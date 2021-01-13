@@ -1,8 +1,8 @@
 # Build and push factoryinsight on staging
 # to Azure Container Registry
 
+pr: none # will disable PR builds entirely; will not disable CI triggers
 trigger:
-  pr: none # will disable PR builds entirely; will not disable CI triggers
   branches:
     include:
       - staging
