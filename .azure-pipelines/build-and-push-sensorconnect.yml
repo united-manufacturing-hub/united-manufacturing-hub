@@ -1,4 +1,4 @@
-# Build and push factoryinsight on staging
+# Build and push sensorconnect on staging
 # to Azure Container Registry
 
 trigger:
