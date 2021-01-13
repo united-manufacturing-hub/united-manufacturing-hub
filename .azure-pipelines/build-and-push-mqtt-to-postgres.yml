@@ -1,0 +1,49 @@
+# Build and push factoryinsight on staging
+# to Azure Container Registry
+
+trigger:
+  branches:
+    include:
+      - staging
+  paths:
+    include: 
+      - golang/cmd/mqtt-to-postgresql
+      - golang/test/mqtt-to-postgresql
+      - golang/internal
+      - golang/pkg
+      - golang/vendor
+      - golang/go.mod
+      - golang/go.sum
+
+resources:
+- repo: self
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: 'edb9cb76-95c8-43c4-8654-57d08990a6f7'
+  containerRegistry: 'iakubernetes.azurecr.io'
+  tag: '$(Build.BuildId)'
+  
+  # Agent VM image name
+  vmImageName: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: Build and push stage
+  jobs:  
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: Docker@2
+      displayName: Build 'mqtt-to-postgresql'
+      inputs:
+        command: buildAndPush
+        repository: 'mqtt-to-postgresql'
+        dockerfile: '$(Build.SourcesDirectory)/deployment/mqtt-to-postgresql/Dockerfile'
+        buildContext: $(Build.SourcesDirectory)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+            $(tag)
+            latest
