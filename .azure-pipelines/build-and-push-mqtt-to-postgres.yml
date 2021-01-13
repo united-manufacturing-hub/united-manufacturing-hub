@@ -1,4 +1,4 @@
-# Build and push factoryinsight on staging
+# Build and push mqtt-to-postgresql on staging
 # to Azure Container Registry
 
 trigger:
