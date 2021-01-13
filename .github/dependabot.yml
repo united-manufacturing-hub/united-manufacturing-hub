@@ -37,11 +37,6 @@ updates:
     schedule:
       interval: "daily"
       
-  - package-ecosystem: "docker"
-    directory: "/deployment/sensorconnect"
-    schedule:
-      interval: "daily"
-      
   - package-ecosystem: "pip"
     directory: "/sensorconnect"
     schedule:
