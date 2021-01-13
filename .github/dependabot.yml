@@ -14,7 +14,6 @@ updates:
    
   - package-ecosystem: "gomod"
     directory: "/golang"
-    vendor: true
     schedule:
       interval: "daily"
       
