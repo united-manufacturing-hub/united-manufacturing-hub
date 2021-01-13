@@ -2,6 +2,7 @@
 # to Azure Container Registry
 
 trigger:
+  pr: none # will disable PR builds entirely; will not disable CI triggers
   branches:
     include:
       - staging
