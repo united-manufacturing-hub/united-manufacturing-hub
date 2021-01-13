@@ -1,0 +1,16 @@
+{
+	"MicrostopDurationInSeconds": 600,
+	"MinimumRunningTimeInSeconds": 60,
+	"ThresholdForNoShiftsConsideredBreakInSeconds": 2100,
+	"AvailabilityLossStates": [
+		1,
+		2,
+		3,
+		6,
+		7,
+		18,
+		1007,
+		1008
+	],
+	"PerformanceLossStates": null
+}

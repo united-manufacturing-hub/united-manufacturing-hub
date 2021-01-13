@@ -1,0 +1,92 @@
+[
+	{
+		"TimestampBegin": "0001-01-01T00:00:00Z",
+		"TimestampEnd": "2020-09-20T20:00:00Z",
+		"ShiftType": 0
+	},
+	{
+		"TimestampBegin": "2020-09-20T20:00:00Z",
+		"TimestampEnd": "2020-09-21T00:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-21T00:30:00Z",
+		"TimestampEnd": "2020-09-21T07:30:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-21T08:00:00Z",
+		"TimestampEnd": "2020-09-21T16:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-21T16:30:00Z",
+		"TimestampEnd": "2020-09-22T00:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-22T00:30:00Z",
+		"TimestampEnd": "2020-09-22T07:30:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-22T08:00:00Z",
+		"TimestampEnd": "2020-09-22T16:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-22T16:30:00Z",
+		"TimestampEnd": "2020-09-23T00:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-23T00:30:00Z",
+		"TimestampEnd": "2020-09-23T07:30:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-23T08:00:00Z",
+		"TimestampEnd": "2020-09-23T16:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-23T16:30:00Z",
+		"TimestampEnd": "2020-09-24T00:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-24T00:30:00Z",
+		"TimestampEnd": "2020-09-24T07:30:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-24T08:00:00Z",
+		"TimestampEnd": "2020-09-24T16:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-24T16:30:00Z",
+		"TimestampEnd": "2020-09-25T00:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-25T00:30:00Z",
+		"TimestampEnd": "2020-09-25T07:30:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-25T08:00:00Z",
+		"TimestampEnd": "2020-09-25T16:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-25T16:30:00Z",
+		"TimestampEnd": "2020-09-26T00:00:00Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2020-09-26T00:00:00Z",
+		"TimestampEnd": "2020-09-26T05:38:10.613Z",
+		"ShiftType": 0
+	}
+]
