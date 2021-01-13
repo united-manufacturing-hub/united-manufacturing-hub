@@ -3,7 +3,7 @@
 # TODO: Adjust paths
 
 # Use an official Python runtime as a parent image
-FROM python:3.7-slim
+FROM python:3.9.1-slim
 ENV PYTHONUNBUFFERED 0
 
 # Building on a temporary dir
