@@ -13,7 +13,7 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/prometheus/client_golang v1.6.0
+	github.com/prometheus/client_golang v1.9.0
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	go.uber.org/zap v1.16.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
