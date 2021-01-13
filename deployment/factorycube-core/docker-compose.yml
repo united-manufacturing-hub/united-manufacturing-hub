@@ -1,0 +1,143 @@
+version: '3.7'
+services:
+  ### MQTT broker
+  # Central container to which al the other connect.
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: ia_mosquitto
+    restart: always
+    networks:
+      - factory_cube
+    ports:
+      - '8883:8883'
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    volumes:
+      - './persistentData/mosquitto/config:/mosquitto/config:ro'
+      - './persistentData/mosquitto/SSL_certs:/mosquitto/SSL_certs:ro'
+      - './persistentData/mosquitto/data:/mosquitto/data'
+    
+  ### ia: sensor connect
+  # Reads sensor data and forwards it to the MQTT Broker
+  sensorconnect:
+    image: iaproduction.azurecr.io/ia-sensorconnect
+    container_name: ia_sensorconnect
+    restart: unless-stopped
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+    environment:
+      - PYTHONUNBUFFERED=0
+      - TRANSMITTERID=${CUBE_TRANSMITTERID}
+      - BROKER_URL=${MQTT_BROKER_URL}
+      - BROKER_PORT=${MQTT_BROKER_PORT}
+      - IP_RANGE=${IOLINK_IP_RANGE}
+    networks:
+      - factory_cube
+     
+  #### TIG STACK - Telegraf, Influx & Grafana
+  # Telegraf - Interface between datasources/targets and Influx
+  telegraf:
+    image: telegraf:latest
+    container_name: ia_telegraf
+    restart: always
+    networks:
+      - factory_cube
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+    volumes:
+      - './persistentData/telegraf/config/telegraf.conf:/etc/telegraf/telegraf.conf:ro'
+    environment:
+      - INFLUXDB_TOKEN_1=${INFLUXDB_TOKEN}
+      - ORGANIZATION_NAME_1=${ORGANIZATION_NAME}
+
+  # Influx - Timeseries database
+  influxdbV2:
+    image: quay.io/influxdb/influxdb:2.0.0-beta
+    container_name: ia_influxdbV2
+    command: --http-bind-address :80
+    restart: always
+    networks:
+      - factory_cube
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    volumes:
+      - './persistentData/influxdb_v2/data:/root/.influxdbv2'
+
+  # Grafana - Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ia_grafana
+    restart: always
+    networks:
+      - factory_cube
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    volumes:
+      - './persistentData/grafana:/var/lib/grafana'
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_LOG_MODE=console
+      - GF_SERVER_PROTOCOL=http
+      - GF_PATHS_PROVISIONING=/var/lib/grafana/provisioning
+
+  ### Node Red
+  # Grafical programming
+  nodered:
+    image: iaproduction.azurecr.io/ia-nodered
+    container_name: ia_nodered
+    restart: unless-stopped
+    networks:
+      - factory_cube
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+    volumes:
+      - './persistentData/nodered/certificates:/certificates:ro'
+      - './persistentData/nodered/data:/data'
+
+  ### NGINX - Load balancer
+  nginx:
+    image: nginx:latest
+    container_name: ia_nginx
+    command: /bin/bash -c "envsubst '$$ENV_SERVER_NAME $$ENV_CERT_PREFIX' < /etc/nginx/conf.d/app.template > /etc/nginx/conf.d/app.conf && nginx -g 'daemon off;'"
+    depends_on:
+      - grafana
+      - influxdbV2
+    restart: always
+    networks:
+      - factory_cube
+    ports: # Check bound ports when running in paralel with the other nginx container
+      - "80:80" 
+      - "8080:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "5"
+        max-size: "10m"
+    volumes:
+      - './persistentData/nginx/conf.d:/etc/nginx/conf.d'
+      - './persistentData/nginx/customization:/var/www/customization'
+
+# Create a network for all containers
+networks:
+  factory_cube:
+    name: factory_cube_network
+    driver: bridge

@@ -1,0 +1,2 @@
+evdev
+paho-mqtt
