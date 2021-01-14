@@ -327,6 +327,49 @@ func TestIsAvailabilityLoss_2(t *testing.T) {
 }
 
 /*
+func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
+
+	var stateArray []datamodel.StateEntry
+	var orderArray []datamodel.OrdersRaw
+	var configuration datamodel.CustomerConfiguration
+	var processedStateArray []datamodel.StateEntry
+
+	configuration.AutomaticallyIdentifyChangeovers = false
+
+	err := internal.Load("../../test/testfiles/addUnknownMicrostops_stateArray_1601323170.golden", &stateArray)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	err = internal.Load("../../test/testfiles/addUnknownMicrostops_orderArray_1601323170.golden", &orderArray)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	err = internal.Load("../../test/testfiles/addUnknownMicrostops_configuration_1601323170.golden", &configuration)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	err = internal.Load("../../test/testfiles/addUnknownMicrostops_processedStateArray_1601323170.golden", &processedStateArray)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+
+	processedStateArrayFresh, err := AutomaticallyIdentifyChangeovers(nil, stateArray, orderArray, configuration)
+	if err != nil {
+		t.Error()
+	}
+
+	if !reflect.DeepEqual(processedStateArrayFresh, processedStateArray) {
+		fmt.Println(processedStateArrayFresh)
+		fmt.Println(processedStateArray)
+		t.Error()
+	}
+}
+*/
+/*
 func TestProcessStates_Complex_1(t *testing.T) {
 	var stateArray []datamodel.StateEntry
 	var rawShifts []ShiftEntry

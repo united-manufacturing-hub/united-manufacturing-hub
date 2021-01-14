@@ -933,7 +933,7 @@ func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (c
 			AutomaticallyIdentifyChangeovers,
 			LanguageCode,
 			AvailabilityLossStates,
-			PerformanceLossStates,
+			PerformanceLossStates
 		FROM 
 			configurationTable 
 		WHERE 
