@@ -1660,6 +1660,8 @@ func automaticallyIdentifyChangeovers(parentSpan opentracing.Span, stateArray []
 		defer span.Finish()
 	}
 
+	zap.S().Infof("automaticallyIdentifyChangeovers loaded")
+
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 
