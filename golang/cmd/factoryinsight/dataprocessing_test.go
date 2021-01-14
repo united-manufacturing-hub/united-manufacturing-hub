@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -333,7 +334,18 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712.golden", &stateArray)
+	from, err := time.Parse(time.RFC3339, "2021-01-09T07:48:21.616Z")
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	to, err := time.Parse(time.RFC3339, "2021-01-09T11:59:37.107Z")
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+
+	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712.golden", &stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -354,7 +366,7 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, from, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -373,7 +385,18 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712_v2.golden", &stateArray)
+	from, err := time.Parse(time.RFC3339, "2021-01-09T07:48:21.616Z")
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	to, err := time.Parse(time.RFC3339, "2021-01-09T11:59:37.107Z")
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+
+	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712_v2.golden", &stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -394,7 +417,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, from, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -413,7 +436,18 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden", &stateArray)
+	from, err := time.Parse(time.RFC3339, "2021-01-09T09:26:11.26Z")
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	to, err := time.Parse(time.RFC3339, "2021-01-09T10:30:15.861Z")
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+
+	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden", &stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -434,7 +468,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, from, to, configuration)
 	if err != nil {
 		t.Error()
 	}

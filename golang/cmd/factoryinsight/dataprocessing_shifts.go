@@ -10,19 +10,19 @@ import (
 
 // TimeRange contains a time range
 type TimeRange struct {
-	begin time.Time
-	end   time.Time
+	Begin time.Time
+	End   time.Time
 }
 
 func isTimerangeEntirelyInTimerange(firstTimeRange TimeRange, secondTimeRange TimeRange) bool {
-	if (firstTimeRange.begin.After(secondTimeRange.begin) || firstTimeRange.begin == secondTimeRange.begin) && (firstTimeRange.end.Before(secondTimeRange.end) || firstTimeRange.end == secondTimeRange.end) {
+	if (firstTimeRange.Begin.After(secondTimeRange.Begin) || firstTimeRange.Begin == secondTimeRange.Begin) && (firstTimeRange.End.Before(secondTimeRange.End) || firstTimeRange.End == secondTimeRange.End) {
 		return true
 	}
 	return false
 }
 
 func isTimepointInTimerange(timestamp time.Time, secondTimeRange TimeRange) bool {
-	if (timestamp.After(secondTimeRange.begin)) && (timestamp.Before(secondTimeRange.end)) {
+	if (timestamp.After(secondTimeRange.Begin)) && (timestamp.Before(secondTimeRange.End)) {
 		return true
 	}
 	return false
@@ -52,8 +52,8 @@ func getOverlappingShifts(state datamodel.StateEntry, followingState datamodel.S
 		if dataPoint.ShiftType != 0 {
 			secondTimeRange := TimeRange{dataPoint.TimestampBegin, dataPoint.TimestampEnd}
 
-			// if firstTimeRange.begin in TimeRange or firstTimeRange.end in TimeRange
-			if isTimepointInTimerange(firstTimeRange.begin, secondTimeRange) || isTimepointInTimerange(firstTimeRange.end, secondTimeRange) { // if state begin is in time range or state end is in time range
+			// if firstTimeRange.Begin in TimeRange or firstTimeRange.End in TimeRange
+			if isTimepointInTimerange(firstTimeRange.Begin, secondTimeRange) || isTimepointInTimerange(firstTimeRange.End, secondTimeRange) { // if state begin is in time range or state end is in time range
 				overlappingShifts = append(overlappingShifts, dataPoint)
 			}
 		}
