@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var logData bool = false
+var logData bool = true
 
 // ChannelResult returns the returnValue and a error code from a goroutine
 type ChannelResult struct {
@@ -1604,8 +1604,10 @@ func automaticallyIdentifyChangeovers(parentSpan opentracing.Span, stateArray []
 	}
 
 	// For testing
+	zap.S().Infof("#######                      EXECUTE                    ###########")
 	loggingTimestamp := time.Now()
 	if parentSpan != nil && logData {
+		zap.S().Infof("#######                      LOGGED                    ###########")
 		internal.LogObject("AutomaticallyIdentifyChangeovers", "stateArray", loggingTimestamp, stateArray)
 		internal.LogObject("AutomaticallyIdentifyChangeovers", "orderArray", loggingTimestamp, orderArray)
 		internal.LogObject("AutomaticallyIdentifyChangeovers", "configuration", loggingTimestamp, configuration)
