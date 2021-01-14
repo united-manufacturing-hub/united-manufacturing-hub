@@ -602,7 +602,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		if aggregationType == 1 { // category: hour in a day
 
 			// create resultDatapoints [][]float64. resultDatapoints[HOUR][STATE] = sum of STATE in that hour
-			var resultDatapoints [24][2000]float64 //24 hours in a day, 2000 different states (0 - 1999)
+			var resultDatapoints [24][datamodel.MaxState]float64 //24 hours in a day, 2000 different states (0 - 1999)
 
 			// round up "from" till the next full hour
 			tempFrom := time.Date(from.Year(), from.Month(), from.Day(), from.Hour()+1, 0, 0, 0, from.Location())
