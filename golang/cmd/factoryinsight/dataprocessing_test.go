@@ -366,7 +366,6 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 	}
 }
 
-/*
 func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 
 	var stateArray []datamodel.StateEntry
@@ -406,7 +405,46 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 		t.Error()
 	}
 }
-*/
+
+func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
+
+	var stateArray []datamodel.StateEntry
+	var orderArray []datamodel.OrdersRaw
+	var configuration datamodel.CustomerConfiguration
+	var processedStateArray []datamodel.StateEntry
+
+	err := internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden", &stateArray)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610630858.golden", &orderArray)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610630858.golden", &configuration)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610630858.golden", &processedStateArray)
+	if err != nil {
+		fmt.Println(err)
+		t.Error()
+	}
+
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, configuration)
+	if err != nil {
+		t.Error()
+	}
+
+	if !reflect.DeepEqual(processedStateArrayFresh, processedStateArray) {
+		fmt.Println(processedStateArrayFresh)
+		fmt.Println(processedStateArray)
+		t.Error()
+	}
+}
 
 /*
 func TestProcessStates_Complex_1(t *testing.T) {
