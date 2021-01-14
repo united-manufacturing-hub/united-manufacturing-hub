@@ -930,9 +930,10 @@ func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (c
 			MinimumRunningTimeInSeconds,
 			ThresholdForNoShiftsConsideredBreakInSeconds,
 			LowSpeedThresholdInPcsPerHour,
+			AutomaticallyIdentifyChangeovers,
 			LanguageCode,
 			AvailabilityLossStates,
-			PerformanceLossStates
+			PerformanceLossStates,
 		FROM 
 			configurationTable 
 		WHERE 
@@ -944,6 +945,7 @@ func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (c
 		&configuration.MinimumRunningTimeInSeconds,
 		&configuration.ThresholdForNoShiftsConsideredBreakInSeconds,
 		&configuration.LowSpeedThresholdInPcsPerHour,
+		&configuration.AutomaticallyIdentifyChangeovers,
 		&configuration.LanguageCode,
 		&tempAvailabilityLossStates,
 		&tempPerformanceLossStates,
@@ -955,6 +957,7 @@ func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (c
 		configuration.MinimumRunningTimeInSeconds = 0
 		configuration.ThresholdForNoShiftsConsideredBreakInSeconds = 60 * 35
 		configuration.LowSpeedThresholdInPcsPerHour = -1 // do not apply by default
+		configuration.AutomaticallyIdentifyChangeovers = true
 		configuration.AvailabilityLossStates = append(configuration.AvailabilityLossStates, 40000, 180000, 190000, 200000, 210000, 220000)
 		configuration.PerformanceLossStates = append(configuration.PerformanceLossStates, 20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000)
 		configuration.LanguageCode = 0

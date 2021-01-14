@@ -19,7 +19,8 @@ const (
 	// OperatorInteractionState means that the asset is in an unspecified state, because the operator has stopped the asset manually
 	OperatorInteractionState = 40200
 
-	// MicrostopState means that the asset is in an unspecified stop shorter than a certain amount of time (typically between 2 to 10 minutes)
+	// MicrostopState means that the asset is in an unspecified stop shorter than a certain amount of time
+	// (typically between 2 to 10 minutes)
 	MicrostopState = 50000
 
 	// InletJamState means that the asset has a jam in the inlet
@@ -42,6 +43,14 @@ const (
 
 	// ChangeoverState means that the asset is currently undergoing a changeover
 	ChangeoverState = 100000
+
+	// ChangeoverPreparationState means that the asset is currently undergoing a changeover in the preparation step
+	// (time between order is started till the machine is first running)
+	ChangeoverPreparationState = 100010
+
+	// ChangeoverPostprocessingState means that the asset is currently undergoing a changeover in the postprocessing step
+	// (time between machien was last running and the time when the order is ended )
+	ChangeoverPostprocessingState = 100020
 
 	// CleaningState means that the asset is currently undergoing a cleaning process
 	CleaningState = 110000
