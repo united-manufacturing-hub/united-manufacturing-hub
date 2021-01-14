@@ -616,11 +616,25 @@ func specifyUnknownStopsWithFollowingStopReason(parentSpan opentracing.Span, sta
 	return
 }
 
-// Adds orders with id
-func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw) (processedOrders []datamodel.OrderEntry) {
+// Adds noOrders at the beginning, ending and between orders
+func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from time.Time, to time.Time) (processedOrders []datamodel.OrderEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range orderArray {
+
+		// if first entry and no order has started yet, then add no order till first order starts
+		if index == 0 && dataPoint.BeginTimestamp.After(from) {
+
+			newTimestampEnd := dataPoint.BeginTimestamp.Add(time.Duration(-1) * time.Millisecond) // end it one Millisecond before the next orders starts
+
+			fullRow := datamodel.OrderEntry{
+				TimestampBegin: from,
+				TimestampEnd:   newTimestampEnd,
+				OrderType:      "noOrder",
+			}
+			processedOrders = append(processedOrders, fullRow)
+		}
+
 		if index > 0 { //if not the first entry, add a noShift
 
 			previousDataPoint := orderArray[index-1]
@@ -637,6 +651,8 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw) (processedOrders
 				processedOrders = append(processedOrders, fullRow)
 			}
 		}
+
+		// add original order
 		fullRow := datamodel.OrderEntry{
 			TimestampBegin: dataPoint.BeginTimestamp,
 			TimestampEnd:   dataPoint.EndTimestamp,
@@ -644,6 +660,18 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw) (processedOrders
 		}
 		processedOrders = append(processedOrders, fullRow)
 
+		// if last entry and previous order has finished, add a no order
+		if index == len(orderArray)-1 && dataPoint.EndTimestamp.Before(to) {
+
+			newTimestampBegin := dataPoint.EndTimestamp.Add(time.Duration(1) * time.Millisecond) // start one Millisecond after the previous order ended
+
+			fullRow := datamodel.OrderEntry{
+				TimestampBegin: newTimestampBegin,
+				TimestampEnd:   to,
+				OrderType:      "noOrder",
+			}
+			processedOrders = append(processedOrders, fullRow)
+		}
 	}
 	return
 }
@@ -675,7 +703,7 @@ func GetOrdersTimeline(parentSpan opentracing.Span, customerID string, location 
 		return
 	}
 
-	processedOrders := addNoOrdersBetweenOrders(rawOrders)
+	processedOrders := addNoOrdersBetweenOrders(rawOrders, from, to)
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedOrders {
