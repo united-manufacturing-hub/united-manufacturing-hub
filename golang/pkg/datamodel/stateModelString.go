@@ -34,6 +34,10 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 			stateString = "Sonstige Materialprobleme"
 		case ChangeoverState:
 			stateString = "Rüsten"
+		case ChangeoverPreparationState:
+			stateString = "Vorbereitung"
+		case ChangeoverPostprocessingState:
+			stateString = "Nachbereitung"
 		case CleaningState:
 			stateString = "Reinigen"
 		case EmptyingState:
@@ -87,6 +91,10 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 			stateString = "Other material issues"
 		case ChangeoverState:
 			stateString = "Changeover"
+		case ChangeoverPreparationState:
+			stateString = "Preparation"
+		case ChangeoverPostprocessingState:
+			stateString = "Postprocessing"
 		case CleaningState:
 			stateString = "Cleaning"
 		case EmptyingState:

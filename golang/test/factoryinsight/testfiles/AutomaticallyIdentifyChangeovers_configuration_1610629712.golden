@@ -1,0 +1,33 @@
+{
+	"MicrostopDurationInSeconds": 300,
+	"IgnoreMicrostopUnderThisDurationInSeconds": 120,
+	"MinimumRunningTimeInSeconds": 120,
+	"ThresholdForNoShiftsConsideredBreakInSeconds": 2100,
+	"AvailabilityLossStates": [
+		40000,
+		60000,
+		70000,
+		80000,
+		90000,
+		110000,
+		170000,
+		180000,
+		190000,
+		200000,
+		210000,
+		220000
+	],
+	"PerformanceLossStates": [
+		20000,
+		50000,
+		100000,
+		110000,
+		120000,
+		130000,
+		140000,
+		150000
+	],
+	"LowSpeedThresholdInPcsPerHour": -1,
+	"AutomaticallyIdentifyChangeovers": false,
+	"LanguageCode": 0
+}
