@@ -8,7 +8,7 @@ func ConvertOldToNew(OldState int) (NewState int) {
 	case 1:
 		NewState = UnspecifiedStopState
 	case 2:
-		NewState = NoOrderState
+		NewState = NoShiftState
 	case 3:
 		NewState = TechnicalOtherStop
 	case 4:
