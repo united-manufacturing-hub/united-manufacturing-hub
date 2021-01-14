@@ -6,7 +6,7 @@ RUN mkdir /build
 ADD ./golang/cmd/factoryinsight /build/cmd/factoryinsight
 ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
-ADD ./golang/test/factoryinsight /build/test
+ADD ./golang/test/factoryinsight /build/test/factoryinsight
 ADD ./golang/vendor /build/vendor
 
 ADD ./golang/go.mod /build/go.mod
