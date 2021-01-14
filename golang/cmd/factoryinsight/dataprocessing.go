@@ -263,6 +263,16 @@ func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, 
 	return
 }
 
+func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, from time.Time, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
+	// Loop through all datapoints
+	for _, dataPoint := range orderArray {
+		if isTimepointInTimerange(dataPoint.BeginTimestamp, TimeRange{from, to}) || isTimepointInTimerange(dataPoint.EndTimestamp, TimeRange{from, to}) {
+			processedOrdersArray = append(processedOrdersArray, dataPoint)
+		}
+	}
+	return
+}
+
 func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from time.Time, to time.Time) (processedStates []datamodel.StateEntry) {
 	// Loop through all datapoints
 	for _, dataPoint := range processedStatesRaw {
@@ -749,7 +759,7 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 			actualTimePerUnit = int(actualDuration / int(actualUnits))
 		}
 
-		processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+		processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, rawOrders, from, to, configuration)
 		if err != nil {
 			errReturn = err
 			return
@@ -880,7 +890,7 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 }
 
 // processStatesOptimized splits up arrays efficiently for better caching
-func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 	var processedStatesTemp []datamodel.StateEntry
 
 	for current := from; current != to; {
@@ -889,7 +899,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, current, to, configuration)
+			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
 				return
@@ -897,7 +907,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, current, currentTo, configuration)
+			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
 
@@ -915,8 +925,21 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 	return
 }
 
-// processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent) and calculating new ones (e.g. microstops)
-func processStates(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+// processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent)
+// and calculating new ones (e.g. microstops)
+func processStates(parentSpan opentracing.Span,
+	assetID int,
+	stateArray []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	countSlice []datamodel.CountEntry,
+	orderArray []datamodel.OrdersRaw,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration,
+) (
+	processedStateArray []datamodel.StateEntry,
+	err error,
+) {
 
 	// Jaeger tracing
 	var span opentracing.Span
@@ -940,20 +963,10 @@ func processStates(parentSpan opentracing.Span, assetID int, stateArray []datamo
 			return
 		}
 
-		// For testing
-		loggingTimestamp := time.Now()
-		if parentSpan != nil && logData {
-			internal.LogObject("processStates", "stateArray", loggingTimestamp, stateArray)
-			internal.LogObject("processStates", "rawShifts", loggingTimestamp, rawShifts)
-			internal.LogObject("processStates", "countSlice", loggingTimestamp, countSlice)
-			internal.LogObject("processStates", "from", loggingTimestamp, from)
-			internal.LogObject("processStates", "to", loggingTimestamp, to)
-			internal.LogObject("processStates", "configuration", loggingTimestamp, configuration)
-		}
-
 		// remove elements outside from, to
 		processedStateArray = removeUnnecessaryElementsFromStateSlice(stateArray, from, to)
 		countSlice = removeUnnecessaryElementsFromCountSlice(countSlice, from, to)
+		orderArray = removeUnnecessaryElementsFromOrderArray(orderArray, from, to)
 
 		processedStateArray, err = removeSmallRunningStates(span, processedStateArray, configuration)
 		if err != nil {
@@ -1008,15 +1021,16 @@ func processStates(parentSpan opentracing.Span, assetID int, stateArray []datamo
 			return
 		}
 
+		processedStateArray, err = automaticallyIdentifyChangeovers(span, processedStateArray, orderArray, configuration)
+		if err != nil {
+			zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
+			return
+		}
+
 		processedStateArray, err = specifySmallNoShiftsAsBreaks(span, processedStateArray, configuration)
 		if err != nil {
 			zap.S().Errorf("specifySmallNoShiftsAsBreaks failed", err)
 			return
-		}
-
-		// for testing
-		if parentSpan != nil && logData {
-			internal.LogObject("processStates", "processedStateArray", loggingTimestamp, processedStateArray)
 		}
 
 		// Store to cache
@@ -1426,6 +1440,7 @@ func CalculateOEE(parentSpan opentracing.Span, temporaryDatapoints []datamodel.S
 }
 
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
+// TODO detect sub-states, e.g. 10200 as well
 func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
 	// Jaeger tracing
 	var span opentracing.Span
@@ -1495,6 +1510,78 @@ func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints 
 
 	} else {
 		zap.S().Errorf("Failed to get Mutex")
+	}
+
+	return
+}
+
+// automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
+func automaticallyIdentifyChangeovers(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+	// Jaeger tracing
+	var span opentracing.Span
+	if parentSpan != nil { //nil during testing
+		span = opentracing.StartSpan(
+			"automaticallyIdentifyChangeovers",
+			opentracing.ChildOf(parentSpan.Context()))
+		defer span.Finish()
+	}
+
+	// Loop through all datapoints
+	for _, dataPoint := range stateArray {
+		/*
+			var state int
+			var timestamp time.Time
+
+			if !datamodel.IsProducing(dataPoint.State) { //if not running, do not do anything
+				fullRow := datamodel.StateEntry{State: dataPoint.State, Timestamp: dataPoint.Timestamp}
+				processedStateArray = append(processedStateArray, fullRow)
+				continue
+			}
+
+			if index == len(stateArray)-1 { //if last entry, ignore
+				fullRow := datamodel.StateEntry{State: dataPoint.State, Timestamp: dataPoint.Timestamp}
+				processedStateArray = append(processedStateArray, fullRow)
+				continue
+			}
+			followingDataPoint := stateArray[index+1]
+			stateDuration := followingDataPoint.Timestamp.Sub(dataPoint.Timestamp).Minutes()
+
+			timestamp = dataPoint.Timestamp
+
+			averageProductionSpeedPerMinute := getProducedPiecesFromCountSlice(countSlice, timestamp, followingDataPoint.Timestamp) / stateDuration
+
+			if averageProductionSpeedPerMinute < configuration.LowSpeedThresholdInPcsPerHour/60 {
+				rows, err := calculatateLowSpeedStates(span, assetID, countSlice, timestamp, followingDataPoint.Timestamp, configuration)
+				if err != nil {
+					zap.S().Errorf("calculatateLowSpeedStates failed", err)
+					error = err
+					return
+				}
+				// Add all states
+				for _, row := range rows {
+					processedStateArray = append(processedStateArray, row)
+				}
+
+			} else {
+				state = dataPoint.State
+				fullRow := datamodel.StateEntry{State: state, Timestamp: timestamp}
+				processedStateArray = append(processedStateArray, fullRow)
+			}
+		*/
+		fullRow := datamodel.StateEntry{
+			State:     dataPoint.State,
+			Timestamp: dataPoint.Timestamp,
+		}
+		processedStateArray = append(processedStateArray, fullRow)
+	}
+
+	// For testing
+	loggingTimestamp := time.Now()
+	if parentSpan != nil && logData {
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "stateArray", loggingTimestamp, stateArray)
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "orderArray", loggingTimestamp, orderArray)
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "configuration", loggingTimestamp, configuration)
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "processedStateArray", loggingTimestamp, processedStateArray)
 	}
 
 	return

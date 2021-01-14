@@ -443,8 +443,15 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(span, c, err)
 		return
@@ -562,10 +569,17 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
 	//TODO: currently multiple functions here
 
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(span, c, err)
 		return
@@ -730,8 +744,15 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(span, c, err)
 		return
@@ -831,8 +852,15 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(span, c, err)
 		return
@@ -931,6 +959,13 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
 
 	// ### create JSON ###
@@ -946,7 +981,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, current, to, configuration)
+			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
@@ -961,7 +996,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, current, currentTo, configuration)
+			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
@@ -1068,8 +1103,15 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(span, c, err)
 		return
@@ -1642,6 +1684,13 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
 
 	// ### create JSON ###
@@ -1657,7 +1706,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, current, to, configuration)
+			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
@@ -1672,7 +1721,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, current, currentTo, configuration)
+			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
@@ -1775,6 +1824,13 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 		return
 	}
 
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
 	// ### calculate (only one function allowed here) ###
 
 	// ### create JSON ###
@@ -1790,13 +1846,13 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, current, to, configuration)
+			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, to, configuration, 6) // Changeover is 6
+			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, to, configuration, datamodel.ChangeoverState)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
@@ -1805,13 +1861,13 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, current, currentTo, configuration)
+			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, currentTo, configuration, 6) // Changeover is 6
+			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, currentTo, configuration, datamodel.ChangeoverState)
 			if err != nil {
 				handleInternalServerError(span, c, err)
 				return
