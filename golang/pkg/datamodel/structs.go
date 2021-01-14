@@ -29,6 +29,7 @@ type CustomerConfiguration struct {
 	AvailabilityLossStates                       []int32
 	PerformanceLossStates                        []int32
 	LowSpeedThresholdInPcsPerHour                float64
+	AutomaticallyIdentifyChangeovers             bool
 	LanguageCode                                 int
 }
 
