@@ -1468,7 +1468,6 @@ func CalculateOEE(parentSpan opentracing.Span, temporaryDatapoints []datamodel.S
 }
 
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
-// TODO detect sub-states, e.g. 10200 as well
 func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
 	// Jaeger tracing
 	var span opentracing.Span

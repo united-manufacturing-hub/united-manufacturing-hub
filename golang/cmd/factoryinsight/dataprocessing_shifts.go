@@ -81,9 +81,6 @@ func isStateEntirelyOutsideNoShift(state datamodel.StateEntry, followingState da
 // Adds shifts with id
 func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration) (processedShifts []datamodel.ShiftEntry) {
 
-	// TODO: check for overlapping shifts
-	// TODO: combine shifts that are adjacent
-
 	// Loop through all datapoints
 	for index, dataPoint := range shiftArray {
 		if index > 0 { //if not the first entry, add a noShift
@@ -114,8 +111,6 @@ func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration d
 }
 
 func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedShifts []datamodel.ShiftEntry) {
-
-	//TODO combine multiple similar shifts
 
 	// Loop through all datapoints
 	for _, dataPoint := range shiftArray {
@@ -220,17 +215,6 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 	}
 	return
 }
-
-/*
-else if dataPoint.Timestamp == overlappingShifts[0].TimestampBegin { // TODO: Add END CASE here
-			timestamp = dataPoint.Timestamp
-			state = dataPoint.State
-			fullRow := datamodel.StateEntry{State: state, Timestamp: timestamp}
-			zap.S().Debugf("## EXIT ", timestamp, state)
-			zap.S().Debugf("Added state ", timestamp, state)
-			processedStateArray = append(processedStateArrayRaw, fullRow)
-		}
-*/
 
 func addNoShiftsToStates(parentSpan opentracing.Span, rawShifts []datamodel.ShiftEntry, stateArray []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 

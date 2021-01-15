@@ -902,9 +902,6 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 	return
 }
 
-// TODO: add configuration widget, which allows you to view the configuration in Grafana
-// TODO: Add this to database
-
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
 func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
 	// Jaeger tracing
