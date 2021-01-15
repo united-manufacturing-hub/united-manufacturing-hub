@@ -80,7 +80,6 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 	if customerID != "raw" {
 
-		// TODO Add more logic to paste it into database
 		switch payloadType {
 		case "state":
 			go ProcessStateData(customerID, location, assetID, payloadType, payload)

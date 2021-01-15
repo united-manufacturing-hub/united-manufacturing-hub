@@ -577,7 +577,6 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	}
 
 	// ### calculate (only one function allowed here) ###
-	//TODO: currently multiple functions here
 
 	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
@@ -763,7 +762,6 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "availability"
 	data.ColumnNames = []string{JSONColumnName}
 
-	// TODO: CalculateAvailability should only return one number
 	data.Datapoints, err = CalculateAvailability(span, processedStates, from, to, configuration)
 
 	if err != nil {
@@ -871,7 +869,6 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "performance"
 	data.ColumnNames = []string{JSONColumnName}
 
-	// TODO: CalculatePerformance should only return one number
 	data.Datapoints, err = CalculatePerformance(span, processedStates, from, to, configuration)
 
 	if err != nil {
@@ -1120,8 +1117,6 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"state", "occurances"}
-
-	// TODO: CalculateStateHistogram should only return structs
 
 	data.Datapoints, err = CalculateStateHistogram(span, processedStates, from, to, includeRunning, keepStatesInteger, configuration)
 
