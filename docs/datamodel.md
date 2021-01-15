@@ -21,11 +21,11 @@ Additionally, the following literature is respected:
 
 ## ACTIVE (10000-29999)
 
-### 10000: Producing at set speed
+### 10000: ProducingAtFullSpeedState
 - WS_Cur_State: Operating 
 - PackML/Tobacco: Execute 
 
-### 20000: Producing at lower than set speed
+### 20000: ProducingAtLowerThanFullSpeedState
 - WS_Cur_Prog: StartUp 
 - WS_Cur_Prog: RunDown 
 - WS_Cur_State: Stopping 
@@ -49,11 +49,11 @@ NOT INCLUDED FOR NOW:
 
 ## UNKNOWN
 
-### 30000: Undefined / no data 
+### 30000: UnknownState
 - WS_Cur_Prog: Undefined 
 - EUROMAP: Offline
 
-### 40000: Unspecified stop
+### 40000: UnspecifiedStopState
 - WS_Cur_State: Clearing
 - PackML/Tobacco: Clearing
 - WS_Cur_State: Emergency Stop
@@ -72,67 +72,67 @@ NOT INCLUDED FOR NOW:
 - PackML/Tobacco: Complete 
 - EUROMAP: READY_TO_RUN 
 
-### 50000: Microstop
+### 50000: MicrostopState
 
 ## MATERIAL
 
-### 60000: Jam in the inlet
+### 60000: InletJamState
 - WS_Cur_State: Lack 
 
-### 70000: Jam in the outlet
+### 70000: OutletJamState
 - WS_Cur_State: Tailback 
 
-### 80000: Congestion or deficiency in the bypass flow
+### 80000: CongestionBypassState
 - WS_Cur_State: Lack/Tailback Branch Line 
 
-### 90000: Unknown material issue
+### 90000: MaterialIssueOtherState
 - WS_Mat_Ready (Information about which material is lacking)
 - PackML/Tobacco: Suspended 
 
 ## PROCESS
 
-### 100000: Changeover
+### 100000: ChangeoverState
 - WS_Cur_Prog: Program-Changeover 
 - Tobacco: CHANGE OVER 
 
-### 110000: Cleaning
+### 110000: CleaningState
 - WS_Cur_Prog: Program-Cleaning 
 - Tobacco: CLEAN 
 
-### 120000: Emptying
+### 120000: EmptyingState
 - Tobacco: EMPTY OUT 
 
-### 130000: Setting up (warming up, etc.)
+### 130000: SettingUpState (warming up, etc.)
 - EUROMAP: PREPARING 
 
 ## OPERATOR
 
-### 140000: Operator not at machine (e.g. Other reasons for operator not at machine)
+### 140000: OperatorNotAtMachineState (e.g. Other reasons for operator not at machine)
 
-### 150000: Operator break (note: different than planned shift as it could count to performance losses)
+### 150000: OperatorBreakState (note: different than planned shift as it could count to performance losses)
 - WS_Cur_Prog: Program-Break 
 
 ## PLANNING
-### 160000: No shift
-### 170000: No order
+### 160000: NoShiftState
+### 170000: NoOrderState
 
 ## TECHNICAL
 
-### 180000: Equipment failure / repair (e.g. broken Engine)
+### 180000: EquipmentFailureState (e.g. broken Engine)
 - WS_Cur_State: Equipment Failure 
 
-### 190000: External failure / repair (e.g. missing compressed air)
+### 190000: ExternalFailureState (e.g. missing compressed air)
 - WS_Cur_State: External Failure 
 
-### 200000: External Interference
+### 200000: ExternalInterferenceState
 
-### 210000: Preventive Maintenance (a planned maintenance action)
+### 210000: PreventiveMaintenanceStop (a planned maintenance action)
 - WS_Cur_Prog: Program-Maintenance 
 - PackML: Maintenance 
 - EUROMAP: MAINTENANCE 
 - Tobacco: MAINTENANCE 
 
-### 220000: Other technical stops
+### 220000: TechnicalOtherStop
 - WS_Not_Of_Fail_Code
 - PackML: Held 
 - EUROMAP: MALFUNCTION 
