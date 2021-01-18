@@ -17,6 +17,9 @@
 
 -->
 
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub?ref=badge_shield)
+[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org)
+
 <!-- PROJECT LOGO -->
 # United Manufacturing Hub
 
