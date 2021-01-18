@@ -120,7 +120,6 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 	var shiftType int
 
 	for index, dataPoint := range shiftArray {
-
 		// first and last shift are always of type noShift. Therefore, ignore them here
 		if dataPoint.ShiftType == 0 {
 			fullRow := datamodel.ShiftEntry{
