@@ -48,7 +48,7 @@ func AsHash(o interface{}) string {
 // GetProcessStatesFromCache gets process states from cache
 func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		////zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -78,7 +78,7 @@ func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.Stat
 // StoreProcessStatesToCache stores process states to the cache
 func StoreProcessStatesToCache(key string, processedStateArray []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		////zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -103,7 +103,7 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 // GetCalculatateLowSpeedStatesFromCache get low speed states from cache
 func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID int) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		////zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -136,7 +136,7 @@ func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID
 // StoreCalculatateLowSpeedStatesToCache stores low speed states to cache
 func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID int, processedStateArray []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		////zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -163,7 +163,7 @@ func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID
 // GetStatesRawFromCache gets raw states from cache
 func GetStatesRawFromCache(assetID int, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		////zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -196,7 +196,7 @@ func GetStatesRawFromCache(assetID int, from time.Time, to time.Time, configurat
 // StoreRawStatesToCache stores raw states to cache
 func StoreRawStatesToCache(assetID int, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -223,7 +223,7 @@ func StoreRawStatesToCache(assetID int, from time.Time, to time.Time, configurat
 // GetRawShiftsFromCache gets raw shifts from cache
 func GetRawShiftsFromCache(assetID int, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -256,7 +256,7 @@ func GetRawShiftsFromCache(assetID int, from time.Time, to time.Time, configurat
 // StoreRawShiftsToCache stores raw shifts to cache
 func StoreRawShiftsToCache(assetID int, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.ShiftEntry) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -283,7 +283,7 @@ func StoreRawShiftsToCache(assetID int, from time.Time, to time.Time, configurat
 // GetRawCountsFromCache gets raw counts from cache
 func GetRawCountsFromCache(assetID int, from time.Time, to time.Time) (data []datamodel.CountEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -316,7 +316,7 @@ func GetRawCountsFromCache(assetID int, from time.Time, to time.Time) (data []da
 // StoreRawCountsToCache stores raw counts to cache
 func StoreRawCountsToCache(assetID int, from time.Time, to time.Time, data []datamodel.CountEntry) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -343,7 +343,7 @@ func StoreRawCountsToCache(assetID int, from time.Time, to time.Time, data []dat
 // GetAverageStateTimeFromCache gets average state time from cache
 func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -375,7 +375,7 @@ func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool
 func StoreAverageStateTimeToCache(key string, data []interface{}) {
 
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -400,7 +400,7 @@ func StoreAverageStateTimeToCache(key string, data []interface{}) {
 // GetDistinctProcessValuesFromCache gets distinct process values from cache
 func GetDistinctProcessValuesFromCache(customerID string, location string, assetID string) (data []string, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -434,7 +434,7 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 func StoreDistinctProcessValuesToCache(customerID string, location string, assetID string, data []string) {
 
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -461,7 +461,7 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 // GetCustomerConfigurationFromCache gets customer configuration from cache
 func GetCustomerConfigurationFromCache(customerID string) (data datamodel.CustomerConfiguration, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -495,7 +495,7 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 func StoreCustomerConfigurationToCache(customerID string, data datamodel.CustomerConfiguration) {
 
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -517,7 +517,7 @@ func StoreCustomerConfigurationToCache(customerID string, data datamodel.Custome
 // GetAssetIDFromCache gets asset id from cache
 func GetAssetIDFromCache(customerID string, location string, assetID string) (DBassetID int, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -548,7 +548,7 @@ func GetAssetIDFromCache(customerID string, location string, assetID string) (DB
 // StoreAssetIDToCache stores asset id to cache
 func StoreAssetIDToCache(customerID string, location string, assetID string, DBassetID int) {
 	if rdb == nil { // only the case during tests
-		zap.S().Errorf("rdb == nil")
+		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
