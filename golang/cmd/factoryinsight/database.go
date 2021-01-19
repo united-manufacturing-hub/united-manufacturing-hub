@@ -355,8 +355,8 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 		SELECT begin_timestamp, end_timestamp, type 
 		FROM shiftTable 
 		WHERE asset_id=$1 
-			AND (begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-			OR (begin_timestamp < $2 AND end_timestamp > $3) 
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC LIMIT 1;
 		`
 
@@ -398,8 +398,8 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 		SELECT begin_timestamp, end_timestamp, type 
 		FROM shiftTable 
 		WHERE asset_id=$1 
-			AND (begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-			OR (begin_timestamp < $2 AND end_timestamp > $3) 
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
 		rows, err := db.Query(sqlStatement, assetID, from, to) //OFFSET to prevent entering first result twice

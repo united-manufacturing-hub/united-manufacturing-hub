@@ -109,6 +109,7 @@ func calculateDurations(parentSpan opentracing.Span, temporaryDatapoints []datam
 				"timestampAfterCurrentOne.Sub(timestampCurrent).Seconds()", timestampAfterCurrentOne.Sub(timestampCurrent).Seconds(),
 				"timestampAfterCurrentOne", timestampAfterCurrentOne,
 				"timestampCurrent", timestampCurrent,
+				"state", datapoint.State,
 			)
 		}
 		durations = append(durations, timestampAfterCurrentOne.Sub(timestampCurrent).Seconds())
@@ -1518,7 +1519,14 @@ func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints 
 
 			// additional error check (this fails if the states are not in order)
 			if timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0 {
-				zap.S().Errorf("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0", timestampAfterCurrentOne.Sub(timestampCurrent).Seconds(), timestampAfterCurrentOne, timestampCurrent)
+				error = errors.New("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0 detected")
+				BusinessLogicErrorHandling(parentSpan, "calculateDurations", error, false)
+				zap.S().Errorw("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0",
+					"timestampAfterCurrentOne.Sub(timestampCurrent).Seconds()", timestampAfterCurrentOne.Sub(timestampCurrent).Seconds(),
+					"timestampAfterCurrentOne", timestampAfterCurrentOne,
+					"timestampCurrent", timestampCurrent,
+					"state", state.State,
+				)
 			}
 
 			duration := timestampAfterCurrentOne.Sub(timestampCurrent).Seconds()
