@@ -82,6 +82,9 @@ const (
 	// ExternalInterferenceState means that the asset is not running because of an external interference
 	ExternalInterferenceState = 200000
 
+	// CraneNotAvailableState means that the asset is not running because the crane is currently not available
+	CraneNotAvailableState = 200010
+
 	// PreventiveMaintenanceStop means that the asset is currently undergoing a preventive maintenance action
 	PreventiveMaintenanceStop = 210000
 
