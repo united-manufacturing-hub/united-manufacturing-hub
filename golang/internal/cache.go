@@ -45,8 +45,6 @@ func AsHash(o interface{}) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// TODO: Check the cache only for one key in parallel as queries often come in bulks
-
 // GetProcessStatesFromCache gets process states from cache
 func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests

@@ -85,7 +85,6 @@ func storeIntoTable(timestampMs int64, DBassetID int, tableName string, value in
 		PQErrorHandling("db.BeginTx()", err)
 	}
 
-	// TODO
 	// WARNING SQL INJECTION POSSIBLE
 	sqlStatement := `
 		INSERT INTO ` + tableName + `(timestamp, asset_id, ` + columnName + `) 
