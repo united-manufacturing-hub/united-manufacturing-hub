@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS configurationTable
     MinimumRunningTimeInSeconds INTEGER DEFAULT 0, --do not apply
     ThresholdForNoShiftsConsideredBreakInSeconds INTEGER DEFAULT 60*35,
 	LowSpeedThresholdInPcsPerHour INTEGER DEFAULT -1, --do not apply
+    AutomaticallyIdentifyChangeovers BOOLEAN DEFAULT true,
     LanguageCode INTEGER DEFAULT 1, -- english
 	AvailabilityLossStates INTEGER[] DEFAULT '{40000, 180000, 190000, 200000, 210000, 220000}', 
     PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'

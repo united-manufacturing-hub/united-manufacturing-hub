@@ -263,6 +263,16 @@ func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, 
 	return
 }
 
+func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, from time.Time, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
+	// Loop through all datapoints
+	for _, dataPoint := range orderArray {
+		if isTimepointInTimerange(dataPoint.BeginTimestamp, TimeRange{from, to}) || isTimepointInTimerange(dataPoint.EndTimestamp, TimeRange{from, to}) {
+			processedOrdersArray = append(processedOrdersArray, dataPoint)
+		}
+	}
+	return
+}
+
 func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from time.Time, to time.Time) (processedStates []datamodel.StateEntry) {
 	// Loop through all datapoints
 	for _, dataPoint := range processedStatesRaw {
@@ -616,11 +626,25 @@ func specifyUnknownStopsWithFollowingStopReason(parentSpan opentracing.Span, sta
 	return
 }
 
-// Adds orders with id
-func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw) (processedOrders []datamodel.OrderEntry) {
+// Adds noOrders at the beginning, ending and between orders
+func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from time.Time, to time.Time) (processedOrders []datamodel.OrderEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range orderArray {
+
+		// if first entry and no order has started yet, then add no order till first order starts
+		if index == 0 && dataPoint.BeginTimestamp.After(from) {
+
+			newTimestampEnd := dataPoint.BeginTimestamp.Add(time.Duration(-1) * time.Millisecond) // end it one Millisecond before the next orders starts
+
+			fullRow := datamodel.OrderEntry{
+				TimestampBegin: from,
+				TimestampEnd:   newTimestampEnd,
+				OrderType:      "noOrder",
+			}
+			processedOrders = append(processedOrders, fullRow)
+		}
+
 		if index > 0 { //if not the first entry, add a noShift
 
 			previousDataPoint := orderArray[index-1]
@@ -637,6 +661,8 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw) (processedOrders
 				processedOrders = append(processedOrders, fullRow)
 			}
 		}
+
+		// add original order
 		fullRow := datamodel.OrderEntry{
 			TimestampBegin: dataPoint.BeginTimestamp,
 			TimestampEnd:   dataPoint.EndTimestamp,
@@ -644,6 +670,18 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw) (processedOrders
 		}
 		processedOrders = append(processedOrders, fullRow)
 
+		// if last entry and previous order has finished, add a no order
+		if index == len(orderArray)-1 && dataPoint.EndTimestamp.Before(to) {
+
+			newTimestampBegin := dataPoint.EndTimestamp.Add(time.Duration(1) * time.Millisecond) // start one Millisecond after the previous order ended
+
+			fullRow := datamodel.OrderEntry{
+				TimestampBegin: newTimestampBegin,
+				TimestampEnd:   to,
+				OrderType:      "noOrder",
+			}
+			processedOrders = append(processedOrders, fullRow)
+		}
 	}
 	return
 }
@@ -675,7 +713,7 @@ func GetOrdersTimeline(parentSpan opentracing.Span, customerID string, location 
 		return
 	}
 
-	processedOrders := addNoOrdersBetweenOrders(rawOrders)
+	processedOrders := addNoOrdersBetweenOrders(rawOrders, from, to)
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedOrders {
@@ -749,7 +787,7 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 			actualTimePerUnit = int(actualDuration / int(actualUnits))
 		}
 
-		processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, from, to, configuration)
+		processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, rawOrders, from, to, configuration)
 		if err != nil {
 			errReturn = err
 			return
@@ -880,7 +918,7 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 }
 
 // processStatesOptimized splits up arrays efficiently for better caching
-func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 	var processedStatesTemp []datamodel.StateEntry
 
 	for current := from; current != to; {
@@ -889,7 +927,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, current, to, configuration)
+			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
 				return
@@ -897,7 +935,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, current, currentTo, configuration)
+			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
 
@@ -915,8 +953,21 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 	return
 }
 
-// processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent) and calculating new ones (e.g. microstops)
-func processStates(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+// processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent)
+// and calculating new ones (e.g. microstops)
+func processStates(parentSpan opentracing.Span,
+	assetID int,
+	stateArray []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	countSlice []datamodel.CountEntry,
+	orderArray []datamodel.OrdersRaw,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration,
+) (
+	processedStateArray []datamodel.StateEntry,
+	err error,
+) {
 
 	// Jaeger tracing
 	var span opentracing.Span
@@ -940,20 +991,10 @@ func processStates(parentSpan opentracing.Span, assetID int, stateArray []datamo
 			return
 		}
 
-		// For testing
-		loggingTimestamp := time.Now()
-		if parentSpan != nil && logData {
-			internal.LogObject("processStates", "stateArray", loggingTimestamp, stateArray)
-			internal.LogObject("processStates", "rawShifts", loggingTimestamp, rawShifts)
-			internal.LogObject("processStates", "countSlice", loggingTimestamp, countSlice)
-			internal.LogObject("processStates", "from", loggingTimestamp, from)
-			internal.LogObject("processStates", "to", loggingTimestamp, to)
-			internal.LogObject("processStates", "configuration", loggingTimestamp, configuration)
-		}
-
 		// remove elements outside from, to
 		processedStateArray = removeUnnecessaryElementsFromStateSlice(stateArray, from, to)
 		countSlice = removeUnnecessaryElementsFromCountSlice(countSlice, from, to)
+		orderArray = removeUnnecessaryElementsFromOrderArray(orderArray, from, to)
 
 		processedStateArray, err = removeSmallRunningStates(span, processedStateArray, configuration)
 		if err != nil {
@@ -1008,15 +1049,16 @@ func processStates(parentSpan opentracing.Span, assetID int, stateArray []datamo
 			return
 		}
 
+		processedStateArray, err = automaticallyIdentifyChangeovers(span, processedStateArray, orderArray, from, to, configuration)
+		if err != nil {
+			zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
+			return
+		}
+
 		processedStateArray, err = specifySmallNoShiftsAsBreaks(span, processedStateArray, configuration)
 		if err != nil {
 			zap.S().Errorf("specifySmallNoShiftsAsBreaks failed", err)
 			return
-		}
-
-		// for testing
-		if parentSpan != nil && logData {
-			internal.LogObject("processStates", "processedStateArray", loggingTimestamp, processedStateArray)
 		}
 
 		// Store to cache
@@ -1495,6 +1537,192 @@ func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints 
 
 	} else {
 		zap.S().Errorf("Failed to get Mutex")
+	}
+
+	return
+}
+
+// getOrdersThatOverlapWithState gets all orders that overlap with a given time range (ignoring noOrders)
+// this assumes that orderArray is in ascending order
+func getOrdersThatOverlapWithTimeRange(stateTimeRange TimeRange, orderArray []datamodel.OrdersRaw) (overlappingOrders []datamodel.OrdersRaw) {
+	for _, order := range orderArray {
+
+		if order.OrderName == "noOrder" { // only process proper orders and not the filler in between them
+			continue
+		}
+
+		// if the order is entirely in TimeRange
+		if isTimepointInTimerange(order.BeginTimestamp, stateTimeRange) && isTimepointInTimerange(order.EndTimestamp, stateTimeRange) {
+			// this means the order is entirely in an unspecified state
+			// ignoring
+
+			continue
+		}
+
+		// if the order overlaps somehow, add it to overlapping orders
+		if isTimepointInTimerange(order.BeginTimestamp, stateTimeRange) || isTimepointInTimerange(order.EndTimestamp, stateTimeRange) {
+			overlappingOrders = append(overlappingOrders, order)
+
+			continue
+		}
+
+	}
+	return
+}
+
+// calculateChangeoverStates splits up an unspecified stop into changeovers (assuming they are in order and there are no noOrder)
+func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []datamodel.OrdersRaw) (processedStateArray []datamodel.StateEntry, error error) {
+
+	if len(overlappingOrders) == 1 {
+		order := overlappingOrders[0]
+
+		// if the order begin is in the timerange
+		if isTimepointInTimerange(order.BeginTimestamp, stateTimeRange) {
+
+			fullRow := datamodel.StateEntry{
+				State:     datamodel.UnspecifiedStopState,
+				Timestamp: stateTimeRange.Begin,
+			}
+			processedStateArray = append(processedStateArray, fullRow)
+
+			// start preparation process
+			fullRow = datamodel.StateEntry{
+				State:     datamodel.ChangeoverPreparationState,
+				Timestamp: order.BeginTimestamp,
+			}
+			processedStateArray = append(processedStateArray, fullRow)
+
+			return // we can abort here as there is no logical case that there would be any order after this (it would cause atleast one order be in the entire unspecified state)
+
+		} else if isTimepointInTimerange(order.EndTimestamp, stateTimeRange) { // if the end timestamp is in the timerange
+
+			// start postprocessing process
+			fullRow := datamodel.StateEntry{
+				State:     datamodel.ChangeoverPostprocessingState,
+				Timestamp: stateTimeRange.Begin,
+			}
+
+			processedStateArray = append(processedStateArray, fullRow)
+
+			// unspecified stop after here
+			fullRow = datamodel.StateEntry{
+				State:     datamodel.UnspecifiedStopState,
+				Timestamp: order.EndTimestamp,
+			}
+			processedStateArray = append(processedStateArray, fullRow)
+		}
+
+	} else if len(overlappingOrders) == 2 { // there is only one case left: the state has one order ending in it and one starting
+		firstOrder := overlappingOrders[0]
+		secondOrder := overlappingOrders[1]
+
+		// start postprocessing process
+		fullRow := datamodel.StateEntry{
+			State:     datamodel.ChangeoverPostprocessingState,
+			Timestamp: stateTimeRange.Begin,
+		}
+
+		processedStateArray = append(processedStateArray, fullRow)
+
+		// changeover after here
+		fullRow = datamodel.StateEntry{
+			State:     datamodel.UnspecifiedStopState,
+			Timestamp: firstOrder.EndTimestamp,
+		}
+		processedStateArray = append(processedStateArray, fullRow)
+
+		// start preparation process
+		fullRow = datamodel.StateEntry{
+			State:     datamodel.ChangeoverPreparationState,
+			Timestamp: secondOrder.BeginTimestamp,
+		}
+		processedStateArray = append(processedStateArray, fullRow)
+
+	} else {
+		// not possible. throw error
+		error = errors.New("More than 2 overlapping orders with one state")
+		return
+
+	}
+
+	return
+}
+
+// automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
+func automaticallyIdentifyChangeovers(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+	// Jaeger tracing
+	var span opentracing.Span
+	if parentSpan != nil { //nil during testing
+		span = opentracing.StartSpan(
+			"automaticallyIdentifyChangeovers",
+			opentracing.ChildOf(parentSpan.Context()))
+		defer span.Finish()
+	}
+
+	// Loop through all datapoints
+	for index, dataPoint := range stateArray {
+
+		if configuration.AutomaticallyIdentifyChangeovers { // only execute when configuration is set
+
+			var state int
+			var timestamp time.Time
+
+			var followingDataPoint datamodel.StateEntry
+			var stateTimeRange TimeRange
+
+			if !datamodel.IsUnspecifiedStop(dataPoint.State) { //if not unspecified, do not do anything
+				fullRow := datamodel.StateEntry{State: dataPoint.State, Timestamp: dataPoint.Timestamp}
+				processedStateArray = append(processedStateArray, fullRow)
+				continue
+			}
+
+			if index == len(stateArray)-1 { //if last entry, use end timestamp instead of following datapoint
+				stateTimeRange = TimeRange{dataPoint.Timestamp, to}
+			} else {
+				followingDataPoint = stateArray[index+1]
+				stateTimeRange = TimeRange{dataPoint.Timestamp, followingDataPoint.Timestamp}
+			}
+
+			overlappingOrders := getOrdersThatOverlapWithTimeRange(stateTimeRange, orderArray)
+
+			if len(overlappingOrders) != 0 { // if it overlaps
+
+				rows, err := calculateChangeoverStates(stateTimeRange, overlappingOrders)
+				if err != nil {
+					zap.S().Errorf("calculatateChangeoverStates failed", err)
+					error = err
+					return
+				}
+				// Add all states
+				for _, row := range rows {
+					processedStateArray = append(processedStateArray, row)
+				}
+
+			} else { // if it does not overlap
+				state = dataPoint.State
+				timestamp = dataPoint.Timestamp
+				fullRow := datamodel.StateEntry{
+					State:     state,
+					Timestamp: timestamp,
+				}
+				processedStateArray = append(processedStateArray, fullRow)
+			}
+		} else {
+			fullRow := datamodel.StateEntry{
+				State:     dataPoint.State,
+				Timestamp: dataPoint.Timestamp,
+			}
+			processedStateArray = append(processedStateArray, fullRow)
+		}
+	}
+
+	// For testing
+	loggingTimestamp := time.Now()
+	if parentSpan != nil && logData {
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "stateArray", loggingTimestamp, stateArray)
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "orderArray", loggingTimestamp, orderArray)
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "configuration", loggingTimestamp, configuration)
+		internal.LogObject("AutomaticallyIdentifyChangeovers", "processedStateArray", loggingTimestamp, processedStateArray)
 	}
 
 	return
