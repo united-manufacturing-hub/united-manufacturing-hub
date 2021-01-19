@@ -266,7 +266,8 @@ func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, 
 func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from time.Time, to time.Time) (processedStates []datamodel.StateEntry) {
 	// Loop through all datapoints
 	for _, dataPoint := range processedStatesRaw {
-		if isTimepointInTimerange(dataPoint.Timestamp, TimeRange{from, to}) {
+		// if is state in range or equal to from or to time range
+		if isTimepointInTimerange(dataPoint.Timestamp, TimeRange{from, to}) || dataPoint.Timestamp == from || dataPoint.Timestamp == to {
 			processedStates = append(processedStates, dataPoint)
 		}
 	}

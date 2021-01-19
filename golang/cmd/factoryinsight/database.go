@@ -256,6 +256,9 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 			return
 		} else {
 			// use "from" timestamp instead of timestamp in the state as we want to look only at data within the selected time range
+
+			dataPoint = datamodel.ConvertOldToNew(dataPoint)
+
 			fullRow := datamodel.StateEntry{
 				State:     dataPoint,
 				Timestamp: from,
