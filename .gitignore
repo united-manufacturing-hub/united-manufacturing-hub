@@ -15,3 +15,6 @@
 .dccache
 
 /**/persistentData/*
+
+# do not include automatically created PDFs 
+docs/**/*.pdf
