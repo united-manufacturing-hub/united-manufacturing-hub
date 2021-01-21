@@ -615,6 +615,9 @@ func GetCurrentState(parentSpan opentracing.Span, customerID string, location st
 		return
 	}
 
+	// Convert old data model to new data model
+	dataPoint = datamodel.ConvertOldToNew(dataPoint)
+
 	if keepStatesInteger {
 		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
