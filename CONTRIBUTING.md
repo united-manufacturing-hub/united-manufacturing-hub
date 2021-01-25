@@ -22,9 +22,13 @@ We are happy about every new idea, change request or found bug! For each feature
 
 #### Sprint Start
 
-Internally we work in 2 week sprints. The list of all open issues without an assigned milestone is our backlog. At the beginning of each sprint we take the most important issues and assign them a milestone. Thus we define the content of a Sprint. Each sprint / milestone results in a new version of the United Manufacturing Hub. Therefore, milestones are named and versioned according to the [structure further down](#versioning). Bigger features, so called EPICs, can be divided into multiple issues and get's its own MINOR version. This can also result in one issue beeing added to two milestones: one for the current sprint and one for the corresponding EPIC and MINOR version.
+Internally we work in 2 week sprints. The list of all open issues without an assigned milestone is our backlog.
 
-At the beginning of the sprint a draft pull request is created from staging to main.
+At the beginning of each sprint we take the most important issues and add them to the project board "current sprint". Thus we define the content of a sprint. Each sprint results in a new version of the United Manufacturing Hub with a increased PATCH version, which includes all smaller changes that are not related to another milestone / bigger epic. For more information about versioning take a look [into the corresponding chapter](#versioning)
+
+An epic consists out of multiple issues that are bundled together in a user story. They can can be divided into multiple issues and get's its own MINOR or MAJOR version.
+
+At the beginning of the sprint a draft pull request is created from staging to main to track the overall changes.
 
 #### Processing of the work package
 
