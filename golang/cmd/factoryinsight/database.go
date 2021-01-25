@@ -256,6 +256,9 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 			return
 		} else {
 			// use "from" timestamp instead of timestamp in the state as we want to look only at data within the selected time range
+
+			dataPoint = datamodel.ConvertOldToNew(dataPoint)
+
 			fullRow := datamodel.StateEntry{
 				State:     dataPoint,
 				Timestamp: from,
@@ -355,8 +358,8 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 		SELECT begin_timestamp, end_timestamp, type 
 		FROM shiftTable 
 		WHERE asset_id=$1 
-			AND (begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-			OR (begin_timestamp < $2 AND end_timestamp > $3) 
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC LIMIT 1;
 		`
 
@@ -398,8 +401,8 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 		SELECT begin_timestamp, end_timestamp, type 
 		FROM shiftTable 
 		WHERE asset_id=$1 
-			AND (begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-			OR (begin_timestamp < $2 AND end_timestamp > $3) 
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
 		rows, err := db.Query(sqlStatement, assetID, from, to) //OFFSET to prevent entering first result twice
@@ -611,6 +614,9 @@ func GetCurrentState(parentSpan opentracing.Span, customerID string, location st
 		error = err
 		return
 	}
+
+	// Convert old data model to new data model
+	dataPoint = datamodel.ConvertOldToNew(dataPoint)
 
 	if keepStatesInteger {
 		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}

@@ -58,6 +58,8 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 			stateString = "Externe Störung"
 		case ExternalInterferenceState:
 			stateString = "Sonstige externe Störung"
+		case CraneNotAvailableState:
+			stateString = "Kran nicht verfügbar"
 		case PreventiveMaintenanceStop:
 			stateString = "Wartung"
 		case TechnicalOtherStop:
@@ -115,6 +117,8 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 			stateString = "External failure"
 		case ExternalInterferenceState:
 			stateString = "External interference"
+		case CraneNotAvailableState:
+			stateString = "Crane not available"
 		case PreventiveMaintenanceStop:
 			stateString = "Maintenance"
 		case TechnicalOtherStop:
