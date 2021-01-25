@@ -1,0 +1,266 @@
+# TODO: Add all other APIs as well.
+
+openapi: '3.0.2'
+info:
+  title: factoryinsight
+  version: '1.0'
+servers:
+  - url: https://api.industrial-analytics.net/api/v1
+
+components:
+  
+  parameters:
+
+      customer:
+        in: path
+        name: customer
+        schema:
+          type: string
+        required: true
+        description: name of the customer
+        example:
+          DCCAachen
+
+      location:
+        in: path
+        name: location
+        schema:
+          type: string
+        required: true
+        description: name of the location
+        example:
+          AachenPlant
+      
+      asset:
+        in: path
+        name: asset
+        schema:
+          type: string
+        required: true
+        description: name of the asset
+        example:
+          WeavingMachine
+      
+      from:
+        in: query
+        name: from
+        schema:
+          type: string
+        required: true
+        description: Get data from this timestamp on (in RFC3339 format)
+        example:
+          2020-11-10T00:00:00.000Z
+
+      to:
+        in: query
+        name: to
+        schema:
+          type: string
+        required: true
+        description: Get data till this timestamp (in RFC3339 format)
+        example:
+          2020-11-10T00:00:00.000Z
+
+      keepStatesInteger:
+        in: query
+        name: to
+        schema:
+          type: boolean
+        description: If set to true all returned states will be numbers at not strings
+        example:
+          true
+
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+
+paths:
+  /{customer}:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+      responses:
+        '200':
+          description: available locations for that customer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example:
+                  - AachenPlant
+                  - DuesseldorfPlant
+                  
+  /{customer}/{location}:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        
+      responses:
+        '200':
+          description: available assets for that customer and location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example:
+                  - Warping
+                  - Weaving
+
+  /{customer}/{location}/{asset}:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: available datapoints for that customer, location and asset
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example:
+                  - state
+                  - count
+                  - currentState
+                  - recommendation
+                  - aggregatedStates
+                  - timeRange
+                  - availability
+                  - performance
+                  - oee
+                  - productionSpeed
+                  - shifts
+                  - stateHistogram
+                  - factoryLocations
+                  - averageCleaningTime
+                  - averageChangeoverTime
+                  - upcomingMaintenanceActivities
+                  - maintenanceComponents
+                  - maintenanceActivities
+                  - uniqueProducts
+                  - orderTable
+                  - orderTimeline
+                  - process_SignalLamp
+                  - process_TotalActivePower
+                  - process_TotalApparentPower
+
+  /{customer}/{location}/{asset}/state:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/keepStatesInteger'
+      responses:
+        '200':
+          description: This returns all states in the selected time range in a data format that can be consumed easily by Grafana
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-AachenPlant-WeavingMachine-state
+                      - timestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "No shift"
+                        - 1605187036148
+                      - 
+                        - "Producing"
+                        - 1605201132835
+
+  /{customer}/{location}/{asset}/count:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the produced pieces in the selected time range in a data format that can be consumed easily by Grafana
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-AachenPlant-WeavingMachine-count
+                      - timestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1250
+                        - 1605201148990
+                      - 
+                        - 625
+                        - 1605201408149
+
+
+  /{customer}/{location}/{asset}/currentState:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This returns the current asset state in a data format that can be consumed easily by Grafana
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-AachenPlant-WeavingMachine-state
+                      - timestamp
+                  datapoints:
+                    type: array
+                    maxLength: 1
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "Unbekannter Zustand 1"
+                        - 1608298176825
+
+security:
+  - BasicAuth: []
