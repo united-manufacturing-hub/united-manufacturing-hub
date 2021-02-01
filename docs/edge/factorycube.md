@@ -50,6 +50,7 @@ You need:
 - an Ethernet cable (provided)
 - a laptop which is not connected to any VPN
 
+For a network overview of the Factorycube, click [here](networking.md)
 ### Instructions to login
 
 Connect the factorycube with your computer via an ethernet cable using the IO-Link port (not Internet!) on the factorycube.
