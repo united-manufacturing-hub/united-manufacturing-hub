@@ -24,6 +24,8 @@ At the Digital Capability Center (DCC) Atlanta, an Industry 4.0 learning and dem
 
 ## Solution
 
+### Integration
+
 ### Installed hardware
 
 #### factorycube

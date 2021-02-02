@@ -27,6 +27,8 @@ At the Digital Capability Center (DCC) Aachen, a learning and demonstration fact
 
 ## Solution
 
+### Integration
+
 ### Installed hardware
 
 #### factorycube
@@ -117,4 +119,4 @@ Assumptions:
 
 [Here you can download the flow described above](../examples/flows/AssemblyAnalytics.json)
 
-[factorycube]: https://123
+[factorycube]: (../edge/factorycube.md)

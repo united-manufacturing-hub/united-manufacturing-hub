@@ -38,6 +38,8 @@
 
 ## Solution
 
+### Integration
+
 ### Installed hardware
 
 #### factorycube
@@ -104,6 +106,4 @@ The customer opted for our SaaS offering. We created the following dashboards fo
 
 TODO
 
-
-
-[factorycube]: https://123
+[factorycube]: (../edge/factorycube.md)
