@@ -43,9 +43,9 @@ United Manufacturing Hub is an open source system for extracting and analyzing d
 
 ### Features
 
-- **Fullfills all your Industrial IoT needs**. The United Factorycube and the United Manufacturing Hub represent a complete hardware and software package. When selecting the components, we paid particular attention to only use established and scalable subcomponents in order to meet the requirements of an enterprise-ready solution. This makes the System highly flexible and easily scaleable.
+- **Fulfills all your Industrial IoT needs**. The United Factorycube and the United Manufacturing Hub represent a complete hardware and software package. When selecting the components, we paid particular attention to only use established and scalable sub-components in order to meet the requirements of an enterprise-ready solution. This makes the System highly flexible and easily scalable.
 - **Solves concrete problems**. The United Manufacturing Hub is our solution that presents the data of the connected production lines in real time. Additional the system includes a portfolio of specific, ready to use solutions to facilitate daily work production. The portfolio contains tools to calculate and analyse the OEE, to break down optimization potentials, to facilitate reporting, to monitor diverse processes via alarms and to enable a condition-based forward looking maintenance.
-- **Open Source**. We combine the best of established open source projects to give all producing companies and machine manufacturers an easy and straigtforward access to modern technology. For this purpose we publish both the core software and our gathered knowledge to this topic on our Hub so that everyone interested has free access to the information and core software in order to develop own solutions for his needs. For you, this means: 1. free of charge, forever; 2. no lock-in, because you can adapt the software yourself at any time.
+- **Open Source**. We combine the best of established open source projects to give all producing companies and machine manufacturers an easy and straightforward access to modern technology. For this purpose we publish both the core software and our gathered knowledge to this topic on our Hub so that everyone interested has free access to the information and core software in order to develop own solutions for his needs. For you, this means: 1. free of charge, forever; 2. no lock-in, because you can adapt the software yourself at any time.
 
 ### Dashboard demo
 
@@ -66,23 +66,23 @@ Check out [Getting Started](docs/getting-started.md) for more information on how
 
 The United Manufacturing Hub has been deployed in various industries, from CNC milling over filling to flame cutting.
 
-Here are some selected cases. For detailled information, please take a look in [our documentation](docs/examples/overview.md)
+Here are some selected cases. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
 
 ### Flame cutting
 
-![flame cutting](docs/examples/images/flame-cutting.png)
+<img src="docs/examples/images/flame-cutting.png" height="150">
 
 Retrofitting of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data
 
 ### Brewery
 
-![brewery](docs/examples/images/brewery.png)
+<img src="docs/examples/images/brewery.png" height="150">
 
 Retrofit of a bottling line for different beer types. Focus on the identification of microstops causes and exact delimitation of the bottleneck machine.
 
 ### Weaving
 
-![brewery](docs/examples/images/weaving.png)
+<img src="docs/examples/images/weaving.png" height="150">
 
 Retrofitting of weaving machines that do not provide data via the PLC to extract operating data. Subsequent determination of the OEE and detailed breakdown of the individual key figures
 
@@ -99,13 +99,12 @@ Contributions are what make the open source community such an amazing place to b
 <!-- LICENSE -->
 ## License
 
-Distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See [`LICENSE`](LICENSE) for more information.
+All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See [`LICENSE`](LICENSE) for more information. All other components (e.g. trademarks, images, logos) are property of the respective owner.
 
 <!-- CONTACT -->
 ## Contact
 
-United Factory Systems GmbH
-
+[United Factory Systems GmbH](https://www.united-manufacturing-hub.com)
 
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
