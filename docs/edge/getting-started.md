@@ -45,6 +45,8 @@ Furthermore, you will find under the general settings:
 
 ### Outputs
 
+[See also DCC Aachen example in our showcase.](../examples/dcc-assembly-analytics.md)
+
 ## 3. Configure your Dashboard
 
 TODO

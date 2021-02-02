@@ -70,19 +70,19 @@ Here are some selected cases. For detailed information, please take a look in [o
 
 ### Flame cutting
 
-![flame cutting](docs/examples/images/flame-cutting.png)
+<img src="docs/examples/images/flame-cutting.png" height="150">
 
 Retrofitting of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data
 
 ### Brewery
 
-![brewery](docs/examples/images/brewery.png)
+<img src="docs/examples/images/brewery.png" height="150">
 
 Retrofit of a bottling line for different beer types. Focus on the identification of microstops causes and exact delimitation of the bottleneck machine.
 
 ### Weaving
 
-![brewery](docs/examples/images/weaving.png)
+<img src="docs/examples/images/weaving.png" height="150">
 
 Retrofitting of weaving machines that do not provide data via the PLC to extract operating data. Subsequent determination of the OEE and detailed breakdown of the individual key figures
 
@@ -104,8 +104,7 @@ All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See 
 <!-- CONTACT -->
 ## Contact
 
-United Factory Systems GmbH
-
+[United Factory Systems GmbH](https://www.united-manufacturing-hub.com)
 
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
