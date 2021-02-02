@@ -27,7 +27,7 @@
 
 ### Heterogeneous machinery and machine controls from different manufacturers
 
-- Only minimal connection of the machines to the ERP system 
+- Only minimal connection of the machines to the ERP system
 - Manual input of production data into the ERP system
 - Machine controls are partially locked by manufacturers
 - Machine controls use different protocols
