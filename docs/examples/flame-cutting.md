@@ -15,6 +15,7 @@
 
 ![](images/flame-cutting/strahlanlage.png)
 ![](images/flame-cutting/autogen1.jpg)
+![](images/flame-cutting/dashboard_nice.png)
 
 ## Challenges
 
@@ -104,6 +105,49 @@ Model:
 
 The customer opted for our SaaS offering. We created the following dashboards for the client.
 
-TODO
+#### Navigation
+
+![](images/flame-cutting/dashboard_1.png)
+
+Default navigation options from Grafana, which we modified to allow custom menus.
+
+1. Customizable menu lets you quickly navigate between dashboards
+1. In the time selection you can adjust the times for the current dashboard
+
+#### Plant-manager dashboard
+
+![](images/flame-cutting/dashboard_2.png)
+
+1. Dashboard for the plant manager / shift supervisor, which gives an overview of the production in the factory
+1. For each machine the current machine status
+1. For each machine, the overall equipment effectiveness / OEE for the selected time period
+1. For each machine, a timeline showing the machine statuses in color
+1. Overview of all orders, including target/actual deviation and which stop reasons, including setup times, occurred during the order
+
+#### Machine deep dive
+
+![](images/flame-cutting/dashboard_3.png)
+
+1. Dashboard for the machine operator / shift supervisor, which displays the details for a machine
+1. The current machine status with time stamp
+1. The overall equipment effectiveness / OEE for the selected time period, including trend over time
+1. An overview of the accumulated duration of each stop reason
+1. A timeline where the machine states are color coded
+1. A timeline where the shifts become visible
+1. A timeline where the orders are displayed
+1. Overview of all orders, including target/actual deviation and which stop reasons, including setup times, occurred during the order
+1. Overview of the number of individual stop reasons
+
+#### Cross-factory dashboard
+
+![](images/flame-cutting/dashboard_4.png)
+
+1. Dashboard for the cross-factory manager, who can use this to obtain an overview of the sites
+1. The overall equipment effectiveness / OEE for the selected time period for all machines.
+1. The minimum overall equipment effectiveness / OEE for the selected time period for machine type A.
+1. The average overall equipment effectiveness / OEE for the selected time period for machine type A
+1. The maximum overall equipment effectiveness / OEE for the selected period for machine type A
+1. Overview of all orders, including target/actual deviation and which stop reasons, including setup times, occurred during the order
+1. Export function as .csv
 
 [factorycube]: (../edge/factorycube.md)
