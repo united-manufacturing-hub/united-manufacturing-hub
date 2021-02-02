@@ -99,12 +99,10 @@ Used Sensors:
 
 Now the machine status is automatically determined and communicated to the united manufacturing hub for further analysis. Like for example the speed loss.
 
-TODO: add example Flow
+TODO: #63 add example Flow for data processing
 ### Testing:
 <img src="images/nodered_testing.png" height="200">
 
+With the help of the testing flows you can test your entire system or simply simulate some sample data for visualization.
+
 [See also DCC Aachen example in our showcase.](../examples/dcc-assembly-analytics.md)
-
-## 3. Configure your Dashboard
-
-TODO
