@@ -149,13 +149,13 @@ func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID
 
 	b, err := json.Marshal(&processedStateArray)
 	if err != nil {
-		zap.S().Errorf("json marshall")
+		zap.S().Errorf("json marshall: %+v", err)
 		return
 	}
 
 	err = rdb.Set(ctx, key, b, dataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %+v", err)
 		return
 	}
 }
