@@ -1,6 +1,6 @@
 # Hardware architecture
 
-TODO: add architecture
+TODO: #72 add architecture
 
 ## sensorconnect
 

@@ -6,6 +6,8 @@ At the Digital Capability Center (DCC) Aachen, a learning and demonstration fact
 
 ### Photos of the machines
 
+![](images/DCC-assembly-analytics.jpg)
+
 ## Challenges
 
 ### Lack of information about production performance
@@ -28,6 +30,8 @@ At the Digital Capability Center (DCC) Aachen, a learning and demonstration fact
 ## Solution
 
 ### Integration
+
+TODO: #66 Add integration for DCC assembly analytics
 
 ### Installed hardware
 
@@ -65,7 +69,7 @@ Proximity sensors on the foot switches of sewing machines detect activity of the
 
 Models:
 
-- ifm TODO
+- ifm KQ6005
 
 #### Barcode scanner
 
@@ -75,13 +79,22 @@ The barcode scanner is used to scan the wristband at the beginning of the assemb
 
 Model:
 
-- TODO
+- Datalogic PowerScan PD9531
+- Datalogic USB Cable Straight 2m (CAB-438)
 
 ### Implemented dashboards
 
-The customer opted for a combination of our SaaS offering with the building kit (and thus an on-premise option). We created the following dashboards for the client.
+The customer opted for a combination of our SaaS offering with the building kit (and thus an on-premise option). The customer decided to go for PowerBI as a dashboard and connected it via the REST API with factoryinsight.
 
-TODO
+![](images/dcc-assembly-analytics/1.png)
+![](images/dcc-assembly-analytics/2.png)
+![](images/dcc-assembly-analytics/3.png)
+![](images/dcc-assembly-analytics/4.png)
+![](images/dcc-assembly-analytics/5.png)
+![](images/dcc-assembly-analytics/6.png)
+![](images/dcc-assembly-analytics/7.png)
+![](images/dcc-assembly-analytics/8.png)
+![](images/dcc-assembly-analytics/9.png)
 
 ### Used node-red flows
 

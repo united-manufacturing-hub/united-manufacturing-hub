@@ -6,6 +6,10 @@ At the Digital Capability Center (DCC) Atlanta, an Industry 4.0 learning and dem
 
 ### Photos of the machines
 
+![](images/dcc-quality-check/picture1.jpg)
+![](images/dcc-quality-check/picture2.jpg)
+![](images/dcc-quality-check/picture3.jpg)
+
 ## Challenges
 
 ### Manual visual inspection causes high costs
@@ -17,7 +21,7 @@ At the Digital Capability Center (DCC) Atlanta, an Industry 4.0 learning and dem
 
 - Various quality defects are difficult to detect with the naked eye and are occasionally overlooked
 
-### No data on quality defects that occur for product and process improvement.
+### No data on quality defects that occur for product and process improvement
 
 - Type and frequency of quality defects are not recorded and documented
 - No data exists that can be analyzed to derive improvement measures for product and process optimization
@@ -25,6 +29,8 @@ At the Digital Capability Center (DCC) Atlanta, an Industry 4.0 learning and dem
 ## Solution
 
 ### Integration
+
+TODO: #67 Add integration for DCC quality check
 
 ### Installed hardware
 
@@ -62,16 +68,14 @@ A camera takes a picture of the bottle and sends it to the factorycube.
 
 Models:
 
-- TODO
+- Allied Vision (Mako G-223)
 
 ### Detectable quality defects
 
-TODO: Photo "Quality defects that can be detected by our system."
+![Quality defects, Defective lid, Incorrect fill level, Missing lid, Pinched lid, Damaged lid, Bottle is empty, Fill level too high, Fill level too low](images/dcc-quality-check/DIAGRAM.png)
 
-### Implemented dashboards
+### Automated action
 
-The client decided to combine our SaaS offering with the building kit (and thus an on-premise option). We created the following dashboards for the client.
-
-TODO
+As soon as a quality defect is detected the defect bottle is automatically kicked out by the machine.
 
 [factorycube]: (../edge/factorycube.md)

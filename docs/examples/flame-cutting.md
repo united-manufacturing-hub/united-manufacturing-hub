@@ -41,6 +41,8 @@
 
 ### Integration
 
+TODO: #68 add integration for flame cutting
+
 ### Installed hardware
 
 #### factorycube
@@ -73,7 +75,7 @@ Models:
 
 #### Vibration sensors
 
-TODO: PHOTO
+![](images/products/VTV122.png)
 
 Vibration sensors are installed on the beam attachments and detect the machine condition via vibration. Used to measure machine conditions.
 
@@ -89,7 +91,7 @@ Button bar is operated by the machine operator in case of a machine standstill. 
 
 Model:
 
-- Self-made, based on Siemens TODO
+- Self-made, based on [Siemens SIRIUS ACT](https://mall.industry.siemens.com/mall/de/WW/Catalog/Products/10216935?tree=CatalogTree)
 
 #### Barcode scanner
 
@@ -99,7 +101,8 @@ Barcode scanners are used to scan production orders, which contain the target ti
 
 Model:
 
-- TODO
+- Datalogic PowerScan PD9531
+- Datalogic USB Cable Straight 2m (CAB-438)
 
 ### Implemented dashboards
 
