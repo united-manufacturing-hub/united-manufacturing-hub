@@ -487,8 +487,8 @@ type getAggregatedStatesRequest struct {
 }
 
 // processAggregatedStatesRequest gets all states (including running). This can be used to calculate availability.
-// If the aggregationType is 0 it will aggregate ovver the entire time span.
-// If the aggregationType is not 0 it will aggregate over various categoreis, e.g. day or hour
+// If the aggregationType is 0 it will aggregate over the entire time span.
+// If the aggregationType is not 0 it will aggregate over various categories, e.g. day or hour
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### activate jaeger tracing ###
@@ -583,6 +583,8 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		handleInternalServerError(span, c, err)
 		return
 	}
+
+	// TODO: #84 Convert states to string when keepStatesInteger is false and aggregationType is 1
 
 	// Prepare JSON
 	var data datamodel.DataResponseAny

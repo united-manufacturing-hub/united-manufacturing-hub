@@ -63,10 +63,33 @@ components:
 
       keepStatesInteger:
         in: query
-        name: to
+        name: keepStatesInteger
+        required: false
         schema:
           type: boolean
+          default:
+            false
         description: If set to true all returned states will be numbers at not strings
+        example:
+          true
+
+      aggregationType:
+        in: query
+        name: aggregationType
+        required: true
+        schema:
+          type: integer
+        description: With this parameter you can specify how the data should be aggregated. 0 means aggregating it over the entire time range. 1 means aggregating it by hours in a day.
+        example:
+          1
+
+      includeRunning:
+        in: query
+        name: includeRunning
+        required: true
+        schema:
+          type: boolean
+        description: If set to true the returned data will include running states as well. This makes sense for a pie chart showing the machine states, but for a pareto bar chart you would set this to false.
         example:
           true
 
@@ -261,6 +284,160 @@ paths:
                       - 
                         - "Unbekannter Zustand 1"
                         - 1608298176825
+  
+  /{customer}/{location}/{asset}/recommendation:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This returns the current recommendations for the asset in a data format that can be consumed easily by Grafana
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - timestamp
+                      - recommendationType
+                      - recommendationValues
+                      - recommendationTextEN
+                      - recommendationTextDE
+                      - diagnoseTextEN
+                      - diagnoseTextDE
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1600707538210
+                        - 1
+                        - {"Threshold":30,"StoppedForTime":612685}
+                        - "Start machine DCCAachen-Demonstrator or specify stop reason."
+                        - "Maschine DCCAachen-Demonstrator einschalten oder Stoppgrund auswählen."
+                        - "Machine DCCAachen-Demonstrator is not running since 612685 seconds (status: 8, threshold: 30)"
+                        - "Maschine DCCAachen-Demonstrator steht seit 612685 Sekunden still (Status: 8, Schwellwert: 30)"
+  
+  /{customer}/{location}/{asset}/timeRange:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This returns the first and last timepoint in the database in a data format that can be consumed easily by Grafana. This can be used to determine from and to parameters when you want to show all data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - firstTimestamp
+                      - lastTimestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "2020-11-03T12:27:22Z"
+                        - "2021-02-01T18:51:50Z"
+
+  /{customer}/{location}/{asset}/aggregatedStates:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/includeRunning'
+        - $ref: '#/components/parameters/keepStatesInteger'
+        - $ref: '#/components/parameters/aggregationType'
+      responses:
+        '200':
+          description: This sums up the duration of all states in the selected time range in a data format that can be consumed easily by Grafana. With aggregationType additional aggregations can be selected, e.g. grouping it additionally by the hour of the day. There is still a bug, that keepStatesInteger is not properly working in some cases #84
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      aggregationType0:
+                        - 
+                          - "state"
+                          - "duration"
+                          
+                      aggregationType1:
+                        - 
+                          - "category"
+                          - "state"
+                          - "duration"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data. duration is the amount of seconds.
+                    example:
+                      aggregationType0:
+                        - 
+                          - "Unbekannter Stopp"
+                          - 17234412.465
+                        - 
+                          - "Keine Schicht"
+                          - 3818293.775
+
+                      aggregationType1:
+                        - 
+                          - 9
+                          - 150000
+                          - 3638.4260000000004
+                        - 
+                          - 9
+                          - 160000
+                          - 2001.471
+                        -
+                          - 10
+                          - 150000
+                          - 6185.870000000001
+
+# "aggregatedStates",
+# "availability",
+# "performance",
+# "oee",
+# "shifts",
+# "productionSpeed",
+# "stateHistogram",
+# "factoryLocations",
+# "averageCleaningTime",
+# "averageChangeoverTime",
+# "upcomingMaintenanceActivities",
+# "maintenanceActivities",
+# "uniqueProducts",
+# "orderTable",
+# "orderTimeline",
+# "process_Fadenueber_link_aktiv",
 
 security:
   - BasicAuth: []
