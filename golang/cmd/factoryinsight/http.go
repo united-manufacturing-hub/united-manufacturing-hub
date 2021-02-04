@@ -1302,6 +1302,8 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	valueName := strings.TrimPrefix(getDataRequest.Value, "process_")
 
+	// TODO: #96 Return timestamps in RFC3339 in /processValue
+
 	// Fetching from the database
 	processValues, err := GetProcessValue(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueRequest.From, getProcessValueRequest.To, valueName)
 	if err != nil {
@@ -1357,6 +1359,8 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 		handleInternalServerError(span, c, err)
 		return
 	}
+
+	// TODO: #100 Return timestamps in RFC3339 in /maintenanceActivities
 
 	for _, timeBasedMaintenanceActivity := range rawData {
 		var activityString = ConvertActivityToString(span, timeBasedMaintenanceActivity.ActivityType, configuration)
@@ -1442,6 +1446,8 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// TODO: #98 Return timestamps in RFC3339 in /orderTable
+
 	// Process data
 	data, err := calculateOrderInformation(span, rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1471,6 +1477,8 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 		handleInvalidInputError(span, c, err)
 		return
 	}
+
+	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
 	data, err := GetOrdersTimeline(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
@@ -1522,6 +1530,8 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 		handleInvalidInputError(span, c, err)
 		return
 	}
+
+	// TODO: #99 Return timestamps in RFC3339 in /uniqueProducts
 
 	// Fetching from the database
 	uniqueProducts, err := GetUniqueProducts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsRequest.From, getUniqueProductsRequest.To)
