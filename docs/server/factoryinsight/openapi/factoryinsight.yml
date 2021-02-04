@@ -93,6 +93,16 @@ components:
         example:
           true
 
+      processValue:
+        in: query
+        name: processValue
+        required: true
+        schema:
+          type: string
+        description: name of the process value to retrieve data
+        example:
+          energyConsumption
+
   securitySchemes:
     BasicAuth:
       type: http
@@ -767,14 +777,361 @@ paths:
                         - "2020-11-03T17:07:22Z"
                       - 
                         - 756,
-                        - "2020-11-12T17:07:22Z"                        
+                        - "2020-11-12T17:07:22Z"           
+                        
+  /{customer}/{location}/{asset}/upcomingMaintenanceActivities:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This returns the upcoming maintenance activities in the selected time range in a data format that can be consumed easily by Grafana. 
+            The duration is in days. Negative values mean the maintenance activity is overdue.
+            Status = 0 means the component is "critical".
+            Status = 1 means the component is "orange" (under a third of the total runtime is remaining). 
+            Status = 2 means the component is "green" (over a third of the total runtime is remaining).
+            Activity is here as a string.
+            **Work in progress**
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - Machine
+                      - Component
+                      - Activity
+                      - Duration
+                      - Status
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "bernd2"
+                        - "Pumpe 21"
+                        - "Austausch"
+                        - -69.5
+                        - 0    
+                      - 
+                        - "bernd2"
+                        - "Pumpe 20"
+                        - "Austausch"
+                        - -79.08
+                        - 0  
+                      - 
+                        - "bernd2"
+                        - "Pumpe 20"
+                        - "Inspektion"
+                        - -61.06
+                        - 0     
+                        
+  /{customer}/{location}/{asset}/maintenanceComponents:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This returns all existing maintenance components for that asset.
+            **This is not parsable by Grafana, therefore maintenanceComponents is not shown in the drop down menu.**
+            **Work in progress**
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                description: the column names
+                example:
+                  - Pumpe 20
+                  - Pumpe 21
+  
+  /{customer}/{location}/{asset}/maintenanceActivities:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This shows all past maintenance activities in a data format that can be consumed easily by Grafana. 
+            Activity is here an integer symbolizing a string. 
+            The timestamp is a UNIX timestamp in milliseconds
+            **Work in progress**
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - Component
+                      - Activity
+                      - Timestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "Pumpe 20"
+                        - 0
+                        - 1605178879502
+                      - 
+                        - "Pumpe 21"
+                        - 1
+                        - 1605189835901                      
+  
+  /{customer}/{location}/{asset}/uniqueProducts:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the all unique products in the selected time range in a data format that can be consumed easily by Grafana. 
+            The data model behind unique products is explained at mqtt.md
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "UID"
+                      - "Timestamp begin"
+                      - "Timestamp end"
+                      - "Product ID"
+                      - "Is Scrap"
+                      - "Quality class"
+                      - "Station ID"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "161063193099727336211610631932133"
+                        - 1610631930997
+                        - 1610631932133
+                        - "test123"
+                        - false
+                        - ""
+                        - "1a"   
+                      - 
+                        - "16106319890449364101610631989682"
+                        - 1610631989044
+                        - 1610631989682
+                        - "test123"
+                        - false
+                        - ""
+                        - "1a"              
 
-# "upcomingMaintenanceActivities",
-# "maintenanceActivities",
-# "uniqueProducts",
-# "orderTable",
-# "orderTimeline",
-# "process_Fadenueber_link_aktiv",
+  /{customer}/{location}/{asset}/orderTable:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns all orders with additional information in the selected time range in a data format that can be consumed easily by Grafana. 
+            The backend calculates automatically for each order how many pieces were actually produced, 
+            what the difference between target and actual duration is and 
+            how long the machine has actually been running, 
+            how long the total changeover time was, etc.
+            All durations are in seconds.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "Order ID"
+                      - "Product ID"
+                      - "Begin"
+                      - "End"
+                      - "Target units"
+                      - "Actual units"
+                      - "Target duration in seconds"
+                      - "Actual duration in seconds"
+                      - "Target time per unit in seconds"
+                      - "Actual time per unit in seconds"
+                      - "Producing"
+                      - "Producing at lower than set speed"
+                      - "No data"
+                      - "Unknown stop"
+                      - "Microstop"
+                      - "Inlet jam"
+                      - "Outlet jam"
+                      - "Congestion in the bypass flow"
+                      - "Other material issues"
+                      - "Changeover"
+                      - "Cleaning"
+                      - "Emptying"
+                      - "Setting up"
+                      - "Operator missing"
+                      - "Break"
+                      - "No shift"
+                      - "No order"
+                      - "Equipment failure"
+                      - "External failure"
+                      - "External interference"
+                      - "Maintenance"
+                      - "Other technical issue"
+                      - "Asset"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "10463444"
+                        - "product10463444"
+                        - 1595824438000
+                        - 1595825648000
+                        - 1
+                        - 0
+                        - 0
+                        - 1210
+                        - 827
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - "redacted-redacted"                          
+
+  /{customer}/{location}/{asset}/orderTimeline:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns all orders in the selected time range for the discrete panel in Grafana.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "timestamp"
+                      - "redacted-redacted-redacted-order"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1592500042000
+                        - "noOrder"
+                      - 
+                        - 1595824438000
+                        - "104638"
+                      - 
+                        - 1595825648000
+                        - "noOrder"
+
+  /{customer}/{location}/{asset}/process_{processValue}:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/processValue'
+      responses:
+        '200':
+          description: This returns the selected process value in the selected time range in a data format that can be consumed easily by Grafana. 
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "timestamp"
+                      - "DCCAachen-Aachen-warping-Fadenueber_link_aktiv"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1606236115808
+                        - 1
+                      - 
+                        - 1606236192305
+                        - 0
+                      - 
+                        - 1606236217103
+                        - 0                      
 
 security:
   - BasicAuth: []
