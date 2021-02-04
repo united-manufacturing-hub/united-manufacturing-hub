@@ -462,6 +462,8 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "state"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	// TODO: #90 Return timestamps in RFC3339 in /state
+
 	// Loop through all datapoints
 	for _, dataPoint := range processedStates {
 		if keepStatesInteger {
@@ -1189,6 +1191,7 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// Fetching from the database
+	// TODO: #89 Return timestamps in RFC3339 in /currentState
 	state, err := GetCurrentState(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCurrentStateRequest.KeepStatesInteger)
 	if err != nil {
 		handleInternalServerError(span, c, err)
@@ -1219,6 +1222,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// Fetching from the database
+	// TODO: #88 Return timestamps in RFC3339 in /counts
 	counts, err = GetCounts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCountsRequest.From, getCountsRequest.To)
 	if err != nil {
 		handleInternalServerError(span, c, err)
@@ -1702,6 +1706,8 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		var tempDatapoints []interface{}
 
 		currentTo := current.AddDate(0, 0, 1)
+
+		// TODO: #93 Rework /averageCleaningTime, /averageChangeovertime, CalculateAverageStateTime() to be compatible with new datamodel
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 

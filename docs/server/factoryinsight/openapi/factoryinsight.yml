@@ -514,7 +514,6 @@ paths:
                     items:
                       type: array
                     description: the returned data
-                    maxLength: 1
                     minimum: 0
                     maximum: 1
                     example:
@@ -527,13 +526,249 @@ paths:
                       - 
                         - 0.036663254805344575,
                         - "2020-11-12T17:07:22Z"
-                        
-# "shifts",
-# "productionSpeed",
-# "stateHistogram",
-# "factoryLocations",
-# "averageCleaningTime",
-# "averageChangeoverTime",
+
+  /{customer}/{location}/{asset}/shifts:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns all shifts in the selected time range in a data format that can be consumed easily by Grafana. 
+            The timestamp is returned as UNIX timestamp in milliseconds.
+            shiftName = 0 means noShift, shiftName = 1 means shift.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - timestamp
+                      - DCCAachen-Aachen-warping-shiftName
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1608019200032
+                        - 1 
+                      - 
+                        - 1608030000032
+                        - 0
+                      - 
+                        - 1608033600016
+                        - 1 
+
+  /{customer}/{location}/{asset}/productionSpeed:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the production speed in the selected time range in a data format that can be consumed easily by Grafana. 
+            The production speed is in units/hour.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-Aachen-warping-speed
+                      - timestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 13560
+                        - 1604077800000 
+                      - 
+                        - 1260
+                        - 1604077860000
+                      - 
+                        - 36360
+                        - 1604077920000   
+
+  /{customer}/{location}/{asset}/stateHistogram:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/includeRunning'
+        - $ref: '#/components/parameters/keepStatesInteger'
+      responses:
+        '200':
+          description: This returns the frequency of each state in the selected time range in a data format that can be consumed easily by Grafana. 
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - state
+                      - occurances
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "Maschine läuft"
+                        - 147
+                      - 
+                        - "Unbekannter Stopp"
+                        - 6
+                      - 
+                        - "Mikrostopp"
+                        - 1  
+
+  /{customer}/{location}/{asset}/factoryLocations:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+      responses:
+        '200':
+          description: This returns all locations including a metric and geohash in the selected time range in a data format that can be consumed easily by Grafana. 
+            **Work in progress, currently only returning dummy data!**
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - Location
+                      - Metric
+                      - Geohash
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "Aachen"
+                        - 80
+                        - u1h2fe
+  
+  /{customer}/{location}/{asset}/averageCleaningTime:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the average cleaning time in the selected time range in a data format that can be consumed easily by Grafana. 
+            **Currently not working! See issue 93**
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "DCCAachen-Aachen-warping-averageCleaningTime"
+                      - "timestamp"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1556,
+                        - "2020-11-02T17:07:22Z"
+                      - 
+                        - 1526,
+                        - "2020-11-03T17:07:22Z"
+                      - 
+                        - 756,
+                        - "2020-11-12T17:07:22Z"                 
+  
+  /{customer}/{location}/{asset}/averageChangeoverTime:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the average changeover time in the selected time range in a data format that can be consumed easily by Grafana. 
+            **Currently not working! See issue 93**
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "DCCAachen-Aachen-warping-averageChangeoverTime"
+                      - "timestamp"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 1556,
+                        - "2020-11-02T17:07:22Z"
+                      - 
+                        - 1526,
+                        - "2020-11-03T17:07:22Z"
+                      - 
+                        - 756,
+                        - "2020-11-12T17:07:22Z"                        
+
 # "upcomingMaintenanceActivities",
 # "maintenanceActivities",
 # "uniqueProducts",
