@@ -372,7 +372,10 @@ paths:
         - $ref: '#/components/parameters/aggregationType'
       responses:
         '200':
-          description: This sums up the duration of all states in the selected time range in a data format that can be consumed easily by Grafana. With aggregationType additional aggregations can be selected, e.g. grouping it additionally by the hour of the day. There is still a bug, that keepStatesInteger is not properly working in some cases #84
+          description: This sums up the duration of all states in the selected time range in a data format that can be consumed easily by Grafana. 
+            With aggregationType additional aggregations can be selected, e.g. grouping it additionally by the hour of the day.
+            If aggregationType = 0, then the category column is omitted. 
+            There is still a bug, that keepStatesInteger is not properly working in some cases #84
           content:
             application/json:
               schema:
@@ -384,12 +387,6 @@ paths:
                       type: string
                     description: the column names
                     example:
-                      aggregationType0:
-                        - 
-                          - "state"
-                          - "duration"
-                          
-                      aggregationType1:
                         - 
                           - "category"
                           - "state"
@@ -400,15 +397,6 @@ paths:
                       type: array
                     description: the returned data. duration is the amount of seconds.
                     example:
-                      aggregationType0:
-                        - 
-                          - "Unbekannter Stopp"
-                          - 17234412.465
-                        - 
-                          - "Keine Schicht"
-                          - 3818293.775
-
-                      aggregationType1:
                         - 
                           - 9
                           - 150000
@@ -422,10 +410,124 @@ paths:
                           - 150000
                           - 6185.870000000001
 
-# "aggregatedStates",
-# "availability",
-# "performance",
-# "oee",
+  /{customer}/{location}/{asset}/availability:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the availability in the selected time range in a data format that can be consumed easily by Grafana. 
+            The way how availability is defined can be configured in the database.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-Aachen-warping-availability
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    maxLength: 1
+                    minimum: 0
+                    maximum: 1
+                    example:
+                      - 
+                        - 0.039953472102622754
+
+  /{customer}/{location}/{asset}/performance:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the performance in the selected time range in a data format that can be consumed easily by Grafana. 
+            The way how performance is defined can be configured in the database.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-Aachen-warping-performance
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    maxLength: 1
+                    minimum: 0
+                    maximum: 1
+                    example:
+                      - 
+                        - 0.039953472102622754
+
+  /{customer}/{location}/{asset}/oee:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the OEE in the selected time range in a data format that can be consumed easily by Grafana. 
+            The result is then split up for each day.
+            The way how OEE is defined can be configured in the database.
+            There is an open issue here #85
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-Aachen-warping-oee
+                      - timestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    maxLength: 1
+                    minimum: 0
+                    maximum: 1
+                    example:
+                      - 
+                        - 0.1779839097022094,
+                        - "2020-11-02T17:07:22Z"
+                      - 
+                        - 0.018431700156319477,
+                        - "2020-11-03T17:07:22Z"
+                      - 
+                        - 0.036663254805344575,
+                        - "2020-11-12T17:07:22Z"
+                        
 # "shifts",
 # "productionSpeed",
 # "stateHistogram",

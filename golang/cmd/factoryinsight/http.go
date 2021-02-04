@@ -972,6 +972,8 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
+
 	// TODO: create JSON and calculate in the same paragraph
 	for current := from; current != to; {
 		var tempDatapoints []interface{}
