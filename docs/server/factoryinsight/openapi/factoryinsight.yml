@@ -46,20 +46,22 @@ components:
         name: from
         schema:
           type: string
+          format: date
         required: true
         description: Get data from this timestamp on (in RFC3339 format)
         example:
-          2020-11-10T00:00:00.000Z
+          "2020-11-10T00:00:00.000Z"
 
       to:
         in: query
         name: to
         schema:
           type: string
+          format: date
         required: true
         description: Get data till this timestamp (in RFC3339 format)
         example:
-          2020-11-10T00:00:00.000Z
+          "2020-11-10T00:00:00.000Z"
 
       keepStatesInteger:
         in: query
@@ -207,6 +209,7 @@ paths:
                     type: array
                     items:
                       type: string
+                      
                     description: the column names
                     example:
                       - DCCAachen-AachenPlant-WeavingMachine-state
