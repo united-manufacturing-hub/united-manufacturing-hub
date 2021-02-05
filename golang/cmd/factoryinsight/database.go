@@ -498,6 +498,7 @@ func GetShifts(parentSpan opentracing.Span, customerID string, location string, 
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedShifts {
+		// TODO: #86 Return timestamps in RFC3339 in /shifts
 		fullRow := []interface{}{float64(dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), dataPoint.ShiftType}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
@@ -817,7 +818,7 @@ func GetTotalCounts(parentSpan opentracing.Span, customerID string, location str
 	return
 }
 
-// GetProductionSpeed gets the production speed in a seleactabl interval (in minutes) for a given time range
+// GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
 
 	// Jaeger tracing
@@ -877,6 +878,8 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 			error = err
 			return
 		}
+
+		// TODO: #92 Return timestamps in RFC3339 in /productionSpeed
 
 		// gapfilling to have constant 0 in grafana
 		if previousTimestamp.IsZero() != true {
@@ -1032,6 +1035,8 @@ func GetRecommendations(parentSpan opentracing.Span, customerID string, location
 			error = err
 			return
 		}
+
+		// TODO: #87 Return timestamps in RFC3339 in /recommendations
 		fullRow := []interface{}{float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), recommendationType, recommendationValues, recommendationTextEN, recommendationTextDE, diagnoseTextEN, diagnoseTextDE}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
