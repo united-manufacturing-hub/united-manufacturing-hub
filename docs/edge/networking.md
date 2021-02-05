@@ -4,7 +4,7 @@ The UMH stack features a sophisticated system to be integrated into any enterpri
 
 ## factorycube
 
-The factorycube (featuring the RUT955) consists out of two seperate networks:
+The factorycube (featuring the RUT955) consists out of two separate networks:
 
 1. internal
 2. external
