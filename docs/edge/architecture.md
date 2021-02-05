@@ -1,11 +1,11 @@
 # Hardware architecture
 
-TODO: add architecture
+TODO: #72 add architecture
 
 ## sensorconnect
 
-This tool automatically finds connected ifm AL1350 or AL1352 IO-Link masters, extracts all relevant data and pushes the data to a MQTT broker.
+This tool automatically finds connected ifm gateways (e.g. the AL1350 or AL1352), extracts all relevant data and pushes the data to a MQTT broker. Technical information and usage can be found in the [documentation for sensorconnect](sensorconnect.md)
 
 ## barcodereader
 
-This tool automatically detected connected USB barcode scanners and send the data to a MQTT broker. //TODO Add source / license / Port from ARM to x86
+This tool automatically detected connected USB barcode scanners and send the data to a MQTT broker. Technical information and usage can be found in the [documentation for barcodereader](barcodereader.md)
