@@ -13,9 +13,13 @@ Features:
 - Scalable, microservice oriented approach for Plug-and-Play usage in Kubernetes or behind load balancers (including health checks and monitoring)
 - Compatible with important automation standards, e.g. Weihenstephaner Standards 09.01 (for filling), [Omron PackML (for packaging/filling)](http://omac.org/wp-content/uploads/2016/11/PackML_Unit_Machine_Implementation_Guide-V1-00.pdf), [EUROMAP 84.1 (for plastic)](https://www.euromap.org/euromap84), [OPC 30060 (for tobacco machines)](https://reference.opcfoundation.org/v104/TMC/v100/docs/) and [VDMA 40502 (for CNC machines)](http://normung.vdma.org/viewer/-/v2article/render/32921121)
 
+Technical information and usage can be found in the [documentation for factoryinsight](factoryinsight.md)
+
 ## mqtt-to-postgresql
 
 the tool to store incoming MQTT messages to the postgres / timescaleDB database
+
+Technical information and usage can be found in the [documentation for mqtt-to-postgresql](mqtt-to-postgresql.md)
 
 ## factoryinsight-datasource
 
