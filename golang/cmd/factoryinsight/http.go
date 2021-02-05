@@ -462,6 +462,8 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "state"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	// TODO: #90 Return timestamps in RFC3339 in /state
+
 	// Loop through all datapoints
 	for _, dataPoint := range processedStates {
 		if keepStatesInteger {
@@ -487,8 +489,8 @@ type getAggregatedStatesRequest struct {
 }
 
 // processAggregatedStatesRequest gets all states (including running). This can be used to calculate availability.
-// If the aggregationType is 0 it will aggregate ovver the entire time span.
-// If the aggregationType is not 0 it will aggregate over various categoreis, e.g. day or hour
+// If the aggregationType is 0 it will aggregate over the entire time span.
+// If the aggregationType is not 0 it will aggregate over various categories, e.g. day or hour
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### activate jaeger tracing ###
@@ -583,6 +585,8 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		handleInternalServerError(span, c, err)
 		return
 	}
+
+	// TODO: #84 Convert states to string when keepStatesInteger is false and aggregationType is 1
 
 	// Prepare JSON
 	var data datamodel.DataResponseAny
@@ -970,6 +974,8 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
+
 	// TODO: create JSON and calculate in the same paragraph
 	for current := from; current != to; {
 		var tempDatapoints []interface{}
@@ -1185,6 +1191,7 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// Fetching from the database
+	// TODO: #89 Return timestamps in RFC3339 in /currentState
 	state, err := GetCurrentState(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCurrentStateRequest.KeepStatesInteger)
 	if err != nil {
 		handleInternalServerError(span, c, err)
@@ -1215,6 +1222,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// Fetching from the database
+	// TODO: #88 Return timestamps in RFC3339 in /counts
 	counts, err = GetCounts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCountsRequest.From, getCountsRequest.To)
 	if err != nil {
 		handleInternalServerError(span, c, err)
@@ -1294,6 +1302,8 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	valueName := strings.TrimPrefix(getDataRequest.Value, "process_")
 
+	// TODO: #96 Return timestamps in RFC3339 in /processValue
+
 	// Fetching from the database
 	processValues, err := GetProcessValue(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueRequest.From, getProcessValueRequest.To, valueName)
 	if err != nil {
@@ -1349,6 +1359,8 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 		handleInternalServerError(span, c, err)
 		return
 	}
+
+	// TODO: #100 Return timestamps in RFC3339 in /maintenanceActivities
 
 	for _, timeBasedMaintenanceActivity := range rawData {
 		var activityString = ConvertActivityToString(span, timeBasedMaintenanceActivity.ActivityType, configuration)
@@ -1434,6 +1446,8 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// TODO: #98 Return timestamps in RFC3339 in /orderTable
+
 	// Process data
 	data, err := calculateOrderInformation(span, rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1463,6 +1477,8 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 		handleInvalidInputError(span, c, err)
 		return
 	}
+
+	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
 	data, err := GetOrdersTimeline(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
@@ -1514,6 +1530,8 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 		handleInvalidInputError(span, c, err)
 		return
 	}
+
+	// TODO: #99 Return timestamps in RFC3339 in /uniqueProducts
 
 	// Fetching from the database
 	uniqueProducts, err := GetUniqueProducts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsRequest.From, getUniqueProductsRequest.To)
@@ -1698,6 +1716,8 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		var tempDatapoints []interface{}
 
 		currentTo := current.AddDate(0, 0, 1)
+
+		// TODO: #93 Rework /averageCleaningTime, /averageChangeovertime, CalculateAverageStateTime() to be compatible with new datamodel
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
