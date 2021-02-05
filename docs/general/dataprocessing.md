@@ -2,20 +2,6 @@
 
 This document gives you a quick introduction into how data is processed in the United Manufacturing Hub. Furthermore, the high-level architecture is explained.
 
-## Contents
-
-- [Dataprocessing in the United Manufacturing Hub / architecture](#dataprocessing-in-the-united-manufacturing-hub--architecture)
-  - [Contents](#contents)
-  - [Architecture diagram](#architecture-diagram)
-  - [Microservice approach](#microservice-approach)
-  - [Services and interfaces in the UMH](#services-and-interfaces-in-the-umh)
-    - [MQTT](#mqtt)
-    - [REST / HTTP](#rest--http)
-  - [Practical implications](#practical-implications)
-    - [Edge devices](#edge-devices)
-    - [Server](#server)
-      - [Database access](#database-access)
-
 ## Architecture diagram
 
 ![microservice architecture](images/dataprocessing.svg)

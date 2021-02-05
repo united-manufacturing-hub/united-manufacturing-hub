@@ -19,6 +19,8 @@ The openapi documentation can be found [here](factoryinsight/openapi/factoryinsi
 
 the tool to store incoming MQTT messages to the postgres / timescaleDB database
 
+Technical information and usage can be found in the [documentation for mqtt-to-postgresql](mqtt-to-postgresql.md)
+
 ## factoryinsight-datasource
 
 This is a plugin for Grafana which acts as a datasource and creates a connection to factoryinsight.
