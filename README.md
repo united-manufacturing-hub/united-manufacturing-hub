@@ -17,105 +17,105 @@
 
 -->
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub?ref=badge_shield)
-[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org)
-
 <!-- PROJECT LOGO -->
 # United Manufacturing Hub
 
-# Contents
-- [United Manufacturing Hub](#united-manufacturing-hub)
-- [Contents](#contents)
-  - [About The Project](#about-the-project)
-    - [Architecture & project structure](#architecture--project-structure)
-    - [Referenced projects](#referenced-projects)
-  - [Getting Started](#getting-started)
-  - [Usage](#usage)
-  - [Roadmap](#roadmap)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Contact](#contact)
-  - [Acknowledgements](#acknowledgements)
+![Connected machines](https://img.shields.io/badge/Connected%20machines-34-informational)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org)
+![Docker Pulls](https://img.shields.io/docker/pulls/unitedmanufacturinghub/factoryinsight)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub?ref=badge_shield)
+![Website](https://img.shields.io/website?up_message=online&url=https%3A%2F%2Fwww.united-manufacturing-hub.com)
+
+
+
+
+<!--<img src="docs/images/Logo UMH primary.svg" height="100" > -->
+
+<img src="docs/images/Otto.svg" height="150">
+
+----
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+United Manufacturing Hub is an open source system for extracting and analyzing data from manufacturing plants and sensors. The Hub includes both software and hardware components to enable the retrofit of productions plants by plug-and-play. Resulting is an end-to-end solution for various questions in manufacturing, e.g. optimization of production through OEE analysis, preventive maintenance through condition analysis and quality improvement through stop analysis.
 
-United Manufacturing Hub (UMH) is an open sourcesystem for extracting and analyzing data from manufacturing plants. It is an end-to-end solution for various issues in manufacturing, e.g. optimization of production through OEE analysis (in German: "Betriebsdatenerfassung") and includes software as well as hardware components.
+### Features
 
-Existing Industry 4.0 platforms are often based on theoretical concepts and research by "big players" in the industry. They tend to develop many elements from scratch and be universal. In contrast, UMH has grown organically and under economic conditions through a wide variety of customer projects in diverse industries. Therefore UMH makes use of a wide range of other open source projects with the focus on solving concrete user problems in production. If you combine all involved projects you can up to xxx millions lines of code and an estimate of xx hundred years of programming time (see also: referenced projects)
+- **Fulfills all your Industrial IoT needs**. The United Factorycube and the United Manufacturing Hub represent a complete hardware and software package. When selecting the components, we paid particular attention to only use established and scalable sub-components in order to meet the requirements of an enterprise-ready solution. This makes the System highly flexible and easily scalable.
+- **Solves concrete problems**. The United Manufacturing Hub is our solution that presents the data of the connected production lines in real time. Additional the system includes a portfolio of specific, ready to use solutions to facilitate daily work production. The portfolio contains tools to calculate and analyse the OEE, to break down optimization potentials, to facilitate reporting, to monitor diverse processes via alarms and to enable a condition-based forward looking maintenance.
+- **Open Source**. We combine the best of established open source projects to give all producing companies and machine manufacturers an easy and straightforward access to modern technology. For this purpose we publish both the core software and our gathered knowledge to this topic on our Hub so that everyone interested has free access to the information and core software in order to develop own solutions for his needs. For you, this means: 1. free of charge, forever; 2. no lock-in, because you can adapt the software yourself at any time.
 
-### Architecture & project structure
+### Dashboard demo
 
-As this projects consists out of various components and sub-components one can easily feel lost. We documented every component, their purpose and how they are integrated:
+![Demo](docs/images/dashboard.gif)
 
-- for a high level architecture and overview over how data is processed take a look [here](docs/general/dataprocessing.md)
-- for the server components take a look [here](docs/server/architecture.md)
-- the edge architecture is explained [here](docs/edge/architecture.md)
-- An explaination of the overall folder structure can be found [here](docs/folder-structure.md)
-
-### Referenced projects
-
-This projects is built upon millions lines of codes from other open source projects. We want to mention here the most important ones:
-
-- [Grafana] as a dashboarding & visualization tool
-- [node-red], to extract and pre-process data on the edge
-- [TimescaleDB], to store sequel and time series data
-- [Kubernetes] and [Helm], to orchestrate microservices
-- [Docker], for containerization
+----
 
 ## Getting Started
 
 Check out [Getting Started](docs/getting-started.md) for more information on how to install the server and edge components.
 
-<!-- USAGE EXAMPLES -->
-## Usage
+### Architecture
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+![IIoT-stack](docs/images/iiot-stack.svg)
 
-_For more examples, please refer to the [Documentation]_
+<!-- SHOWCASE -->
+## Showcase
+
+The United Manufacturing Hub has been deployed in various industries, from CNC milling over filling to flame cutting.
+
+Here are some selected cases. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
+
+### Flame cutting
+
+<img src="docs/examples/images/flame-cutting.png" height="150">
+
+Retrofitting of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data
+
+### Brewery
+
+<img src="docs/examples/images/brewery.png" height="150">
+
+Retrofit of a bottling line for different beer types. Focus on the identification of microstops causes and exact delimitation of the bottleneck machine.
+
+### Weaving
+
+<img src="docs/examples/images/weaving.png" height="150">
+
+Retrofitting of weaving machines that do not provide data via the PLC to extract operating data. Subsequent determination of the OEE and detailed breakdown of the individual key figures
 
 <!-- ROADMAP -->
 ## Roadmap
 
-- Adding more manufacturing KPIs, like MTBF, MTTR, etc.
-- Providing various maintenance options, e.g. charts for Condition Monitoring, Predictive Maintenance or Time-based Maintenance
-
-Additionally, see the [open issues](https://github.com/united-manufacturing-hub/united-manufacturing-hub/issues) for a list of proposed features (and known issues).
-
-
+See the [open issues](https://github.com/united-manufacturing-hub/united-manufacturing-hub/issues) for a list of proposed features (and known issues).
 
 <!-- CONTRIBUTING -->
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**. See `CONTRIBUTING.md` for more information.
-
+Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information.
 
 <!-- LICENSE -->
 ## License
 
-Distributed under the United Public License. The license is basically AGPL with a modification to prevent offering the solution "as-a-service" without contributing back to the community. See `LICENSE` for more information.
-
-
+All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See [`LICENSE`](LICENSE) for more information. All other components (e.g. trademarks, images, logos) are property of the respective owner.
 
 <!-- CONTACT -->
 ## Contact
 
-United Factory Systems GmbH
-
-Project Link: [https://github.com/united-manufacturing-hub/united-manufacturing-hub](https://github.com/united-manufacturing-hub/united-manufacturing-hub)
-
-
+[United Factory Systems GmbH](https://www.united-manufacturing-hub.com)
 
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
-* [Digital Capability Center Aachen](https://www.mckinsey.com/business-functions/operations/how-we-help-clients/capability-center-network/our-centers/aachen)
+
+- [Digital Capability Center Aachen](https://www.mckinsey.com/business-functions/operations/how-we-help-clients/capability-center-network/our-centers/aachen)
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 [product-screenshot]: images/screenshot.png
 [Documentation]: https://wiki.industrial-analytics.net
+[Website]: https://www.united-manufacturing-hub.com
 
 <!-- Software -->
 [Grafana]: https://github.com/grafana/grafana
