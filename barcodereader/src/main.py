@@ -1,3 +1,5 @@
+# TODO: redo this in Go based on https://github.com/Banrai/PiScan/blob/master/scanner/scanner.go
+
 # STD imports
 import json # for HTTP JSON
 import os #for importing environment variables
@@ -8,18 +10,24 @@ import evdev
 from evdev import InputDevice, categorize, ecodes
 import paho.mqtt.client as mqtt
 
-# Local imports
+# Known barcodereaders
+KNOWN_USB_BARCODEREADER = ['Datalogic ADC, Inc. Handheld Barcode Scanner']
+
+# Environment configuration
+DEBUG_ENABLED = bool(os.environ.get('DEBUG_ENABLED'))
+CUSTOM_USB_NAME = os.environ.get('CUSTOM_USB_NAME')
 
 # Broker details
-TRASMITTER_ID = os.environ['TRANSMITTERID']
-BROKER_URL = os.environ['BROKER_URL']
-BROKER_PORT = int(os.environ['BROKER_PORT'])
-CUSTOMER_ID = os.environ['CUSTOMER_ID']
-LOCATION = os.environ['LOCATION']
-MACHINE_ID = os.environ['MACHINE_ID']
-PUB_TOPIC = "ia/{}/{}/{}/barcode".format(CUSTOMER_ID,
-                                        LOCATION,
-                                        MACHINE_ID)
+if not DEBUG_ENABLED:
+    MQTT_CLIENT_ID = os.environ.get('MQTT_CLIENT_ID')
+    BROKER_URL = os.environ.get('BROKER_URL')
+    BROKER_PORT = int(os.environ.get('BROKER_PORT'))
+    CUSTOMER_ID = os.environ.get('CUSTOMER_ID')
+    LOCATION = os.environ.get('LOCATION')
+    MACHINE_ID = os.environ.get('MACHINE_ID')
+    PUB_TOPIC = "ia/{}/{}/{}/barcode".format(CUSTOMER_ID,
+                                            LOCATION,
+                                            MACHINE_ID)
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
@@ -32,7 +40,7 @@ def on_disconnect(client, userdata, rc):
 # function to start up MQTT
 def startMQTT():
     print(str(time.ctime(time.time())) + " Connecting...")
-    mqttc = mqtt.Client(client_id=str(TRASMITTER_ID+str("_barcodereader")), clean_session=False)
+    mqttc = mqtt.Client(client_id=str(MQTT_CLIENT_ID), clean_session=False)
     mqttc.on_connect = on_connect
     mqttc.on_disconnect = on_disconnect
     
@@ -41,9 +49,7 @@ def startMQTT():
 
     return mqttc
 
-# Provided as an example taken from my own keyboard attached to a Centos 6 box:
 scancodes = {
-    # Scancode: ASCIICode
     0: None, 1: u'ESC', 2: u'1', 3: u'2', 4: u'3', 5: u'4', 6: u'5', 7: u'6', 8: u'7', 9: u'8',
     10: u'9', 11: u'0', 12: u'-', 13: u'=', 14: u'BKSP', 15: u'TAB', 16: u'q', 17: u'w', 18: u'e', 19: u'r',
     20: u't', 21: u'y', 22: u'u', 23: u'i', 24: u'o', 25: u'p', 26: u'[', 27: u']', 28: u'CRLF', 29: u'LCTRL',
@@ -65,61 +71,70 @@ x = ''
 caps = False
 
 def find_device():
-  device_names = ['VirtualBox USB Tablet', 'VirtualBox mouse integration', 'Video Bus', 'ImExPS/2 Generic Explorer Mouse', 'AT Translated Set 2 keyboard', 'Sleep Button', 'Power Button']
   devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
   device = None
   for d in devices:
-    print(str(time.ctime(time.time())) + "Device " + d.name)
-    if d.name not in device_names:
-      print(str(time.ctime(time.time())) + "Found device " + d.name)
+    print(str(time.ctime(time.time())) + " Device " + d.name)
+
+    # if device is either a known barcodereader or a custom specified
+    if d.name in KNOWN_USB_BARCODEREADER or d.name == CUSTOM_USB_NAME:
+      print(str(time.ctime(time.time())) + " Found device " + d.name)
       device = d
+      return device
   return device
 
-while True:
-    mqttc = startMQTT() # start MQTT
+try:
     while True:
-        dev = find_device()
-
-        if dev != None:
-            #grab provides exclusive access to the device
-            dev.grab()
-
-            #loop
-            for event in dev.read_loop():
-                if event.type == ecodes.EV_KEY:
-                    data = categorize(event)  # Save the event temporarily to introspect it
-                    if data.scancode == 42:
-                        if data.keystate == 1:
-                            caps = True
-                        if data.keystate == 0:
-                            caps = False
-                    if data.keystate == 1:  # Down events only
-                        if caps:
-                            key_lookup = u'{}'.format(capscodes.get(data.scancode)) or u'UNKNOWN:[{}]'.format(data.scancode)  # Lookup or return UNKNOWN:XX
-                        else:
-                            key_lookup = u'{}'.format(scancodes.get(data.scancode)) or u'UNKNOWN:[{}]'.format(data.scancode)  # Lookup or return UNKNOWN:XX
-                        if (data.scancode != 42) and (data.scancode != 28):
-                            x += key_lookup
-                        if(data.scancode == 28):
-
-                            timestamp_ms = int(round(time.time() * 1000))
-
-                            # store values in payload
-                            payload = {
-                                "serial_number": TRASMITTER_ID+"_barcodereader",
-                                "timestamp_ms":timestamp_ms,
-                                "barcode": x
-                            }
-
-                            #Send values
-                            (result, mid) = mqttc.publish(PUB_TOPIC, payload=json.dumps(payload), qos=1)
-
-                            if (result != 0):
-                                print(str(time.ctime(time.time())) + " [Error in publish] " + str(result))
-
-                            print(str(time.ctime(time.time())) + " " + str(json.dumps(payload)))          # Print it all out!
-                            x = ''
+        if not DEBUG_ENABLED:
+            print("Enabled production mode")
+            mqttc = startMQTT() # start MQTT
         else:
-            print("No device found. Trying again in 10 seconds...")
-        time.sleep(10)
+            print("Enabled debug mode")
+        while True:
+            dev = find_device()
 
+            if dev != None:
+                #grab provides exclusive access to the device
+                dev.grab()
+
+                #loop
+                for event in dev.read_loop():
+                    if event.type == ecodes.EV_KEY:
+                        data = categorize(event)  # Save the event temporarily to introspect it
+                        if data.scancode == 42:
+                            if data.keystate == 1:
+                                caps = True
+                            if data.keystate == 0:
+                                caps = False
+                        if data.keystate == 1:  # Down events only
+                            if caps:
+                                key_lookup = u'{}'.format(capscodes.get(data.scancode)) or u'UNKNOWN:[{}]'.format(data.scancode)  # Lookup or return UNKNOWN:XX
+                            else:
+                                key_lookup = u'{}'.format(scancodes.get(data.scancode)) or u'UNKNOWN:[{}]'.format(data.scancode)  # Lookup or return UNKNOWN:XX
+                            if (data.scancode != 42) and (data.scancode != 28):
+                                x += key_lookup
+                            if(data.scancode == 28):
+
+                                timestamp_ms = int(round(time.time() * 1000))
+
+                                # store values in payload
+                                payload = {
+                                    "timestamp_ms":timestamp_ms,
+                                    "barcode": x
+                                }
+
+                                #Send values
+                                if not DEBUG_ENABLED:
+                                    (result, mid) = mqttc.publish(PUB_TOPIC, payload=json.dumps(payload), qos=1)
+
+                                    if (result != 0):
+                                        print(str(time.ctime(time.time())) + " [Error in publish] " + str(result))
+
+                                print(str(time.ctime(time.time())) + " " + str(json.dumps(payload)))          # Print it all out!
+                                x = ''
+            else:
+                print("No device found. Trying again in 10 seconds...")
+            time.sleep(10)
+
+except KeyboardInterrupt:
+    os._exit(1)

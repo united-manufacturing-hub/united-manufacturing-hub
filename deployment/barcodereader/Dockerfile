@@ -10,11 +10,11 @@ RUN apk upgrade --update-cache --available && \
     rm -rf /var/cache/apk/*
     
 # Install pyhon requirements
-COPY ./requirements.txt /app
+COPY ./barcodereader/requirements.txt /app
 RUN pip install --trusted-host pypi.python.org -r requirements.txt --no-cache-dir
 
 # Copy source code
-COPY ./src/ .
+COPY ./barcodereader/src/ .
 
 # Run app.py when the container launches
 CMD ["python","-u", "main.py"]
