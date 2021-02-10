@@ -83,17 +83,16 @@ func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration d
 
 	// Loop through all datapoints
 	for index, dataPoint := range shiftArray {
-		if index > 0 { //if not the first entry, add a noShift
+		if index > 0 && shiftArray[index-1].ShiftType != 0 && dataPoint.ShiftType != 0 { //if not the first entry, add a noShift. Only add it if the previous value is not noShift or the current value is not noShoft
 
 			previousDataPoint := shiftArray[index-1]
 			timestampBegin := previousDataPoint.TimestampEnd
 			timestampEnd := dataPoint.TimestampBegin
 
-			if timestampBegin != timestampEnd { // timestampBegin == timestampEnd ahppens when a no shift is already in the list.
-				// TODO: Fix
+			if timestampBegin != timestampEnd { // timestampBegin == timestampEnd happens when a no shift is already in the list. Not possible anymore since #106
 				fullRow := datamodel.ShiftEntry{
 					TimestampBegin: timestampBegin,
-					TimestampEnd:   timestampEnd,
+					TimestampEnd:   timestampEnd.Add(time.Duration(-1) * time.Millisecond),
 					ShiftType:      0, //shiftType =0 is noShift
 				}
 				processedShifts = append(processedShifts, fullRow)
@@ -104,13 +103,18 @@ func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration d
 			TimestampEnd:   dataPoint.TimestampEnd,
 			ShiftType:      dataPoint.ShiftType,
 		}
+		zap.S().Infow("append(processedShifts, fullRow)",
+			"timestampBegin", dataPoint.TimestampBegin.String(),
+			"timestampEnd2", dataPoint.TimestampEnd.String(),
+			"ShiftType", dataPoint.ShiftType,
+		)
 		processedShifts = append(processedShifts, fullRow)
 
 	}
 	return
 }
 
-// cleanRawShiftData has a complicated algorithm, so here a human readable explaination
+// cleanRawShiftData has a complicated algorithm, so here a human readable explanation
 // Function 1: it prevents going shifts out of selected time range
 // Function 2: if there are multiple shifts adjacent to each other with a given tolerance of 10 minutes, it combines them
 func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedShifts []datamodel.ShiftEntry) {
