@@ -22,9 +22,11 @@ func isTimerangeEntirelyInTimerange(firstTimeRange TimeRange, secondTimeRange Ti
 }
 
 func isTimepointInTimerange(timestamp time.Time, secondTimeRange TimeRange) bool {
-	if (timestamp.After(secondTimeRange.Begin)) && (timestamp.Before(secondTimeRange.End)) {
+	if (timestamp.After(secondTimeRange.Begin)) && (timestamp.Before(secondTimeRange.End)) { // if inside
 		return true
-	}
+	} /* else if (timestamp == secondTimeRange.Begin) || (timestamp == secondTimeRange.End) { // if same value as border
+		return true
+	} */
 	return false
 }
 
@@ -49,11 +51,20 @@ func getOverlappingShifts(state datamodel.StateEntry, followingState datamodel.S
 
 	// Loop through all shifts
 	for _, dataPoint := range processedShifts {
+		/*
+			zap.S().Infow("for _, dataPoint := range processedShifts",
+				"dataPoint.TimestampBegin", dataPoint.TimestampBegin.String(),
+				"dataPoint.TimestampEnd", dataPoint.TimestampEnd.String(),
+				"dataPoint.ShiftType", dataPoint.ShiftType,
+			)
+		*/
 		if dataPoint.ShiftType != 0 {
 			secondTimeRange := TimeRange{dataPoint.TimestampBegin, dataPoint.TimestampEnd}
 
 			// if firstTimeRange.Begin in TimeRange or firstTimeRange.End in TimeRange
 			if isTimepointInTimerange(firstTimeRange.Begin, secondTimeRange) || isTimepointInTimerange(firstTimeRange.End, secondTimeRange) { // if state begin is in time range or state end is in time range
+				overlappingShifts = append(overlappingShifts, dataPoint)
+			} else if state.Timestamp.Before(dataPoint.TimestampBegin) && followingState.Timestamp.After(dataPoint.TimestampEnd) { //if there is one single state ranging over an entire shift
 				overlappingShifts = append(overlappingShifts, dataPoint)
 			}
 		}
@@ -189,6 +200,8 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 	var timestamp time.Time
 
 	overlappingShifts := getOverlappingShifts(dataPoint, followingDataPoint, processedShifts)
+	zap.S().Infof("getOverlappingShifts ", dataPoint.Timestamp.String(), followingDataPoint.Timestamp.String())
+
 	// Loop through all shifts
 	/*
 		for _, shift := range overlappingShifts {
@@ -204,9 +217,9 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 	}
 
 	if len(overlappingShifts) > 0 { // if there are overlapping shifts
-		//zap.S().Infof("len(overlappingShifts) ", len(overlappingShifts))
+		zap.S().Infof("len(overlappingShifts) ", len(overlappingShifts))
 		if dataPoint.Timestamp.Before(overlappingShifts[0].TimestampBegin) { // if the beginning of the state is out of the shift
-			//zap.S().Infof("## State before shift begin ", overlappingShifts[0].TimestampBegin, overlappingShifts[0].TimestampEnd, dataPoint.Timestamp, followingDataPoint.Timestamp)
+			zap.S().Infof("## State before shift begin ", overlappingShifts[0].TimestampBegin, overlappingShifts[0].TimestampEnd, dataPoint.Timestamp, followingDataPoint.Timestamp)
 			// add everything till shift begin as "noShift"
 			timestamp = dataPoint.Timestamp
 			state = datamodel.NoShiftState
@@ -220,19 +233,29 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 			fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp}
 
 			if len(overlappingShifts) == 1 { // if last seperation, abort
-				//zap.S().Infof("## EXIT 1 ", timestamp, state)
+				zap.S().Infof("## EXIT 1 ", timestamp, state)
+
 				processedStateArray = append(processedStateArray, fullRow)
+
+				// Additionally check whether the state is ranging over the shift, because then we need to add a NoShiftState as well (case #106)
+				if followingDataPoint.Timestamp.After(overlappingShifts[0].TimestampEnd) {
+					timestamp = overlappingShifts[0].TimestampEnd
+					state = datamodel.NoShiftState
+					fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp}
+					processedStateArray = append(processedStateArray, fullRow)
+				}
+
 			} else { // otherwise continue
 				processedStateArray = recursiveSplittingOfShiftsToAddNoShifts(fullRow, followingDataPoint, processedShifts, processedStateArray, executionAmount)
 			}
 
 		} else { // if the end of the state is out of the shift. Therefore, the beginning of the state is still in the shift.
-			//zap.S().Infof("## State after shift begin ", overlappingShifts[0].TimestampBegin, overlappingShifts[0].TimestampEnd, dataPoint.Timestamp, followingDataPoint.Timestamp)
+			zap.S().Infof("## State after shift begin ", overlappingShifts[0].TimestampBegin, overlappingShifts[0].TimestampEnd, dataPoint.Timestamp, followingDataPoint.Timestamp)
 
 			timestamp = dataPoint.Timestamp
 			state = dataPoint.State
 			fullRow := datamodel.StateEntry{State: state, Timestamp: timestamp}
-			//zap.S().Infof("Added state ", timestamp, state)
+			zap.S().Infof("Added state ", timestamp, state)
 			processedStateArray = append(processedStateArrayRaw, fullRow) // add the datapoint with its corresponding state
 
 			// we need to deep dive further in here
@@ -241,7 +264,7 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 			if len(overlappingShifts) == 1 { // if last seperation, abort
 				state = datamodel.NoShiftState
 				fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp}
-				//zap.S().Infof("## EXIT 2 ", timestamp, state)
+				zap.S().Infof("## EXIT 2 ", timestamp, state)
 				processedStateArray = append(processedStateArray, fullRow)
 			} else { // otherwise continue
 				state = dataPoint.State
@@ -255,7 +278,7 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 		timestamp = dataPoint.Timestamp
 		state = dataPoint.State
 		fullRow := datamodel.StateEntry{State: state, Timestamp: timestamp}
-		//zap.S().Infof("## EXIT 3 ", timestamp, state)
+		zap.S().Infof("## EXIT 3 ", timestamp, state)
 		processedStateArray = append(processedStateArrayRaw, fullRow)
 	}
 	return
@@ -273,6 +296,12 @@ func addNoShiftsToStates(parentSpan opentracing.Span, rawShifts []datamodel.Shif
 
 	processedShifts := cleanRawShiftData(rawShifts, from, to, configuration)
 	processedShifts = addNoShiftsBetweenShifts(processedShifts, configuration)
+
+	zap.S().Infow("addNoShiftsToStates",
+		"from", from.String(),
+		"to", to.String(),
+		"len(stateArray)", len(stateArray),
+	)
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -295,18 +324,39 @@ func addNoShiftsToStates(parentSpan opentracing.Span, rawShifts []datamodel.Shif
 				State:     -1,
 				Timestamp: to,
 			}
+			zap.S().Infow("index == len(stateArray)-1",
+				"dataPoint.Timestamp", dataPoint.Timestamp.String(),
+				"dataPoint.State", dataPoint.State,
+				"to", to.String(),
+			)
 		} else {
 			followingDataPoint = stateArray[index+1]
+			zap.S().Infow("index != len(stateArray)-1",
+				"dataPoint.Timestamp", dataPoint.Timestamp.String(),
+				"dataPoint.State", dataPoint.State,
+			)
 		}
 
 		// TODO: parallelize and work with go and channels
 
 		if isStateEntirelyInNoShift(dataPoint, followingDataPoint, processedShifts) {
 			state = datamodel.NoShiftState //noShift
+			zap.S().Infow("isStateEntirelyInNoShift",
+				"dataPoint.Timestamp", dataPoint.Timestamp.String(),
+				"followingDataPoint.Timestamp", followingDataPoint.Timestamp.String(),
+			)
 		} else if isStateEntirelyOutsideNoShift(dataPoint, followingDataPoint, processedShifts) {
 			state = dataPoint.State
+			zap.S().Infow("isStateEntirelyOutsideNoShift",
+				"dataPoint.Timestamp", dataPoint.Timestamp.String(),
+				"followingDataPoint.Timestamp", followingDataPoint.Timestamp.String(),
+			)
 		} else { // now we have a state that is somehow overlapping with shifts and which we need to split up
 			processedStateArray = recursiveSplittingOfShiftsToAddNoShifts(dataPoint, followingDataPoint, processedShifts, processedStateArray, 0)
+			zap.S().Infow("else",
+				"dataPoint.Timestamp", dataPoint.Timestamp.String(),
+				"followingDataPoint.Timestamp", followingDataPoint.Timestamp.String(),
+			)
 			continue
 		}
 
