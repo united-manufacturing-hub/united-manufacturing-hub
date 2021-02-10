@@ -103,11 +103,6 @@ func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration d
 			TimestampEnd:   dataPoint.TimestampEnd,
 			ShiftType:      dataPoint.ShiftType,
 		}
-		zap.S().Infow("append(processedShifts, fullRow)",
-			"timestampBegin", dataPoint.TimestampBegin.String(),
-			"timestampEnd2", dataPoint.TimestampEnd.String(),
-			"ShiftType", dataPoint.ShiftType,
-		)
 		processedShifts = append(processedShifts, fullRow)
 
 	}
