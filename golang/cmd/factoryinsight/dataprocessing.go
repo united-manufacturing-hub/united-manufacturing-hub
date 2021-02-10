@@ -283,14 +283,10 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 		}
 	}
 
-	if len(processedStates) == 0 { // if no value in time range take the previous time stamp. see also #106
-		previousDataPoint := datamodel.StateEntry{}
+	// this subflow is needed to calculate noShifts while using processStatesOptimized. See also #106
 
-		zap.S().Infow("len(processedStates) == 0",
-			"from", from.String(),
-			"to", to.String(),
-			"len(processedStatesRaw)", len(processedStatesRaw),
-		)
+	if len(processedStates) == 0 { // if no value in time range take the previous time stamp.
+		previousDataPoint := datamodel.StateEntry{}
 
 		// if there is only one element in it, use it (before taking the performance intensive way further down)
 		if len(processedStatesRaw) == 1 {
@@ -304,13 +300,6 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 
 		// Loop through all datapoints
 		for index, dataPoint := range processedStatesRaw {
-			/*
-				zap.S().Infow("for index, dataPoint := range processedStatesRaw",
-					"index", index,
-					"dataPoint.Timestamp", dataPoint.Timestamp.String(),
-				)
-			*/
-
 			// if the current timestamp is after the start of the time range
 			if dataPoint.Timestamp.After(from) {
 				// we have found the previous timestamp and add it
@@ -323,10 +312,6 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 				} else {
 					newDataPoint.State = dataPoint.State
 				}
-				zap.S().Infow("append(processedStates, newDataPoint)",
-					"newDataPoint.Timestamp", newDataPoint.Timestamp.String(),
-					"newDataPoint.State", newDataPoint.State,
-				)
 
 				processedStates = append(processedStates, newDataPoint)
 
@@ -986,15 +971,11 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 	var processedStatesTemp []datamodel.StateEntry
 
-	zap.S().Infof("########    processStatesOptimized", from.String(), to.String())
-
 	for current := from; current != to; {
 
 		currentTo := current.AddDate(0, 0, 1)
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
-			zap.S().Infof("########    processStates", current.String(), to.String())
-
 			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
@@ -1002,9 +983,6 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 			}
 			current = to
 		} else { //otherwise, calculate for entire time range
-
-			zap.S().Infof("########    processStates", current.String(), currentTo.String())
-
 			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
