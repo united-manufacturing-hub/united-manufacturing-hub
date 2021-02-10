@@ -330,12 +330,19 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 
 				processedStates = append(processedStates, newDataPoint)
 
-				// no need to continue now, jumping out of the loop
-				break
+				// no need to continue now, aborting
+				return
 			}
 
 			previousDataPoint = dataPoint
 		}
+
+		// if nothing has been found so far, use the last element (reason: there is no state after f"rom")
+		lastElement := processedStatesRaw[len(processedStatesRaw)-1] // last element in the row
+		newDataPoint := datamodel.StateEntry{}
+		newDataPoint.Timestamp = from
+		newDataPoint.State = lastElement.State
+		processedStates = append(processedStates, newDataPoint)
 
 	}
 	return
