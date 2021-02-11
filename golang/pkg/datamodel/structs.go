@@ -48,6 +48,7 @@ type StateEntry struct {
 // CountEntry contains the count and its corresponding timestamp
 type CountEntry struct {
 	Count     float64
+	Scrap     float64
 	Timestamp time.Time
 }
 
