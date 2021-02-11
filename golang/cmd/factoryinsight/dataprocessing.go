@@ -952,6 +952,13 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 		}
 	}
 
+	// resolving issue #17 (States change depending on the zoom level during time ranges longer than a day)
+	processedStateArray, err = combineAdjacentStops(parentSpan, processedStateArray, configuration)
+	if err != nil {
+		zap.S().Errorf("combineAdjacentStops failed", err)
+		return
+	}
+
 	return
 }
 
