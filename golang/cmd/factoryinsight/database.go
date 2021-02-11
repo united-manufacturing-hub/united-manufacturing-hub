@@ -914,6 +914,102 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 	return
 }
 
+// GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
+func GetQualityRate(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+
+	// Jaeger tracing
+	span := opentracing.StartSpan(
+		"GetProductionSpeed",
+		opentracing.ChildOf(parentSpan.Context()))
+	defer span.Finish()
+
+	span.SetTag("customerID", customerID)
+	span.SetTag("location", location)
+	span.SetTag("asset", asset)
+	span.SetTag("from", from)
+	span.SetTag("to", to)
+	span.SetTag("aggregatedInterval", aggregatedInterval)
+
+	assetID, err := GetAssetID(span, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
+	data.ColumnNames = []string{JSONColumnName, "timestamp"}
+
+	//time_bucket_gapfill does not work on Microsoft Azure (license issue)
+	sqlStatement := `
+	SELECT time_bucket('1 minutes', timestamp) as ratePerIntervall, 
+		coalesce(
+			(sum(count)-sum(scrap))::float / sum(count)
+		,1)
+	FROM countTable 
+	WHERE asset_id=$1 
+		AND timestamp BETWEEN $2 AND $3 
+	GROUP BY ratePerIntervall 
+	ORDER BY ratePerIntervall ASC;`
+
+	rows, err := db.Query(sqlStatement, assetID, from, to)
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	// for custom gapfilling
+	var previousTimestamp time.Time
+
+	for rows.Next() {
+		var timestamp time.Time
+		var dataPoint float64
+
+		err := rows.Scan(&timestamp, &dataPoint)
+		if err != nil {
+			PQErrorHandling(span, sqlStatement, err, false)
+			error = err
+			return
+		}
+
+		// TODO: Return timestamps in RFC3339 in /qualityRate
+
+		// gapfilling to have constant 0 in grafana
+		if previousTimestamp.IsZero() != true {
+			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
+
+			if timeDifference > 60 { // bigger than one minute
+				// add 100% quality one minute after previous timestamp
+				fullRow := []interface{}{1, float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
+				data.Datapoints = append(data.Datapoints, fullRow)
+
+				// add 100% one ms before timestamp
+				fullRow = []interface{}{1, float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
+				data.Datapoints = append(data.Datapoints, fullRow)
+			}
+		}
+		// add datapoint
+		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		data.Datapoints = append(data.Datapoints, fullRow)
+
+		previousTimestamp = timestamp
+	}
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	return
+}
+
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
 func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
 	// Jaeger tracing
