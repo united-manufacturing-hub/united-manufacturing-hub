@@ -18,3 +18,4 @@
 
 # do not include automatically created PDFs 
 docs/**/*.pdf
+golang/test/mqtt-to-postgresql/config/certificates/*

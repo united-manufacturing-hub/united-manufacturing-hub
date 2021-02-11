@@ -282,8 +282,41 @@ func StoreIntoStateTable(timestampMs int64, DBassetID int, state int) {
 }
 
 // StoreIntoCountTable stores a count into the database
-func StoreIntoCountTable(timestampMs int64, DBassetID int, count int) {
-	storeIntoTable(timestampMs, DBassetID, "countTable", count, "count")
+func StoreIntoCountTable(timestampMs int64, DBassetID int, count int, scrap int) {
+	zap.S().Debugf("StoreIntoCountTable called", timestampMs, DBassetID, count, scrap)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		PQErrorHandling("db.BeginTx()", err)
+	}
+
+	// WARNING SQL INJECTION POSSIBLE
+	sqlStatement := `
+		INSERT INTO counttable (timestamp, asset_id, count, scrap) 
+		VALUES (to_timestamp($1 / 1000.0),$2,$3, $4) 
+		ON CONFLICT DO NOTHING;`
+
+	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, count, scrap)
+	if err != nil {
+		tx.Rollback()
+		PQErrorHandling(sqlStatement, err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+		err = tx.Rollback()
+		if err != nil {
+			PQErrorHandling("tx.Rollback()", err)
+		}
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		PQErrorHandling("tx.Commit()", err)
+	}
 }
 
 // StoreIntoShiftTable stores a count into the database
