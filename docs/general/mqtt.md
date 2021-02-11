@@ -37,6 +37,8 @@
       - [Example for /cycleTimeTrigger](#example-for-cycletimetrigger)
     - [/uniqueProduct](#uniqueproduct)
       - [Example for /uniqueProduct](#example-for-uniqueproduct)
+    - [/scrapUniqueProduct](#scrapuniqueproduct)
+      - [Example for /scrapUniqueProduct](#example-for-scrapuniqueproduct)
   - [4th level: Recommendations for action](#4th-level-recommendations-for-action)
     - [/recommendations](#recommendations)
       - [Example for /recommendations](#example-for-recommendations)
@@ -351,6 +353,22 @@ A message is sent here each time a product has been produced or modified. A modi
   "UID": "161117101271788647991611171016443",
   "isScrap": false,
   "stationID": "1a"
+}
+```
+
+### /scrapUniqueProduct
+
+Topic: `ia/<customerID>/<location>/<AssetID>/scrapUniqueProduct`
+
+A message is sent here each time a unique product has been scrapped.
+
+`UID`: Unique ID of the current single product.
+
+#### Example for /scrapUniqueProduct
+
+```json
+{
+  "UID": "161117101271788647991611171016443",
 }
 ```
 
