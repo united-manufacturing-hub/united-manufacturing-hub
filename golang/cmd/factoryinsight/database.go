@@ -383,7 +383,7 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 			// First entry is always noShift
 			fullRow := datamodel.ShiftEntry{
 				TimestampBegin: time.Time{},
-				TimestampEnd:   timestampStart,
+				TimestampEnd:   timestampStart, //.Add(time.Duration(-1) * time.Millisecond)
 				ShiftType:      0,
 			}
 			data = append(data, fullRow)

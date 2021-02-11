@@ -282,6 +282,54 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 			processedStates = append(processedStates, dataPoint)
 		}
 	}
+
+	// this subflow is needed to calculate noShifts while using processStatesOptimized. See also #106
+
+	if len(processedStates) == 0 { // if no value in time range take the previous time stamp.
+		previousDataPoint := datamodel.StateEntry{}
+
+		// if there is only one element in it, use it (before taking the performance intensive way further down)
+		if len(processedStatesRaw) == 1 {
+			newDataPoint := datamodel.StateEntry{}
+			newDataPoint.Timestamp = from
+			newDataPoint.State = processedStatesRaw[0].State
+
+			processedStates = append(processedStates, newDataPoint)
+			return
+		}
+
+		// Loop through all datapoints
+		for index, dataPoint := range processedStatesRaw {
+			// if the current timestamp is after the start of the time range
+			if dataPoint.Timestamp.After(from) {
+				// we have found the previous timestamp and add it
+				newDataPoint := datamodel.StateEntry{}
+
+				newDataPoint.Timestamp = from
+
+				if index > 0 {
+					newDataPoint.State = previousDataPoint.State
+				} else {
+					newDataPoint.State = dataPoint.State
+				}
+
+				processedStates = append(processedStates, newDataPoint)
+
+				// no need to continue now, aborting
+				return
+			}
+
+			previousDataPoint = dataPoint
+		}
+
+		// if nothing has been found so far, use the last element (reason: there is no state after f"rom")
+		lastElement := processedStatesRaw[len(processedStatesRaw)-1] // last element in the row
+		newDataPoint := datamodel.StateEntry{}
+		newDataPoint.Timestamp = from
+		newDataPoint.State = lastElement.State
+		processedStates = append(processedStates, newDataPoint)
+
+	}
 	return
 }
 
@@ -928,7 +976,6 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 		currentTo := current.AddDate(0, 0, 1)
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
-
 			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
@@ -936,7 +983,6 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 			}
 			current = to
 		} else { //otherwise, calculate for entire time range
-
 			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
