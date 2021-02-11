@@ -89,6 +89,8 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload)
 		case "count":
 			go ProcessCountData(customerID, location, assetID, payloadType, payload)
+		case "scrapCount":
+			go ProcessScrapCountData(customerID, location, assetID, payloadType, payload)
 		case "recommendation":
 			go ProcessRecommendationData(customerID, location, assetID, payloadType, payload)
 		case "addShift":

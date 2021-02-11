@@ -15,6 +15,11 @@ type count struct {
 	TimestampMs int64 `json:"timestamp_ms"`
 }
 
+type scrapCount struct {
+	Scrap       int   `json:"scrap"`
+	TimestampMs int64 `json:"timestamp_ms"`
+}
+
 type addShift struct {
 	TimestampMs    int64 `json:"timestamp_ms"`
 	TimestampMsEnd int64 `json:"timestamp_ms_end"`
@@ -144,6 +149,23 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 	timestampMs := parsedPayload.TimestampMs
 
 	StoreIntoCountTable(timestampMs, DBassetID, count, scrap)
+}
+
+// ProcessScrapCountData processes an incoming scrapCount message
+func ProcessScrapCountData(customerID string, location string, assetID string, payloadType string, payload []byte) {
+	var parsedPayload scrapCount
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+
+	scrap := parsedPayload.Scrap
+	timestampMs := parsedPayload.TimestampMs
+
+	UpdateCountTableWithScrap(timestampMs, DBassetID, scrap)
 }
 
 // ProcessAddShift adds a new shift to the database
