@@ -234,6 +234,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "aggregatedStates")
 	values = append(values, "availability")
 	values = append(values, "performance")
+	values = append(values, "quality")
 	values = append(values, "oee")
 	values = append(values, "shifts")
 	values = append(values, "productionSpeed")
@@ -321,6 +322,8 @@ func getDataHandler(c *gin.Context) {
 		processAvailabilityRequest(c, getDataRequest)
 	case "performance":
 		processPerformanceRequest(c, getDataRequest)
+	case "quality":
+		processQualityRequest(c, getDataRequest)
 	case "oee":
 		processOEERequest(c, getDataRequest)
 	case "productionSpeed":
@@ -874,6 +877,80 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	data.ColumnNames = []string{JSONColumnName}
 
 	data.Datapoints, err = CalculatePerformance(span, processedStates, from, to, configuration)
+
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+// ---------------------- getQuality ----------------------
+
+type getQualityRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
+func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
+
+	// ### activate jaeger tracing ###
+	var span opentracing.Span
+	if cspan, ok := c.Get("tracing-context"); ok {
+		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processQualityRequest", c.Request.Method, c.Request.URL.Path)
+	} else {
+		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processQualityRequest", c.Request.Method, c.Request.URL.Path)
+	}
+	defer span.Finish()
+
+	// ### store getDataRequest in proper variables ###
+	customer := getDataRequest.Customer
+	location := getDataRequest.Location
+	asset := getDataRequest.Asset
+
+	// ### parse query ###
+	var getQualityRequest getQualityRequest
+	var err error
+
+	err = c.BindQuery(&getQualityRequest)
+	if err != nil {
+		handleInvalidInputError(span, c, err)
+		return
+	}
+
+	from := getQualityRequest.From
+	to := getQualityRequest.To
+
+	// ### jaeger addon ###
+	span.SetTag("customer", customer)
+	span.SetTag("location", location)
+	span.SetTag("asset", asset)
+	span.SetTag("from", from)
+	span.SetTag("to", to)
+
+	// ### fetch necessary data from database ###
+
+	// customer configuration
+	configuration, err := GetCustomerConfiguration(span, customer)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
+	// get counts for lowSpeed detection
+	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+
+	// ### create JSON ###
+	var data datamodel.DataResponseAny
+	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "quality"
+	data.ColumnNames = []string{JSONColumnName}
+
+	data.Datapoints, err = CalculateQuality(span, countSlice, from, to, configuration)
 
 	if err != nil {
 		handleInternalServerError(span, c, err)

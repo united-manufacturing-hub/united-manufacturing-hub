@@ -704,6 +704,65 @@ BasicAuth
 
 <section>
 
+## GET /{customer}/{location}/{asset}/quality
+
+<section>
+<h3 id="get__{customer}_{location}_{asset}_quality-parameters">Parameters</h3>
+
+|Name|In|Type|Required|Description|Example|
+|---|---|---|---|---|---|
+|customer|path|string|true|name of the customer|*DCCAachen*|
+|location|path|string|true|name of the location|*AachenPlant*|
+|asset|path|string|true|name of the asset|*WeavingMachine*|
+|from|query|string(date)|true|Get data from this timestamp on (in RFC3339 format)|*2020-11-10T00:00:00.000Z*|
+|to|query|string(date)|true|Get data till this timestamp (in RFC3339 format)|*2020-11-10T00:00:00.000Z*|
+
+</section>
+
+<section>
+<h3 id="get__{customer}_{location}_{asset}_quality-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|This returns the quality in the selected time range in a data format that can be consumed easily by Grafana. Quality is defined by goodProducts / totalProducts|Inline|
+
+<h3 id="get__{customer}_{location}_{asset}_quality-responseschema">Response Schema</h3>
+
+Status Code **200**
+
+|Name|Type|Required|Restrictions|Description|
+|---|---|---|---|---|
+|» columnNames|[string]|false|none|the column names|
+|» datapoints|[array]|false|none|the returned data|
+
+<h3 id="get__{customer}_{location}_{asset}_quality-exampleresponses">Example responses</h3>
+
+> 200 Response
+
+```json
+{
+  "columnNames": [
+    "DCCAachen-Aachen-warping-quality"
+  ],
+  "datapoints": [
+    [
+      0.8
+    ]
+  ]
+}
+```
+
+</section>
+
+<aside class="warning">
+To perform this operation, you must be authenticated by means of one of the following methods:
+BasicAuth
+</aside>
+
+</section>
+
+<section>
+
 ## GET /{customer}/{location}/{asset}/oee
 
 <section>
