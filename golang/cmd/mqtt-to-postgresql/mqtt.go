@@ -83,40 +83,30 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		switch payloadType {
 		case "state":
 			go ProcessStateData(customerID, location, assetID, payloadType, payload)
-			break
 		case "processValue":
 			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload)
-			break
 		case "processvalue":
 			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload)
-			break
 		case "count":
 			go ProcessCountData(customerID, location, assetID, payloadType, payload)
-			break
 		case "recommendation":
 			go ProcessRecommendationData(customerID, location, assetID, payloadType, payload)
-			break
 		case "addShift":
 			go ProcessAddShift(customerID, location, assetID, payloadType, payload)
-			break
 		case "addMaintenanceActivity":
 			go ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload)
-			break
 		case "uniqueProduct":
 			go ProcessUniqueProduct(customerID, location, assetID, payloadType, payload)
-			break
+		case "scrapUniqueProduct":
+			go ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload)
 		case "addProduct":
 			go ProcessAddProduct(customerID, location, assetID, payloadType, payload)
-			break
 		case "addOrder":
 			go ProcessAddOrder(customerID, location, assetID, payloadType, payload)
-			break
 		case "startOrder":
 			go ProcessStartOrder(customerID, location, assetID, payloadType, payload)
-			break
 		case "endOrder":
 			go ProcessEndOrder(customerID, location, assetID, payloadType, payload)
-			break
 		}
 	}
 }
@@ -175,11 +165,6 @@ func OnConnectionLost(c MQTT.Client, err error) {
 	zap.S().Warnf("Connection lost", err)
 	mqttConnected.Dec()
 	zap.S().Debugf("mqttConnected.Dec()")
-}
-
-// OnReconnecting outputs info message
-func OnReconnecting(c MQTT.Client, opts *MQTT.ClientOptions) {
-	zap.S().Infof("Reconnecting...")
 }
 
 func checkConnected(c MQTT.Client) healthcheck.Check {

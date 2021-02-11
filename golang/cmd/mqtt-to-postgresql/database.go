@@ -226,7 +226,7 @@ func getProcessValue64BufferAndStore() {
 	}
 
 	keepRunning := false
-	for keepRunning == false {
+	for !keepRunning {
 		select {
 		case pt := <-processValue64Channel:
 
@@ -373,6 +373,40 @@ func StoreIntoUniqueProductTable(UID string, DBassetID int, timestampMsBegin int
 		ON CONFLICT DO NOTHING;`
 
 	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
+	if err != nil {
+		tx.Rollback()
+		PQErrorHandling(sqlStatement, err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+		err = tx.Rollback()
+		if err != nil {
+			PQErrorHandling("tx.Rollback()", err)
+		}
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		PQErrorHandling("tx.Commit()", err)
+	}
+}
+
+// UpdateUniqueProductTableWithScrap sets isScrap to true in the database
+func UpdateUniqueProductTableWithScrap(UID string, DBassetID int) {
+	zap.S().Debugf("UpdateUniqueProductTableWithScrap called", UID, DBassetID)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		PQErrorHandling("db.BeginTx()", err)
+	}
+
+	sqlStatement := `UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`
+
+	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID)
 	if err != nil {
 		tx.Rollback()
 		PQErrorHandling(sqlStatement, err)
