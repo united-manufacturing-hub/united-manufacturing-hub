@@ -204,7 +204,7 @@ func addUnknownMicrostops(parentSpan opentracing.Span, stateArray []datamodel.St
 			continue
 		}
 
-		if index == len(stateArray)-1 { //if last entry, ignore
+		if index == len(stateArray)-1 || index == 0 { //if last entry or first entry, ignore
 			fullRow := datamodel.StateEntry{
 				State:     dataPoint.State,
 				Timestamp: dataPoint.Timestamp,
@@ -517,7 +517,7 @@ func removeSmallRunningStates(parentSpan opentracing.Span, stateArray []datamode
 			continue
 		}
 
-		if index == len(stateArray)-1 { //if last entry, ignore
+		if index == len(stateArray)-1 || index == 0 { //if last entry or first entry, ignore
 			fullRow := datamodel.StateEntry{State: dataPoint.State, Timestamp: dataPoint.Timestamp}
 			processedStateArray = append(processedStateArray, fullRow)
 			continue
@@ -562,7 +562,7 @@ func removeSmallStopStates(parentSpan opentracing.Span, stateArray []datamodel.S
 			continue
 		}
 
-		if index == len(stateArray)-1 { //if last entry, ignore
+		if index == len(stateArray)-1 || index == 0 { //if last entry or first entry, ignore
 			fullRow := datamodel.StateEntry{State: dataPoint.State, Timestamp: dataPoint.Timestamp}
 			processedStateArray = append(processedStateArray, fullRow)
 			continue
