@@ -68,15 +68,16 @@ Check out [Getting Started](docs/getting-started.md) for more information on how
 <!-- SHOWCASE -->
 ## Showcase
 
-The United Manufacturing Hub has been deployed in various industries, from CNC milling over filling to flame cutting.
+The United Manufacturing Hub has successfully deployed in various industries, from CNC milling over filling to flame cutting.
 
-Here are some selected cases. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
+Here are some selected cases from our installations across industries, that show how our product is used in practice. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
 
 ### Flame cutting
 
 <img src="docs/examples/images/flame-cutting.png" height="150">
 
-Retrofitting of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data
+Plug-and-play retrofit of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data.
+
 
 ### Brewery
 
@@ -84,11 +85,13 @@ Retrofitting of 11 flame cutting machines and blasting systems at two locations 
 
 Retrofit of a bottling line for different beer types. Focus on the identification of microstops causes and exact delimitation of the bottleneck machine.
 
+
 ### Weaving
 
 <img src="docs/examples/images/weaving.png" height="150">
 
-Retrofitting of weaving machines that do not provide data via the PLC to extract operating data. Subsequent determination of the OEE and detailed breakdown of the individual key figures
+Retrofit of several weaving machines that do not provide data via the PLC to extract operating data to determine the OEE and detailed breakdown analysis of the individual key figures.
+
 
 <!-- ROADMAP -->
 ## Roadmap
