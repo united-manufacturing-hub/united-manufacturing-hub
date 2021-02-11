@@ -11,6 +11,7 @@ import (
 
 type count struct {
 	Count       int   `json:"count"`
+	Scrap       int   `json:"scrap"`
 	TimestampMs int64 `json:"timestamp_ms"`
 }
 
@@ -135,9 +136,10 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 	DBassetID := GetAssetID(customerID, location, assetID)
 
 	count := parsedPayload.Count
+	scrap := parsedPayload.Scrap
 	timestampMs := parsedPayload.TimestampMs
 
-	StoreIntoCountTable(timestampMs, DBassetID, count)
+	StoreIntoCountTable(timestampMs, DBassetID, count, scrap)
 }
 
 // ProcessAddShift adds a new shift to the database

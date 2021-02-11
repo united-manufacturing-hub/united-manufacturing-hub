@@ -98,9 +98,10 @@ By definition all topic names should be lower case only!
 
 Topic: `ia/<customerID>/<location>/<AssetID>/count`
 
-Here a message is sent every time something has been counted. This can be, for example, a product produced or scrap.
+Here a message is sent every time something has been counted. This can be, for example, a good product or scrap.
 
-`count` in the JSON is a integer.
+`count` in the JSON is an integer.
+`scrap` in the JSON is an integer, which is optional. It means `scrap` pieces of `count` are scrap. If not specified it is 0 (all produced goods are good).
 
 #### Example for /count
 
