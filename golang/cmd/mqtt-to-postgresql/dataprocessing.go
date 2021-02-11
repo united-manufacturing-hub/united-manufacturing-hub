@@ -40,6 +40,10 @@ type uniqueProduct struct {
 	StationID        string `json:"stationID"`
 }
 
+type scrapUniqueProduct struct {
+	UID string `json:"UID"`
+}
+
 /*
 product_id SERIAL PRIMARY KEY,
     product_name VARCHAR(40) NOT NULL,
@@ -204,6 +208,22 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 	stationID := parsedPayload.StationID
 
 	StoreIntoUniqueProductTable(UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
+}
+
+// ProcessScrapUniqueProduct sets isScrap of a uniqueProduct to true
+func ProcessScrapUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte) {
+	var parsedPayload scrapUniqueProduct
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+
+	UID := parsedPayload.UID
+
+	UpdateUniqueProductTableWithScrap(UID, DBassetID)
 }
 
 // ProcessAddProduct adds a new product to the database
