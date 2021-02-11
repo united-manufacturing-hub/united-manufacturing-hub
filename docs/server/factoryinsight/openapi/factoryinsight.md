@@ -289,15 +289,18 @@ Status Code **200**
 {
   "columnNames": [
     "DCCAachen-AachenPlant-WeavingMachine-count",
+    "DCCAachen-AachenPlant-WeavingMachine-scrap",
     "timestamp"
   ],
   "datapoints": [
     [
       1250,
+      0,
       1605201148990
     ],
     [
       625,
+      0,
       1605201408149
     ]
   ]

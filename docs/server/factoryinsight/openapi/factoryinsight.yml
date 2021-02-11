@@ -250,6 +250,7 @@ paths:
                     description: the column names
                     example:
                       - DCCAachen-AachenPlant-WeavingMachine-count
+                      - DCCAachen-AachenPlant-WeavingMachine-scrap
                       - timestamp
                   datapoints:
                     type: array
@@ -259,9 +260,11 @@ paths:
                     example:
                       - 
                         - 1250
+                        - 0
                         - 1605201148990
                       - 
                         - 625
+                        - 0
                         - 1605201408149
 
 
