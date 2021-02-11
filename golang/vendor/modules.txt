@@ -10,7 +10,7 @@ github.com/beorn7/perks/quantile
 github.com/cespare/xxhash/v2
 # github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f
 github.com/dgryski/go-rendezvous
-# github.com/eclipse/paho.mqtt.golang v1.3.1
+# github.com/eclipse/paho.mqtt.golang v1.3.2
 ## explicit
 github.com/eclipse/paho.mqtt.golang
 github.com/eclipse/paho.mqtt.golang/packets
