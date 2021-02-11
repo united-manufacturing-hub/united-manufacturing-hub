@@ -712,7 +712,7 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 		}
 
 		// no data in cache
-		sqlStatement := `SELECT timestamp, count FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
+		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 		rows, err := db.Query(sqlStatement, assetID, from, to)
 		if err == sql.ErrNoRows {
 			PQErrorHandling(span, sqlStatement, err, false)
@@ -728,8 +728,9 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 		for rows.Next() {
 			var timestamp time.Time
 			var dataPoint float64
+			var dataPoint2 float64
 
-			err := rows.Scan(&timestamp, &dataPoint)
+			err := rows.Scan(&timestamp, &dataPoint, &dataPoint2)
 			if err != nil {
 				PQErrorHandling(span, sqlStatement, err, false)
 				error = err
@@ -737,6 +738,7 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 			}
 			fullRow := datamodel.CountEntry{
 				Count:     dataPoint,
+				Scrap:     dataPoint2,
 				Timestamp: timestamp,
 			}
 			data = append(data, fullRow)
@@ -766,7 +768,8 @@ func GetCounts(parentSpan opentracing.Span, customerID string, location string, 
 	defer span.Finish()
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
-	data.ColumnNames = []string{JSONColumnName, "timestamp"}
+	JSONColumnName2 := customerID + "-" + location + "-" + asset + "-" + "scrap"
+	data.ColumnNames = []string{JSONColumnName, JSONColumnName2, "timestamp"}
 
 	countSlice, err := GetCountsRaw(span, customerID, location, asset, from, to)
 	if err != nil {
@@ -777,7 +780,7 @@ func GetCounts(parentSpan opentracing.Span, customerID string, location string, 
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
-		fullRow := []interface{}{dataPoint.Count, float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{dataPoint.Count, dataPoint.Scrap, float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
