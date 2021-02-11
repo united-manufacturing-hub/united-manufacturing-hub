@@ -319,6 +319,54 @@ func StoreIntoCountTable(timestampMs int64, DBassetID int, count int, scrap int)
 	}
 }
 
+// UpdateCountTableWithScrap updates the database to scrap products
+func UpdateCountTableWithScrap(timestampMs int64, DBassetID int, scrap int) {
+	zap.S().Debugf("UpdateCountTableWithScrap called", timestampMs, DBassetID, scrap)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		PQErrorHandling("db.BeginTx()", err)
+	}
+
+	sqlStatement := `
+		UPDATE counttable 
+		SET scrap = count 
+		WHERE (timestamp, asset_id) IN
+			(SELECT timestamp, asset_id
+			FROM (
+				SELECT *, sum(count) OVER (ORDER BY timestamp DESC) AS running_total
+				FROM countTable
+				WHERE timestamp < $1 AND timestamp > ($1::TIMESTAMP - INTERVAL '1 DAY') AND asset_id = $2
+			) t
+			WHERE running_total <= $3)
+		;
+	`
+
+	// TODO: # 125
+
+	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, scrap)
+	if err != nil {
+		tx.Rollback()
+		PQErrorHandling(sqlStatement, err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+		err = tx.Rollback()
+		if err != nil {
+			PQErrorHandling("tx.Rollback()", err)
+		}
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		PQErrorHandling("tx.Commit()", err)
+	}
+}
+
 // StoreIntoShiftTable stores a count into the database
 func StoreIntoShiftTable(timestampMs int64, DBassetID int, timestampMsEnd int64) {
 	zap.S().Debugf("StoreIntoShiftTable called", timestampMs, DBassetID, timestampMsEnd)
