@@ -1421,6 +1421,34 @@ func CalculatePerformance(parentSpan opentracing.Span, temporaryDatapoints []dat
 	return
 }
 
+// CalculateQuality calculates the quality for a given []datamodel.CountEntry
+func CalculateQuality(parentSpan opentracing.Span, temporaryDatapoints []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+	// Jaeger tracing
+	var span opentracing.Span
+	if parentSpan != nil { //nil during testing
+		span = opentracing.StartSpan(
+			"CalculateQuality",
+			opentracing.ChildOf(parentSpan.Context()))
+		defer span.Finish()
+	}
+
+	// Loop through all datapoints and calculate good pieces and scrap
+	var total float64 = 0
+	var scrap float64 = 0
+
+	for _, currentCount := range temporaryDatapoints {
+		total += currentCount.Count
+		scrap += currentCount.Scrap
+	}
+
+	good := total - scrap
+
+	fullRow := []interface{}{good / total}
+	data = append(data, fullRow)
+
+	return
+}
+
 // IsPerformanceLoss checks whether a state is a performance loss as specified in configuration or derived from it
 // (derived means it is not specifically mentioned in configuration, but the overarching category is)
 func IsPerformanceLoss(state int32, configuration datamodel.CustomerConfiguration) (IsPerformanceLoss bool) {

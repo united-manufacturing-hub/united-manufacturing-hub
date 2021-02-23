@@ -250,6 +250,7 @@ paths:
                     description: the column names
                     example:
                       - DCCAachen-AachenPlant-WeavingMachine-count
+                      - DCCAachen-AachenPlant-WeavingMachine-scrap
                       - timestamp
                   datapoints:
                     type: array
@@ -259,9 +260,11 @@ paths:
                     example:
                       - 
                         - 1250
+                        - 0
                         - 1605201148990
                       - 
                         - 625
+                        - 0
                         - 1605201408149
 
 
@@ -495,6 +498,42 @@ paths:
                       - 
                         - 0.039953472102622754
 
+  /{customer}/{location}/{asset}/quality:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the quality in the selected time range in a data format that can be consumed easily by Grafana. 
+            Quality is defined by goodProducts / totalProducts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-Aachen-warping-quality
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    maxLength: 1
+                    minimum: 0
+                    maximum: 1
+                    example:
+                      - 
+                        - 0.80
+
   /{customer}/{location}/{asset}/oee:
     get:
       parameters:
@@ -621,6 +660,46 @@ paths:
                         - 1604077860000
                       - 
                         - 36360
+                        - 1604077920000   
+
+  /{customer}/{location}/{asset}/qualityRate:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the quality rate in the selected time range in a data format that can be consumed easily by Grafana. 
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - DCCAachen-Aachen-warping-qualityRate
+                      - timestamp
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - 0.80
+                        - 1604077800000 
+                      - 
+                        - 0.85
+                        - 1604077860000
+                      - 
+                        - 0.82
                         - 1604077920000   
 
   /{customer}/{location}/{asset}/stateHistogram:

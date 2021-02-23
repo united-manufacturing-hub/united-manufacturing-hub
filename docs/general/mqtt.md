@@ -12,6 +12,8 @@
   - [2nd level: contextualized data](#2nd-level-contextualized-data)
     - [/count](#count)
       - [Example for /count](#example-for-count)
+    - [/scrapCount](#scrapcount)
+      - [Example for /scrapCount](#example-for-scrapcount)
     - [/barcode](#barcode)
       - [Example for /barcode](#example-for-barcode)
     - [/activity](#activity)
@@ -37,13 +39,14 @@
       - [Example for /cycleTimeTrigger](#example-for-cycletimetrigger)
     - [/uniqueProduct](#uniqueproduct)
       - [Example for /uniqueProduct](#example-for-uniqueproduct)
+    - [/scrapUniqueProduct](#scrapuniqueproduct)
+      - [Example for /scrapUniqueProduct](#example-for-scrapuniqueproduct)
   - [4th level: Recommendations for action](#4th-level-recommendations-for-action)
     - [/recommendations](#recommendations)
       - [Example for /recommendations](#example-for-recommendations)
   - [in development](#in-development)
     - [/qualityClass](#qualityclass)
     - [/detectedObject](#detectedobject)
-    - [/cycleTimeTrigger](#cycletimetrigger-1)
     - [/cycleTimeScrap](#cycletimescrap)
 
 ## Introduction
@@ -98,9 +101,10 @@ By definition all topic names should be lower case only!
 
 Topic: `ia/<customerID>/<location>/<AssetID>/count`
 
-Here a message is sent every time something has been counted. This can be, for example, a product produced or scrap.
+Here a message is sent every time something has been counted. This can be, for example, a good product or scrap.
 
-`count` in the JSON is a integer.
+`count` in the JSON is an integer.
+`scrap` in the JSON is an integer, which is optional. It means `scrap` pieces of `count` are scrap. If not specified it is 0 (all produced goods are good).
 
 #### Example for /count
 
@@ -108,6 +112,32 @@ Here a message is sent every time something has been counted. This can be, for e
 {
     "timestamp_ms": 1588879689394, 
     "count": 1
+}
+```
+
+### /scrapCount
+
+Topic: `ia/<customerID>/<location>/<AssetID>/scrapCount`
+
+Here a message is sent every time products should be marked as scrap. It works as follows:
+A message with `scrap` and `timestamp_ms` is sent. It starts with the count that is directly before `timestamp_ms`. It is now iterated step by step back in time and step by step the existing counts are set to scrap until a total of `scrap` products have been scraped.
+
+![scrap count image](images/scrapCount_image.png)
+
+**Important notes:**
+
+- You can specify maximum of 24h to be scrapped to avoid accidents
+- (NOT IMPLEMENTED YET) If counts does not equal `scrap`, e.g. the count is 5 but only 2 more need to be scrapped, it will scrap exactly 2. Currently it would ignore these 2. see also #125
+- (NOT IMPLEMENTED YET) If no counts are available for this asset, but uniqueProducts are available, they can also be marked as scrap. //TODO
+
+`scrap` in the JSON is an integer.
+
+#### Example for /scrapCount
+
+```json
+{
+    "timestamp_ms": 1588879689394, 
+    "scrap": 1
 }
 ```
 
@@ -353,6 +383,22 @@ A message is sent here each time a product has been produced or modified. A modi
 }
 ```
 
+### /scrapUniqueProduct
+
+Topic: `ia/<customerID>/<location>/<AssetID>/scrapUniqueProduct`
+
+A message is sent here each time a unique product has been scrapped.
+
+`UID`: Unique ID of the current single product.
+
+#### Example for /scrapUniqueProduct
+
+```json
+{
+  "UID": "161117101271788647991611171016443",
+}
+```
+
 ## 4th level: Recommendations for action
 
 ### /recommendations
@@ -402,7 +448,7 @@ A message is sent here each time a product is classified. Example payload:
 | 2 | Cookie center broken |Cookie center broken| Freely selectable |
 | 3 | Cookie has a broken corner |Cookie has a broken corner | Freely selectable |
 
-```
+```json
 {
 "timestamp_ms": 1588879689394, 
 "qualityClass": 1
@@ -416,7 +462,7 @@ A message is sent here each time a product is classified. Example payload:
 
 Under this topic, a detected object is published from the object detection. Each object is enclosed by a rectangular field in the image. The position and dimensions of this field are stored in rectangle. The type of detected object can be retrieved with the keyword object. Additionally, the prediction accuracy for this object class is given as confidence. The requestID is only used for traceability and assigns each recognized object to a request/query, i.e. to an image. All objects with the same requestID were detected in one image capture.
 
-```
+```json
 {
 "timestamp_ms": 1588879689394, 
 }, "detectedObject": 
@@ -434,24 +480,11 @@ Under this topic, a detected object is published from the object detection. Each
 }
 ```
 
-### /cycleTimeTrigger
-
-A message should be sent under this topic whenever an assembly cycle is started.
-
-```
-{
-"timestamp_ms" : 1588879689394,
-"currentStation" : "StationXY",
-"nextStation" : "StationYZ",
-"sanityTime_in_s": 12 // time after current cycle should be aborted because it takes unrealistically long time (in seconds).
-}
-```
-
 ### /cycleTimeScrap
 
 Under this topic a message should be sent whenever an assembly at a certain station should be aborted because the part has been marked as defective.
 
-```
+```json
 { 
 "timestamp_ms" : 1588879689394,
 "currentStation" : "StationXY"

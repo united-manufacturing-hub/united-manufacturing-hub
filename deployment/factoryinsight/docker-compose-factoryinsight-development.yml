@@ -6,14 +6,14 @@ services:
         container_name: grafana
         restart: always
         ports: 
-        - 30001:3000
+        - 35001:3000
         logging:
           driver: "json-file"
           options:
               max-file: "5"
               max-size: "10m"
         volumes:
-          - './golang/test/factoryinsight/persistentData/grafana:/var/lib/grafana'
+          - '../../golang/test/factoryinsight/persistentData/grafana:/var/lib/grafana'
         networks:
           iafactoryinsightbasic:
         environment:
@@ -28,7 +28,7 @@ services:
       container_name: factoryinsight
       build:
         dockerfile: ./deployment/factoryinsight/Dockerfile
-        context: ./
+        context: ../../
       environment:
         VERSION: 1
         REDIS_URI: ${REDIS_URI}
