@@ -148,6 +148,12 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 	scrap := parsedPayload.Scrap
 	timestampMs := parsedPayload.TimestampMs
 
+	// this should not happen. Throw a warning message and ignore (= do not try to store in database)
+	if count <= 0 {
+		zap.S().Warnf("count <= 0", customerID, location, assetID, payload, parsedPayload)
+		return
+	}
+
 	StoreIntoCountTable(timestampMs, DBassetID, count, scrap)
 }
 
