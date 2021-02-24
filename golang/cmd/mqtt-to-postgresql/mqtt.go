@@ -116,7 +116,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 func onMessageReceived(client MQTT.Client, message MQTT.Message) {
 
 	//Check whether topic has the correct structure
-	rp := regexp.MustCompile("ia/([\\w]*)/([\\w]*)/([\\w]*)/([\\w]*)")
+	rp := regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
 
 	res := rp.FindStringSubmatch(message.Topic())
 	if res == nil {
