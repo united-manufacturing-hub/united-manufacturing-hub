@@ -614,7 +614,8 @@ func combineAdjacentStops(parentSpan opentracing.Span, stateArray []datamodel.St
 		}
 		previousDataPoint := stateArray[index-1]
 
-		if datamodel.IsUnspecifiedStop(dataPoint.State) && !datamodel.IsProducing(previousDataPoint.State) && !datamodel.IsNoShift(previousDataPoint.State) { // if the current stop is an unknown stop and the previous one is not running (unspecified or specified stop) and not noShift
+		// if the current stop is an unknown stop and the previous one is not running (unspecified or specified stop) and not noShift (or break)
+		if datamodel.IsUnspecifiedStop(dataPoint.State) && !datamodel.IsProducing(previousDataPoint.State) && !datamodel.IsNoShift(previousDataPoint.State) && !datamodel.IsOperatorBreak(previousDataPoint.State) {
 			continue // then don't add the current state (it gives no additional information). As a result we remove adjacent unknown stops
 		}
 

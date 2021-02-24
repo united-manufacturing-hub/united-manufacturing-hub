@@ -14,40 +14,48 @@ updates:
    
   - package-ecosystem: "gomod"
     directory: "/golang"
+    target-branch: "staging"
     schedule:
       interval: "daily"
       
   - package-ecosystem: "docker"
     directory: "/deployment/factoryinsight"
+    target-branch: "staging"
     schedule:
       interval: "daily"
   
   - package-ecosystem: "docker"
     directory: "/deployment/mqtt-to-postgresql"
+    target-branch: "staging"
     schedule:
       interval: "daily"
   
   - package-ecosystem: "docker"
     directory: "/deployment/python-sdk"
+    target-branch: "staging"
     schedule:
       interval: "daily"
   
   - package-ecosystem: "docker"
     directory: "/deployment/sensorconnect"
+    target-branch: "staging"
     schedule:
       interval: "daily"
       
   - package-ecosystem: "pip"
     directory: "/sensorconnect"
+    target-branch: "staging"
     schedule:
       interval: "daily"
       
   - package-ecosystem: "pip"
     directory: "/python-sdk"
+    target-branch: "staging"
     schedule:
       interval: "daily"
       
   - package-ecosystem: "pip"
     directory: "/barcodereader"
+    target-branch: "staging"
     schedule:
       interval: "daily"
