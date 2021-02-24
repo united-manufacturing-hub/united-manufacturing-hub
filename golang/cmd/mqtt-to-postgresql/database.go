@@ -93,7 +93,10 @@ func storeIntoTable(timestampMs int64, DBassetID int, tableName string, value in
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, value)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -130,7 +133,10 @@ func StoreIntoprocessValueTable(timestampMs int64, DBassetID int, value int, val
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, value, valueName)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -168,7 +174,10 @@ func StoreRecommendation(timestampMs int64, uid string, recommendationType int, 
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, uid, recommendationType, enabled, recommendationValues, recommendationTextEN, recommendationTextDE, recommendationDiagnoseTextEN, recommendationDiagnoseTextDE)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -299,7 +308,10 @@ func StoreIntoCountTable(timestampMs int64, DBassetID int, count int, scrap int)
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, count, scrap)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -347,7 +359,10 @@ func UpdateCountTableWithScrap(timestampMs int64, DBassetID int, scrap int) {
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, scrap)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -385,7 +400,10 @@ func StoreIntoShiftTable(timestampMs int64, DBassetID int, timestampMsEnd int64)
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, timestampMsEnd, DBassetID, 1) //type is always 1 for now (0 would be no shift)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -422,7 +440,10 @@ func StoreIntoUniqueProductTable(UID string, DBassetID int, timestampMsBegin int
 
 	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -456,7 +477,10 @@ func UpdateUniqueProductTableWithScrap(UID string, DBassetID int) {
 
 	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -493,7 +517,10 @@ func StoreIntoProductTable(DBassetID int, productName string, timePerUnitInSecon
 
 	_, err = tx.ExecContext(ctx, sqlStatement, DBassetID, productName, timePerUnitInSeconds)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -530,7 +557,10 @@ func StoreIntoOrderTable(orderName string, productID int, targetUnits int, DBass
 
 	_, err = tx.ExecContext(ctx, sqlStatement, orderName, productID, targetUnits, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -568,7 +598,10 @@ func UpdateBeginTimestampInOrderTable(orderName string, beginTimestamp int64, DB
 
 	_, err = tx.ExecContext(ctx, sqlStatement, beginTimestamp, orderName, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -606,7 +639,10 @@ func UpdateEndTimestampInOrderTable(orderName string, endTimestamp int64, DBasse
 
 	_, err = tx.ExecContext(ctx, sqlStatement, endTimestamp, orderName, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -643,7 +679,10 @@ func StoreIntoMaintenancewActivitiesTable(timestampMs int64, componentID int, ac
 
 	_, err = tx.ExecContext(ctx, sqlStatement, componentID, activityType, timestampMs)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -689,7 +728,10 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 
 	_, err = tx.ExecContext(ctx, sqlStatement, assetID, location, customerID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
