@@ -39,13 +39,17 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-United Manufacturing Hub is an open source system for extracting and analyzing data from manufacturing plants and sensors. The Hub includes both software and hardware components to enable the retrofit of productions plants by plug-and-play. Resulting is an end-to-end solution for various questions in manufacturing, e.g. optimization of production through OEE analysis, preventive maintenance through condition analysis and quality improvement through stop analysis.
+The United Manufacturing System is an open source solution for extracting and analyzing data from manufacturing plants and sensors. The Hub includes both software and hardware components to enable the retrofit of productions plants by plug-and-play as well as to integrate existing machine PLCs and IT systems. The result is an end-to-end solution for various questions in manufacturing such as the optimization of production through OEE analysis, preventive maintenance through condition analysis and quality improvement through stop analysis.
+
 
 ### Features
 
-- **Fulfills all your Industrial IoT needs**. The United Factorycube and the United Manufacturing Hub represent a complete hardware and software package. When selecting the components, we paid particular attention to only use established and scalable sub-components in order to meet the requirements of an enterprise-ready solution. This makes the System highly flexible and easily scalable.
-- **Solves concrete problems**. The United Manufacturing Hub is our solution that presents the data of the connected production lines in real time. Additional the system includes a portfolio of specific, ready to use solutions to facilitate daily work production. The portfolio contains tools to calculate and analyse the OEE, to break down optimization potentials, to facilitate reporting, to monitor diverse processes via alarms and to enable a condition-based forward looking maintenance.
-- **Open Source**. We combine the best of established open source projects to give all producing companies and machine manufacturers an easy and straightforward access to modern technology. For this purpose we publish both the core software and our gathered knowledge to this topic on our Hub so that everyone interested has free access to the information and core software in order to develop own solutions for his needs. For you, this means: 1. free of charge, forever; 2. no lock-in, because you can adapt the software yourself at any time.
+- **Fulfills all your Industrial IoT needs**. The United Factorycube and the United Manufacturing System represent a complete hardware and software package. When selecting the components, we paid particular attention to only use established and scalable subcomponents in order to meet the requirements of an enterprise-ready solution. This makes the System highly flexible and easily scaleable.
+
+- **Solves concrete problems**. The United Manufacturing Hub is our solution that presents the data of the connected production lines in real-time. In addition, the system includes a digital toolbox for production, which contains all the important functionalities that support both production management and management in their daily tasks. The portfolio contains tools to calculate and analyse the OEE, to break down optimization potentials, to facilitate reporting, to monitor diverse processes via alarms and to enable a condition-based forward looking maintenance. Due to the various features, the system is configurable and editable as desired. Our solution is connected and ready to use within 2 hours. Our core products are freely accessible at any time (Open Core) and the premium package we offer (SaaS solution) can be cancelled at any time.
+
+- **Open Source**. We combine the best of established open source projects to provide all manufacturing organizations and machine manufacturers an easy and straigtforward access to modern technology. For this purpose we publish both the core software and our gathered knowledge to this topic on our Hub. Everyone interested has free access to the information and core software in order to develop own solutions for his needs. For you, this means: For you, this means: 1. free of charge, forever; 2. no lock-in, as you can customize the software yourself at any time; 3. comprehensive digital toolbox for production; 4. configurable and editable as desired; 5. continuous development through open source technology; 6. up and running in under 2 hours
+
 
 ### Dashboard demo
 
@@ -64,15 +68,16 @@ Check out [Getting Started](docs/getting-started.md) for more information on how
 <!-- SHOWCASE -->
 ## Showcase
 
-The United Manufacturing Hub has been deployed in various industries, from CNC milling over filling to flame cutting.
+The United Manufacturing Hub has successfully deployed in various industries, from CNC milling over filling to flame cutting.
 
-Here are some selected cases. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
+Here are some selected cases from our installations across industries, that show how our product is used in practice. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
 
 ### Flame cutting
 
 <img src="docs/examples/images/flame-cutting.png" height="150">
 
-Retrofitting of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data
+Plug-and-play retrofit of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data.
+
 
 ### Brewery
 
@@ -80,11 +85,13 @@ Retrofitting of 11 flame cutting machines and blasting systems at two locations 
 
 Retrofit of a bottling line for different beer types. Focus on the identification of microstops causes and exact delimitation of the bottleneck machine.
 
+
 ### Weaving
 
 <img src="docs/examples/images/weaving.png" height="150">
 
-Retrofitting of weaving machines that do not provide data via the PLC to extract operating data. Subsequent determination of the OEE and detailed breakdown of the individual key figures
+Retrofit of several weaving machines that do not provide data via the PLC to extract operating data to determine the OEE and detailed breakdown analysis of the individual key figures.
+
 
 <!-- ROADMAP -->
 ## Roadmap
