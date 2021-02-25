@@ -5,7 +5,7 @@
 ssh_authorized_keys:
 - github:jeremytheocharis
 
-hostname: cubi_prototype
+hostname: cubi-prototype
 
 init_cmd:
 - "echo hello, init command"
@@ -14,7 +14,9 @@ boot_cmd:
 - "echo hello, boot command"
 
 run_cmd:
-- "export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh"
+- "wget http://172.21.9.175/init_stack.sh"
+- "chmod +x init_stack.sh" 
+- "./init_stack.sh"
 
 k3os:
   dns_nameservers:

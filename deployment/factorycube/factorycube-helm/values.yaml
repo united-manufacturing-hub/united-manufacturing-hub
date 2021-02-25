@@ -12,45 +12,13 @@ vernemq:
     tag: 1.11.0-alpine
     pullPolicy: IfNotPresent
 
-  nameOverride: ""
-  fullnameOverride: ""
-
-  serviceMonitor:
-    create: false
-    labels: {}
-
   service:
-    # NodePort - Listen to a port on nodes and forward to the service.
-    # ClusterIP - Listen on the service internal to the cluster only.
-    # LoadBalancer - Create a LoadBalancer in the cloud provider and forward to the service.
-    type: ClusterIP
-  #  clusterIP: 10.1.2.4
-  #  externalIPs: []
-  #  loadBalancerIP: 10.1.2.4
-  #  loadBalancerSourceRanges: []
-  #  externalTrafficPolicy: Local
-  #  sessionAffinity: None
-  #  sessionAffinityConfig: {}
+    type: LoadBalancer
     mqtt:
       enabled: true
       port: 1883
       # This is the port used by nodes to expose the service
       nodePort: 1883
-    mqtts:
-      enabled: false
-      port: 8883
-      # This is the port used by nodes to expose the service
-      nodePort: 8883
-    ws:
-      enabled: false
-      port: 8080
-      # This is the port used by nodes to expose the service
-      nodePort: 8080
-    wss:
-      enabled: false
-      port: 8443
-      # This is the port used by nodes to expose the service
-      nodePort: 8443
     annotations: {}
     labels: {}
 
@@ -98,7 +66,7 @@ vernemq:
   persistentVolume:
     ## If true, VerneMQ will create/use a Persistent Volume Claim
     ## If false, use local directory
-    enabled: false
+    enabled: true
 
     ## VerneMQ data Persistent Volume access modes
     ## Must match those of existing PV or dynamic provisioner
@@ -169,7 +137,7 @@ vernemq:
     lifecycle: {}
 
   pdb:
-    enabled: false
+    enabled: true
     minAvailable: 1
     # maxUnavailable: 1
 
@@ -184,17 +152,12 @@ vernemq:
       value: "on"
     - name: DOCKER_VERNEMQ_ALLOW_UNSUBSCRIBE_DURING_NETSPLIT
       value: "on"
-  #  - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
-  #    value: "on"
-  #  - name: DOCKER_VERNEMQ_MAX_CLIENT_ID_SIZE
-  #    value: "100"
-  #  - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
-  #    value: "10000"
-  #  - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
-  #    value: "-1"
-  #  - name: DOCKER_VERNEMQ_LISTENER__SSL__CAFILE
-  #    value: "/etc/ssl/vernemq/tls.crt"
-  #  - name: DOCKER_VERNEMQ_LISTENER__SSL__CERTFILE
-  #    value: "/etc/ssl/vernemq/tls.crt"
-  #  - name: DOCKER_VERNEMQ_LISTENER__SSL__KEYFILE
-  #    value: "/etc/ssl/vernemq/tls.key"
+    - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
+      value: "on"
+    - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
+      value: "-1"
+    - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
+      value: "-1"
+
+    - name: DOCKER_VERNEMQ_ACCEPT_EULA 
+      value: "yes"
