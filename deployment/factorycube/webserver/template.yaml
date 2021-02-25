@@ -1,11 +1,6 @@
 # See https://github.com/rancher/k3os/blob/master/README.md#configuration
-# and https://github.com/rancher/k3os/blob/master/README.md#remastering-iso
-# This file is a placeholder for custom configuration when building a custom ISO image.
 
-ssh_authorized_keys:
-- github:jeremytheocharis
-
-hostname: factorycube-core
+# Please adjust the following lines and add your certificates
 
 write_files:
 - content: |
@@ -14,25 +9,26 @@ write_files:
     metadata:
         name: general-configuration
     data:
-        serial_number: CHANGE_ME
-        remoteURL: "CHANGE_ME_MQTT_BROKER:8883"
-        mqttBridgeTopic: "ia/* out 1 local remote "
+        serial_number: CHANGE_SERIAL_NUMER
+        remoteURL: "CHANGE_BROKER_URL:8883"
+        mqttBridgeTopic: "ia/* out 1"
     
   path: /var/lib/rancher/k3s/server/manifests/general-configuration.yaml
 
 - content: |
-    INSERT CA HERE
+   ADD CA CERT HERE
   path: /home/rancher/ssl_certs/ca.crt
   
 - content: |
-    INSERT CERT HERE
+    ADD PUBLIC KEY HERE
   path: /home/rancher/ssl_certs/tls.crt
 
 - content: |
-    INSERT PRIVKEY HERE
+    ADD PRIVATE KEY HERE
   path: /home/rancher/ssl_certs/tls.key
 
-# TODO: add github URL here
+# DO NOT CHANGE ANYTHING BELOW EXCEPT WHEN YOU KNOW WHAT YOU ARE DOING
+
 - content: |
     #!/bin/bash
 
@@ -50,6 +46,11 @@ write_files:
         echo "Already configured. If you want to reconfigure delete /home/rancher/DO_NOT_DELETE"
     fi
   path: /home/rancher/initial_setup.sh
+
+ssh_authorized_keys:
+- github:jeremytheocharis
+
+hostname: factorycube-core
 
 run_cmd:
 - "chmod +x /home/rancher/initial_setup.sh && /home/rancher/initial_setup.sh &"
