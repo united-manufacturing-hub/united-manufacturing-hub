@@ -1,0 +1,63 @@
+# See https://github.com/rancher/k3os/blob/master/README.md#configuration
+# and https://github.com/rancher/k3os/blob/master/README.md#remastering-iso
+# This file is a placeholder for custom configuration when building a custom ISO image.
+
+ssh_authorized_keys:
+- github:jeremytheocharis
+
+hostname: factorycube-core
+
+write_files:
+- content: |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+        name: general-configuration
+    data:
+        serial_number: CHANGE_ME
+        remoteURL: "CHANGE_ME_MQTT_BROKER:8883"
+        mqttBridgeTopic: "ia/* out 1 local remote "
+    
+  path: /var/lib/rancher/k3s/server/manifests/general-configuration.yaml
+
+- content: |
+    INSERT CA HERE
+  path: /home/rancher/ssl_certs/ca.crt
+  
+- content: |
+    INSERT CERT HERE
+  path: /home/rancher/ssl_certs/tls.crt
+
+- content: |
+    INSERT PRIVKEY HERE
+  path: /home/rancher/ssl_certs/tls.key
+
+# TODO: add github URL here
+- content: |
+    #!/bin/bash
+
+    LOCKDIR=/home/rancher/DO_NOT_DELETE
+
+    if mkdir $LOCKDIR; then
+        echo "Initial setup!"
+
+        wget -nc http://172.21.9.175/init_stack.sh -P /home/rancher
+        chmod +x /home/rancher/init_stack.sh
+        /home/rancher/init_stack.sh &
+
+        echo "Initial setup finished!"
+    else
+        echo "Already configured. If you want to reconfigure delete /home/rancher/DO_NOT_DELETE"
+    fi
+  path: /home/rancher/initial_setup.sh
+
+run_cmd:
+- "chmod +x /home/rancher/initial_setup.sh && /home/rancher/initial_setup.sh &"
+
+k3os:
+  dns_nameservers:
+  - 8.8.8.8
+  - 1.1.1.1
+  ntp_servers:
+  - 0.us.pool.ntp.org
+  - 1.us.pool.ntp.org
