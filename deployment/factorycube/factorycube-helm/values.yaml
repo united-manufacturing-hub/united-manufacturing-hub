@@ -1,11 +1,5 @@
 # Default values for factorycube-helm.
 
-##### GENERAL CONFIG #####
-
-serialNumber: cubi-prototype
-remoteURL: mqtt.app.industrial-analytics.net
-mqttSpec: "* out 1 local remote "
-
 ##### CONFIG FOR VERNEMQ #####
 
 vernemq:
@@ -186,11 +180,11 @@ vernemq:
           key: serial_number
 
     - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CAFILE
-      value: "/etc/vernemq/ca.crt"
+      value: "/etc/ssl/vernemq/ca.crt"
     - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CERTFILE
-      value: "/etc/vernemq/tls.crt"
+      value: "/etc/ssl/vernemq/tls.crt"
     - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__KEYFILE
-      value: "/etc/vernemq/tls.key"
+      value: "/etc/ssl/vernemq/tls.key"
 
     - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CLEANSESSION
       value: "off"
