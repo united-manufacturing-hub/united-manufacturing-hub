@@ -1,6 +1,10 @@
 # Default values for factorycube-helm.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+
+##### GENERAL CONFIG #####
+
+serialNumber: cubi-prototype
+remoteURL: mqtt.app.industrial-analytics.net
+mqttSpec: "* out 1 local remote "
 
 ##### CONFIG FOR VERNEMQ #####
 
@@ -100,10 +104,10 @@ vernemq:
 
   # A list of secrets and their paths to mount inside the pod
   # This is useful for mounting certificates for security (tls)
-  secretMounts: []
-  #  - name: vernemq-certificates
-  #    secretName: vernemq-certificates-secret
-  #    path: /etc/ssl/vernemq
+  secretMounts: 
+    - name: vernemq-certificates
+      secretName: vernemq-certificates-secret
+      path: /etc/ssl/vernemq
 
   statefulset:
     ## Start and stop pods in Parallel or OrderedReady (one-by-one.)  Note - Can not change after first release.
@@ -118,13 +122,13 @@ vernemq:
     ## Liveness and Readiness probe values
     ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes
     livenessProbe:
-      initialDelaySeconds: 90
+      initialDelaySeconds: 20
       periodSeconds: 10
       timeoutSeconds: 5
       successThreshold: 1
       failureThreshold: 3
     readinessProbe:
-      initialDelaySeconds: 90
+      initialDelaySeconds: 20
       periodSeconds: 10
       timeoutSeconds: 5
       successThreshold: 1
@@ -161,3 +165,36 @@ vernemq:
 
     - name: DOCKER_VERNEMQ_ACCEPT_EULA 
       value: "yes"
+
+    - name: DOCKER_VERNEMQ_PLUGINS__VMQ_BRIDGE
+      value: "on"
+
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0
+      valueFrom:
+        configMapKeyRef:
+          name: general-configuration
+          key: remoteURL
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__TOPIC__1
+      valueFrom:
+        configMapKeyRef:
+          name: general-configuration
+          key: mqttBridgeTopic
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CLIENT_ID
+      valueFrom:
+        configMapKeyRef:
+          name: general-configuration
+          key: serial_number
+
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CAFILE
+      value: "/etc/vernemq/ca.crt"
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CERTFILE
+      value: "/etc/vernemq/tls.crt"
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__KEYFILE
+      value: "/etc/vernemq/tls.key"
+
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__CLEANSESSION
+      value: "off"
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__try_private
+      value: "off"
+    - name: DOCKER_VERNEMQ_VMQ_BRIDGE__SSL__BR0__MAX_OUTGOING_BUFFERED_MESSAGES
+      value: "5000000"
