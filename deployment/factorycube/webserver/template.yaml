@@ -1,0 +1,26 @@
+# See https://github.com/rancher/k3os/blob/master/README.md#configuration
+# and https://github.com/rancher/k3os/blob/master/README.md#remastering-iso
+# This file is a placeholder for custom configuration when building a custom ISO image.
+
+ssh_authorized_keys:
+- github:jeremytheocharis
+
+hostname: cubi_prototype
+
+init_cmd:
+- "echo hello, init command"
+
+boot_cmd:
+- "echo hello, boot command"
+
+run_cmd:
+- "export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh"
+
+k3os:
+  dns_nameservers:
+  - 8.8.8.8
+  - 1.1.1.1
+  ntp_servers:
+  - 0.us.pool.ntp.org
+  - 1.us.pool.ntp.org
+  password: rancher
