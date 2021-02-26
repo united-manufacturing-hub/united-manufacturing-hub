@@ -1,6 +1,6 @@
 apiVersion: v2
-name: factorycube-helm
-description: A Helm chart for Kubernetes
+name: factorycube-core
+description: A Helm chart for Kubernetes which setups the entire factorycube core.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -31,3 +31,4 @@ dependencies:
   - name: vernemq
     version: 1.6.7
     repository: https://vernemq.github.io/docker-vernemq
+    condition: vernemq.enabled

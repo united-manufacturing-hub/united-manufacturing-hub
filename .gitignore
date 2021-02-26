@@ -23,4 +23,4 @@ docs/**/*.pdf
 golang/test/mqtt-to-postgresql/config/certificates/*
 *.pem
 *.b64
-deployment/factorycube/webserver/configs/*
+deployment/factorycube-core-deployment/configs/*
