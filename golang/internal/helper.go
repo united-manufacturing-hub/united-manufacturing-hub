@@ -8,9 +8,11 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
-var lock sync.Mutex
+var lock2 sync.Mutex
 
 // Marshal is a function that marshals the object into an
 // io.Reader.
@@ -25,8 +27,8 @@ var Marshal = func(v interface{}) (io.Reader, error) {
 
 // Save saves a representation of v to the file at path.
 func Save(path string, v interface{}) error {
-	lock.Lock()
-	defer lock.Unlock()
+	lock2.Lock()
+	defer lock2.Unlock()
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -51,8 +53,8 @@ var Unmarshal = func(r io.Reader, v interface{}) error {
 // Use os.IsNotExist() to see if the returned error is due
 // to the file being missing.
 func Load(path string, v interface{}) error {
-	lock.Lock()
-	defer lock.Unlock()
+	lock2.Lock()
+	defer lock2.Unlock()
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -65,6 +67,8 @@ func Load(path string, v interface{}) error {
 func LogObject(functionName string, objectName string, now time.Time, v interface{}) {
 	timestamp := strconv.FormatInt(now.UTC().Unix(), 10)
 	Save("/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden", v)
+
+	zap.S().Infof("Logged ", "/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden")
 }
 
 // UniqueInt returns a unique subset of the int slice provided.
