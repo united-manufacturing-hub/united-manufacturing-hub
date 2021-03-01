@@ -664,7 +664,7 @@ func specifyUnknownStopsWithFollowingStopReason(parentSpan opentracing.Span, sta
 		followingDataPoint := stateArray[index+1]
 		timestamp = dataPoint.Timestamp
 
-		if datamodel.IsUnspecifiedStop(dataPoint.State) && !datamodel.IsNoShift(followingDataPoint.State) && datamodel.IsSpecifiedStop(followingDataPoint.State) { // if the following state is a specified stop that is not noShift AND the current is unknown stop
+		if datamodel.IsUnspecifiedStop(dataPoint.State) && !datamodel.IsNoShift(followingDataPoint.State) && !datamodel.IsOperatorBreak(followingDataPoint.State) && datamodel.IsSpecifiedStop(followingDataPoint.State) { // if the following state is a specified stop that is not noShift AND the current is unknown stop
 			state = followingDataPoint.State // then the current state uses the same specification
 		} else {
 			state = dataPoint.State // otherwise, use the state
@@ -1082,6 +1082,10 @@ func processStates(parentSpan opentracing.Span,
 			return
 		}
 
+		for _, dataPoint := range processedStateArray {
+			zap.S().Infof("#### for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
+		}
+
 		processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(span, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
 		if err != nil {
 			zap.S().Errorf("specifyUnknownStopsWithFollowingStopReason failed", err)
@@ -1093,6 +1097,11 @@ func processStates(parentSpan opentracing.Span,
 			zap.S().Errorf("combineAdjacentStops failed", err)
 			return
 		}
+
+		for _, dataPoint := range processedStateArray {
+			zap.S().Infof("####2 for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
+		}
+
 		processedStateArray, err = addLowSpeedStates(span, assetID, processedStateArray, countSlice, configuration)
 		if err != nil {
 			zap.S().Errorf("addLowSpeedStates failed", err)
@@ -1115,6 +1124,10 @@ func processStates(parentSpan opentracing.Span,
 		if err != nil {
 			zap.S().Errorf("specifySmallNoShiftsAsBreaks failed", err)
 			return
+		}
+
+		for _, dataPoint := range processedStateArray {
+			zap.S().Infof("####LAST for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
 		}
 
 		// Store to cache
