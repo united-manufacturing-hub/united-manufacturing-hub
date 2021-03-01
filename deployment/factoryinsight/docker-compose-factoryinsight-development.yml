@@ -41,7 +41,7 @@ services:
         FACTORYINSIGHT_PASSWORD: ${FACTORYINSIGHT_PASSWORD}
         DEBUG_ENABLED: ${DEBUG_ENABLED}
       volumes:
-          - './golang/test/factoryinsight/testfiles:/testfiles'
+          - '../../golang/test/factoryinsight/testfiles:/testfiles'
       logging:
           driver: "json-file"
           options:
