@@ -260,7 +260,7 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 				processedStateArray = append(processedStateArray, fullRow)
 			} else { // otherwise continue
 				state = dataPoint.State
-				fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp.Add(time.Duration(1) * time.Millisecond)} // see case # XXX
+				fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp.Add(time.Duration(1) * time.Millisecond)} // required for case #145. Otherwise this results in an endless loop
 				processedStateArray = recursiveSplittingOfShiftsToAddNoShifts(fullRow, followingDataPoint, processedShifts, processedStateArray, executionAmount)
 			}
 

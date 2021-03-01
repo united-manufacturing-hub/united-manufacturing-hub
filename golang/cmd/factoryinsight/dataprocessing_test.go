@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 )
@@ -540,3 +541,37 @@ func TestProcessStates_Complex_1(t *testing.T) {
 	}
 }
 */
+
+func Test_processStatesOptimized(t *testing.T) {
+	type args struct {
+		parentSpan    opentracing.Span
+		assetID       int
+		stateArray    []datamodel.StateEntry
+		rawShifts     []datamodel.ShiftEntry
+		countSlice    []datamodel.CountEntry
+		orderArray    []datamodel.OrdersRaw
+		from          time.Time
+		to            time.Time
+		configuration datamodel.CustomerConfiguration
+	}
+	tests := []struct {
+		name                    string
+		args                    args
+		wantProcessedStateArray []datamodel.StateEntry
+		wantErr                 bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotProcessedStateArray, err := processStatesOptimized(tt.args.parentSpan, tt.args.assetID, tt.args.stateArray, tt.args.rawShifts, tt.args.countSlice, tt.args.orderArray, tt.args.from, tt.args.to, tt.args.configuration)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("processStatesOptimized() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotProcessedStateArray, tt.wantProcessedStateArray) {
+				t.Errorf("processStatesOptimized() = %v, want %v", gotProcessedStateArray, tt.wantProcessedStateArray)
+			}
+		})
+	}
+}
