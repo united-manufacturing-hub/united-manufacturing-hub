@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
@@ -16,6 +17,7 @@ import (
 )
 
 var logData bool = false
+var lock sync.Mutex
 
 // ChannelResult returns the returnValue and a error code from a goroutine
 type ChannelResult struct {
@@ -275,12 +277,33 @@ func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, f
 }
 
 func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from time.Time, to time.Time) (processedStates []datamodel.StateEntry) {
+	firstSelectedTimestampIndex := -1
 	// Loop through all datapoints
-	for _, dataPoint := range processedStatesRaw {
+	for index, dataPoint := range processedStatesRaw {
 		// if is state in range or equal to from or to time range
 		if isTimepointInTimerange(dataPoint.Timestamp, TimeRange{from, to}) || dataPoint.Timestamp == from || dataPoint.Timestamp == to {
+
+			if firstSelectedTimestampIndex == -1 { //remember the first selected element
+				firstSelectedTimestampIndex = index
+			}
+
 			processedStates = append(processedStates, dataPoint)
 		}
+	}
+
+	if len(processedStates) > 0 && processedStates[0].Timestamp.After(from) { // if there is time missing between from and the first selected timestamp, add the element just before the first selected timestamp
+
+		if firstSelectedTimestampIndex == 0 { // there is data missing here, throwing a warning
+			zap.S().Warnf("data missing, firstSelectedTimestampIndex == 0", processedStates[0].Timestamp)
+		} else {
+
+			newDataPoint := datamodel.StateEntry{}
+			newDataPoint.Timestamp = from
+			newDataPoint.State = processedStatesRaw[firstSelectedTimestampIndex-1].State
+
+			processedStates = append([]datamodel.StateEntry{newDataPoint}, processedStates...) // prepand = put it as first element. reference: https://medium.com/@tzuni_eh/go-append-prepend-item-into-slice-a4bf167eb7af
+		}
+
 	}
 
 	// this subflow is needed to calculate noShifts while using processStatesOptimized. See also #106
@@ -1006,6 +1029,19 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 		return
 	}
 
+	// For testing
+	loggingTimestamp := time.Now()
+	if logData {
+		internal.LogObject("processStatesOptimized", "stateArray", loggingTimestamp, stateArray)
+		internal.LogObject("processStatesOptimized", "rawShifts", loggingTimestamp, rawShifts)
+		internal.LogObject("processStatesOptimized", "countSlice", loggingTimestamp, countSlice)
+		internal.LogObject("processStatesOptimized", "orderArray", loggingTimestamp, orderArray)
+		internal.LogObject("processStatesOptimized", "from", loggingTimestamp, from)
+		internal.LogObject("processStatesOptimized", "to", loggingTimestamp, to)
+		internal.LogObject("processStatesOptimized", "configuration", loggingTimestamp, configuration)
+		internal.LogObject("processStatesOptimized", "processedStateArray", loggingTimestamp, processedStateArray)
+	}
+
 	return
 }
 
@@ -1035,106 +1071,101 @@ func processStates(parentSpan opentracing.Span,
 	}
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
-	if mutex.TryLock(key) { // is is already running?
-		defer mutex.Unlock(key)
 
-		// Get from cache if possible
-		var cacheHit bool
-		processedStateArray, cacheHit = internal.GetProcessStatesFromCache(key)
-		if cacheHit {
-			//zap.S().Debugf("processStates CacheHit")
-			span.SetTag("CacheHit", true)
-			return
-		}
-
-		// remove elements outside from, to
-		processedStateArray = removeUnnecessaryElementsFromStateSlice(stateArray, from, to)
-		countSlice = removeUnnecessaryElementsFromCountSlice(countSlice, from, to)
-		orderArray = removeUnnecessaryElementsFromOrderArray(orderArray, from, to)
-
-		processedStateArray, err = removeSmallRunningStates(span, processedStateArray, configuration)
-		if err != nil {
-			zap.S().Errorf("removeSmallRunningStates failed", err)
-			return
-		}
-
-		processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
-		if err != nil {
-			zap.S().Errorf("combineAdjacentStops failed", err)
-			return
-		}
-
-		processedStateArray, err = removeSmallStopStates(span, processedStateArray, configuration)
-		if err != nil {
-			zap.S().Errorf("removeSmallStopStates failed", err)
-			return
-		}
-
-		processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
-		if err != nil {
-			zap.S().Errorf("combineAdjacentStops failed", err)
-			return
-		}
-
-		processedStateArray, err = addNoShiftsToStates(span, rawShifts, processedStateArray, from, to, configuration)
-		if err != nil {
-			zap.S().Errorf("addNoShiftsToStates failed", err)
-			return
-		}
-
-		for _, dataPoint := range processedStateArray {
-			zap.S().Infof("#### for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
-		}
-
-		processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(span, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
-		if err != nil {
-			zap.S().Errorf("specifyUnknownStopsWithFollowingStopReason failed", err)
-			return
-		}
-
-		processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
-		if err != nil {
-			zap.S().Errorf("combineAdjacentStops failed", err)
-			return
-		}
-
-		for _, dataPoint := range processedStateArray {
-			zap.S().Infof("####2 for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
-		}
-
-		processedStateArray, err = addLowSpeedStates(span, assetID, processedStateArray, countSlice, configuration)
-		if err != nil {
-			zap.S().Errorf("addLowSpeedStates failed", err)
-			return
-		}
-
-		processedStateArray, err = addUnknownMicrostops(span, processedStateArray, configuration)
-		if err != nil {
-			zap.S().Errorf("addUnknownMicrostops failed", err)
-			return
-		}
-
-		processedStateArray, err = automaticallyIdentifyChangeovers(span, processedStateArray, orderArray, from, to, configuration)
-		if err != nil {
-			zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
-			return
-		}
-
-		processedStateArray, err = specifySmallNoShiftsAsBreaks(span, processedStateArray, configuration)
-		if err != nil {
-			zap.S().Errorf("specifySmallNoShiftsAsBreaks failed", err)
-			return
-		}
-
-		for _, dataPoint := range processedStateArray {
-			zap.S().Infof("####LAST for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
-		}
-
-		// Store to cache
-		internal.StoreProcessStatesToCache(key, processedStateArray)
-	} else {
-		zap.S().Errorf("Failed to get Mutex")
+	// Get from cache if possible
+	var cacheHit bool
+	processedStateArray, cacheHit = internal.GetProcessStatesFromCache(key)
+	if cacheHit {
+		//zap.S().Debugf("processStates CacheHit")
+		span.SetTag("CacheHit", true)
+		return
 	}
+
+	// remove elements outside from, to
+	processedStateArray = removeUnnecessaryElementsFromStateSlice(stateArray, from, to)
+	countSlice = removeUnnecessaryElementsFromCountSlice(countSlice, from, to)
+	orderArray = removeUnnecessaryElementsFromOrderArray(orderArray, from, to)
+
+	processedStateArray, err = removeSmallRunningStates(span, processedStateArray, configuration)
+	if err != nil {
+		zap.S().Errorf("removeSmallRunningStates failed", err)
+		return
+	}
+
+	processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	if err != nil {
+		zap.S().Errorf("combineAdjacentStops failed", err)
+		return
+	}
+
+	processedStateArray, err = removeSmallStopStates(span, processedStateArray, configuration)
+	if err != nil {
+		zap.S().Errorf("removeSmallStopStates failed", err)
+		return
+	}
+
+	processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	if err != nil {
+		zap.S().Errorf("combineAdjacentStops failed", err)
+		return
+	}
+
+	processedStateArray, err = addNoShiftsToStates(span, rawShifts, processedStateArray, from, to, configuration)
+	if err != nil {
+		zap.S().Errorf("addNoShiftsToStates failed", err)
+		return
+	}
+
+	for _, dataPoint := range processedStateArray {
+		zap.S().Infof("#### for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
+	}
+
+	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(span, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
+	if err != nil {
+		zap.S().Errorf("specifyUnknownStopsWithFollowingStopReason failed", err)
+		return
+	}
+
+	processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	if err != nil {
+		zap.S().Errorf("combineAdjacentStops failed", err)
+		return
+	}
+
+	for _, dataPoint := range processedStateArray {
+		zap.S().Infof("####2 for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
+	}
+
+	processedStateArray, err = addLowSpeedStates(span, assetID, processedStateArray, countSlice, configuration)
+	if err != nil {
+		zap.S().Errorf("addLowSpeedStates failed", err)
+		return
+	}
+
+	processedStateArray, err = addUnknownMicrostops(span, processedStateArray, configuration)
+	if err != nil {
+		zap.S().Errorf("addUnknownMicrostops failed", err)
+		return
+	}
+
+	processedStateArray, err = automaticallyIdentifyChangeovers(span, processedStateArray, orderArray, from, to, configuration)
+	if err != nil {
+		zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
+		return
+	}
+
+	processedStateArray, err = specifySmallNoShiftsAsBreaks(span, processedStateArray, configuration)
+	if err != nil {
+		zap.S().Errorf("specifySmallNoShiftsAsBreaks failed", err)
+		return
+	}
+
+	for _, dataPoint := range processedStateArray {
+		zap.S().Infof("####LAST for _, datapoint := range processedStateArray", dataPoint.State, dataPoint.Timestamp)
+	}
+
+	// Store to cache
+	internal.StoreProcessStatesToCache(key, processedStateArray)
 
 	return
 }
@@ -1818,15 +1849,6 @@ func automaticallyIdentifyChangeovers(parentSpan opentracing.Span, stateArray []
 			}
 			processedStateArray = append(processedStateArray, fullRow)
 		}
-	}
-
-	// For testing
-	loggingTimestamp := time.Now()
-	if parentSpan != nil && logData {
-		internal.LogObject("AutomaticallyIdentifyChangeovers", "stateArray", loggingTimestamp, stateArray)
-		internal.LogObject("AutomaticallyIdentifyChangeovers", "orderArray", loggingTimestamp, orderArray)
-		internal.LogObject("AutomaticallyIdentifyChangeovers", "configuration", loggingTimestamp, configuration)
-		internal.LogObject("AutomaticallyIdentifyChangeovers", "processedStateArray", loggingTimestamp, processedStateArray)
 	}
 
 	return
