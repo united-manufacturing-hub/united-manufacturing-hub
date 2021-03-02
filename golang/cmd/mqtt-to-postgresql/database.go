@@ -93,7 +93,10 @@ func storeIntoTable(timestampMs int64, DBassetID int, tableName string, value in
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, value)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -130,7 +133,10 @@ func StoreIntoprocessValueTable(timestampMs int64, DBassetID int, value int, val
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, value, valueName)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -168,7 +174,10 @@ func StoreRecommendation(timestampMs int64, uid string, recommendationType int, 
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, uid, recommendationType, enabled, recommendationValues, recommendationTextEN, recommendationTextDE, recommendationDiagnoseTextEN, recommendationDiagnoseTextDE)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -226,7 +235,7 @@ func getProcessValue64BufferAndStore() {
 	}
 
 	keepRunning := false
-	for keepRunning == false {
+	for !keepRunning {
 		select {
 		case pt := <-processValue64Channel:
 
@@ -282,8 +291,95 @@ func StoreIntoStateTable(timestampMs int64, DBassetID int, state int) {
 }
 
 // StoreIntoCountTable stores a count into the database
-func StoreIntoCountTable(timestampMs int64, DBassetID int, count int) {
-	storeIntoTable(timestampMs, DBassetID, "countTable", count, "count")
+func StoreIntoCountTable(timestampMs int64, DBassetID int, count int, scrap int) {
+	zap.S().Debugf("StoreIntoCountTable called", timestampMs, DBassetID, count, scrap)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		PQErrorHandling("db.BeginTx()", err)
+	}
+
+	// WARNING SQL INJECTION POSSIBLE
+	sqlStatement := `
+		INSERT INTO counttable (timestamp, asset_id, count, scrap) 
+		VALUES (to_timestamp($1 / 1000.0),$2,$3, $4) 
+		ON CONFLICT DO NOTHING;`
+
+	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, count, scrap)
+	if err != nil {
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
+		PQErrorHandling(sqlStatement, err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+		err = tx.Rollback()
+		if err != nil {
+			PQErrorHandling("tx.Rollback()", err)
+		}
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		PQErrorHandling("tx.Commit()", err)
+	}
+}
+
+// UpdateCountTableWithScrap updates the database to scrap products
+func UpdateCountTableWithScrap(timestampMs int64, DBassetID int, scrap int) {
+	zap.S().Debugf("UpdateCountTableWithScrap called", timestampMs, DBassetID, scrap)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		PQErrorHandling("db.BeginTx()", err)
+	}
+
+	sqlStatement := `
+		UPDATE counttable 
+		SET scrap = count 
+		WHERE (timestamp, asset_id) IN
+			(SELECT timestamp, asset_id
+			FROM (
+				SELECT *, sum(count) OVER (ORDER BY timestamp DESC) AS running_total
+				FROM countTable
+				WHERE timestamp < to_timestamp($1 / 1000.0) AND timestamp > (to_timestamp($1 / 1000.0) - INTERVAL '1 DAY') AND asset_id = $2
+			) t
+			WHERE running_total <= $3)
+		;
+	`
+
+	// TODO: # 125
+
+	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, scrap)
+	if err != nil {
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
+		PQErrorHandling(sqlStatement, err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+		err = tx.Rollback()
+		if err != nil {
+			PQErrorHandling("tx.Rollback()", err)
+		}
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		PQErrorHandling("tx.Commit()", err)
+	}
 }
 
 // StoreIntoShiftTable stores a count into the database
@@ -304,7 +400,10 @@ func StoreIntoShiftTable(timestampMs int64, DBassetID int, timestampMsEnd int64)
 
 	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, timestampMsEnd, DBassetID, 1) //type is always 1 for now (0 would be no shift)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -341,7 +440,47 @@ func StoreIntoUniqueProductTable(UID string, DBassetID int, timestampMsBegin int
 
 	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
+		PQErrorHandling(sqlStatement, err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+		err = tx.Rollback()
+		if err != nil {
+			PQErrorHandling("tx.Rollback()", err)
+		}
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		PQErrorHandling("tx.Commit()", err)
+	}
+}
+
+// UpdateUniqueProductTableWithScrap sets isScrap to true in the database
+func UpdateUniqueProductTableWithScrap(UID string, DBassetID int) {
+	zap.S().Debugf("UpdateUniqueProductTableWithScrap called", UID, DBassetID)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		PQErrorHandling("db.BeginTx()", err)
+	}
+
+	sqlStatement := `UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`
+
+	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID)
+	if err != nil {
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -378,7 +517,10 @@ func StoreIntoProductTable(DBassetID int, productName string, timePerUnitInSecon
 
 	_, err = tx.ExecContext(ctx, sqlStatement, DBassetID, productName, timePerUnitInSeconds)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -415,7 +557,10 @@ func StoreIntoOrderTable(orderName string, productID int, targetUnits int, DBass
 
 	_, err = tx.ExecContext(ctx, sqlStatement, orderName, productID, targetUnits, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -453,7 +598,10 @@ func UpdateBeginTimestampInOrderTable(orderName string, beginTimestamp int64, DB
 
 	_, err = tx.ExecContext(ctx, sqlStatement, beginTimestamp, orderName, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -491,7 +639,10 @@ func UpdateEndTimestampInOrderTable(orderName string, endTimestamp int64, DBasse
 
 	_, err = tx.ExecContext(ctx, sqlStatement, endTimestamp, orderName, DBassetID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -528,7 +679,10 @@ func StoreIntoMaintenancewActivitiesTable(timestampMs int64, componentID int, ac
 
 	_, err = tx.ExecContext(ctx, sqlStatement, componentID, activityType, timestampMs)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 
@@ -574,7 +728,10 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 
 	_, err = tx.ExecContext(ctx, sqlStatement, assetID, location, customerID)
 	if err != nil {
-		tx.Rollback()
+		err2 := tx.Rollback()
+		if err2 != nil {
+			PQErrorHandling("tx.Rollback()", err2)
+		}
 		PQErrorHandling(sqlStatement, err)
 	}
 

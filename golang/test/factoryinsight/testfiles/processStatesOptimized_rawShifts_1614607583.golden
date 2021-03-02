@@ -1,0 +1,42 @@
+[
+	{
+		"TimestampBegin": "0001-01-01T00:00:00Z",
+		"TimestampEnd": "2021-02-26T13:00:00.006Z",
+		"ShiftType": 0
+	},
+	{
+		"TimestampBegin": "2021-02-26T13:00:00.006Z",
+		"TimestampEnd": "2021-02-26T15:30:00.006Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2021-02-26T15:50:00.009Z",
+		"TimestampEnd": "2021-02-26T18:30:00.009Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2021-02-26T19:00:00.009Z",
+		"TimestampEnd": "2021-02-26T21:00:00.009Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2021-03-01T05:00:00.015Z",
+		"TimestampEnd": "2021-03-01T08:00:00.015Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2021-03-01T08:20:00.006Z",
+		"TimestampEnd": "2021-03-01T11:30:00.006Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2021-03-01T12:00:00.012Z",
+		"TimestampEnd": "2021-03-01T12:59:00.012Z",
+		"ShiftType": 1
+	},
+	{
+		"TimestampBegin": "2021-03-01T13:00:00.007Z",
+		"TimestampEnd": "2021-03-01T15:30:00.007Z",
+		"ShiftType": 1
+	}
+]

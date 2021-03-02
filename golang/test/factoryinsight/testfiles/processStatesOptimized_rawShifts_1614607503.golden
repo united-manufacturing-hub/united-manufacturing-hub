@@ -1,0 +1,12 @@
+[
+	{
+		"TimestampBegin": "0001-01-01T00:00:00Z",
+		"TimestampEnd": "2021-02-23T05:00:00.017Z",
+		"ShiftType": 0
+	},
+	{
+		"TimestampBegin": "2021-02-23T05:00:00.017Z",
+		"TimestampEnd": "2021-02-23T12:59:00.017Z",
+		"ShiftType": 1
+	}
+]

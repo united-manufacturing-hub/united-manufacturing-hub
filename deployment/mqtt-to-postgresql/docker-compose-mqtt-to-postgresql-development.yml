@@ -5,7 +5,7 @@ services:
       container_name: mqtt-to-postgresql
       build:
         dockerfile: ./deployment/mqtt-to-postgresql/Dockerfile
-        context: ./
+        context: ../../
       environment:
         CERTIFICATE_NAME: ${CERTIFICATE_NAME}
         BROKER_URL: ${BROKER_URL}
@@ -22,4 +22,4 @@ services:
               max-size: "10m"
       restart: unless-stopped
       volumes:
-        - ./golang/test/mqtt-to-posgtresql/config/certificates:/SSL_certs
+        - ../../golang/test/mqtt-to-postgresql/config/certificates:/SSL_certs

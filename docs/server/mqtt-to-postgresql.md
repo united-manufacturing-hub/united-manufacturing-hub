@@ -10,6 +10,8 @@ Here is a quick tutorial on how to start up a basic configuration / a basic dock
 
 |TUTORIAL|
 
+docker-compose -f ./deployment/mqtt-to-postgresql/docker-compose-mqtt-to-postgresql-development.yml --env-file ./.env up -d --build
+
 ## Environment variables
 
 This chapter explains all used environment variables.

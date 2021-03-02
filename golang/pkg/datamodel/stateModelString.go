@@ -54,6 +54,16 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 			stateString = "Kein Auftrag"
 		case EquipmentFailureState:
 			stateString = "Maschinenstörung"
+		case EquipmentFailureStateWelder:
+			stateString = "Maschinenstörung Schweißer"
+		case EquipmentFailureStateExpender:
+			stateString = "Maschinenstörung Spreizer"
+		case EquipmentFailureStatePalletizer:
+			stateString = "Maschinenstörung Palettierer"
+		case EquipmentFailureStateUnderbody:
+			stateString = "Maschinenstörung Unterboden"
+		case EquipmentFailureStateTopcover:
+			stateString = "Maschinenstörung Oberboden"
 		case ExternalFailureState:
 			stateString = "Externe Störung"
 		case ExternalInterferenceState:
@@ -113,6 +123,16 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 			stateString = "No order"
 		case EquipmentFailureState:
 			stateString = "Equipment failure"
+		case EquipmentFailureStateWelder:
+			stateString = "Equipment failure welder"
+		case EquipmentFailureStateExpender:
+			stateString = "Equipment failure expender"
+		case EquipmentFailureStatePalletizer:
+			stateString = "Equipment failure palletizer"
+		case EquipmentFailureStateUnderbody:
+			stateString = "Equipment failure underbody"
+		case EquipmentFailureStateTopcover:
+			stateString = "Equipment failure topcover"
 		case ExternalFailureState:
 			stateString = "External failure"
 		case ExternalInterferenceState:
