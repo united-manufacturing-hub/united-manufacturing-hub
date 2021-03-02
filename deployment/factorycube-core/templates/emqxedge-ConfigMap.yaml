@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "factorycube-core.fullname" . }}-emqxedge-env
+  labels:
+    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+data:
+    EMQX_BRIDGE__AWS__SSL: "on"
+    EMQX_BRIDGE__AWS__ADDRESS: {{ .Values.mqttBridgeURL }}
+    EMQX_BRIDGE__AWS__CLIENT_ID: {{ .Values.serialNumber }}
+    EMQX_BRIDGE__AWS__FORWARDS: {{ .Values.mqttBridgeTopic }}
+    EMQX_BRIDGE__AWS__CACERTFILE: "/etc/ssl/emqxedge/ca.crt"
+    EMQX_BRIDGE__AWS__CERTFILE: "/etc/ssl/emqxedge/tls.crt"
+    EMQX_BRIDGE__AWS__KEYFILE: "/etc/ssl/emqxedge/tls.key"
+    EMQX_BRIDGE__AWS__START_TYPE: "auto"
+    EMQX_BRIDGE__AWS__MOUNTPOINT: ""
+    EMQX_BRIDGE__AWS__QUEUE__REPLAYQ_DIR: "/opt/emqx/data/mnesia/emqx_aws_bridge/"
+    EMQX_BRIDGE__AWS__QUEUE__REPLAYQ_SEG_BYTES: "10MB"
+    EMQX_ALLOW_ANONYMOUS: "true"
+  {{- range $index, $value := .Values.emqxedge.emqxConfig}}
+    {{$index}}: "{{ $value }}" 
+  {{- end}}

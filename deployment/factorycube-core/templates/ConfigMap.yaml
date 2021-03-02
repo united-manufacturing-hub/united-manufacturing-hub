@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-    name: {{ include "factorycube-core.fullname" . }}-configmap
-data:
-    serialNumber: {{ .Values.serialNumber }}
-    mqttBridgeURL: {{ .Values.mqttBridgeURL }}
-    mqttBridgeTopic: {{ .Values.mqttBridgeTopic }}

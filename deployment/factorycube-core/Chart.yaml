@@ -26,9 +26,3 @@ appVersion: "1.16.0"
 home: https://www.united-manufacturing-hub.com
 sources:
   - https://github.com/united-manufacturing-hub/united-manufacturing-hub
-
-dependencies: 
-  - name: vernemq
-    version: 1.6.7
-    repository: https://vernemq.github.io/docker-vernemq
-    condition: vernemq.enabled

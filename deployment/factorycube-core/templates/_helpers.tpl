@@ -68,6 +68,14 @@ app.kubernetes.io/name: {{ include "factorycube-core.name" . }}-vernemq
 {{ include "factorycube-core.labels.common" . }}
 {{- end }}
 
+{{/*
+Labels for emqxedge
+*/}}
+{{- define "factorycube-core.labels.emqxedge" -}}
+app.kubernetes.io/name: {{ include "factorycube-core.name" . }}-emqxedge
+{{ include "factorycube-core.labels.common" . }}
+{{- end }}
+
 
 {{/*
 Create the name of the service account to use
