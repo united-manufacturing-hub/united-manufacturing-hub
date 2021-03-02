@@ -11,6 +11,12 @@ import (
 
 type count struct {
 	Count       int   `json:"count"`
+	Scrap       int   `json:"scrap"`
+	TimestampMs int64 `json:"timestamp_ms"`
+}
+
+type scrapCount struct {
+	Scrap       int   `json:"scrap"`
 	TimestampMs int64 `json:"timestamp_ms"`
 }
 
@@ -37,6 +43,10 @@ type uniqueProduct struct {
 	IsScrap          bool   `json:"isScrap"`
 	QualityClass     string `json:"qualityClass"`
 	StationID        string `json:"stationID"`
+}
+
+type scrapUniqueProduct struct {
+	UID string `json:"UID"`
 }
 
 /*
@@ -135,9 +145,33 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 	DBassetID := GetAssetID(customerID, location, assetID)
 
 	count := parsedPayload.Count
+	scrap := parsedPayload.Scrap
 	timestampMs := parsedPayload.TimestampMs
 
-	StoreIntoCountTable(timestampMs, DBassetID, count)
+	// this should not happen. Throw a warning message and ignore (= do not try to store in database)
+	if count <= 0 {
+		zap.S().Warnf("count <= 0", customerID, location, assetID, payload, parsedPayload)
+		return
+	}
+
+	StoreIntoCountTable(timestampMs, DBassetID, count, scrap)
+}
+
+// ProcessScrapCountData processes an incoming scrapCount message
+func ProcessScrapCountData(customerID string, location string, assetID string, payloadType string, payload []byte) {
+	var parsedPayload scrapCount
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+
+	scrap := parsedPayload.Scrap
+	timestampMs := parsedPayload.TimestampMs
+
+	UpdateCountTableWithScrap(timestampMs, DBassetID, scrap)
 }
 
 // ProcessAddShift adds a new shift to the database
@@ -202,6 +236,22 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 	stationID := parsedPayload.StationID
 
 	StoreIntoUniqueProductTable(UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
+}
+
+// ProcessScrapUniqueProduct sets isScrap of a uniqueProduct to true
+func ProcessScrapUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte) {
+	var parsedPayload scrapUniqueProduct
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+
+	UID := parsedPayload.UID
+
+	UpdateUniqueProductTableWithScrap(UID, DBassetID)
 }
 
 // ProcessAddProduct adds a new product to the database
