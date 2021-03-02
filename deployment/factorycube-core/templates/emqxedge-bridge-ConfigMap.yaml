@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "factorycube-core.fullname" . }}-emqxedge-bridge-configmap
+  labels:
+    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+data:
+  "emqx_bridge_mqtt.conf": |
+    
+    {{ .Values.emqxedge.emqxBridgeConfig | indent 4 }}
