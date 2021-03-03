@@ -43,6 +43,12 @@ spec:
           items:
           - key: acl.conf
             path: acl.conf
+      - name: {{ include "factorycube-core.fullname" . }}-emqxedge-bridge-configmap
+        configMap:
+          name: {{ include "factorycube-core.fullname" . }}-emqxedge-bridge-configmap
+          items:
+          - key: emqx_bridge_mqtt.conf
+            path: emqx_bridge_mqtt.conf
       - name: {{ include "factorycube-core.fullname" . }}-emqxedge-certificates
         secret:
           secretName: factorycube-core-emqxedge-secrets
@@ -110,6 +116,9 @@ spec:
           - name: {{ include "factorycube-core.fullname" . }}-emqxedge-acl
             mountPath: "/opt/emqx/etc/acl.conf"
             subPath: "acl.conf"
+          - name: {{ include "factorycube-core.fullname" . }}-emqxedge-bridge-configmap
+            mountPath: "/opt/emqx/etc/plugins/emqx_bridge_mqtt.conf"
+            subPath: "emqx_bridge_mqtt.conf"
           - name: {{ include "factorycube-core.fullname" . }}-emqxedge-certificates
             mountPath: /etc/ssl/emqxedge
             readOnly: true

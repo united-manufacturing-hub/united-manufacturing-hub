@@ -6,5 +6,16 @@ metadata:
     {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
 data:
   "emqx_bridge_mqtt.conf": |
-    
-    {{ .Values.emqxedge.emqxBridgeConfig | indent 4 }}
+    bridge.mqtt.bridge.ssl = on
+    bridge.mqtt.bridge.address = {{ .Values.mqttBridgeURL }}
+    bridge.mqtt.bridge.clientid = {{ .Values.serialNumber }}
+    bridge.mqtt.bridge.forwards = {{ .Values.mqttBridgeTopic }}
+    bridge.mqtt.bridge.cacertfile = /etc/ssl/emqxedge/ca.crt
+    bridge.mqtt.bridge.certfile = /etc/ssl/emqxedge/tls.crt
+    bridge.mqtt.bridge.keyfile = /etc/ssl/emqxedge/tls.key
+    bridge.mqtt.bridge.start_type = auto
+    bridge.mqtt.bridge.queue.replayq_dir = /opt/emqx/data/mnesia/emqx_aws_bridge/
+    bridge.mqtt.bridge.queue.replayq_seg_bytes = 10MB
+    bridge.mqtt.bridge.keepalive = 86400s
+    bridge.mqtt.bridge.retry_interval = 15s
+    bridge.mqtt.bridge.max_inflight_size = 15

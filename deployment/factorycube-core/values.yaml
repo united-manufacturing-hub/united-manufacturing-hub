@@ -2,7 +2,7 @@
 
 serialNumber: "" # usually the hostname
 mqttBridgeURL: "" # e.g. mqtt.app.industrial-analytics.net:8883
-mqttBridgeTopic: "ia/* out 1" # e.g. ia/* out 1
+mqttBridgeTopic: "ia/#" # e.g. ia/#
 
 # Certficiates for MQTT Bridge
 mqttBridgeCACert: |
@@ -283,7 +283,7 @@ emqxedge:
 
   persistence:
     enabled: true
-    size: 20Mi
+    size: 1Gi
     ## If defined, volume.beta.kubernetes.io/storage-class: <storageClass>
     ## Default: volume.alpha.kubernetes.io/storage-class: default
     # storageClass: "-"
