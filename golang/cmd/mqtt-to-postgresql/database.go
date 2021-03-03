@@ -25,7 +25,15 @@ type processValue64 struct {
 	ValueName   string
 }
 
+type countStruct struct {
+	TimestampMs int64
+	DBassetID   int
+	Count       int
+	Scrap       int
+}
+
 var processValue64Channel chan processValue64
+var countStructChannel chan countStruct
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, dryRun string) {
@@ -47,8 +55,10 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
 	processValue64Channel = make(chan processValue64, 1000) //Buffer size of 1000
+	countStructChannel = make(chan countStruct, 1000)       //Buffer size of 1000
 
 	go storeProcessValue64BufferIntoDatabase()
+	go storeCountBufferIntoDatabase()
 }
 
 // ShutdownDB closes all database connections
@@ -285,6 +295,68 @@ func storeProcessValue64BufferIntoDatabase() { //Send the buffer every second in
 	}
 }
 
+func getCountBufferAndStore() {
+	txn, err := db.Begin()
+	if err != nil {
+		PQErrorHandling("db.Begin()", err)
+	}
+
+	stmt, err := txn.Prepare(pq.CopyIn("counttable", "timestamp", "asset_id", "count", "scrap"))
+	if err != nil {
+		PQErrorHandling("pq.CopyIn()", err)
+	}
+
+	keepRunning := false
+	for !keepRunning {
+		select {
+		case pt := <-countStructChannel:
+
+			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+			zap.S().Debugf("getCountBufferAndStore called", pt.TimestampMs, timestamp, pt.DBassetID, pt.Count, pt.Scrap)
+			_, err = stmt.Exec(timestamp, pt.DBassetID, pt.Count, pt.Scrap)
+			if err != nil {
+				PQErrorHandling("stmt.Exec()", err)
+			}
+		default:
+			keepRunning = true
+			break
+		}
+	}
+
+	_, err = stmt.Exec()
+	if err != nil {
+		PQErrorHandling("stmt.Exec()", err)
+	}
+
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandling("stmt.Close()", err)
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT", "getCountBufferAndStore")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		return
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+	}
+
+}
+
+func storeCountBufferIntoDatabase() { //Send the buffer every second into database
+	for range time.Tick(time.Duration(1) * time.Second) {
+		getCountBufferAndStore()
+		zap.S().Debugf("getCountBufferAndStore called")
+	}
+}
+
 // StoreIntoStateTable stores a state into the database
 func StoreIntoStateTable(timestampMs int64, DBassetID int, state int) {
 	storeIntoTable(timestampMs, DBassetID, "stateTable", state, "state")
@@ -294,41 +366,52 @@ func StoreIntoStateTable(timestampMs int64, DBassetID int, state int) {
 func StoreIntoCountTable(timestampMs int64, DBassetID int, count int, scrap int) {
 	zap.S().Debugf("StoreIntoCountTable called", timestampMs, DBassetID, count, scrap)
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+	countElement := countStruct{
+		TimestampMs: timestampMs,
+		DBassetID:   DBassetID,
+		Count:       count,
+		Scrap:       scrap,
 	}
 
-	// WARNING SQL INJECTION POSSIBLE
-	sqlStatement := `
-		INSERT INTO counttable (timestamp, asset_id, count, scrap) 
-		VALUES (to_timestamp($1 / 1000.0),$2,$3, $4) 
-		ON CONFLICT DO NOTHING;`
+	countStructChannel <- countElement
 
-	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, count, scrap)
-	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
-		}
-		PQErrorHandling(sqlStatement, err)
-	}
-
-	// if dry run, print statement and rollback
-	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+	/*
+		ctx := context.Background()
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("db.BeginTx()", err)
 		}
-		return
-	}
 
-	err = tx.Commit()
-	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
-	}
+		// WARNING SQL INJECTION POSSIBLE
+		sqlStatement := `
+			INSERT INTO counttable (timestamp, asset_id, count, scrap)
+			VALUES (to_timestamp($1 / 1000.0),$2,$3, $4)
+			ON CONFLICT DO NOTHING;`
+
+		_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, count, scrap)
+		if err != nil {
+			err2 := tx.Rollback()
+			if err2 != nil {
+				PQErrorHandling("tx.Rollback()", err2)
+			}
+			PQErrorHandling(sqlStatement, err)
+		}
+
+		// if dry run, print statement and rollback
+		if isDryRun {
+			zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
+			err = tx.Rollback()
+			if err != nil {
+				PQErrorHandling("tx.Rollback()", err)
+			}
+			return
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			PQErrorHandling("tx.Commit()", err)
+		}
+	*/
 }
 
 // UpdateCountTableWithScrap updates the database to scrap products
@@ -349,7 +432,7 @@ func UpdateCountTableWithScrap(timestampMs int64, DBassetID int, scrap int) {
 			FROM (
 				SELECT *, sum(count) OVER (ORDER BY timestamp DESC) AS running_total
 				FROM countTable
-				WHERE timestamp < to_timestamp($1 / 1000.0) AND timestamp > (to_timestamp($1 / 1000.0) - INTERVAL '1 DAY') AND asset_id = $2
+				WHERE timestamp < $1 AND timestamp > ($1::TIMESTAMP - INTERVAL '1 DAY') AND asset_id = $2
 			) t
 			WHERE running_total <= $3)
 		;
