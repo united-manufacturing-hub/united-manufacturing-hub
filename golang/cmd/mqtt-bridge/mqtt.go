@@ -4,8 +4,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
-	"os"
 
+	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"go.uber.org/zap"
 )
@@ -52,17 +52,18 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 	}
 }
 
-// onMessageReceived is called everytime a message is recieved by a specified topic
-func onMessageReceived(client MQTT.Client, message MQTT.Message) {
+// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
+func getOnMessageRecieved(mode string, pg *goque.PrefixQueue) func(MQTT.Client, MQTT.Message) {
 
-	topic := message.Topic()
-	payload := message.Payload()
+	return func(client MQTT.Client, message MQTT.Message) {
 
-	optionsReader := client.OptionsReader()
+		topic := message.Topic()
+		payload := message.Payload()
 
-	zap.S().Infof("onMessageReceived", optionsReader.ClientID(), topic, payload)
+		zap.S().Infof("onMessageReceived", mode, topic, payload)
 
-	go storeMessageIntoQueue(topic, message, optionsReader.ClientID())
+		go storeMessageIntoQueue(topic, payload, mode, pg)
+	}
 }
 
 // onConnect subscribes once the connection is established. Required to re-subscribe when cleansession is True
@@ -78,7 +79,7 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // setupMQTT setups MQTT and connect to the broker
-func setupMQTT(clientID string, mode string, mqttBrokerURL string, MQTTTopic string, SSLEnabled bool) (MQTTClient MQTT.Client) {
+func setupMQTT(clientID string, mode string, mqttBrokerURL string, MQTTTopic string, SSLEnabled bool, pg *goque.PrefixQueue) (MQTTClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -102,7 +103,7 @@ func setupMQTT(clientID string, mode string, mqttBrokerURL string, MQTTTopic str
 		panic(token.Error())
 	}
 	// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-	if token := MQTTClient.Subscribe(MQTTTopic, 2, onMessageReceived); token.Wait() && token.Error() != nil {
+	if token := MQTTClient.Subscribe(MQTTTopic, 2, getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 

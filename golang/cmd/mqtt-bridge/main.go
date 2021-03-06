@@ -5,13 +5,14 @@ Important principles: stateless as much as possible
 */
 
 import (
-	"net/http"
+	"github.com/beeker1121/goque"
+	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"go.uber.org/zap"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 var localMQTTClient MQTT.Client
@@ -28,24 +29,51 @@ func main() {
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
-	dryRun := os.Getenv("DRY_RUN")
+	//dryRun := os.Getenv("DRY_RUN")
 
 	// Read environment variables for remote broker
 	remoteCertificateName := os.Getenv("REMOTE_CERTIFICATE_NAME")
 	remoteMQTTBrokerURL := os.Getenv("REMOTE_BROKER_URL")
 	remoteMQTTTopic := os.Getenv("REMOTE_TOPIC")
-	remoteMQTTBrokerSSLEnabled := os.Getenv("REMOTE_BROKER_SSL_ENABLED")
+	remoteMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("REMOTE_BROKER_SSL_ENABLED"))
+	if err != nil {
+		zap.S().Errorf("Error parsing bool from environment variable", err)
+		return
+	}
 
 	// Read environment variables for local broker
 	localCertificateName := os.Getenv("LOCAL_CERTIFICATE_NAME")
 	localMQTTBrokerURL := os.Getenv("LOCAL_BROKER_URL")
 	localMQTTTopic := os.Getenv("LOCAL_TOPIC")
-	localMQTTBrokerSSLEnabled := os.Getenv("LOCAL_BROKER_SSL_ENABLED")
+	localMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("LOCAL_BROKER_SSL_ENABLED"))
+	if err != nil {
+		zap.S().Errorf("Error parsing bool from environment variable", err)
+		return
+	}
 
+	// Setting up queues
+
+	zap.S().Debugf("Setting up queues")
+
+	remotePg, err := setupQueue("remote")
+	if err != nil {
+		zap.S().Errorf("Error setting up remote queue", err)
+		return
+	}
+	defer closeQueue(remotePg)
+
+	localPg, err := setupQueue("local")
+	if err != nil {
+		zap.S().Errorf("Error setting up local queue", err)
+		return
+	}
+	defer closeQueue(localPg)
+
+	// Setting up MQTT
 	zap.S().Debugf("Setting up MQTT")
 
-	remoteMQTTClient = setupMQTT(remoteCertificateName, "remote", remoteMQTTBrokerURL, remoteMQTTTopic, remoteMQTTBrokerSSLEnabled)
-	localMQTTClient = setupMQTT(localCertificateName, "local", localMQTTBrokerURL, localMQTTTopic, localMQTTBrokerSSLEnabled)
+	remoteMQTTClient = setupMQTT(remoteCertificateName, "remote", remoteMQTTBrokerURL, remoteMQTTTopic, remoteMQTTBrokerSSLEnabled, remotePg)
+	localMQTTClient = setupMQTT(localCertificateName, "local", localMQTTBrokerURL, localMQTTTopic, localMQTTBrokerSSLEnabled, localPg)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -89,17 +117,31 @@ func ShutdownApplicationGraceful() {
 
 // publishQueueToBroker starts an endless loop and publishes the given queue element by element to the selected MQTT broker.
 // There can be multiple processes running of this function and to identify each of them a prefix is used
-func publishQueueToBroker(pq goque.PrefixQueue, client MQTT.Client, prefix string) {
-	for True {
-		topElement, err := peekFirstElementAndGetID(pq, prefix)
+func publishQueueToBroker(pq *goque.PrefixQueue, client MQTT.Client, prefix string) {
+	for {
+		// get first element and convert it to object
+		topElement, err := pq.Peek([]byte(prefix))
 		if err != nil {
-			zap.S().Fatalf("Error peeking first element", err)
+			zap.S().Errorf("Error peeking first element", err)
 			return
 		}
+
+		var currentMessage queueObject
 		err = topElement.ToObject(&currentMessage)
+		if err != nil {
+			zap.S().Fatalf("Error decoding first element", err)
+			return
+		}
 
-		token := client.Publish(currentMessage.Topic, 2, false, currentMessage.Message)
-		token.Wait()
+		// Publish element and wait for confirmation
+		token := client.Publish(currentMessage.Topic, 1, false, currentMessage.Message)
+		token.Wait() // wait indefinete amount of time (librarz will automatically resend)
 
+		// if successfully recieved at broker delete from stack
+		topElement, err = pq.Dequeue([]byte(prefix))
+		if err != nil {
+			zap.S().Fatalf("Error dequeuing element", err)
+			return
+		}
 	}
 }
