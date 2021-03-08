@@ -53,7 +53,7 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 }
 
 // getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
-func getOnMessageRecieved(mode string, pg *goque.PrefixQueue) func(MQTT.Client, MQTT.Message) {
+func getOnMessageRecieved(mode string, pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
 
@@ -79,7 +79,7 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // setupMQTT setups MQTT and connect to the broker
-func setupMQTT(clientID string, mode string, mqttBrokerURL string, MQTTTopic string, SSLEnabled bool, pg *goque.PrefixQueue) (MQTTClient MQTT.Client) {
+func setupMQTT(clientID string, mode string, mqttBrokerURL string, subMQTTTopic string, SSLEnabled bool, pg *goque.Queue, subscribeToTopic bool) (MQTTClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -95,16 +95,22 @@ func setupMQTT(clientID string, mode string, mqttBrokerURL string, MQTTTopic str
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
 
-	zap.S().Infof("MQTT connection configured", clientID, mode, mqttBrokerURL, MQTTTopic, SSLEnabled)
+	zap.S().Infof("MQTT connection configured", clientID, mode, mqttBrokerURL, subMQTTTopic, SSLEnabled)
 
 	// Start the connection
 	MQTTClient = MQTT.NewClient(opts)
 	if token := MQTTClient.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
-	// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-	if token := MQTTClient.Subscribe(MQTTTopic, 2, getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+
+	// Can be deactivated, e.g. if one does not want to recieve all data from remote broker
+	if subscribeToTopic {
+
+		zap.S().Infof("MQTT subscribed", mode, subMQTTTopic)
+		// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
+		if token := MQTTClient.Subscribe(subMQTTTopic+"/#", 2, getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
+			panic(token.Error())
+		}
 	}
 
 	return

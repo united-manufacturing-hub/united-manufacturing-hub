@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -34,7 +35,8 @@ func main() {
 	// Read environment variables for remote broker
 	remoteCertificateName := os.Getenv("REMOTE_CERTIFICATE_NAME")
 	remoteMQTTBrokerURL := os.Getenv("REMOTE_BROKER_URL")
-	remoteMQTTTopic := os.Getenv("REMOTE_TOPIC")
+	remoteSubMQTTTopic := os.Getenv("REMOTE_SUB_TOPIC")
+	remotePubMQTTTopic := os.Getenv("REMOTE_PUB_TOPIC")
 	remoteMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("REMOTE_BROKER_SSL_ENABLED"))
 	if err != nil {
 		zap.S().Errorf("Error parsing bool from environment variable", err)
@@ -44,13 +46,19 @@ func main() {
 	// Read environment variables for local broker
 	localCertificateName := os.Getenv("LOCAL_CERTIFICATE_NAME")
 	localMQTTBrokerURL := os.Getenv("LOCAL_BROKER_URL")
-	localMQTTTopic := os.Getenv("LOCAL_TOPIC")
+	localSubMQTTTopic := os.Getenv("LOCAL_SUB_TOPIC")
+	localPubMQTTTopic := os.Getenv("LOCAL_PUB_TOPIC")
 	localMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("LOCAL_BROKER_SSL_ENABLED"))
 	if err != nil {
 		zap.S().Errorf("Error parsing bool from environment variable", err)
 		return
 	}
 
+	BRIDGE_ONE_WAY, err := strconv.ParseBool(os.Getenv("BRIDGE_ONE_WAY"))
+	if err != nil {
+		zap.S().Errorf("Error parsing bool from environment variable", err)
+		return
+	}
 	// Setting up queues
 
 	zap.S().Debugf("Setting up queues")
@@ -72,8 +80,12 @@ func main() {
 	// Setting up MQTT
 	zap.S().Debugf("Setting up MQTT")
 
-	remoteMQTTClient = setupMQTT(remoteCertificateName, "remote", remoteMQTTBrokerURL, remoteMQTTTopic, remoteMQTTBrokerSSLEnabled, remotePg)
-	localMQTTClient = setupMQTT(localCertificateName, "local", localMQTTBrokerURL, localMQTTTopic, localMQTTBrokerSSLEnabled, localPg)
+	remoteMQTTClient = setupMQTT(remoteCertificateName, "remote", remoteMQTTBrokerURL, remoteSubMQTTTopic, remoteMQTTBrokerSSLEnabled, remotePg, !BRIDGE_ONE_WAY) // make remote subscription dependent on variable
+	localMQTTClient = setupMQTT(localCertificateName, "local", localMQTTBrokerURL, localSubMQTTTopic, localMQTTBrokerSSLEnabled, localPg, true)                   // always subscribe to local
+
+	// Setting up endless loops to send out messages
+	go publishQueueToBroker(remotePg, localMQTTClient, "local", remoteSubMQTTTopic, localPubMQTTTopic)
+	go publishQueueToBroker(localPg, remoteMQTTClient, "remote", localSubMQTTTopic, remotePubMQTTTopic)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -117,12 +129,18 @@ func ShutdownApplicationGraceful() {
 
 // publishQueueToBroker starts an endless loop and publishes the given queue element by element to the selected MQTT broker.
 // There can be multiple processes running of this function and to identify each of them a prefix is used
-func publishQueueToBroker(pq *goque.PrefixQueue, client MQTT.Client, prefix string) {
+func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, subMQTTTopic string, pubMQTTTopic string) {
 	for {
+		if pq.Length() == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			time.Sleep(1 * time.Second) // TEMPORARY
+			continue
+		}
+
 		// get first element and convert it to object
-		topElement, err := pq.Peek([]byte(prefix))
+		topElement, err := pq.Peek()
 		if err != nil {
-			zap.S().Errorf("Error peeking first element", err)
+			zap.S().Errorf("Error peeking first element", err, prefix, pq.Length())
 			return
 		}
 
@@ -134,14 +152,24 @@ func publishQueueToBroker(pq *goque.PrefixQueue, client MQTT.Client, prefix stri
 		}
 
 		// Publish element and wait for confirmation
-		token := client.Publish(currentMessage.Topic, 1, false, currentMessage.Message)
+
+		if !strings.HasPrefix(currentMessage.Topic, subMQTTTopic) {
+			zap.S().Errorf("Recieved unexpected message", currentMessage.Topic, subMQTTTopic)
+			return
+		}
+
+		// see also documentation on the entire topic handling
+		topic := pubMQTTTopic + strings.TrimPrefix(currentMessage.Topic, subMQTTTopic)
+
+		token := client.Publish(topic, 1, false, currentMessage.Message)
 		token.Wait() // wait indefinete amount of time (librarz will automatically resend)
 
 		// if successfully recieved at broker delete from stack
-		topElement, err = pq.Dequeue([]byte(prefix))
+		topElement, err = pq.Dequeue()
 		if err != nil {
 			zap.S().Fatalf("Error dequeuing element", err)
 			return
 		}
+		time.Sleep(1 * time.Second) // TEMPORARY. Prevent flooding the server
 	}
 }

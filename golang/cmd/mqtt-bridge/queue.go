@@ -12,8 +12,8 @@ type queueObject struct {
 
 const queuePath = "/data/queue"
 
-func setupQueue(mode string) (pq *goque.PrefixQueue, err error) {
-	pq, err = goque.OpenPrefixQueue(queuePath + "/" + mode)
+func setupQueue(mode string) (pq *goque.Queue, err error) {
+	pq, err = goque.OpenQueue(queuePath + "/" + mode)
 	if err != nil {
 		zap.S().Errorf("Error opening queue", err)
 		return
@@ -21,7 +21,7 @@ func setupQueue(mode string) (pq *goque.PrefixQueue, err error) {
 	return
 }
 
-func closeQueue(pq *goque.PrefixQueue) (err error) {
+func closeQueue(pq *goque.Queue) (err error) {
 
 	err = pq.Close()
 
@@ -33,16 +33,16 @@ func closeQueue(pq *goque.PrefixQueue) (err error) {
 	return
 }
 
-func storeMessageIntoQueue(topic string, message []byte, mode string, pq *goque.PrefixQueue) {
+func storeMessageIntoQueue(topic string, message []byte, mode string, pq *goque.Queue) {
 
 	newElement := queueObject{
 		Topic:   topic,
 		Message: message,
 	}
 
-	prefix := mode // TODO: add load balancing and multiple queues
+	// prefix := mode // TODO: add load balancing and multiple queues
 
-	_, err := pq.EnqueueObject([]byte(prefix), newElement)
+	_, err := pq.EnqueueObject(newElement)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
