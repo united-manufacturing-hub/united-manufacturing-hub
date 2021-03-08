@@ -13,7 +13,7 @@ type queueObject struct {
 const queuePath = "/data/queue"
 
 func setupQueue(mode string) (pq *goque.PrefixQueue, err error) {
-	pq, err = goque.OpenPrefixQueue(queuePath)
+	pq, err = goque.OpenPrefixQueue(queuePath + "/" + mode)
 	if err != nil {
 		zap.S().Errorf("Error opening queue", err)
 		return
