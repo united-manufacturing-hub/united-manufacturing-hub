@@ -4,7 +4,7 @@
 
 ### Prerequisites
 
-You need a HTTP server running in your local network containing the configuration files. You can setup one with
+You need a HTTP server running in your local network containing the configuration files. You can setup one with for example
 `docker run -d -it -p 80:80 -v "C:\git\united-manufacturing-hub\deployment\factorycube-core-deployment:/usr/share/nginx/html:ro" nginx`
 
 Package the helm chart with the following command:
@@ -12,4 +12,4 @@ Package the helm chart with the following command:
 
 ### During installation
 
-Enter following cloud-init script http://172.21.9.175/configs/SERIAL_NUMBER.yaml
+Now you can use the following cloud-init script during the installation of k3os: `http://YOUR_IP/configs/SERIAL_NUMBER.yaml`
