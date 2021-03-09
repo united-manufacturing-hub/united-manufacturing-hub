@@ -2,7 +2,7 @@
 
 serialNumber: "" # usually the hostname
 mqttBridgeURL: "" # e.g. mqtt.app.industrial-analytics.net:8883
-mqttBridgeTopic: "ia/#" # e.g. ia/#
+mqttBridgeTopic: "ia" # /# will be automatically appended to the string specified here.
 
 # Certficiates for MQTT Bridge
 mqttBridgeCACert: |
@@ -17,13 +17,20 @@ mqttBridgePrivkey: |
 serviceAccount:
   create: true
 
+### mqttbridge ###
+
+mqttbridge:
+  enabled: true
+  tag: development
+  storageRequest: 1Gi
+
 ### sensorconnect ###
 
 sensorconnect:
   enabled: true
   tag: latest
   iprange: "ENTER_IP_RANGE" #e.g. 172.21.9.0/24
-  brokerURL: "factorycube-core-vernemq" # do not change, points to vernemq
+  brokerURL: "mqtt://factorycube-core-emqxedge-headless:1883" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
 
 ### nodered ###

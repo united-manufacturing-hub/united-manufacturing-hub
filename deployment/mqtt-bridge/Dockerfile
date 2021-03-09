@@ -6,7 +6,7 @@ RUN mkdir /build
 ADD ./golang/cmd/mqtt-bridge /build/cmd/mqtt-bridge
 ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
-ADD ./golang/test/mqtt-bridge /build/test
+# ADD ./golang/test/mqtt-bridge /build/test
 ADD ./golang/vendor /build/vendor
 
 ADD ./golang/go.mod /build/go.mod

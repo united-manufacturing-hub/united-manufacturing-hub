@@ -14,7 +14,7 @@ LOCAL_SUB_TOPIC: the local topic that should be subscribed. The bridge will auto
 LOCAL_PUB_TOPIC: the local topic prefix where messages from the remote broker should be send to.
 LOCAL_BROKER_SSL_ENABLED: true or false
 
-BRIDGE_ONE_WAY: if true it sends the messages only from local broker to remote broker (not the other way around) 
+BRIDGE_ONE_WAY: DO NOT SET TO FALSE OR THIS MIGHT CAUSE AN ENDLESS LOOP! NEEDS TO BE FIXED BY SWITCHING TO MQTTV5 AND USING NO_LOCAL OPTION WHILE SUBSCRIBING. If true it sends the messages only from local broker to remote broker (not the other way around) 
 
 Note regarding topics:
 The bridge will append /# to LOCAL_SUB_TOPIC and subscribe to it. All messages will then be send to the remote broker. The topic on the remote broker is defined by:

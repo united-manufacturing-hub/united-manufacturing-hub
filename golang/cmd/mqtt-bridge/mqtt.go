@@ -17,13 +17,13 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/SSL_certs/" + mode + "/intermediate_CA.pem")
+	pemCerts, err := ioutil.ReadFile("/SSL_certs/" + mode + "/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/"+mode+"/"+clientID+".pem", "/SSL_certs/"+mode+"/"+clientID+"-privkey.pem")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/"+mode+"/tls.crt", "/SSL_certs/"+mode+"/tls.key")
 	if err != nil {
 		panic(err)
 	}
