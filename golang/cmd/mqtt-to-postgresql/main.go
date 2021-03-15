@@ -49,7 +49,7 @@ func main() {
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
-	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
+	// health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	go http.ListenAndServe("0.0.0.0:8086", health)
 
 	dryRun := os.Getenv("DRY_RUN")
