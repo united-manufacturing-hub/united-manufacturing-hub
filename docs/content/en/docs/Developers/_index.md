@@ -1,11 +1,8 @@
 
 ---
-title: "Documentation"
-linkTitle: "Documentation"
+title: "Developers"
+linkTitle: "Developers"
 weight: 20
-menu:
-  main:
-    weight: 20
 ---
 
 {{% pageinfo %}}

@@ -1,9 +1,8 @@
 ---
-title: "Quickstart"
-linkTitle: "Quickstart"
+title: "setting up development environment"
+linktitle: "setting up development environment"
 date: 2021-03-09
 description: >
-  This quickstart assumes that you have a database filled with data based on the data model provided by the United Manufacturing Hub. 
 ---
 
 1. Change ./test/factoryinsight/default.env to ./.env and fill out

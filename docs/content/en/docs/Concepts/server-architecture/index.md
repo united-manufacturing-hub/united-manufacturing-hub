@@ -1,6 +1,15 @@
+
+---
+title: "Server architecture"
+linkTitle: "Server architecture"
+weight: 2
+description: >
+ The architecture of factorycube-server 
+---
+
 # Server architecture
 
-![](images/server_kubernetes.svg)
+{{< imgproc server Fit "1200x1200" >}}{{< /imgproc >}}
 
 ## factoryinsight
 

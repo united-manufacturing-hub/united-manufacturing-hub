@@ -1,11 +1,8 @@
 
 ---
-title: "Documentation"
-linkTitle: "Documentation"
+title: "factorycube-core"
+linkTitle: "factorycube-core"
 weight: 20
-menu:
-  main:
-    weight: 20
 ---
 
 {{% pageinfo %}}

@@ -1,20 +1,10 @@
-# Three step implementation plan for using the factorycube
-
-## Contents
-
-- [Three step implementation plan for using the factorycube](#three-step-implementation-plan-for-using-the-factorycube)
-  - [Contents](#contents)
-  - [Create a sensor plan](#create-a-sensor-plan)
-  - [Discuss and install](#discuss-and-install)
-  - [Supply your factorycube with power and turn it on](#supply-your-factorycube-with-power-and-turn-it-on)
-  - [Setup sensors](#setup-sensors)
-  - [Connect your factorycube to the internet](#connect-your-factorycube-to-the-internet)
-    - [Instructions to login](#instructions-to-login)
-    - [3 ways to connect to the internet: WiFi, 3G/4G or Ethernet](#3-ways-to-connect-to-the-internet-wifi-3g4g-or-ethernet)
-      - [Instructions to setup WiFi](#instructions-to-setup-wifi)
-      - [Instructions to setup 3G/4G](#instructions-to-setup-3g4g)
-      - [Instructions to set up connection via Ethernet](#instructions-to-set-up-connection-via-ethernet)
-  - [Outro](#outro)
+---
+title: "Working with the system practically"
+linkTitle: "Working with the system practically"
+weight: 5
+description: >
+  Three step implementation plan for using the factorycube
+---
 
 Please ensure that you have read the safety information and manuals before proceeding! Failure to do so can result in damages to the product or serious injuries.
 
@@ -36,10 +26,10 @@ Setup a meeting with your line engineers and discuss your plan. Then install eve
 
 Plug in the power cable to turn the factorycube on. After a few seconds the ia: factorycube should be lit up.
 
-## Setup sensors
+<!-- ## Setup sensors
 
 Refer to [this guide](sensors/mounting-sensors.md) for instructions and tipps to setup the sensors.
-
+-->
 ## Connect your factorycube to the internet
 
 If you want to use the cloud dashboard, you must first connect the factorycube to the internet.
@@ -50,15 +40,16 @@ You need:
 - an Ethernet cable (provided)
 - a laptop which is not connected to any VPN
 
-For a network overview of the Factorycube, click [here](networking.md)
+For a network overview of the Factorycube, click [here](../networking/)
+
 ### Instructions to login
 
-Connect the factorycube with your computer via an ethernet cable using the IO-Link port (not Internet!) on the factorycube.
+Connect the factorycube with your computer via an ethernet cable using the IO-Link port (not Internettest_ on the factorycube.
 
 Open the following website on your browser: <http://172.16.x.2> (The X stands for the last number(s) of the serial number. e.g. 2019_0103 -> x=3 or 2019_0111 -> x=11)
 
 Enter your credentials according to the information in the customer area. The username is always “admin”
-![login.jpg](images/login.jpg)
+{{< imgproc login.jpg Fit "800x800" >}}{{< /imgproc >}}
 
 ### 3 ways to connect to the internet: WiFi, 3G/4G or Ethernet
 
@@ -81,7 +72,7 @@ The computer should now be connected to the internet.
 - For the installation of a SIM card please contact our experts
 - Select "Network" → "Mobile"
 - Adjust the settings under the "General" tab as follows:
-![mobile.jpg](images/mobile.jpg)
+{{< imgproc mobile.jpg Fit "800x800" >}}{{< /imgproc >}}
 - Save your settings
 
 The computer should now be connected to the internet.
@@ -91,10 +82,10 @@ The computer should now be connected to the internet.
 - Plug the Ethernet cable into the device's “Internet” port and the other side into the network access port
 - Select "Network" --> "WAN"
 - Select as wired as your main WAN
-![wired.jpg](images/wired.jpg)
+{{< imgproc wired.jpg Fit "800x800" >}}{{< /imgproc >}}
 - Click save
 
-The computer should now be connected to the internet. You can now the entire United Manufacturing Hub Edge Stack. For more information, take a look in the [getting started with edge devices](getting-started.md).
+The computer should now be connected to the internet. You can now the entire United Manufacturing Hub Edge Stack. For more information, take a look in the [getting started with edge devices](../../getting-started/installing-factorycube-core).
 
 ## Outro
 

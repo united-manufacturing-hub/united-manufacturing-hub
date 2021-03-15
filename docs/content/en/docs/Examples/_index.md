@@ -1,7 +1,7 @@
 ---
 title: "Examples"
 linkTitle: "Examples"
-weight: 2
+weight: 4
 description: >
   This document is an overview over the various showcases that we already did. It provides for every showcase a quick summary including a picture. More details can be found in the subsequent documents.
 ---
