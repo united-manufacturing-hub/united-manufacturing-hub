@@ -1,9 +1,9 @@
 # github.com/Bose/go-gin-opentracing v1.0.5
-## explicit
 github.com/Bose/go-gin-opentracing
 # github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
-## explicit
 github.com/EagleChen/mapmutex
+# github.com/beeker1121/goque v2.1.0+incompatible
+github.com/beeker1121/goque
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.1.1
@@ -11,16 +11,13 @@ github.com/cespare/xxhash/v2
 # github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f
 github.com/dgryski/go-rendezvous
 # github.com/eclipse/paho.mqtt.golang v1.3.2
-## explicit
 github.com/eclipse/paho.mqtt.golang
 github.com/eclipse/paho.mqtt.golang/packets
 # github.com/gin-contrib/sse v0.1.0
 github.com/gin-contrib/sse
 # github.com/gin-contrib/zap v0.0.1
-## explicit
 github.com/gin-contrib/zap
 # github.com/gin-gonic/gin v1.6.3
-## explicit
 github.com/gin-gonic/gin
 github.com/gin-gonic/gin/binding
 github.com/gin-gonic/gin/internal/bytesconv
@@ -34,7 +31,6 @@ github.com/go-playground/universal-translator
 # github.com/go-playground/validator/v10 v10.3.0
 github.com/go-playground/validator/v10
 # github.com/go-redis/redis/v8 v8.6.0
-## explicit
 github.com/go-redis/redis/v8
 github.com/go-redis/redis/v8/internal
 github.com/go-redis/redis/v8/internal/hashtag
@@ -49,10 +45,11 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/golang/snappy v0.0.3
+github.com/golang/snappy
 # github.com/gorilla/websocket v1.4.2
 github.com/gorilla/websocket
 # github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
-## explicit
 github.com/heptiolabs/healthcheck
 # github.com/json-iterator/go v1.1.10
 github.com/json-iterator/go
@@ -61,7 +58,6 @@ github.com/konsorten/go-windows-terminal-sequences
 # github.com/leodido/go-urn v1.2.0
 github.com/leodido/go-urn
 # github.com/lib/pq v1.9.0
-## explicit
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
@@ -74,17 +70,14 @@ github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
 # github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
-## explicit
 github.com/omeid/pgerror
 # github.com/opentracing/opentracing-go v1.2.0
-## explicit
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/ext
 github.com/opentracing/opentracing-go/log
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
 # github.com/prometheus/client_golang v1.9.0
-## explicit
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promauto
@@ -101,8 +94,20 @@ github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
 # github.com/sirupsen/logrus v1.6.0
 github.com/sirupsen/logrus
+# github.com/syndtr/goleveldb v1.0.0
+github.com/syndtr/goleveldb/leveldb
+github.com/syndtr/goleveldb/leveldb/cache
+github.com/syndtr/goleveldb/leveldb/comparer
+github.com/syndtr/goleveldb/leveldb/errors
+github.com/syndtr/goleveldb/leveldb/filter
+github.com/syndtr/goleveldb/leveldb/iterator
+github.com/syndtr/goleveldb/leveldb/journal
+github.com/syndtr/goleveldb/leveldb/memdb
+github.com/syndtr/goleveldb/leveldb/opt
+github.com/syndtr/goleveldb/leveldb/storage
+github.com/syndtr/goleveldb/leveldb/table
+github.com/syndtr/goleveldb/leveldb/util
 # github.com/uber/jaeger-client-go v2.25.0+incompatible
-## explicit
 github.com/uber/jaeger-client-go
 github.com/uber/jaeger-client-go/config
 github.com/uber/jaeger-client-go/internal/baggage
@@ -148,7 +153,6 @@ go.uber.org/atomic
 # go.uber.org/multierr v1.5.0
 go.uber.org/multierr
 # go.uber.org/zap v1.16.0
-## explicit
 go.uber.org/zap
 go.uber.org/zap/buffer
 go.uber.org/zap/internal/bufferpool
@@ -193,7 +197,5 @@ google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
-# gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0
-## explicit
 # gopkg.in/yaml.v2 v2.3.0
 gopkg.in/yaml.v2
