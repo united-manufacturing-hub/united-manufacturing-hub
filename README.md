@@ -32,7 +32,7 @@
 
 <!--<img src="docs/images/Logo UMH primary.svg" height="100" > -->
 
-<img src="docs/images/Otto.svg" height="150">
+<img src="docs/static/images/Otto.svg" height="150">
 
 ----
 
@@ -53,42 +53,42 @@ The United Manufacturing System is an open source solution for extracting and an
 
 ### Dashboard demo
 
-![Demo](docs/images/dashboard.gif)
+![Demo](docs/content/en/docs/Overview/dashboard.gif)
 
 ----
 
 ## Getting Started
 
-Check out [Getting Started](docs/getting-started.md) for more information on how to install the server and edge components.
+Check out our [Documentation] for more information on how to install the server and edge components.
 
 ### Architecture
 
-![IIoT-stack](docs/images/iiot-stack.svg)
+![IIoT-stack](docs/content/en/docs/Overview/iiot-stack.svg)
 
 <!-- SHOWCASE -->
 ## Showcase
 
 The United Manufacturing Hub has successfully deployed in various industries, from CNC milling over filling to flame cutting.
 
-Here are some selected cases from our installations across industries, that show how our product is used in practice. For detailed information, please take a look in [our documentation](docs/examples/overview.md)
+Here are some selected cases from our installations across industries, that show how our product is used in practice. For detailed information, please take a look in our [Documentation]
 
 ### Flame cutting
 
-<img src="docs/examples/images/flame-cutting.png" height="150">
+<img src="docs/content/en/docs/Examples/flame-cutting.png" height="150">
 
 Plug-and-play retrofit of 11 flame cutting machines and blasting systems at two locations using sensors, barcode scanners and button bars to extract and analyze operating data.
 
 
 ### Brewery
 
-<img src="docs/examples/images/brewery.png" height="150">
+<img src="docs/content/en/docs/Examples/brewery.png" height="150">
 
 Retrofit of a bottling line for different beer types. Focus on the identification of microstops causes and exact delimitation of the bottleneck machine.
 
 
 ### Weaving
 
-<img src="docs/examples/images/weaving.png" height="150">
+<img src="docs/content/en/docs/Examples/weaving.png" height="150">
 
 Retrofit of several weaving machines that do not provide data via the PLC to extract operating data to determine the OEE and detailed breakdown analysis of the individual key figures.
 
@@ -120,15 +120,5 @@ All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See 
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[product-screenshot]: images/screenshot.png
-[Documentation]: https://wiki.industrial-analytics.net
 [Website]: https://www.united-manufacturing-hub.com
-
-<!-- Software -->
-[Grafana]: https://github.com/grafana/grafana
-[PowerBI]: https://powerbi.microsoft.com/
-[node-red]: https://github.com/node-red/node-red
-[TimescaleDB]: https://github.com/timescale/timescaledb
-[Kubernetes]: https://github.com/kubernetes/kubernetes
-[Helm]: https://github.com/helm/helm
-[Docker]: https://github.com/docker/engine
+[Documentation]: docs/
