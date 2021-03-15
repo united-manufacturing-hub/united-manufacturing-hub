@@ -1,0 +1,6 @@
+dependencies:
+- name: vernemq
+  repository: https://vernemq.github.io/docker-vernemq
+  version: 1.6.7
+digest: sha256:3d3dc44fb277182f547716aa336383c224e17cfc23aec23dca0b937e526b9b5b
+generated: "2021-02-25T17:49:33.4675047+01:00"
