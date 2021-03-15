@@ -50,7 +50,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	} else {
 		isDryRun = false
 	}
-
+	db.SetMaxOpenConns(20)
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
