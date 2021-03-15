@@ -10,7 +10,7 @@ description: >
 
 As this projects consists out of various components and sub-components one can easily feel lost. We documented every component, their purpose and how they are integrated:
 
-- for a high level architecture and overview over how data is processed take a look [here](general/dataprocessing.md)
+- for a high level architecture and overview over how data is processed take a look [here]({{< ref "/docs/Concepts/dataprocessing" >}} )
 - An explanation of the overall folder structure can be found [here](folder-structure.md)
 
 ## Setting up and configuring the edge devices
