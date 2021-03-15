@@ -33,6 +33,7 @@ func main() {
 	PQUser := os.Getenv("POSTGRES_USER")
 	PQPassword := os.Getenv("POSTGRES_PASSWORD")
 	PWDBName := os.Getenv("POSTGRES_DATABASE")
+	SSLMODE := os.Getenv("POSTGRES_SSLMODE")
 
 	zap.S().Debugf("######################################################################################## Starting program..", PQHost, PQUser, PWDBName)
 
@@ -48,7 +49,7 @@ func main() {
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
-	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
+	// health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	go http.ListenAndServe("0.0.0.0:8086", health)
 
 	dryRun := os.Getenv("DRY_RUN")
@@ -64,7 +65,7 @@ func main() {
 
 	zap.S().Debugf("Setting up database")
 
-	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, dryRun)
+	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")

@@ -1,0 +1,42 @@
+{{- if .Values.sensorconnect.enabled -}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "factorycube-core.fullname" . }}-sensorconnect
+  labels:
+    {{- include "factorycube-core.labels.sensorconnect" . | nindent 4 }}
+    app.kubernetes.io/component: "sensorconnect"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "factorycube-core.labels.sensorconnect" . | nindent 6 }}
+      app.kubernetes.io/component: "sensorconnect"
+  strategy:  
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "factorycube-core.labels.sensorconnect" . | nindent 8 }}
+        app.kubernetes.io/component: "sensorconnect"
+    spec:
+      containers:
+        - image: unitedmanufacturinghub/sensorconnect:{{ .Values.sensorconnect.tag }}
+          name: {{ include "factorycube-core.fullname" . }}-sensorconnect
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "0"
+            - name: TRANSMITTERID
+              value: {{ .Values.serialNumber | quote }}
+            - name: BROKER_URL
+              value: {{ .Values.sensorconnect.brokerURL | quote }}
+            - name: BROKER_PORT
+              value: {{ .Values.sensorconnect.brokerPort | quote }}
+            - name: IP_RANGE
+              value: {{ .Values.sensorconnect.iprange | quote }}
+
+      serviceAccountName: {{ include "factorycube-core.serviceAccountName" . }}
+      restartPolicy: Always
+
+{{- end }}
