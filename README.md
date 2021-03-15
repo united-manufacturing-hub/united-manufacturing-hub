@@ -88,7 +88,7 @@ Retrofit of a bottling line for different beer types. Focus on the identificatio
 
 ### Weaving
 
-<img src="weaving.png" height="150">
+<img src="docs/content/en/docs/Examples/weaving.png" height="150">
 
 Retrofit of several weaving machines that do not provide data via the PLC to extract operating data to determine the OEE and detailed breakdown analysis of the individual key figures.
 
