@@ -50,7 +50,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	} else {
 		isDryRun = false
 	}
-
+	db.SetMaxOpenConns(20)
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
@@ -264,11 +264,13 @@ func getProcessValue64BufferAndStore() {
 	_, err = stmt.Exec()
 	if err != nil {
 		PQErrorHandling("stmt.Exec()", err)
+		return
 	}
 
 	err = stmt.Close()
 	if err != nil {
 		PQErrorHandling("stmt.Close()", err)
+		return
 	}
 
 	// if dry run, print statement and rollback
@@ -326,11 +328,13 @@ func getCountBufferAndStore() {
 	_, err = stmt.Exec()
 	if err != nil {
 		PQErrorHandling("stmt.Exec()", err)
+		return
 	}
 
 	err = stmt.Close()
 	if err != nil {
 		PQErrorHandling("stmt.Close()", err)
+		return
 	}
 
 	// if dry run, print statement and rollback
