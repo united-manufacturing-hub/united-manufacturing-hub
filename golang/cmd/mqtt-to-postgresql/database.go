@@ -36,8 +36,8 @@ var processValue64Channel chan processValue64
 var countStructChannel chan countStruct
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
-func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, dryRun string) {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require", PQHost, PQPort, PQUser, PQPassword, PWDBName)
+func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, sslmode string, dryRun string) {
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PWDBName, sslmode)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
@@ -50,7 +50,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	} else {
 		isDryRun = false
 	}
-
+	db.SetMaxOpenConns(20)
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
@@ -264,11 +264,13 @@ func getProcessValue64BufferAndStore() {
 	_, err = stmt.Exec()
 	if err != nil {
 		PQErrorHandling("stmt.Exec()", err)
+		return
 	}
 
 	err = stmt.Close()
 	if err != nil {
 		PQErrorHandling("stmt.Close()", err)
+		return
 	}
 
 	// if dry run, print statement and rollback
@@ -326,11 +328,13 @@ func getCountBufferAndStore() {
 	_, err = stmt.Exec()
 	if err != nil {
 		PQErrorHandling("stmt.Exec()", err)
+		return
 	}
 
 	err = stmt.Close()
 	if err != nil {
 		PQErrorHandling("stmt.Close()", err)
+		return
 	}
 
 	// if dry run, print statement and rollback

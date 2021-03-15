@@ -24,9 +24,9 @@ func isTimerangeEntirelyInTimerange(firstTimeRange TimeRange, secondTimeRange Ti
 func isTimepointInTimerange(timestamp time.Time, secondTimeRange TimeRange) bool {
 	if (timestamp.After(secondTimeRange.Begin)) && (timestamp.Before(secondTimeRange.End)) { // if inside
 		return true
-	} /* else if (timestamp == secondTimeRange.Begin) || (timestamp == secondTimeRange.End) { // if same value as border
+	} else if (timestamp == secondTimeRange.Begin) || (timestamp == secondTimeRange.End) { // if same value as border
 		return true
-	} */
+	}
 	return false
 }
 
@@ -237,7 +237,6 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 			} else { // otherwise continue
 				processedStateArray = recursiveSplittingOfShiftsToAddNoShifts(fullRow, followingDataPoint, processedShifts, processedStateArray, executionAmount)
 			}
-
 		} else { // if the end of the state is out of the shift. Therefore, the beginning of the state is still in the shift.
 			timestamp = dataPoint.Timestamp
 			state = dataPoint.State
@@ -253,7 +252,7 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 				processedStateArray = append(processedStateArray, fullRow)
 			} else { // otherwise continue
 				state = dataPoint.State
-				fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp}
+				fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp.Add(time.Duration(1) * time.Millisecond)} // required for case #145. Otherwise this results in an endless loop
 				processedStateArray = recursiveSplittingOfShiftsToAddNoShifts(fullRow, followingDataPoint, processedShifts, processedStateArray, executionAmount)
 			}
 
