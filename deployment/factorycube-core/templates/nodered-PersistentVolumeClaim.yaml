@@ -1,0 +1,16 @@
+{{- if .Values.nodered.enabled -}}
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ include "factorycube-core.fullname" . }}-nodered-claim
+  labels:
+    {{- include "factorycube-core.labels.nodered" . | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.nodered.storageRequest }}
+
+{{- end }}

@@ -23,3 +23,10 @@ docs/**/*.pdf
 golang/test/mqtt-to-postgresql/config/certificates/*
 *.pem
 *.b64
+deployment/factorycube-core-deployment/configs/*
+
+# ignore vim
+*.swp
+
+# ignore test mqtt-bridge
+golang/test/mqtt-bridge/data/*
