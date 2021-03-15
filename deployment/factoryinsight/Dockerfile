@@ -15,7 +15,7 @@ ADD ./golang/go.sum /build/go.sum
 WORKDIR /build
 
 RUN CGO_ENABLED=0 GOOS=linux go test ./cmd/factoryinsight
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o mainFile ./cmd/factoryinsight
+RUN CGO_ENABLED=0 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags '-extldflags "-static"' -o mainFile ./cmd/factoryinsight
 
 FROM scratch
 COPY --from=builder /build /app/
