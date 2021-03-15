@@ -133,7 +133,7 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 	for {
 		if pq.Length() == 0 {
 			zap.S().Debugf("Queue empty", prefix)
-			time.Sleep(1 * time.Second) // TEMPORARY
+			// time.Sleep(1 * time.Second) // TEMPORARY
 			continue
 		}
 

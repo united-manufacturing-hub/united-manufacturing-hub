@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 )
@@ -540,3 +541,101 @@ func TestProcessStates_Complex_1(t *testing.T) {
 	}
 }
 */
+
+func Test_processStatesOptimized(t *testing.T) {
+	type args struct {
+		parentSpan    opentracing.Span
+		assetID       int
+		stateArray    []datamodel.StateEntry
+		rawShifts     []datamodel.ShiftEntry
+		countSlice    []datamodel.CountEntry
+		orderArray    []datamodel.OrdersRaw
+		from          time.Time
+		to            time.Time
+		configuration datamodel.CustomerConfiguration
+	}
+	tests := []struct {
+		name                    string
+		args                    args
+		wantProcessedStateArray []datamodel.StateEntry
+		wantErr                 bool
+		goldenTimestamp         string
+	}{
+		{
+			name:            "shifts1",
+			goldenTimestamp: "1614606163",
+		},
+		{
+			name:            "noShift before unknown stop",
+			goldenTimestamp: "1614607503",
+		},
+		{
+			name:            "multiple noShifts during one long stop #145",
+			goldenTimestamp: "1614607583",
+		},
+	}
+	for _, tt := range tests {
+		// loading golden files
+		err := internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_processedStateArray_"+tt.goldenTimestamp+".golden", &tt.wantProcessedStateArray)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_stateArray_"+tt.goldenTimestamp+".golden", &tt.args.stateArray)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_rawShifts_"+tt.goldenTimestamp+".golden", &tt.args.rawShifts)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_countSlice_"+tt.goldenTimestamp+".golden", &tt.args.countSlice)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_orderArray_"+tt.goldenTimestamp+".golden", &tt.args.orderArray)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_from_"+tt.goldenTimestamp+".golden", &tt.args.from)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_to_"+tt.goldenTimestamp+".golden", &tt.args.to)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_configuration_"+tt.goldenTimestamp+".golden", &tt.args.configuration)
+		if err != nil {
+			fmt.Println(err)
+			t.Error()
+		}
+
+		// Executing tests
+		t.Run(tt.name, func(t *testing.T) {
+			gotProcessedStateArray, err := processStatesOptimized(tt.args.parentSpan, tt.args.assetID, tt.args.stateArray, tt.args.rawShifts, tt.args.countSlice, tt.args.orderArray, tt.args.from, tt.args.to, tt.args.configuration)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("processStatesOptimized() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotProcessedStateArray, tt.wantProcessedStateArray) {
+				t.Errorf("processStatesOptimized() got / want")
+				t.Errorf("%v", gotProcessedStateArray)
+				t.Errorf("%v", tt.wantProcessedStateArray)
+			}
+		})
+	}
+}

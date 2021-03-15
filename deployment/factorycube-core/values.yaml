@@ -30,7 +30,7 @@ sensorconnect:
   enabled: true
   tag: latest
   iprange: "ENTER_IP_RANGE" #e.g. 172.21.9.0/24
-  brokerURL: "mqtt://factorycube-core-emqxedge-headless:1883" # do not change, points to emqxedge i
+  brokerURL: "factorycube-core-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
 
 ### nodered ###
