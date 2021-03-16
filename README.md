@@ -53,7 +53,7 @@ The United Manufacturing System is an open source solution for extracting and an
 
 ### Dashboard demo
 
-![Demo](docs/content/en/docs/Overview/dashboard.gif)
+![Demo](docs/content/en/docs/dashboard.gif)
 
 ----
 
@@ -63,7 +63,7 @@ Check out our [Documentation] for more information on how to install the server 
 
 ### Architecture
 
-![IIoT-stack](docs/content/en/docs/Overview/iiot-stack.svg)
+![IIoT-stack](docs/content/en/docs/iiot-stack.svg)
 
 <!-- SHOWCASE -->
 ## Showcase
