@@ -81,7 +81,7 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("count"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixCount), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -449,7 +449,7 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
 	}
 
-	_, err = pg.EnqueueObject([]byte("recommendation"), parsedPayload)
+	_, err = pg.EnqueueObject([]byte(prefixRecommendation), parsedPayload)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
