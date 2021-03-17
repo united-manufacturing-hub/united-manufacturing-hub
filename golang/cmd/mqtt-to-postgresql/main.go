@@ -49,7 +49,7 @@ func main() {
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
-	// health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	go http.ListenAndServe("0.0.0.0:8086", health)
 
 	dryRun := os.Getenv("DRY_RUN")
@@ -66,10 +66,20 @@ func main() {
 	zap.S().Debugf("Setting up database")
 
 	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
+	// Setting up queues
+	zap.S().Debugf("Setting up queues")
+
+	pg, err := setupQueue()
+	if err != nil {
+		zap.S().Errorf("Error setting up remote queue", err)
+		return
+	}
+	defer closeQueue(pg)
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
-	SetupMQTT(certificateName, mqttBrokerURL, health, podName)
+	mqttTopic := os.Getenv("MQTT_TOPIC")
+	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName, pg)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -91,7 +101,7 @@ func main() {
 		ShutdownApplicationGraceful()
 
 	}()
-
+	go reportQueueLength(pg)
 	select {} // block forever
 }
 

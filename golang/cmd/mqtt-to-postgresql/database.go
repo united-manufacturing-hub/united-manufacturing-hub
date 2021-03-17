@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/beeker1121/goque"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
@@ -17,23 +18,6 @@ import (
 var db *sql.DB
 
 var isDryRun bool
-
-type processValue64 struct {
-	TimestampMs int64
-	DBassetID   int
-	Value       float64
-	ValueName   string
-}
-
-type countStruct struct {
-	TimestampMs int64
-	DBassetID   int
-	Count       int
-	Scrap       int
-}
-
-var processValue64Channel chan processValue64
-var countStructChannel chan countStruct
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, sslmode string, dryRun string) {
@@ -54,11 +38,6 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
-	processValue64Channel = make(chan processValue64, 1000) //Buffer size of 1000
-	countStructChannel = make(chan countStruct, 1000)       //Buffer size of 1000
-
-	go storeProcessValue64BufferIntoDatabase()
-	go storeCountBufferIntoDatabase()
 }
 
 // ShutdownDB closes all database connections
@@ -290,9 +269,176 @@ func getProcessValue64BufferAndStore() {
 
 }
 
-func storeProcessValue64BufferIntoDatabase() { //Send the buffer every second into database
+func storeProcessValue64IntoDatabase(pg *goque.PrefixQueue) { //Send the buffer every second into database
+	prefix := "processValue64"
+
 	for range time.Tick(time.Duration(1) * time.Second) {
-		getProcessValue64BufferAndStore()
+		// Begin transactiob
+		txn, err := db.Begin()
+		if err != nil {
+			PQErrorHandling("db.Begin()", err)
+		}
+
+		// 1. Prepare statement: create temp table
+		{
+			stmt, err := txn.Prepare(`
+				CREATE TEMP TABLE tmp_processValueTable64 
+					( LIKE processValueTable INCLUDING DEFAULTS ) 
+				ON COMMIT DROP;
+			`)
+			if err != nil {
+				PQErrorHandling("Prepare()", err)
+			}
+
+			// Create statement
+			_, err = stmt.Exec()
+			if err != nil {
+				PQErrorHandling("stmt.Exec()", err)
+
+				err = txn.Rollback()
+				if err != nil {
+					PQErrorHandling("txn.Rollback()", err)
+				}
+
+				return
+			}
+
+			// Close Statement
+			err = stmt.Close()
+			if err != nil {
+				PQErrorHandling("stmt.Close()", err)
+
+				err = txn.Rollback()
+				if err != nil {
+					PQErrorHandling("txn.Rollback()", err)
+				}
+
+				return
+			}
+
+		}
+		// 2. Prepare statement: copying into temp table
+		{
+			stmt, err := txn.Prepare(pq.CopyIn("tmp_processValueTable64", "timestamp", "asset_id", "value", "valuename"))
+			if err != nil {
+				PQErrorHandling("Prepare()", err)
+
+				err = txn.Rollback()
+				if err != nil {
+					PQErrorHandling("txn.Rollback()", err)
+				}
+			}
+
+			keepRunning := false
+			for !keepRunning {
+				item, err := pg.Peek([]byte(prefix))
+				if err != nil {
+					PQErrorHandling("Dequeue", err)
+
+					err = txn.Rollback()
+					if err != nil {
+						PQErrorHandling("txn.Rollback()", err)
+					}
+				}
+
+				var pt processValueFloat64Queue
+
+				err = item.ToObject(&pt)
+
+				if err != nil {
+					PQErrorHandling("Decode", err)
+
+					err = txn.Rollback()
+					if err != nil {
+						PQErrorHandling("txn.Rollback()", err)
+					}
+				}
+
+				timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+				zap.S().Debugf("getProcessValue64BufferAndStore called", pt.TimestampMs, timestamp, pt.DBAssetID, pt.Value, pt.Name)
+
+				// Create statement
+				_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+				if err != nil {
+					PQErrorHandling("stmt.Exec()", err)
+
+					err = txn.Rollback()
+					if err != nil {
+						PQErrorHandling("txn.Rollback()", err)
+					}
+
+					return
+				}
+
+				// Close Statement
+				err = stmt.Close()
+				if err != nil {
+					PQErrorHandling("stmt.Close()", err)
+
+					err = txn.Rollback()
+					if err != nil {
+						PQErrorHandling("txn.Rollback()", err)
+					}
+
+					return
+				}
+			}
+
+		}
+
+		// 3. Prepare statement: copy from temp table into main table
+		{
+
+			stmt, err := txn.Prepare(`
+				INSERT INTO processvaluetable SELECT * FROM tmp_processValueTable64 ON CONFLICT DO NOTHING;
+			`)
+			if err != nil {
+				PQErrorHandling("Prepare()", err)
+			}
+
+			// Create statement
+			_, err = stmt.Exec()
+			if err != nil {
+				PQErrorHandling("stmt.Exec()", err)
+
+				err = txn.Rollback()
+				if err != nil {
+					PQErrorHandling("txn.Rollback()", err)
+				}
+
+				return
+			}
+
+			// Close Statement
+			err = stmt.Close()
+			if err != nil {
+				PQErrorHandling("stmt.Close()", err)
+
+				err = txn.Rollback()
+				if err != nil {
+					PQErrorHandling("txn.Rollback()", err)
+				}
+
+				return
+			}
+		}
+
+		// if dry run, print statement and rollback
+		if isDryRun {
+			zap.S().Debugf("PREPARED STATEMENT", "getProcessValue64BufferAndStore")
+			err = txn.Rollback()
+			if err != nil {
+				PQErrorHandling("txn.Rollback()", err)
+			}
+			return
+		}
+
+		// Commit all statements
+		err = txn.Commit()
+		if err != nil {
+			PQErrorHandling("txn.Commit()", err)
+		}
+
 		zap.S().Debugf("getProcessValue64BufferAndStore called")
 	}
 }
@@ -791,6 +937,7 @@ func StoreIntoMaintenancewActivitiesTable(timestampMs int64, componentID int, ac
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
+	return //TEMP
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -840,6 +987,8 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 
 // GetAssetID gets the assetID from the database
 func GetAssetID(customerID string, location string, assetID string) (DBassetID int) {
+	return 0 //TEMP
+
 	// Get from cache if possible
 	var cacheHit bool
 	DBassetID, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
