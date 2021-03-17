@@ -516,7 +516,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 						Name:        k,
 						Value:       valueFloat64,
 					}
-					_, err = pg.EnqueueObject([]byte("processValueFloat64"), newObject)
+					_, err = pg.EnqueueObject([]byte(prefixProcessValueFloat64), newObject)
 					if err != nil {
 						zap.S().Errorf("Error enqueuing", err)
 						return

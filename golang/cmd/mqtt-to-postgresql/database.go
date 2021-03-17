@@ -48,6 +48,17 @@ func ShutdownDB() {
 	}
 }
 
+// PQErrorHandlingTransaction logs and handles postgresql errors in transactions
+func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) {
+	PQErrorHandling(sqlStatement, err)
+
+	err2 := txn.Rollback()
+	if err2 != nil {
+		PQErrorHandling("txn.Rollback()", err2)
+	}
+
+}
+
 // PQErrorHandling logs and handles postgresql errors
 func PQErrorHandling(sqlStatement string, err error) {
 
@@ -105,44 +116,8 @@ func storeIntoTable(timestampMs int64, DBassetID int, tableName string, value in
 	}
 }
 
-// StoreIntoprocessValueTable stores a state into the database
-func StoreIntoprocessValueTable(timestampMs int64, DBassetID int, value int, valueName string) {
-	zap.S().Debugf("StoreIntoprocessValueTable called", timestampMs, DBassetID, value, valueName)
+func storeRecommendationIntoDatabase(pg *goque.PrefixQueue) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
-	}
-
-	sqlStatement := `
-		INSERT INTO processValueTable (timestamp, asset_id, value, valuename) 
-		VALUES (to_timestamp($1 / 1000.0),$2,$3,$4) 
-		ON CONFLICT DO NOTHING;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, value, valueName)
-	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
-		}
-		PQErrorHandling(sqlStatement, err)
-	}
-
-	// if dry run, print statement and rollback
-	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
-		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
-		}
-		return
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
-	}
 }
 
 // StoreRecommendation stores a recommendation into the database
@@ -186,75 +161,113 @@ func StoreRecommendation(timestampMs int64, uid string, recommendationType int, 
 	}
 }
 
-// StoreIntoprocessValueTableFloat64 stores a state into the database
-func StoreIntoprocessValueTableFloat64(timestampMs int64, DBassetID int, value float64, valueName string) {
-	zap.S().Debugf("StoreIntoprocessValueTableFloat64 called", timestampMs, DBassetID, value, valueName)
-	processValue := processValue64{
-		TimestampMs: timestampMs,
-		DBassetID:   DBassetID,
-		Value:       value,
-		ValueName:   valueName,
-	}
+func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err error) {
 
-	processValue64Channel <- processValue
-
-	/*
-		sqlStatement := `
-			INSERT INTO processValueTable (timestamp, asset_id, value, valuename)
-			VALUES (to_timestamp($1 / 1000.0),$2,$3,$4)
-			ON CONFLICT DO NOTHING;`
-
-		_, err := db.Exec(sqlStatement, timestampMs, DBassetID, value, valueName)
-		if err != nil {
-			zap.S().Errorf("INSERT failed", err, sqlStatement)
-			panic(err)
-		}
-	*/
-}
-
-func getProcessValue64BufferAndStore() {
+	// Begin transaction
 	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.Begin()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
 	}
 
-	stmt, err := txn.Prepare(pq.CopyIn("processvaluetable", "timestamp", "asset_id", "value", "valuename"))
-	if err != nil {
-		PQErrorHandling("pq.CopyIn()", err)
-	}
+	// 1. Prepare statement: create temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			CREATE TEMP TABLE tmp_processvaluetable64 
+				( LIKE processValueTable INCLUDING DEFAULTS ) 
+			;
+		`)
+		if err != nil {
+			PQErrorHandlingTransaction("Prepare()", err, txn)
+		}
 
-	keepRunning := false
-	for !keepRunning {
-		select {
-		case pt := <-processValue64Channel:
+		// Create statement
+		_, err = stmt.Exec()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			return
+		}
+
+	}
+	// 2. Prepare statement: copying into temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable64", "timestamp", "asset_id", "value", "valuename"))
+		if err != nil {
+			PQErrorHandlingTransaction("Prepare()", err, txn)
+			return
+		}
+
+		for _, item := range itemArray {
+
+			var pt processValueFloat64Queue
+
+			err = item.ToObject(&pt)
+
+			if err != nil {
+				PQErrorHandlingTransaction("item.ToObject()", err, txn)
+				return
+			}
 
 			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
-			zap.S().Debugf("getProcessValue64BufferAndStore called", pt.TimestampMs, timestamp, pt.DBassetID, pt.Value, pt.ValueName)
-			_, err = stmt.Exec(timestamp, pt.DBassetID, pt.Value, pt.ValueName)
+
+			// Create statement
+			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
-				PQErrorHandling("stmt.Exec()", err)
+				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				return
 			}
-		default:
-			keepRunning = true
-			break
+
 		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			return
+		}
+
 	}
 
-	_, err = stmt.Exec()
-	if err != nil {
-		PQErrorHandling("stmt.Exec()", err)
-		return
-	}
+	// 3. Prepare statement: copy from temp table into main table
+	{
 
-	err = stmt.Close()
-	if err != nil {
-		PQErrorHandling("stmt.Close()", err)
-		return
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			PQErrorHandling("Prepare()", err)
+			return
+		}
+
+		// Create statement
+		_, err = stmt.Exec()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			return
+		}
+
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", "getProcessValue64BufferAndStore")
+		zap.S().Debugf("PREPARED STATEMENT")
 		err = txn.Rollback()
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
@@ -262,126 +275,287 @@ func getProcessValue64BufferAndStore() {
 		return
 	}
 
+	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
 	}
-
+	return
 }
 
-func storeProcessValue64IntoDatabase(pg *goque.PrefixQueue) { //Send the buffer every second into database
-	prefix := "processValue64"
+func storeIntoDatabaseRoutineProcessValueFloat64(pg *goque.PrefixQueue) { //Send the buffer every second into database
+	prefix := prefixProcessValueFloat64
 
 	for range time.Tick(time.Duration(1) * time.Second) {
-		// Begin transactiob
-		txn, err := db.Begin()
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
 		if err != nil {
-			PQErrorHandling("db.Begin()", err)
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseProcessValueFloat64(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+	}
+
+	// 1. Prepare statement: create temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			CREATE TEMP TABLE tmp_processvaluetable 
+				( LIKE processValueTable INCLUDING DEFAULTS ) 
+			;
+		`)
+		if err != nil {
+			PQErrorHandlingTransaction("Prepare()", err, txn)
+		}
+
+		// Create statement
+		_, err = stmt.Exec()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			return
+		}
+
+	}
+	// 2. Prepare statement: copying into temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable", "timestamp", "asset_id", "value", "valuename"))
+		if err != nil {
+			PQErrorHandlingTransaction("Prepare()", err, txn)
+			return
+		}
+
+		for _, item := range itemArray {
+
+			var pt processValueQueue
+
+			err = item.ToObject(&pt)
+
+			if err != nil {
+				PQErrorHandlingTransaction("item.ToObject()", err, txn)
+				return
+			}
+
+			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+
+			// Create statement
+			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+			if err != nil {
+				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				return
+			}
+
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			return
+		}
+
+	}
+
+	// 3. Prepare statement: copy from temp table into main table
+	{
+
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			PQErrorHandling("Prepare()", err)
+			return
+		}
+
+		// Create statement
+		_, err = stmt.Exec()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			return
+		}
+
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		return
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+	}
+	return
+}
+
+func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) { //Send the buffer every second into database
+	prefix := prefixProcessValue
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseProcessValue(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeCountIntoDatabase(pg *goque.PrefixQueue) { //Send the buffer every second into database
+	prefix := prefixCount
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			PQErrorHandling("getAllItemsInQueue", err)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		// Begin transaction
+		txn, err := db.Begin()
+
+		if err != nil {
+			PQErrorHandlingTransaction("db.Begin()", err, txn)
 		}
 
 		// 1. Prepare statement: create temp table
 		{
 			stmt, err := txn.Prepare(`
-				CREATE TEMP TABLE tmp_processValueTable64 
-					( LIKE processValueTable INCLUDING DEFAULTS ) 
-				ON COMMIT DROP;
+				CREATE TEMP TABLE tmp_counttable
+					( LIKE counttable INCLUDING DEFAULTS ) 
+				;
 			`)
 			if err != nil {
-				PQErrorHandling("Prepare()", err)
+				PQErrorHandlingTransaction("Prepare()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
 			}
 
 			// Create statement
 			_, err = stmt.Exec()
 			if err != nil {
-				PQErrorHandling("stmt.Exec()", err)
-
-				err = txn.Rollback()
-				if err != nil {
-					PQErrorHandling("txn.Rollback()", err)
-				}
-
-				return
+				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
 
 			// Close Statement
 			err = stmt.Close()
 			if err != nil {
-				PQErrorHandling("stmt.Close()", err)
-
-				err = txn.Rollback()
-				if err != nil {
-					PQErrorHandling("txn.Rollback()", err)
-				}
-
-				return
+				PQErrorHandlingTransaction("stmt.Close()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
 
 		}
 		// 2. Prepare statement: copying into temp table
 		{
-			stmt, err := txn.Prepare(pq.CopyIn("tmp_processValueTable64", "timestamp", "asset_id", "value", "valuename"))
+			stmt, err := txn.Prepare(pq.CopyIn("counttable", "timestamp", "asset_id", "count", "scrap"))
 			if err != nil {
-				PQErrorHandling("Prepare()", err)
-
-				err = txn.Rollback()
-				if err != nil {
-					PQErrorHandling("txn.Rollback()", err)
-				}
+				PQErrorHandlingTransaction("Prepare()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
 
-			keepRunning := false
-			for !keepRunning {
-				item, err := pg.Peek([]byte(prefix))
-				if err != nil {
-					PQErrorHandling("Dequeue", err)
+			for _, item := range itemArray {
 
-					err = txn.Rollback()
-					if err != nil {
-						PQErrorHandling("txn.Rollback()", err)
-					}
-				}
-
-				var pt processValueFloat64Queue
+				var pt countQueue
 
 				err = item.ToObject(&pt)
 
 				if err != nil {
-					PQErrorHandling("Decode", err)
-
-					err = txn.Rollback()
-					if err != nil {
-						PQErrorHandling("txn.Rollback()", err)
-					}
+					PQErrorHandlingTransaction("item.ToObject()", err, txn)
+					addMultipleItemsToQueue(prefix, pg, itemArray)
+					continue
 				}
 
 				timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
-				zap.S().Debugf("getProcessValue64BufferAndStore called", pt.TimestampMs, timestamp, pt.DBAssetID, pt.Value, pt.Name)
 
 				// Create statement
-				_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+				_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
 				if err != nil {
-					PQErrorHandling("stmt.Exec()", err)
-
-					err = txn.Rollback()
-					if err != nil {
-						PQErrorHandling("txn.Rollback()", err)
-					}
-
-					return
+					PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					addMultipleItemsToQueue(prefix, pg, itemArray)
+					continue
 				}
 
-				// Close Statement
-				err = stmt.Close()
-				if err != nil {
-					PQErrorHandling("stmt.Close()", err)
+			}
 
-					err = txn.Rollback()
-					if err != nil {
-						PQErrorHandling("txn.Rollback()", err)
-					}
-
-					return
-				}
+			// Close Statement
+			err = stmt.Close()
+			if err != nil {
+				PQErrorHandlingTransaction("stmt.Close()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
 
 		}
@@ -390,178 +564,56 @@ func storeProcessValue64IntoDatabase(pg *goque.PrefixQueue) { //Send the buffer 
 		{
 
 			stmt, err := txn.Prepare(`
-				INSERT INTO processvaluetable SELECT * FROM tmp_processValueTable64 ON CONFLICT DO NOTHING;
+				INSERT INTO counttable (SELECT * FROM tmp_counttable) ON CONFLICT DO NOTHING;
 			`)
 			if err != nil {
 				PQErrorHandling("Prepare()", err)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
 
 			// Create statement
 			_, err = stmt.Exec()
 			if err != nil {
-				PQErrorHandling("stmt.Exec()", err)
-
-				err = txn.Rollback()
-				if err != nil {
-					PQErrorHandling("txn.Rollback()", err)
-				}
-
-				return
+				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
 
 			// Close Statement
 			err = stmt.Close()
 			if err != nil {
-				PQErrorHandling("stmt.Close()", err)
-
-				err = txn.Rollback()
-				if err != nil {
-					PQErrorHandling("txn.Rollback()", err)
-				}
-
-				return
+				PQErrorHandlingTransaction("stmt.Close()", err, txn)
+				addMultipleItemsToQueue(prefix, pg, itemArray)
+				continue
 			}
+
 		}
 
 		// if dry run, print statement and rollback
 		if isDryRun {
-			zap.S().Debugf("PREPARED STATEMENT", "getProcessValue64BufferAndStore")
+			zap.S().Debugf("PREPARED STATEMENT", prefix)
 			err = txn.Rollback()
 			if err != nil {
 				PQErrorHandling("txn.Rollback()", err)
 			}
-			return
+			continue
 		}
 
 		// Commit all statements
 		err = txn.Commit()
 		if err != nil {
 			PQErrorHandling("txn.Commit()", err)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
 		}
 
 		zap.S().Debugf("getProcessValue64BufferAndStore called")
 	}
 }
 
-func getCountBufferAndStore() {
-	txn, err := db.Begin()
-	if err != nil {
-		PQErrorHandling("db.Begin()", err)
-	}
-
-	stmt, err := txn.Prepare(pq.CopyIn("counttable", "timestamp", "asset_id", "count", "scrap"))
-	if err != nil {
-		PQErrorHandling("pq.CopyIn()", err)
-	}
-
-	keepRunning := false
-	for !keepRunning {
-		select {
-		case pt := <-countStructChannel:
-
-			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
-			zap.S().Debugf("getCountBufferAndStore called", pt.TimestampMs, timestamp, pt.DBassetID, pt.Count, pt.Scrap)
-			_, err = stmt.Exec(timestamp, pt.DBassetID, pt.Count, pt.Scrap)
-			if err != nil {
-				PQErrorHandling("stmt.Exec()", err)
-			}
-		default:
-			keepRunning = true
-			break
-		}
-	}
-
-	_, err = stmt.Exec()
-	if err != nil {
-		PQErrorHandling("stmt.Exec()", err)
-		return
-	}
-
-	err = stmt.Close()
-	if err != nil {
-		PQErrorHandling("stmt.Close()", err)
-		return
-	}
-
-	// if dry run, print statement and rollback
-	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", "getCountBufferAndStore")
-		err = txn.Rollback()
-		if err != nil {
-			PQErrorHandling("txn.Rollback()", err)
-		}
-		return
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		PQErrorHandling("txn.Commit()", err)
-	}
-
-}
-
-func storeCountBufferIntoDatabase() { //Send the buffer every second into database
-	for range time.Tick(time.Duration(1) * time.Second) {
-		getCountBufferAndStore()
-		zap.S().Debugf("getCountBufferAndStore called")
-	}
-}
-
 // StoreIntoStateTable stores a state into the database
 func StoreIntoStateTable(timestampMs int64, DBassetID int, state int) {
 	storeIntoTable(timestampMs, DBassetID, "stateTable", state, "state")
-}
-
-// StoreIntoCountTable stores a count into the database
-func StoreIntoCountTable(timestampMs int64, DBassetID int, count int, scrap int) {
-	zap.S().Debugf("StoreIntoCountTable called", timestampMs, DBassetID, count, scrap)
-
-	countElement := countStruct{
-		TimestampMs: timestampMs,
-		DBassetID:   DBassetID,
-		Count:       count,
-		Scrap:       scrap,
-	}
-
-	countStructChannel <- countElement
-
-	/*
-		ctx := context.Background()
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			PQErrorHandling("db.BeginTx()", err)
-		}
-
-		// WARNING SQL INJECTION POSSIBLE
-		sqlStatement := `
-			INSERT INTO counttable (timestamp, asset_id, count, scrap)
-			VALUES (to_timestamp($1 / 1000.0),$2,$3, $4)
-			ON CONFLICT DO NOTHING;`
-
-		_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, count, scrap)
-		if err != nil {
-			err2 := tx.Rollback()
-			if err2 != nil {
-				PQErrorHandling("tx.Rollback()", err2)
-			}
-			PQErrorHandling(sqlStatement, err)
-		}
-
-		// if dry run, print statement and rollback
-		if isDryRun {
-			zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-			err = tx.Rollback()
-			if err != nil {
-				PQErrorHandling("tx.Rollback()", err)
-			}
-			return
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			PQErrorHandling("tx.Commit()", err)
-		}
-	*/
 }
 
 // UpdateCountTableWithScrap updates the database to scrap products
@@ -937,8 +989,7 @@ func StoreIntoMaintenancewActivitiesTable(timestampMs int64, componentID int, ac
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
-	return //TEMP
-
+	return
 	// Get from cache if possible
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
@@ -987,7 +1038,6 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 
 // GetAssetID gets the assetID from the database
 func GetAssetID(customerID string, location string, assetID string) (DBassetID int) {
-	return 0 //TEMP
 
 	// Get from cache if possible
 	var cacheHit bool

@@ -9,6 +9,10 @@ import (
 
 const queuePath = "/data/queue"
 
+const prefixProcessValueFloat64 = "processValueFloat64"
+const prefixProcessValue = "processValue"
+const prefixCount = "count"
+
 type QueueObject struct {
 	Object    interface{}
 	DBAssetID int
@@ -33,6 +37,42 @@ func closeQueue(pq *goque.PrefixQueue) (err error) {
 	}
 
 	return
+}
+
+func getAllItemsInQueue(prefix string, pq *goque.PrefixQueue) (itemsInQueue []goque.Item, err error) {
+	keepRunning := false
+
+	for !keepRunning {
+		item, err2 := pq.Dequeue([]byte(prefix))
+		if err2 == goque.ErrEmpty || err2 == goque.ErrOutOfBounds {
+			return
+		} else if err2 != nil {
+			err = err2
+			zap.S().Errorf("Error Dequeueing", err2)
+			return
+		}
+
+		//zap.S().Debugf("Adding item", item.ToString())
+		itemsInQueue = append(itemsInQueue, *item)
+
+	}
+
+	return
+}
+
+func addMultipleItemsToQueue(prefix string, pq *goque.PrefixQueue, itemsInQueue []goque.Item) {
+	zap.S().Debugf("addMultipleItemsToQueue")
+
+	for _, item := range itemsInQueue {
+
+		_, err := pq.Enqueue([]byte(prefix), item.Value)
+		if err != nil {
+			zap.S().Errorf("Error enqueueing", err)
+			return
+		}
+
+	}
+
 }
 
 func reportQueueLength(pg *goque.PrefixQueue) {

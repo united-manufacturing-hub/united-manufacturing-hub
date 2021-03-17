@@ -102,6 +102,9 @@ func main() {
 
 	}()
 	go reportQueueLength(pg)
+	go storeProcessValue64IntoDatabase(pg)
+	go storeProcessValueIntoDatabase(pg)
+	go storeCountIntoDatabase(pg)
 	select {} // block forever
 }
 
