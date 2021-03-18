@@ -13,6 +13,16 @@ const prefixProcessValueFloat64 = "processValueFloat64"
 const prefixProcessValue = "processValue"
 const prefixCount = "count"
 const prefixRecommendation = "recommendation"
+const prefixState = "state"
+const prefixUniqueProduct = "uniqueProduct"
+const prefixScrapCount = "scrapCount"
+const prefixAddShift = "addShift"
+const prefixUniqueProductScrap = "uniqueProductScrap"
+const prefixAddProduct = "addProduct"
+const prefixAddOrder = "addOrder"
+const prefixStartOrder = "startOrder"
+const prefixEndOrder = "endOrder"
+const prefixAddMaintenanceActivity = "addMaintenanceActivity"
 
 type QueueObject struct {
 	Object    interface{}

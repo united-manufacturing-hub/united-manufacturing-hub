@@ -101,10 +101,23 @@ func main() {
 		ShutdownApplicationGraceful()
 
 	}()
+
+	// Start queue processing goroutines
 	go reportQueueLength(pg)
-	go storeProcessValue64IntoDatabase(pg)
-	go storeProcessValueIntoDatabase(pg)
-	go storeCountIntoDatabase(pg)
+	go storeIntoDatabaseRoutineAddMaintenanceActivity(pg)
+	go storeIntoDatabaseRoutineAddOrder(pg)
+	go storeIntoDatabaseRoutineAddProduct(pg)
+	go storeIntoDatabaseRoutineCount(pg)
+	go storeIntoDatabaseRoutineEndOrder(pg)
+	go storeIntoDatabaseRoutineProcessValue(pg)
+	go storeIntoDatabaseRoutineProcessValueFloat64(pg)
+	go storeIntoDatabaseRoutineRecommendation(pg)
+	go storeIntoDatabaseRoutineScrapCount(pg)
+	go storeIntoDatabaseRoutineShift(pg)
+	go storeIntoDatabaseRoutineStartOrder(pg)
+	go storeIntoDatabaseRoutineState(pg)
+	go storeIntoDatabaseRoutineUniqueProduct(pg)
+	go storeIntoDatabaseRoutineUniqueProductScrap(pg)
 	select {} // block forever
 }
 

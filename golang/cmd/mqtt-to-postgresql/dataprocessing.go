@@ -37,7 +37,7 @@ func ProcessStateData(customerID string, location string, assetID string, payloa
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("state"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixState), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -116,7 +116,7 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("scrapCount"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixScrapCount), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -149,7 +149,7 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 		DBAssetID:      DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("addShift"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixAddShift), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -193,7 +193,7 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 		ComponentID:   componentID,
 		Activity:      parsedPayload.Activity,
 	}
-	_, err = pg.EnqueueObject([]byte("addMaintenanceActivity"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixAddMaintenanceActivity), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -242,7 +242,7 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 		StationID:        parsedPayload.StationID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("uniqueProduct"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixUniqueProduct), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -272,7 +272,7 @@ func ProcessScrapUniqueProduct(customerID string, location string, assetID strin
 		DBAssetID: DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("scrapUniqueProduct"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixUniqueProductScrap), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -305,7 +305,7 @@ func ProcessAddProduct(customerID string, location string, assetID string, paylo
 		TimePerUnitInSeconds: parsedPayload.TimePerUnitInSeconds,
 	}
 
-	_, err = pg.EnqueueObject([]byte("addProduct"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixAddProduct), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -351,7 +351,7 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 		TargetUnits: parsedPayload.TargetUnits,
 		ProductID:   productID,
 	}
-	_, err = pg.EnqueueObject([]byte("addOrder"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixAddOrder), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -385,7 +385,7 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("startOrder"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixStartOrder), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -418,7 +418,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte("endOrder"), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixEndOrder), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return

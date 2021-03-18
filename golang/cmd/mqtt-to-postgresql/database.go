@@ -74,48 +74,6 @@ func PQErrorHandling(sqlStatement string, err error) {
 	ShutdownApplicationGraceful()
 }
 
-func storeIntoTable(timestampMs int64, DBassetID int, tableName string, value int, columnName string) {
-	zap.S().Debugf("storeIntoTable called", timestampMs, DBassetID, columnName, value)
-
-	//https://stackoverflow.com/questions/23950025/how-to-write-bigint-timestamp-in-milliseconds-value-as-timestamp-in-postgresql
-
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
-	}
-
-	// WARNING SQL INJECTION POSSIBLE
-	sqlStatement := `
-		INSERT INTO ` + tableName + `(timestamp, asset_id, ` + columnName + `) 
-		VALUES (to_timestamp($1 / 1000.0),$2,$3) 
-		ON CONFLICT DO NOTHING;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, value)
-	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
-		}
-		PQErrorHandling(sqlStatement, err)
-	}
-
-	// if dry run, print statement and rollback
-	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
-		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
-		}
-		return
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
-	}
-}
-
 // storeIntoDatabaseRoutineRecommendation fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineRecommendation(pg *goque.PrefixQueue) {
 	prefix := prefixRecommendation
@@ -145,7 +103,7 @@ func storeIntoDatabaseRoutineRecommendation(pg *goque.PrefixQueue) {
 	}
 }
 
-func storeItemsIntoDatabaseRecommendation(itemArray []*goque.Item) (err error) {
+func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -666,22 +624,143 @@ func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
 	}
 }
 
-// StoreIntoStateTable stores a state into the database
-func StoreIntoStateTable(timestampMs int64, DBassetID int, state int) {
-	storeIntoTable(timestampMs, DBassetID, "stateTable", state, "state")
+// storeIntoDatabaseRoutineState fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {
+	prefix := prefixState
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseState(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
 }
 
-// UpdateCountTableWithScrap updates the database to scrap products
-func UpdateCountTableWithScrap(timestampMs int64, DBassetID int, scrap int) {
-	zap.S().Debugf("UpdateCountTableWithScrap called", timestampMs, DBassetID, scrap)
+func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
+		INSERT INTO statetable (timestamp, asset_id, state) 
+		VALUES (to_timestamp($1 / 1000.0),$2,$3)`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt stateQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
+		}
+		// Create statement
+		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.State)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		return
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineScrapCount from queue and sends it to the database
+func storeIntoDatabaseRoutineScrapCount(pg *goque.PrefixQueue) {
+	prefix := prefixScrapCount
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseScrapCount(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
+	}
+
+	var stmt *sql.Stmt
+
+	stmt, err = txn.Prepare(`
 		UPDATE counttable 
 		SET scrap = count 
 		WHERE (timestamp, asset_id) IN
@@ -692,354 +771,821 @@ func UpdateCountTableWithScrap(timestampMs int64, DBassetID int, scrap int) {
 				WHERE timestamp < $1 AND timestamp > ($1::TIMESTAMP - INTERVAL '1 DAY') AND asset_id = $2
 			) t
 			WHERE running_total <= $3)
-		;
-	`
+		;`)
 
 	// TODO: # 125
-
-	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, DBassetID, scrap)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt scrapCountQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.Scrap)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineUniqueProduct fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineUniqueProduct(pg *goque.PrefixQueue) {
+	prefix := prefixUniqueProduct
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseUniqueProduct(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// StoreIntoShiftTable stores a count into the database
-func StoreIntoShiftTable(timestampMs int64, DBassetID int, timestampMsEnd int64) {
-	zap.S().Debugf("StoreIntoShiftTable called", timestampMs, DBassetID, timestampMsEnd)
+func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
+		INSERT INTO uniqueProductTable (uid, asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id) 
+		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7,$8) 
+		ON CONFLICT DO NOTHING;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt uniqueProductQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
+		}
+		// Create statement
+		_, err = stmt.Exec(pt.UID, pt.DBAssetID, pt.TimestampMsBegin, pt.TimestampMsEnd, pt.ProductID, pt.IsScrap, pt.QualityClass, pt.StationID)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		return
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineShift fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
+	prefix := prefixAddShift
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseShift(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
+	}
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
 		INSERT INTO shiftTable (begin_timestamp, end_timestamp, asset_id, type) 
 		VALUES (to_timestamp($1 / 1000.0),to_timestamp($2 / 1000.0),$3,$4) 
 		ON CONFLICT (begin_timestamp, asset_id) DO UPDATE 
-		SET begin_timestamp=to_timestamp($1 / 1000.0), end_timestamp=to_timestamp($2 / 1000.0), asset_id=$3, type=$4;`
+		SET begin_timestamp=to_timestamp($1 / 1000.0), end_timestamp=to_timestamp($2 / 1000.0), asset_id=$3, type=$4;`)
 
-	_, err = tx.ExecContext(ctx, sqlStatement, timestampMs, timestampMsEnd, DBassetID, 1) //type is always 1 for now (0 would be no shift)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt addShiftQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineUniqueProductScrap fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineUniqueProductScrap(pg *goque.PrefixQueue) {
+	prefix := prefixUniqueProductScrap
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseUniqueProductScrap(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// StoreIntoUniqueProductTable stores a unique product into the database
-func StoreIntoUniqueProductTable(UID string, DBassetID int, timestampMsBegin int64, timestampMsEnd int64, productID string, isScrap bool, qualityClass string, stationID string) {
-	zap.S().Debugf("StoreIntoUniqueProductTable called", UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
+func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
-		INSERT INTO uniqueProductTable (uid, asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id) 
-		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7,$8) 
-		ON CONFLICT DO NOTHING;`
+	var stmt *sql.Stmt
 
-	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID, timestampMsBegin, timestampMsEnd, productID, isScrap, qualityClass, stationID)
+	stmt, err = txn.Prepare(`UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt scrapUniqueProductQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.UID, pt.DBAssetID)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineAddProduct fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineAddProduct(pg *goque.PrefixQueue) {
+	prefix := prefixAddProduct
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseAddProduct(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// UpdateUniqueProductTableWithScrap sets isScrap to true in the database
-func UpdateUniqueProductTableWithScrap(UID string, DBassetID int) {
-	zap.S().Debugf("UpdateUniqueProductTableWithScrap called", UID, DBassetID)
+func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
-	}
-
-	sqlStatement := `UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, UID, DBassetID)
-	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
-		}
-		PQErrorHandling(sqlStatement, err)
-	}
-
-	// if dry run, print statement and rollback
-	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
-		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
-		}
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
 		return
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
-	}
-}
+	var stmt *sql.Stmt
 
-// StoreIntoProductTable stores a product into the database
-func StoreIntoProductTable(DBassetID int, productName string, timePerUnitInSeconds float64) {
-	zap.S().Debugf("StoreIntoProductTable called", DBassetID, productName, timePerUnitInSeconds)
-
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
-	}
-
-	sqlStatement := `
-		INSERT INTO productTable (asset_id, product_name, time_per_unit_in_seconds) 
+	stmt, err = txn.Prepare(`INSERT INTO productTable (asset_id, product_name, time_per_unit_in_seconds) 
 		VALUES ($1, $2, $3) 
-		ON CONFLICT DO NOTHING;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, DBassetID, productName, timePerUnitInSeconds)
+		ON CONFLICT DO NOTHING;`)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt addProductQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.DBAssetID, pt.ProductName, pt.TimePerUnitInSeconds)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineAddOrder fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineAddOrder(pg *goque.PrefixQueue) {
+	prefix := prefixAddOrder
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseAddOrder(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// StoreIntoOrderTable stores a order without begin and end timestap into the database
-func StoreIntoOrderTable(orderName string, productID int, targetUnits int, DBassetID int) {
-	zap.S().Debugf("StoreIntoOrderTable called", orderName, productID, targetUnits, DBassetID)
+func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
-		INSERT INTO orderTable (order_name, product_id, target_units, asset_id) 
+	var stmt *sql.Stmt
+
+	stmt, err = txn.Prepare(`INSERT INTO orderTable (order_name, product_id, target_units, asset_id) 
 		VALUES ($1, $2, $3, $4) 
-		ON CONFLICT DO NOTHING;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, orderName, productID, targetUnits, DBassetID)
+		ON CONFLICT DO NOTHING;`)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt addOrderQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineStartOrder fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineStartOrder(pg *goque.PrefixQueue) {
+	prefix := prefixStartOrder
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseStartOrder(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// UpdateBeginTimestampInOrderTable updates an order with a given beginTimestamp
-func UpdateBeginTimestampInOrderTable(orderName string, beginTimestamp int64, DBassetID int) {
-	zap.S().Debugf("UpdateBeginTimestampInOrderTable called", orderName, beginTimestamp, DBassetID)
+func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
-		UPDATE orderTable 
+	var stmt *sql.Stmt
+
+	stmt, err = txn.Prepare(`UPDATE orderTable 
 		SET begin_timestamp = to_timestamp($1 / 1000.0) 
 		WHERE order_name=$2 
-			AND asset_id = $3;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, beginTimestamp, orderName, DBassetID)
+			AND asset_id = $3;`)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt startOrderQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineEndOrder fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineEndOrder(pg *goque.PrefixQueue) {
+	prefix := prefixEndOrder
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseEndOrder(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// UpdateEndTimestampInOrderTable an order with a given endTimestamp
-func UpdateEndTimestampInOrderTable(orderName string, endTimestamp int64, DBassetID int) {
-	zap.S().Debugf("UpdateEndTimestampInOrderTable called", orderName, endTimestamp, DBassetID)
+func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
-		UPDATE orderTable 
+	var stmt *sql.Stmt
+
+	stmt, err = txn.Prepare(`UPDATE orderTable 
 		SET end_timestamp = to_timestamp($1 / 1000.0) 
 		WHERE order_name=$2 
-			AND asset_id = $3;`
-
-	_, err = tx.ExecContext(ctx, sqlStatement, endTimestamp, orderName, DBassetID)
+			AND asset_id = $3;`)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt endOrderQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
+	}
+	return
+
+}
+
+// storeIntoDatabaseRoutineAddMaintenanceActivity fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineAddMaintenanceActivity(pg *goque.PrefixQueue) {
+	prefix := prefixAddMaintenanceActivity
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseAddMaintenanceActivity(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
 	}
 }
 
-// StoreIntoMaintenancewActivitiesTable stores a new maintenance activity into the database
-func StoreIntoMaintenancewActivitiesTable(timestampMs int64, componentID int, activityType int) {
-	zap.S().Debugf("StoreIntoMaintenancewActivitiesTable called", timestampMs, componentID, activityType)
+func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err error) {
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
+	// Begin transaction
+	txn, err := db.Begin()
+
 	if err != nil {
-		PQErrorHandling("db.BeginTx()", err)
+		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		return
 	}
 
-	sqlStatement := `
-	INSERT INTO maintenanceactivities (component_id, activitytype, timestamp) 
-	VALUES ($1, $2, to_timestamp($3 / 1000.0)) 
-	ON CONFLICT DO NOTHING;`
+	var stmt *sql.Stmt
 
-	_, err = tx.ExecContext(ctx, sqlStatement, componentID, activityType, timestampMs)
+	stmt, err = txn.Prepare(`INSERT INTO maintenanceactivities (component_id, activitytype, timestamp) 
+	VALUES ($1, $2, to_timestamp($3 / 1000.0)) 
+	ON CONFLICT DO NOTHING;`)
 	if err != nil {
-		err2 := tx.Rollback()
-		if err2 != nil {
-			PQErrorHandling("tx.Rollback()", err2)
+		PQErrorHandling("Prepare()", err)
+		return
+	}
+
+	for _, item := range itemArray {
+
+		var pt addMaintenanceActivityQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			return
 		}
-		PQErrorHandling(sqlStatement, err)
+		// Create statement
+		_, err = stmt.Exec(pt.ComponentID, pt.Activity, pt.TimestampMs)
+		if err != nil {
+			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			return
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		return
 	}
 
 	// if dry run, print statement and rollback
 	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT", sqlStatement)
-		err = tx.Rollback()
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
+			PQErrorHandling("txn.Rollback()", err)
 		}
 		return
 	}
 
-	err = tx.Commit()
+	// Commit all statements
+	err = txn.Commit()
 	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
+		PQErrorHandling("txn.Commit()", err)
+		return
 	}
+	return
+
 }
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
