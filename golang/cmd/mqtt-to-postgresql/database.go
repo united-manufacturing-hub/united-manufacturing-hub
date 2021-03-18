@@ -49,14 +49,23 @@ func ShutdownDB() {
 }
 
 // PQErrorHandlingTransaction logs and handles postgresql errors in transactions
-func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) {
+func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (returnedErr error) {
 	PQErrorHandling(sqlStatement, err)
+
+	if e := pgerror.UniqueViolation(err); e != nil {
+		zap.S().Warnf("PostgreSQL failed: UniqueViolation", err, sqlStatement)
+		return
+	} else if e := pgerror.CheckViolation(err); e != nil {
+		zap.S().Warnf("PostgreSQL failed: CheckViolation", err, sqlStatement)
+		return
+	}
 
 	err2 := txn.Rollback()
 	if err2 != nil {
 		PQErrorHandling("txn.Rollback()", err2)
 	}
-
+	returnedErr = err
+	return
 }
 
 // PQErrorHandling logs and handles postgresql errors
@@ -109,8 +118,10 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -122,7 +133,9 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -132,14 +145,18 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.TimestampMs, pt.UID, pt.RecommendationType, pt.Enabled, pt.RecommendationValues, pt.RecommendationTextEN, pt.RecommendationTextDE, pt.DiagnoseTextEN, pt.DiagnoseTextDE)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -147,8 +164,10 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -158,15 +177,20 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
+
 	return
 
 }
@@ -177,7 +201,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
 	}
 
 	// 1. Prepare statement: create temp table
@@ -185,25 +209,29 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 		var stmt *sql.Stmt
 		stmt, err = txn.Prepare(`
 			CREATE TEMP TABLE tmp_processvaluetable64 
-				( LIKE processValueTable INCLUDING DEFAULTS ) 
+				( LIKE processValueTable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
 		`)
 		if err != nil {
-			PQErrorHandlingTransaction("Prepare()", err, txn)
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
 		}
 
 		// Create statement
 		_, err = stmt.Exec()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -212,8 +240,10 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 		var stmt *sql.Stmt
 		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable64", "timestamp", "asset_id", "value", "valuename"))
 		if err != nil {
-			PQErrorHandlingTransaction("Prepare()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		for _, item := range itemArray {
@@ -223,8 +253,10 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 			err = item.ToObject(&pt)
 
 			if err != nil {
-				PQErrorHandlingTransaction("item.ToObject()", err, txn)
-				return
+				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+				if err != nil {
+					return
+				}
 			}
 
 			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
@@ -232,8 +264,10 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 			// Create statement
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
-				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-				return
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				if err != nil {
+					return
+				}
 			}
 
 		}
@@ -241,8 +275,10 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -256,21 +292,27 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 		`)
 		if err != nil {
 			PQErrorHandling("Prepare()", err)
-			return
+			if err != nil {
+				return
+			}
 		}
 
 		// Create statement
 		_, err = stmt.Exec()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -282,7 +324,9 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
@@ -328,7 +372,7 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
 	}
 
 	// 1. Prepare statement: create temp table
@@ -336,25 +380,29 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 		var stmt *sql.Stmt
 		stmt, err = txn.Prepare(`
 			CREATE TEMP TABLE tmp_processvaluetable 
-				( LIKE processValueTable INCLUDING DEFAULTS ) 
+				( LIKE processValueTable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
 		`)
 		if err != nil {
-			PQErrorHandlingTransaction("Prepare()", err, txn)
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
 		}
 
 		// Create statement
 		_, err = stmt.Exec()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -363,8 +411,10 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 		var stmt *sql.Stmt
 		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable", "timestamp", "asset_id", "value", "valuename"))
 		if err != nil {
-			PQErrorHandlingTransaction("Prepare()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		for _, item := range itemArray {
@@ -374,8 +424,10 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 			err = item.ToObject(&pt)
 
 			if err != nil {
-				PQErrorHandlingTransaction("item.ToObject()", err, txn)
-				return
+				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+				if err != nil {
+					return
+				}
 			}
 
 			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
@@ -383,8 +435,10 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 			// Create statement
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
-				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-				return
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				if err != nil {
+					return
+				}
 			}
 
 		}
@@ -392,8 +446,10 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -407,21 +463,27 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 		`)
 		if err != nil {
 			PQErrorHandling("Prepare()", err)
-			return
+			if err != nil {
+				return
+			}
 		}
 
 		// Create statement
 		_, err = stmt.Exec()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -433,7 +495,9 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
@@ -479,7 +543,7 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
 	}
 
 	// 1. Prepare statement: create temp table
@@ -487,35 +551,41 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 		var stmt *sql.Stmt
 		stmt, err = txn.Prepare(`
 			CREATE TEMP TABLE tmp_counttable
-				( LIKE processValueTable INCLUDING DEFAULTS ) 
+				( LIKE counttable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
 		`)
 		if err != nil {
-			PQErrorHandlingTransaction("Prepare()", err, txn)
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
 		}
 
 		// Create statement
 		_, err = stmt.Exec()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
 	// 2. Prepare statement: copying into temp table
 	{
 		var stmt *sql.Stmt
-		stmt, err = txn.Prepare(pq.CopyIn("counttable", "timestamp", "asset_id", "count", "scrap"))
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_counttable", "timestamp", "asset_id", "count", "scrap"))
 		if err != nil {
-			PQErrorHandlingTransaction("Prepare()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		for _, item := range itemArray {
@@ -525,8 +595,10 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 			err = item.ToObject(&pt)
 
 			if err != nil {
-				PQErrorHandlingTransaction("item.ToObject()", err, txn)
-				return
+				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+				if err != nil {
+					return
+				}
 			}
 
 			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
@@ -534,8 +606,10 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 			// Create statement
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
 			if err != nil {
-				PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-				return
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				if err != nil {
+					return
+				}
 			}
 
 		}
@@ -543,8 +617,10 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -558,21 +634,27 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 		`)
 		if err != nil {
 			PQErrorHandling("Prepare()", err)
-			return
+			if err != nil {
+				return
+			}
 		}
 
 		// Create statement
 		_, err = stmt.Exec()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 		// Close Statement
 		err = stmt.Close()
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Close()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -584,7 +666,9 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
@@ -659,8 +743,10 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -670,7 +756,9 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -680,14 +768,18 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.State)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -695,8 +787,10 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -706,14 +800,18 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -754,8 +852,10 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -776,7 +876,9 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 	// TODO: # 125
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -786,14 +888,18 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.Scrap)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -801,8 +907,10 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -812,14 +920,18 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -860,8 +972,10 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -872,7 +986,9 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -882,14 +998,18 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.UID, pt.DBAssetID, pt.TimestampMsBegin, pt.TimestampMsEnd, pt.ProductID, pt.IsScrap, pt.QualityClass, pt.StationID)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -897,8 +1017,10 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -908,14 +1030,18 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -956,8 +1082,10 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -969,7 +1097,9 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -979,14 +1109,18 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -994,8 +1128,10 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1005,14 +1141,18 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1053,8 +1193,10 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -1062,7 +1204,9 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 	stmt, err = txn.Prepare(`UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -1072,14 +1216,18 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.UID, pt.DBAssetID)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -1087,8 +1235,10 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1098,14 +1248,18 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1146,8 +1300,10 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -1157,7 +1313,9 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 		ON CONFLICT DO NOTHING;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -1167,14 +1325,18 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.DBAssetID, pt.ProductName, pt.TimePerUnitInSeconds)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -1182,8 +1344,10 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1193,14 +1357,18 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1241,8 +1409,10 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -1252,7 +1422,9 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 		ON CONFLICT DO NOTHING;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -1262,14 +1434,18 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -1277,8 +1453,10 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1288,14 +1466,18 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1336,8 +1518,10 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -1348,7 +1532,9 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 			AND asset_id = $3;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -1358,14 +1544,18 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -1373,8 +1563,10 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1384,14 +1576,18 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1432,8 +1628,10 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -1444,7 +1642,9 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 			AND asset_id = $3;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -1454,14 +1654,18 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -1469,8 +1673,10 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1480,14 +1686,18 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1528,8 +1738,10 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 	txn, err := db.Begin()
 
 	if err != nil {
-		PQErrorHandlingTransaction("db.Begin()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	var stmt *sql.Stmt
@@ -1539,7 +1751,9 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 	ON CONFLICT DO NOTHING;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	for _, item := range itemArray {
@@ -1549,14 +1763,18 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 		err = item.ToObject(&pt)
 
 		if err != nil {
-			PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 		// Create statement
 		_, err = stmt.Exec(pt.ComponentID, pt.Activity, pt.TimestampMs)
 		if err != nil {
-			PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			return
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
 		}
 
 	}
@@ -1564,8 +1782,10 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
-		PQErrorHandlingTransaction("stmt.Close()", err, txn)
-		return
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// if dry run, print statement and rollback
@@ -1575,14 +1795,18 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 		if err != nil {
 			PQErrorHandling("txn.Rollback()", err)
 		}
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	// Commit all statements
 	err = txn.Commit()
 	if err != nil {
 		PQErrorHandling("txn.Commit()", err)
-		return
+		if err != nil {
+			return
+		}
 	}
 	return
 
@@ -1590,12 +1814,10 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
-	return
 	// Get from cache if possible
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
-		zap.S().Debugf("GetAssetID cache hit")
 		return
 	}
 
