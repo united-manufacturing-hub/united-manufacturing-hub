@@ -45,6 +45,14 @@ app.kubernetes.io/part-of: {{ include "factorycube-core.name" . }}
 {{- end }}
 
 {{/*
+Labels for barcodereader 
+*/}}
+{{- define "factorycube-core.labels.barcodereader" -}}
+app.kubernetes.io/name: {{ include "factorycube-core.name" . }}-barcodereader
+{{ include "factorycube-core.labels.common" . }}
+{{- end }}
+
+{{/*
 Labels for mqtt-bridge 
 */}}
 {{- define "factorycube-core.labels.mqttbridge" -}}
