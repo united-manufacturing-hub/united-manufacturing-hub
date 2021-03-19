@@ -1,0 +1,102 @@
+# TODO: #11 Add all other APIs as well.
+
+openapi: '3.0.2'
+info:
+  title: factoryinput
+  version: '1.0'
+servers:
+  - url: https://api.industrial-analytics.net/factoryinput/v1
+
+components:
+  
+  parameters:
+
+      customer:
+        in: path
+        name: customer
+        schema:
+          type: string
+        required: true
+        description: name of the customer. only characters, numbers, - and _ allowed
+        example:
+          DCCAachen
+
+      location:
+        in: path
+        name: location
+        schema:
+          type: string
+        required: true
+        description: name of the location. only characters, numbers, - and _ allowed
+        example:
+          AachenPlant
+      
+      asset:
+        in: path
+        name: asset
+        schema:
+          type: string
+        required: true
+        description: name of the asset. only characters, numbers, - and _ allowed
+        example:
+          WeavingMachine
+
+      value:
+        in: path
+        name: value
+        schema:
+          type: string
+        required: true
+        description: selected value. only characters, numbers, - and _ allowed
+        example:
+          count
+
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+
+paths:
+  /{customer}/{location}/{asset}/{value}:
+    post:
+      summary: Create MQTT Message from Rest call
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/value'
+      requestBody:
+        description: With the help of this Rest call you can create a MQTT message which is processed like a message that goes directly to the MQTT broker. The JSON can be any valid JSON from the MQTT Datamodell
+        required: true
+        content:
+          application/json:
+            schema:
+                type: object
+                properties:
+                  state:
+                    type: int
+                    items:
+                      type: int
+                      
+                    description: Asset state
+                    example:
+                      20000
+
+                  timestamp_ms:
+                    type: int
+                    items:
+                      type: int
+                    description: the returned data
+                    example:
+                      1616003999831
+                      
+      responses:
+        '200':
+          description: MQTT Message created
+        'xxx':
+          description: Not a valid JSON
+
+ 
+
+security:
+  - BasicAuth: []
