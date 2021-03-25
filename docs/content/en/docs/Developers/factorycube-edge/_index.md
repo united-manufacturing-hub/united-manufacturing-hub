@@ -20,3 +20,11 @@ This tool acts as an MQTT bridge to handle bad internet connections. Messages ar
 - emqx causes for internet blackouts longer than 3-4 min a DoS attack on our server (messages are send in endless loop, see https://github.com/emqx/emqx-bridge-mqtt/issues/81)
 - VerneMQ only stored 10-20% of the data
 - mosquitto was working very unreliable
+
+## nodered
+
+This tool is used to connect PLC and to process data. See also [Getting Started](../../getting-started/connecting-machines-creating-dashboards). Or take a look into the [official documentation](www.nodered.org/docs)
+
+## emqx-edge
+
+This tool is used as a central MQTT broker. See [emqx-edge documentation](https://docs.emqx.io/en/edge/latest/) for more information.

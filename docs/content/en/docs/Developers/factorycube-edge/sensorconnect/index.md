@@ -10,9 +10,8 @@ description: >
 
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
-1. Copy `deployment/sensorconnect/docker-compose.yml` to the main folder
-2. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose
-3. execute `sudo docker-compose up -d`
+1. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose
+2. execute `sudo docker-compose -f ./deployment/sensorconnect/docker-compose.yaml up -d --build`
 
 ## Environment variables
 
