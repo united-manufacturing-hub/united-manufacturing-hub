@@ -1,7 +1,7 @@
 ---
 title: "mqtt-bridge"
 linkTitle: "mqtt-bridge"
-date: 2021-03-15
+description: "This tool acts as an MQTT bridge to handle bad internet connections."
 ---
 
 ## Getting started
