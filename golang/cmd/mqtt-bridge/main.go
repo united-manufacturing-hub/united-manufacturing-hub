@@ -132,8 +132,7 @@ func ShutdownApplicationGraceful() {
 func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, subMQTTTopic string, pubMQTTTopic string) {
 	for {
 		if pq.Length() == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			// time.Sleep(1 * time.Second) // TEMPORARY
+			time.Sleep(1 * time.Millisecond) // wait 1 ms to avoid high cpu usage
 			continue
 		}
 
@@ -170,6 +169,5 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 			zap.S().Fatalf("Error dequeuing element", err)
 			return
 		}
-		time.Sleep(1 * time.Second) // TEMPORARY. Prevent flooding the server
 	}
 }
