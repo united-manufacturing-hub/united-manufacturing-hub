@@ -26,11 +26,11 @@ See also the [detailed documentation](cnc-milling).
 
 ## Textile industry
 
-### Cycle time monitoring in the Digital Capability Center Aachen
+### Cycle time monitoring
 
 {{< imgproc assembly-analytics Fit "500x300" >}}{{< /imgproc >}}
 
-See also the [detailed documentation](dcc-assembly-analytics).
+See also the [detailed documentation](assembly-analytics).
 
 ### Retrofitting of weaving machines for OEE calculation
 
@@ -58,7 +58,7 @@ Retrofit of a Japanese pharmaceutical packaging line for automatic analysis of m
 
 See also the [detailed documentation](pharma-packaging).
 
-### Quality monitoring in a filling line at the Digital Capability Center Atlanta
+### Quality monitoring in a filling line
 
 ![quality monitoring](images/dcc-quality-check/picture1.jpg)
 
