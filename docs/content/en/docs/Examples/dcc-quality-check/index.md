@@ -1,5 +1,5 @@
 ---
-title: "Quality monitoring in a bottling line at the Digital Capability Center Atlanta"
+title: "Quality monitoring in a bottling line"
 linkTitle: "Quality monitoring"
 weight: 3
 description: >
@@ -8,7 +8,7 @@ description: >
 
 ## Profile
 
-At the Digital Capability Center (DCC) Atlanta, an Industry 4.0 learning and demonstration factory, a bottling line for filling water bottles was retrofitted with an artificial intelligence quality inspection system. With the help of a camera connected to an ia: factorycube, the bottles are checked for quality defects and sorted out by a pneumatic device in the event of a defect.
+A bottling line for filling water bottles was retrofitted with an artificial intelligence quality inspection system. With the help of a camera connected to an ia: factorycube, the bottles are checked for quality defects and sorted out by a pneumatic device in the event of a defect.
 
 ### Photos of the machines
 
