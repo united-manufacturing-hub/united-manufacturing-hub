@@ -1,7 +1,7 @@
 
 ---
-title: "The United datamodel / MQTT messages"
-linkTitle: "MQTT and datamodel"
+title: "The UMH datamodel / MQTT"
+linkTitle: "The UMH datamodel / MQTT"
 weight: 2
 description: >
   All events or subsequent changes in production are transmitted via MQTT in the following data model
@@ -449,4 +449,4 @@ Under this topic a message should be sent whenever an assembly at a certain stat
 }
 ```
 
-[sensorconnect]: ../edge/sensorconnect.md
+[sensorconnect]: ../../developers/factorycube-core/sensorconnect

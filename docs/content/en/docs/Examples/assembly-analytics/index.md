@@ -1,5 +1,5 @@
 ---
-title: "Cycle time monitoring in an assembly cell at the DCC Aachen"
+title: "Cycle time monitoring in an assembly cell"
 linkTitle: "Cycle time monitoring"
 weight: 3
 description: >
@@ -8,7 +8,7 @@ description: >
 
 ## Profile
 
-At the Digital Capability Center (DCC) Aachen, a learning and demonstration factory on the topic of Industry 4.0, an assembly cell was retrofitted to measure and optimize cycle times. Customizable textile wristbands are produced in the assembly cell.
+An assembly cell was retrofitted to measure and optimize cycle times. Customizable textile wristbands are produced in the assembly cell.
 
 ### Photos of the machines
 
@@ -37,7 +37,7 @@ At the Digital Capability Center (DCC) Aachen, a learning and demonstration fact
 
 ### Integration
 
-TODO: #66 Add integration for DCC assembly analytics
+TODO: #66 Add integration for assembly analytics
 
 ### Installed hardware
 

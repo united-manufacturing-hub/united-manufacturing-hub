@@ -1,14 +1,17 @@
 ---
 title: "mqtt-bridge"
 linkTitle: "mqtt-bridge"
-date: 2021-03-15
+description: "This tool acts as an MQTT bridge to handle bad internet connections."
 ---
 
 ## Getting started
 
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
-TODO 
+Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
+
+1. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose
+2. execute `sudo docker-compose -f ./deployment/mqtt-bridge/docker-compose.yaml up -d --build`
 
 ## Environment variables
 

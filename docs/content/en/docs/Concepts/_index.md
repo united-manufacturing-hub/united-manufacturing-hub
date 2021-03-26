@@ -1,17 +1,111 @@
 ---
 title: "Concepts"
 linkTitle: "Concepts"
-weight: 4
+weight: 1
 description: >
-  What does your user need to understand about your project in order to use it - or potentially contribute to it? 
+  The software of the United Manufacturing Hub is designed as a modular system. Our software serves as a basic building block for connecting and using various hardware and software components quickly and easily. This enables flexible use and thus the possibility to create comprehensive solutions for various challenges in the industry.
 ---
 
-{{% pageinfo %}}
-This is a placeholder page that shows you how to use this template site.
-{{% /pageinfo %}}
+## Architecture
 
-For many projects, users may not need much information beyond the information in the [Overview](/docs/overview/), so this section is **optional**. However if there are areas where your users will need a more detailed understanding of a given term or feature in order to do anything useful with your project (or to not make mistakes when using it) put that information in this section. For example, you may want to add some conceptual pages if you have a large project with many components and a complex architecture.
+{{< imgproc dataprocessing Fit "1200x1200" >}}{{< /imgproc >}}
 
-Remember to focus on what the user needs to know, not just what you think is interesting about your project! If they don’t need to understand your original design decisions to use or contribute to the project, don’t put them in, or include your design docs in your repo and link to them. Similarly, most users will probably need to know more about how features work when in use rather than how they are implemented. Consider a separate architecture page for more detailed implementation and system design information that potential project contributors can consult.
+### Edge-device / IoT gateway
+
+As a central hardware component we use an edge device which is connected to different data sources and to a server. The edge device is an industrial computer on which our software is installed. The customer can either use the United factorycube offered by us or his own IoT gateway. 
+
+More information about our certified devices can be found on our [website](https://www.united-manufacturing-hub.com)
+
+**Examples:**
+
+- Factorycube
+- Cubi
+
+### Data acquisition
+
+The data sources connected to the edge device provide the foundation for automatic data collection.  The data sources can be external sensors (e.g. light barriers, vibration sensors), input devices (e.g. button bars), Auto-ID technologies (e.g. barcode scanners), industrial cameras and other data sources such as machine PLCs. The wide range of data sources allows the connection of all machines, either directly via the machine PLC or via simple and fast retrofitting with external sensors.
+
+More information can be found in the technical documentation of the edge helm chart [`factorycube-edge`](../developers/factorycube-edge)
+
+**Examples:**
+
+- sensorconnect
+- barcodereader
+
+### Data processing
+
+The software installed on the edge device receives the data from the individual data sources. Using various data processing services and "node-red", the imported data is preprocessed and forwarded to the connected server via the MQTT broker.
+
+More information can be found in the technical documentation of the edge and server helm chart [`factorycube-edge`](../developers/factorycube-edge) [`factorycube-server`](../developers/factorycube-server)
 
 
+**Examples:**
+
+- node-red
+
+### Data storage
+
+The data forwarded by the edge device can either be stored on the customer's servers or, in the SaaS version, in the United Cloud hosted by us. Relational data (e.g. data about orders and products) as well as time series data in high resolution (e.g. machine data like temperature) can be stored.
+
+More information can be found in the technical documentation of the server helm chart [`factorycube-server`](../developers/factorycube-server)
+
+**Examples:**
+
+- TimescaleDB 
+
+### Data usage
+
+The stored data is automatically processed and provided to the user via a Grafana dashboard or other computer programs via a Rest interface. For each data request, the user can choose between raw data and various pre-processed data such as OEE, MTBF, etc., so that every user (even without programming knowledge) can quickly and easily compose personally tailored dashboards with the help of modular building blocks.
+
+More information can be found in the technical documentation of the server helm chart [`factorycube-server`](../developers/factorycube-server)
+
+**Examples:**
+
+- Grafana
+- factoryinsight
+
+### Technology
+
+At all of the above-mentioned levels, great importance is attached to the topics of resilience and scalability:
+
+- Only open source projects developed by established companies are used to ensure guaranteed maintainability.
+- All services are based on Docker, which enables shorter development cycles and improved resource utilization.
+- The additional services offered at the server level are managed by Kubernetes software, a technology on which 95% of public cloud providers (Microsoft, Amazon, Google, etc.) also rely.
+
+## Technical approach and details
+
+### Microservice approach
+
+The UMH is based on the [microservices approach](https://en.wikipedia.org/wiki/Microservices) and arranges an application as a collection of loosely coupled services. Each service is a self-contained piece of business functionality with clear interfaces.
+
+### Services and interfaces in the UMH
+
+A service in UMH can either be on the server or the edge device. The interface between all edge and most of the server services is MQTT. The interface between Grafana (or any other BI tool) and factoryinsight is REST.
+
+#### MQTT
+
+Out of the [wikipedia article about MQTT](https://en.wikipedia.org/wiki/MQTT):
+
+> MQTT (originally an acronym for MQ Telemetry Transport) is an lightweight, publish-subscribe network protocol that transports messages between devices. The MQTT protocol defines two types of network entities: a message broker and a number of clients. An MQTT broker is a server that receives all messages from the clients and then routes the messages to the appropriate destination clients. An MQTT client is any device (from a micro controller up to a fully-fledged server) that runs an MQTT library and connects to an MQTT broker over a network.
+
+The protocol MQTT specifies not the actual content of the exchanged MQTT messages. In the UMH stack we specify them further with the [UMH datamodel](../mqtt/)
+
+#### REST / HTTP
+
+Out of the [wikipedia article about REST](https://en.wikipedia.org/wiki/Representational_state_transfer):
+
+> Representational state transfer (REST) is a de-facto standard for a software architecture for interactive applications that typically use multiple Web services. In order to be used in a REST-based application, a Web Service needs to meet certain constraints; such a Web Service is called RESTful. A RESTful Web service is required to provide an application access to its Web resources in a textual representation and support reading and modification of them with a stateless protocol and a predefined set of operations. By being RESTfull, Web Services provide interoperability between the computer systems on the internet that provide these services.
+
+factoryinsight provides a REST / HTTP access to all data stored in the database. [The entire API is well-documented](../developers/factorycube-server/factoryinsight).
+
+## Practical implications
+
+### Edge devices
+
+Typically you have multiple data sources like `sensorconnect` or `barcodereader`, that are containered in a Docker container. They all send their data to the MQTT broker. You can now process the data in node-red by subscribing to the data sources via MQTT, processing the data, and then writing it back.
+
+### Server
+
+#### Database access
+
+The database on the server side should never be accessed directly by a service except `mqtt-to-postgresql` and `factoryinsight`. Instead, these services should be modified to include the required functionalities.
