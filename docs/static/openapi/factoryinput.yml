@@ -93,8 +93,10 @@ paths:
       responses:
         '200':
           description: MQTT Message created
-        'xxx':
-          description: Not a valid JSON
+        '400':
+          description: Not a JSON
+        '401':
+          description: Not authorized
 
  
 
