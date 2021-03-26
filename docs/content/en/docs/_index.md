@@ -11,7 +11,9 @@ menu:
 
 <img src="/images/Otto.svg" style="height: 150px !important">
 
-
+{{% alert title="Warning" color="warning" %}}
+The project is currently in closed alpha. The document might be subject to heavy refactoring or API changes.
+{{% /alert %}}
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project

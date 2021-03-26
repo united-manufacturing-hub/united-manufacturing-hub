@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"os"
 
+	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus"
@@ -75,98 +75,81 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 }
 
-func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) {
+func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	if customerID != "raw" {
 
 		switch payloadType {
 		case "state":
-			go ProcessStateData(customerID, location, assetID, payloadType, payload)
+			go ProcessStateData(customerID, location, assetID, payloadType, payload, pg)
 		case "processValue":
-			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload)
+			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		case "processvalue":
-			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload)
+			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		case "count":
-			go ProcessCountData(customerID, location, assetID, payloadType, payload)
+			go ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
 		case "scrapCount":
-			go ProcessScrapCountData(customerID, location, assetID, payloadType, payload)
+			go ProcessScrapCountData(customerID, location, assetID, payloadType, payload, pg)
 		case "recommendation":
-			go ProcessRecommendationData(customerID, location, assetID, payloadType, payload)
+			go ProcessRecommendationData(customerID, location, assetID, payloadType, payload, pg)
 		case "addShift":
-			go ProcessAddShift(customerID, location, assetID, payloadType, payload)
+			go ProcessAddShift(customerID, location, assetID, payloadType, payload, pg)
 		case "addMaintenanceActivity":
-			go ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload)
+			go ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload, pg)
 		case "uniqueProduct":
-			go ProcessUniqueProduct(customerID, location, assetID, payloadType, payload)
+			go ProcessUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
 		case "scrapUniqueProduct":
-			go ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload)
+			go ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
 		case "addProduct":
-			go ProcessAddProduct(customerID, location, assetID, payloadType, payload)
+			go ProcessAddProduct(customerID, location, assetID, payloadType, payload, pg)
 		case "addOrder":
-			go ProcessAddOrder(customerID, location, assetID, payloadType, payload)
+			go ProcessAddOrder(customerID, location, assetID, payloadType, payload, pg)
 		case "startOrder":
-			go ProcessStartOrder(customerID, location, assetID, payloadType, payload)
+			go ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
 		case "endOrder":
-			go ProcessEndOrder(customerID, location, assetID, payloadType, payload)
+			go ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
 		}
 	}
 }
 
-func onMessageReceived(client MQTT.Client, message MQTT.Message) {
+// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
+func getOnMessageRecieved(pg *goque.PrefixQueue) func(MQTT.Client, MQTT.Message) {
 
-	//Check whether topic has the correct structure
-	rp := regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
+	return func(client MQTT.Client, message MQTT.Message) {
 
-	res := rp.FindStringSubmatch(message.Topic())
-	if res == nil {
-		//zap.S().Infof("onMessageReceived","unknown topic:  %s\tMessage: %s", message.Topic(), message.Payload())
-		return
+		//Check whether topic has the correct structure
+		rp := regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
+
+		res := rp.FindStringSubmatch(message.Topic())
+		if res == nil {
+			return
+		}
+
+		customerID := res[1]
+		location := res[2]
+		assetID := res[3]
+		payloadType := res[4]
+		payload := message.Payload()
+
+		mqttTotal.Inc()
+
+		go processMessage(customerID, location, assetID, payloadType, payload, pg)
 	}
-
-	customerID := res[1]
-	location := res[2]
-	assetID := res[3]
-	payloadType := res[4]
-	payload := message.Payload()
-
-	zap.S().Debugf("onMessageReceived", customerID, location, assetID, payloadType)
-	mqttTotal.Inc()
-
-	go processMessage(customerID, location, assetID, payloadType, payload)
 }
 
 // OnConnect subscribes once the connection is established. Required to re-subscribe when cleansession is True
 func OnConnect(c MQTT.Client) {
-	zap.S().Infof("Connected to MQTT broker")
-
-	certificateName := os.Getenv("CERTIFICATE_NAME")
-
-	mqttTopic := os.Getenv("CUSTOM_MQTT_TOPIC")
-
-	// if custom MQTT topic not sert
-	if mqttTopic == "" {
-		if certificateName == "NO_CERT" {
-			mqttTopic = "$share/MQTT_TO_POSTGRESQL/ia/#"
-			zap.S().Infof("Subscribing in Kubernetes mode", mqttTopic)
-		} else {
-			mqttTopic = "ia/#"
-			zap.S().Infof("Running in normal mode", mqttTopic)
-		}
-	}
-
-	if token := c.Subscribe(mqttTopic, 2, onMessageReceived); token.Wait() && token.Error() != nil {
-		panic(token.Error())
-	}
+	optionsReader := c.OptionsReader()
+	zap.S().Infof("Connected to MQTT broker", optionsReader.ClientID())
 	mqttConnected.Inc()
-	zap.S().Debugf("mqttConnected.Inc()")
 }
 
 // OnConnectionLost outputs warn message
 func OnConnectionLost(c MQTT.Client, err error) {
-	zap.S().Warnf("Connection lost", err)
+	optionsReader := c.OptionsReader()
+	zap.S().Warnf("Connection lost", err, optionsReader.ClientID())
 	mqttConnected.Dec()
-	zap.S().Debugf("mqttConnected.Dec()")
 }
 
 func checkConnected(c MQTT.Client) healthcheck.Check {
@@ -184,18 +167,29 @@ func ShutdownMQTT() {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, health healthcheck.Handler, podName string) {
+func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.PrefixQueue) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
 		opts.SetUsername("MQTT_TO_POSTGRESQL")
-		zap.S().Infof("Running in Kubernetes mode", podName)
+
+		if mqttTopic == "" {
+			mqttTopic = "$share/MQTT_TO_POSTGRESQL/ia/#"
+		}
+
+		zap.S().Infof("Running in Kubernetes mode", podName, mqttTopic)
+
 	} else {
 		tlsconfig := newTLSConfig(certificateName)
-		zap.S().Infof("Running in normal mode", certificateName)
 		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
+
+		if mqttTopic == "" {
+			mqttTopic = "ia/#"
+		}
+
+		zap.S().Infof("Running in normal mode", mqttTopic, certificateName)
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(OnConnect)
@@ -208,6 +202,12 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, health healthcheck.
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
+
+	// Subscribe
+	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageRecieved(pg)); token.Wait() && token.Error() != nil {
+		panic(token.Error())
+	}
+	zap.S().Infof("MQTT subscribed", mqttTopic)
 
 	// Implement a custom check with a 50 millisecond timeout.
 	health.AddReadinessCheck("mqtt-check", checkConnected(mqttClient))
