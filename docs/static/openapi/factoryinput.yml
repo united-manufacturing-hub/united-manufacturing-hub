@@ -72,23 +72,9 @@ paths:
           application/json:
             schema:
                 type: object
-                properties:
-                  state:
-                    type: int
-                    items:
-                      type: int
-                      
-                    description: Asset state
-                    example:
-                      20000
-
-                  timestamp_ms:
-                    type: int
-                    items:
-                      type: int
-                    description: the returned data
-                    example:
-                      1616003999831
+                example:
+                   {"state":4000}
+                  
                       
       responses:
         '200':
