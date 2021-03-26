@@ -1,7 +1,7 @@
 
 ---
-title: "Datamodel for asset states"
-linkTitle: "Datamodel for asset states"
+title: "Available states for assets"
+linkTitle: "Available states for assets"
 weight: 3
 description: >
   This data model maps various machine states to relevant OEE buckets.
