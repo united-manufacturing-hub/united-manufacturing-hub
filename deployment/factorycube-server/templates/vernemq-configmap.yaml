@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:  
+  name: vernemq-acl
+  labels:
+     {{- include "factorycube-server.labels.factoryinsight" . | nindent 4 }}
+data:  
+  vernemq-acl: |-   
+     user MQTT_TO_POSTGRESQL
+     topic read ia/#
+     topic read $share/MQTT_TO_POSTGRESQL/ia/#
+
+     {{ .Values.vernemq.AclConfig | nindent 6 }}
