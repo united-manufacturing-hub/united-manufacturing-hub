@@ -1,3 +1,4 @@
+{{- if .Values.factoryinsight.enabled -}}
 {{- if .Values.factoryinsight.pdb.enabled -}}
 
 apiVersion: policy/v1beta1
@@ -16,4 +17,5 @@ spec:
     matchLabels:
      {{- include "factorycube-server.labels.factoryinsight" . | nindent 6 }}
 
+{{- end -}}
 {{- end -}}

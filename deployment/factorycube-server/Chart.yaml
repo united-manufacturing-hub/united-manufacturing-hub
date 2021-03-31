@@ -31,12 +31,16 @@ dependencies:
   - name: redis 
     version: 12.7.3
     repository: https://charts.bitnami.com/bitnami 
+    condition: redis.enabled
   - name: vernemq
     version: 1.6.7
     repository: https://vernemq.github.io/docker-vernemq
+    condition: vernemq.enabled
   - name: grafana
     version: 5.2.7 
     repository: https://charts.bitnami.com/bitnami 
+    condition: grafana.enabled
   - name: timescaledb-single
     version: 0.8.2 
     repository: https://charts.timescale.com
+    condition: timescaledb.enabled

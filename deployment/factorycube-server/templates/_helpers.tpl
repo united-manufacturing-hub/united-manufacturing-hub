@@ -67,3 +67,10 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-nodered
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
 
+Labels for redis 
+*/}}
+{{- define "factorycube-server.labels.redis" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-redis
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}
+

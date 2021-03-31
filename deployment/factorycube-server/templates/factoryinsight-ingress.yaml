@@ -1,3 +1,4 @@
+{{- if .Values.factoryinsight.enabled -}}
 {{- if .Values.factoryinsight.ingress.enabled -}}
 
 apiVersion: networking.k8s.io/v1beta1
@@ -30,4 +31,5 @@ spec:
             backend:
               serviceName: {{ include "factorycube-server.fullname" . }}-factoryinsight-service
               servicePort: 80
+{{- end -}}
 {{- end -}}

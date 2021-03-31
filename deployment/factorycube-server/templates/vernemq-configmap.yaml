@@ -1,3 +1,4 @@
+{{- if .Values.vernemq.enabled -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:  
@@ -11,3 +12,4 @@ data:
      topic read $share/MQTT_TO_POSTGRESQL/ia/#
 
      {{ .Values.vernemq.AclConfig | nindent 6 }}
+ {{- end -}}

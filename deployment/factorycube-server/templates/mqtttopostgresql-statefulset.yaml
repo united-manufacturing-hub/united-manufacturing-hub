@@ -1,3 +1,4 @@
+{{- if .Values.mqtttopostgresql.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet 
 metadata:
@@ -9,7 +10,7 @@ metadata:
     {{- toYaml .Values.mqtttopostgresql.annotations | nindent 4 }}
   {{- end }}
 spec:
-  replicas: 2
+  replicas: {{ .Values.mqtttopostgresql.replicas }} 
   serviceName: mqtt-to-postgresql
   volumeClaimTemplates:
     - metadata:
@@ -79,7 +80,10 @@ spec:
             - name: REDIS_URI3
               value: redis-node-2.redis-headless:26379
             - name: REDIS_PASSWORD
-              value: {{ .Values.redis.password }} 
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret 
+                  key: redis-password
             
             - name: MY_POD_NAME
               valueFrom:
@@ -112,4 +116,5 @@ spec:
           #secretName: mqtt-to-postgresql-secret
       serviceAccountName: ""
       restartPolicy: Always
----
+{{- end -}}
+
