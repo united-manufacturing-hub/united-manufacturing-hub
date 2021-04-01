@@ -67,10 +67,19 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-nodered
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
 
+{{/*
 Labels for redis 
 */}}
 {{- define "factorycube-server.labels.redis" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-redis
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}
+
+{{/*
+Labels for timescaledb 
+*/}}
+{{- define "factorycube-server.labels.timescaledb" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-timescaledb
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
 

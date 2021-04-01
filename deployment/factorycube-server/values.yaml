@@ -13,7 +13,7 @@ factoryinsight:
   db_host: ""
   db_database: "factoryinsight"
   db_user: "factoryinsight"
-  db_password: ""
+  db_password: "changeme"
   service:
     annotations: {}
   pdb:
@@ -49,8 +49,8 @@ mqtttopostgresql:
 
 
 ### timescaleDB ###
-timescaledb:
-  enabled: false
+timescaledb-single:
+  enabled: true
   # This file and its contents are licensed under the Apache License 2.0.
   # Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
   
@@ -301,11 +301,11 @@ timescaledb:
     # in sorted order only once: After a cluster initialization
     # Some examples:
     - configMap:
-        name: custom-init-scripts
-        optional: true
+        name: timescale-post-init
+        optional: false
     - secret:
-        name: custom-secret-scripts
-        optional: true
+        name: timescale-post-init-pw
+        optional: false
   
   loadBalancer:
     # If not enabled, we still expose the primary using a so called Headless Service
@@ -587,7 +587,7 @@ timescaledb:
   # Setting unsafe to true will generate some random credentials. This is meant
   # for development or first evaluation of the Helm Charts. It should *not* be
   # used for anything beyong the evaluation phase.
-  unsafe: true
+  unsafe: false
   
   debug:
     # This setting is mainly for during development, debugging or troubleshooting.
@@ -595,8 +595,14 @@ timescaledb:
     # example below, we can mimick a slow restore by sleeping for 5 minutes before starting
     execStartPre:  # sleep 300
   
-### nodered ###
+### grafana ###
+grafana:
+  enabled: false
+  db_user: "grafana"
+  db_database: "grafana"
+  db_password: "changeme"
 
+### nodered ###
 nodered:
   enabled: false 
   tag: 1.2.9
