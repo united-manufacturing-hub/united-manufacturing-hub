@@ -10,7 +10,7 @@ metadata:
     {{- toYaml .Values.factoryinsight.annotations | nindent 4 }}
   {{- end }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.factoryinsight.replicas }} 
   selector:
     matchLabels:
      {{- include "factorycube-server.labels.factoryinsight" . | nindent 6 }}
@@ -60,7 +60,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: redis-secret 
-                  key: redis-password
+                  key: redispassword
             
             - name: POSTGRES_HOST
               value: {{ .Values.factoryinsight.db_host }}
@@ -74,7 +74,10 @@ spec:
             - name: FACTORYINSIGHT_USER
               value: {{ .Values.factoryinsight.user }}
             - name: FACTORYINSIGHT_PASSWORD
-              value: {{ .Values.factoryinsight.password }} 
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinsight-secret 
+                  key: password
             - name: VERSION
               value: "1"
  

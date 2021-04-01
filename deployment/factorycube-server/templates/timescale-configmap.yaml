@@ -9,11 +9,15 @@ data:
 
     psql -d "$1" <<__SQL__
     
-    CREATE ROLE {{ .Values.grafana.db_user }};
+    CREATE USER {{ .Values.grafana.db_user }};
     CREATE DATABASE {{ .Values.grafana.db_database }} OWNER {{ .Values.grafana.db_user }};
-    
-    CREATE ROLE {{ .Values.factoryinsight.db_user }};
+    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.grafana.db_database }} TO {{ .Values.grafana.db_user }};
+    \c {{ .Values.grafana.db_database }}
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.grafana.db_user }};
+
+    CREATE USER {{ .Values.factoryinsight.db_user }};
     CREATE DATABASE {{ .Values.factoryinsight.db_database }} OWNER {{ .Values.factoryinsight.db_user }};
+    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.factoryinsight.db_database }} TO {{ .Values.factoryinsight.db_user }};
     
     \c {{ .Values.factoryinsight.db_database }}
     
@@ -175,6 +179,7 @@ data:
     -- #74
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
     
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
     
     __SQL__   
 {{- end -}}
