@@ -15,6 +15,10 @@ factoryinsight:
   db_database: "factoryinsight"
   db_user: "factoryinsight"
   db_password: "changeme"
+  redis:
+    URI1: factorycube-server-redis-node-0.factorycube-server-redis-headless:26379
+    URI2: factorycube-server-redis-node-1.factorycube-server-redis-headless:26379
+    URI3: factorycube-server-redis-node-2.factorycube-server-redis-headless:26379
   service:
     annotations: {}
   pdb:
@@ -605,7 +609,7 @@ grafana:
 
 ### nodered ###
 nodered:
-  enabled: false 
+  enabled: true 
   tag: 1.2.9
   port: 1880
   storageRequest: 1Gi

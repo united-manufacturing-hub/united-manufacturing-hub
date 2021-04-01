@@ -51,11 +51,11 @@ spec:
               cpu: {{ .Values.factoryinsight.resources.requests.cpu }}
           env:
             - name: REDIS_URI
-              value: redis-node-0.redis-headless:26379
+              value: {{ .Values.factoryinsight.redis.URI1 }}
             - name: REDIS_URI2
-              value: redis-node-1.redis-headless:26379
+              value: {{ .Values.factoryinsight.redis.URI2 }}
             - name: REDIS_URI3
-              value: redis-node-2.redis-headless:26379
+              value: {{ .Values.factoryinsight.redis.URI3 }}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
