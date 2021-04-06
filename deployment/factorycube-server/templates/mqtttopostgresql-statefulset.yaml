@@ -15,6 +15,8 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql-data
+        finalizers:
+          - kubernetes.io/pvc-protection
       spec:
         accessModes:
           - ReadWriteOnce
@@ -53,19 +55,19 @@ spec:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
           #
             - name: POSTGRES_HOST
-              value: {{ .Values.mqtttopostgresql.db_host }} 
+              value: {{ .Values.factoryinsight.db_host }} 
             - name: POSTGRES_DATABASE
-              value: {{ .Values.mqtttopostgresql.db_database}} 
+              value: {{ .Values.factoryinsight.db_database}} 
             - name: POSTGRES_USER
-              value: {{ .Values.mqtttopostgresql.db_user }} 
+              value: {{ .Values.factoryinsight.db_user }} 
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.mqtttopostgresql.db_password }} 
+              value: {{ .Values.factoryinsight.db_password }} 
             - name: POSTGRES_SSLMODE
-              value: {{ .Values.mqtttopostgresql.db_sslmode }} 
+              value: {{ .Values.factoryinsight.db_sslmode }} 
 
             - name: CERTIFICATE_NAME
               value: NO_CERT
@@ -74,16 +76,16 @@ spec:
               value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
 
             - name: REDIS_URI
-              value: redis-node-0.redis-headless:26379
+              value: {{ .Values.factoryinsight.redis.URI1 }} 
             - name: REDIS_URI2
-              value: redis-node-1.redis-headless:26379
+              value: {{ .Values.factoryinsight.redis.URI2 }} 
             - name: REDIS_URI3
-              value: redis-node-2.redis-headless:26379
+              value: {{ .Values.factoryinsight.redis.URI3 }} 
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: redis-secret 
-                  key: redis-password
+                  key: redispassword
             
             - name: MY_POD_NAME
               valueFrom:

@@ -180,6 +180,7 @@ data:
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
     
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
     
     __SQL__   
 {{- end -}}

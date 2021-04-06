@@ -4,6 +4,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: {{ include "factorycube-server.fullname" . }}-nodered-claim
+  finalizers:
+    - kubernetes.io/pvc-protection
   labels:
     {{- include "factorycube-server.labels.nodered" . | nindent 4 }}
 spec:
