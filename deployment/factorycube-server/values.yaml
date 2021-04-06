@@ -972,7 +972,20 @@ grafana:
   ##     - name: <key>
   ##       valueFrom:
   ##         <value rendered as YAML>
-  envValueFrom: {}
+  envValueFrom:
+    FACTORYINSIGHT_BASEURL:
+        secretKeyRef:
+          name: factoryinsight-secret
+          key: baseURL
+    FACTORYINSIGHT_APIKEY:
+        secretKeyRef:
+          name: factoryinsight-secret
+          key: apiKey 
+    FACTORYINSIGHT_CUSTOMERID:
+        secretKeyRef:
+          name: factoryinsight-secret
+          key: customerID 
+
 
   ## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
   ## This can be useful for auth tokens, etc. Value is templated.
@@ -1045,23 +1058,30 @@ grafana:
   ## Configure grafana datasources
   ## ref: http://docs.grafana.org/administration/provisioning/#datasources
   ##
-  datasources: {}
-  #  datasources.yaml:
-  #    apiVersion: 1
-  #    datasources:
-  #    - name: Prometheus
-  #      type: prometheus
-  #      url: http://prometheus-prometheus-server
-  #      access: proxy
-  #      isDefault: true
-  #    - name: CloudWatch
-  #        type: cloudwatch
-  #        access: proxy
-  #        uid: cloudwatch
-  #        editable: false
-  #        jsonData:
-  #          authType: credentials
-  #          defaultRegion: us-east-1
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      # <string, required> name of the datasource. Required
+      - name: UMH 
+        # <string, required> datasource type. Required
+        type: ia-ia-factoryinsight-datasource
+        # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
+        access: proxy
+        # <int> org id. will default to orgId 1 if not specified
+        orgId: 1
+        # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
+        uid: my_unique_uid
+        jsonData:
+          serverURL: $FACTORYINSIGHT_BASEURL
+          customerId: $FACTORYINSIGHT_CUSTOMERID
+        # <string> json object of data that will be encrypted.
+        secureJsonData:
+          apiKey: $FACTORYINSIGHT_APIKEY
+        version: 1
+        # <bool> allow users to edit datasources from the UI.
+        isDefault: true
+        editable: false
 
   ## Configure notifiers
   ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
