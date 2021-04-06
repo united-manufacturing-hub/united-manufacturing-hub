@@ -9,11 +9,11 @@ data:
 
     psql -d "$1" <<__SQL__
     
-    CREATE USER {{ .Values.grafana.db_user }};
-    CREATE DATABASE {{ .Values.grafana.db_database }} OWNER {{ .Values.grafana.db_user }};
-    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.grafana.db_database }} TO {{ .Values.grafana.db_user }};
-    \c {{ .Values.grafana.db_database }}
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.grafana.db_user }};
+    CREATE USER {{ index .Values "grafana" "grafana.ini" "database" "user" }};
+    CREATE DATABASE {{ index .Values "grafana" "grafana.ini" "database" "name" }} OWNER {{ index .Values "grafana" "grafana.ini" "database" "user" }};
+    GRANT ALL PRIVILEGES ON DATABASE {{ index .Values "grafana" "grafana.ini" "database" "name" }} TO {{ index .Values "grafana" "grafana.ini" "database" "user" }};
+    \c {{ index .Values "grafana" "grafana.ini" "database" "name" }}
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ index .Values "grafana" "grafana.ini" "database" "user" }};
 
     CREATE USER {{ .Values.factoryinsight.db_user }};
     CREATE DATABASE {{ .Values.factoryinsight.db_database }} OWNER {{ .Values.factoryinsight.db_user }};

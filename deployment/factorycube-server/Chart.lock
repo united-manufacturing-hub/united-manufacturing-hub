@@ -6,10 +6,10 @@ dependencies:
   repository: https://vernemq.github.io/docker-vernemq
   version: 1.6.7
 - name: grafana
-  repository: https://charts.bitnami.com/bitnami
-  version: 5.2.7
+  repository: https://grafana.github.io/helm-charts
+  version: 6.7.2
 - name: timescaledb-single
   repository: https://charts.timescale.com
   version: 0.8.2
-digest: sha256:d1c64088bab8e164eba1a318c113465505a08c7939bac3b00ed85f317db92add
-generated: "2021-03-30T09:37:39.455147588Z"
+digest: sha256:0b25273d9009aeb20667266874b4188af0a2571157ca415e307b818a70313dbe
+generated: "2021-04-06T17:38:24.206484985+02:00"
