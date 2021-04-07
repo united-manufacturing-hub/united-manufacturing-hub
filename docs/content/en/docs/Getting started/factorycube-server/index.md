@@ -21,7 +21,9 @@ Everything should be now successfully setup and you can connect your edge device
 
 ## Using it
 
-You can now access Grafana and nodered via HTTP / HTTPS (depending on your setup). Default user for Grafana is admin. You can find the password in the secret TODO. If you are fine with a non-production development setup we recommend that you skip the following part and go directly to [part 3](../connecting-machines-creating-dashboards)
+You can now access Grafana and nodered via HTTP / HTTPS (depending on your setup). Default user for Grafana is admin. You can find the password in the secret RELEASE-NAME-grafana. Grafana is available via port 8080, nodered via 1880. 
+
+If you are fine with a non-production development setup we recommend that you skip the following part and go directly to [part 3](../connecting-machines-creating-dashboards)
 
 ## Notes for production environments
 
