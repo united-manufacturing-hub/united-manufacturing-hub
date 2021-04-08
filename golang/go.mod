@@ -15,7 +15,7 @@ require (
 	github.com/lib/pq v1.10.0
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/prometheus/client_golang v1.9.0
+	github.com/prometheus/client_golang v1.10.0
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	go.uber.org/zap v1.16.0
