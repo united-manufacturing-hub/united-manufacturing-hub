@@ -6,7 +6,7 @@ require (
 	github.com/Bose/go-gin-opentracing v1.0.5
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 	github.com/beeker1121/goque v2.1.0+incompatible
-	github.com/eclipse/paho.mqtt.golang v1.3.2
+	github.com/eclipse/paho.mqtt.golang v1.3.3
 	github.com/gin-contrib/zap v0.0.1
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-redis/redis/v8 v8.8.0
