@@ -29,8 +29,8 @@ The idea behind machineconnect is to protect the PLC and all components with an 
 3. Clip system to the DIN Rail
 4. Connect with 24V power supply
 5. Connect Ethernet 1 with WAN / Internet
-6. Connect Ethernet 2 with local switch (if existing). This connection will be called from now on "LAN".
-7. (optional, see [connection to PLC](#connection-to-the-plc). If skipped please connect the PLC to Ethernet 2) Connect Ethernet 3 with PLC. This connection will be called from now on "PLC network". 
+6. Connect Ethernet 3 with local switch (if existing). This connection will be called from now on "LAN".
+7. (optional, see [connection to PLC](#connection-to-the-plc). If skipped please connect the PLC to Ethernet 3) Connect Ethernet 2 with PLC. This connection will be called from now on "PLC network". 
 
 Verify the installation by turning on the power supply and checking whether all Ethernet LEDs are blinking.
 
