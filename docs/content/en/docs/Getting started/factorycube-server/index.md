@@ -13,6 +13,8 @@ description: >
 
 ## Installation steps
 
+Please check out the notes for [using it in development installations](#notes-for-development-installations) and for [using it in production environments](#notes-for-production-environments)
+
 1. Clone repository (in the future: add helm repo)
 2. Configure values.yaml according to your needs. For help in configuring you can take a look into the respective documentation of the subcharts ([Grafana](https://github.com/grafana/helm-charts), [redis](https://github.com/bitnami/charts/tree/master/bitnami/redis), [timescaleDB](https://github.com/timescale/timescaledb-kubernetes/tree/master/charts/timescaledb-single), [verneMQ](https://github.com/vernemq/docker-vernemq/tree/master/helm/vernemq)) or into the documentation of the subcomponents ([factoryinsight](../../developers/factorycube-server/factoryinsight), [mqtt-to-postgresql](../../developers/factorycube-server/mqtt-to-postgresql))
 3. Execute `helm install factorycube-server .` and wait. Helm will automatically install the entire stack across multiple node. It can take up to several minutes until everything is setup. 
@@ -24,6 +26,17 @@ Everything should be now successfully setup and you can connect your edge device
 You can now access Grafana and nodered via HTTP / HTTPS (depending on your setup). Default user for Grafana is admin. You can find the password in the secret RELEASE-NAME-grafana. Grafana is available via port 8080, nodered via 1880. 
 
 If you are fine with a non-production development setup we recommend that you skip the following part and go directly to [part 3](../connecting-machines-creating-dashboards)
+
+## Notes for development installations
+
+When installing factorycube-server on the same edge device as factorycube-edge we recommend the following adjustments:
+
+1. Install factorycube-edge according to [Getting Started part 1](../factorycube-edge)
+    - Install it in a namespace called `factorycube-edge` with `kubectl create namespace factorycube-edge` and `helm install ... -n factorycube-edge`. 
+    - When setting up the certificates use the certificates in `factorycube-server/developmentCertificates/pki/` and then `ca.crt`, `issued/TESTING.crt` and `issued/private/TESTING.key`. 
+    - Additionally use as `mqttBridgeURL` `ssl://factorycube-server-vernemq-local-service.factorycube-server:8883`. 
+    - You can also use the following example [`development_values.yaml`](/examples/factorycube-server/development_values.yaml). However, you still need to adjust the iprange from sensorconnect in case you want to use it.
+2.
 
 ## Notes for production environments
 

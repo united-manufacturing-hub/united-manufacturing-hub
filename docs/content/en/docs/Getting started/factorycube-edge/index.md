@@ -17,15 +17,17 @@ Recommended for small deployments
 ### Steps
 
 1. Install k3os and helm on your edge device
-2. Copy the helm chart to the folder `/home/rancher/factorycube-core` (you can use other folders as well, but please adjust the folder name in the following code snippets)
-3. Configure `factorycube-core` by creating a values.yaml file in the folder `/home/rancher/configs/factorycube-core-helm-values.yaml`, which you use to override values. Required: `mqttBridgeURL`, `mqttBridgeTopic`, `sensorconnect.iprange`, `mqttBridgeCACert`, `mqttBridgeCert`, `mqttBridgePrivkey`
-4. Execute `helm install factorycube-core /home/rancher/factorycube-core --values "/home/rancher/configs/factorycube-core-helm-values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml` (change kubeconfig and serialNumber accordingly)
+2. Copy the helm chart to the folder `/home/rancher/factorycube-edge` (you can use other folders as well, but please adjust the folder name in the following code snippets)
+3. Configure `factorycube-edge` by creating a values.yaml file in the folder `/home/rancher/configs/factorycube-edge-helm-values.yaml`, which you use to override values. Required: `mqttBridgeURL`, `mqttBridgeTopic`, `sensorconnect.iprange`, `mqttBridgeCACert`, `mqttBridgeCert`, `mqttBridgePrivkey`
+4. Execute `helm install factorycube-edge /home/rancher/factorycube-edge --values "/home/rancher/configs/factorycube-edge-helm-values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml` (change kubeconfig and serialNumber accordingly)
+
+Please always use `factorycube-edge` as name for the release. Unfortunately, there are still some bugs with other names.
 
 ### Usage
 
 You can now log into the device using the SSH keys you specified in the config file. You can get the kubeconfig with `cat /etc/rancher/k3s/k3s.yaml`.
 
-## Method 2: using factorycube-core-deployment
+## Method 2: using factorycube-edge-deployment
 Recommended for large deployments. Enterprise only.
 
 ### Prerequisites

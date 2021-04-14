@@ -3,9 +3,9 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: {{ include "factorycube-core.fullname" . }}-nodered-claim
+  name: {{ include "factorycube-edge.fullname" . }}-nodered-claim
   labels:
-    {{- include "factorycube-core.labels.nodered" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.nodered" . | nindent 4 }}
 spec:
   accessModes:
   - ReadWriteOnce

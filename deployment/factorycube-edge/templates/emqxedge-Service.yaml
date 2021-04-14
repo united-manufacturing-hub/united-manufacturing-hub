@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-core.fullname" . }}-emqxedge-service
+  name: {{ include "factorycube-edge.fullname" . }}-emqxedge-service
   labels:
-    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}
   {{- if .Values.emqxedge.service.annotations }}
   annotations:
 {{ toYaml .Values.emqxedge.service.annotations | indent 4 }}
@@ -74,15 +74,15 @@ spec:
     nodePort: null
     {{- end }}
   selector:
-    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-core.fullname" . }}-emqxedge-headless
+  name: {{ include "factorycube-edge.fullname" . }}-emqxedge-headless
   labels:
-    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}
 spec:
   type: ClusterIP
   sessionAffinity: None
@@ -117,4 +117,4 @@ spec:
     protocol: TCP
     targetPort: ekka
   selector:
-    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}

@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-core.fullname" . }}-emqxedge
+  name: {{ include "factorycube-edge.fullname" . }}-emqxedge
   labels:
-    {{- include "factorycube-core.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}
 spec:
-  serviceName: {{ include "factorycube-core.fullname" . }}-emqxedge-headless
+  serviceName: {{ include "factorycube-edge.fullname" . }}-emqxedge-headless
   {{- if and .Values.emqxedge.persistence.enabled (not .Values.emqxedge.persistence.existingClaim) }}
   volumeClaimTemplates:
     - metadata:
-        name: {{ include "factorycube-core.fullname" . }}-emqxedge-data
+        name: {{ include "factorycube-edge.fullname" . }}-emqxedge-data
         labels:
-          {{- include "factorycube-core.labels.emqxedge" . | nindent 10 }}
+          {{- include "factorycube-edge.labels.emqxedge" . | nindent 10 }}
         annotations:
         {{- if .Values.emqxedge.persistence.storageClass }}
           volume.beta.kubernetes.io/storage-class: {{ .Values.emqxedge.persistence.storageClass | quote }}
@@ -30,30 +30,30 @@ spec:
   replicas: {{ .Values.emqxedge.replicaCount }}
   selector:
     matchLabels:
-      {{- include "factorycube-core.labels.emqxedge" . | nindent 6 }}
+      {{- include "factorycube-edge.labels.emqxedge" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "factorycube-core.labels.emqxedge" . | nindent 8 }}
+        {{- include "factorycube-edge.labels.emqxedge" . | nindent 8 }}
     spec:
       volumes:
-      - name: {{ include "factorycube-core.fullname" . }}-emqxedge-acl
+      - name: {{ include "factorycube-edge.fullname" . }}-emqxedge-acl
         configMap:
-          name: {{ include "factorycube-core.fullname" . }}-emqxedge-acl
+          name: {{ include "factorycube-edge.fullname" . }}-emqxedge-acl
           items:
           - key: acl.conf
             path: acl.conf
       {{- if not .Values.emqxedge.persistence.enabled }}
-      - name: {{ include "factorycube-core.fullname" . }}-emqxedge-data
+      - name: {{ include "factorycube-edge.fullname" . }}-emqxedge-data
         emptyDir: {}
       {{- else if .Values.emqxedge.persistence.existingClaim }}
-      - name: {{ include "factorycube-core.fullname" . }}-emqxedge-data
+      - name: {{ include "factorycube-edge.fullname" . }}-emqxedge-data
         persistentVolumeClaim:
         {{- with .Values.emqxedge.persistence.existingClaim }}
           claimName: {{ tpl . $ }}
         {{- end }}
       {{- end }}
-      serviceAccountName:  {{ include "factorycube-core.fullname" . }}-emqxedge-serviceaccount
+      serviceAccountName:  {{ include "factorycube-edge.fullname" . }}-emqxedge-serviceaccount
       securityContext:
         fsGroup: 1000
       {{- if .Values.emqxedge.initContainers }}
@@ -61,7 +61,7 @@ spec:
 {{ toYaml .Values.emqxedge.initContainers | indent 8 }}
       {{- end }}
       containers:
-        - name: {{ include "factorycube-core.fullname" . }}-emqxedge
+        - name: {{ include "factorycube-edge.fullname" . }}-emqxedge
           image: "{{ .Values.emqxedge.image.repository }}:{{ .Values.emqxedge.image.tag }}"
           imagePullPolicy: {{ .Values.emqxedge.image.pullPolicy }}
           {{- if .Values.emqxedge.image.pullSecrets }}
@@ -87,7 +87,7 @@ spec:
             containerPort: 4370
           envFrom:
             - configMapRef:
-                name: {{ include "factorycube-core.fullname" . }}-emqxedge-env
+                name: {{ include "factorycube-edge.fullname" . }}-emqxedge-env
           env:
           - name: EMQX_NAME
             value: {{ .Values.serialNumber }}
@@ -96,15 +96,15 @@ spec:
           - name: EMQX_CLUSTER__DISCOVERY
             value: k8s 
           - name: EMQX_CLUSTER__K8S__SERVICE_NAME
-            value: {{ include "factorycube-core.fullname" . }}-emqxedge-headless
+            value: {{ include "factorycube-edge.fullname" . }}-emqxedge-headless
           - name: EMQX_CLUSTER__K8S__NAMESPACE
-            value: default
+            value: {{ .Release.Namespace }}
           resources:
 {{ toYaml .Values.emqxedge.resources | indent 12 }}
           volumeMounts:
-          - name: {{ include "factorycube-core.fullname" . }}-emqxedge-data
+          - name: {{ include "factorycube-edge.fullname" . }}-emqxedge-data
             mountPath: "/opt/emqx/data/mnesia"
-          - name: {{ include "factorycube-core.fullname" . }}-emqxedge-acl
+          - name: {{ include "factorycube-edge.fullname" . }}-emqxedge-acl
             mountPath: "/opt/emqx/etc/acl.conf"
             subPath: "acl.conf"
           readinessProbe:

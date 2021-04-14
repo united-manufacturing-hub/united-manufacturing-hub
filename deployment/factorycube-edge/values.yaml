@@ -30,7 +30,7 @@ barcodereader:
   enabled: true
   tag: latest 
   customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
-  brokerURL: "factorycube-core-emqxedge-headless" # do not change, points to emqxedge i
+  brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
   customerID: "raw"
   location: "barcodereader"
@@ -42,7 +42,7 @@ sensorconnect:
   enabled: true
   tag: latest
   iprange: "ENTER_IP_RANGE" #e.g. 172.21.9.0/24
-  brokerURL: "factorycube-core-emqxedge-headless" # do not change, points to emqxedge i
+  brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
 
 ### nodered ###

@@ -3,27 +3,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-core.fullname" . }}-sensorconnect
+  name: {{ include "factorycube-edge.fullname" . }}-sensorconnect
   labels:
-    {{- include "factorycube-core.labels.sensorconnect" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.sensorconnect" . | nindent 4 }}
     app.kubernetes.io/component: "sensorconnect"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-core.labels.sensorconnect" . | nindent 6 }}
+      {{- include "factorycube-edge.labels.sensorconnect" . | nindent 6 }}
       app.kubernetes.io/component: "sensorconnect"
   strategy:  
     type: RollingUpdate
   template:
     metadata:
       labels:
-        {{- include "factorycube-core.labels.sensorconnect" . | nindent 8 }}
+        {{- include "factorycube-edge.labels.sensorconnect" . | nindent 8 }}
         app.kubernetes.io/component: "sensorconnect"
     spec:
       containers:
         - image: unitedmanufacturinghub/sensorconnect:{{ .Values.sensorconnect.tag }}
-          name: {{ include "factorycube-core.fullname" . }}-sensorconnect
+          name: {{ include "factorycube-edge.fullname" . }}-sensorconnect
           env:
             - name: PYTHONUNBUFFERED
               value: "0"
@@ -36,7 +36,7 @@ spec:
             - name: IP_RANGE
               value: {{ .Values.sensorconnect.iprange | quote }}
 
-      serviceAccountName: {{ include "factorycube-core.serviceAccountName" . }}
+      serviceAccountName: {{ include "factorycube-edge.serviceAccountName" . }}
       restartPolicy: Always
 
 {{- end }}

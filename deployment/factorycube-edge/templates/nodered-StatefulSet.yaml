@@ -3,26 +3,26 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-core.fullname" . }}-nodered
+  name: {{ include "factorycube-edge.fullname" . }}-nodered
   labels:
-    {{- include "factorycube-core.labels.nodered" . | nindent 4 }}
+    {{- include "factorycube-edge.labels.nodered" . | nindent 4 }}
 spec:
-  serviceName: {{ include "factorycube-core.fullname" . }}-nodered
+  serviceName: {{ include "factorycube-edge.fullname" . }}-nodered
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-core.labels.nodered" . | nindent 6 }}
+      {{- include "factorycube-edge.labels.nodered" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "factorycube-core.labels.nodered" . | nindent 8 }}
+        {{- include "factorycube-edge.labels.nodered" . | nindent 8 }}
     spec:
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
       containers:
-      - name: {{ include "factorycube-core.fullname" . }}-nodered
+      - name: {{ include "factorycube-edge.fullname" . }}-nodered
         image: nodered/node-red:{{ .Values.nodered.tag }}
         ports:
         - containerPort: 1880
@@ -38,9 +38,9 @@ spec:
         securityContext:
           runAsUser: 1000
         volumeMounts:
-        - name: {{ include "factorycube-core.fullname" . }}-nodered-data
+        - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
           mountPath: /data
-        - name: {{ include "factorycube-core.fullname" . }}-nodered-config
+        - name: {{ include "factorycube-edge.fullname" . }}-nodered-config
           mountPath: /data/settings.js
           subPath: nodered-config 
           readOnly: true  
@@ -48,11 +48,11 @@ spec:
         - name: TZ
           value: {{ .Values.nodered.timezone }}
       volumes:
-      - name: {{ include "factorycube-core.fullname" . }}-nodered-data
+      - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
         persistentVolumeClaim:
-          claimName: {{ include "factorycube-core.fullname" . }}-nodered-claim
-      - name: {{ include "factorycube-core.fullname" . }}-nodered-config 
+          claimName: {{ include "factorycube-edge.fullname" . }}-nodered-claim
+      - name: {{ include "factorycube-edge.fullname" . }}-nodered-config 
         configMap:
-          name: {{ include "factorycube-core.fullname" . }}-nodered-config 
+          name: {{ include "factorycube-edge.fullname" . }}-nodered-config 
 
 {{- end }}
