@@ -36,7 +36,7 @@ When installing factorycube-server on the same edge device as factorycube-edge w
     - When setting up the certificates use the certificates in `factorycube-server/developmentCertificates/pki/` and then `ca.crt`, `issued/TESTING.crt` and `issued/private/TESTING.key`. 
     - Additionally use as `mqttBridgeURL` `ssl://factorycube-server-vernemq-local-service.factorycube-server:8883`. 
     - You can also use the following example [`development_values.yaml`](/examples/factorycube-server/development_values.yaml). However, you still need to adjust the iprange from sensorconnect in case you want to use it.
-2.
+2. Install `factorycube-server` in the namespace `factorycube-server` (see also 1.)
 
 ## Notes for production environments
 

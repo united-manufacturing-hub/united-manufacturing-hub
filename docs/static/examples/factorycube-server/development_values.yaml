@@ -1,7 +1,7 @@
 serialNumber: prototypv1
 
 mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"
-mqttBridgeTopic: "ia/ia"
+mqttBridgeTopic: "ia/factoryinsight"
 
 sensorconnect:
   iprange: "172.21.21.0/24"
