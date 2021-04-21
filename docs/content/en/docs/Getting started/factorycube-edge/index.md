@@ -16,12 +16,31 @@ Recommended for small deployments
 
 ### Steps
 
-1. Install k3os and helm on your edge device
-2. Copy the helm chart to the folder `/home/rancher/factorycube-edge` (you can use other folders as well, but please adjust the folder name in the following code snippets)
-3. Configure `factorycube-edge` by creating a values.yaml file in the folder `/home/rancher/configs/factorycube-edge-helm-values.yaml`, which you use to override values. Required: `mqttBridgeURL`, `mqttBridgeTopic`, `sensorconnect.iprange`, `mqttBridgeCACert`, `mqttBridgeCert`, `mqttBridgePrivkey`
-4. Execute `helm install factorycube-edge /home/rancher/factorycube-edge --values "/home/rancher/configs/factorycube-edge-helm-values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml` (change kubeconfig and serialNumber accordingly)
+1. Install k3os on your edge device
+2. Install Helm on your edge device
+```
+export VERIFY_CHECKSUM=false 
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 
+chmod 700 get_helm.sh && ./get_helm.sh
+```
+3. Copy the content of `united-manufacturing-hub/deployment/factorycube-core/` of our GitHub repo repo into the folder of your edge device `/home/rancher/factorycube-core` (you can use other folders as well, but please adjust the folder name in the following code snippets)
+4. Configure `factorycube-core` by creating a `factorycube-core-helm-values.yaml` file in the folder `/home/rancher/configs/factorycube-core-helm-values.yaml`, which you use to override values. Required: `mqttBridgeURL`, `mqttBridgeTopic`, `sensorconnect.iprange`, `mqttBridgeCACert`, `mqttBridgeCert`, `mqttBridgePrivkey`
 
-Please always use `factorycube-edge` as name for the release. Unfortunately, there are still some bugs with other names.
+Example for factorycube-core-helm-values.yaml:
+```
+mqttBridgeURL: "ssl://mqtt.umh.app:8883"
+mqttBridgeTopic: "ia/ia"
+sensorconnect:
+  iprange: "172.16.1.0/24"
+mqttBridgeCACert: |
+  ENTER CERT HERE
+mqttBridgeCert: |
+  ENTER CERT HERE
+mqttBridgePrivkey: |
+  ENTER CERT HERE
+```
+
+5. Execute `helm install factorycube-core /home/rancher/factorycube-core --values "/home/rancher/configs/factorycube-core-helm-values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml` (change kubeconfig and serialNumber accordingly)
 
 ### Usage
 

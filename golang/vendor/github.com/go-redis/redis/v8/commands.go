@@ -124,6 +124,7 @@ type Cmdable interface {
 	MSet(ctx context.Context, values ...interface{}) *StatusCmd
 	MSetNX(ctx context.Context, values ...interface{}) *BoolCmd
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *StatusCmd
+	SetArgs(ctx context.Context, key string, value interface{}, a SetArgs) *StatusCmd
 	SetEX(ctx context.Context, key string, value interface{}, expiration time.Duration) *StatusCmd
 	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *BoolCmd
 	SetXX(ctx context.Context, key string, value interface{}, expiration time.Duration) *BoolCmd
@@ -241,6 +242,7 @@ type Cmdable interface {
 	ZLexCount(ctx context.Context, key, min, max string) *IntCmd
 	ZIncrBy(ctx context.Context, key string, increment float64, member string) *FloatCmd
 	ZInterStore(ctx context.Context, destination string, store *ZStore) *IntCmd
+	ZMScore(ctx context.Context, key string, members ...string) *FloatSliceCmd
 	ZPopMax(ctx context.Context, key string, count ...int64) *ZSliceCmd
 	ZPopMin(ctx context.Context, key string, count ...int64) *ZSliceCmd
 	ZRange(ctx context.Context, key string, start, stop int64) *StringSliceCmd
@@ -1987,12 +1989,10 @@ func (c cmdable) ZIncrBy(ctx context.Context, key string, increment float64, mem
 }
 
 func (c cmdable) ZInterStore(ctx context.Context, destination string, store *ZStore) *IntCmd {
-	args := make([]interface{}, 3+len(store.Keys))
-	args[0] = "zinterstore"
-	args[1] = destination
-	args[2] = len(store.Keys)
-	for i, key := range store.Keys {
-		args[3+i] = key
+	args := make([]interface{}, 0, 3+len(store.Keys))
+	args = append(args, "zinterstore", destination, len(store.Keys))
+	for _, key := range store.Keys {
+		args = append(args, key)
 	}
 	if len(store.Weights) > 0 {
 		args = append(args, "weights")
@@ -2005,6 +2005,18 @@ func (c cmdable) ZInterStore(ctx context.Context, destination string, store *ZSt
 	}
 	cmd := NewIntCmd(ctx, args...)
 	cmd.setFirstKeyPos(3)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+func (c cmdable) ZMScore(ctx context.Context, key string, members ...string) *FloatSliceCmd {
+	args := make([]interface{}, 2+len(members))
+	args[0] = "zmscore"
+	args[1] = key
+	for i, member := range members {
+		args[2+i] = member
+	}
+	cmd := NewFloatSliceCmd(ctx, args...)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -2223,12 +2235,10 @@ func (c cmdable) ZScore(ctx context.Context, key, member string) *FloatCmd {
 }
 
 func (c cmdable) ZUnionStore(ctx context.Context, dest string, store *ZStore) *IntCmd {
-	args := make([]interface{}, 3+len(store.Keys))
-	args[0] = "zunionstore"
-	args[1] = dest
-	args[2] = len(store.Keys)
-	for i, key := range store.Keys {
-		args[3+i] = key
+	args := make([]interface{}, 0, 3+len(store.Keys))
+	args = append(args, "zunionstore", dest, len(store.Keys))
+	for _, key := range store.Keys {
+		args = append(args, key)
 	}
 	if len(store.Weights) > 0 {
 		args = append(args, "weights")
