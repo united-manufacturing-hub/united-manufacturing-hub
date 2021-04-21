@@ -1,0 +1,17 @@
+
+{{- if .Values.mqttbridge.enabled -}}
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ include "factorycube-edge.fullname" . }}-mqttbridge-claim
+  labels:
+    {{- include "factorycube-edge.labels.mqttbridge" . | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.mqttbridge.storageRequest }}
+
+{{- end }}

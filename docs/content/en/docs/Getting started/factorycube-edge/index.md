@@ -46,7 +46,7 @@ mqttBridgePrivkey: |
 
 You can now log into the device using the SSH keys you specified in the config file. You can get the kubeconfig with `cat /etc/rancher/k3s/k3s.yaml`.
 
-## Method 2: using factorycube-core-deployment
+## Method 2: using factorycube-edge-deployment
 Recommended for large deployments. Enterprise only.
 
 ### Prerequisites

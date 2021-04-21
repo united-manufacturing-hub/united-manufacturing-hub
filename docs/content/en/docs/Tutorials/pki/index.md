@@ -24,7 +24,7 @@ Setup basic PKI infrastructure with `/usr/share/easy-rsa/easyrsa init-pki`
 
 Copy the default configuration file with `cp /usr/share/easy-rsa/vars.example pki/vars` and edit it to your liking (e.g. adjust EASYRSA_REQ_... and CA and cert validity)
 
-Build the CA using `/usr/share/easy-rsa/easyrsa build-ca`
+Build the CA using `/usr/share/easy-rsa/easyrsa build-ca nopass`
 
 Create the server certificate by using the following commands (exchange mqtt.umh.app with your domain!):
 ```bash
@@ -35,8 +35,8 @@ Copy the private key `pki/private/mqtt.umh.app.key` and the public certificate `
 
 ## Adding new clients
 
-Create new clients with following commands (remember to change TESTING_JT with the planned MQTT client id):
+Create new clients with following commands (remember to change TESTING with the planned MQTT client id):
 ```bash
-./easyrsa gen-req TESTING_JT
-./easyrsa sign-req client TESTING_JT
+./easyrsa gen-req TESTING nopass
+./easyrsa sign-req client TESTING
 ```
