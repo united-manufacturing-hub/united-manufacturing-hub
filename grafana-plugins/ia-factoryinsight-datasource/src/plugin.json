@@ -1,0 +1,56 @@
+{
+  "type": "datasource",
+  "name": "ia-factoryinsight-datasource",
+  "id": "ia-ia-factoryinsight-datasource",
+  "metrics": true,
+  "info": {
+    "description": "Datasource plugin to retrieve JSON messages from a REST API. Based on the \"simple-json-datasource\" plugin for Grafana and the previous work by Jeremy Theocharis.",
+    "author": {
+      "name": "Ricardo Vega Ayora",
+      "url": ""
+    },
+    "keywords": [
+      "JSON",
+      "REST",
+      "ia",
+      "industrial",
+      "analytics"
+    ],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "Website",
+        "url": "https://github.com/grafana/simple-datasource"
+      },
+      {
+        "name": "License",
+        "url": "https://github.com/grafana/simple-datasource/blob/master/LICENSE"
+      }
+    ],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaVersion": "6.5.x",
+    "plugins": []
+  },
+  "routes": [
+    {
+      "path": "factoryinsight",
+      "url": "{{ .JsonData.serverURL }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "content": "{{ .SecureJsonData.apiKey }}"
+        },{
+          "name": "Content-Type",
+          "content": "application/json"
+        }
+      ]
+    }
+  ]
+}

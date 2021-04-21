@@ -1,0 +1,48 @@
+{{- if .Values.barcodereader.enabled -}}
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "factorycube-edge.fullname" . }}-barcodereader
+  labels:
+    {{- include "factorycube-edge.labels.barcodereader" . | nindent 4 }}
+spec:
+  serviceName: {{ include "factorycube-edge.fullname" . }}-barcodereader
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "factorycube-edge.labels.barcodereader" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "factorycube-edge.labels.barcodereader" . | nindent 8 }}
+    spec:
+      containers:
+      - name: {{ include "factorycube-edge.fullname" . }}-barcodereader
+        image: unitedmanufacturinghub/barcodereader:{{ .Values.barcodereader.tag }}
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: dev
+          mountPath: /dev/ 
+        env:
+        - name: CUSTOM_USB_NAME 
+          value: {{ .Values.barcodereader.customUSBName }}
+        - name: MQTT_CLIENT_ID 
+          value: {{ .Values.serialNumber }}-barcodereader
+        - name: BROKER_URL
+          value: {{ .Values.barcodereader.brokerURL }}
+        - name: BROKER_PORT
+          value: {{ .Values.barcodereader.brokerPort | quote }}
+        - name: CUSTOMER_ID 
+          value: {{ .Values.barcodereader.customerID }}
+        - name: LOCATION 
+          value: {{ .Values.barcodereader.location }}
+        - name: MACHINE_ID 
+          value: {{ .Values.barcodereader.machineID }}
+      
+      volumes:
+      - name: dev
+        hostPath:
+          path: /dev/
+{{- end }}
