@@ -1,0 +1,21 @@
+version: "3"
+services:
+    # Dashboard
+    grafana:
+      image: grafana/grafana:latest
+      container_name: grafana
+      restart: always
+      ports: 
+        - 3000:3000
+      logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+      volumes:
+        - './ia-factoryinsight-plugin:/var/lib/grafana/plugins/ia-factoryinsight-plugin'
+      environment:
+        - GF_SECURITY_ADMIN_USER=admin
+        - GF_SECURITY_ADMIN_PASSWORD=admin
+        - GF_LOG_MODE=console
+        - GF_SERVER_PROTOCOL=http

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-configmap
+binaryData:
+    plugin.zip: 
+        {{ .Files.Get "grafanaDatasource/plugin.zip" | b64enc }}

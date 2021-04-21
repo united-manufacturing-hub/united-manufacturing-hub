@@ -1,0 +1,15 @@
+dependencies:
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 12.7.3
+- name: vernemq
+  repository: https://vernemq.github.io/docker-vernemq
+  version: 1.6.7
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 6.7.2
+- name: timescaledb-single
+  repository: https://charts.timescale.com
+  version: 0.8.2
+digest: sha256:0b25273d9009aeb20667266874b4188af0a2571157ca415e307b818a70313dbe
+generated: "2021-04-06T17:38:24.206484985+02:00"
