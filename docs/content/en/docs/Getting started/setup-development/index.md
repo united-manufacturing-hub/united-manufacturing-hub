@@ -43,7 +43,7 @@ chmod 700 get_helm.sh && ./get_helm.sh
 ```
 5. Clone or copy the content of the [united-manufacturing-hub repository on Github](https://github.com/united-manufacturing-hub/united-manufacturing-hub) into the home folder (`/home/rancher/united-manufacturing-hub`).
 6. Execute `cat /etc/rancher/k3s/k3s.yaml` to retrieve the secrets to connect to your Kubernetes cluster
-7. Paste the file into Lens when adding a new cluster and adjust the IP 127.0.0.1 with the IP you got at the end of the k3OS step. You should now see the cluster in Lens.
+7. Paste the file into Lens when adding a new cluster and adjust the IP 127.0.0.1 (only change the IP address. The port, the numbers after the colon, remain the same). You should now see the cluster in Lens.
 8. Create two namespaces in your Kubernetes cluster called `factorycube-edge` and `factorycube-server` by executing the following command:
 ```bash
 kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server
@@ -56,7 +56,7 @@ Warning: in production you should use your own certificates and not the ones pro
 1. Go into the folder `/home/rancher/united-manufacturing-hub/deployment/factorycube-edge`
 2. Create a new file called `development_values.yaml` using `touch development_values.yaml`
 3. Copy the following content to that file or use the following example [`development_values.yaml`](/examples/factorycube-server/development_values.yaml). 
-4. (only if you did not use example file) Copy the certificates in `deplotment/factorycube-server/developmentCertificates/pki/` and then `ca.crt`, `issued/TESTING.crt` and `issued/private/TESTING.key` into `development_values.yaml`. Additionally use as `mqttBridgeURL` `ssl://factorycube-server-vernemq-local-service.factorycube-server:8883`. 
+4. **(Only if you did not use example file)** Copy the certificates in `deplotment/factorycube-server/developmentCertificates/pki/` and then `ca.crt`, `issued/TESTING.crt` and `issued/private/TESTING.key` into `development_values.yaml`. Additionally use as `mqttBridgeURL` `ssl://factorycube-server-vernemq-local-service.factorycube-server:8883`. 
 5. Adjust `iprange` to your network IP range
 
 Example for `development_values.yaml`:
@@ -73,15 +73,14 @@ mqttBridgePrivkey: |
   ENTER CERT HERE
 ```
 
-6. Execute `helm install factorycube-edge /home/rancher/united-manufacturing-hub/deployment-factorycube-edge --values "/home/rancher/united-manufacturing-hub/deployment/development_values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml` (change kubeconfig and serialNumber accordingly)
+6. Execute `helm install factorycube-edge /home/rancher/united-manufacturing-hub/deployment/factorycube-edge --values "/home/rancher/united-manufacturing-hub/deployment/factorycube-edge/development_values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml  -n factorycube-edge` (change kubeconfig and serialNumber accordingly) (Please pay attention to the correct path. The path may be /home/rancher/united-manufacturing-hub-main ... or similar)
 
 ### Install factorycube-server
 
 Warning: in production this should be installed on a seperate device / in the cloud to ensure High Availability and provide automated backups. 
 
-1. Go to the folder `deployment/factorycube-server`
-2. Configure values.yaml according to your needs. For the development version you do not need to do anything. For help in configuring you can take a look into the respective documentation of the subcharts ([Grafana](https://github.com/grafana/helm-charts), [redis](https://github.com/bitnami/charts/tree/master/bitnami/redis), [timescaleDB](https://github.com/timescale/timescaledb-kubernetes/tree/master/charts/timescaledb-single), [verneMQ](https://github.com/vernemq/docker-vernemq/tree/master/helm/vernemq)) or into the documentation of the subcomponents ([factoryinsight](../../developers/factorycube-server/factoryinsight), [mqtt-to-postgresql](../../developers/factorycube-server/mqtt-to-postgresql))
-3. Execute `helm install factorycube-server . --kubeconfig /etc/rancher/k3s/k3s.yaml` and wait. Helm will automatically install the entire stack across multiple node. It can take up to several minutes until everything is setup. 
+1. Configure values.yaml according to your needs. For the development version you do not need to do anything. For help in configuring you can take a look into the respective documentation of the subcharts ([Grafana](https://github.com/grafana/helm-charts), [redis](https://github.com/bitnami/charts/tree/master/bitnami/redis), [timescaleDB](https://github.com/timescale/timescaledb-kubernetes/tree/master/charts/timescaledb-single), [verneMQ](https://github.com/vernemq/docker-vernemq/tree/master/helm/vernemq)) or into the documentation of the subcomponents ([factoryinsight](../../developers/factorycube-server/factoryinsight), [mqtt-to-postgresql](../../developers/factorycube-server/mqtt-to-postgresql))
+2. Execute `helm install factorycube-server /home/rancher/united-manufacturing-hub/deployment/factorycube-server --values "/home/rancher/united-manufacturing-hub/deployment/factorycube-server/values.yaml" --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server` and wait. Helm will automatically install the entire stack across multiple node. It can take up to several minutes until everything is setup. (Please pay attention to the correct path. The path may be /home/rancher/united-manufacturing-hub-main ... or similar)
 
 Everything should be now successfully setup and you can connect your edge devices and start creating dashboards! **Keep in mind**: the default development_values.yaml should only be used for development environments and never for production. See also notes below.
 
