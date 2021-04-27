@@ -1,4 +1,4 @@
-baseURL = "/"
+baseURL = "https://docs.umh.app/"
 title = "United Manufacturing Hub"
 
 enableRobotsTXT = true
