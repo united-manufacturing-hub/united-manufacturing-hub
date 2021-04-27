@@ -112,7 +112,7 @@ All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See 
 <!-- CONTACT -->
 ## Contact
 
-[United Factory Systems GmbH](https://www.united-manufacturing-hub.com)
+[UMH Systems GmbH](https://www.umh.app)
 
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
@@ -121,5 +121,5 @@ All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See 
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[Website]: https://www.united-manufacturing-hub.com
-[Documentation]: https://docs.umh.app 
+[Website]: https://www.umh.app
+[Documentation]: https://docs.umh.app/docs/ 
