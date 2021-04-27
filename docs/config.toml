@@ -54,7 +54,7 @@ anchor = "smart"
 [languages]
 [languages.en]
 title = "United Manufacturing Hub"
-description = "The open source manufacturing system"
+description = "The documentation for the United Manufacturing Hub - the Open Source Manufacturing Application Platform"
 languageName ="English"
 # Weight used for sorting.
 weight = 1
@@ -77,7 +77,7 @@ section = ["HTML", "print"]
 
 [params]
 copyright = "UMH Systems GmbH"
-privacy_policy = "https://united-manufacturing-hub.com/data-safety"
+privacy_policy = "https://www.umh.app/data-safety"
 
 # First one is picked as the Twitter card image if not set on page.
 # images = ["images/project-illustration.png"]
