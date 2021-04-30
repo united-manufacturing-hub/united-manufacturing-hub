@@ -64,39 +64,6 @@ More information can be found in the technical documentation of the server helm 
 - Grafana
 - factoryinsight
 
-### Technology
-
-At all of the above-mentioned levels, great importance is attached to the topics of resilience and scalability:
-
-- Only open source projects developed by established companies are used to ensure guaranteed maintainability.
-- All services are based on Docker, which enables shorter development cycles and improved resource utilization.
-- The additional services offered at the server level are managed by Kubernetes software, a technology on which 95% of public cloud providers (Microsoft, Amazon, Google, etc.) also rely.
-
-## Technical approach and details
-
-### Microservice approach
-
-The UMH is based on the [microservices approach](https://en.wikipedia.org/wiki/Microservices) and arranges an application as a collection of loosely coupled services. Each service is a self-contained piece of business functionality with clear interfaces.
-
-### Services and interfaces in the UMH
-
-A service in UMH can either be on the server or the edge device. The interface between all edge and most of the server services is MQTT. The interface between Grafana (or any other BI tool) and factoryinsight is REST.
-
-#### MQTT
-
-Out of the [wikipedia article about MQTT](https://en.wikipedia.org/wiki/MQTT):
-
-> MQTT (originally an acronym for MQ Telemetry Transport) is an lightweight, publish-subscribe network protocol that transports messages between devices. The MQTT protocol defines two types of network entities: a message broker and a number of clients. An MQTT broker is a server that receives all messages from the clients and then routes the messages to the appropriate destination clients. An MQTT client is any device (from a micro controller up to a fully-fledged server) that runs an MQTT library and connects to an MQTT broker over a network.
-
-The protocol MQTT specifies not the actual content of the exchanged MQTT messages. In the UMH stack we specify them further with the [UMH datamodel](../mqtt/)
-
-#### REST / HTTP
-
-Out of the [wikipedia article about REST](https://en.wikipedia.org/wiki/Representational_state_transfer):
-
-> Representational state transfer (REST) is a de-facto standard for a software architecture for interactive applications that typically use multiple Web services. In order to be used in a REST-based application, a Web Service needs to meet certain constraints; such a Web Service is called RESTful. A RESTful Web service is required to provide an application access to its Web resources in a textual representation and support reading and modification of them with a stateless protocol and a predefined set of operations. By being RESTfull, Web Services provide interoperability between the computer systems on the internet that provide these services.
-
-factoryinsight provides a REST / HTTP access to all data stored in the database. [The entire API is well-documented](../developers/factorycube-server/factoryinsight).
 
 ## Practical implications
 
