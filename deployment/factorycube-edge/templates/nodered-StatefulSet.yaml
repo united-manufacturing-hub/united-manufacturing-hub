@@ -54,6 +54,9 @@ spec:
       - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
         persistentVolumeClaim:
           claimName: {{ include "factorycube-edge.fullname" . }}-nodered-claim
+      - name: {{ include "factorycube-edge.fullname" . }}-nodered-flows 
+        configMap:
+          name: {{ include "factorycube-edge.fullname" . }}-nodered-flows 
       - name: {{ include "factorycube-edge.fullname" . }}-nodered-config 
         configMap:
           name: {{ include "factorycube-edge.fullname" . }}-nodered-config 
