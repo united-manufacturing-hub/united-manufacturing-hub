@@ -828,7 +828,7 @@ grafana:
 
   extraInitContainers: 
   - args:
-    - mkdir -p /var/lib/grafana/plugins && cp /grafanaDatasource/plugin.zip /var/lib/grafana && unzip /var/lib/grafana/plugin.zip -d /var/lib/grafana/plugins/
+    - mkdir -p /var/lib/grafana/plugins && cp -u /grafanaDatasource/plugin.zip /var/lib/grafana && unzip -n /var/lib/grafana/plugin.zip -d /var/lib/grafana/plugins/
     command:
     - /bin/sh
     - -c
