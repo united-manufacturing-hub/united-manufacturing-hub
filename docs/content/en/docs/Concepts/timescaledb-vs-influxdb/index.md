@@ -93,7 +93,7 @@ join(
 *Example Flux code for the same SQL code.*
 
 ### Summary
-**n summary, InfluxDB puts unnecessary obstacles in the way of not-so-tech-savvy companies with flux, while PostgreSQL relies on SQL, which just about every programmer knows.**
+**In summary, InfluxDB puts unnecessary obstacles in the way of not-so-tech-savvy companies with flux, while PostgreSQL relies on SQL, which just about every programmer knows.**
 
 *We can also strongly recommend the [blog post by timescaleDB on exactly this topic](https://blog.timescale.com/blog/sql-vs-flux-influxdb-query-language-time-series-database-290977a01a8a/).*
 
