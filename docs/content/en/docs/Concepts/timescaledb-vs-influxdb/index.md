@@ -111,7 +111,7 @@ If you have to run two databases anyway, you can reduce complexity and directly 
 
 ## Not an argument: Performance for time-series data
 
-ften the duel between timescaleDB and InfluxDB is fought on the performance level. Both databases are efficient, and 30% better or worse does not matter if both databases are 10x-100x faster [^timescaledbperformance] than classical relational databases like PostgreSQL or MySQL.
+Often the duel between timescaleDB and InfluxDB is fought on the performance level. Both databases are efficient, and 30% better or worse does not matter if both databases are 10x-100x faster [^timescaledbperformance] than classical relational databases like PostgreSQL or MySQL.
 
 Even if it is not important, there is strong evidence that timescaleDB is actually more performant. Both databases regularly compare their performance against other databases, and InfluxDB never compares itself to timescaleDB. However, timescaleDB has provided [a detailed performance guide of influxDB](https://blog.timescale.com/blog/timescaledb-vs-influxdb-for-time-series-data-timescale-influx-sql-nosql-36489299877/).
  
