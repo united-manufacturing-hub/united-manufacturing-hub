@@ -16,9 +16,6 @@
 
 /**/persistentData/*
 
-# do not include automatically created PDFs 
-docs/**/*.pdf
-
 # ignore certificates
 golang/test/mqtt-to-postgresql/config/certificates/*
 *.pem
