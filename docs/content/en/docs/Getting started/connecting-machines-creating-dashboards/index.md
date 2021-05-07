@@ -1,8 +1,8 @@
 
 ---
-title: "3. Connecting machines and creating dashboards"
-linkTitle: "3. Connecting machines and creating dashboards"
-weight: 3
+title: "2. Connecting machines and creating dashboards"
+linkTitle: "2. Connecting machines and creating dashboards"
+weight: 2
 description: >
   This section explains how the United Manufacturing Hub is used practically 
 ---
