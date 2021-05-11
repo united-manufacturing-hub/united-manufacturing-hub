@@ -21,6 +21,30 @@ spec:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
+      initContainers:
+      - name: {{ include "factorycube-edge.fullname" . }}-nodered-init
+        image: busybox:1.28
+        command: ['sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null']
+        volumeMounts:
+        - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
+          mountPath: /data
+        - name: {{ include "factorycube-edge.fullname" . }}-nodered-flows
+          mountPath: /data/flows.default
+          subPath: nodered-flows 
+      - name: {{ include "factorycube-edge.fullname" . }}-nodered-init-plugin
+        image: node:14
+        command: 
+        - 'sh'
+        - '-c'
+        args:
+        - cd /data;
+          npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
+          npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
+          npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
+          npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
+        volumeMounts:
+        - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
+          mountPath: /data
       containers:
       - name: {{ include "factorycube-edge.fullname" . }}-nodered
         image: nodered/node-red:{{ .Values.nodered.tag }}
@@ -40,9 +64,6 @@ spec:
         volumeMounts:
         - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
           mountPath: /data
-        - name: {{ include "factorycube-edge.fullname" . }}-nodered-flows
-          mountPath: /data/flows.js
-          subPath: nodered-flows 
         - name: {{ include "factorycube-edge.fullname" . }}-nodered-config
           mountPath: /data/settings.js
           subPath: nodered-config 
