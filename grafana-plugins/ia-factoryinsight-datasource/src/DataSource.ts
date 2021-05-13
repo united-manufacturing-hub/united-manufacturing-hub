@@ -157,11 +157,12 @@ export class DataSource extends DataSourceApi<JSONQuery, JSONQueryOptions> {
         url: `${this.baseURL}`,
         method: 'GET',
       })
+      // TODO: Add wrong authentification or server URL wrong messages
       .then((res: any) => {
-        if (res.status !== 200) {
-          testResult.status = 'error';
-          testResult.message = `Wrong response from server: ${res.message}`;
-          testResult.title = `Data source connection error ${res.status}`;
+          if (res.status !== 200) {
+              testResult.status = 'error';
+              testResult.message = `Wrong response from server: ${res.message}`;
+              testResult.title = `Data source connection error ${res.status}`;
         }
       })
       .catch((error: any) => {

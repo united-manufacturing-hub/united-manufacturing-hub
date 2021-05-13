@@ -1,20 +1,18 @@
 {
   "type": "datasource",
-  "name": "ia-factoryinsight-datasource",
+  "name": "united-manufacturing-hub-datasource",
   "id": "ia-ia-factoryinsight-datasource",
   "metrics": true,
   "info": {
-    "description": "Datasource plugin to retrieve JSON messages from a REST API. Based on the \"simple-json-datasource\" plugin for Grafana and the previous work by Jeremy Theocharis.",
+    "description": "Datasource plugin to retrieve JSON messages from a REST API. Based on the \"simple-json-datasource\" plugin for Grafana and the previous work by Ricardo Vega Ayora.",
     "author": {
-      "name": "Ricardo Vega Ayora",
-      "url": ""
+      "name": "UMH Systems GmbH",
+      "url": "https://www.umh.app"
     },
     "keywords": [
       "JSON",
       "REST",
-      "ia",
-      "industrial",
-      "analytics"
+      "United Manufacturing Hub"
     ],
     "logos": {
       "small": "img/logo.svg",
@@ -23,11 +21,7 @@
     "links": [
       {
         "name": "Website",
-        "url": "https://github.com/grafana/simple-datasource"
-      },
-      {
-        "name": "License",
-        "url": "https://github.com/grafana/simple-datasource/blob/master/LICENSE"
+        "url": "https://github.com/united-manufacturing-hub/united-manufacturing-hub"
       }
     ],
     "screenshots": [],

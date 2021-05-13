@@ -1,15 +1,15 @@
 {
-  "name": "ia-ia-factoryinsight-datasource",
-  "version": "1.2.0",
-  "description": "Datasource plugin to retrieve JSON messages from a REST API. Based on the \"simple-json-datasource\" plugin for Grafana and the previous work by Jeremy Theocharis.",
+  "name": "united-manufacturing-hub-datasource",
+  "version": "2.0.0",
+  "description": "Datasource plugin to retrieve JSON messages from a REST API. Based on the \"simple-json-datasource\" plugin for Grafana and the previous work by Ricardo Vega Ayora",
   "scripts": {
     "build": "grafana-toolkit plugin:build",
     "test": "grafana-toolkit plugin:test",
     "dev": "grafana-toolkit plugin:dev",
     "watch": "grafana-toolkit plugin:dev --watch"
   },
-  "author": "Ricardo Vega Ayora",
-  "license": "Apache-2.0",
+  "author": "UMH Systems GmbH",
+  "license": "AGPL v3",
   "devDependencies": {
     "@grafana/data": "7.0.1",
     "@grafana/toolkit": "7.0.1",
