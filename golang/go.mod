@@ -12,7 +12,7 @@ require (
 	github.com/go-redis/redis/v8 v8.8.0
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
-	github.com/lib/pq v1.10.0
+	github.com/lib/pq v1.10.1
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.10.0
