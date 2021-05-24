@@ -22,7 +22,7 @@ github.com/gin-contrib/sse
 # github.com/gin-contrib/zap v0.0.1
 ## explicit
 github.com/gin-contrib/zap
-# github.com/gin-gonic/gin v1.7.1
+# github.com/gin-gonic/gin v1.7.2
 ## explicit
 github.com/gin-gonic/gin
 github.com/gin-gonic/gin/binding

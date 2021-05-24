@@ -8,7 +8,7 @@ require (
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.4
 	github.com/gin-contrib/zap v0.0.1
-	github.com/gin-gonic/gin v1.7.1
+	github.com/gin-gonic/gin v1.7.2
 	github.com/go-redis/redis/v8 v8.8.0
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
