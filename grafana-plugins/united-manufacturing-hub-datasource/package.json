@@ -14,10 +14,11 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@grafana/data": "latest",
-    "@grafana/toolkit": "latest",
     "@grafana/runtime": "latest",
+    "@grafana/toolkit": "latest",
     "@grafana/ui": "latest",
-    "@types/lodash": "latest"
+    "@types/lodash": "latest",
+    "prettier": "2.3.0"
   },
   "resolutions": {
     "rxjs": "6.6.3"

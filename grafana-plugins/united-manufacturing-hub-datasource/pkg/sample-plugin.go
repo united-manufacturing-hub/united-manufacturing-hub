@@ -69,10 +69,11 @@ type queryModel struct {
 	MaxDataPoints   int64  `json:"maxDataPoints"`
 	ParameterString string `json:"parameterString"`
 
-	Location map[string]string `json:"location"`
-	Value    map[string]string `json:"value"`
+	Location map[int32]string `json:"location"`
+	Value    map[int32]string `json:"value"`
 }
-START HERE
+
+// START HERE
 func (td *SampleDatasource) query(ctx context.Context, query backend.DataQuery) backend.DataResponse {
 	// Unmarshal the json into our queryModel
 	var qm queryModel

@@ -22,9 +22,13 @@ export const defaultQuery: Partial<MyQuery> = {
  * These are options configured for each DataSource instance
  */
 export interface MyDataSourceOptions extends DataSourceJsonData {
-  customerId: string;
-  apiPath: string;
+  historicalEnabled: boolean;
   serverURL: string;
+  customerId: string;
+
+  realtimeEnabled: boolean;
+  brokerURI: string;
+  secureConnectionMQTT: boolean;
 
   // Variables to store the last query
   lastLocationIndex: number;
@@ -37,4 +41,6 @@ export interface MyDataSourceOptions extends DataSourceJsonData {
  */
 export interface MySecureJsonData {
   apiKey?: string;
+  CACert?: string;
+  privkey?: string;
 }
