@@ -128,36 +128,6 @@ A message with `scrap` and `timestamp_ms` is sent. It starts with the count that
 }
 ```
 
-### /qualityClass
-
-Topic: `ia/<customerID>/<location>/<AssetID>/qualityClass`
-
-A message is sent here each time a product is classified.
-
-`cameraID`: Unique ID of the camera (usually the seriel number).
-`qualityClass`: Resulting quality class. qualityClass 0 and 1 are defined by default. The qualityClass 2 and higher are freely selectable. 
-
-| qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
-|---------|------|------------------|------------------|
-| 0 | Good | The product does not meet the quality requirements | Green |
-| 1 | Bad |The product does not meet the quality requirements| Red |
-
-
-#### Example for /qualityClass
-
-```json
-{
-"timestamp_ms": 1588879689394, 
-"cameraID": "4646548" 
-"qualityClass": 1
-}
-```
-
-| qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
-|---------|------|------------------|------------------|
-| 2 | Cookie center broken |Cookie center broken| Freely selectable |
-| 3 | Cookie has a broken corner |Cookie has a broken corner | Freely selectable |
-
 ### /barcode
 
 Topic: `ia/<customerID>/<location>/<AssetID>/barcode`
