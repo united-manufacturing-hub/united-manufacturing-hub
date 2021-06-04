@@ -386,6 +386,7 @@ A message is sent here each time a product has been produced or modified. A modi
 `begin_timestamp_ms`: Start time
 `end_timestamp_ms`: Completion time
 `stationID`: If the asset has several stations, you can also classify here at which station the product was created (optional).
+`quality_class`: Optional. Additional quality class (besides isScrap),
 
 #### Example for /uniqueProduct
 
@@ -396,7 +397,8 @@ A message is sent here each time a product has been produced or modified. A modi
   "productID": "test123",
   "UID": "161117101271788647991611171016443",
   "isScrap": false,
-  "stationID": "1a"
+  "stationID": "1a",
+  "quality_class": "alignment3" 
 }
 ```
 
@@ -416,28 +418,17 @@ A message is sent here each time a unique product has been scrapped.
 }
 ```
 
-### /detectedObject
+### /classifyUniqueProduct
 
-> **in progress (Patrick)**
-{.is-danger}
+A message is sent here each time a unique product has been classified, e.g., if quality class was unknown when creating the initial uniqueProduct with /uniqueProduct
 
-Under this topic, a detected object is published from the object detection. Each object is enclosed by a rectangular field in the image. The position and dimensions of this field are stored in rectangle. The type of detected object can be retrieved with the keyword object. Additionally, the prediction accuracy for this object class is given as confidence. The requestID is only used for traceability and assigns each recognized object to a request/query, i.e. to an image. All objects with the same requestID were detected in one image capture.
+#### Example for /classifyUniqueProduct
 
 ```json
 {
-"timestamp_ms": 1588879689394, 
-}, "detectedObject": 
- {
-   "rectangle":{
-    "x":730,
-    "y":66,
-    "w":135,
-    "h":85
-   },
-   { "object": "fork",
-   "confidence":0.501
-  },
-"requestID":"a7fde8fd-cc18-4f5f-99d3-897dcd07b308"
+  "UID": "161117101271788647991611171016443",
+  "isScrap": false,
+  "quality_class": "alignment3" 
 }
 ```
 
