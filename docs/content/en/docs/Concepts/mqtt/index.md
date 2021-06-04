@@ -45,6 +45,35 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 }
 ```
 
+### Topic: ia/rawImage/
+
+All raw data coming in via [cameraconnect].
+
+Topic structure: `ia/rawImage/<transmitterID>/<cameraID>`
+
+`image_bytes`: base64 encoded image
+`image_height`: height of the image in pixel
+`image_width`: width of the image in pixel
+`image_channels`: amount of included color channels
+
+#### Example for ia/rawImage/
+
+Topic: `ia/rawImage/2020-0102/4646548`
+
+This means that the transmitter with the serial number `2020-0102` has one camera connected to it with the serial number `4646548`.
+
+```json
+{
+        "timestamp_ms": 1588879689394, 
+        "image": {
+            "image_bytes": 9j/4AAQSkZJRgABAQAAAQABAAD/2wBD ... 
+            "image_height": 800,
+            "image_width": 1203,
+            "image_channels": 3,
+        }
+}
+```
+
 ## 2nd level: contextualized data
 
 In this level the data is already assigned to a machine.
@@ -98,6 +127,36 @@ A message with `scrap` and `timestamp_ms` is sent. It starts with the count that
     "scrap": 1
 }
 ```
+
+### /qualityClass
+
+Topic: `ia/<customerID>/<location>/<AssetID>/qualityClass`
+
+A message is sent here each time a product is classified.
+
+`cameraID`: Unique ID of the camera (usually the seriel number).
+`qualityClass`: Resulting quality class. qualityClass 0 and 1 are defined by default. The qualityClass 2 and higher are freely selectable. 
+
+| qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
+|---------|------|------------------|------------------|
+| 0 | Good | The product does not meet the quality requirements | Green |
+| 1 | Bad |The product does not meet the quality requirements| Red |
+
+
+#### Example for /qualityClass
+
+```json
+{
+"timestamp_ms": 1588879689394, 
+"cameraID": "4646548" 
+"qualityClass": 1
+}
+```
+
+| qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
+|---------|------|------------------|------------------|
+| 2 | Cookie center broken |Cookie center broken| Freely selectable |
+| 3 | Cookie has a broken corner |Cookie has a broken corner | Freely selectable |
 
 ### /barcode
 
@@ -357,6 +416,31 @@ A message is sent here each time a unique product has been scrapped.
 }
 ```
 
+### /detectedObject
+
+> **in progress (Patrick)**
+{.is-danger}
+
+Under this topic, a detected object is published from the object detection. Each object is enclosed by a rectangular field in the image. The position and dimensions of this field are stored in rectangle. The type of detected object can be retrieved with the keyword object. Additionally, the prediction accuracy for this object class is given as confidence. The requestID is only used for traceability and assigns each recognized object to a request/query, i.e. to an image. All objects with the same requestID were detected in one image capture.
+
+```json
+{
+"timestamp_ms": 1588879689394, 
+}, "detectedObject": 
+ {
+   "rectangle":{
+    "x":730,
+    "y":66,
+    "w":135,
+    "h":85
+   },
+   { "object": "fork",
+   "confidence":0.501
+  },
+"requestID":"a7fde8fd-cc18-4f5f-99d3-897dcd07b308"
+}
+```
+
 ## 4th level: Recommendations for action
 
 ### /recommendations
@@ -387,56 +471,6 @@ Shopfloor insights are recommendations for action that require concrete and rapi
 
 ## in development
 
-### /qualityClass
-
-A message is sent here each time a product is classified. Example payload:
-> **qualityClass 0 and 1 are defined by default.
-> {.is-warning}
-
-| qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
-|---------|------|------------------|------------------|
-| 0 | Good | The product does not meet the quality requirements | Green |
-| 1 | Bad |The product does not meet the quality requirements| Red |
-
-> **The qualityClass 2 and higher are freely selectable**.
-> {.is-warning}
-
-| qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
-|---------|------|------------------|------------------|
-| 2 | Cookie center broken |Cookie center broken| Freely selectable |
-| 3 | Cookie has a broken corner |Cookie has a broken corner | Freely selectable |
-
-```json
-{
-"timestamp_ms": 1588879689394, 
-"qualityClass": 1
-}
-```
-
-### /detectedObject
-
-> **in progress (Patrick)**
-{.is-danger}
-
-Under this topic, a detected object is published from the object detection. Each object is enclosed by a rectangular field in the image. The position and dimensions of this field are stored in rectangle. The type of detected object can be retrieved with the keyword object. Additionally, the prediction accuracy for this object class is given as confidence. The requestID is only used for traceability and assigns each recognized object to a request/query, i.e. to an image. All objects with the same requestID were detected in one image capture.
-
-```json
-{
-"timestamp_ms": 1588879689394, 
-}, "detectedObject": 
- {
-   "rectangle":{
-    "x":730,
-    "y":66,
-    "w":135,
-    "h":85
-   },
-   { "object": "fork",
-   "confidence":0.501
-  },
-"requestID":"a7fde8fd-cc18-4f5f-99d3-897dcd07b308"
-}
-```
 
 ### /cycleTimeScrap
 
