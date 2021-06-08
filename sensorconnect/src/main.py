@@ -94,6 +94,7 @@ for filename in glob.glob(os.path.join('./iodd_files', '*.xml')):
     datapoints = processDataDict['ProcessData']['ProcessDataIn']['Datatype']['RecordItem']
 
     for recordItem in datapoints:
+      print(recordItem)
       name = recordItem['Name']['@textId']
       translatedName = translationsDict[name]
       datatype = recordItem['SimpleDatatype']['@{http://www.w3.org/2001/XMLSchema-instance}type']
