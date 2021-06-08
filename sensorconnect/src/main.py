@@ -75,7 +75,7 @@ for filename in glob.glob(os.path.join('./iodd_files', '*.xml')):
     DeviceIdentityDict = etree_to_dict(DeviceIdentity)
     deviceId=DeviceIdentityDict['DeviceIdentity']['@deviceId']
     vendorId=DeviceIdentityDict['DeviceIdentity']['@vendorId']
-    
+
     # processTranslations
     translationsDict = {}
 
@@ -108,9 +108,9 @@ for filename in glob.glob(os.path.join('./iodd_files', '*.xml')):
       offset = recordItem['@bitOffset']
 
       deviceDict = {
-        "name": translatedName, 
-        "datatype": datatype, 
-        "length": length, 
+        "name": translatedName,
+        "datatype": datatype,
+        "length": length,
         "offset": offset
       }
 
@@ -128,7 +128,7 @@ for filename in glob.glob(os.path.join('./iodd_files', '*.xml')):
 
     deviceDataArray.append(tempdict)
 # getDeviceData returns the device data for a given deviceData array, vendorId and deviceId
-def getDeviceData(deviceData, vendorId, deviceId): ## 
+def getDeviceData(deviceData, vendorId, deviceId): ##
     if deviceData == None:
         return None
     for vendor in deviceData:
@@ -260,7 +260,7 @@ def dataProcessing(data, modeArray, portNumber, mqttc, serialNumber):
                         "type": port_mode,
                         "connected": connected
                     }
-                    
+
                     tempVendorId = vendorID
                     tempDeviceId = deviceID
                     tempValueString = value_string
@@ -270,7 +270,7 @@ def dataProcessing(data, modeArray, portNumber, mqttc, serialNumber):
 
                     if tempDeviceData == None: #if device is not known
                             datapointDict = {"value_string": tempValueString}
-                            payload.update(datapointDict) 
+                            payload.update(datapointDict)
                             # send out result
                             (result, _) = mqttc.publish(mqtt_raw_topic + "/"+str(tempVendorId)+"-"+str(tempDeviceId), payload=json.dumps(payload), qos=1)
                             if (result != 0):
@@ -278,7 +278,7 @@ def dataProcessing(data, modeArray, portNumber, mqttc, serialNumber):
                             continue
                     else:
                         tempDeviceData = tempDeviceData[::-1] #no idea what this line does, but tempDeviceData is not allowed to be None
-                    
+
                     try:
                         scale = 16
                         num_of_bits = tempValueStringLength*4
@@ -288,7 +288,7 @@ def dataProcessing(data, modeArray, portNumber, mqttc, serialNumber):
                             tempName = datapoint["name"]
                             tempDatatype = datapoint["datatype"]
                             tempOffset = int(datapoint["offset"])
-                            tempLength = int(datapoint["length"]) 
+                            tempLength = int(datapoint["length"])
 
                             firstCut = tempValueStringLength*4-tempLength-tempOffset
                             secondCut = tempValueStringLength*4-tempOffset
@@ -299,7 +299,7 @@ def dataProcessing(data, modeArray, portNumber, mqttc, serialNumber):
 
                             datapointDict = {tempName: value}
 
-                            payload.update(datapointDict) 
+                            payload.update(datapointDict)
 
                         # send out result
                         (result, _) = mqttc.publish(mqtt_raw_topic + "/"+str(tempVendorId)+"-"+str(tempDeviceId), payload=json.dumps(payload), qos=1)
@@ -337,7 +337,7 @@ def readOutDevice(device, mqttc):
         device_serial_number = device[2]
 
         portNumber = 4
-        if (device_type == "AL1342" or device_type == "AL1352"):
+        if (device_type == "AL1342" or device_type == "AL1352" or device_type == "AL1353"):
             portNumber = 8
 
         # get port modes
