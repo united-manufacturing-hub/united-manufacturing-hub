@@ -25,7 +25,7 @@ description: >
 1. Install k3OS on your edge device using the bootable USB-stick (Press "entf or delete" repeatedly to enter the BIOS of the Factorycube and then boot from the USB stick with K3OS)
 2. Choose the desired partition (in most cases 1)
 3. Do not use a cloud configuration file
-4. When asked, enter your GitHub username. In the future you will access the device via SSH with your private key. After the installation the system will reboot and show after successfull startup the IP adress of the device. If no IP is shown please check your network setup (especially whether you have DHCP activated). 
+4. When asked, enter your GitHub username. In the future you will access the device via SSH with your private key. After the installation the system will reboot and show after successfull startup the IP adress of the device. If no IP is shown please check your network setup (especially whether you have DHCP activated). If you want to use the classic username / password authentification we recommend reading this article on [how to access SSH for username / password authentification in k3OS](../../Tutorials/add-username-password-authentification-k3os-ssh)
 5. Configure K3OS as "server"
 6. Remove the USB stick after the message that the system will restart in 5 seconds.
 7. You can now disconnect Monitor and keyboard as you will do everything else via SSH.
