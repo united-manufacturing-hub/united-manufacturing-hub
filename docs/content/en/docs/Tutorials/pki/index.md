@@ -20,11 +20,13 @@ mkdir ~/mqtt.umh.app/
 cd ~/mqtt.umh.app/
 ```
 
+Enable batch mode of easyrsa with `export EASYRSA_BATCH=1`
+
 Setup basic PKI infrastructure with `/usr/share/easy-rsa/easyrsa init-pki`
 
 Copy the default configuration file with `cp /usr/share/easy-rsa/vars.example pki/vars` and edit it to your liking (e.g. adjust EASYRSA_REQ_... and CA and cert validity)
 
-Build the CA using `/usr/share/easy-rsa/easyrsa build-ca nopass`
+Build the CA using `export EASYRSA_REQ_CN=YOUR_CA_NAME && /usr/share/easy-rsa/easyrsa build-ca nopass`. Replace `YOUR_CA_NAME` with a name for your certificate authority (CA), e.g., `UMH CA`
 
 Create the server certificate by using the following commands (exchange mqtt.umh.app with your domain!):
 ```bash
@@ -35,8 +37,4 @@ Copy the private key `pki/private/mqtt.umh.app.key` and the public certificate `
 
 ## Adding new clients
 
-Create new clients with following commands (remember to change TESTING with the planned MQTT client id):
-```bash
-./easyrsa gen-req TESTING nopass
-./easyrsa sign-req client TESTING
-```
+Create new clients with following commands (remember to change TESTING with the planned MQTT client id): `export EASYRSA_REQ_CN=TESTING && /usr/share/easy-rsa/easyrsa gen-req $EASYRSA_REQ_CN nopass && /usr/share/easy-rsa/easyrsa sign-req client $EASYRSA_REQ_CN nopass`
