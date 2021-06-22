@@ -43,6 +43,14 @@ We created the additional DMZ around each machine to prevent one solution / host
 
 Our certified device "machineconnect" will have that network setup by default. Our certified device "factorycube" has a little bit different network setup, which you can take a look at [here](../../tutorials/networking).
 
+### Other useful commands
+
+Quick setup on k3OS:
+
+1. `export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh`
+2. `curl -L https://github.com/united-manufacturing-hub/united-manufacturing-hub/tarball/v0.4.2 | tar zx && mv $(find . -maxdepth 1  -type d -name "united-manufacturing-hub*") united-manufacturing-hub`
+3. `helm install factorycube-edge /home/rancher/united-manufacturing-hub/deployment/factorycube-edge --values "/home/rancher/CUSTOM.yaml" --kubeconfig /etc/rancher/k3s/k3s.yaml`
+
 ## factorycube-server
 
 We recommend adjusting the values.yaml to your needs. We recommend the following values for production:
