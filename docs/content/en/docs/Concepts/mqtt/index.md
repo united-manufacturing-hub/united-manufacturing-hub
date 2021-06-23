@@ -47,7 +47,9 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 
 ### Topic: ia/rawImage/
 
-All raw data coming in via [cameraconnect].
+All raw data coming in via [cameraconnect]. The full dataflow for images is shown here:
+
+{{< imgproc dataflow_imagedata.png Fit "1200x1200" >}}Full dataflow for capturing, classifying and processing image data{{< /imgproc >}}
 
 Topic structure: `ia/rawImage/<transmitterID>/<cameraID>`
 
