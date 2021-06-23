@@ -361,7 +361,7 @@ timescaledb-single:
     # https://www.postgresql.org/docs/current/creating-cluster.html#CREATING-CLUSTER-MOUNT-POINTS
     data:
       enabled: true
-      size: 2Gi
+      size: 1.9Tib
       ## database data Persistent Volume Storage Class
       ## If defined, storageClassName: <storageClass>
       ## If set to "-", storageClassName: "", which disables dynamic provisioning
