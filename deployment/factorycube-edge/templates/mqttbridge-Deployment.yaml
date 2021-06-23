@@ -20,7 +20,11 @@ spec:
     spec:
       containers:
       - name: {{ include "factorycube-edge.fullname" . }}-mqttbridge
-        image: unitedmanufacturinghub/mqtt-bridge:{{ .Values.mqttbridge.tag }}
+        {{- if .Values.mqttbridge.tag -}}
+        image: {{ .Values.mqttbridge.image }}:{{ .Values.mqttbridge.tag }}
+        {{- else }}
+        image: {{ .Values.mqttbridge.image }}:{{ .Chart.AppVersion }}
+        {{- end }}
         volumeMounts:
         - name: {{ include "factorycube-edge.fullname" . }}-mqttbridge-data
           mountPath: /data/queue
