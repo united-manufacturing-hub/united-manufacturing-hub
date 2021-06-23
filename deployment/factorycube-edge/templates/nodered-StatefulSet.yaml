@@ -31,14 +31,15 @@ spec:
         - name: {{ include "factorycube-edge.fullname" . }}-nodered-flows
           mountPath: /data/flows.default
           subPath: nodered-flows 
-      {{- if .Values.nodered.pluginInstallEnabled -}}
+      {{ if .Values.nodered.pluginInstallEnabled }}
       - name: {{ include "factorycube-edge.fullname" . }}-nodered-init-plugin
         image: node:14
         command: 
         - 'sh'
         - '-c'
         args:
-        - cd /data;
+        - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi; 
+          cd /data;
           npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
           npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
           npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;

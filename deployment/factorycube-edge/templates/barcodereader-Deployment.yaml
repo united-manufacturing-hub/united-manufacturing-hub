@@ -24,7 +24,6 @@ spec:
         {{- else }}
         image: {{ .Values.barcodereader.image }}:{{ .Chart.AppVersion }}
         {{- end }}
-        image: :{{ .Values.barcodereader.tag }}
         securityContext:
           privileged: true
         volumeMounts:
