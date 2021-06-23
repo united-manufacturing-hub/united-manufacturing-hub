@@ -179,6 +179,32 @@ A message is sent here each time a stop reason has been identified automatically
 }
 ```
 
+### /productImage
+
+Topic: `ia/<customerID>/<location>/<AssetID>/productImage`
+
+A message is sent here each time a picture of a unique product is taken.
+
+`UID` in the JSON is a string and the UID of a uniqueProduct.
+`imageUID` in the JSON is a string and the UID of a image
+`image` in the JSON is a dictionary according to `/rawImage`
+
+#### Example for /productImage
+
+```json
+{
+    "timestamp_ms": 1588879689394, 
+    "UID": "48937222657",
+    "imageUID": "2021-03-16T15:33:02Z_camera1" 
+    "image": {
+        "image_bytes": 9j/4AAQSkZJRgABAQAAAQABAAD/2wBD ... 
+        "image_height": 800,
+        "image_width": 1203,
+        "image_channels": 3,
+    }
+}
+```
+
 ### /addShift
 
 Topic: `ia/<customerID>/<location>/<AssetID>/addShift`
@@ -356,7 +382,6 @@ A message is sent here each time a product has been produced or modified. A modi
 `begin_timestamp_ms`: Start time
 `end_timestamp_ms`: Completion time
 `stationID`: If the asset has several stations, you can also classify here at which station the product was created (optional).
-`quality_class`: Optional. Additional quality class (besides isScrap),
 
 #### Example for /uniqueProduct
 
@@ -368,7 +393,6 @@ A message is sent here each time a product has been produced or modified. A modi
   "UID": "161117101271788647991611171016443",
   "isScrap": false,
   "stationID": "1a",
-  "quality_class": "alignment3" 
 }
 ```
 
@@ -388,17 +412,18 @@ A message is sent here each time a unique product has been scrapped.
 }
 ```
 
-### /classifyUniqueProduct
+### /addOrChangeUniqueProductData
 
-A message is sent here each time a unique product has been classified, e.g., if quality class was unknown when creating the initial uniqueProduct with /uniqueProduct
+A message is sent here each time a unique product has additional data associated with it, e.g., a image classification or test result. 
 
-#### Example for /classifyUniqueProduct
+#### Example for /addOrChangeUniqueProductData
 
 ```json
 {
   "UID": "161117101271788647991611171016443",
   "isScrap": false,
-  "quality_class": "alignment3" 
+  "name": "classification",
+  "value": "alignment3_error"
 }
 ```
 
