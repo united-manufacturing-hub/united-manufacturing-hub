@@ -361,7 +361,7 @@ timescaledb-single:
     # https://www.postgresql.org/docs/current/creating-cluster.html#CREATING-CLUSTER-MOUNT-POINTS
     data:
       enabled: true
-      size: 1.9Tib
+      size: 2Gi 
       ## database data Persistent Volume Storage Class
       ## If defined, storageClassName: <storageClass>
       ## If set to "-", storageClassName: "", which disables dynamic provisioning
@@ -659,7 +659,7 @@ grafana:
 
   image:
     repository: grafana/grafana
-    tag: 7.5.2
+    tag: 7.5.9
     sha: ""
     pullPolicy: IfNotPresent
 
