@@ -22,8 +22,12 @@ spec:
         app.kubernetes.io/component: "sensorconnect"
     spec:
       containers:
-        - image: unitedmanufacturinghub/sensorconnect:{{ .Values.sensorconnect.tag }}
-          name: {{ include "factorycube-edge.fullname" . }}-sensorconnect
+        - name: {{ include "factorycube-edge.fullname" . }}-sensorconnect
+          {{- if .Values.sensorconnect.tag -}}
+          image: {{ .Values.sensorconnect.image }}:{{ .Values.sensorconnect.tag }}
+          {{- else }}
+          image: {{ .Values.sensorconnect.image }}:{{ .Chart.AppVersion }}
+          {{- end }}
           env:
             - name: PYTHONUNBUFFERED
               value: "0"
