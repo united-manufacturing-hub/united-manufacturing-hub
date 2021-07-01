@@ -53,42 +53,390 @@ Quick setup on k3OS:
 
 ## factorycube-server
 
-We recommend adjusting the values.yaml to your needs. We recommend the following values for production:
+In general the factorycube-server installation is tailored strongly to the environments it is running in. Therefore, we can only provide general guidance on setting it up.
 
-### General
+**WARNING: THIS SECTION IS STILL IN WORK, PLEASE ONLY USE AS A ROUGH START. WE STRONGLY RECOMMEND CONTACTING US IF YOU ARE PLANNING ON USING IT IN PRODUCTION ENVIRONMENT AND WITH EXPOSURE TO THE INTERNET**
 
-- In case of internet access: adding Cloudflare in front of the HTTP / HTTPS nodes (e.g. Grafana, factoryinsight) to provide an additional security layer
-- We also recommend using LetsEncrypt (e.g. with cert-manager)
+## Example deployment on AWS EKS
 
-### TimescaleDB
-- Setting timescaleDB replica to 3 and tuning or disabling it altogether and using timescaleDB Cloud (https://www.timescale.com/products)
-- Adjusting resources for factoryinsight, enabling pdb and hpa and pointing it to the read replica of the timescaleDB database. We recommend pointing it to the read replica to increase performance and to prevent too much database load on the primary database.
+To give you an better idea, this section explains an example production deployment on AWS EKS.
 
-### VerneMQ
+### Preparation
+
+#### General
+- Use Cloudflare as DNS and firewall. This will provide an additional security layer on top of all your HTTP/HTTPS applications, e.g., factoryinsight or Grafana
+
+#### AWS 
+
+- Setup a AWS EKS cluster using [eksctl](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html)
+- Setup a S3 bucket and a IAM user
+- Add IAM policy to the user (assuming the bucket is called `umhtimescaledbbackup`)
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::umhtimescaledbbackup/*",
+                "arn:aws:s3:::umhtimescaledbbackup"
+            ]
+        }
+    ]
+}
+```
+
+If you do not add the IAM policy you might get a `ACCESS DENIED` in `pgbackrest` pod.
+
+#### Kubernetes
+
+- Create a namespace called `dev2`
+- Use later the release name `dev2`. If you are using a different release name, you might need to adjust `dev2` in the following `aws_eks.yaml` file
+- Setup [nginx-ingress-controller](https://kubernetes.github.io/ingress-nginx/) (e.g., using the bitnami helm chart)
+- Setup [external-dns](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/nginx-ingress.md)
+- Setup [cert-manager](https://cert-manager.io/docs/tutorials/acme/ingress/) and create a certificate issuer called `letsencrypt-prod` (see also link)
+- to enable backup using S3 buckets create a secret called `dev2-pgbackrest` and enter the following content:
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: dev2-pgbackrest
+  namespace: dev2
+data:
+  PGBACKREST_REPO1_S3_BUCKET: <redacted>
+  PGBACKREST_REPO1_S3_ENDPOINT: <redacted>
+  PGBACKREST_REPO1_S3_KEY: <redacted>
+  PGBACKREST_REPO1_S3_KEY_SECRET: <redacted>
+  PGBACKREST_REPO1_S3_REGION: <redacted>
+type: Opaque
+
+```
+  
+### aws_eks.yaml
+
+We recommend the following values to get your journey to production started (using release name `dev2` and namespace `dev2`):
+
+```yaml
+
+### factoryinsight ###
+factoryinsight:
+  enabled: true
+  image: unitedmanufacturinghub/factoryinsight
+  replicas: 2
+  redis:
+    URI1: dev2-redis-node-0.dev2-redis-headless:26379
+    URI2: dev2-redis-node-1.dev2-redis-headless:26379
+    URI3: dev2-redis-node-2.dev2-redis-headless:26379
+  db_host: "dev2-replica"
+  db_port: "5433"
+  db_password: "ADD_STRONG_PASSWORD_HERE"
+  ingress:
+    enabled: true
+    publicHost: "api.dev2.umh.app"
+    publicHostSecretName: "factoryinsight-tls-secret"
+    annotations:
+      external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod" 
+  resources:
+    limits:
+       cpu: 1000m         
+    requests:
+       cpu: 200m      
+
+
+### mqtt-to-postresql ###
+mqtttopostgresql:
+  enabled: true
+  image: unitedmanufacturinghub/mqtt-to-postgresql
+  replicas: 2
+  storageRequest: 1Gi
+
+### timescaleDB ###
+timescaledb-single:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    # Image was built from
+    # https://github.com/timescale/timescaledb-docker-ha
+    repository: timescaledev/timescaledb-ha
+    tag: pg12-ts2.0-latest
+    pullPolicy: IfNotPresent 
+  
+  backup:
+    enabled: true
+  
+  persistentVolumes:
+    data:
+      size: 20Gi 
+    wal:
+      enabled: true
+      size: 5Gi
+  
+### grafana ###
+grafana:
+  enabled: true
+
+  replicas: 2
+
+  image:
+    repository: grafana/grafana
+    tag: 7.5.9
+    sha: ""
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP 
+
+  ingress:
+    enabled: true
+    annotations: 
+      kubernetes.io/ingress.class: nginx
+      kubernetes.io/tls-acme: "true"
+    labels: {}
+    path: /
+
+    # pathType is only for k8s > 1.19
+    pathType: Prefix
+
+    hosts:
+      - dev2.umh.app 
+
+    tls: []
+
+  ## Pass the plugins you want installed as a list.
+  ##
+  plugins: 
+      - grafana-worldmap-panel
+      - grafana-piechart-panel
+      - aceiot-svg-panel
+      - grafana-worldmap-panel
+      - natel-discrete-panel
+      - isaozler-paretochart-panel
+      - williamvenner-timepickerbuttons-panel
+      - agenty-flowcharting-panel
+      - marcusolsson-dynamictext-panel
+      - factry-untimely-panel
+      - cloudspout-button-panel 
+
+
+  ## Grafana's primary configuration
+  ## NOTE: values in map will be converted to ini format
+  ## ref: http://docs.grafana.org/installation/configuration/
+  ##
+  grafana.ini:
+    paths:
+      data: /var/lib/grafana/data
+      logs: /var/log/grafana
+      plugins: /var/lib/grafana/plugins
+      provisioning: /etc/grafana/provisioning
+    analytics:
+      check_for_updates: true
+    log:
+      mode: console
+    grafana_net:
+      url: https://grafana.net
+    database:
+      host: dev2 
+      user: "grafana"
+      name: "grafana"
+      password: "ADD_ANOTHER_STRONG_PASSWORD_HERE"
+      ssl_mode: require
+      type: postgres
+
+  ## Add a seperate remote image renderer deployment/service
+  imageRenderer:
+    # Enable the image-renderer deployment & service
+    enabled: true
+    replicas: 1
+
+####################### nodered #######################
+nodered:
+  enabled: true 
+  tag: 1.2.9
+  port: 1880
+  storageRequest: 1Gi
+  timezone: Berlin/Europe
+  serviceType: ClusterIP
+  ingress:
+    enabled: true
+    publicHost: "nodered.dev2.umh.app"
+    publicHostSecretName: "nodered-tls-secret"
+    annotations:
+      external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  settings: |-  
+    module.exports = {
+        // the tcp port that the Node-RED web server is listening on
+        uiPort: process.env.PORT || 1880,
+        // By default, the Node-RED UI accepts connections on all IPv4 interfaces.
+        // To listen on all IPv6 addresses, set uiHost to "::",
+        // The following property can be used to listen on a specific interface. For
+        // example, the following would only allow connections from the local machine.
+        //uiHost: "127.0.0.1",
+        // Retry time in milliseconds for MQTT connections
+        mqttReconnectTime: 15000,
+        // Retry time in milliseconds for Serial port connections
+        serialReconnectTime: 15000,
+        // The following property can be used in place of 'httpAdminRoot' and 'httpNodeRoot',
+        // to apply the same root to both parts.
+        httpRoot: '/nodered',
+        // If you installed the optional node-red-dashboard you can set it's path
+        // relative to httpRoot
+        ui: { path: "ui" },
+        // Securing Node-RED
+        // -----------------
+        // To password protect the Node-RED editor and admin API, the following
+        // property can be used. See http://nodered.org/docs/security.html for details.
+        adminAuth: {
+            type: "credentials",
+            users: [
+                {
+                    username: "admin",
+                    password: "ADD_NODERED_PASSWORD",
+                    permissions: "*"
+                }
+            ]
+        },
+        
+        functionGlobalContext: {
+            // os:require('os'),
+            // jfive:require("johnny-five"),
+            // j5board:require("johnny-five").Board({repl:false})
+        },
+        // `global.keys()` returns a list of all properties set in global context.
+        // This allows them to be displayed in the Context Sidebar within the editor.
+        // In some circumstances it is not desirable to expose them to the editor. The
+        // following property can be used to hide any property set in `functionGlobalContext`
+        // from being list by `global.keys()`.
+        // By default, the property is set to false to avoid accidental exposure of
+        // their values. Setting this to true will cause the keys to be listed.
+        exportGlobalContextKeys: false,
+        // Configure the logging output
+        logging: {
+            // Only console logging is currently supported
+            console: {
+                // Level of logging to be recorded. Options are:
+                // fatal - only those errors which make the application unusable should be recorded
+                // error - record errors which are deemed fatal for a particular request + fatal errors
+                // warn - record problems which are non fatal + errors + fatal errors
+                // info - record information about the general running of the application + warn + error + fatal errors
+                // debug - record information which is more verbose than info + info + warn + error + fatal errors
+                // trace - record very detailed logging + debug + info + warn + error + fatal errors
+                // off - turn off all logging (doesn't affect metrics or audit)
+                level: "info",
+                // Whether or not to include metric events in the log output
+                metrics: false,
+                // Whether or not to include audit events in the log output
+                audit: false
+            }
+        },
+        // Customising the editor
+        editorTheme: {
+            projects: {
+                // To enable the Projects feature, set this value to true
+                enabled: false
+            }
+        }
+    }
+
+
+##### CONFIG FOR REDIS #####
+redis:
+  enabled: true
+  cluster:
+    enabled: true
+    slaveCount: 2
+  image:
+    pullPolicy: IfNotPresent
+    registry: docker.io
+    repository: bitnami/redis
+    tag: 6.0.9-debian-10-r13
+  master:
+    extraFlags:
+    - --maxmemory 4gb
+    persistence:
+      size: 8Gi
+    resources:
+      limits:
+        memory: 4Gi
+      requests:
+        cpu: 100m
+        memory: 1Gi
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  slave:
+    persistence:
+      size: 8Gi
+    resources:
+      limits:
+        memory: 4Gi
+      requests:
+        cpu: 100m
+        memory: 1Gi
+
+##### CONFIG FOR VERNEMQ #####
+
+vernemq:
+  enabled: true
+  AclConfig: |-
+     pattern write ia/raw/%u/#
+     pattern write ia/%u/#
+     pattern $SYS/broker/connection/%c/state
+
+     user TESTING
+     topic ia/#
+     topic $SYS/#
+     topic read $share/TESTING/ia/#
+
+     user ia_nodered
+     topic ia/#
+  CACert: |-
+    ADD CERT
+  Cert: |-
+    ADD CERT
+  Privkey: |-
+    ADD CERT
+  image:
+    pullPolicy: IfNotPresent 
+    repository: vernemq/vernemq
+    tag: latest
+  replicaCount: 2 
+  service:
+    annotations:
+      prometheus.io/port: "8888"
+      prometheus.io/scrape: "true"
+      external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+      external-dns.alpha.kubernetes.io/hostname: mqtt.dev2.umh.app
+    mqtts:
+      enabled: true
+      nodePort: 8883
+      port: 8883
+    mqtt:
+      enabled: false
+    type: LoadBalancer
+
+```
+
+### Further adjustments
+
+#### VerneMQ / MQTT
+
 - We recommend setting up a PKI infrastructure for MQTT (see also prerequisites) and adding the certs to `vernemq.CAcert` and following in the helm chart (by default there are highly insecure certificates there)
 - You can adjust the ACL (access control list) by changing `vernemq.AclConfig`
-- We highly recommend opening the unsecured port 1883 to the internet as everyone can connect there anonymously (`vernemq.service.mqtt.enabled` to `false`)
 - If you are using the VerneMQ binaries in production you need to accept the verneMQ EULA (which disallows using it in production without contacting them)
-- We recommend using 3 replicas on 3 different phyiscal servers for high availability setups
 
-### Redis
-- We recommend using 3 replicas
+#### Redis
 - The password is generated once during setup and stored in the secret redis-secret
 
-### Nodered
+#### Nodered
 - We recommend disabling external access to nodered entirely and spawning a seperate nodered instance for every project (to avoid having one node crashing all flows)
 - You can change the configuration in `nodered.settings`
-- We recommend that you set a password for accessing the webinterface in the `nodered.settings`
-
-### Grafana
-- We recommend two replicas on two seperate phyiscal server
-- We also recommend changing the database password in `grafana.grafana.ini.database.password` (the database will automatically use this value during database setup)
-
-### mqtt-to-postgresql
-- We recommend at least two replicas on two seperate phyisical server
-- It uses the same database access as factoryinsight. So if you want to switch it you can do it in factoryinsight
-
-### factoryinsight
-- We recommend at least two replicas on two seperate phyiscal server
-- We strongly recommend that you change the passwords (they will automatically be used across the system, e.g. in the Grafana plugin)
+- We recommend that you set a password for accessing the webinterface in the `nodered.settings`. See also [the official tutorial from nodered](https://nodered.org/docs/user-guide/runtime/securing-node-red#generating-the-password-hash)
 
