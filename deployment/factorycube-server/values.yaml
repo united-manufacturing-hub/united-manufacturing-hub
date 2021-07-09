@@ -1365,7 +1365,7 @@ grafana:
   #     memory: 50Mi
 ### nodered ###
 nodered:
-  enabled: true 
+  enabled: false 
   tag: 1.2.9
   port: 1880
   storageRequest: 1Gi
