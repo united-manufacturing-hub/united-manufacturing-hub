@@ -21,14 +21,14 @@ serviceAccount:
 
 mqttbridge:
   enabled: true
-  tag: development
+  image: unitedmanufacturinghub/mqtt-bridge 
   storageRequest: 1Gi
 
 ### barcodereader ###
 
 barcodereader:
   enabled: true
-  tag: latest 
+  image: unitedmanufacturinghub/barcodereader
   customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
   brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
@@ -40,7 +40,7 @@ barcodereader:
 
 sensorconnect:
   enabled: true
-  tag: latest
+  image: unitedmanufacturinghub/sensorconnect
   iprange: "ENTER_IP_RANGE" #e.g. 172.21.9.0/24
   brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
@@ -49,7 +49,8 @@ sensorconnect:
 
 nodered:
   enabled: true
-  tag: 1.2.9
+  pluginInstallEnabled: true
+  tag: 1.3.5
   port: 1880
   storageRequest: 1Gi
   timezone: Berlin/Europe
