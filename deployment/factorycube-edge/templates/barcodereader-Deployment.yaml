@@ -19,7 +19,11 @@ spec:
     spec:
       containers:
       - name: {{ include "factorycube-edge.fullname" . }}-barcodereader
-        image: unitedmanufacturinghub/barcodereader:{{ .Values.barcodereader.tag }}
+        {{- if .Values.barcodereader.tag -}}
+        image: {{ .Values.barcodereader.image }}:{{ .Values.barcodereader.tag }}
+        {{- else }}
+        image: {{ .Values.barcodereader.image }}:{{ .Chart.AppVersion }}
+        {{- end }}
         securityContext:
           privileged: true
         volumeMounts:
