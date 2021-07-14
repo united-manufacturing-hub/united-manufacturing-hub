@@ -7,7 +7,7 @@ metadata:
   labels:
     {{- include "factorycube-server.labels.nodered" . | nindent 4 }}
 spec:
-  type: LoadBalancer
+  type: {{ .Values.nodered.serviceType }}
   ports:
   - port: {{ .Values.nodered.port }}
     targetPort: 1880
