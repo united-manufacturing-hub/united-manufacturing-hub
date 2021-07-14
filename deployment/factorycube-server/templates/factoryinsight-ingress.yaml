@@ -17,13 +17,6 @@ spec:
     - {{ .Values.factoryinsight.ingress.publicHost }}
     secretName: {{ .Values.factoryinsight.ingress.publicHostSecretName }} 
   rules:
-    - host: factoryinsight
-      http:
-        paths:
-          - path: /
-            backend:
-              serviceName: {{ include "factorycube-server.fullname" . }}-factoryinsight-service
-              servicePort: 80
     - host: {{ .Values.factoryinsight.ingress.publicHost }}
       http:
         paths:
