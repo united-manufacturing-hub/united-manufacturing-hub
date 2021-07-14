@@ -260,7 +260,6 @@ timescaledb-single:
       use_endpoints: true
     postgresql:
       create_replica_methods:
-      - pgbackrest
       - basebackup
       pgbackrest:
         command: /etc/timescaledb/scripts/pgbackrest_restore.sh
@@ -923,9 +922,9 @@ grafana:
 
   # Use an existing secret for the admin user.
   admin:
-    existingSecret: ""
-    userKey: admin-user
-    passwordKey: admin-password
+    existingSecret: "grafana-secret"
+    userKey: adminuser
+    passwordKey: adminpassword
 
   ## Define command to be executed at startup by grafana container
   ## Needed if using `vault-env` to manage secrets (ref: https://banzaicloud.com/blog/inject-secrets-into-pods-vault/)
@@ -1365,11 +1364,16 @@ grafana:
   #     memory: 50Mi
 ### nodered ###
 nodered:
-  enabled: true 
+  enabled: false 
   tag: 1.2.9
   port: 1880
   storageRequest: 1Gi
   timezone: Berlin/Europe
+  serviceType: LoadBalancer
+  ingress:
+    enabled: false
+    publicHost: ""
+    publicHostSecretName: ""
   settings: |-  
     module.exports = {
         // the tcp port that the Node-RED web server is listening on

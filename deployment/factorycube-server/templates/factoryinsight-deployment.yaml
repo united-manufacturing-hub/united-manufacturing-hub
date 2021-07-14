@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-factoryinsight
+  name: {{ include "factorycube-server.fullname" . }}-factoryinsight-deployment
   labels:
      {{- include "factorycube-server.labels.factoryinsight" . | nindent 4 }}
   {{- if .Values.factoryinsight.annotations }}
@@ -34,12 +34,12 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-factoryinsight
-          {{- if .Values.factoryinsight.tag -}}
+          {{- if .Values.factoryinsight.tag }}
           image: {{ .Values.factoryinsight.image }}:{{ .Values.factoryinsight.tag }}
           {{- else }}
           image: {{ .Values.factoryinsight.image }}:{{ .Chart.AppVersion }}
           {{- end }}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
               - name: http
                 containerPort: 80
@@ -64,12 +64,23 @@ spec:
             
             - name: POSTGRES_HOST
               value: {{ .Values.factoryinsight.db_host }}
+            - name: POSTGRES_PORT
+              value: {{ .Values.factoryinsight.db_port | quote }}
             - name: POSTGRES_DATABASE
               value: {{ .Values.factoryinsight.db_database }} 
             - name: POSTGRES_USER
               value: {{ .Values.factoryinsight.db_user }}
             - name: POSTGRES_PASSWORD
               value: {{ .Values.factoryinsight.db_password }}
+               
+              {{ $index := 1 }}
+              {{ range $customerName, $password := .Values.customers | default dict }}
+            - name: CUSTOMER_NAME_{{ $index }}
+              value: {{ $customerName }}
+            - name: CUSTOMER_PASSWORD_{{ $index }}
+              value: {{ $password }}
+              {{ $index = add $index 1 }}
+              {{ end }}
 
             - name: FACTORYINSIGHT_USER
               value: {{ .Values.factoryinsight.user }}
