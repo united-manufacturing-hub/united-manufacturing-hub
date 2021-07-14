@@ -39,6 +39,8 @@ description: >
 ```bash
 export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh
 ```
+If this command fails with a `curl: (60) SSL certificate problem: certificate is not yet valid` (+ you are in a university or otherwise restricted network), [take a look here](../../tutorials/how-to-fix-ntp-issues/).
+
 5. Clone or copy the content of the [united-manufacturing-hub repository on Github](https://github.com/united-manufacturing-hub/united-manufacturing-hub) into the home folder (`/home/rancher/united-manufacturing-hub`). You can use the following command to do that for you (you might need to adjust the version number): `curl -L https://github.com/united-manufacturing-hub/united-manufacturing-hub/tarball/v0.4.2 | tar zx && mv $(find . -maxdepth 1  -type d -name "united-manufacturing-hub*") united-manufacturing-hub`
 6. Execute `cat /etc/rancher/k3s/k3s.yaml` to retrieve the secrets to connect to your Kubernetes cluster
 7. Paste the file into Lens when adding a new cluster and adjust the IP 127.0.0.1 (only change the IP address. The port, the numbers after the colon, remain the same). You should now see the cluster in Lens.
