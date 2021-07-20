@@ -49,17 +49,18 @@
    ```
 
 2. Build backend plugin binaries for Linux, Windows and Darwin:
-
-YOU NEED TO INSTALL VIA 
-```
-git clone https://github.com/magefile/mage
-cd mage
-go run bootstrap.go
-```
-NOW EXECUTE
-   ```bash
-   ~/go/bin/mage -v
-   ```
+   
+   2.1 Install [mage](https://github.com/magefile/mage) dependency
+      ```base
+      git clone https://github.com/magefile/mage
+      cd mage
+      go run bootstrap.go
+      ```
+   
+   2.2 Build backend
+      ```bash
+      ~/go/bin/mage -v
+      ```
 
 3. List all available Mage targets for additional commands:
 
