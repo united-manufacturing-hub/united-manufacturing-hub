@@ -1,18 +1,8 @@
 # United Manufacturing Hub datasource for Grafana 
 
-   ```bash
-   sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana 
-   
-   yarn install
-   
-   yarn build && ~/go/bin/mage -v build:backend && sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana
-   
-   yarn build && ~/go/bin/mage -v build:backend && sudo docker container restart grafana
-   
-   npx @grafana/toolkit plugin:dev --watch
-   ```
+TODO: Add description
 
-## Getting started
+## Getting started (Manual)
 
    A data source backend plugin consists of both frontend and backend components.
 
@@ -69,6 +59,33 @@
    ```bash
    mage -l
    ```
+   
+## Getting Started (Dockerized)
+   ### Build (Release)
+
+   1. Install all dependencies
+   ```bash
+   yarn install
+   ```
+   2. Build frontend & backend
+   ```bash
+   yarn build && ~/go/bin/mage -v build:backend 
+   ```
+   3. Run docker with plugin
+   ```bash
+   sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana
+   ```
+   
+   ### Update (Release)
+   ```bash
+   yarn build && ~/go/bin/mage -v build:backend && sudo docker container restart grafana
+   ```
+
+### Auto rebuild dev builds
+   ```bash
+   npx @grafana/toolkit plugin:dev --watch
+   ```
+
 
 ## Learn more
 
