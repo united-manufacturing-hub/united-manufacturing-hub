@@ -45,6 +45,31 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 }
 ```
 
+### Topic: productImage
+
+All data coming back from microservices and were published on the server. Input has been from the topic /rawImageClassification.
+
+Topic structure: 'ia/<customer>/<location>/<assetID>/productImage'
+
+### Example:
+
+Topic: 'ia/mck/dccaachen/weaving1/productImage
+
+This means that the customer is McKinsey which is located in the DCC in Aachen, Germany. The assetID from the machine is weaving1 which is taking the product image.
+
+```json
+{
+	"timestamp_ms": 214423040823,
+	"image":  {
+		"image_id": "<SerialNumberCamera>_<timestamp_ms>",
+		"image_bytes": 3495ask484...,
+		"image_heigth": 800,
+		"image_width": 1203,
+		"image_channels": 3
+	}
+}
+```
+
 ## 2nd level: contextualized data
 
 In this level the data is already assigned to a machine.
