@@ -1,6 +1,9 @@
-# United Manufacturing Hub datasource for Grafana 
+# WIP
+## This plugin is currently work-in-progress and should *not* be used in production !
 
-TODO: Add description
+
+# United Manufacturing Hub datasource for Grafana
+This Plugin allows sending data from the Grafana frontend to the factoryinput microservice.
 
 ## Getting started (Manual)
 
