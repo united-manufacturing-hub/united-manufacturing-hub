@@ -66,7 +66,7 @@ This means that the transmitter with the serial number 2020-0102 has one camera 
 	"timestamp_ms": 214423040823,
 	"image":  {
 		"image_id": "<SerialNumberCamera>_<timestamp_ms>",
-		"image_bytes": 3495ask484...
+		"image_bytes": 3495ask484...,
 		"image_heigth": 800,
 		"image_width": 1203,
 		"image_channels": 3
@@ -81,7 +81,7 @@ im_arr = np.frombuffer(im_bytes, dtype=np.uint8)  # im_arr is a one-dimensional 
 img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
 cv2.imwrite(image_path, img)
 ```
-
+  
 ## 2nd level: contextualized data
 
 In this level the data is already assigned to a machine.
@@ -310,6 +310,14 @@ A message is sent here every time a process value has been prepared. Unique nami
 }
 ```
 
+### /productImage
+
+All data coming from `/rawImageClassification` and were published on the server. Same content as `/rawImageClassification`, only with a changed topic.
+
+Topic structure: `ia/<customer>/<location>/<assetID>/productImage`
+
+
+
 ## 3rd level: production data
 
 This level contains only highly aggregated production data.
@@ -393,7 +401,7 @@ A message is sent here each time a unique product has been scrapped.
   "UID": "161117101271788647991611171016443",
 }
 ```
-
+  
 ## 4th level: Recommendations for action
 
 ### /recommendations
