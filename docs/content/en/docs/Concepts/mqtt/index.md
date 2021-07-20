@@ -26,7 +26,7 @@ Some messages might deviate from it, but this will be noted explicitly. All topi
 
 Here are all raw data, which are not yet contextualized, i.e. assigned to a machine. These are in particular all data from [sensorconnect].
 
-### Topic: ia/raw/
+### Topic: `ia/raw/`
 
 All raw data coming in via [sensorconnect].
 
@@ -43,6 +43,43 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 "timestamp_ms": 1588879689394, 
 "distance": 16
 }
+```
+
+### Topic: `ia/rawImage/`
+All raw data coming in via [cameraconnect].
+
+Topic structure: `ia/rawImage/<TransmitterID>/<SerialNumberCamera>`
+
+`image_id:` a unique identifier for every image acquired
+`image_bytes:` base64 encoded image in JPG format in bytes\
+`image_height:` height of the image in pixel\
+`image_width:` width of the image in pixel\
+`image_channels:` amount of included color channels (Mono: 1, RGB: 3)
+
+#### Example for ia/rawImage/
+Topic: `ia/rawImage/2020-0102/4646548`
+
+This means that the transmitter with the serial number 2020-0102 has one camera connected to it with the serial number 4646548.
+
+```json
+{
+	"timestamp_ms": 214423040823,
+	"image":  {
+		"image_id": "<SerialNumberCamera>_<timestamp_ms>",
+		"image_bytes": 3495ask484...
+		"image_heigth": 800,
+		"image_width": 1203,
+		"image_channels": 3
+	}
+}
+```
+
+#### Example for decoding an image and saving it locally with OpenCV
+```
+im_bytes = base64.b64decode(incoming_mqtt_message["image"]["image_bytes"])
+im_arr = np.frombuffer(im_bytes, dtype=np.uint8)  # im_arr is a one-dimensional Numpy array
+img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
+cv2.imwrite(image_path, img)
 ```
 
 ## 2nd level: contextualized data
@@ -450,3 +487,4 @@ Under this topic a message should be sent whenever an assembly at a certain stat
 ```
 
 [sensorconnect]: ../../developers/factorycube-core/sensorconnect
+[cameraconnect]: ../../developers/factorycube-core/cameraconnect

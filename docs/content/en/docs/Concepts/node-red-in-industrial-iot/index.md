@@ -129,4 +129,4 @@ Node-RED is on the same level as "professional" closed-source and commercial sol
 
 It is included and enabled in every installation of the United Manufacturing Hub - in the cloud and on the edge. 
 
-More information on how we use the system can be found in our [Quick Start](http://localhost:1313/docs/getting-started/connecting-machines-creating-dashboards/).
+More information on how we use the system can be found in our [Quick Start](https://docs.umh.app/docs/getting-started/connecting-machines-creating-dashboards/).
