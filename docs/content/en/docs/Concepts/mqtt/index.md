@@ -1,8 +1,11 @@
 
 ---
 title: "The UMH datamodel / MQTT"
+
 linkTitle: "The UMH datamodel / MQTT"
+
 weight: 2
+
 description: >
   All events or subsequent changes in production are transmitted via MQTT in the following data model
 ---
