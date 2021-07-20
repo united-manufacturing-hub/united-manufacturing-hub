@@ -1423,7 +1423,9 @@ paths:
                     example:
                       - "uniqueProductID"
                       - "TorqueScrew1"
+                      - "TorqueScrew1_timestamp_ms"
                       - "TorqueScrew2"
+                      - "TorqueScrew2_timestamp_ms"
                   datapoints:
                     type: array
                     items:
@@ -1433,15 +1435,21 @@ paths:
                       - 
                         - "12439248"
                         - 5.4
+                        - 1610631989044
                         - 5.3
+                        - 1610631989044
                       - 
                         - "468887"
                         - 5.99
+                        - 1610631989044
                         - 5.3
+                        - 1610631989044
                       - 
                         - "1243664542248"
                         - 5.4
+                        - 1610631989044
                         - 8.465
+                        - 1610631989044
 
   /{customer}/productTag:
     get:
