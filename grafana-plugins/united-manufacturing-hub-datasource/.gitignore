@@ -9,3 +9,8 @@ converage/junit.xml
 
 # Yarn build files
 dist
+
+# Remove build files
+modules.js
+modules.js.LICENSE.txt
+modules.js.map
