@@ -26,7 +26,7 @@ Some messages might deviate from it, but this will be noted explicitly. All topi
 
 Here are all raw data, which are not yet contextualized, i.e. assigned to a machine. These are in particular all data from [sensorconnect].
 
-### Topic: ia/raw/
+### Topic: `ia/raw/`
 
 All raw data coming in via [sensorconnect].
 
@@ -45,17 +45,21 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 }
 ```
 
-### Topic: productImage
+### Topic: `ia/rawImage/`
+All raw data coming in via [cameraconnect].
 
-All data coming back from microservices and were published on the server. Input has been from the topic /rawImageClassification.
+Topic structure: `ia/rawImage/<TransmitterID>/<SerialNumberCamera>`
 
-Topic structure: 'ia/<customer>/<location>/<assetID>/productImage'
+`image_id:` a unique identifier for every image acquired
+`image_bytes:` base64 encoded image in JPG format in bytes\
+`image_height:` height of the image in pixel\
+`image_width:` width of the image in pixel\
+`image_channels:` amount of included color channels (Mono: 1, RGB: 3)
 
-### Example:
+#### Example for ia/rawImage/
+Topic: `ia/rawImage/2020-0102/4646548`
 
-Topic: 'ia/mck/dccaachen/weaving1/productImage
-
-This means that the customer is McKinsey which is located in the DCC in Aachen, Germany. The assetID from the machine is weaving1 which is taking the product image.
+This means that the transmitter with the serial number 2020-0102 has one camera connected to it with the serial number 4646548.
 
 ```json
 {
@@ -70,6 +74,14 @@ This means that the customer is McKinsey which is located in the DCC in Aachen, 
 }
 ```
 
+#### Example for decoding an image and saving it locally with OpenCV
+```
+im_bytes = base64.b64decode(incoming_mqtt_message["image"]["image_bytes"])
+im_arr = np.frombuffer(im_bytes, dtype=np.uint8)  # im_arr is a one-dimensional Numpy array
+img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
+cv2.imwrite(image_path, img)
+```
+  
 ## 2nd level: contextualized data
 
 In this level the data is already assigned to a machine.
@@ -298,6 +310,14 @@ A message is sent here every time a process value has been prepared. Unique nami
 }
 ```
 
+### /productImage
+
+All data coming from `/rawImageClassification` and were published on the server. Same content as `/rawImageClassification`, only with a changed topic.
+
+Topic structure: `ia/<customer>/<location>/<assetID>/productImage`
+
+
+
 ## 3rd level: production data
 
 This level contains only highly aggregated production data.
@@ -381,7 +401,7 @@ A message is sent here each time a unique product has been scrapped.
   "UID": "161117101271788647991611171016443",
 }
 ```
-
+  
 ## 4th level: Recommendations for action
 
 ### /recommendations
@@ -475,3 +495,4 @@ Under this topic a message should be sent whenever an assembly at a certain stat
 ```
 
 [sensorconnect]: ../../developers/factorycube-core/sensorconnect
+[cameraconnect]: ../../developers/factorycube-core/cameraconnect
