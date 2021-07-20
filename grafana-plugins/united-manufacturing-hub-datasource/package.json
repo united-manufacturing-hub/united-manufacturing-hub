@@ -13,11 +13,11 @@
   "author": "UMH Systems GmbH",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@grafana/data": "latest",
-    "@grafana/runtime": "latest",
-    "@grafana/toolkit": "latest",
-    "@grafana/ui": "latest",
-    "@types/lodash": "latest",
+    "@grafana/data": "^8.0.6",
+    "@grafana/runtime": "^8.0.6",
+    "@grafana/toolkit": "^8.0.6",
+    "@grafana/ui": "^8.0.6",
+    "@types/lodash": "^4.14.171",
     "prettier": "2.3.0"
   },
   "resolutions": {
