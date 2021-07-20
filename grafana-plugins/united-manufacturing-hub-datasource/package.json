@@ -1,7 +1,7 @@
 {
   "name": "united-manufacturing-hub-united-manufacturing-hub",
   "version": "1.0.0",
-  "description": "LOREM IPSUM",
+  "description": "This Plugin allows sending data from the Grafana frontend to the factoryinput microservice.",
   "scripts": {
     "build": "grafana-toolkit plugin:build",
     "test": "grafana-toolkit plugin:test",
@@ -11,13 +11,13 @@
     "start": "yarn watch"
   },
   "author": "UMH Systems GmbH",
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
-    "@grafana/data": "latest",
-    "@grafana/runtime": "latest",
-    "@grafana/toolkit": "latest",
-    "@grafana/ui": "latest",
-    "@types/lodash": "latest",
+    "@grafana/data": "^8.0.6",
+    "@grafana/runtime": "^8.0.6",
+    "@grafana/toolkit": "^8.0.6",
+    "@grafana/ui": "^8.0.6",
+    "@types/lodash": "^4.14.171",
     "prettier": "2.3.0"
   },
   "resolutions": {

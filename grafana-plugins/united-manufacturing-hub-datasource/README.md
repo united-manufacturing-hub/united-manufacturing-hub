@@ -1,16 +1,13 @@
-# United Manufacturing Hub datasource for Grafana 
+# WIP
+## This plugin is currently work-in-progress and should *not* be used in production !
 
-sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana 
 
-yarn build && ~/go/bin/mage -v build:backend && sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana
+# United Manufacturing Hub datasource for Grafana
+This Plugin allows sending data from the Grafana frontend to the factoryinput microservice.
 
-yarn build && ~/go/bin/mage -v build:backend && sudo docker container restart grafana
+## Getting started (Manual)
 
-npx @grafana/toolkit plugin:dev --watch
-
-## Getting started
-
-A data source backend plugin consists of both frontend and backend components.
+   A data source backend plugin consists of both frontend and backend components.
 
 ### Frontend
 
@@ -47,23 +44,51 @@ A data source backend plugin consists of both frontend and backend components.
    ```
 
 2. Build backend plugin binaries for Linux, Windows and Darwin:
-
-YOU NEED TO INSTALL VIA 
-```
-git clone https://github.com/magefile/mage
-cd mage
-go run bootstrap.go
-```
-NOW EXECUTE
-   ```bash
-   ~/go/bin/mage -v
-   ```
+   
+   2.1 Install [mage](https://github.com/magefile/mage) dependency
+      ```base
+      git clone https://github.com/magefile/mage
+      cd mage
+      go run bootstrap.go
+      ```
+   
+   2.2 Build backend
+      ```bash
+      ~/go/bin/mage -v
+      ```
 
 3. List all available Mage targets for additional commands:
 
    ```bash
    mage -l
    ```
+   
+## Getting Started (Dockerized)
+   ### Build (Release)
+
+   1. Install all dependencies
+   ```bash
+   yarn install
+   ```
+   2. Build frontend & backend
+   ```bash
+   yarn build && ~/go/bin/mage -v build:backend 
+   ```
+   3. Run docker with plugin
+   ```bash
+   sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana
+   ```
+   
+   ### Update (Release)
+   ```bash
+   yarn build && ~/go/bin/mage -v build:backend && sudo docker container restart grafana
+   ```
+
+### Auto rebuild dev builds
+   ```bash
+   npx @grafana/toolkit plugin:dev --watch
+   ```
+
 
 ## Learn more
 

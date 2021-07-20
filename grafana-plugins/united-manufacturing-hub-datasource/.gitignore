@@ -1,1 +1,11 @@
+# NodeJS modules
 node_modules/*
+
+# Jetbrains IDEA
+.idea
+
+# Yarn build files
+dist/*
+
+# JUnit coverage tests
+/coverage/junit.xml
