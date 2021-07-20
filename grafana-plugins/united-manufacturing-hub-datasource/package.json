@@ -11,7 +11,7 @@
     "start": "yarn watch"
   },
   "author": "UMH Systems GmbH",
-  "license": "GNU AGPL v3",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "@grafana/data": "^8.0.6",
     "@grafana/runtime": "^8.0.6",
