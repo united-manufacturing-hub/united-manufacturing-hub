@@ -494,5 +494,12 @@ Under this topic a message should be sent whenever an assembly at a certain stat
 }
 ```
 
+## TimescaleDB structure
+
+Here is a scheme of the timescaleDB structure:
+{{< imgproc timescaleDB Fit "1792x950" >}}{{< /imgproc >}}
+
+
+
 [sensorconnect]: ../../developers/factorycube-core/sensorconnect
 [cameraconnect]: ../../developers/factorycube-core/cameraconnect
