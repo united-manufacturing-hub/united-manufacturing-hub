@@ -451,7 +451,7 @@ Under this topic a message should be sent whenever an assembly at a certain stat
 
 ### /TimescaleDB structure
 
-Here is a schema of the timescaleDB structure:
+Here is a scheme of the timescaleDB structure:
 {{< imgproc timescaleDB Fit "1792x950" >}}{{< /imgproc >}}
 
 
