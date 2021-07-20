@@ -4,8 +4,8 @@ node_modules/*
 # Jetbrains IDEA
 .idea
 
-# JUnit coverage tests
-converage/junit.xml
-
 # Yarn build files
 dist/*
+
+# JUnit coverage tests
+/coverage/junit.xml
