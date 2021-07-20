@@ -1214,6 +1214,143 @@ paths:
                       - 
                         - 1606236217103
                         - 0                      
+  /{customer}/productTag:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/productTypeID'
+        - $ref: '#/components/parameters/uniqueProductID'
+      responses:
+        '200':
+          description: This function returns all stored productTags for one uniqueProduct (incl. duplicates)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "asset"
+                      - "timestamp"
+                      - "uniqueProductID"
+                      - "productTypeID"
+                      - "valueName"
+                      - "value"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "Assembly_1",
+                        - "12439248"
+                        - "testUID465487"
+                        - "testProductType546456"
+                        - "barcode"
+                        - "167000002348"
+                      - 
+                        - "Assembly_1",
+                        - "12439249"
+                        - "testUID465488"
+                        - "testProductType546456"
+                        - "Torque"
+                        - 5.4
+
+  /{customer}/{location}/{asset}/uniqueProductWithTags:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This function returns all uniqueProducts for that specific asset in the given timerange including all unqiueProductTags (value and timestamp for each uniqueProduct. If there is no productTag for that uniqueProduct it will return `null`. If there are multiple productTags it will return an error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "uniqueProductID"
+                      - "TorqueScrew1"
+                      - "TorqueScrew2"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "12439248"
+                        - 5.4
+                        - 5.3
+                      - 
+                        - "468887"
+                        - 5.99
+                        - 5.3
+                      - 
+                        - "1243664542248"
+                        - 5.4
+                        - 8.465
+
+  /{customer}/productTag:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/productTypeID'
+        - $ref: '#/components/parameters/uniqueProductID'
+      responses:
+        '200':
+          description: This function returns all stored productTags for one uniqueProduct (incl. duplicates)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columnNames:
+                    type: array
+                    items:
+                      type: string
+                    description: the column names
+                    example:
+                      - "asset"
+                      - "timestamp"
+                      - "uniqueProductID"
+                      - "productTypeID"
+                      - "valueName"
+                      - "value"
+                  datapoints:
+                    type: array
+                    items:
+                      type: array
+                    description: the returned data
+                    example:
+                      - 
+                        - "Assembly_1",
+                        - "12439248"
+                        - "testUID465487"
+                        - "testProductType546456"
+                        - "barcode"
+                        - "167000002348"
+                      - 
+                        - "Assembly_1",
+                        - "12439249"
+                        - "testUID465488"
+                        - "testProductType546456"
+                        - "Torque"
+                        - 5.4
 
 security:
   - BasicAuth: []
