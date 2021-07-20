@@ -51,7 +51,7 @@ All raw data coming in via [cameraconnect].
 Topic structure: `ia/rawImage/<TransmitterID>/<SerialNumberCamera>`
 
 `image_id:` a unique identifier for every image acquired
-`image_bytes:` base64 encoded image\
+`image_bytes:` base64 encoded image in JPG format in bytes\
 `image_height:` height of the image in pixel\
 `image_width:` width of the image in pixel\
 `image_channels:` amount of included color channels (Mono: 1, RGB: 3)
@@ -72,6 +72,14 @@ This means that the transmitter with the serial number 2020-0102 has one camera 
 		"image_channels": 3
 	}
 }
+```
+
+#### Example for decoding an image and saving it locally with OpenCV
+```
+im_bytes = base64.b64decode(incoming_mqtt_message["image"]["image_bytes"])
+im_arr = np.frombuffer(im_bytes, dtype=np.uint8)  # im_arr is a one-dimensional Numpy array
+img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
+cv2.imwrite(image_path, img)
 ```
 
 ## 2nd level: contextualized data
