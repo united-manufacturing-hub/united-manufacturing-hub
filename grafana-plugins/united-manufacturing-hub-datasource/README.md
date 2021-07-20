@@ -3,6 +3,8 @@
    ```bash
    sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana 
    
+   yarn install
+   
    yarn build && ~/go/bin/mage -v build:backend && sudo docker run --rm -p 3000:3000 -v "$(pwd)":/var/lib/grafana/plugins/united-manufacturing-hub -e 'GF_DEFAULT_APP_MODE=development' --name=grafana grafana/grafana
    
    yarn build && ~/go/bin/mage -v build:backend && sudo docker container restart grafana
