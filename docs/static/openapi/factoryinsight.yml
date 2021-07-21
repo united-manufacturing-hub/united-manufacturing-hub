@@ -1,5 +1,5 @@
 # TODO: #11 Add all other APIs as well.
-
+# TODO make inline schemas into proper models
 openapi: '3.0.2'
 info:
   title: factoryinsight
@@ -112,7 +112,7 @@ components:
     BasicAuth:
       type: http
       scheme: basic
-  schemas: # todo move data objects to schemas
+  schemas: # todo move inline data objects to schemas
     blank:
       properties:
         none:
