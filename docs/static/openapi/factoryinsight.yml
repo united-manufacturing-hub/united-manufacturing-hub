@@ -109,6 +109,11 @@ components:
     BasicAuth:
       type: http
       scheme: basic
+  schemas: # todo move data objects to schemas
+    blank:
+      properties:
+        none:
+          type: string
 
 paths:
   /{customer}:
@@ -209,7 +214,6 @@ paths:
                     type: array
                     items:
                       type: string
-                      
                     description: the column names
                     example:
                       - DCCAachen-AachenPlant-WeavingMachine-state
@@ -218,14 +222,19 @@ paths:
                     type: array
                     items:
                       type: array
-                    description: the returned data
+                      items:
+                        anyOf:
+                          - type: string
+                          - type: integer
+                          - type: number
                     example:
-                      - 
-                        - "No shift"
-                        - 1605187036148
-                      - 
+                      -
+                        -   "No shift"
+                        -   1605187036148
+                      -
                         - "Producing"
                         - 1605201132835
+                    description: the returned data
 
   /{customer}/{location}/{asset}/count:
     get:
@@ -256,6 +265,12 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf:
+                          - type: number
+                          - type: integer
+
+
                     description: the returned data
                     example:
                       - 
@@ -292,9 +307,14 @@ paths:
                       - timestamp
                   datapoints:
                     type: array
-                    maxLength: 1
+                    maxLength: 1 # todo change to dict
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -332,6 +352,12 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
+                          - type: object # this will make problems with certain generators
                     description: the returned data
                     example:
                       - 
@@ -357,7 +383,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  columnNames:
+                  columnNames: # change to dictionary
                     type: array
                     items:
                       type: string
@@ -369,6 +395,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                            format: date-time
                     description: the returned data
                     example:
                       - 
@@ -402,7 +432,7 @@ paths:
                     items:
                       type: string
                     description: the column names
-                    example:
+                    example: #convert following entry into list of dicts with named keys
                         - 
                           - "category"
                           - "state"
@@ -411,6 +441,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data. duration is the amount of seconds.
                     example:
                         - 
@@ -454,6 +489,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: integer
+                          - type: number
                     description: the returned data
                     maxLength: 1
                     minimum: 0
@@ -490,6 +529,9 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                            # todo fix this data model, only doing triage to create a generatable client
+                        type: number
                     description: the returned data
                     maxLength: 1
                     minimum: 0
@@ -526,6 +568,9 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        type: number
+                         # todo fix this data model, only doing triage to create a generatable client
                     description: the returned data
                     maxLength: 1
                     minimum: 0
@@ -565,17 +610,22 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                            format: date-time
+                          - type: number
                     description: the returned data
                     minimum: 0
                     maximum: 1
                     example:
-                      - 
+                      -
                         - 0.1779839097022094,
                         - "2020-11-02T17:07:22Z"
-                      - 
+                      -
                         - 0.018431700156319477,
                         - "2020-11-03T17:07:22Z"
-                      - 
+                      -
                         - 0.036663254805344575,
                         - "2020-11-12T17:07:22Z"
 
@@ -609,6 +659,8 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                       type: integer # todo fix this data model, only doing triage to create a generatable client
                     description: the returned data
                     example:
                       - 
@@ -650,6 +702,8 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        type: number
                     description: the returned data
                     example:
                       - 
@@ -690,6 +744,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: #todo only doing triage
+                          - type: number
+                          - type: integer
                     description: the returned data
                     example:
                       - 
@@ -732,6 +790,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -772,6 +835,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -808,6 +876,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -849,6 +922,12 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                            format: date-time
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -896,6 +975,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -969,6 +1053,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -1014,6 +1103,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -1097,6 +1191,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -1162,6 +1261,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
                     description: the returned data
                     example:
                       - 
@@ -1203,6 +1306,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
