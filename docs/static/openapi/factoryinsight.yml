@@ -4,6 +4,9 @@ openapi: '3.0.2'
 info:
   title: factoryinsight
   version: '1.0'
+  description: >
+    this api is designed to be used with grafana
+
 servers:
   - url: https://api.industrial-analytics.net/api/v1
 
@@ -118,6 +121,7 @@ components:
 paths:
   /{customer}:
     get:
+      operationId: get_customer_locations
       parameters:
         - $ref: '#/components/parameters/customer'
       responses:
@@ -135,6 +139,7 @@ paths:
                   
   /{customer}/{location}:
     get:
+      operationId: get_location_assets
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -154,6 +159,7 @@ paths:
 
   /{customer}/{location}/{asset}:
     get:
+      operationId: get_asset_datapoints
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -195,6 +201,7 @@ paths:
 
   /{customer}/{location}/{asset}/state:
     get:
+      operationId: get_asset_states
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -238,6 +245,7 @@ paths:
 
   /{customer}/{location}/{asset}/count:
     get:
+      operationId: get_asset_counts
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -285,6 +293,7 @@ paths:
 
   /{customer}/{location}/{asset}/currentState:
     get:
+      operationId: get_current_asset_state
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -323,6 +332,7 @@ paths:
   
   /{customer}/{location}/{asset}/recommendation:
     get:
+      operationId: get_current_asset_recommendation
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -371,6 +381,7 @@ paths:
   
   /{customer}/{location}/{asset}/timeRange:
     get:
+      operationId: get_asset_data_timerange
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -407,6 +418,7 @@ paths:
 
   /{customer}/{location}/{asset}/aggregatedStates:
     get:
+      operationId: get_asset_aggregatedStates
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -463,6 +475,7 @@ paths:
 
   /{customer}/{location}/{asset}/availability:
     get:
+      operationId: get_asset_availability
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -503,6 +516,7 @@ paths:
 
   /{customer}/{location}/{asset}/performance:
     get:
+      operationId: get_asset_performance
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -542,6 +556,7 @@ paths:
 
   /{customer}/{location}/{asset}/quality:
     get:
+      operationId: get_asset_quality
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -581,6 +596,7 @@ paths:
 
   /{customer}/{location}/{asset}/oee:
     get:
+      operationId: get_asset_oee
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -631,6 +647,7 @@ paths:
 
   /{customer}/{location}/{asset}/shifts:
     get:
+      operationId: get_asset_shifts
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -675,6 +692,7 @@ paths:
 
   /{customer}/{location}/{asset}/productionSpeed:
     get:
+      operationId: get_asset_production_speed
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -718,6 +736,7 @@ paths:
 
   /{customer}/{location}/{asset}/qualityRate:
     get:
+      operationId: get_asset_quality_rate
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -762,6 +781,7 @@ paths:
 
   /{customer}/{location}/{asset}/stateHistogram:
     get:
+      operationId: get_asset_state_histogram
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -809,6 +829,7 @@ paths:
 
   /{customer}/{location}/{asset}/factoryLocations:
     get:
+      operationId: get_asset_factory_location
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -849,6 +870,7 @@ paths:
   
   /{customer}/{location}/{asset}/averageCleaningTime:
     get:
+      operationId: get_asset_average_cleaning_time
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -895,6 +917,7 @@ paths:
   
   /{customer}/{location}/{asset}/averageChangeoverTime:
     get:
+      operationId: get_asset_average_changeover_time
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -942,6 +965,7 @@ paths:
                         
   /{customer}/{location}/{asset}/upcomingMaintenanceActivities:
     get:
+      operationId: get_asset_umpcoming_maintenance_activities
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1002,7 +1026,9 @@ paths:
                         - 0     
                         
   /{customer}/{location}/{asset}/maintenanceComponents:
+
     get:
+      operationId: get_asset_maintenance_components
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1025,6 +1051,7 @@ paths:
   
   /{customer}/{location}/{asset}/maintenanceActivities:
     get:
+      operationId: get_asset_maintenance_activities
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1071,6 +1098,7 @@ paths:
   
   /{customer}/{location}/{asset}/uniqueProducts:
     get:
+      operationId: get_asset_unique_products
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1129,6 +1157,7 @@ paths:
 
   /{customer}/{location}/{asset}/orderTable:
     get:
+      operationId: get_asset_order_table
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1235,6 +1264,7 @@ paths:
 
   /{customer}/{location}/{asset}/orderTimeline:
     get:
+      operationId: get_asset_order_timeline
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1279,6 +1309,7 @@ paths:
 
   /{customer}/{location}/{asset}/process_{processValue}:
     get:
+      operationId: get_asset_process_value
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
