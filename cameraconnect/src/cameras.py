@@ -5,8 +5,7 @@ The module provides two classes:
 - GenICam: for all GenICam compatible cameras. Cameras with GigE 
             Vision or USB3 Vision transport layer always support 
             GenICam.
-- Cognex: for all cognex vision sensors and vision systems of 
-            the in-sight series. 
+- DummyCam: for simulating a camera
 
 """
 
@@ -65,9 +64,6 @@ class CamGeneral(ABC):
 
         self.mqtt_host = mqtt_host
         self.mqtt_port = mqtt_port
-        print(mqtt_host)
-        print(mqtt_port)
-
         self.mqtt_topic = mqtt_topic
         self.serial_number = serial_number
         self.image_storage_path = image_storage_path
@@ -322,7 +318,7 @@ class GenICam(CamGeneral):
         fetch an image.
     """
 
-    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, genTL_producer_path,
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, genTL_producer_path_list,
                  user_set_selector="Default", image_width=None, image_height=None, pixel_format=None,
                  image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
                  image_storage_path=None) -> None:
@@ -341,7 +337,7 @@ class GenICam(CamGeneral):
                          mqtt_topic=mqtt_topic,
                          serial_number=serial_number)
 
-        self.genTL_producer_path = genTL_producer_path
+        self.genTL_producer_path_list = genTL_producer_path_list
         self.user_set_selector = user_set_selector
         self.image_width = image_width
         self.image_height = image_height
@@ -378,10 +374,14 @@ class GenICam(CamGeneral):
         self.h = Harvester()
 
         # Add path of GenTL Producer 
-        self.h.add_file(self.genTL_producer_path)
+        #self.h.add_file(self.genTL_producer_path)
+
+        for path in self.genTL_producer_path_list:
+            self.h.add_file(path)
+
         # Check if cti-file available, stop if none found
         if len(self.h.files) == 0:
-            sys.exit("No valid cti file found at %s" % self.genTL_producer_path)
+            sys.exit("No valid cti file found")
         print("Currently available genTL Producer CTI files: ", self.h.files)
 
         # Update the list of remote devices; fills up your device
