@@ -1364,7 +1364,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This function returns all uniqueProducts for that specific asset in the given timerange including all unqiueProductTags (value and timestamp for each uniqueProduct. If there is no productTag for that uniqueProduct it will return `null`. If there are multiple productTags it will return an error
+          description: This function returns all uniqueProducts for that specific asset in the given timerange including all productTags (value and timestamp for each uniqueProduct. If there is no productTag for that uniqueProduct it will return `null`. If there are multiple productTags it will return an error. This function will not return the productTags from the parents. For this we recommend to use /productShadow.
           content:
             application/json:
               schema:
@@ -1376,11 +1376,16 @@ paths:
                       type: string
                     description: the column names
                     example:
-                      - "uniqueProductID"
+                      - "uniqueProductUID"
+                      - "uniqueProductAID"
                       - "TorqueScrew1"
                       - "TorqueScrew1_timestamp_ms"
                       - "TorqueScrew2"
                       - "TorqueScrew2_timestamp_ms"
+                      - "parentAID1"
+                      - "parentUID1"
+                      - "parentAID2"
+                      - "parentUID2"
                   datapoints:
                     type: array
                     items:
@@ -1394,22 +1399,37 @@ paths:
                     example:
                       - 
                         - "12439248"
+                        - "barcode123"
                         - 5.4
                         - 1610631989044
                         - 5.3
                         - 1610631989044
+                        - "barcode111"
+                        - "55487545"
+                        - "barcode222"
+                        - "5648753"
                       - 
                         - "468887"
+                        - "barcode456"
                         - 5.99
                         - 1610631989044
                         - 5.3
                         - 1610631989044
+                        - "barcode211"
+                        - "55484545"
+                        - "barcode322"
+                        - "5648453"
                       - 
                         - "1243664542248"
+                        - "barcode789"
                         - 5.4
                         - 1610631989044
                         - 8.465
                         - 1610631989044
+                        - "barcode311"
+                        - "55666666"
+                        - "barcode422"
+                        - "5648433"
 
   /{customer}/productTag:
     get:
