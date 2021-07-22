@@ -1415,8 +1415,8 @@ paths:
     get:
       parameters:
         - $ref: '#/components/parameters/customer'
-        - $ref: '#/components/parameters/productTypeID'
-        - $ref: '#/components/parameters/uniqueProductID'
+        # - $ref: '#/components/parameters/productTypeID'
+        # - $ref: '#/components/parameters/uniqueProductID'
       responses:
         '200':
           description: PLANNED, NOT IMPLEMENTED. This function returns all stored productTags for one uniqueProduct (incl. duplicates)
