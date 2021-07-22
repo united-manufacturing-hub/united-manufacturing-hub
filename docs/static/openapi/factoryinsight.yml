@@ -118,51 +118,48 @@ components:
         none:
           type: string
     customer_location:
-      properties:
         type: array
-          items:
-            type: string
-          example:
-            - AachenPlant
-            - DuesseldorfPlant
+        items:
+          type: string
+        example:
+          - AachenPlant
+          - DuesseldorfPlant
     location_assets:
-      properties:
         type: array
-          items:
-            type: string
-          example:
-            - Warping
-            - Weaving
+        items:
+          type: string
+        example:
+          - Warping
+          - Weaving
     asset_datapoints:
-      properties:
-        type: array
-          items:
-            type: string
-          example:
-            - state
-            - count
-            - currentState
-            - recommendation
-            - aggregatedStates
-            - timeRange
-            - availability
-            - performance
-            - oee
-            - productionSpeed
-            - shifts
-            - stateHistogram
-            - factoryLocations
-            - averageCleaningTime
-            - averageChangeoverTime
-            - upcomingMaintenanceActivities
-            - maintenanceComponents
-            - maintenanceActivities
-            - uniqueProducts
-            - orderTable
-            - orderTimeline
-            - process_SignalLamp
-            - process_TotalActivePower
-            - process_TotalApparentPower
+      type: array
+      items:
+        type: string
+      example:
+        - state
+        - count
+        - currentState
+        - recommendation
+        - aggregatedStates
+        - timeRange
+        - availability
+        - performance
+        - oee
+        - productionSpeed
+        - shifts
+        - stateHistogram
+        - factoryLocations
+        - averageCleaningTime
+        - averageChangeoverTime
+        - upcomingMaintenanceActivities
+        - maintenanceComponents
+        - maintenanceActivities
+        - uniqueProducts
+        - orderTable
+        - orderTimeline
+        - process_SignalLamp
+        - process_TotalActivePower
+        - process_TotalApparentPower
 
     asset_state: #TODO changing asset state and asset datapoint to be linked properly requires changing the datamodel
       properties:
@@ -660,14 +657,13 @@ components:
                 - 0
 
     asset_maintenance_components:
-      properties:
         type: array
-          items:
-            type: string
-          description: the column names
-          example:
-            - Pumpe 20
-            - Pumpe 21
+        items:
+          type: string
+        description: the column names
+        example:
+          - Pumpe 20
+          - Pumpe 21
 
     asset_maintenance_activities:
         properties:
@@ -1005,7 +1001,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/customer_location'
+                $ref: '#/components/schemas/location_assets'
 
 
 
@@ -1104,7 +1100,7 @@ paths:
           content:
             application/json:
               schema:
-               $ref: '#/components/parameters/asset_data_timerange'
+               $ref: '#/components/schemas/asset_data_timerange'
 
   /{customer}/{location}/{asset}/aggregatedStates:
     get:

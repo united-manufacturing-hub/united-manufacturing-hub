@@ -27,15 +27,17 @@ Method | HTTP request | Description
 [**getAssetStates**](DefaultApi.md#getAssetStates) | **GET** /{customer}/{location}/{asset}/state | 
 [**getAssetUmpcomingMaintenanceActivities**](DefaultApi.md#getAssetUmpcomingMaintenanceActivities) | **GET** /{customer}/{location}/{asset}/upcomingMaintenanceActivities | 
 [**getAssetUniqueProducts**](DefaultApi.md#getAssetUniqueProducts) | **GET** /{customer}/{location}/{asset}/uniqueProducts | 
+[**getAssetUniqueProductsWithTags**](DefaultApi.md#getAssetUniqueProductsWithTags) | **GET** /{customer}/{location}/{asset}/uniqueProductWithTags | 
 [**getCurrentAssetRecommendation**](DefaultApi.md#getCurrentAssetRecommendation) | **GET** /{customer}/{location}/{asset}/recommendation | 
 [**getCurrentAssetState**](DefaultApi.md#getCurrentAssetState) | **GET** /{customer}/{location}/{asset}/currentState | 
 [**getCustomerLocations**](DefaultApi.md#getCustomerLocations) | **GET** /{customer} | 
+[**getCustomerProductTags**](DefaultApi.md#getCustomerProductTags) | **GET** /{customer}/productTag | 
 [**getLocationAssets**](DefaultApi.md#getLocationAssets) | **GET** /{customer}/{location} | 
 
 
 <a name="getAssetAggregatedStates"></a>
 # **getAssetAggregatedStates**
-> inline_response_200_5 getAssetAggregatedStates(customer, location, asset, from, to, includeRunning, aggregationType, keepStatesInteger)
+> asset_aggregated_states getAssetAggregatedStates(customer, location, asset, from, to, includeRunning, aggregationType, keepStatesInteger)
 
 
 
@@ -54,7 +56,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_5**](../Models/inline_response_200_5.md)
+[**asset_aggregated_states**](../Models/asset_aggregated_states.md)
 
 ### Authorization
 
@@ -67,7 +69,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetAvailability"></a>
 # **getAssetAvailability**
-> inline_response_200_6 getAssetAvailability(customer, location, asset, from, to)
+> asset_availability getAssetAvailability(customer, location, asset, from, to)
 
 
 
@@ -83,7 +85,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_6**](../Models/inline_response_200_6.md)
+[**asset_availability**](../Models/asset_availability.md)
 
 ### Authorization
 
@@ -96,7 +98,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetAverageChangeoverTime"></a>
 # **getAssetAverageChangeoverTime**
-> inline_response_200_16 getAssetAverageChangeoverTime(customer, location, asset, from, to)
+> asset_average_changeover_time getAssetAverageChangeoverTime(customer, location, asset, from, to)
 
 
 
@@ -112,7 +114,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_16**](../Models/inline_response_200_16.md)
+[**asset_average_changeover_time**](../Models/asset_average_changeover_time.md)
 
 ### Authorization
 
@@ -125,7 +127,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetAverageCleaningTime"></a>
 # **getAssetAverageCleaningTime**
-> inline_response_200_15 getAssetAverageCleaningTime(customer, location, asset, from, to)
+> asset_average_cleaning_time getAssetAverageCleaningTime(customer, location, asset, from, to)
 
 
 
@@ -141,7 +143,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_15**](../Models/inline_response_200_15.md)
+[**asset_average_cleaning_time**](../Models/asset_average_cleaning_time.md)
 
 ### Authorization
 
@@ -154,7 +156,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetCounts"></a>
 # **getAssetCounts**
-> inline_response_200_1 getAssetCounts(customer, location, asset, from, to)
+> asset_counts getAssetCounts(customer, location, asset, from, to)
 
 
 
@@ -170,7 +172,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_1**](../Models/inline_response_200_1.md)
+[**asset_counts**](../Models/asset_counts.md)
 
 ### Authorization
 
@@ -183,7 +185,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetDataTimerange"></a>
 # **getAssetDataTimerange**
-> inline_response_200_4 getAssetDataTimerange(customer, location, asset)
+> asset_data_timerange getAssetDataTimerange(customer, location, asset)
 
 
 
@@ -197,7 +199,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_4**](../Models/inline_response_200_4.md)
+[**asset_data_timerange**](../Models/asset_data_timerange.md)
 
 ### Authorization
 
@@ -237,7 +239,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetFactoryLocation"></a>
 # **getAssetFactoryLocation**
-> inline_response_200_14 getAssetFactoryLocation(customer, location, asset)
+> asset_factory_location getAssetFactoryLocation(customer, location, asset)
 
 
 
@@ -251,7 +253,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_14**](../Models/inline_response_200_14.md)
+[**asset_factory_location**](../Models/asset_factory_location.md)
 
 ### Authorization
 
@@ -264,7 +266,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetMaintenanceActivities"></a>
 # **getAssetMaintenanceActivities**
-> inline_response_200_18 getAssetMaintenanceActivities(customer, location, asset)
+> asset_maintenance_activities getAssetMaintenanceActivities(customer, location, asset)
 
 
 
@@ -278,7 +280,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_18**](../Models/inline_response_200_18.md)
+[**asset_maintenance_activities**](../Models/asset_maintenance_activities.md)
 
 ### Authorization
 
@@ -318,7 +320,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetOee"></a>
 # **getAssetOee**
-> inline_response_200_9 getAssetOee(customer, location, asset, from, to)
+> asset_oee getAssetOee(customer, location, asset, from, to)
 
 
 
@@ -334,7 +336,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_9**](../Models/inline_response_200_9.md)
+[**asset_oee**](../Models/asset_oee.md)
 
 ### Authorization
 
@@ -347,7 +349,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetOrderTable"></a>
 # **getAssetOrderTable**
-> inline_response_200_20 getAssetOrderTable(customer, location, asset, from, to)
+> asset_order_table getAssetOrderTable(customer, location, asset, from, to)
 
 
 
@@ -363,7 +365,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_20**](../Models/inline_response_200_20.md)
+[**asset_order_table**](../Models/asset_order_table.md)
 
 ### Authorization
 
@@ -376,7 +378,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetOrderTimeline"></a>
 # **getAssetOrderTimeline**
-> inline_response_200_21 getAssetOrderTimeline(customer, location, asset, from, to)
+> asset_order_timeline getAssetOrderTimeline(customer, location, asset, from, to)
 
 
 
@@ -392,7 +394,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_21**](../Models/inline_response_200_21.md)
+[**asset_order_timeline**](../Models/asset_order_timeline.md)
 
 ### Authorization
 
@@ -405,7 +407,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetPerformance"></a>
 # **getAssetPerformance**
-> inline_response_200_7 getAssetPerformance(customer, location, asset, from, to)
+> asset_performance getAssetPerformance(customer, location, asset, from, to)
 
 
 
@@ -421,7 +423,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_7**](../Models/inline_response_200_7.md)
+[**asset_performance**](../Models/asset_performance.md)
 
 ### Authorization
 
@@ -434,7 +436,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetProcessValue"></a>
 # **getAssetProcessValue**
-> inline_response_200_22 getAssetProcessValue(customer, location, asset, from, to, processValue)
+> asset_process_value getAssetProcessValue(customer, location, asset, from, to, processValue)
 
 
 
@@ -451,7 +453,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_22**](../Models/inline_response_200_22.md)
+[**asset_process_value**](../Models/asset_process_value.md)
 
 ### Authorization
 
@@ -464,7 +466,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetProductionSpeed"></a>
 # **getAssetProductionSpeed**
-> inline_response_200_11 getAssetProductionSpeed(customer, location, asset, from, to)
+> asset_production_speed getAssetProductionSpeed(customer, location, asset, from, to)
 
 
 
@@ -480,7 +482,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_11**](../Models/inline_response_200_11.md)
+[**asset_production_speed**](../Models/asset_production_speed.md)
 
 ### Authorization
 
@@ -493,7 +495,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetQuality"></a>
 # **getAssetQuality**
-> inline_response_200_8 getAssetQuality(customer, location, asset, from, to)
+> asset_quality getAssetQuality(customer, location, asset, from, to)
 
 
 
@@ -509,7 +511,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_8**](../Models/inline_response_200_8.md)
+[**asset_quality**](../Models/asset_quality.md)
 
 ### Authorization
 
@@ -522,7 +524,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetQualityRate"></a>
 # **getAssetQualityRate**
-> inline_response_200_12 getAssetQualityRate(customer, location, asset, from, to)
+> asset_quality_rate getAssetQualityRate(customer, location, asset, from, to)
 
 
 
@@ -538,7 +540,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_12**](../Models/inline_response_200_12.md)
+[**asset_quality_rate**](../Models/asset_quality_rate.md)
 
 ### Authorization
 
@@ -551,7 +553,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetShifts"></a>
 # **getAssetShifts**
-> inline_response_200_10 getAssetShifts(customer, location, asset, from, to)
+> asset_shifts getAssetShifts(customer, location, asset, from, to)
 
 
 
@@ -567,7 +569,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_10**](../Models/inline_response_200_10.md)
+[**asset_shifts**](../Models/asset_shifts.md)
 
 ### Authorization
 
@@ -580,7 +582,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetStateHistogram"></a>
 # **getAssetStateHistogram**
-> inline_response_200_13 getAssetStateHistogram(customer, location, asset, from, to, includeRunning, keepStatesInteger)
+> asset_state_histogram getAssetStateHistogram(customer, location, asset, from, to, includeRunning, keepStatesInteger)
 
 
 
@@ -598,7 +600,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_13**](../Models/inline_response_200_13.md)
+[**asset_state_histogram**](../Models/asset_state_histogram.md)
 
 ### Authorization
 
@@ -611,7 +613,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetStates"></a>
 # **getAssetStates**
-> inline_response_200 getAssetStates(customer, location, asset, from, to, keepStatesInteger)
+> asset_states getAssetStates(customer, location, asset, from, to, keepStatesInteger)
 
 
 
@@ -628,7 +630,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200**](../Models/inline_response_200.md)
+[**asset_states**](../Models/asset_states.md)
 
 ### Authorization
 
@@ -641,7 +643,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetUmpcomingMaintenanceActivities"></a>
 # **getAssetUmpcomingMaintenanceActivities**
-> inline_response_200_17 getAssetUmpcomingMaintenanceActivities(customer, location, asset)
+> asset_umpcoming_maintenance_activities getAssetUmpcomingMaintenanceActivities(customer, location, asset)
 
 
 
@@ -655,7 +657,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_17**](../Models/inline_response_200_17.md)
+[**asset_umpcoming_maintenance_activities**](../Models/asset_umpcoming_maintenance_activities.md)
 
 ### Authorization
 
@@ -668,7 +670,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetUniqueProducts"></a>
 # **getAssetUniqueProducts**
-> inline_response_200_19 getAssetUniqueProducts(customer, location, asset, from, to)
+> asset_unique_products getAssetUniqueProducts(customer, location, asset, from, to)
 
 
 
@@ -684,7 +686,36 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_19**](../Models/inline_response_200_19.md)
+[**asset_unique_products**](../Models/asset_unique_products.md)
+
+### Authorization
+
+[BasicAuth](../README.md#BasicAuth)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+<a name="getAssetUniqueProductsWithTags"></a>
+# **getAssetUniqueProductsWithTags**
+> asset_unique_products_with_tags getAssetUniqueProductsWithTags(customer, location, asset, from, to)
+
+
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **customer** | **String**| name of the customer | [default to null]
+ **location** | **String**| name of the location | [default to null]
+ **asset** | **String**| name of the asset | [default to null]
+ **from** | **date**| Get data from this timestamp on (in RFC3339 format) | [default to null]
+ **to** | **date**| Get data till this timestamp (in RFC3339 format) | [default to null]
+
+### Return type
+
+[**asset_unique_products_with_tags**](../Models/asset_unique_products_with_tags.md)
 
 ### Authorization
 
@@ -697,7 +728,7 @@ Name | Type | Description  | Notes
 
 <a name="getCurrentAssetRecommendation"></a>
 # **getCurrentAssetRecommendation**
-> inline_response_200_3 getCurrentAssetRecommendation(customer, location, asset)
+> asset_recommendation getCurrentAssetRecommendation(customer, location, asset)
 
 
 
@@ -711,7 +742,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_3**](../Models/inline_response_200_3.md)
+[**asset_recommendation**](../Models/asset_recommendation.md)
 
 ### Authorization
 
@@ -724,7 +755,7 @@ Name | Type | Description  | Notes
 
 <a name="getCurrentAssetState"></a>
 # **getCurrentAssetState**
-> inline_response_200_2 getCurrentAssetState(customer, location, asset)
+> asset_state getCurrentAssetState(customer, location, asset)
 
 
 
@@ -738,7 +769,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**inline_response_200_2**](../Models/inline_response_200_2.md)
+[**asset_state**](../Models/asset_state.md)
 
 ### Authorization
 
@@ -764,6 +795,32 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**List**](../Models/string.md)
+
+### Authorization
+
+[BasicAuth](../README.md#BasicAuth)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+<a name="getCustomerProductTags"></a>
+# **getCustomerProductTags**
+> customer_product_tags getCustomerProductTags(customer, UNKNOWN_PARAMETER_NAME)
+
+
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **customer** | **String**| name of the customer | [default to null]
+ **UNKNOWN_PARAMETER_NAME** | [****](../Models/.md)|  | [optional]
+
+### Return type
+
+[**customer_product_tags**](../Models/customer_product_tags.md)
 
 ### Authorization
 
