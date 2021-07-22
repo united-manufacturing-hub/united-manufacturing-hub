@@ -4,14 +4,14 @@ services:
   cameraconnect:
     image: cameraconnect_image
     build:
-        context: ../
-        dockerfile: ./docker/Dockerfile
+        context: ../../
+        dockerfile: ./deployment/cameraconnect/Dockerfile
     container_name: cameraconnect_container
     #restart: unless-stopped
     env_file:
-      - ./.env
+      - ./example_env
     volumes:
-      - "../assets:/app/assets/"
+      - "../../cameraconnect/assets:/app/assets/"
     networks:
       - camera_vlan
       - dockernet
