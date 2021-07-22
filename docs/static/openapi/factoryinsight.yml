@@ -280,7 +280,7 @@ components:
                 - "Maschine DCCAachen-Demonstrator einschalten oder Stoppgrund auswählen."
                 - "Machine DCCAachen-Demonstrator is not running since 612685 seconds (status: 8, threshold: 30)"
                 - "Maschine DCCAachen-Demonstrator steht seit 612685 Sekunden still (Status: 8, Schwellwert: 30)"
-    asset_timerange:
+    asset_data_timerange:
         properties:
           columnNames: # change to dictionary
             type: array
@@ -1073,7 +1073,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/asset_states'
+                $ref: '#/components/schemas/asset_state'
 
   
   /{customer}/{location}/{asset}/recommendation:
@@ -1104,7 +1104,7 @@ paths:
           content:
             application/json:
               schema:
-               $ref: '#/components/parameters/asset_timerange'
+               $ref: '#/components/parameters/asset_data_timerange'
 
   /{customer}/{location}/{asset}/aggregatedStates:
     get:
@@ -1127,7 +1127,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/asset_aggregated_state"
+                $ref: "#/components/schemas/asset_aggregated_states"
 
   /{customer}/{location}/{asset}/availability:
     get:
@@ -1181,7 +1181,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "/components/schemas/asset_quality"
+                $ref: "#/components/schemas/asset_quality"
 
   /{customer}/{location}/{asset}/oee:
     get:
