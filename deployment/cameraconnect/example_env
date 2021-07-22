@@ -5,6 +5,7 @@ CUSTOMER_ID=ExampleID
 LOCATION=ExampleLocation
 MACHINE_ID=ExampleID
 
+
 ## ------------- MQTT SETTINGS -------------
 
 #Use 192.168.0.1 your MQTT Broker answers on localhost
@@ -13,6 +14,7 @@ MQTT_PORT=1883
 
 # Set transmitter-id/serial-number of the system
 CUBE_TRANSMITTERID=EXAMPLE_TRANSMITTERID
+
 
 ### ------------- IMAGE ACQUISITION ------------
 
@@ -41,7 +43,7 @@ ACQUISITION_DELAY=0.0
 #   image, an error is thrown
 # Possible values: Floats in seconds
 # Default: 10.0
-CYCLE_TIME=5
+CYCLE_TIME=4
 
 #if IMAGE_PATH is not defined, no images will be saved
 IMAGE_PATH=/app/assets/images/
@@ -54,8 +56,8 @@ IMAGE_PATH=/app/assets/images/
 # No default
 CAMERA_INTERFACE=GenICam
 
-#typically pixel format is rgb8packed or mono8
-PIXEL_FORMAT=RGB8Packed or Mono8
+#typically pixel format is rgb8packed or Mono8
+#PIXEL_FORMAT=Mono8
 IMAGE_WIDTH=800
 IMAGE_HEIGHT=800
 IMAGE_CHANNELS=3
@@ -64,7 +66,12 @@ IMAGE_CHANNELS=3
 # Default:    (empty)
 SERIAL_NUMBER=02-2625A-09849
 
-#Depending on the camera, the corresponding manudacturer file has to be selected
-#Solely include the cti file which corresponds to the camera's manufacturer
-DEFAULT_GENTL_PRODUCER_PATH=/ProducerFiles/pylon/lib/gentlproducer/gtl/ProducerGEV.cti
-#DEFAULT_GENTL_PRODUCER_PATH=/ProducerFiles/VimbaGigETL.cti
+#set path were gentl producers are located
+DEFAULT_GENTL_PRODUCER_PATH=/app/assets/producer_files
+
+## ------------- DEVELOPER SETTINGS -----------------
+
+#set logging level
+#possible values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+#default INFO
+LOGGING_LEVEL=DEBUG
