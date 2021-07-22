@@ -107,16 +107,881 @@ components:
         description: name of the process value to retrieve data
         example:
           energyConsumption
+      uniqueProductID:
+        in: query
+        name: uniqueProductID
+        required: true
+        schema:
+          type: string
+        description: unique id of the product to search for
+        example:
+          energyConsumption
 
   securitySchemes:
     BasicAuth:
       type: http
       scheme: basic
-  # schemas: # todo move inline data objects to schemas
-  #   blank:
-  #     properties:
-  #       none:
-  #         type: string
+  schemas: # todo move inline data objects to schemas
+    blank:
+      properties:
+        none:
+          type: string
+    customer_location:
+        type: array
+        items:
+          type: string
+        example:
+          - AachenPlant
+          - DuesseldorfPlant
+    location_assets:
+        type: array
+        items:
+          type: string
+        example:
+          - Warping
+          - Weaving
+    asset_datapoints:
+      type: array
+      items:
+        type: string
+      example:
+        - state
+        - count
+        - currentState
+        - recommendation
+        - aggregatedStates
+        - timeRange
+        - availability
+        - performance
+        - oee
+        - productionSpeed
+        - shifts
+        - stateHistogram
+        - factoryLocations
+        - averageCleaningTime
+        - averageChangeoverTime
+        - upcomingMaintenanceActivities
+        - maintenanceComponents
+        - maintenanceActivities
+        - uniqueProducts
+        - orderTable
+        - orderTimeline
+        - process_SignalLamp
+        - process_TotalActivePower
+        - process_TotalApparentPower
+
+    asset_state: #TODO changing asset state and asset datapoint to be linked properly requires changing the datamodel
+      properties:
+        columnNames:
+          type: array
+          items:
+            type: string
+          description: the column names
+          example:
+            - DCCAachen-AachenPlant-WeavingMachine-state
+            - timestamp
+        datapoints:
+          type: array
+          maxLength: 1 # todo change to dict
+          items:
+            type: array
+            items:
+              anyOf: # todo fix this data model, only doing triage to create a generatable client
+                - type: string
+                - type: integer
+                - type: number
+          description: the returned data
+          example:
+            - - "Unbekannter Zustand 1"
+              - 1608298176825
+
+    asset_states:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-AachenPlant-WeavingMachine-state
+              - timestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf:
+                  - type: string
+                  - type: integer
+                  - type: number
+            example:
+              - - "No shift"
+                - 1605187036148
+              - - "Producing"
+                - 1605201132835
+            description: the returned data
+
+
+
+    asset_counts:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-AachenPlant-WeavingMachine-count
+              - DCCAachen-AachenPlant-WeavingMachine-scrap
+              - timestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf:
+                  - type: number
+                  - type: integer
+                  - description: the returned data
+                    example:
+                      -
+                        - 1250
+                        - 0
+                        - 1605201148990
+                      -
+                        - 625
+                        - 0
+                        - 1605201408149
+    asset_recommendation:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - timestamp
+              - recommendationType
+              - recommendationValues
+              - recommendationTextEN
+              - recommendationTextDE
+              - diagnoseTextEN
+              - diagnoseTextDE
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+                  - type: object # this will make problems with certain generators
+            description: the returned data
+            example:
+              - - 1600707538210
+                - 1
+                - { "Threshold": 30,"StoppedForTime": 612685 }
+                - "Start machine DCCAachen-Demonstrator or specify stop reason."
+                - "Maschine DCCAachen-Demonstrator einschalten oder Stoppgrund auswählen."
+                - "Machine DCCAachen-Demonstrator is not running since 612685 seconds (status: 8, threshold: 30)"
+                - "Maschine DCCAachen-Demonstrator steht seit 612685 Sekunden still (Status: 8, Schwellwert: 30)"
+    asset_data_timerange:
+        properties:
+          columnNames: # change to dictionary
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - firstTimestamp
+              - lastTimestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                    format: date-time
+            description: the returned data
+            example:
+              - - "2020-11-03T12:27:22Z"
+                - "2021-02-01T18:51:50Z"
+    asset_aggregated_states:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example: #convert following entry into list of dicts with named keys
+              - - "category"
+                - "state"
+                - "duration"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data. duration is the amount of seconds.
+            example:
+              - - 9
+                - 150000
+                - 3638.4260000000004
+              - - 9
+                - 160000
+                - 2001.471
+              - - 10
+                - 150000
+                - 6185.870000000001
+    asset_availability:
+
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-Aachen-warping-availability
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: integer
+                  - type: number
+            description: the returned data
+            maxLength: 1
+            minimum: 0
+            maximum: 1
+            example:
+              - - 0.039953472102622754
+    asset_performance:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-Aachen-warping-performance
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                # todo fix this data model, only doing triage to create a generatable client
+                type: number
+            description: the returned data
+            maxLength: 1
+            minimum: 0
+            maximum: 1
+            example:
+              - - 0.039953472102622754
+    asset_quality:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-Aachen-warping-quality
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                type: number
+                # todo fix this data model, only doing triage to create a generatable client
+            description: the returned data
+            maxLength: 1
+            minimum: 0
+            maximum: 1
+            example:
+              - - 0.80
+    asset_oee:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-Aachen-warping-oee
+              - timestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                    format: date-time
+                  - type: number
+            description: the returned data
+            minimum: 0
+            maximum: 1
+            example:
+              - - 0.1779839097022094,
+                - "2020-11-02T17:07:22Z"
+              - - 0.018431700156319477,
+                - "2020-11-03T17:07:22Z"
+              - - 0.036663254805344575,
+                - "2020-11-12T17:07:22Z"
+    asset_shifts:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - timestamp
+              - DCCAachen-Aachen-warping-shiftName
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                type: integer # todo fix this data model, only doing triage to create a generatable client
+            description: the returned data
+            example:
+              - - 1608019200032
+                - 1
+              - - 1608030000032
+                - 0
+              - - 1608033600016
+                - 1
+    asset_production_speed:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-Aachen-warping-speed
+              - timestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                type: number
+            description: the returned data
+            example:
+              - - 13560
+                - 1604077800000
+              - - 1260
+                - 1604077860000
+              - - 36360
+                - 1604077920000
+
+    asset_quality_rate:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - DCCAachen-Aachen-warping-qualityRate
+              - timestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: #todo only doing triage
+                  - type: number
+                  - type: integer
+            description: the returned data
+            example:
+              - - 0.80
+                - 1604077800000
+              - - 0.85
+                - 1604077860000
+              - - 0.82
+                - 1604077920000
+
+    asset_state_histogram:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - state
+              - occurances
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "Maschine läuft"
+                - 147
+              - - "Unbekannter Stopp"
+                - 6
+              - - "Mikrostopp"
+                - 1
+
+    asset_factory_location:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - Location
+              - Metric
+              - Geohash
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "Aachen"
+                - 80
+                - u1h2fe
+
+    asset_average_cleaning_time:
+      properties:
+        columnNames:
+          type: array
+          items:
+            type: string
+          description: the column names
+          example:
+            - "DCCAachen-Aachen-warping-averageCleaningTime"
+            - "timestamp"
+        datapoints:
+          type: array
+          items:
+            type: array
+            items:
+              anyOf: # todo fix this data model, only doing triage to create a generatable client
+                - type: string
+                - type: integer
+                - type: number
+          description: the returned data
+          example:
+            - - 1556,
+              - "2020-11-02T17:07:22Z"
+            - - 1526,
+              - "2020-11-03T17:07:22Z"
+            - - 756,
+              - "2020-11-12T17:07:22Z"
+
+
+
+    asset_average_changeover_time:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "DCCAachen-Aachen-warping-averageChangeoverTime"
+              - "timestamp"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                    format: date-time
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - 1556,
+                - "2020-11-02T17:07:22Z"
+              - - 1526,
+                - "2020-11-03T17:07:22Z"
+              - - 756,
+                - "2020-11-12T17:07:22Z"
+
+    asset_umpcoming_maintenance_activities:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - Machine
+              - Component
+              - Activity
+              - Duration
+              - Status
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "bernd2"
+                - "Pumpe 21"
+                - "Austausch"
+                - -69.5
+                - 0
+              - - "bernd2"
+                - "Pumpe 20"
+                - "Austausch"
+                - -79.08
+                - 0
+              - - "bernd2"
+                - "Pumpe 20"
+                - "Inspektion"
+                - -61.06
+                - 0
+
+    asset_maintenance_components:
+        type: array
+        items:
+          type: string
+        description: the column names
+        example:
+          - Pumpe 20
+          - Pumpe 21
+
+    asset_maintenance_activities:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - Component
+              - Activity
+              - Timestamp
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "Pumpe 20"
+                - 0
+                - 1605178879502
+              - - "Pumpe 21"
+                - 1
+                - 1605189835901
+
+    asset_unique_products:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "UID"
+              - "Timestamp begin"
+              - "Timestamp end"
+              - "Product ID"
+              - "Is Scrap"
+              - "Quality class"
+              - "Station ID"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "161063193099727336211610631932133"
+                - 1610631930997
+                - 1610631932133
+                - "test123"
+                - false
+                - ""
+                - "1a"
+              - - "16106319890449364101610631989682"
+                - 1610631989044
+                - 1610631989682
+                - "test123"
+                - false
+                - ""
+                - "1a"
+    asset_order_table:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "Order ID"
+              - "Product ID"
+              - "Begin"
+              - "End"
+              - "Target units"
+              - "Actual units"
+              - "Target duration in seconds"
+              - "Actual duration in seconds"
+              - "Target time per unit in seconds"
+              - "Actual time per unit in seconds"
+              - "Producing"
+              - "Producing at lower than set speed"
+              - "No data"
+              - "Unknown stop"
+              - "Microstop"
+              - "Inlet jam"
+              - "Outlet jam"
+              - "Congestion in the bypass flow"
+              - "Other material issues"
+              - "Changeover"
+              - "Cleaning"
+              - "Emptying"
+              - "Setting up"
+              - "Operator missing"
+              - "Break"
+              - "No shift"
+              - "No order"
+              - "Equipment failure"
+              - "External failure"
+              - "External interference"
+              - "Maintenance"
+              - "Other technical issue"
+              - "Asset"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "10463444"
+                - "product10463444"
+                - 1595824438000
+                - 1595825648000
+                - 1
+                - 0
+                - 0
+                - 1210
+                - 827
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - 0
+                - "redacted-redacted"
+
+    asset_order_timeline:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "timestamp"
+              - "redacted-redacted-redacted-order"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+            description: the returned data
+            example:
+              - - 1592500042000
+                - "noOrder"
+              - - 1595824438000
+                - "104638"
+              - - 1595825648000
+                - "noOrder"
+
+    asset_process_value:
+
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "timestamp"
+              - "DCCAachen-Aachen-warping-Fadenueber_link_aktiv"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - 1606236115808
+                - 1
+              - - 1606236192305
+                - 0
+              - - 1606236217103
+                - 0
+
+    asset_unique_products_with_tags:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "uniqueProductUID"
+              - "uniqueProductAID"
+              - "TorqueScrew1"
+              - "TorqueScrew1_timestamp_ms"
+              - "TorqueScrew2"
+              - "TorqueScrew2_timestamp_ms"
+              - "parentAID1"
+              - "parentUID1"
+              - "parentAID2"
+              - "parentUID2"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "12439248"
+                - "barcode123"
+                - 5.4
+                - 1610631989044
+                - 5.3
+                - 1610631989044
+                - "barcode111"
+                - "55487545"
+                - "barcode222"
+                - "5648753"
+              - - "468887"
+                - "barcode456"
+                - 5.99
+                - 1610631989044
+                - 5.3
+                - 1610631989044
+                - "barcode211"
+                - "55484545"
+                - "barcode322"
+                - "5648453"
+              - - "1243664542248"
+                - "barcode789"
+                - 5.4
+                - 1610631989044
+                - 8.465
+                - 1610631989044
+                - "barcode311"
+                - "55666666"
+                - "barcode422"
+                - "5648433"
+
+    customer_product_tags:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "asset"
+              - "timestamp"
+              - "uniqueProductID"
+              - "productTypeID"
+              - "valueName"
+              - "value"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+            description: the returned data
+            example:
+              - - "Assembly_1"
+                - "12439248"
+                - "testUID465487"
+                - "testProductType546456"
+                - "barcode"
+                - "167000002348"
+              - - "Assembly_1"
+                - "12439249"
+                - "testUID465488"
+                - "testProductType546456"
+                - "Torque"
+                - 5.4
+
+
+
 
 paths:
   /{customer}:
@@ -130,13 +995,8 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: string
-                example:
-                  - AachenPlant
-                  - DuesseldorfPlant
-                  
+                $ref: '#/components/schemas/customer_location'
+
   /{customer}/{location}:
     get:
       operationId: get_location_assets
@@ -150,12 +1010,9 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: string
-                example:
-                  - Warping
-                  - Weaving
+                $ref: '#/components/schemas/location_assets'
+
+
 
   /{customer}/{location}/{asset}:
     get:
@@ -170,34 +1027,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: string
-                example:
-                  - state
-                  - count
-                  - currentState
-                  - recommendation
-                  - aggregatedStates
-                  - timeRange
-                  - availability
-                  - performance
-                  - oee
-                  - productionSpeed
-                  - shifts
-                  - stateHistogram
-                  - factoryLocations
-                  - averageCleaningTime
-                  - averageChangeoverTime
-                  - upcomingMaintenanceActivities
-                  - maintenanceComponents
-                  - maintenanceActivities
-                  - uniqueProducts
-                  - orderTable
-                  - orderTimeline
-                  - process_SignalLamp
-                  - process_TotalActivePower
-                  - process_TotalApparentPower
+                $ref: "#/components/schemas/asset_datapoints"
 
   /{customer}/{location}/{asset}/state:
     get:
@@ -215,33 +1045,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-AachenPlant-WeavingMachine-state
-                      - timestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf:
-                          - type: string
-                          - type: integer
-                          - type: number
-                    example:
-                      -
-                        -   "No shift"
-                        -   1605187036148
-                      -
-                        - "Producing"
-                        - 1605201132835
-                    description: the returned data
+                $ref: "#/components/schemas/asset_states"
 
   /{customer}/{location}/{asset}/count:
     get:
@@ -258,37 +1062,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-AachenPlant-WeavingMachine-count
-                      - DCCAachen-AachenPlant-WeavingMachine-scrap
-                      - timestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf:
-                          - type: number
-                          - type: integer
-
-
-                    description: the returned data
-                    example:
-                      - 
-                        - 1250
-                        - 0
-                        - 1605201148990
-                      - 
-                        - 625
-                        - 0
-                        - 1605201408149
+                $ref: "#/components/schemas/asset_counts"
 
 
   /{customer}/{location}/{asset}/currentState:
@@ -304,31 +1078,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-AachenPlant-WeavingMachine-state
-                      - timestamp
-                  datapoints:
-                    type: array
-                    maxLength: 1 # todo change to dict
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "Unbekannter Zustand 1"
-                        - 1608298176825
+                $ref: '#/components/schemas/asset_state'
+
   
   /{customer}/{location}/{asset}/recommendation:
     get:
@@ -343,42 +1094,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - timestamp
-                      - recommendationType
-                      - recommendationValues
-                      - recommendationTextEN
-                      - recommendationTextDE
-                      - diagnoseTextEN
-                      - diagnoseTextDE
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                          - type: object # this will make problems with certain generators
-                    description: the returned data
-                    example:
-                      - 
-                        - 1600707538210
-                        - 1
-                        - {"Threshold":30,"StoppedForTime":612685}
-                        - "Start machine DCCAachen-Demonstrator or specify stop reason."
-                        - "Maschine DCCAachen-Demonstrator einschalten oder Stoppgrund auswählen."
-                        - "Machine DCCAachen-Demonstrator is not running since 612685 seconds (status: 8, threshold: 30)"
-                        - "Maschine DCCAachen-Demonstrator steht seit 612685 Sekunden still (Status: 8, Schwellwert: 30)"
-  
+                $ref: '#/components/schemas/asset_recommendation'
+
   /{customer}/{location}/{asset}/timeRange:
     get:
       operationId: get_asset_data_timerange
@@ -392,29 +1109,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames: # change to dictionary
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - firstTimestamp
-                      - lastTimestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                            format: date-time
-                    description: the returned data
-                    example:
-                      - 
-                        - "2020-11-03T12:27:22Z"
-                        - "2021-02-01T18:51:50Z"
+               $ref: '#/components/schemas/asset_data_timerange'
 
   /{customer}/{location}/{asset}/aggregatedStates:
     get:
@@ -437,41 +1132,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example: #convert following entry into list of dicts with named keys
-                        - 
-                          - "category"
-                          - "state"
-                          - "duration"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data. duration is the amount of seconds.
-                    example:
-                        - 
-                          - 9
-                          - 150000
-                          - 3638.4260000000004
-                        - 
-                          - 9
-                          - 160000
-                          - 2001.471
-                        -
-                          - 10
-                          - 150000
-                          - 6185.870000000001
+                $ref: "#/components/schemas/asset_aggregated_states"
 
   /{customer}/{location}/{asset}/availability:
     get:
@@ -489,30 +1150,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-Aachen-warping-availability
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    maxLength: 1
-                    minimum: 0
-                    maximum: 1
-                    example:
-                      - 
-                        - 0.039953472102622754
+                $ref: '#/components/schemas/asset_availability'
 
   /{customer}/{location}/{asset}/performance:
     get:
@@ -530,29 +1168,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-Aachen-warping-performance
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                            # todo fix this data model, only doing triage to create a generatable client
-                        type: number
-                    description: the returned data
-                    maxLength: 1
-                    minimum: 0
-                    maximum: 1
-                    example:
-                      - 
-                        - 0.039953472102622754
+                $ref: '#/components/schemas/asset_performance'
 
   /{customer}/{location}/{asset}/quality:
     get:
@@ -570,29 +1186,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-Aachen-warping-quality
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        type: number
-                         # todo fix this data model, only doing triage to create a generatable client
-                    description: the returned data
-                    maxLength: 1
-                    minimum: 0
-                    maximum: 1
-                    example:
-                      - 
-                        - 0.80
+                $ref: "#/components/schemas/asset_quality"
 
   /{customer}/{location}/{asset}/oee:
     get:
@@ -612,38 +1206,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-Aachen-warping-oee
-                      - timestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                            format: date-time
-                          - type: number
-                    description: the returned data
-                    minimum: 0
-                    maximum: 1
-                    example:
-                      -
-                        - 0.1779839097022094,
-                        - "2020-11-02T17:07:22Z"
-                      -
-                        - 0.018431700156319477,
-                        - "2020-11-03T17:07:22Z"
-                      -
-                        - 0.036663254805344575,
-                        - "2020-11-12T17:07:22Z"
+                $ref: "#/components/schemas/asset_oee"
 
   /{customer}/{location}/{asset}/shifts:
     get:
@@ -662,33 +1225,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - timestamp
-                      - DCCAachen-Aachen-warping-shiftName
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                       type: integer # todo fix this data model, only doing triage to create a generatable client
-                    description: the returned data
-                    example:
-                      - 
-                        - 1608019200032
-                        - 1 
-                      - 
-                        - 1608030000032
-                        - 0
-                      - 
-                        - 1608033600016
-                        - 1 
+                $ref: "#/components/schemas/asset_shifts"
 
   /{customer}/{location}/{asset}/productionSpeed:
     get:
@@ -706,33 +1243,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-Aachen-warping-speed
-                      - timestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - 13560
-                        - 1604077800000 
-                      - 
-                        - 1260
-                        - 1604077860000
-                      - 
-                        - 36360
-                        - 1604077920000   
+                $ref: "#/components/schemas/asset_production_speed"
 
   /{customer}/{location}/{asset}/qualityRate:
     get:
@@ -749,35 +1260,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - DCCAachen-Aachen-warping-qualityRate
-                      - timestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: #todo only doing triage
-                          - type: number
-                          - type: integer
-                    description: the returned data
-                    example:
-                      - 
-                        - 0.80
-                        - 1604077800000 
-                      - 
-                        - 0.85
-                        - 1604077860000
-                      - 
-                        - 0.82
-                        - 1604077920000   
+                $ref: "#/components/schemas/asset_quality_rate"
 
   /{customer}/{location}/{asset}/stateHistogram:
     get:
@@ -796,36 +1279,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - state
-                      - occurances
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "Maschine läuft"
-                        - 147
-                      - 
-                        - "Unbekannter Stopp"
-                        - 6
-                      - 
-                        - "Mikrostopp"
-                        - 1  
+                $ref: "#/components/schemas/asset_state_histogram"
 
   /{customer}/{location}/{asset}/factoryLocations:
     get:
@@ -841,32 +1295,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - Location
-                      - Metric
-                      - Geohash
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "Aachen"
-                        - 80
-                        - u1h2fe
+                $ref: "#/components/schemas/asset_factory_location"
   
   /{customer}/{location}/{asset}/averageCleaningTime:
     get:
@@ -884,36 +1313,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "DCCAachen-Aachen-warping-averageCleaningTime"
-                      - "timestamp"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - 1556,
-                        - "2020-11-02T17:07:22Z"
-                      - 
-                        - 1526,
-                        - "2020-11-03T17:07:22Z"
-                      - 
-                        - 756,
-                        - "2020-11-12T17:07:22Z"                 
+                $ref: "#/components/schemas/asset_average_cleaning_time"
   
   /{customer}/{location}/{asset}/averageChangeoverTime:
     get:
@@ -931,38 +1331,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "DCCAachen-Aachen-warping-averageChangeoverTime"
-                      - "timestamp"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                            format: date-time
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - 1556,
-                        - "2020-11-02T17:07:22Z"
-                      - 
-                        - 1526,
-                        - "2020-11-03T17:07:22Z"
-                      - 
-                        - 756,
-                        - "2020-11-12T17:07:22Z"           
-                        
+                $ref: "#/components/schemas/asset_average_changeover_time"
+
+
   /{customer}/{location}/{asset}/upcomingMaintenanceActivities:
     get:
       operationId: get_asset_umpcoming_maintenance_activities
@@ -982,49 +1353,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - Machine
-                      - Component
-                      - Activity
-                      - Duration
-                      - Status
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "bernd2"
-                        - "Pumpe 21"
-                        - "Austausch"
-                        - -69.5
-                        - 0    
-                      - 
-                        - "bernd2"
-                        - "Pumpe 20"
-                        - "Austausch"
-                        - -79.08
-                        - 0  
-                      - 
-                        - "bernd2"
-                        - "Pumpe 20"
-                        - "Inspektion"
-                        - -61.06
-                        - 0     
-                        
+                $ref: "#/components/schemas/asset_umpcoming_maintenance_activities"
+
+
   /{customer}/{location}/{asset}/maintenanceComponents:
 
     get:
@@ -1041,14 +1372,9 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: string
-                description: the column names
-                example:
-                  - Pumpe 20
-                  - Pumpe 21
-  
+                $ref: "#/components/schemas/asset_maintenance_components"
+
+
   /{customer}/{location}/{asset}/maintenanceActivities:
     get:
       operationId: get_asset_maintenance_activities
@@ -1065,37 +1391,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - Component
-                      - Activity
-                      - Timestamp
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "Pumpe 20"
-                        - 0
-                        - 1605178879502
-                      - 
-                        - "Pumpe 21"
-                        - 1
-                        - 1605189835901                      
-  
+                $ref: "#/components/schemas/asset_maintenance_activities"
+
   /{customer}/{location}/{asset}/uniqueProducts:
     get:
       operationId: get_asset_unique_products
@@ -1112,48 +1409,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "UID"
-                      - "Timestamp begin"
-                      - "Timestamp end"
-                      - "Product ID"
-                      - "Is Scrap"
-                      - "Quality class"
-                      - "Station ID"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "161063193099727336211610631932133"
-                        - 1610631930997
-                        - 1610631932133
-                        - "test123"
-                        - false
-                        - ""
-                        - "1a"   
-                      - 
-                        - "16106319890449364101610631989682"
-                        - 1610631989044
-                        - 1610631989682
-                        - "test123"
-                        - false
-                        - ""
-                        - "1a"              
+                $ref: "#/components/schemas/asset_unique_products"
 
   /{customer}/{location}/{asset}/orderTable:
     get:
@@ -1175,92 +1431,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "Order ID"
-                      - "Product ID"
-                      - "Begin"
-                      - "End"
-                      - "Target units"
-                      - "Actual units"
-                      - "Target duration in seconds"
-                      - "Actual duration in seconds"
-                      - "Target time per unit in seconds"
-                      - "Actual time per unit in seconds"
-                      - "Producing"
-                      - "Producing at lower than set speed"
-                      - "No data"
-                      - "Unknown stop"
-                      - "Microstop"
-                      - "Inlet jam"
-                      - "Outlet jam"
-                      - "Congestion in the bypass flow"
-                      - "Other material issues"
-                      - "Changeover"
-                      - "Cleaning"
-                      - "Emptying"
-                      - "Setting up"
-                      - "Operator missing"
-                      - "Break"
-                      - "No shift"
-                      - "No order"
-                      - "Equipment failure"
-                      - "External failure"
-                      - "External interference"
-                      - "Maintenance"
-                      - "Other technical issue"
-                      - "Asset"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "10463444"
-                        - "product10463444"
-                        - 1595824438000
-                        - 1595825648000
-                        - 1
-                        - 0
-                        - 0
-                        - 1210
-                        - 827
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - 0
-                        - "redacted-redacted"                          
+                $ref: "#/components/schemas/asset_order_table"
+
 
   /{customer}/{location}/{asset}/orderTimeline:
     get:
@@ -1277,35 +1449,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "timestamp"
-                      - "redacted-redacted-redacted-order"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                    description: the returned data
-                    example:
-                      - 
-                        - 1592500042000
-                        - "noOrder"
-                      - 
-                        - 1595824438000
-                        - "104638"
-                      - 
-                        - 1595825648000
-                        - "noOrder"
+                $ref: "#/components/schemas/asset_order_timeline"
+
 
   /{customer}/{location}/{asset}/process_{processValue}:
     get:
@@ -1323,35 +1468,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "timestamp"
-                      - "DCCAachen-Aachen-warping-Fadenueber_link_aktiv"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - 1606236115808
-                        - 1
-                      - 
-                        - 1606236192305
-                        - 0
-                      - 
-                        - 1606236217103
-                        - 0                      
+                $ref: "#/components/schemas/asset_process_value"
+
 
   /{customer}/{location}/{asset}/uniqueProductWithTags:
     get:
@@ -1368,71 +1486,11 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "uniqueProductUID"
-                      - "uniqueProductAID"
-                      - "TorqueScrew1"
-                      - "TorqueScrew1_timestamp_ms"
-                      - "TorqueScrew2"
-                      - "TorqueScrew2_timestamp_ms"
-                      - "parentAID1"
-                      - "parentUID1"
-                      - "parentAID2"
-                      - "parentUID2"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                          - type: integer
-                          - type: number
-                    description: the returned data
-                    example:
-                      - 
-                        - "12439248"
-                        - "barcode123"
-                        - 5.4
-                        - 1610631989044
-                        - 5.3
-                        - 1610631989044
-                        - "barcode111"
-                        - "55487545"
-                        - "barcode222"
-                        - "5648753"
-                      - 
-                        - "468887"
-                        - "barcode456"
-                        - 5.99
-                        - 1610631989044
-                        - 5.3
-                        - 1610631989044
-                        - "barcode211"
-                        - "55484545"
-                        - "barcode322"
-                        - "5648453"
-                      - 
-                        - "1243664542248"
-                        - "barcode789"
-                        - 5.4
-                        - 1610631989044
-                        - 8.465
-                        - 1610631989044
-                        - "barcode311"
-                        - "55666666"
-                        - "barcode422"
-                        - "5648433"
+                $ref: "#/components/schemas/asset_unique_products_with_tags"
 
   /{customer}/productTag:
     get:
+      operationId: get_customer_product_tags
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/uniqueProductID'
@@ -1442,43 +1500,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "asset"
-                      - "timestamp"
-                      - "uniqueProductID"
-                      - "productTypeID"
-                      - "valueName"
-                      - "value"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                      items:
-                        anyOf: # todo fix this data model, only doing triage to create a generatable client
-                          - type: string
-                    description: the returned data
-                    example:
-                      - 
-                        - "Assembly_1"
-                        - "12439248"
-                        - "testUID465487"
-                        - "testProductType546456"
-                        - "barcode"
-                        - "167000002348"
-                      - 
-                        - "Assembly_1"
-                        - "12439249"
-                        - "testUID465488"
-                        - "testProductType546456"
-                        - "Torque"
-                        - 5.4
+                $ref: "#/components/schemas/customer_product_tags"
 
 security:
   - BasicAuth: []
