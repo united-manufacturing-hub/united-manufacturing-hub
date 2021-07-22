@@ -10,6 +10,7 @@ services:
     #restart: unless-stopped
     env_file:
       - ../../cameraconnect/example_env
+
     volumes:
       - "../../cameraconnect/assets:/app/assets/"
     networks:

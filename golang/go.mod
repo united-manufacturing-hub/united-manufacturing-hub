@@ -6,7 +6,7 @@ require (
 	github.com/Bose/go-gin-opentracing v1.0.5
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 	github.com/beeker1121/goque v2.1.0+incompatible
-	github.com/eclipse/paho.mqtt.golang v1.3.4
+	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/gin-contrib/zap v0.0.1
 	github.com/gin-gonic/gin v1.7.2
 	github.com/go-redis/redis/v8 v8.8.0
@@ -17,7 +17,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.10.0
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/uber/jaeger-client-go v2.25.0+incompatible
+	github.com/uber/jaeger-client-go v2.29.1+incompatible
 	go.uber.org/zap v1.16.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 )

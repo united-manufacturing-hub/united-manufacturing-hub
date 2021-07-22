@@ -1,0 +1,169 @@
+openapi: 3.0.3
+info:
+  title: Title
+  description: Title
+  version: 1.0.0
+paths:
+  /empty:
+
+
+
+components:
+  schemas:
+   raw:
+     properties:
+       timestamp_ms:
+         type: integer
+         format: timestamp
+     additionalProperties:
+       oneOf:
+        - type: integer
+        - type: string
+        - type: number
+   count:
+     properties:
+       timestamp_ms:
+         type: integer
+       count:
+         type: integer
+   scrap_count:
+     properties:
+       timestamp_ms:
+         type: integer
+       scrap:
+         type: integer
+   barcode:
+     properties:
+       timestamp_ms:
+         type: integer
+       barcode:
+         type: string
+         pattern: '.{1,40}'
+   activity:
+     properties:
+       timestamp_ms:
+         type: integer
+       activity:
+         type: boolean
+
+   detected_anomaly:
+     properties:
+       timestamp_ms:
+         type: integer
+       detected_anomaly:
+         type: string
+         pattern: '.{1,40}'
+
+   shift:
+     properties:
+       timestamp_ms:
+         type: integer
+       timestamp_ms_end:
+         type: integer
+   # order related schemas
+   order:
+     properties:
+       product_id:
+         type: string
+         pattern: '.{1,40}'
+       order_id:
+         type: string
+         pattern: '.{1,40}'
+       target_units:
+         type: integer
+         example: 1337
+
+   start_order:
+     properties:
+       timestamp_ms:
+         type: integer
+       order_id:
+         type: string
+         pattern: '.{1,40}'
+
+   end_order:
+     properties:
+       timestamp_ms:
+         type: integer
+       order_id:
+         type: string
+         pattern: '.{1,40}'
+   # product related schemas
+
+   product:
+     properties:
+       product_id:
+         type: string
+         pattern: '.{1,40}'
+       time_per_unit_s:
+         type: number
+         pattern: float
+
+   unique_product: # violating current spec/doc
+     properties:
+       begin_timestamp:
+         type: integer
+       end_timestamp:
+         type: integer
+       product_id:
+         type: string
+         pattern: '.{1,40}'
+       uid:
+         type: string
+         pattern: '.{1,40}'
+       is_scrap:
+         type: boolean
+       station_id:
+         type: string
+         pattern: '.{1,40}'
+
+   scrap_unique_product: # violating current spec/doc
+      properties:
+        uid:
+          type: string
+          pattern: '.{1,40}'
+
+
+
+   cycle_time_trigger: # violating current spec/doc
+     properties:
+       timestamp_ms:
+         type: integer
+       current_station:
+         type: string
+         pattern: '.{1,40}'
+       last_station:
+         type: string
+         pattern: '.{1,40}'
+       sanity_time_s:
+         type: integer
+   recommendations:
+     properties:
+       timestamp_ms:
+         type: integer
+       recommendation_uid:
+         type: string
+       recommendation_type:
+         type: string # tbd
+       enabled:
+         type: boolean
+       recommendation_values:
+         anyOf:
+           - type: number
+           - type: string
+           - type: integer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
