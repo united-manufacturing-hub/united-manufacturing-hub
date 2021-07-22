@@ -807,7 +807,7 @@ Name | Type | Description  | Notes
 
 <a name="getCustomerProductTags"></a>
 # **getCustomerProductTags**
-> customer_product_tags getCustomerProductTags(customer, UNKNOWN_PARAMETER_NAME)
+> customer_product_tags getCustomerProductTags(customer, uniqueProductID)
 
 
 
@@ -816,7 +816,7 @@ Name | Type | Description  | Notes
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **customer** | **String**| name of the customer | [default to null]
- **UNKNOWN_PARAMETER_NAME** | [****](../Models/.md)|  | [optional]
+ **uniqueProductID** | **String**| unique id of the product to search for | [default to null]
 
 ### Return type
 

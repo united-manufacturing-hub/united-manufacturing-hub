@@ -107,6 +107,15 @@ components:
         description: name of the process value to retrieve data
         example:
           energyConsumption
+      uniqueProductID:
+        in: query
+        name: uniqueProductID
+        required: true
+        schema:
+          type: string
+        description: unique id of the product to search for
+        example:
+          energyConsumption
 
   securitySchemes:
     BasicAuth:
