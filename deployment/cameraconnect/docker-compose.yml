@@ -5,11 +5,11 @@ services:
     image: cameraconnect_image
     build:
         context: ../../
-        dockerfile: .deployment/cameraconnect/Dockerfile
+        dockerfile: ./deployment/cameraconnect/Dockerfile
     container_name: cameraconnect_container
     #restart: unless-stopped
     env_file:
-      - ./.env
+      - ../../cameraconnect/example_env
     volumes:
       - "../../cameraconnect/assets:/app/assets/"
     networks:
