@@ -34,5 +34,11 @@ cameraconnect/assets/images/*
 #ignore cameraconnect development .env file
 cameraconnect/docker/.env
 
-#ignore thirs party licensed files
+#ignore third party licensed files
 cameraconnect/assets/producer_files/*
+
+# ignore output from openapi generator
+/docs/static/openapi/output/go/
+/docs/static/openapi/output/html/
+/docs/static/openapi/output/rust/
+/docs/static/openapi/output/python/
