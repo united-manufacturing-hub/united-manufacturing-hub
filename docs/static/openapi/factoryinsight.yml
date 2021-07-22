@@ -1352,55 +1352,10 @@ paths:
                       - 
                         - 1606236217103
                         - 0                      
-  /{customer}/productTag:
-    get:
-      parameters:
-        - $ref: '#/components/parameters/customer'
-        - $ref: '#/components/parameters/productTypeID'
-        - $ref: '#/components/parameters/uniqueProductID'
-      responses:
-        '200':
-          description: This function returns all stored productTags for one uniqueProduct (incl. duplicates)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  columnNames:
-                    type: array
-                    items:
-                      type: string
-                    description: the column names
-                    example:
-                      - "asset"
-                      - "timestamp"
-                      - "uniqueProductID"
-                      - "productTypeID"
-                      - "valueName"
-                      - "value"
-                  datapoints:
-                    type: array
-                    items:
-                      type: array
-                    description: the returned data
-                    example:
-                      - 
-                        - "Assembly_1",
-                        - "12439248"
-                        - "testUID465487"
-                        - "testProductType546456"
-                        - "barcode"
-                        - "167000002348"
-                      - 
-                        - "Assembly_1",
-                        - "12439249"
-                        - "testUID465488"
-                        - "testProductType546456"
-                        - "Torque"
-                        - 5.4
 
   /{customer}/{location}/{asset}/uniqueProductWithTags:
     get:
+      operationId: get_asset_unique_products_with_tags
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1430,6 +1385,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -1459,7 +1419,7 @@ paths:
         - $ref: '#/components/parameters/uniqueProductID'
       responses:
         '200':
-          description: This function returns all stored productTags for one uniqueProduct (incl. duplicates)
+          description: PLANNED, NOT IMPLEMENTED. This function returns all stored productTags for one uniqueProduct (incl. duplicates)
           content:
             application/json:
               schema:
@@ -1481,6 +1441,9 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
                     description: the returned data
                     example:
                       - 
