@@ -30,12 +30,11 @@ golang/test/mqtt-bridge/data/*
 
 /.idea/
 
-
 #ignore acquired images
 cameraconnect/assets/images/*
 
 #ignore cameraconnect development .env file
-cameraconnect/docker/.env
+*.env
 
 #ignore third party licensed files
 cameraconnect/assets/producer_files/*

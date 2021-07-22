@@ -14,9 +14,11 @@ running until the user stops the container.
 """
 
 # Import python in-built libraries
+import glob
 import time
 import os
 import sys
+import logging
 
 # Import self-written modules
 from cameras import GenICam
@@ -61,7 +63,7 @@ EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')
 EXPOSURE_AUTO = os.environ.get('EXPORSURE_AUTO', 'Off')
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
-
+LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
 
 if IMAGE_CHANNELS != 'None':
     IMAGE_CHANNELS = int(IMAGE_CHANNELS)
@@ -71,11 +73,35 @@ if EXPOSURE_TIME != 'None':
 ### End of loading settings ###
 
 if __name__ == "__main__":
+
+    if LOGGING_LEVEL == "DEBUG":
+        logging.basicConfig(level=logging.DEBUG)
+    elif LOGGING_LEVEL == "INFO":
+        logging.basicConfig(level=logging.INFO)
+    elif LOGGING_LEVEL == "WARNING":
+        logging.basicConfig(level=logging.WARNING)
+    elif LOGGING_LEVEL == "ERROR":
+        logging.basicConfig(level=logging.ERROR)
+    elif LOGGING_LEVEL == "CRITICAL":
+        logging.basicConfig(level=logging.CRITICAL)
+
+    #detect available cti files as camera producers
+    cti_file_list = []
+    for name in glob.glob(str(DEFAULT_GENTL_PRODUCER_PATH)+'/**/*.cti', recursive=True):
+
+        cti_file_list.append(str(name))
+
+    #if no cti files are found, log error and exit program
+    if len(cti_file_list)==0:
+        logging.error("No producer file discovered")
+        exit(1)
+
+
     # Check selected camera interface
     if CAMERA_INTERFACE == "DummyCamera":
         cam = DummyCamera(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, 0, image_storage_path=IMAGE_PATH)
     elif CAMERA_INTERFACE == "GenICam":
-        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE,SERIAL_NUMBER,DEFAULT_GENTL_PRODUCER_PATH,image_width=IMAGE_WIDTH,image_height=IMAGE_HEIGHT,pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH)
+        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE,SERIAL_NUMBER, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH)
     else: 
         # Stop system, not possible to run with this settings
         sys.exit("Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
