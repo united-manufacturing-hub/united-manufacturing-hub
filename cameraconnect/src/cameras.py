@@ -50,7 +50,7 @@ class CamGeneral(ABC):
         See inheritors
     """
 
-    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, image_storage_path=None) -> None:
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, mac_address, image_storage_path=None) -> None:
         """
         Base class constructor configures the object with the 
         MQTT host settings.
@@ -66,6 +66,7 @@ class CamGeneral(ABC):
         self.mqtt_port = mqtt_port
         self.mqtt_topic = mqtt_topic
         self.serial_number = serial_number
+        self.mac_address = mac_address
         self.image_storage_path = image_storage_path
 
         # Connect to the Broker, default port for MQTT 1883
@@ -137,7 +138,7 @@ class CamGeneral(ABC):
         message = json.dumps(prepared_message)
         # Publish the message
         ret = self.client.publish(self.mqtt_topic, message, qos=0)
-        print(ret)
+        print("Image No.: " + str(ret[1]))
 
         print("Image sent to MQTT broker under topic: " + str(self.mqtt_topic))
 
@@ -318,7 +319,7 @@ class GenICam(CamGeneral):
         fetch an image.
     """
 
-    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, genTL_producer_path_list,
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, mac_address, genTL_producer_path_list,
                  user_set_selector="Default", image_width=None, image_height=None, pixel_format=None,
                  image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
                  image_storage_path=None) -> None:
@@ -335,7 +336,8 @@ class GenICam(CamGeneral):
         super().__init__(mqtt_host=mqtt_host,
                          mqtt_port=mqtt_port,
                          mqtt_topic=mqtt_topic,
-                         serial_number=serial_number)
+                         serial_number=serial_number,
+                         mac_address=mac_address)
 
         self.genTL_producer_path_list = genTL_producer_path_list
         self.user_set_selector = user_set_selector
@@ -382,7 +384,10 @@ class GenICam(CamGeneral):
         # Check if cti-file available, stop if none found
         if len(self.h.files) == 0:
             sys.exit("No valid cti file found")
-        print("Currently available genTL Producer CTI files: ", self.h.files)
+        print("\n___________________________________________\n")
+        print("Currently available genTL Producer CTI files: ")
+        for file in self.h.files:
+            print(file)
 
         # Update the list of remote devices; fills up your device
         #   information list; multiple devices in list possible
@@ -391,8 +396,9 @@ class GenICam(CamGeneral):
         if len(self.h.device_info_list) == 0:
             sys.exit("No compatible devices detected.")
         # Show remote devices in list
-        print("Available devices List: ", self.h.device_info_list)
-
+        print("\nAvailable devices:")
+        for camera in self.h.device_info_list:
+            print(camera)
         # Create an image acquirer object specifying a target 
         #   remote device
         # As argument also user_defined_name, serial_number, 
@@ -400,10 +406,19 @@ class GenICam(CamGeneral):
         # If multiple cameras in device list, choose the right 
         #   one by changing the list_index or by using another 
         #   argument
-        # Multiple devices not supported yet in this program
-        self.ia = self.h.create_image_acquirer(list_index=0)
-        print("Using device: ", self.h.device_info_list[0])
 
+        for camera in self.h.device_info_list:
+            device_mac_address = str(camera.id_).replace("_","").replace("devicemodul","")
+            if device_mac_address.upper() == self.mac_address.upper().replace(":",""):
+                self.ia = self.h.create_image_acquirer(id_=camera.id_)
+                print("\nUsing:\n" + str(camera))
+                print("\n___________________________________________\n")
+        """
+        #if selecting via serial number
+        for camera in self.h.device_info_list:
+            if camera.serial_number == self.serial_number:
+                print("Using " +str(camera))
+        """
         ## Set some default settings
         # This is required because of a bug in the harvesters 
         #   module. This should not affect our usage of image
@@ -524,6 +539,7 @@ class GenICam(CamGeneral):
         self.ia.start_acquisition()
         print("Acquisition started.")
 
+
     # Get image out of image stream
     def get_image(self) -> None:
         """
@@ -553,6 +569,7 @@ class GenICam(CamGeneral):
             # Due to with statement buffer will automatically be
             #   queued
             with self.ia.fetch_buffer(timeout=20) as buffer:
+                print("\n___________________________________________\n")
                 print("Image fetched.")
                 # Create an alias of the 2D image component:
                 component = buffer.payload.components[0]
@@ -654,6 +671,8 @@ class DummyCamera(CamGeneral):
 
         #reads a static image which is part of stack
         img = cv2.imread("/app/assets/dummy_image.jpg")
+        print("\n___________________________________________\n")
+        print("Image fetched.")
         height, width, channels = img.shape
         retrieved_image = np.ndarray(buffer=img,
                                      dtype=np.uint8,
