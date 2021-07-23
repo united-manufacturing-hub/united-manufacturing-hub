@@ -9,4 +9,4 @@ Please also take a look on our [guide on how to use it in production](../../gett
 
 ## Default settings / development setup
 
-By default MinIO is not exposed outside of the Kubernetes cluster. You can connect to the MinIO console service, e.g., using Lens and your preferred browser. The default credentials are minio:minio123 for the console.
+By default MinIO is exposed outside of the Kubernetes cluster using a LoadBalancer. The default credentials are minio:minio123 for the console. When using `minikube` you can access the LoadBalancer service using `minikube tunnel` and then accessing the `external IP` using the selected port.

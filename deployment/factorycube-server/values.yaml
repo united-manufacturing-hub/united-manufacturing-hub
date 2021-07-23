@@ -54,6 +54,9 @@ mqtttopostgresql:
 
 minio-operator:
     enabled: true
+    loadBalancerEnabled: true
+    service:
+        annotations: {}
     ## MinIO Tenant Definition
     tenants:
       # Tenant name
