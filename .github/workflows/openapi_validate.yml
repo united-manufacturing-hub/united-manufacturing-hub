@@ -31,5 +31,7 @@ jobs:
         uses: mbowman100/swagger-validator-action@2.0
         with:
           # List of Swagger/OpenAPI file(s) to validate. Seperate each file with a new line or a space.
-          files: docs/static/openapi/factoryinput.yaml docs/static/openapi/factoryinsight.yaml 
+          files: 
+            docs/static/openapi/factoryinput.yaml 
+            docs/static/openapi/factoryinsight.yaml 
           # Defaults to true.
