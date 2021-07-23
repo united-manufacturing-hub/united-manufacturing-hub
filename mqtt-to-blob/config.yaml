@@ -1,0 +1,4 @@
+---
+azure_storage_connectionstring: "DefaultEndpointsProtocol=https;AccountName=blobstoragedcc2021;AccountKey=6sXMwj9VO9O1wwHLQ56HI7xjf3Ws8oUyZDLd73eFr4mgdIbCHtelyIpEssZAqFrgZZ4B1W6GSw7qN1jk4JenHg==;EndpointSuffix=core.windows.net"
+pictures_container_name: "pictures"
+source_folder: "/home/ant001/PycharmProjects/ven_ai_vision-based_quality_control_of_cylinder_head_gaskets/image-saver/docker"
