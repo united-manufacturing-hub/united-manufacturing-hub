@@ -1,0 +1,12 @@
+version: "3.2"
+services:
+  minio:
+    image: minio/minio:latest
+    entrypoint: sh
+    command: -c 'mkdir -p /export/gitlab && /usr/bin/minio server /export'
+    environment:
+          MINIO_ACCESS_KEY: "DCCAachen"
+          MINIO_SECRET_KEY: "DCCAachen2021"
+    deploy:
+      restart_policy:
+        condition: on-failure
