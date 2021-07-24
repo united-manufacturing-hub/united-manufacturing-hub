@@ -1,0 +1,86 @@
+{{- if .Values.cameraconnect.enabled -}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "factorycube-edge.fullname" . }}-cameraconnect
+  labels:
+    {{- include "factorycube-edge.labels.cameraconnect" . | nindent 4 }}
+    app.kubernetes.io/component: "cameraconnect"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "factorycube-edge.labels.cameraconnect" . | nindent 6 }}
+      app.kubernetes.io/component: "cameraconnect"
+  strategy:  
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "factorycube-edge.labels.cameraconnect" . | nindent 8 }}
+        app.kubernetes.io/component: "cameraconnect"
+    spec:
+      initContainers:
+          - args:
+            - mkdir -p /app/assets/producer_files && cp -u /genTLProducer/files.zip /app/assets/ && unzip -n /app/assets/files.zip -d /app/assets/producer_files
+            command:
+            - /bin/sh
+            - -c
+            image: busybox
+            name: init-cameraconnect-genTLProducer
+            volumeMounts:
+            - mountPath: /app/assets
+              name: storage
+            - mountPath: /genTLProducer
+              name: {{ include "factorycube-edge.fullname" . }}-cameraconnect-genTLProducer
+        containers:
+        - name: {{ include "factorycube-edge.fullname" . }}-cameraconnect
+          {{- if .Values.cameraconnect.tag -}}
+          image: {{ .Values.cameraconnect.image }}:{{ .Values.cameraconnect.tag }}
+          {{- else }}
+          image: {{ .Values.cameraconnect.image }}:{{ .Chart.AppVersion }}
+          {{- end }}
+          volumeMounts:
+            - mountPath: /app/assets
+              name: storage
+          env:
+            - name: CUBE_TRANSMITTERID
+              value: {{ .Values.serialNumber | quote }}
+            - name: MQTT_HOST
+              value: {{ .Values.cameraconnect.brokerURL | quote }}
+            - name: MQTT_PORT
+              value: {{ .Values.cameraconnect.brokerPort | quote }}
+            - name: IP_RANGE
+              value: {{ .Values.cameraconnect.iprange | quote }}
+            - name: TRIGGER 
+              value: {{ .Values.cameraconnect.trigger | quote }}
+            - name: ACQUISITION_DELAY 
+              value: {{ .Values.cameraconnect.acquisitionDelay | quote }}
+            - name: CYCLE_TIME 
+              value: {{ .Values.cameraconnect.cycleTime | quote }}
+            - name: CAMERA_INTERFACE 
+              value: {{ .Values.cameraconnect.cameraInterface | quote }}
+            - name: IMAGE_WIDTH 
+              value: {{ .Values.cameraconnect.imageWidth | quote }}
+            - name: IMAGE_HEIGHT 
+              value: {{ .Values.cameraconnect.imageHeight | quote }}
+            - name: IMAGE_CHANNELS 
+              value: {{ .Values.cameraconnect.imageChannels | quote }}
+            - name: SERIAL_NUMBER 
+              value: {{ .Values.cameraconnect.serialNumber | quote }}
+            - name: LOGGING_LEVEL 
+              value: {{ .Values.cameraconnect.loggingLevel | quote }}
+            - name: DEFAULT_GENTL_PRODUCER_PATH 
+              value: "/app/assets/producer_files"
+      volumes:
+      - name: storage
+        emptyDir: {}
+      - name: {{ include "factorycube-edge.fullname" . }}-cameraconnect-genTLProducer        
+        configMap:
+          name: {{ include "factorycube-edge.fullname" . }}-cameraconnect-genTLProducer 
+
+      serviceAccountName: {{ include "factorycube-edge.serviceAccountName" . }}
+      restartPolicy: Always
+
+{{- end }}
