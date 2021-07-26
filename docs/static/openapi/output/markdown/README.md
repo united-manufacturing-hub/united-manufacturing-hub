@@ -30,39 +30,43 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**getAssetStates**](Apis/DefaultApi.md#getassetstates) | **GET** /{customer}/{location}/{asset}/state | 
 *DefaultApi* | [**getAssetUmpcomingMaintenanceActivities**](Apis/DefaultApi.md#getassetumpcomingmaintenanceactivities) | **GET** /{customer}/{location}/{asset}/upcomingMaintenanceActivities | 
 *DefaultApi* | [**getAssetUniqueProducts**](Apis/DefaultApi.md#getassetuniqueproducts) | **GET** /{customer}/{location}/{asset}/uniqueProducts | 
+*DefaultApi* | [**getAssetUniqueProductsWithTags**](Apis/DefaultApi.md#getassetuniqueproductswithtags) | **GET** /{customer}/{location}/{asset}/uniqueProductWithTags | 
 *DefaultApi* | [**getCurrentAssetRecommendation**](Apis/DefaultApi.md#getcurrentassetrecommendation) | **GET** /{customer}/{location}/{asset}/recommendation | 
 *DefaultApi* | [**getCurrentAssetState**](Apis/DefaultApi.md#getcurrentassetstate) | **GET** /{customer}/{location}/{asset}/currentState | 
 *DefaultApi* | [**getCustomerLocations**](Apis/DefaultApi.md#getcustomerlocations) | **GET** /{customer} | 
+*DefaultApi* | [**getCustomerProductTags**](Apis/DefaultApi.md#getcustomerproducttags) | **GET** /{customer}/productTag | 
 *DefaultApi* | [**getLocationAssets**](Apis/DefaultApi.md#getlocationassets) | **GET** /{customer}/{location} | 
 
 
 <a name="documentation-for-models"></a>
 ## Documentation for Models
 
+ - [AssetAggregatedStates](./Models/AssetAggregatedStates.md)
+ - [AssetAvailability](./Models/AssetAvailability.md)
+ - [AssetAverageChangeoverTime](./Models/AssetAverageChangeoverTime.md)
+ - [AssetAverageCleaningTime](./Models/AssetAverageCleaningTime.md)
+ - [AssetCounts](./Models/AssetCounts.md)
+ - [AssetDataTimerange](./Models/AssetDataTimerange.md)
+ - [AssetFactoryLocation](./Models/AssetFactoryLocation.md)
+ - [AssetMaintenanceActivities](./Models/AssetMaintenanceActivities.md)
+ - [AssetOee](./Models/AssetOee.md)
+ - [AssetOrderTable](./Models/AssetOrderTable.md)
+ - [AssetOrderTimeline](./Models/AssetOrderTimeline.md)
+ - [AssetPerformance](./Models/AssetPerformance.md)
+ - [AssetProcessValue](./Models/AssetProcessValue.md)
+ - [AssetProductionSpeed](./Models/AssetProductionSpeed.md)
+ - [AssetQuality](./Models/AssetQuality.md)
+ - [AssetQualityRate](./Models/AssetQualityRate.md)
+ - [AssetRecommendation](./Models/AssetRecommendation.md)
+ - [AssetShifts](./Models/AssetShifts.md)
+ - [AssetState](./Models/AssetState.md)
+ - [AssetStateHistogram](./Models/AssetStateHistogram.md)
+ - [AssetStates](./Models/AssetStates.md)
+ - [AssetUmpcomingMaintenanceActivities](./Models/AssetUmpcomingMaintenanceActivities.md)
+ - [AssetUniqueProducts](./Models/AssetUniqueProducts.md)
+ - [AssetUniqueProductsWithTags](./Models/AssetUniqueProductsWithTags.md)
  - [Blank](./Models/Blank.md)
- - [InlineResponse200](./Models/InlineResponse200.md)
- - [InlineResponse2001](./Models/InlineResponse2001.md)
- - [InlineResponse20010](./Models/InlineResponse20010.md)
- - [InlineResponse20011](./Models/InlineResponse20011.md)
- - [InlineResponse20012](./Models/InlineResponse20012.md)
- - [InlineResponse20013](./Models/InlineResponse20013.md)
- - [InlineResponse20014](./Models/InlineResponse20014.md)
- - [InlineResponse20015](./Models/InlineResponse20015.md)
- - [InlineResponse20016](./Models/InlineResponse20016.md)
- - [InlineResponse20017](./Models/InlineResponse20017.md)
- - [InlineResponse20018](./Models/InlineResponse20018.md)
- - [InlineResponse20019](./Models/InlineResponse20019.md)
- - [InlineResponse2002](./Models/InlineResponse2002.md)
- - [InlineResponse20020](./Models/InlineResponse20020.md)
- - [InlineResponse20021](./Models/InlineResponse20021.md)
- - [InlineResponse20022](./Models/InlineResponse20022.md)
- - [InlineResponse2003](./Models/InlineResponse2003.md)
- - [InlineResponse2004](./Models/InlineResponse2004.md)
- - [InlineResponse2005](./Models/InlineResponse2005.md)
- - [InlineResponse2006](./Models/InlineResponse2006.md)
- - [InlineResponse2007](./Models/InlineResponse2007.md)
- - [InlineResponse2008](./Models/InlineResponse2008.md)
- - [InlineResponse2009](./Models/InlineResponse2009.md)
+ - [CustomerProductTags](./Models/CustomerProductTags.md)
 
 
 <a name="documentation-for-authorization"></a>
