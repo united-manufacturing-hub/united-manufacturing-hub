@@ -29,4 +29,4 @@ deployment/factorycube-core-deployment/configs/*
 golang/test/mqtt-bridge/data/*
 
 # idea
-**/.idea
+**/.idea/
