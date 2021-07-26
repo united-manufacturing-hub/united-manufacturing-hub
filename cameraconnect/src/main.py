@@ -46,12 +46,11 @@ CYCLE_TIME = float(os.environ.get('CYCLE_TIME', 10.0))
 
 ## CAMERA SETTINGS
 CAMERA_INTERFACE = os.environ.get('CAMERA_INTERFACE')
-SERIAL_NUMBER = os.environ.get('SERIAL_NUMBER','')
 MAC_ADDRESS = os.environ.get('MAC_ADDRESS','')
 TRANSMITTER_ID = os.environ.get('CUBE_TRANSMITTERID','')
 
-MQTT_TOPIC_TRIGGER = "ia/trigger/"+TRANSMITTER_ID+"/"+SERIAL_NUMBER
-MQTT_TOPIC_IMAGE = "ia/rawImage/"+TRANSMITTER_ID+"/"+SERIAL_NUMBER
+MQTT_TOPIC_TRIGGER = "ia/trigger/"+TRANSMITTER_ID+"/"+MAC_ADDRESS
+MQTT_TOPIC_IMAGE = "ia/rawImage/"+TRANSMITTER_ID+"/"+MAC_ADDRESS
 
 # GenICam settings
 DEFAULT_GENTL_PRODUCER_PATH = os.environ.get('DEFAULT_GENTL_PRODUCER_PATH', '/app/assets/producer_files')
@@ -102,7 +101,7 @@ if __name__ == "__main__":
     if CAMERA_INTERFACE == "DummyCamera":
         cam = DummyCamera(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, 0, image_storage_path=IMAGE_PATH)
     elif CAMERA_INTERFACE == "GenICam":
-        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE,SERIAL_NUMBER, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH)
+        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH)
     else: 
         # Stop system, not possible to run with this settings
         sys.exit("Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")

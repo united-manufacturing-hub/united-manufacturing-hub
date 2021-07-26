@@ -30,7 +30,7 @@ TRIGGER=Continuous
 #   is used. Epoch is defined as January 1, 1970, 00:00:00 
 #   (UTC). If no timestamp is provided in trigger message, 
 #   a timestamp is generated as soon as message is 
-#   received at image acquirer. This acqusition delay can
+#   received at image acquirer. This acquisition delay can
 #   be used to avoid problems caused by varying latency.
 #   Use 0.0 for stationary inspection processes to do it
 #   as fast as possible without any delay.
@@ -43,10 +43,10 @@ ACQUISITION_DELAY=0.0
 #   image, an error is thrown
 # Possible values: Floats in seconds
 # Default: 10.0
-CYCLE_TIME=4
+CYCLE_TIME=5
 
 #if IMAGE_PATH is not defined, no images will be saved
-IMAGE_PATH=/app/assets/images/
+#IMAGE_PATH=/app/assets/images/
 
 
 ## ------------- CAMERA SETTINGS -----------------
@@ -61,12 +61,11 @@ CAMERA_INTERFACE=GenICam
 IMAGE_WIDTH=800
 IMAGE_HEIGHT=800
 IMAGE_CHANNELS=3
-# Set serial number of camera
 # Possible values: String without quotation marks
 # Default:    (empty)
-#SERIAL_NUMBER=50-0536953909
-#MAC address of camera
+#MAC address of camera, it is written on the camera
 #format: 0030532B879C
+#000f315cd0b5
 MAC_ADDRESS=000f315cd0b5
 
 #set path were gentl producers are located
