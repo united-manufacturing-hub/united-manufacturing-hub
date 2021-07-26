@@ -1,0 +1,9 @@
+node_modules/
+
+coverage
+
+.idea
+
+dist
+
+*.js.map
