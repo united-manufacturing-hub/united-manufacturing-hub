@@ -159,9 +159,9 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 		return
 	}
 
-	proxyurl := strings.TrimPrefix(string(getProxyRequest.OriginalURI), "/")
+	proxyUrl := strings.TrimPrefix(string(getProxyRequest.OriginalURI), "/")
 
-	u, err := url.Parse(proxyurl)
+	u, err := url.Parse(proxyUrl)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
@@ -187,21 +187,21 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 	fmt.Println(customer, location, asset, value)
 	fmt.Println("Orgas: ", orgas)
 
-	allowed_org := false
+	allowedOrg := false
 	for _, orgsElement := range orgas {
 		if orgsElement.Name == customer {
-			allowed_org = true
+			allowedOrg = true
 			break
 		}
 	}
 
-	if !allowed_org {
+	if !allowedOrg {
 		fmt.Println("User not in org")
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 
-	fmt.Println("Is allowed org: ", allowed_org)
+	fmt.Println("Is allowed org: ", allowedOrg)
 
 	client := &http.Client{}
 
