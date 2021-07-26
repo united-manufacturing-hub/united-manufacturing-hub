@@ -42,7 +42,7 @@ factoryinsight:
 ### grafana-proxy ###
 grafana-proxy:
   enabled: true
-  image: todo
+  image: unitedmanufacturinghub/grafana-proxy
   replicas: 1
   # factoryinsight api key
   factoryinsight_key: "factoryinsight_key"
