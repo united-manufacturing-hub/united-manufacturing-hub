@@ -27,7 +27,7 @@ var FactoryInputUser string
 func SetupRestAPI(factoryInputUser string, factoryInputAPIKey string, jaegerHost string, jaegerPort string) {
 	FactoryInputUser = factoryInputUser
 	FactoryInputAPIKey = factoryInputAPIKey
-	gin.SetMode(gin.DebugMode)
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
 	// Add a ginzap middleware, which:
