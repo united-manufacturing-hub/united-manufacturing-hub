@@ -108,12 +108,14 @@ func getProxyHandler(c *gin.Context) {
 	var getProxyRequest getProxyRequest
 	var err error
 
+	// Failed to parse request into service name and original url
 	err = c.BindUri(&getProxyRequest)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
 	}
 
+	// Grafana session not present in request
 	session, err := c.Cookie("grafana_session")
 	if err != nil {
 
@@ -121,26 +123,29 @@ func getProxyHandler(c *gin.Context) {
 		return
 	}
 
-	logged_in, err := CheckUserLoggedIn(session)
+	// Check if user is logged in
+	loggedIn, err := CheckUserLoggedIn(session)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 	}
 
-	if !logged_in {
-
+	// Abort if not logged in
+	if !loggedIn {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 
+	// Switch to handle our services
 	switch getProxyRequest.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, session)
+		HandleFactoryInput(c, session, getProxyRequest)
 	default:
 		c.AbortWithStatus(http.StatusBadRequest)
 	}
 }
 
-func HandleFactoryInput(c *gin.Context, sessioncookie string) {
+// HandleFactoryInput handles proxy requests to factoryinput
+func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRequest) {
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get("tracing-context"); ok {
@@ -150,23 +155,16 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 	}
 	defer span.Finish()
 
-	var getProxyRequest getProxyRequest
-	var err error
+	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
 
-	err = c.BindUri(&getProxyRequest)
-	if err != nil {
-		handleInvalidInputError(span, c, err)
-		return
-	}
-
-	proxyUrl := strings.TrimPrefix(string(getProxyRequest.OriginalURI), "/")
-
+	// Validate proxy url
 	u, err := url.Parse(proxyUrl)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
 	}
 
+	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
 	if len(s) != 5 {
 		handleInvalidInputError(span, c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
@@ -180,12 +178,14 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 		value := s[4]
 	*/
 
+	// Get grafana organizations of user
 	orgas, err := user.GetOrgas(sessioncookie)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
 	}
 
+	// Check if user is in orga, with same name as customer
 	allowedOrg := false
 	for _, orgsElement := range orgas {
 		if orgsElement.Name == customer {
@@ -194,12 +194,13 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 		}
 	}
 
+	// Abort if not in allowed org
 	if !allowedOrg {
-
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 
+	// Proxy request to backend
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", u.String(), nil)
@@ -208,6 +209,7 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 		return
 	}
 
+	// Add headers for backend
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
 	req.Header.Set("Authorization", fmt.Sprintf("Basic ", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey)))))
 
@@ -235,6 +237,7 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 	for a, b := range resp.Header {
 		c.Header(a, b[0])
 	}
+	// Add cors headers for reply to original requester
 	c.Header("Access-Control-Allow-Headers", "*")
 
 	_, err = c.Writer.Write(bodyBytes)
