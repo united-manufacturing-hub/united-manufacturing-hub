@@ -29,6 +29,8 @@ import numpy as np
 from genicam.gentl import TimeoutException
 from harvesters.core import Harvester
 
+#Console Style elements for outpu
+HORIZONTAL_CONSOLE_LINE = "\n"+"_"*80+"\n"
 
 class CamGeneral(ABC):
     """
@@ -319,7 +321,7 @@ class GenICam(CamGeneral):
         fetch an image.
     """
 
-    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, mac_address, genTL_producer_path_list,
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, serial_number, mac_address, gen_tl_producer_path_list,
                  user_set_selector="Default", image_width=None, image_height=None, pixel_format=None,
                  image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
                  image_storage_path=None) -> None:
@@ -339,7 +341,7 @@ class GenICam(CamGeneral):
                          serial_number=serial_number,
                          mac_address=mac_address)
 
-        self.genTL_producer_path_list = genTL_producer_path_list
+        self.gen_tl_producer_path_list = gen_tl_producer_path_list
         self.user_set_selector = user_set_selector
         self.image_width = image_width
         self.image_height = image_height
@@ -376,15 +378,15 @@ class GenICam(CamGeneral):
         self.h = Harvester()
 
         # Add path of GenTL Producer 
-        #self.h.add_file(self.genTL_producer_path)
+        #self.h.add_file(self.gen_tl_producer_path)
 
-        for path in self.genTL_producer_path_list:
+        for path in self.gen_tl_producer_path_list:
             self.h.add_file(path)
 
         # Check if cti-file available, stop if none found
         if len(self.h.files) == 0:
             sys.exit("No valid cti file found")
-        print("\n___________________________________________\n")
+        print("\n"+"_"*80+"\n")
         print("Currently available genTL Producer CTI files: ")
         for file in self.h.files:
             print(file)
@@ -412,7 +414,7 @@ class GenICam(CamGeneral):
             if device_mac_address.upper() == self.mac_address.upper().replace(":",""):
                 self.ia = self.h.create_image_acquirer(id_=camera.id_)
                 print("\nUsing:\n" + str(camera))
-                print("\n___________________________________________\n")
+                print(HORIZONTAL_CONSOLE_LINE)
         """
         #if selecting via serial number
         for camera in self.h.device_info_list:
@@ -569,7 +571,7 @@ class GenICam(CamGeneral):
             # Due to with statement buffer will automatically be
             #   queued
             with self.ia.fetch_buffer(timeout=20) as buffer:
-                print("\n___________________________________________\n")
+                print(HORIZONTAL_CONSOLE_LINE)
                 print("Image fetched.")
                 # Create an alias of the 2D image component:
                 component = buffer.payload.components[0]
@@ -671,7 +673,7 @@ class DummyCamera(CamGeneral):
 
         #reads a static image which is part of stack
         img = cv2.imread("/app/assets/dummy_image.jpg")
-        print("\n___________________________________________\n")
+        print(HORIZONTAL_CONSOLE_LINE)
         print("Image fetched.")
         height, width, channels = img.shape
         retrieved_image = np.ndarray(buffer=img,
