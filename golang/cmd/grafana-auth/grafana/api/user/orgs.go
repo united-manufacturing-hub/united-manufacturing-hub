@@ -40,16 +40,15 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		fmt.Println("NewRequest failed")
+
 		return Orgs{}, err
 	}
 
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
 
-	fmt.Println("%s", req)
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Do failed: %s", err)
+
 		return Orgs{}, err
 	}
 
@@ -63,13 +62,13 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 	if resp.StatusCode == http.StatusOK {
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Println("ReadAll failed")
+
 			log.Fatal(err)
 		}
 
 		orgs, err := UnmarshalOrgs(bodyBytes)
 		if err != nil {
-			fmt.Println("UnmarshalOrgs failed")
+
 			return Orgs{}, err
 		}
 		return orgs, nil

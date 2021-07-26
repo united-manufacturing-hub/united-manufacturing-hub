@@ -44,16 +44,15 @@ func GetUser(sessioncookie string) (User, error) {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		fmt.Println("NewRequest failed")
+
 		return User{}, err
 	}
 
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
 
-	fmt.Println("%s", req)
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Do failed: %s", err)
+
 		return User{}, err
 	}
 
@@ -67,13 +66,13 @@ func GetUser(sessioncookie string) (User, error) {
 	if resp.StatusCode == http.StatusOK {
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Println("ReadAll failed")
+
 			log.Fatal(err)
 		}
 
 		user, err := UnmarshalUser(bodyBytes)
 		if err != nil {
-			fmt.Println("UnmarshalUser failed")
+
 			return User{}, err
 		}
 		return user, nil

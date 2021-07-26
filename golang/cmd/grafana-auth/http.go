@@ -116,7 +116,7 @@ func getProxyHandler(c *gin.Context) {
 
 	session, err := c.Cookie("grafana_session")
 	if err != nil {
-		fmt.Println("No cookie !")
+
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
@@ -127,7 +127,7 @@ func getProxyHandler(c *gin.Context) {
 	}
 
 	if !logged_in {
-		fmt.Println("Not logged in")
+
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
@@ -174,18 +174,17 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 	}
 
 	customer := s[1]
-	location := s[2]
-	asset := s[3]
-	value := s[4]
+	/*
+		location := s[2]
+		asset := s[3]
+		value := s[4]
+	*/
 
 	orgas, err := user.GetOrgas(sessioncookie)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
 	}
-
-	fmt.Println(customer, location, asset, value)
-	fmt.Println("Orgas: ", orgas)
 
 	allowedOrg := false
 	for _, orgsElement := range orgas {
@@ -196,28 +195,25 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 	}
 
 	if !allowedOrg {
-		fmt.Println("User not in org")
+
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
-
-	fmt.Println("Is allowed org: ", allowedOrg)
 
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
-		fmt.Println("NewRequest failed")
+
 		return
 	}
 
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
 	req.Header.Set("Authorization", fmt.Sprintf("Basic ", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey)))))
 
-	fmt.Println(req)
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Do failed: %s", err)
+
 		return
 	}
 
@@ -228,10 +224,9 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 		}
 	}(resp.Body)
 
-	fmt.Println(resp)
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("ReadAll failed")
+
 		log.Fatal(err)
 	}
 
@@ -244,6 +239,9 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string) {
 
 	_, err = c.Writer.Write(bodyBytes)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		err = c.AbortWithError(http.StatusInternalServerError, err)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
