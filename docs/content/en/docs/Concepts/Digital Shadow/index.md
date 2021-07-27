@@ -158,7 +158,10 @@ Example of generating a message under `productTagString` topic containing the me
 "value": 1.458
 }
 ```
-Now it is full -> send it away.
+Now it is full -> send it away. \
+**Important:** always send the `uniqueProduct` message first and afterwards the messages for the related 
+`productTag`/`productTagString` and messages on the `addParentToChild` topic.
+
 
 #### Advantages and disadvantages of presented process
 Pro | Con
@@ -250,58 +253,59 @@ though the UID and the related `uniqueProduct` message is created at the current
 If for example a batch of screws is supplied to one asset with only one datamatrix code (one AID) for all screws 
 together, there will only be one MQTT message under the topic `uniqueProduct` created for the batch with one AID, a 
 newly generated UID and with the default supply asset `storage`.
-- The batch AID is then used as parent for a MQTT message under the topic `addParentToChild` 
-  (-> mqtt-to-postgres will always fetch the same parent uid for the inheritanceTable)
-- The batch AID only changes when new batch AID is scanned
+- The batch AID is then used as parent for a MQTT message under the topic `addParentToChild`.
+  (-> mqtt-to-postgres will repeatedly fetch the same parent uid for the inheritanceTable)
+- The batch AID only changes when new batch AID is scanned.
 
 ### MQTT-to-postgres
-The `MQTT-to-postgres` microservice now uses the MQTT Messages it gets from the broker and writes the information in the
-database. The microservice is not use-case specific, so the user does not need to change anything about it.
+The `MQTT-to-postgres` microservice now uses the MQTT messages it gets from the broker and writes the information in the
+database. The microservice is not use-case specific, so the user just needs to send it the correct MQTT messages.
 
 `MQTT-to-postgres` now needs to generate UID's and save the information in the database, because the database uses UID's
-to store and link all the generated data efficiently. Note that the incoming MQTT messages are contextualized with AID's.
+to store and link all the generated data efficiently. Remember that the incoming MQTT messages are contextualized with AID's.
 
-Now we can divide the task of `MQTT-to-postgres` in three:
-- Use the MQTT message under the Topic **/uniqueProduct** which gives us the AID and the Asset and make an entry in the
-  uniqueProduct table containing the AID and a newly generated UID. 
+We can divide the task of `MQTT-to-postgres` in three (regarding the digital shadow):
+- Use the MQTT message under the Topic **uniqueProduct** which gives us the AID and the Asset and make an entry in the
+  uniqueProduct table containing the AID and a newly generated UID.
   1. Generate UID (with snowflake: https://en.wikipedia.org/wiki/Snowflake_ID)
-  2. Store new UID and all data from /uniqueProduct MQTT Message in uniqueProductTable
+  2. Store new UID and all data from **uniqueProduct** MQTT Message in the  `uniqueProductTable`
 
-- Use **/productTag and /productTagString** MQTT messages. The AID (child) and the AssetId is used to look for the uniqueProduct of 
-  the Child to get the UID of the child. The product Tag information is then stored with the UID in the TimescaleDB 
-  1. Look in TimescaleDB, uniqueProductTable for the uniqueProduct with the same Asset and AID from the /productTag 
+- Use **productTag and productTagString** topic MQTT messages. The AID and the AssetId is used to look for the uniqueProduct 
+  the massages belong to. The `productTag` information is then stored with the UID in the TimescaleDB 
+  1. Look in TimescaleDB, `uniqueProductTable` for the uniqueProduct with the same Asset and AID from the `productTag` 
      massage (the child)
-  2. Get the UID when found from the child (if not found, write /productTag message in a buffer, which is regularly 
-     step 1. to find the missing uniqueProducts)
-  3. Write productTag information without AID, instead with the found UID in the uniqeProductTable
+  2. Get the UID when found from the child (that is why it is important to send the `uniqueProduct` message before sending
+     `productTag`/`productTagString`).
+  3. Write productTag information without AID, instead with the found UID in the uniqueProductTable
 
-- Use the **/addParentToChild** message. Retrieve the child UID by using the child AID and the Asset. Get the parent 
+- Use the **addParentToChild** message. Retrieve the child UID by using the child AID and the Asset. Get the parent 
   UID's by finding the last time the parents AID's were stored in the uniqueProductTable.
-  1. Look in TimescaleDB, uniqueProductTable for the uniqueProduct with the same Asset and AID as written in the child 
-     of the /addParentToChild meassage
-  2. Look in the TimescaleDB, uniqueProductTable for all other assets for the last time the AID of the Parents was used 
-     and get UID's
-  3. Write UID of child and two UID's of parents in the productInheritanceTable
+  1. Look in TimescaleDB, `uniqueProductTable` for the uniqueProduct with the same Asset and AID as written in the child 
+     of the /addParentToChild message
+  2. Look in the TimescaleDB, `uniqueProductTable` for all other assets for the last time the AID of the parent was used 
+     and get the UID
+  3. Write UID of child and UID of the parent in the `productInheritanceTable`
 
-Possible Problems: 
-- The /uniqueProduct of the child has to be made before we can store /productTag or /productTagString. 
-- All /uniqueProducts of one step at one asset need to be stored before we can process /addParentToChild
+**Possible Problems:**
+- The `uniqueProduct` MQTT message of the child has to be made before we can store `productTag` or `productTagString`
+  messages. 
+- All `uniqueProducts` of one step at one asset need to be stored before we can process `addParentToChild` messages.
+This means we also need to send possible parent `uniqueProduct` MQTT messages (asset = `storage`) before.
 
 ### Sql Database Structure (timescaleDB)
 *The structure of the timescaleDB might be changed in the future.*
 {{< imgproc timescaleDB Fit "2026x1211" >}}{{< /imgproc >}}
 ![postgreSQL_DatabaseVis_04](https://user-images.githubusercontent.com/87082063/127060211-4a70f8d8-5d43-487f-b5e5-9e34e6fd17f6.png)
-Four tables are expecially relevant:
-- `uniqueProductTable` contains entrys with a pair of one UID and one AID.
+Four tables are especially relevant:
+- `uniqueProductTable` contains entries with a pair of one UID and one AID and other data.
 - `productTagTable` and `productTagStringTable` store information referenced to the UID's in the `uniqueProductTable`. 
   Stored is everything from individual measurements to quality classes.
-  
-- `productInheritanceTable` contains pairs of child and parent. The table as a whole thereby contains the complete 
+- `productInheritanceTable` contains pairs of child and parent UID's. The table as a whole thereby contains the complete 
   inheritance information of each individual part. One entry describes one edge of the inheritance tree.
 
 ### Factoryinsight + Rest API
-To make the relevant Data used for digital shadow available we need to provide new REST API's. `Factoryinsight` is the
-microservice doing that task. It accesses the timescaleDB database, fetches the data and sends it as in the request 
+To make the relevant data used for digital shadow available we need to provide new REST API's. `Factoryinsight` is the
+microservice doing that task. It accesses the timescaleDB database, fetches the data and sends it like the request 
 specified.
 
 #### Implemented functionality for digital shadow
@@ -405,7 +409,9 @@ Possible candidates are:
 - more specific REST API's to use the digital shadow more flexible
 - detailed performance analysis and subsequent optimization to enable digital shadow for massive 
   production speed and complexity
-- 
+- A buffer in microservice `MQTT-to-postgres`. If `productTag`/`productTagString` messages are send to the the 
+  microservice before writing the message `uniqueProduct` in the database the the tags are not stored. A buffer could hold
+  `productTag`/`productTagString` messages and regularly try to write them in the database.
 
 
 [the UMH datamodel]: ../../concepts/mqtt
