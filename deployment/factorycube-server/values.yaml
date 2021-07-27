@@ -855,12 +855,22 @@ grafana:
     - /bin/sh
     - -c
     image: busybox
-    name: init-factoryinsight-plugin
+    name: init-umh-datasource
     volumeMounts:
     - mountPath: /var/lib/grafana
       name: storage
-    - mountPath: /grafanaDatasource
-      name: grafanadatasource
+  extraInitContainers: 
+  - args:
+    - mkdir -p /var/lib/grafana/plugins && curl -O "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && cp -u umh-factoryinput-panel.zip /var/lib/grafana/plugin.zip && unzip -n /var/lib/grafana/plugin.zip -d /var/lib/grafana/plugins/
+    command:
+    - /bin/sh
+    - -c
+    image: busybox
+    name: init-umh-panel-plugin
+    volumeMounts:
+    - mountPath: /var/lib/grafana
+      name: storage
+
       # subPath: ia-factoryinsight-datasource.zip
   ## Enable an Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
   extraContainers: |
