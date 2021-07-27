@@ -1,0 +1,87 @@
+{{- if .Values.grafana-proxy.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+  labels:
+     {{- include "factorycube-server.labels.grafana-proxy" . | nindent 4 }}
+  {{- if .Values.grafana-proxy.annotations }}
+  annotations:
+    {{- toYaml .Values.grafana-proxy.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.grafana-proxy.replicas }} 
+  selector:
+    matchLabels:
+     {{- include "factorycube-server.labels.grafana-proxy" . | nindent 6 }}
+  strategy:  
+    type: RollingUpdate
+  template:
+    metadata:
+      name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+      labels:
+        {{- include "factorycube-server.labels.grafana-proxy" . | nindent 8 }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+          {{- if .Values.grafana-proxy.tag -}}
+          image: {{ .Values.grafana-proxy.image }}:{{ .Values.grafana-proxy.tag }}
+          {{- else }}
+          image: {{ .Values.grafana-proxy.image }}:{{ .Chart.AppVersion }}
+          {{- end }}
+          imagePullPolicy: Always
+          ports:
+              - name: http
+                containerPort: 80
+                protocol: TCP
+          resources:
+            limits:
+              cpu: {{ .Values.grafana-proxy.resources.limits.cpu }} 
+            requests:
+              cpu: {{ .Values.grafana-proxy.resources.requests.cpu }}
+          env:
+            - name: FACTORYINPUT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinput-secret 
+                  key: password
+                  
+            - name: FACTORYINPUT_USER
+              value: {{ .Values.grafana-proxy.factoryinput.user }}
+              
+            - name: FACTORYINPUT_BASE_URL
+              value: {{ .Values.grafana-proxy.factoryinput.base_url }}
+              
+            - name: FACTORYINSIGHT_BASE_URL
+              value: {{ .Values.grafana-proxy.factoryinsight.base_url }}
+              
+            - name: VERSION
+              value: "1"
+ 
+          # define a liveness probe that checks every 1 seconds, starting after 30 seconds
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 1
+
+          # define a readiness probe that checks every 15 seconds
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 1
+      
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
+{{- end -}}
