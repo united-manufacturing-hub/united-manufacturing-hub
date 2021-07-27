@@ -1,1 +1,0 @@
-See [https://docs.umh.app/docs/developers/factorycube-server/grafana-auth/](https://docs.umh.app/docs/developers/factorycube-server/grafana-auth/)
