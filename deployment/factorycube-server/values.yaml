@@ -39,6 +39,10 @@ factoryinsight:
     requests:
        cpu: 200m      
 
+### cameraconnect ###
+cameraconnect:
+    enabled: true
+
 
 ### mqtt-to-postresql ###
 mqtttopostgresql:
