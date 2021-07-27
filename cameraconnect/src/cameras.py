@@ -28,6 +28,7 @@ import numpy as np
 
 # Import libraries that are only needed for GenICam
 from genicam.gentl import TimeoutException
+from genicam.genapi import OutOfRangeException
 from harvesters.core import Harvester
 
 #Console Style elements for outpu
@@ -500,7 +501,11 @@ class GenICam(CamGeneral):
 
         # Set Exposure time
         if self.exposure_auto is not None:
-            self.ia.remote_device.node_map.ExposureTimeAbs.value = self.exposure_time
+            try:
+                self.ia.remote_device.node_map.ExposureTimeAbs.value = self.exposure_time
+            except OutOfRangeException:
+                logging.error("Specified Exposure time too long for selected camera. Please choose shorter value.")
+                sys.exit(1)
 
         # Get list of all available features of the camera
         node_map = dir(self.ia.remote_device.node_map)
