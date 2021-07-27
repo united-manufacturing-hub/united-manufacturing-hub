@@ -61,7 +61,7 @@ information, meaning: we want to link gained data to specific products, because 
 First we should use microservices (stateless if possible) to convert messages under a `raw` topic into messages under `processValue`
 or `processValueString`. This typically only requires resending the message under the appropriate topic.
 
-There are three specific kinds of messages regarding the digital shadow which need to be sent to the the `MQTT-to-postgres`
+There are four specific kinds of messages regarding the digital shadow which need to be sent to the the `MQTT-to-postgres`
 function:
 
 - **productTag topic:** MQTT Messages containing one specific datapoint for one asset (specified in the MQTT topic):
@@ -85,13 +85,25 @@ function:
 "value": "Quality2483"
 }
 ```
-- **addParentToChild:** To describe relations between products and states of those products in the production MQTT-to-postgres expects 
+- **addParentToChild:** To describe relations between products and states of those products in the production `MQTT-to-postgres` expects 
 MQTT messages under the topic: `ia/<customerID>/<location>/<AssetID>/addParentToChild`
 ```json
 {
 "timestamp_ms": 124387,
 "childAID": "23948723489",
 "parentAID": "4329875"
+}
+```
+- **uniqueProduct:** To indicate the generation of a new product/ new product state send a MQTT message to `MQTT-to-postgres`
+under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`
+```json
+{
+  "begin_timestamp_ms": 1611171012717,
+  "end_timestamp_ms": 1611171016443,
+  "product_id": "test123",
+  "is_scrap": false,
+  "step_id": "1a"
+  "uniqueProductAlternativeID": "12493857-a"
 }
 ```
 
@@ -178,17 +190,17 @@ AID's and UID's are stored  in combination one-to-one in the uniqueProductTable 
 ### Definition of when to change the UID
 If we can move a product from point "A" in the production to point "B" or back without causing problems from a process 
 perspective, the UID of the product should stay the same. (For example if the product only gets transported between 
-point a and b).
+point "A" and "B").
 
-If moving the object produces problems (e.g. moving a not yet tested object in the bin "tested Products"), the object 
+If moving the object produces problems (e.g. moving a not yet tested object in the bin "tested products"), the object 
 should have gotten a new UID on its regular way.
 
-**Example 1: Testing**
-Even thought Testing doesn't change the part itself, it changes its state in the production process:
+#### Example 1: Testing
+Even thought testing a product doesn't change the part itself, it changes its state in the production process:
 - it gets something like a virtual "certificate"
-- the value increases
+- the value increases because of that
 
-**Example 2: Transport**
+#### Example 2: Transport
 Monitored Transport over a significant distance (not the transport between two nearby assets).
 - parts value increases
 
@@ -198,34 +210,29 @@ Type | creation UID   |   death UID
 without inheritance at creation | `storage/uniqueProduct`   |   `/addParentToChild` (UID is parent)
 with inheritance at creation | `<asset>/uniqueProduct` + `addParentToChild` (UID is child)| `/addParentToChild` (UID is parent)
 
-Currently, there is nothing between life and death of a uid except productTags which should not be used to show transport
-of a part. Because the Rest API issue #336 uses the child from the `inheritanceTable` to filter the `uniqueProductsTable`
-for the relevant uniqueProducts a uniqueProduct entry at a third asset between life and death would cause problems.
+MQTT messages under the `productTag` topic should not be used to show transport of a part. If transport is relevant, 
+change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniqueProduct` topic).
 
-If at some point in the future the feature to be able to track uniqueProducts between life and death gets relevant, a 
-possible solution might be adding a field in the `uniqueProductsTable` (e.g. `inTransport: bool`). Now the rest API 
-looks if a child exists only if `inTransport: false`.
-
-####Example:
+####Example process to show the usage of AID's and UID's in the production:
 ![Documentation_ProductIDs_04](https://user-images.githubusercontent.com/87082063/126969680-e2234849-d023-41a1-b60f-69f48b7c6cf7.png)
 {{< imgproc productIDExample Fit "2026x1211" >}}{{< /imgproc >}}
-####Explanation of diagram:
+####Explanation of the diagram:
 Assembly Station 1:
-- ProductA and ProductB are combined into Product C
+- ProductA and ProductB are combined into ProductC
 - Because ProductA and ProductB have not been "seen" by the digital shadow, they get a new UID and asset = "storage" 
-  assinged (placeholder for unknown/unspecified origin).
-- ProductC now gets a new UID and as an asset, Assy1 because it is a child at Assembly Station 1
+  assigned (placeholder for unknown/unspecified origin).
+- After ProductC is now produced it gets a new UID and as an asset, Assy1, because it is the child at Assembly Station 1
 - The AID of ProductA ("A") is a physical label. Because ProductB doesn't have a physical Label, it gets a generated 
-  AID. For ProductC we can now choose either the AID form ProductA or from ProductB. Because "A" is a physical label it 
+  AID. For ProductC we can now choose either the AID from ProductA or from ProductB. Because "A" is a physical label, it 
   makes sense to use the AID of ProductA.
 
 Now the ProductC is transported to Assembly Station 2. Because it is a short transport, doesn't add value etc. we do not
-need to produce a new UID after the transport for the Product.
+need to produce a new UID after the transport of ProductA.
 
 Assembly Station 2:
-- ProductC stays the same (in the sense that it is keeping it's UID before and after the Transport), because of the easy
+- ProductC stays the same (in the sense that it is keeping its UID before and after the transport), because of the easy
   transport. 
-- ProductD is new, so it gets asset = "storage" assigned
+- ProductD is new and not produced at assembly station 2, so it gets asset = "storage" assigned
 - ProductC and ProductD are combined into ProductE. ProductE gets a new UID. We again freely choose the AID we want to 
   use (AID C was chosen, maybe because after the assembly of ProductC and ProductD, the AID Label on ProductC is not 
   accessible while the AID Label on the ProductD is).
@@ -235,16 +242,16 @@ Assembly Station 3:
 - At Assembly Station ProductE comes in and is turned into Product F
 - ProductF gets a new UID and keeps the AID of ProductE. It now gets the Assy3 assigned as asset.
 
-Note that the `uniqueProduct` MQTT Message for ProductD would not be under the Topic of Assembly2 as asset but for 
+Note that the `uniqueProduct` MQTT message for ProductD would not be under the Topic of Assembly2 as asset but for 
 example under storage. The convention is, that every part never seen by digital shadow "comes" from storage even 
-though the UID and the related `uniqueProduct` message is created at current station.
+though the UID and the related `uniqueProduct` message is created at the current station.
 
 #### Batches of parts
 If for example a batch of screws is supplied to one asset with only one datamatrix code (one AID) for all screws 
-together, there will only be one /uniqueProduct created for the batch with one AID, a newly generated UID and with the 
-default supply asset `storage`.
-- The batch AID is then used as parent for /addParentToChild (-> mqtt-to-postgres will always fetch the same parent uid
-  for the inheritanceTable)
+together, there will only be one MQTT message under the topic `uniqueProduct` created for the batch with one AID, a 
+newly generated UID and with the default supply asset `storage`.
+- The batch AID is then used as parent for a MQTT message under the topic `addParentToChild` 
+  (-> mqtt-to-postgres will always fetch the same parent uid for the inheritanceTable)
 - The batch AID only changes when new batch AID is scanned
 
 ### MQTT-to-postgres
