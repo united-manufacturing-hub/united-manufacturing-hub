@@ -211,7 +211,7 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRe
 
 	// Add headers for backend
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
-	req.Header.Set("Authorization", fmt.Sprintf("Basic ", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey)))))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey)))))
 
 	resp, err := client.Do(req)
 	if err != nil {
