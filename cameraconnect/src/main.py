@@ -110,17 +110,17 @@ if __name__ == "__main__":
     #   trigger classes
     if TRIGGER == "Continuous":
         # Never jumps out of the processes of the instance
-        ContinuousTrigger(cam,CAMERA_INTERFACE,CYCLE_TIME) 
+        ContinuousTrigger(cam,CAMERA_INTERFACE,CYCLE_TIME)
     elif TRIGGER == "MQTT":
         # Starts an asynchroneous process for working with 
         #   the received mqtt data
-        trigger = MqttTrigger(cam,CAMERA_INTERFACE,ACQUISITION_DELAY,MQTT_HOST,MQTT_PORT,MQTT_TOPIC_TRIGGER) 
+        trigger = MqttTrigger(cam,CAMERA_INTERFACE,ACQUISITION_DELAY,MQTT_HOST,MQTT_PORT,MQTT_TOPIC_TRIGGER)
 
         # Run forever to stay connected 
         while True:
             # Avoid overloading the CPU
             time.sleep(10)
-            print("Still running.")
+            logging.debug("Still running.")
     else:
         # Stop system, not possible to run with this setting
         sys.exit("Environment Error: TRIGGER not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
