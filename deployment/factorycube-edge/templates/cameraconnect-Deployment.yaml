@@ -21,6 +21,7 @@ spec:
         {{- include "factorycube-edge.labels.cameraconnect" . | nindent 8 }}
         app.kubernetes.io/component: "cameraconnect"
     spec:
+        hostNetwork: true
         volumes:
           - name: storage
             emptyDir: {}
@@ -47,7 +48,6 @@ spec:
               {{- else }}
               image: {{ .Values.cameraconnect.image }}:{{ .Chart.AppVersion }}
               {{- end }}
-              hostNetwork: true
               volumeMounts:
                 - mountPath: /app/assets
                   name: storage
