@@ -24,6 +24,7 @@ import (
 var FactoryInputAPIKey string
 var FactoryInputUser string
 var FactoryInputBaseURL string
+var FactoryInsightBaseUrl string
 
 func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	gin.SetMode(gin.ReleaseMode)
@@ -114,16 +115,66 @@ func getProxyHandler(c *gin.Context) {
 		return
 	}
 
-	// Grafana session not present in request
-	session, err := c.Cookie("grafana_session")
-	if err != nil {
+	// Switch to handle our services
+	switch getProxyRequest.Service {
+	case "factoryinput":
+		HandleFactoryInput(c, getProxyRequest)
+	case "factoryinsight":
+		HandleFactoryInsight(c, getProxyRequest)
+	default:
+		c.AbortWithStatus(http.StatusBadRequest)
+	}
+}
 
+func HandleFactoryInsight(c *gin.Context, request getProxyRequest) {
+	// Jaeger tracing
+	var span opentracing.Span
+	if cspan, ok := c.Get("tracing-context"); ok {
+		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInsight", c.Request.Method, c.Request.URL.Path)
+	} else {
+		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInsight", c.Request.Method, c.Request.URL.Path)
+	}
+	defer span.Finish()
+
+	authHeader := c.GetHeader("authorization")
+	// HTTP Basic auth not present in request
+	if authHeader == "" {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
+
+	// Validate proxy url
+	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInsightBaseUrl, proxyUrl))
+	if err != nil {
+		handleInvalidInputError(span, c, err)
+		return
+	}
+
+	DoProxiedRequest(c, err, u, "", authHeader)
+}
+
+// HandleFactoryInput handles proxy requests to factoryinput
+func HandleFactoryInput(c *gin.Context, request getProxyRequest) {
+	// Jaeger tracing
+	var span opentracing.Span
+	if cspan, ok := c.Get("tracing-context"); ok {
+		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
+	} else {
+		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
+	}
+	defer span.Finish()
+
+	// Grafana sessionCookie not present in request
+	sessionCookie, err := c.Cookie("grafana_session")
+	if err != nil {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
 	// Check if user is logged in
-	loggedIn, err := CheckUserLoggedIn(session)
+	loggedIn, err := CheckUserLoggedIn(sessionCookie)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 	}
@@ -134,30 +185,10 @@ func getProxyHandler(c *gin.Context) {
 		return
 	}
 
-	// Switch to handle our services
-	switch getProxyRequest.Service {
-	case "factoryinput":
-		HandleFactoryInput(c, session, getProxyRequest)
-	default:
-		c.AbortWithStatus(http.StatusBadRequest)
-	}
-}
-
-// HandleFactoryInput handles proxy requests to factoryinput
-func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRequest) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
-	}
-	defer span.Finish()
-
 	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
 
 	// Validate proxy url
-	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL,proxyUrl))
+	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
@@ -178,7 +209,7 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRe
 	*/
 
 	// Get grafana organizations of user
-	orgas, err := user.GetOrgas(sessioncookie)
+	orgas, err := user.GetOrgas(sessionCookie)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
@@ -198,7 +229,11 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRe
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
+	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
+	DoProxiedRequest(c, err, u, sessionCookie, ak)
+}
 
+func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorization_key string) {
 	// Proxy request to backend
 	client := &http.Client{}
 
@@ -209,8 +244,10 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRe
 	}
 
 	// Add headers for backend
-	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
-	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey)))))
+	if len(sessionCookie) > 0 {
+		req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessionCookie))
+	}
+	req.Header.Set("Authorization", authorization_key)
 
 	resp, err := client.Do(req)
 	if err != nil {

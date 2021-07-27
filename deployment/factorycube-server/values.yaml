@@ -39,6 +39,11 @@ factoryinsight:
     requests:
        cpu: 200m      
   
+### grafana-proxy ###
+grafana-proxy:
+  enabled: true
+  image: unitedmanufacturinghub/grafana-proxy
+  replicas: 1
 
 ### mqtt-to-postresql ###
 mqtttopostgresql:
