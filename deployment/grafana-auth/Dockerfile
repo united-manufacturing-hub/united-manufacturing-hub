@@ -6,13 +6,14 @@ RUN mkdir /build
 ADD ./golang/cmd/grafana-auth /build/cmd/grafana-auth
 ADD ./golang/internal /build/internal
 ADD ./golang/vendor /build/vendor
+ADD ./golang/pkg /build/pkg
 
 ADD ./golang/go.mod /build/go.mod
 ADD ./golang/go.sum /build/go.sum
 
 WORKDIR /build
 
-RUN CGO_ENABLED=0 GOOS=linux go test --mod=readonly ./cmd/grafana-auth
+RUN CGO_ENABLED=0 GOOS=linux go test -v --mod=readonly ./cmd/grafana-auth
 RUN CGO_ENABLED=0 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags '-extldflags "-static"' -o mainFile ./cmd/grafana-auth
 
 FROM scratch
