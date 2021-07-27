@@ -504,7 +504,7 @@ class GenICam(CamGeneral):
             try:
                 self.ia.remote_device.node_map.ExposureTimeAbs.value = self.exposure_time
             except OutOfRangeException:
-                logging.error("Specified Exposure time too long for selected camera. Please choose shorter value.")
+                logging.error("Specified Exposure time too high for selected camera. Please choose shorter value.")
                 sys.exit(1)
 
         # Get list of all available features of the camera
