@@ -27,13 +27,6 @@ from trigger import MqttTrigger,ContinuousTrigger
 
 IMAGE_PATH = os.environ.get('IMAGE_PATH', None)
 
-### LOAD OVERALL ENVIROMENT SETTINGS
-## GLOBAL SETTINGS
-CUSTOMER_ID = os.environ.get('CUSTOMER_ID')
-LOCATION = os.environ.get('LOCATION')
-MACHINE_ID = os.environ.get('MACHINE_ID')
-
-
 ### LOAD OVERALL SETTINGS
 ## MQTT SETTINGS
 MQTT_HOST = os.environ.get('MQTT_HOST')
@@ -60,7 +53,8 @@ IMAGE_HEIGHT = int(os.environ.get('IMAGE_HEIGHT', 800))
 PIXEL_FORMAT = os.environ.get('PIXEL_FORMAT', 'Mono8')
 IMAGE_CHANNELS = os.environ.get('IMAGE_CHANNELS', 'None')
 EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')
-EXPOSURE_AUTO = os.environ.get('EXPORSURE_AUTO', 'Off')
+
+EXPOSURE_AUTO = os.environ.get('EXPOSURE_AUTO', 'Off')
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
@@ -85,6 +79,11 @@ if __name__ == "__main__":
     elif LOGGING_LEVEL == "CRITICAL":
         logging.basicConfig(level=logging.CRITICAL)
 
+    logging.debug("Exposure time: " + str(EXPOSURE_TIME))
+    logging.debug("Image channels: " + str(IMAGE_CHANNELS))
+    logging.debug("Set image width: " + str(IMAGE_WIDTH))
+    logging.debug("Set image height: " + str(IMAGE_HEIGHT))
+
     #detect available cti files as camera producers
     cti_file_list = []
     for name in glob.glob(str(DEFAULT_GENTL_PRODUCER_PATH)+'/**/*.cti', recursive=True):
@@ -96,12 +95,11 @@ if __name__ == "__main__":
         logging.error("No producer file discovered")
         exit(1)
 
-
     # Check selected camera interface
     if CAMERA_INTERFACE == "DummyCamera":
         cam = DummyCamera(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, 0, image_storage_path=IMAGE_PATH)
     elif CAMERA_INTERFACE == "GenICam":
-        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH)
+        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH, exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO)
     else: 
         # Stop system, not possible to run with this settings
         sys.exit("Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
