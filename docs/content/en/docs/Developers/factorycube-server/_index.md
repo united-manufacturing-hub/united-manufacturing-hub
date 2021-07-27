@@ -28,6 +28,11 @@ the tool to store incoming MQTT messages to the postgres / timescaleDB database
 
 Technical information and usage can be found in the [documentation for mqtt-to-postgresql](mqtt-to-postgresql)
 
-## factoryinsight-datasource
+## grafana-auth
 
-This is a plugin for Grafana which acts as a datasource and creates a connection to factoryinsight.
+Proxies request from grafana to various backend services, while authenticating the grafana user.
+Technical information and usage can be found in the [documentation for grafana-auth](grafana-auth)
+
+## grafana-plugins
+
+Contains our grafana datasource plugin and our input panel
