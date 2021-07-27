@@ -12,8 +12,8 @@ export const plugin = new PanelPlugin<ButtonPanelOptions>(ButtonPanel).setPanelO
       path: 'url',
       name: 'URL',
       category: ['REST Integration'],
-      description: 'The URL to call',
-      defaultValue: 'http://api.example.com/',
+      description: 'URL of the Grafana Auth proxy',
+      defaultValue: 'http://grafana-proxy/',
     })
       .addTextInput({
         path: 'Rlocation',
