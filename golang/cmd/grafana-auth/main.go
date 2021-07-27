@@ -25,10 +25,14 @@ func main() {
 		}
 	}(logger)
 
+	for i, s := range os.Environ() {
+		fmt.Println(i, s)
+	}
+
 	FactoryInsightAPIKey := os.Getenv("FACTORYINSIGHT_KEY")
 	FactoryInputUser := os.Getenv("FACTORYINSIGHT_USER")
 
-	if FactoryInputAPIKey == "" {
+	if len(FactoryInputAPIKey) == 0 {
 		zap.S().Error("Factoryinsight API Key not set")
 		return
 	}
