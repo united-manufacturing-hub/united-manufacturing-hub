@@ -404,6 +404,8 @@ class GenICam(CamGeneral):
         #   argument
 
         for camera in self.h.device_info_list:
+            #read cameras mac address
+            #ATTENTION: only works with BAUMER SDK
             device_mac_address = str(camera.id_).replace("_","").replace("devicemodul","")
             if device_mac_address.upper() == self.mac_address.upper().replace(":",""):
                 try:
@@ -414,6 +416,9 @@ class GenICam(CamGeneral):
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
 
+        if not hasattr(self, "ia"):
+            logging.error("No camera with the specified MAC address available. Please specify MAC address in env file correctly.")
+            sys.exit("Invalid MAC address.")
         ## Set some default settings
         # This is required because of a bug in the harvesters
         #   module. This should not affect our usage of image
