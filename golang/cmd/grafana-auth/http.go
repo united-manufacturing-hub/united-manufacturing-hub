@@ -23,6 +23,7 @@ import (
 
 var FactoryInputAPIKey string
 var FactoryInputUser string
+var FactoryInputBaseURL string
 
 func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	gin.SetMode(gin.ReleaseMode)
@@ -156,7 +157,7 @@ func HandleFactoryInput(c *gin.Context, sessioncookie string, request getProxyRe
 	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
 
 	// Validate proxy url
-	u, err := url.Parse(proxyUrl)
+	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL,proxyUrl))
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return

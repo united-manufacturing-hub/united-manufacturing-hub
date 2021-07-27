@@ -7,6 +7,7 @@ if the requesting user is logged into grafana and part of the organization he re
 1) Set .env variables
     - FACTORYINPUT_KEY
     - FACTORYINPUT_USER
+    - FACTORYINPUT_BASE_URL
     - JAEGER_HOST
     - JAEGER_PORT
 

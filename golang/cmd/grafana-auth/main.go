@@ -31,6 +31,7 @@ func main() {
 
 	FactoryInputAPIKey := os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser := os.Getenv("FACTORYINPUT_USER")
+	FactoryInputBaseURL := os.Getenv("FACTORYINPUT_BASE_URL")
 
 	if len(FactoryInputAPIKey) == 0 {
 		zap.S().Error("Factoryinsight API Key not set")
