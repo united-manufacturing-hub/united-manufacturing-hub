@@ -16,9 +16,8 @@ require (
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.11.0
-	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.29.1+incompatible
-	go.uber.org/zap v1.16.0
+	go.uber.org/zap v1.18.1
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 )
