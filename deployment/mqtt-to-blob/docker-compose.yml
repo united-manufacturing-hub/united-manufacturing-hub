@@ -1,12 +1,26 @@
-version: "3.2"
+version: '3.7'
 services:
-  minio:
-    image: minio/minio:latest
-    entrypoint: sh
-    command: -c 'mkdir -p /export/gitlab && /usr/bin/minio server /export'
+  ### Min.io: Transforms MQTT-messages in JPEGs and puts them on the Min.io blob storage with the timestamp as name
+  mqtt-to-blob:
+    container_name: mqtt-to-blob
+    #image: minio/minio
+    build:
+      context: ../../
+      dockerfile: ./deployment/mqtt-to-blob/Dockerfile
+    restart: unless-stopped
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
     environment:
-          MINIO_ACCESS_KEY: "DCCAachen"
-          MINIO_SECRET_KEY: "DCCAachen2021"
-    deploy:
-      restart_policy:
-        condition: on-failure
+      - BROKER_URL=172.21.9.226
+      - BROKER_PORT=1883
+      - MINIO_URL=play.min.io
+      - MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+      - MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+      - TOPIC=ia/rawImage/#
+#    deploy:
+#      restart_policy:
+#        condition: on-failure
+

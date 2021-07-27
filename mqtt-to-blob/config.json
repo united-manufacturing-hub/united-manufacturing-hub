@@ -36,6 +36,9 @@
 	"LISTENER" : {
 		"TIMEZONE" : "Europe/Vienna"
 	},
+	"MQTT-to-Blob" : {
+		"TIMEZONE" : "Europe/Vienna"
+	},
 	"DUMMY_DATA_CREATOR" :{
 		"NUMBER_OF_RETRIES" : 10,
 		"TIME_BETWEEN_RECONNECTS" : 5,
