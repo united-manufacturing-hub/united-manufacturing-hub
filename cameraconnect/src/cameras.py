@@ -406,7 +406,11 @@ class GenICam(CamGeneral):
         for camera in self.h.device_info_list:
             device_mac_address = str(camera.id_).replace("_","").replace("devicemodul","")
             if device_mac_address.upper() == self.mac_address.upper().replace(":",""):
-                self.ia = self.h.create_image_acquirer(id_=camera.id_)
+                try:
+                    self.ia = self.h.create_image_acquirer(id_=camera.id_)
+                except:
+                    logging.error("Camera ist not reachable. It is most likely in the wrong subnet. Check your network definition and the camera ip address.")
+                    sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
 
