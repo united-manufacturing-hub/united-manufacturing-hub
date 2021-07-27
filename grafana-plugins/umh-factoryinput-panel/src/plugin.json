@@ -5,7 +5,7 @@
   "info": {
     "description": "This plugins allows sending of MQTT messages to the UMH stack via the factoryinput API\"",
     "author": {
-      "name": "UMH Systems GMBH",
+      "name": "UMH Systems GmbH",
       "url": ""
     },
     "keywords": [

@@ -8,7 +8,7 @@
     "dev": "grafana-toolkit plugin:dev",
     "watch": "grafana-toolkit plugin:dev --watch"
   },
-  "author": "UMH Systems GMBH",
+  "author": "UMH Systems GmbH",
   "license": "AGPL-3.0-only",
   "devDependencies": {
     "@grafana/data": "7.4.2",
