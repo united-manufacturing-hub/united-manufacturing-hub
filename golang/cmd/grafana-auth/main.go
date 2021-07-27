@@ -29,19 +29,24 @@ func main() {
 		fmt.Println(i, s)
 	}
 
-	FactoryInputAPIKey := os.Getenv("FACTORYINPUT_KEY")
-	FactoryInputUser := os.Getenv("FACTORYINPUT_USER")
-	FactoryInputBaseURL := os.Getenv("FACTORYINPUT_BASE_URL")
+	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
+	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")
+	FactoryInputBaseURL = os.Getenv("FACTORYINPUT_BASE_URL")
+	FactoryInsightBaseUrl = os.Getenv("FACTORYINSIGHT_BASE_URL")
 
 	if len(FactoryInputAPIKey) == 0 {
-		zap.S().Error("Factoryinsight API Key not set")
+		zap.S().Error("Factoryinput API Key not set")
 		return
 	}
 	if FactoryInputUser == "" {
-		zap.S().Error("Factoryinsight user not set")
+		zap.S().Error("Factoryinput user not set")
 		return
 	}
 	if FactoryInputBaseURL == "" {
+		zap.S().Error("Factoryinput base url not set")
+		return
+	}
+	if FactoryInsightBaseUrl == "" {
 		zap.S().Error("Factoryinsight base url not set")
 		return
 	}
@@ -57,14 +62,22 @@ func main() {
 		}
 	}()
 
-	jaegerHost := os.Getenv("JAEGER_HOST")
-	jaegerPort := os.Getenv("JAEGER_PORT")
+	var jaegerHost string
+	var jaegerPort string
+	if os.Getenv("DISABLE_JAEGER") == "1" || os.Getenv("DISABLE_JAEGER") == "true" {
+		jaegerHost = ""
+		jaegerPort = ""
+	} else {
+		jaegerHost = os.Getenv("JAEGER_HOST")
+		jaegerPort = os.Getenv("JAEGER_PORT")
 
-	if jaegerHost == "" || jaegerPort == "" {
-		zap.S().Warn("Jaeger not configured correctly")
+		if jaegerHost == "" || jaegerPort == "" {
+			zap.S().Warn("Jaeger not configured correctly")
+		}
 	}
 
 	SetupRestAPI(jaegerHost, jaegerPort)
+	zap.S().Infof("Ready to proxy connections")
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

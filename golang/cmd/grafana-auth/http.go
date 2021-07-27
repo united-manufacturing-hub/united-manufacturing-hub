@@ -69,12 +69,20 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/:service/*data", getProxyHandler)
+		v1.OPTIONS("/:service/*data", optionsCORSHAndler)
 	}
 
 	err = router.Run(":80")
 	if err != nil {
 		panic(err)
 	}
+}
+
+func optionsCORSHAndler(c *gin.Context) {
+	fmt.Println("optionsCORSHAndler")
+	c.Status(http.StatusOK)
+	c.Header("Access-Control-Allow-Headers", "*")
+	c.Header("Access-Control-Allow-Origin", "*")
 }
 
 func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err error) {
@@ -90,12 +98,13 @@ func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err er
 	c.String(400, "You have provided a wrong input. Please check your parameters and mention the following trace id while contacting our support: "+traceID)
 }
 
-type getProxyRequest struct {
+type getProxyRequestPath struct {
 	Service     string `uri:"service" binding:"required"`
 	OriginalURI string `uri:"data" binding:"required"`
 }
 
 func getProxyHandler(c *gin.Context) {
+	fmt.Println("getProxyHandler")
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get("tracing-context"); ok {
@@ -105,28 +114,31 @@ func getProxyHandler(c *gin.Context) {
 	}
 	defer span.Finish()
 
-	var getProxyRequest getProxyRequest
+	var getProxyRequestPath getProxyRequestPath
 	var err error
 
 	// Failed to parse request into service name and original url
-	err = c.BindUri(&getProxyRequest)
+	err = c.BindUri(&getProxyRequestPath)
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
 	}
 
+	fmt.Println(c.Request)
+
 	// Switch to handle our services
-	switch getProxyRequest.Service {
+	switch getProxyRequestPath.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, getProxyRequest)
+		HandleFactoryInput(c, getProxyRequestPath)
 	case "factoryinsight":
-		HandleFactoryInsight(c, getProxyRequest)
+		HandleFactoryInsight(c, getProxyRequestPath)
 	default:
 		c.AbortWithStatus(http.StatusBadRequest)
 	}
 }
 
-func HandleFactoryInsight(c *gin.Context, request getProxyRequest) {
+func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath) {
+	fmt.Println("HandleFactoryInsight")
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get("tracing-context"); ok {
@@ -145,8 +157,14 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequest) {
 
 	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
 
+	var path = "?"
+	for k, v := range c.Request.URL.Query() {
+		path += fmt.Sprintf("%s=%s&", k, v[0])
+	}
+
 	// Validate proxy url
-	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInsightBaseUrl, proxyUrl))
+	u, err := url.Parse(fmt.Sprintf("%s%s%s", FactoryInsightBaseUrl, proxyUrl, path))
+
 	if err != nil {
 		handleInvalidInputError(span, c, err)
 		return
@@ -156,7 +174,7 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequest) {
 }
 
 // HandleFactoryInput handles proxy requests to factoryinput
-func HandleFactoryInput(c *gin.Context, request getProxyRequest) {
+func HandleFactoryInput(c *gin.Context, request getProxyRequestPath) {
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get("tracing-context"); ok {
@@ -233,50 +251,69 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequest) {
 	DoProxiedRequest(c, err, u, sessionCookie, ak)
 }
 
-func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorization_key string) {
+func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string) {
+	fmt.Println("DoProxiedRequest")
 	// Proxy request to backend
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", u.String(), nil)
-	if err != nil {
-
-		return
-	}
-
-	// Add headers for backend
-	if len(sessionCookie) > 0 {
-		req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessionCookie))
-	}
-	req.Header.Set("Authorization", authorization_key)
-
-	resp, err := client.Do(req)
-	if err != nil {
-
-		return
-	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-
-		log.Fatal(err)
-	}
-
-	c.Status(resp.StatusCode)
-
-	for a, b := range resp.Header {
-		c.Header(a, b[0])
-	}
 	// Add cors headers for reply to original requester
 	c.Header("Access-Control-Allow-Headers", "*")
+	c.Header("Access-Control-Allow-Origin", "*")
 
-	_, err = c.Writer.Write(bodyBytes)
+	fmt.Println("Request URL: ", u.String())
+	//CORS request !
+	if u.String() == "" {
+		fmt.Println("CORS Answer")
+		c.Status(http.StatusOK)
+		_, err := c.Writer.Write([]byte("online"))
+		if err != nil {
+			fmt.Println("Failed to reply to CORS request")
+			c.AbortWithError(http.StatusInternalServerError, err)
+		}
+	} else {
+		req, err := http.NewRequest("GET", u.String(), nil)
+		if err != nil {
+			fmt.Println("Request error: ", err)
+			return
+		}
+		// Add headers for backend
+		if len(sessionCookie) > 0 {
+			req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessionCookie))
+		}
+		req.Header.Set("Authorization", authorizationKey)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Client.Do error: ", err)
+			return
+		}
+
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				panic(err)
+			}
+		}(resp.Body)
+
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println("Backend answer:")
+		fmt.Println(string(bodyBytes))
+
+		c.Status(resp.StatusCode)
+
+		for a, b := range resp.Header {
+			c.Header(a, b[0])
+		}
+		_, err = c.Writer.Write(bodyBytes)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+		}
+	}
+
 	if err != nil {
 		err = c.AbortWithError(http.StatusInternalServerError, err)
 		if err != nil {
