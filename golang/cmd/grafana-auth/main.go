@@ -29,10 +29,10 @@ func main() {
 		fmt.Println(i, s)
 	}
 
-	FactoryInsightAPIKey := os.Getenv("FACTORYINSIGHT_KEY")
-	FactoryInputUser := os.Getenv("FACTORYINSIGHT_USER")
+	FactoryInputAPIKey := os.Getenv("FACTORYINPUT_KEY")
+	FactoryInputUser := os.Getenv("FACTORYINPUT_USER")
 
-	if len(FactoryInsightAPIKey) == 0 {
+	if len(FactoryInputAPIKey) == 0 {
 		zap.S().Error("Factoryinsight API Key not set")
 		return
 	}
@@ -59,7 +59,7 @@ func main() {
 		zap.S().Warn("Jaeger not configured correctly")
 	}
 
-	SetupRestAPI(FactoryInputUser, FactoryInsightAPIKey, jaegerHost, jaegerPort)
+	SetupRestAPI(jaegerHost, jaegerPort)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

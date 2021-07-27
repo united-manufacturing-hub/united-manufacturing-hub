@@ -24,9 +24,7 @@ import (
 var FactoryInputAPIKey string
 var FactoryInputUser string
 
-func SetupRestAPI(factoryInputUser string, factoryInputAPIKey string, jaegerHost string, jaegerPort string) {
-	FactoryInputUser = factoryInputUser
-	FactoryInputAPIKey = factoryInputAPIKey
+func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
