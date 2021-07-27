@@ -38,18 +38,6 @@ factoryinsight:
        cpu: 1000m         
     requests:
        cpu: 200m      
-
-### grafana-proxy ###
-grafana-proxy:
-  enabled: true
-  image: unitedmanufacturinghub/grafana-proxy
-  replicas: 1
-  # factoryinsight api key
-  factoryinsight_key: "factoryinsight_key"
-  # factoryinsight user
-  factoryinsight_user: "factoryinsight_user"
-  jaeger_host: "localhost"
-  jaeger_port: 8000
   
 
 ### mqtt-to-postresql ###

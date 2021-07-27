@@ -41,6 +41,10 @@ func main() {
 		zap.S().Error("Factoryinsight user not set")
 		return
 	}
+	if FactoryInputBaseURL == "" {
+		zap.S().Error("Factoryinsight base url not set")
+		return
+	}
 
 	health := healthcheck.NewHandler()
 	shutdownEnabled = false
