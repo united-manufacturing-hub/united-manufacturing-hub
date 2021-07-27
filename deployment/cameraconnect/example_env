@@ -46,7 +46,7 @@ ACQUISITION_DELAY=0.0
 CYCLE_TIME=5
 
 #if IMAGE_PATH is not defined, no images will be saved
-#IMAGE_PATH=/app/assets/images/
+IMAGE_PATH=/app/assets/images/
 
 
 ## ------------- CAMERA SETTINGS -----------------
@@ -56,17 +56,23 @@ CYCLE_TIME=5
 # No default
 CAMERA_INTERFACE=GenICam
 
+EXPOSURE_TIME=1000000
+
 #typically pixel format is rgb8packed or Mono8
 #PIXEL_FORMAT=Mono8
-IMAGE_WIDTH=800
-IMAGE_HEIGHT=800
+
+#if the width or height values surpass the maximum capabilities of the camera
+#the maximum values are selected automatically
+IMAGE_WIDTH=50000
+IMAGE_HEIGHT=50000
+
 IMAGE_CHANNELS=3
 # Possible values: String without quotation marks
-# Default:    (empty)
+
 #MAC address of camera, it is written on the camera
 #format: 0030532B879C
 #000f315cd0b5
-MAC_ADDRESS=000f315cd0b5
+MAC_ADDRESS=0030532B879C
 
 #set path were gentl producers are located
 DEFAULT_GENTL_PRODUCER_PATH=/app/assets/producer_files
