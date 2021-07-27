@@ -51,27 +51,27 @@ grafanaproxy:
        cpu: 200m
   factoryinput:
     key:
-        envValueFrom: 
-            secretKeyRef:
-              name: factoryinput-secret
-              key: apiKey
+      envValueFrom: 
+        secretKeyRef:
+          name: factoryinput-secret
+          key: apiKey
     user:
-        envValueFrom: 
-            secretKeyRef:
-              name: factoryinput-secret
-              key: customerID
+      envValueFrom: 
+        secretKeyRef:
+          name: factoryinput-secret
+          key: customerID
     base_url:
-        envValueFrom: 
-            secretKeyRef:
-              name: factoryinput-secret
-              key: baseURL
+      envValueFrom: 
+        secretKeyRef:
+          name: factoryinput-secret
+          key: baseURL
 
-    factoryinsight:
-        base_url:
-            envValueFrom: 
-                secretKeyRef:
-                  name: factoryinput-secret
-                  key: baseURL
+  factoryinsight:
+    base_url:
+      envValueFrom: 
+        secretKeyRef:
+          name: factoryinput-secret
+          key: baseURL
 
               
 ### mqtt-to-postresql ###
