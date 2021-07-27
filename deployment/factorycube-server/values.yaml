@@ -39,29 +39,41 @@ factoryinsight:
     requests:
        cpu: 200m      
   
-### grafana-proxy ###
-grafana-proxy:
+### grafanaproxy ###
+grafanaproxy:
   enabled: true
   image: unitedmanufacturinghub/grafana-proxy
   replicas: 1
-  envValueFrom:
-    FACTORYINPUT_BASE_URL:
-        secretKeyRef:
-          name: factoryinput-secret
-          key: baseURL
-    FACTORYINSIGHT_BASEURL:
-        secretKeyRef:
-          name: factoryinsight-secret
-          key: baseURL
-    FACTORYINSIGHT_APIKEY:
-        secretKeyRef:
-          name: factoryinsight-secret
-          key: apiKey 
-    FACTORYINSIGHT_CUSTOMERID:
-        secretKeyRef:
-          name: factoryinsight-secret
-          key: customerID 
+  resources:
+    limits:
+       cpu: 1000m
+    requests:
+       cpu: 200m
+  factoryinput:
+    key:
+        envValueFrom: 
+            secretKeyRef:
+              name: factoryinput-secret
+              key: apiKey
+    user:
+        envValueFrom: 
+            secretKeyRef:
+              name: factoryinput-secret
+              key: customerID
+    base_url:
+        envValueFrom: 
+            secretKeyRef:
+              name: factoryinput-secret
+              key: baseURL
 
+    factoryinsight:
+        base_url:
+            envValueFrom: 
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: baseURL
+
+              
 ### mqtt-to-postresql ###
 mqtttopostgresql:
   enabled: true

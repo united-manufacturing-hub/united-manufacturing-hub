@@ -25,6 +25,12 @@ if the requesting user is logged into grafana and part of the organization he re
         - Open an terminal inside ```united-manufacturing-hub/deployment/grafana-auth```
         - Run ```docker build -f ./Dockerfile ../..```
 
+## Notes
+Grafana-Auth accepts all CORS requests, by setting the following headers:
+```
+Access-Control-Allow-Headers: *
+Access-Control-Allow-Origin: *
+```
 
 {{< swaggerui src="/openapi/grafana-proxy.yml" >}}
 

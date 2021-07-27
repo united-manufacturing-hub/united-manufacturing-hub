@@ -1,26 +1,26 @@
-{{- if .Values.grafana-proxy.enabled -}}
+{{- if .Values.grafanaproxy.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+  name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
   labels:
-     {{- include "factorycube-server.labels.grafana-proxy" . | nindent 4 }}
-  {{- if .Values.grafana-proxy.annotations }}
+     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 4 }}
+  {{- if .Values.grafanaproxy.annotations }}
   annotations:
-    {{- toYaml .Values.grafana-proxy.annotations | nindent 4 }}
+    {{- toYaml .Values.grafanaproxy.annotations | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ .Values.grafana-proxy.replicas }} 
+  replicas: {{ .Values.grafanaproxy.replicas }} 
   selector:
     matchLabels:
-     {{- include "factorycube-server.labels.grafana-proxy" . | nindent 6 }}
+     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 6 }}
   strategy:  
     type: RollingUpdate
   template:
     metadata:
-      name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+      name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
       labels:
-        {{- include "factorycube-server.labels.grafana-proxy" . | nindent 8 }}
+        {{- include "factorycube-server.labels.grafanaproxy" . | nindent 8 }}
     spec:
       affinity:
         podAntiAffinity:
@@ -29,14 +29,14 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
+                    name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{ include "factorycube-server.fullname" . }}-grafana-proxy
-          {{- if .Values.grafana-proxy.tag -}}
-          image: {{ .Values.grafana-proxy.image }}:{{ .Values.grafana-proxy.tag }}
+        - name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+          {{- if .Values.grafanaproxy.tag -}}
+          image: {{ .Values.grafanaproxy.image }}:{{ .Values.grafanaproxy.tag }}
           {{- else }}
-          image: {{ .Values.grafana-proxy.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.grafanaproxy.image }}:{{ .Chart.AppVersion }}
           {{- end }}
           imagePullPolicy: Always
           ports:
@@ -45,24 +45,21 @@ spec:
                 protocol: TCP
           resources:
             limits:
-              cpu: {{ .Values.grafana-proxy.resources.limits.cpu }} 
+              cpu: {{ .Values.grafanaproxy.resources.limits.cpu }} 
             requests:
-              cpu: {{ .Values.grafana-proxy.resources.requests.cpu }}
+              cpu: {{ .Values.grafanaproxy.resources.requests.cpu }}
           env:
             - name: FACTORYINPUT_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: factoryinput-secret 
-                  key: password
+              value: {{ .Values.grafanaproxy.factoryinput.key }}
                   
             - name: FACTORYINPUT_USER
-              value: {{ .Values.grafana-proxy.factoryinput.user }}
+              value: {{ .Values.grafanaproxy.factoryinput.user }}
               
             - name: FACTORYINPUT_BASE_URL
-              value: {{ .Values.grafana-proxy.factoryinput.base_url }}
+              value: {{ .Values.grafanaproxy.factoryinput.base_url }}
               
             - name: FACTORYINSIGHT_BASE_URL
-              value: {{ .Values.grafana-proxy.factoryinsight.base_url }}
+              value: {{ .Values.grafanaproxy.factoryinsight.base_url }}
               
             - name: VERSION
               value: "1"
