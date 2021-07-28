@@ -4,6 +4,7 @@ services:
   mqtt-to-blob:
     container_name: mqtt-to-blob
     #image: minio/minio
+    network_mode: host     #only for test purposes
     build:
       context: ../../
       dockerfile: ./deployment/mqtt-to-blob/Dockerfile
@@ -14,12 +15,12 @@ services:
             max-file: "5"
             max-size: "10m"
     environment:
-      - BROKER_URL=172.21.9.226
+      - BROKER_URL=127.0.0.1
       - BROKER_PORT=1883
       - MINIO_URL=play.min.io
       - MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
       - MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-      - TOPIC=ia/rawImage/#
+      - TOPIC=#
 #    deploy:
 #      restart_policy:
 #        condition: on-failure
