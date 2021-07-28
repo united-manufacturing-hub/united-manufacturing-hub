@@ -20,6 +20,8 @@ image_uid = os.environ['IMAGE_UID']
 image_bytes = os.environ['IMAGE_BYTES']
 input_var = ""
 
+IMAGE_FOLDER = "./images/"
+
 # Connects to the mqtt client.
 # If you want to be sure that the connection attempt was successful,
 # then see the logs.
@@ -48,7 +50,7 @@ def on_message(client, userdata, message):
     im_bytes = base64.b64decode(im[image_bytes])
     im_arr = np.frombuffer(im_bytes, dtype=np.uint8)
     img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
-    img_saver = cv2.imwrite("./images/"+uid+".jpg", img)
+    img_saver = cv2.imwrite(IMAGE_FOLDER+uid+".jpg", img)
 
     if img_saver:
         logging.info("saved")
@@ -69,12 +71,12 @@ def on_message(client, userdata, message):
         logging.info("Bucket already exists")
 
     minio_client.fput_object(
-        bucket_name, uid + ".jpg", "./images/" + uid + ".jpg"
+        bucket_name, uid + ".jpg", IMAGE_FOLDER + uid + ".jpg"
     )
     logging.info("Successfully uploaded")
 
-    if os.path.exists("./images/" + uid + ".jpg"):
-        os.remove("./images/" + uid + ".jpg")
+    if os.path.exists(IMAGE_FOLDER + uid + ".jpg"):
+        os.remove(IMAGE_FOLDER + uid + ".jpg")
         logging.info("file has been deleted")
     else:
         logging.info("The file does not exist")
