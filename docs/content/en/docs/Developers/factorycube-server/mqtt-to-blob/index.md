@@ -1,8 +1,8 @@
 ---
-title: "factoryinsight"
-linkTitle: "factoryinsight"
+title: "mqtt-to-blob"
+linkTitle: "mqtt-to-blob"
 description: >
-  This document describes the usage of factoryinsight including environment variables and the REST API
+  The following guide describes how to catch data from the MQTT-Broker and push them to the blob storage from MIN.io
 ---
 
 ## Getting started
