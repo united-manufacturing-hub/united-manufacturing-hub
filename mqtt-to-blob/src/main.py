@@ -55,20 +55,20 @@ def on_message(client, userdata, message):
     else:
         logging.debug("failed to save image to cache")
 
-    client = Minio(
+    minio_client = Minio(
         minio_url,
         access_key=minio_access_key,
         secret_key=minio_secret
     )
 
-    found = client.bucket_exists(bucket_name)
+    found = minio_client.bucket_exists(bucket_name)
 
     if not found:
-        client.make_bucket(bucket_name)
+        minio_client.make_bucket(bucket_name)
     else:
         logging.info("Bucket already exists")
 
-    client.fput_object(
+    minio_client.fput_object(
         bucket_name, uid + ".jpg", "./images/" + uid + ".jpg"
     )
     logging.info("Successfully uploaded")
