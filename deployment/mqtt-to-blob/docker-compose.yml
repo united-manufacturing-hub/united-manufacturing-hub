@@ -4,7 +4,7 @@ services:
   mqtt-to-blob:
     container_name: mqtt-to-blob
     #image: minio/minio
-    #network_mode: host     #only for test purposes
+    network_mode: host     #only for test purposes
     build:
       context: ../../
       dockerfile: ./deployment/mqtt-to-blob/Dockerfile

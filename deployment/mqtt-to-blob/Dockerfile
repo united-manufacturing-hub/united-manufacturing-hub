@@ -7,9 +7,6 @@ WORKDIR /app
 # Install any needed packages specified in requirements.txt
 COPY ./mqtt-to-blob/requirements.txt ./
 RUN pip install --trusted-host pypi.python.org -r requirements.txt --no-cache-dir
-RUN pip3 install numpy
-RUN pip3 install paho-mqtt
-RUN pip3 install minio
 
 # Copy the current directory contents into the container at /app
 COPY ./mqtt-to-blob/src /app
