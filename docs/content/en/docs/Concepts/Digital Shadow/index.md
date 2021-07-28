@@ -214,7 +214,6 @@ MQTT messages under the `productTag` topic should not be used to show transport 
 change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniqueProduct` topic).
 
 ####Example process to show the usage of AID's and UID's in the production:
-![Documentation_ProductIDs_04](https://user-images.githubusercontent.com/87082063/126969680-e2234849-d023-41a1-b60f-69f48b7c6cf7.png)
 {{< imgproc productIDExample Fit "2026x1211" >}}{{< /imgproc >}}
 ####Explanation of the diagram:
 Assembly Station 1:
@@ -292,7 +291,6 @@ This means we also need to send possible parent `uniqueProduct` MQTT messages (a
 ### Sql Database Structure (timescaleDB)
 *The structure of the timescaleDB might be changed in the future.*
 {{< imgproc timescaleDB Fit "2026x1211" >}}{{< /imgproc >}}
-![postgreSQL_DatabaseVis_04](https://user-images.githubusercontent.com/87082063/127060211-4a70f8d8-5d43-487f-b5e5-9e34e6fd17f6.png)
 Four tables are especially relevant:
 - `uniqueProductTable` contains entries with a pair of one UID and one AID and other data.
 - `productTagTable` and `productTagStringTable` store information referenced to the UID's in the `uniqueProductTable`. 
