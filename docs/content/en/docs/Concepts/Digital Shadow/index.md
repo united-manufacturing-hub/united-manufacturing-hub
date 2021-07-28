@@ -1,12 +1,9 @@
-
 ---
 title: "Digital Shadow - track and trace"
 linkTitle: "Digital Shadow - track and trace"
-weight: 2
 description: >
   A system of features allowing tracking and tracing of individual parts through the production process. 
 ---
-TEMP: [count](#count)
 
 *Digital shadow is still in development and not yet deployable.*
 ## Introduction
@@ -304,19 +301,19 @@ Four tables are especially relevant:
   inheritance information of each individual part. One entry describes one edge of the inheritance tree.
 
 ### Factoryinsight + Rest API
-To make the relevant data used for digital shadow available we need to provide new REST API's. `Factoryinsight` is the
-microservice doing that task. It accesses the timescaleDB database, fetches the data and sends it like the request 
-specified.
+To make the relevant data from digital shadow available we need to provide new REST API's. `Factoryinsight` is the
+microservice doing that task. It accepts specific requests, accesses the timescale database and returns 
+the data in the desired format.
 
 #### Implemented functionality for digital shadow
-This function returns all uniqueProducts for that specific asset in a specified timerange. One datapoint contains one 
-childUID, all parentUID's and all available alternativeUniqueProductID's. All unqiueProductTags and 
+The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one 
+childUID, all parentUID's and all available alternativeUniqueProductID's. All uniqueProductTags and 
 uniqueProductTagStrings (value and timestamp for each uniqueProduct) for the childUID are returned to the same datapoint.
 
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
 from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID` and `step_id`.
 
-Format:
+Example Format: 
 ```json
 [
    row
@@ -338,12 +335,12 @@ Format:
 ```
 
 
-Example:
+Example Return:
 ```json
 [
   {
-    "ValveHeadAlternativeUniqueID": 123,
-    "TorqueScrew1": 5.0,
+    "ValveHeadAlternativeUniqueID": "123",
+    "TorqueScrew1": 5.2,
     "TorqueScrew2": 5.0,
     "TorqueScrew3": 5.0,
     "TorqueScrew4": 5.0,
@@ -353,7 +350,7 @@ Example:
     "Timestamp_GasketImageID": 5.0
   },
   {
-    "ValveHeadAlternativeUniqueID": 123,
+    "ValveHeadAlternativeUniqueID": "124",
     "TorqueScrew1" : 5.0,
     "TorqueScrew2" : 5.0,
     "TorqueScrew3" : 5.0,
@@ -364,7 +361,7 @@ Example:
     "Timestamp_GasketImageID": 5.0
   },
   {
-    "ValveHeadAlternativeUniqueID": 123,
+    "ValveHeadAlternativeUniqueID": "125",
     "TorqueScrew1" : 5.0,
     "TorqueScrew2" : 5.0,
     "TorqueScrew3" : 5.0,
@@ -377,11 +374,11 @@ Example:
 
 ]
 ```
-#### Implemented logic to achieve the functionality
-1. Get all productUID's from uniqueProductTable within the specified time and from the specified asset and station.
-2. Get all parentUID's from the productInheritanceTable for each of the selected UID's.
-3. Get the AID's for the parentUID's.
-4. Get all key, value pairs from the productTagTable and productTagStringTable for the in step 1 selected UID's.
+#### Implemented logic of factoryinsight to achieve the functionality
+1. Get all productUID's and AID's from `uniqueProductTable` within the specified time and from the specified asset and station.
+2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
+3. Get the AID's for the parentUID's from the `uniqueProductTable`.
+4. Get all key, value pairs from the `productTagTable` and `productTagStringTable` for the in step 1 selected UID's.
 5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values.
 
 ### SQL Database to connect to Tableau server
@@ -389,14 +386,16 @@ Example:
 For the digital shadow functionality we need to give the tableau server access to the data. Because the 
 tableau server can't directly connect to the REST API, we need to either use a database in between, or a 
 tableau web data connector. We were advised against the tableau web data connector 
-(general info: https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm), so the plan is to go
-with a sql database. MySQL is opensource, works well with node-red and with tableau wich makes it the best choice for
+(general info about tableau webdata connectors: 
+https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm). Because of that we implemented a 
+sql database. We used MySQL because it is opensource, works well with node-red and with tableau, which makes it the best choice for
 the task. 
 According to the structure overview in the beginning of this article we are using node-red to fetch the required data
-from the REST API of `factoryinsight` and push it into the MySQL database.
+from the REST API of `factoryinsight` and push it into the MySQL database. The MySQL database can then be accessed by 
+the tableau server.
 
 ## Industry Example
-To test the digital shadow functionality and display it's advantages we implemented the solution in a model factory.
+To test the digital shadow functionality and display its advantages we implemented the solution in a model factory.
 
 {{< imgproc testProductionMQTT Fit "2822x2344" >}}{{< /imgproc >}}
 This graphic displays the MQTT messages `MQTT-to-postgres` receives.
@@ -404,13 +403,13 @@ This graphic displays the MQTT messages `MQTT-to-postgres` receives.
 
 
 ##Long term: planned features
-We plan on integrating further functionalities to the digital shadow.
+We plan to integrate further functionalities to the digital shadow.
 Possible candidates are:
-- more specific REST API's to use the digital shadow more flexible
+- multiple new REST API's to use the digital shadow more flexible
 - detailed performance analysis and subsequent optimization to enable digital shadow for massive 
   production speed and complexity
-- A buffer in microservice `MQTT-to-postgres`. If `productTag`/`productTagString` messages are send to the the 
-  microservice before writing the message `uniqueProduct` in the database the the tags are not stored. A buffer could hold
+- A buffer in microservice `MQTT-to-postgres`. If `productTag`/`productTagString` messages are sent to the 
+  microservice before writing the message `uniqueProduct` in the database the tags should be stored later. A buffer could hold
   `productTag`/`productTagString` messages and regularly try to write them in the database.
 
 
