@@ -1,0 +1,36 @@
+{
+  "type": "panel",
+  "name": "Button Panel",
+  "id": "umh-factoryinput-panel",
+  "info": {
+    "description": "This plugins allows sending of MQTT messages to the UMH stack via the factoryinput API\"",
+    "author": {
+      "name": "UMH Systems GmbH",
+      "url": ""
+    },
+    "keywords": [
+    ],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "Website",
+        "url": "https://github.com/united-manufacturing-hub/united-manufacturing-hub-factoryinput-panel"
+      },
+      {
+        "name": "License",
+        "url": "https://github.com/united-manufacturing-hub/united-manufacturing-hub-factoryinput-panel/blob/main/LICENSE"
+      }
+    ],
+    "screenshots": [
+    ],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaVersion": ">=7.0.0",
+    "plugins": []
+  }
+}

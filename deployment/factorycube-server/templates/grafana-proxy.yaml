@@ -1,0 +1,84 @@
+{{- if .Values.grafanaproxy.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+  labels:
+     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 4 }}
+  {{- if .Values.grafanaproxy.annotations }}
+  annotations:
+    {{- toYaml .Values.grafanaproxy.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.grafanaproxy.replicas }} 
+  selector:
+    matchLabels:
+     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 6 }}
+  strategy:  
+    type: RollingUpdate
+  template:
+    metadata:
+      name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+      labels:
+        {{- include "factorycube-server.labels.grafanaproxy" . | nindent 8 }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+          {{- if .Values.grafanaproxy.tag -}}
+          image: {{ .Values.grafanaproxy.image }}:{{ .Values.grafanaproxy.tag }}
+          {{- else }}
+          image: {{ .Values.grafanaproxy.image }}:{{ .Chart.AppVersion }}
+          {{- end }}
+          imagePullPolicy: Always
+          ports:
+              - name: http
+                containerPort: 80
+                protocol: TCP
+          resources:
+            limits:
+              cpu: {{ .Values.grafanaproxy.resources.limits.cpu }} 
+            requests:
+              cpu: {{ .Values.grafanaproxy.resources.requests.cpu }}
+          env:
+            - name: FACTORYINPUT_KEY
+              value: {{ .Values.grafanaproxy.factoryinput.key }}
+                  
+            - name: FACTORYINPUT_USER
+              value: {{ .Values.grafanaproxy.factoryinput.user }}
+              
+            - name: FACTORYINPUT_BASE_URL
+              value: {{ .Values.grafanaproxy.factoryinput.base_url }}
+              
+            - name: FACTORYINSIGHT_BASE_URL
+              value: {{ .Values.grafanaproxy.factoryinsight.base_url }}
+              
+            - name: VERSION
+              value: "1"
+ 
+          # define a liveness probe that checks every 1 seconds, starting after 30 seconds
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 1
+
+          # define a readiness probe that checks every 15 seconds
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 1
+      
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
+{{- end -}}
