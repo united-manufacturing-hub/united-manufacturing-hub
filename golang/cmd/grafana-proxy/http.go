@@ -17,6 +17,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -120,6 +121,17 @@ func getProxyHandler(c *gin.Context) {
 	// Failed to parse request into service name and original url
 	err = c.BindUri(&getProxyRequestPath)
 	if err != nil {
+		handleInvalidInputError(span, c, err)
+		return
+	}
+
+	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(getProxyRequestPath.OriginalURI))
+	if err != nil {
+		handleInvalidInputError(span, c, err)
+		return
+	}
+	// Invalid url
+	if !match {
 		handleInvalidInputError(span, c, err)
 		return
 	}
