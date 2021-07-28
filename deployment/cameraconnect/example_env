@@ -56,10 +56,14 @@ IMAGE_PATH=/app/assets/images/
 # No default
 CAMERA_INTERFACE=GenICam
 
-EXPOSURE_TIME=1000000
+EXPOSURE_TIME=1000
 
-#typically pixel format is rgb8packed or Mono8
-#PIXEL_FORMAT=Mono8
+#see doc strings for explanation
+#Possible values: Off, Continuous, Once
+EXPOSURE_AUTO=Continuous
+
+#Possible values: Mono8, RGB8Packed, BGR8Packed
+PIXEL_FORMAT=Mono8
 
 #if the width or height values surpass the maximum capabilities of the camera
 #the maximum values are selected automatically
