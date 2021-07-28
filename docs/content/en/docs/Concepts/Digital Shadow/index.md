@@ -23,11 +23,11 @@ usability of BI-Tools like tableau. The data is made available to a Tableau-serv
 {{< imgproc digitalShadowConcept Fit "9063x2130" >}}{{< /imgproc >}}
 This is the overview of the digital shadow concept.
 
-The following chapters are going trough the concept from left to right (from the inputs of the digital shadow to the outputs).
+The following chapters are going through the concept from left to right (from the inputs of the digital shadow to the outputs).
 
 ### Data Input
 
-Data can be send as JSON and MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of [the UMH datamodel]
+Data can be sent as JSON and MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of [the UMH datamodel]
 for the topics and messages, but the implementation is client specific and can be modeled for the individual problem. 
 The relevant input data for digital shadow is on Level 1 and Level 2.
 
@@ -118,8 +118,8 @@ and talk about the advantages and disadvantages of it:
 1. Make empty containers for predefined messages to `MQTT-to-postgres` when the first production step took place
 2. Fill containers step by step when relevant messages come in.
 3. If full, send the container.
-4. If the first production step for new product is received before the container is full, send container and set missing 
-   fields to null. Also send error message.
+4. If the message from the first production step for the new product is received before the container is full, 
+   send container and set missing fields to null. Also send error message.
 
 #### Example process:
 1. parent AID scanned -> barcode sent under `processValueString` topic
@@ -174,7 +174,7 @@ every state a product was/is in and is mainly important for the database. The AI
 physical label, or a written product number. It is usually the relevant ID for engineers and for production planning.
 
 #### Difference of UID (uniqueProductID) and AID (alternativeUniqueProductID)
-The UID is only newly generated if:
+`MQTT-to-postgres` only generates a new UID if:
 - the exact product doesn't already have a UID (-> This is the case, if it has never been produced at an asset 
   incorporated in the digital shadow). We then use a different asset for the uniqueProductID (for example a placeholder 
   like "storage", or the station it came from if the station isn't connected to digital shadow)
@@ -298,6 +298,7 @@ Four tables are especially relevant:
 - `productInheritanceTable` contains pairs of child and parent UID's. The table as a whole thereby contains the complete 
   inheritance information of each individual part. One entry describes one edge of the inheritance tree.
 
+The new relevant tables are dotted, the `uniqueProductTable` changes are bold in the timescaleDB structure visualization. 
 ### Factoryinsight + Rest API
 To make the relevant data from digital shadow available we need to provide new REST API's. `Factoryinsight` is the
 microservice doing that task. It accepts specific requests, accesses the timescale database and returns 
