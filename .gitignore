@@ -28,8 +28,6 @@ deployment/factorycube-core-deployment/configs/*
 # ignore test mqtt-bridge
 golang/test/mqtt-bridge/data/*
 
-/.idea/
-
 #ignore acquired images
 cameraconnect/assets/images/*
 
@@ -44,3 +42,5 @@ cameraconnect/assets/producer_files/*
 /docs/static/openapi/output/html/
 /docs/static/openapi/output/rust/
 /docs/static/openapi/output/python/
+
+**/.idea
