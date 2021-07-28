@@ -96,7 +96,14 @@ function:
 }
 ```
 - **uniqueProduct:** To indicate the generation of a new product or a new product state send a MQTT message to `MQTT-to-postgres`
-under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`
+under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`.
+  There are two cases of when to send a message under the `uniqueProduct` topic:
+  - The exact product doesn't already have a UID (-> This is the case, if it has not been produced at an asset 
+  incorporated in the digital shadow). Specify a space holder asset = "storage" in the MQTT message for the 
+    `uniqueProduct` topic.
+  - The product was produced at the current asset/step (it is now different from before, e.g. after machining or after 
+    something was screwed in). The newly produced product is always the "child" of the process. Products it was made 
+    out of are called the "parents". 
 ```json
 {
   "begin_timestamp_ms": 1611171012717,
@@ -174,25 +181,15 @@ general usability good |might need a lot of different containers if the number o
 ### uniqueProductID and uniqueProductAlternativeID
 At this point it makes sense to talk about uniqueProductID's and uniqueProductAlternativeID's, in short UID's and AID's.
 The concept behind these different types of ID's is crucial to understand, if you want to understand the later presented 
-datastructures. Neither UID nor AID are defining the type of a product, they identify a single product itself. The UID 
-is generated for every state a product was/is in and is mainly important for the database. The AID on the other hand might be from a 
-physical label, or a written product number. It is usually the relevant ID for engineers and for production planning.
-
-#### Difference of UID (uniqueProductID) and AID (alternativeUniqueProductID)
-`MQTT-to-postgres` only generates a new UID if:
-- the exact product doesn't already have a UID (-> This is the case, if it has never been produced at an asset 
-  incorporated in the digital shadow). We then use a different asset for the uniqueProductID (for example a placeholder 
-  like "storage", or the station it came from if the station isn't connected to digital shadow)
-- the product was just produced (it is now different from before, e.g. after machining or after something was screwed in) 
-  (The newly produced product is always the "child" of the process, product it was made out of are called the "parents")
-
-The AID is a field in the database for different kinds of other identification. For example physical labels stay the 
-same after assembly (the same AID can be related to multiple different UID's). If we have multiple labels on one part 
-we can choose one of them for the AID.
+datastructures. Neither UID nor AID are defining the type of a product; they identify a single product itself. The UID 
+is generated for every state a product was/is in and is mainly important for the database. The AID on the other hand 
+might be from a physical label, or a written product number. It is usually the relevant ID for engineers and for 
+production planning. The physical labels stay the same after assembly (the same AID can be related to multiple different
+UID's). If we have multiple labels on one part we can also choose one of them for the AID.
 
 AID's and UID's are stored  in combination one-to-one in the uniqueProductTable (timescaleDB).
 
-### Definition of when to change the UID
+#### Definition of when to change the UID
 If we can move a product from point "A" in the production to point "B" or back without causing problems from a process 
 perspective, the UID of the product should stay the same. (For example if the product only gets transported between 
 point "A" and "B").
@@ -205,17 +202,20 @@ Even thought testing a product doesn't change the part itself, it changes its st
 - it gets something like a virtual "certificate"
 - the value increases because of that
 
+-> Make a new UID.
+
 #### Example 2: Transport
 Monitored Transport over a significant distance (not the transport between two nearby assets).
 - parts value increases
 
+-> Make a new UID
 #### Life of a single UID
 Type | creation UID   |   death UID
 --- | --- | ---
-without inheritance at creation | `storage/uniqueProduct`   |   `/addParentToChild` (UID is parent)
-with inheritance at creation | `<asset>/uniqueProduct` + `addParentToChild` (UID is child)| `/addParentToChild` (UID is parent)
+without inheritance at creation | topic: `storage/uniqueProduct`   |   `/addParentToChild` (UID is parent)
+with inheritance at creation | topic: `<asset>/uniqueProduct` + `addParentToChild` (UID is child)| `/addParentToChild` (UID is parent)
 
-MQTT messages under the `productTag` topic should not be used to show transport of a part. If transport is relevant, 
+MQTT messages under the `productTag` topic should not be used to indicate transport of a part. If transport is relevant, 
 change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniqueProduct` topic).
 
 #### Example process to show the usage of AID's and UID's in the production:
@@ -224,7 +224,7 @@ change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniq
 Assembly Station 1:
 - ProductA and ProductB are combined into ProductC
 - Because ProductA and ProductB have not been "seen" by the digital shadow, they get a new UID and asset = "storage" 
-  assigned (placeholder for unknown/unspecified origin).
+  assigned (placeholder asset for unknown/unspecified origin).
 - After ProductC is now produced it gets a new UID and as an asset, Assy1, because it is the child at Assembly Station 1
 - The AID of ProductA ("A") is a physical label. Because ProductB doesn't have a physical Label, it gets a generated 
   AID. For ProductC we can now choose either the AID from ProductA or from ProductB. Because "A" is a physical label, it 
@@ -269,15 +269,15 @@ We can divide the task of `MQTT-to-postgres` in three (regarding the digital sha
 - Use the MQTT message under the Topic **uniqueProduct** which gives us the AID and the Asset and make an entry in the
   uniqueProduct table containing the AID and a newly generated UID.
   1. Generate UID (with snowflake: https://en.wikipedia.org/wiki/Snowflake_ID)
-  2. Store new UID and all data from **uniqueProduct** MQTT Message in the  `uniqueProductTable`
+  2. Store new UID and all data from `uniqueProduct` MQTT Message in the  `uniqueProductTable`
 
 - Use **productTag and productTagString** topic MQTT messages. The AID and the AssetId is used to look for the uniqueProduct 
-  the massages belong to. The `productTag` information is then stored with the UID in the TimescaleDB 
+  the messages belong to. The value information is then stored with the UID in the TimescaleDB 
   1. Look in TimescaleDB, `uniqueProductTable` for the uniqueProduct with the same Asset and AID from the `productTag` 
      massage (the child)
   2. Get the UID when found from the child (that is why it is important to send the `uniqueProduct` message before sending
      `productTag`/`productTagString`).
-  3. Write productTag information without AID, instead with the found UID in the uniqueProductTable
+  3. Write value information without AID, instead with the found UID in the uniqueProductTable
 
 - Use the **addParentToChild** message. Retrieve the child UID by using the child AID and the Asset. Get the parent 
   UID's by finding the last time the parents AID's were stored in the uniqueProductTable.
@@ -301,7 +301,7 @@ Four tables are especially relevant:
 - `productTagTable` and `productTagStringTable` store information referenced to the UID's in the `uniqueProductTable`. 
   Stored is everything from individual measurements to quality classes.
 - `productInheritanceTable` contains pairs of child and parent UID's. The table as a whole thereby contains the complete 
-  inheritance information of each individual part. One entry describes one edge of the inheritance tree.
+  inheritance information of each individual part. One entry describes one edge of the inheritance graph.
 
 The new relevant tables are dotted, the `uniqueProductTable` changes are bold in the timescaleDB structure visualization. 
 ### Factoryinsight + Rest API
@@ -310,9 +310,9 @@ microservice doing that task. It accepts specific requests, accesses the timesca
 the data in the desired format.
 
 #### Implemented functionality for digital shadow
-The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one 
+The following function returns all uniqueProducts for that specific asset and step_id in a specified time range. One datapoint contains one 
 childUID, all parentUID's and all available alternativeUniqueProductID's. All uniqueProductTags and 
-uniqueProductTagStrings (value and timestamp for each uniqueProduct) for the childUID are returned to the same datapoint.
+uniqueProductTagStrings (value and timestamp) for the childUID are returned to the same datapoint.
 
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
 from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID` and `step_id`.
@@ -383,7 +383,7 @@ Example Return:
 2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
 3. Get the AID's for the parentUID's from the `uniqueProductTable`.
 4. Get all key, value pairs from the `productTagTable` and `productTagStringTable` for the in step 1 selected UID's.
-5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values.
+5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values and timestamps.
 
 ### SQL Database to connect to Tableau server
 
@@ -402,7 +402,7 @@ the tableau server.
 To test the digital shadow functionality and display its advantages we implemented the solution in a model factory.
 
 {{< imgproc testProductionMQTT Fit "2822x2344" >}}{{< /imgproc >}}
-This graphic displays the MQTT messages `MQTT-to-postgres` receives.
+This graphic displays the events and following MQTT messages, `MQTT-to-postgres` receives.
 
 
 
@@ -413,8 +413,9 @@ Possible candidates are:
 - detailed performance analysis and subsequent optimization to enable digital shadow for massive 
   production speed and complexity
 - A buffer in microservice `MQTT-to-postgres`. If `productTag`/`productTagString` messages are sent to the 
-  microservice before writing the message `uniqueProduct` in the database the tags should be stored later. A buffer 
-  could hold `productTag`/`productTagString` messages and regularly try to write them in the database.
+  microservice before writing the message `uniqueProduct` in the database the tags should be stored until the 
+  `uniqueProduct` message arrives. A buffer could hold `productTag`/`productTagString` messages and regularly try to 
+  write them in the database.
 
 
 [the UMH datamodel]: ../../concepts/mqtt
