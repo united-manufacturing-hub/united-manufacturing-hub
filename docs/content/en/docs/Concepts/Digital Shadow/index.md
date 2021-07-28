@@ -238,7 +238,7 @@ Assembly Station 2:
 
 
 Assembly Station 3:
-- At Assembly Station ProductE comes in and is turned into Product F
+- At Assembly Station ProductE comes in and is turned into ProductF
 - ProductF gets a new UID and keeps the AID of ProductE. It now gets the Assy3 assigned as asset.
 
 Note that the `uniqueProduct` MQTT message for ProductD would not be under the Topic of Assembly2 as asset but for 
@@ -385,7 +385,7 @@ For the digital shadow functionality we need to give the tableau server access t
 tableau server can't directly connect to the REST API, we need to either use a database in between, or a 
 tableau web data connector. We were advised against the tableau web data connector 
 (general info about tableau webdata connectors: 
-https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm). Because of that we implemented a 
+https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm ). Because of that we implemented a 
 sql database. We used MySQL because it is opensource, works well with node-red and with tableau, which makes it the best choice for
 the task. 
 According to the structure overview in the beginning of this article we are using node-red to fetch the required data
