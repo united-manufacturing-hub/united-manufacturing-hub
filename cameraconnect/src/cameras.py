@@ -246,7 +246,7 @@ class GenICam(CamGeneral):
                                     Default: None
         (opt.) pixel_format[string]:
                                     Set the pixel format you want
-                                    to use. This Programm allows
+                                    to use. This program allows
                                     you to take pictures in
                                     monochrome pixel formats
                                     (use: "Mono8") and RGB/BRG
@@ -455,6 +455,11 @@ class GenICam(CamGeneral):
             None
         """
 
+        # Get list of all available features of the camera
+        node_map = dir(self.ia.remote_device.node_map)
+        for setting in node_map:
+            print(setting)
+
         # If camera was already configured and configurations
         #   has been saved in user set, then set and load user
         #   set here and return
@@ -495,7 +500,6 @@ class GenICam(CamGeneral):
                 (self.ia.remote_device.node_map.HeightMax.value - self.ia.remote_device.node_map.Height.value) / 2)
 
         # Set PixelFormat
-
         if self.pixel_format is not None:
             self.ia.remote_device.node_map.PixelFormat.value = self.pixel_format
 
@@ -504,30 +508,27 @@ class GenICam(CamGeneral):
             try:
                 self.ia.remote_device.node_map.ExposureTimeAbs.value = self.exposure_time
             except OutOfRangeException:
-                logging.error("Specified Exposure time too high for selected camera. Please choose shorter value.")
+                logging.error("Specified Exposure time too high for selected camera. Please choose smaller value.")
                 sys.exit(1)
 
-        # Get list of all available features of the camera
-        node_map = dir(self.ia.remote_device.node_map)
-
         # Set ExposureAuto, GainAuto and BalanceWhiteAuto;
-        #   it always first check if connected camera supports
+        #   it always first checks if connected camera supports
         #   this function
         if self.exposure_auto is not None:
             if "ExposureAuto" in node_map:
                 self.ia.remote_device.node_map.ExposureAuto.value = self.exposure_auto
             else:
-                logging.WARNING("Camera does not support automatic adjustment of exposure time")
+                logging.warning("Camera does not support automatic adjustment of exposure time")
         if self.gain_auto is not None:
             if "GainAuto" in node_map:
                 self.ia.remote_device.node_map.GainAuto.value = self.gain_auto
             else:
-                logging.WARNING("Camera does not support automatic adjustment of gain")
+                logging.warning("Camera does not support automatic adjustment of gain")
         if self.balance_white_auto is not None:
             if "BalanceWhiteAuto" in node_map:
                 self.ia.remote_device.node_map.BalanceWhiteAuto.value = self.balance_white_auto
             else:
-                logging.WARNING("Camera does not support automatic adjustment of white balance")
+                logging.warning("Camera does not support automatic adjustment of white balance")
 
     def _start_acquisition(self) -> None:
         """
