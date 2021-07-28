@@ -406,7 +406,7 @@ vernemq:
   image:
     pullPolicy: IfNotPresent 
     repository: vernemq/vernemq
-    tag: latest
+    tag: 1.11.0
   replicaCount: 2 
   service:
     annotations:
