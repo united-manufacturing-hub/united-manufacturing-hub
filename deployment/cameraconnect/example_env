@@ -22,7 +22,7 @@ CUBE_TRANSMITTERID=EXAMPLE_TRANSMITTERID
 #   between each acquisition or a trigger over MQTT 
 # Possible values: Continuous, MQTT
 # No default
-TRIGGER=MQTT
+TRIGGER=Continuous
 
 # IF "MQTT" set the time between the trigger and image 
 #   acquisition. If a timestamp in ms since epoch is 
@@ -30,7 +30,7 @@ TRIGGER=MQTT
 #   is used. Epoch is defined as January 1, 1970, 00:00:00 
 #   (UTC). If no timestamp is provided in trigger message, 
 #   a timestamp is generated as soon as message is 
-#   received at image acquirer. This acqusition delay can
+#   received at image acquirer. This acquisition delay can
 #   be used to avoid problems caused by varying latency.
 #   Use 0.0 for stationary inspection processes to do it
 #   as fast as possible without any delay.
@@ -43,7 +43,7 @@ ACQUISITION_DELAY=0.0
 #   image, an error is thrown
 # Possible values: Floats in seconds
 # Default: 10.0
-CYCLE_TIME=4
+CYCLE_TIME=5
 
 #if IMAGE_PATH is not defined, no images will be saved
 IMAGE_PATH=/app/assets/images/
@@ -56,15 +56,27 @@ IMAGE_PATH=/app/assets/images/
 # No default
 CAMERA_INTERFACE=GenICam
 
-#typically pixel format is rgb8packed or Mono8
-#PIXEL_FORMAT=Mono8
-IMAGE_WIDTH=800
-IMAGE_HEIGHT=800
+EXPOSURE_TIME=1000
+
+#see doc strings for explanation
+#Possible values: Off, Continuous, Once
+EXPOSURE_AUTO=Continuous
+
+#Possible values: Mono8, RGB8Packed, BGR8Packed
+PIXEL_FORMAT=Mono8
+
+#if the width or height values surpass the maximum capabilities of the camera
+#the maximum values are selected automatically
+IMAGE_WIDTH=50000
+IMAGE_HEIGHT=50000
+
 IMAGE_CHANNELS=3
-# Set serial number of camera
 # Possible values: String without quotation marks
-# Default:    (empty)
-SERIAL_NUMBER=02-2625A-09849
+
+#MAC address of camera, it is written on the camera
+#format: 0030532B879C
+#000f315cd0b5
+MAC_ADDRESS=0030532B879C
 
 #set path were gentl producers are located
 DEFAULT_GENTL_PRODUCER_PATH=/app/assets/producer_files

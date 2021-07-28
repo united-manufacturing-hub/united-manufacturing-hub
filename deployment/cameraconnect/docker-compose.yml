@@ -24,7 +24,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: "192.168.1.0/24"
+        - subnet: "192.168.1.100/24"
   dockernet:
     driver: bridge
     ipam:
