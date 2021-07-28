@@ -4,7 +4,7 @@ services:
   mqtt-to-blob:
     container_name: mqtt-to-blob
     #image: minio/minio
-    network_mode: host     #only for test purposes
+    #network_mode: host     #only for test purposes
     build:
       context: ../../
       dockerfile: ./deployment/mqtt-to-blob/Dockerfile
@@ -25,6 +25,10 @@ services:
       - IMAGE_UID=imageUID
       - IMAGE=image
       - IMAGE_BYTES=image_bytes
+        #set logging level
+        #possible values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+        #default INFO
+      - LOGGING_LEVEL=DEBUG
 #    deploy:
 #      restart_policy:
 #        condition: on-failure
