@@ -33,12 +33,12 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
-          {{- if .Values.grafanaproxy.tag -}}
-          image: {{ .Values.grafanaproxy.image }}:{{ .Values.grafanaproxy.tag }}
+          {{- if .Values.grafanaproxy.image.tag }}
+          image: {{ .Values.grafanaproxy.image.repository }}:{{ .Values.grafanaproxy.image.tag }}
           {{- else }}
-          image: {{ .Values.grafanaproxy.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.grafanaproxy.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.grafanaproxy.image.pullPolicy }}
           ports:
               - name: http
                 containerPort: 80
@@ -48,18 +48,30 @@ spec:
               cpu: {{ .Values.grafanaproxy.resources.limits.cpu }} 
             requests:
               cpu: {{ .Values.grafanaproxy.resources.requests.cpu }}
-          env:
+          env:              
             - name: FACTORYINPUT_KEY
-              value: {{ .Values.grafanaproxy.factoryinput.key }}
+              valueFrom: 
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: apiKey 
                   
             - name: FACTORYINPUT_USER
-              value: {{ .Values.grafanaproxy.factoryinput.user }}
+              valueFrom: 
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: customerID
               
             - name: FACTORYINPUT_BASE_URL
-              value: {{ .Values.grafanaproxy.factoryinput.base_url }}
+              valueFrom: 
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: baseURL
               
             - name: FACTORYINSIGHT_BASE_URL
-              value: {{ .Values.grafanaproxy.factoryinsight.base_url }}
+              valueFrom: 
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: baseURL
               
             - name: VERSION
               value: "1"

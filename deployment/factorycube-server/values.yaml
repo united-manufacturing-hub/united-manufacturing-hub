@@ -41,38 +41,17 @@ factoryinsight:
   
 ### grafanaproxy ###
 grafanaproxy:
-  enabled: true
-  image: unitedmanufacturinghub/grafana-proxy
+  enabled: true  
+  image:
+    repository: unitedmanufacturinghub/grafana-proxy
+    tag: testing
+    pullPolicy: Always
   replicas: 1
   resources:
     limits:
        cpu: 1000m
     requests:
        cpu: 200m
-  factoryinput:
-    key:
-      envValueFrom: 
-        secretKeyRef:
-          name: factoryinput-secret
-          key: apiKey
-    user:
-      envValueFrom: 
-        secretKeyRef:
-          name: factoryinput-secret
-          key: customerID
-    base_url:
-      envValueFrom: 
-        secretKeyRef:
-          name: factoryinput-secret
-          key: baseURL
-
-  factoryinsight:
-    base_url:
-      envValueFrom: 
-        secretKeyRef:
-          name: factoryinput-secret
-          key: baseURL
-
               
 ### mqtt-to-postresql ###
 mqtttopostgresql:
@@ -693,7 +672,7 @@ grafana:
 
   image:
     repository: grafana/grafana
-    tag: 7.5.2
+    tag: 8.0.6
     sha: ""
     pullPolicy: IfNotPresent
 
@@ -862,23 +841,12 @@ grafana:
 
   extraInitContainers: 
   - args:
-    - mkdir -p /var/lib/grafana/plugins && curl -O "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && cp -u umh-datasource.zip /var/lib/grafana/plugin.zip && unzip -n /var/lib/grafana/plugin.zip -d /var/lib/grafana/plugins/
+    - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/
     command:
     - /bin/sh
     - -c
     image: busybox
     name: init-umh-datasource
-    volumeMounts:
-    - mountPath: /var/lib/grafana
-      name: storage
-  extraInitContainers: 
-  - args:
-    - mkdir -p /var/lib/grafana/plugins && curl -O "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && cp -u umh-factoryinput-panel.zip /var/lib/grafana/plugin.zip && unzip -n /var/lib/grafana/plugin.zip -d /var/lib/grafana/plugins/
-    command:
-    - /bin/sh
-    - -c
-    image: busybox
-    name: init-umh-panel-plugin
     volumeMounts:
     - mountPath: /var/lib/grafana
       name: storage
@@ -1000,7 +968,8 @@ grafana:
   ## 6. uncomment the annotation section in the serviceAccount: above
   ## make sure to replace arn:aws:iam::123456789000:role/iam-role-name-here with your role arn
 
-  env: {}
+  env:
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-factoryinput-panel
 
   ## "valueFrom" environment variable references that will be added to deployment pods
   ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#envvarsource-v1-core
@@ -1101,15 +1070,14 @@ grafana:
       apiVersion: 1
       datasources:
       # <string, required> name of the datasource. Required
-      - name: UMH 
+      - name: umh-datasource
         # <string, required> datasource type. Required
         type: umh-datasource
         # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
-        access: proxy
+        access: direct
         # <int> org id. will default to orgId 1 if not specified
         orgId: 1
         # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
-        uid: my_unique_uid
         jsonData:
           customerId: $FACTORYINSIGHT_CUSTOMERID
           apiKey: $FACTORYINSIGHT_APIKEY
@@ -1118,7 +1086,7 @@ grafana:
         version: 1
         # <bool> allow users to edit datasources from the UI.
         isDefault: true
-        editable: false
+        editable: true
 
   ## Configure notifiers
   ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
