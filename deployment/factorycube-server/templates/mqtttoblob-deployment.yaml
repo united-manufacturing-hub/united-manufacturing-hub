@@ -1,0 +1,71 @@
+{{- if .Values.mqtttoblob.enabled -}}
+apiVersion: apps/v1
+kind: Deployment 
+metadata:
+  name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+  labels:
+     {{- include "factorycube-server.labels.mqtttoblob" . | nindent 4 }}
+  {{- if .Values.mqtttoblob.annotations }}
+  annotations:
+    {{- toYaml .Values.mqtttoblob.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.mqtttoblob.replicas }} 
+  serviceName: mqtt-to-blob
+  selector:
+    matchLabels:
+      name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+  updateStrategy:  
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+        {{- include "factorycube-server.labels.mqtttoblob" . | nindent 8 }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+          {{- if .Values.mqtttoblob.tag -}}
+          image: {{ .Values.mqtttoblob.image }}:{{ .Values.mqtttoblob.tag }}
+          {{- else }}
+          image: {{ .Values.mqtttoblob.image }}:{{ .Chart.AppVersion }}
+          {{- end }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CERTIFICATE_NAME
+              value: NO_CERT
+
+            - name: BROKER_URL
+              value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
+            
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          # livenessProbe:
+          #   httpGet:
+          #     path: /live
+          #     port: 8086
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 5
+
+          # define a readiness probe that checks every 5 seconds
+          #readinessProbe:
+          #  httpGet:
+          #    path: /ready
+          #    port: 8086
+          #  periodSeconds: 5
+          resources: {}
+      serviceAccountName: ""
+      restartPolicy: Always
+{{- end -}}
+
