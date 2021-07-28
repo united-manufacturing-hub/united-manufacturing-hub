@@ -10,7 +10,7 @@ description: >
 
 **Goal:**
 In order to gain detailed insight in the production process and into the produced products we needed a system of 
-features to acquire and access information gained by scanners, sensors etc. This allowes enables better quality assurance 
+features to acquire and access information gained by scanners, sensors etc. This allows enables better quality assurance 
 and enables production improvement.
 
 **Solution:**
@@ -27,9 +27,9 @@ The following chapters are going through the concept from left to right (from th
 
 ### Data Input
 
-Data can be sent as JSON and MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of [the UMH datamodel]
-for the topics and messages, but the implementation is client specific and can be modeled for the individual problem. 
-The relevant input data for digital shadow is on Level 1 and Level 2.
+Data can be sent as JSON and MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of 
+[the UMH datamodel] for the topics and messages, but the implementation is client specific and can be modeled for the 
+individual problem. The relevant input data for digital shadow is on Level 1 and Level 2.
 
 ####Example 1, raw, Level 1 data:
 Topic: `ia/rawBarcode/2020-0102/210-156`\
@@ -52,11 +52,12 @@ Topic structure: `ia/<customerID>/<location>/<AssetID>/processValue`
 
 
 ### Contextualization + Messages for MQTT-to-postgres
-Now the information is available at the mqtt-broker and because of that to all subscribed services. But we still need to contextualize the 
-information, meaning: we want to link gained data to specific products, because right now we only have asset specific values with timestamps.
+Now the information is available at the mqtt-broker and because of that to all subscribed services. But we still need to
+contextualize the information, meaning: we want to link gained data to specific products, because right now we only have
+asset specific values with timestamps.
 
-First we should use microservices (stateless if possible) to convert messages under a `raw` topic into messages under `processValue`
-or `processValueString`. This typically only requires resending the message under the appropriate topic.
+First we should use microservices (stateless if possible) to convert messages under a `raw` topic into messages under 
+`processValue` or `processValueString`. This typically only requires resending the message under the appropriate topic.
 
 There are four specific kinds of messages regarding the digital shadow which need to be sent to the the `MQTT-to-postgres`
 function:
@@ -82,8 +83,8 @@ function:
 "value": "Quality2483"
 }
 ```
-- **addParentToChild:** To describe relations between products and states of those products in the production `MQTT-to-postgres` expects 
-MQTT messages under the topic: `ia/<customerID>/<location>/<AssetID>/addParentToChild`
+- **addParentToChild:** To describe relations between products and states of those products in the production 
+  `MQTT-to-postgres` expects MQTT messages under the topic: `ia/<customerID>/<location>/<AssetID>/addParentToChild`
 ```json
 {
 "timestamp_ms": 124387,
@@ -181,9 +182,9 @@ physical label, or a written product number. It is usually the relevant ID for e
 - the product was just produced (it is now different from before, e.g. after machining or after something was screwed in) 
   (The newly produced product is always the "child" of the process, product it was made out of are called the "parents")
 
-The AID is a field in the database for different kinds of other identification. For example physical labels stay the same after assembly
-(the same AID can be related to multiple different UID's). If we have multiple labels on one part we can choose one of them
-for the AID.
+The AID is a field in the database for different kinds of other identification. For example physical labels stay the 
+same after assembly (the same AID can be related to multiple different UID's). If we have multiple labels on one part 
+we can choose one of them for the AID.
 
 AID's and UID's are stored  in combination one-to-one in the uniqueProductTable (timescaleDB).
 
@@ -408,8 +409,8 @@ Possible candidates are:
 - detailed performance analysis and subsequent optimization to enable digital shadow for massive 
   production speed and complexity
 - A buffer in microservice `MQTT-to-postgres`. If `productTag`/`productTagString` messages are sent to the 
-  microservice before writing the message `uniqueProduct` in the database the tags should be stored later. A buffer could hold
-  `productTag`/`productTagString` messages and regularly try to write them in the database.
+  microservice before writing the message `uniqueProduct` in the database the tags should be stored later. A buffer 
+  could hold `productTag`/`productTagString` messages and regularly try to write them in the database.
 
 
 [the UMH datamodel]: ../../concepts/mqtt
