@@ -8,4 +8,5 @@ description: >
 
 1. Clone the repo 
 2. Go to /docs and execute `git submodule update --init --recursive` to download all submodules
-3. Startup the development server by using `sudo docker-compose up --build`
+3. `git init && git add . && git commit -m "test"` (yes it is quite stupid, but it works)
+4. Startup the development server by using `sudo docker-compose up --build`

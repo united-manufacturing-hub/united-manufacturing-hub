@@ -7,81 +7,60 @@ description: >
 
 ## Getting started
 
-Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
-
+The following guide describes how to catch data from the MQTT-Broker and push them to the blob storage from MIN.io
 Go to the root folder of the project and execute the following command:
 
 ```bash
-sudo docker build -f deployment/factoryinsight/Dockerfile -t factoryinsight:latest . && sudo docker run factoryinsight:latest 
+sudo docker-compose -f ./deployment/mqtt-to-blob/docker-compose.yml build && sudo docker-compose -f ./deployment/mqtt-to-blob/docker-compose.yml up 
 ```
 
 ## Environment variables
 
 This chapter explains all used environment variables.
 
-### POSTGRES_HOST
+### BROKER_URL
 
-**Description:** Specifies the database DNS name / IP-address for postgresql / timescaleDB 
+**Description:** Specifies the DNS name / IP-address to connect to the MQTT Broker postgresql / timescaleDB 
 
 **Type:** string
 
 **Possible values:** all DNS names or IP 
 
-**Example value:**  factorycube-server
+**Example value:**  127.0.0.1
 
-### POSTGRES_PORT
+### BROKER_PORT
 
-**Description:** Specifies the database port for postgresql 
+**Description:** Specifies the port for the MQTT-Broker. In most cases it is 1883. 
 
 **Type:** int
 
 **Possible values:** valid port number 
 
-**Example value:** 5432
+**Example value:** 1883
 
-### POSTGRES_DATABASE
+### MINIO_URL
 
-**Description:** Specifies the database name that should be used 
-
-**Type:** string
-
-**Possible values:** an existing database in postgresql 
-
-**Example value:**  factoryinsight
-
-### POSTGRES_USER
-
-**Description:** Specifies the database user that should be used 
+**Description:** Specifies the database DNS name / IP-address for the MIN.io server. 
 
 **Type:** string
 
-**Possible values:** an existing user with access to the specified database in postgresql 
+**Possible values:** all DNS names or IP 
 
-**Example value:**  factoryinsight
+**Example value:**  play.min.io
 
-### POSTGRES_PASSWORD
+### MINIO_ACCESS_KEY
 
-**Description:** Specifies the database password that should be used 
-
-**Type:** string
-
-**Possible values:** all
-
-**Example value:**  changeme
-
-### FACTORYINSIGHT_USER
-
-**Description:** Specifies the admin user for the REST API 
+**Description:** Specifies the key to access the MIN.io Server. Can be seen as the username to login.  
 
 **Type:** string
 
-**Possible values:** all
+**Possible values:** an existing / just created user with access to the specified database 
 
-**Example value:**  jeremy
+**Example value:**  testuser
 
-### FACTORYINSIGHT_PASSWORD
+### MINIO_SECRET_KEY
 
-**Description:** Specifies the password for the admin user for the REST API 
+**Description:** Specifies the MIN.io Server password that should be used 
 
 **Type:** string
 
@@ -89,68 +68,43 @@ This chapter explains all used environment variables.
 
 **Example value:**  changeme
 
-### VERSION
+### TOPIC
 
-**Description:** The version of the API used (currently not used yet) 
+**Description:** Specifies the topic the MQTT will listen to. To subscribe to all topics use '#' instead of the topic. 
 
-**Type:** int
+**Type:** string
 
 **Possible values:** all
 
-**Example value:**  1
+**Example value:**  /test/umh
 
-### DEBUG_ENABLED
+### BUCKET_NAME
 
-**Description:** Enables debug logging 
-
-**Type:** string
-
-**Possible values:** true,false
-
-**Example value:**  false
-
-### REDIS_URI
-
-**Description:** URI for accessing redis sentinel  
+**Description:** Specifies the location in MIN.io where data are stored in MIN.io on the online.
 
 **Type:** string
 
-**Possible values:** All valids URIs
+**Possible values:** all
 
-**Example value:** factorycube-server-redis-node-0.factorycube-server-redis-headless:26379
+**Example value:**  testbucket
 
-### REDIS_URI2
+### imageUID
 
-**Description:** Backup URI for accessing redis sentinel  
-
-**Type:** string
-
-**Possible values:** All valids URIs
-
-**Example value:** factorycube-server-redis-node-1.factorycube-server-redis-headless:26379
-
-### REDIS_URI3
-
-**Description:** Backup URI for accessing redis sentinel  
+**Description:** Specifies the name of the stored image and is included in the MQTT message. 
+Must only be changed if the message's identifier has changed as well. 
 
 **Type:** string
 
-**Possible values:** All valids URIs
+**Possible values:** all
 
-**Example value:** factorycube-server-redis-node-2.factorycube-server-redis-headless:26379
+**Example value:**  imageUID
 
-### REDIS_PASSWORD
+### image_bytes
 
-**Description:** Password for accessing redis sentinel  
+**Description:** Part of the MQTT message which includes the picture in a Base64 JSON format. 
 
-**Type:** string
+**Type:** JSON
 
-**Possible values:** all 
+**Possible values:** all
 
-**Example value:** changeme 
-
-
-## REST API
-
-{{< swaggerui src="/openapi/factoryinsight.yml" >}}
-
+**Example value:**  alongstringwithoutspaces
