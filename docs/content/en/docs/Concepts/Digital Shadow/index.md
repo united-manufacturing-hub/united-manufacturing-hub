@@ -10,13 +10,13 @@ description: >
 
 **Goal:**
 In order to gain detailed insight in the production process and into the produced products we needed a system of 
-features to acquire and access information gained by scanners, sensors etc. This allows enables better quality assurance 
+features to acquire and access information gained by scanners, sensors etc. This allows better quality assurance 
 and enables production improvement.
 
 **Solution:**
 We send MQTT messages containing a timestamp with a single value like a scanned ID, a measured value etc. from our edge
 devices to the MQTT broker and contextualize them with microservices. The gained data is pushed into a database by the 
-`MQTT-to-postgres` microservice. After that `factoryinsight` provides an interface for formatted data for maximal 
+`MQTT-to-postgres` microservice. After that `factoryinsight` provides an interface for formatted data providing maximal 
 usability of BI-Tools like tableau. The data is made available to a Tableau-server via a MySQL Database.
 
 ## Overall Concept
@@ -27,11 +27,11 @@ The following chapters are going through the concept from left to right (from th
 
 ### Data Input
 
-Data can be sent as JSON and MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of 
+Data can be sent as JSON in a MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of 
 [the UMH datamodel] for the topics and messages, but the implementation is client specific and can be modeled for the 
 individual problem. The relevant input data for digital shadow is on Level 1 and Level 2.
 
-####Example 1, raw, Level 1 data:
+#### Example 1, raw, Level 1 data:
 Topic: `ia/rawBarcode/2020-0102/210-156`\
 Topic structure: `ia/rawBarcode/<transmitterID>/<barcodeReaderID>`
 ```json
@@ -40,7 +40,7 @@ Topic structure: `ia/rawBarcode/<transmitterID>/<barcodeReaderID>`
 "barcode": "1284ABCtestbarcode"
 }
 ```
-####Example 2, sensorValue, Level 2:
+#### Example 2, sensorValue, Level 2:
 Topic: `ia/testCustomerID123/testLocationID123/testAssetID123/processValue`\
 Topic structure: `ia/<customerID>/<location>/<AssetID>/processValue`
 ```json
@@ -56,8 +56,9 @@ Now the information is available at the mqtt-broker and because of that to all s
 contextualize the information, meaning: we want to link gained data to specific products, because right now we only have
 asset specific values with timestamps.
 
-First we should use microservices (stateless if possible) to convert messages under a `raw` topic into messages under 
-`processValue` or `processValueString`. This typically only requires resending the message under the appropriate topic.
+First microservices should be used (stateless if possible) to convert messages under a `raw` topic into messages under 
+`processValue` or `processValueString`. This typically only requires resending the message under the appropriate topic or 
+breaking messages with multiple values apart into single ones.
 
 There are four specific kinds of messages regarding the digital shadow which need to be sent to the the `MQTT-to-postgres`
 function:
@@ -84,7 +85,9 @@ function:
 }
 ```
 - **addParentToChild:** To describe relations between products and states of those products in the production 
-  `MQTT-to-postgres` expects MQTT messages under the topic: `ia/<customerID>/<location>/<AssetID>/addParentToChild`
+  `MQTT-to-postgres` expects MQTT messages under the topic: `ia/<customerID>/<location>/<AssetID>/addParentToChild`. One
+  message always contains one child AID and one parent AID. This specifies what parent product was used to generate the 
+  child.
 ```json
 {
 "timestamp_ms": 124387,
@@ -92,7 +95,7 @@ function:
 "parentAID": "4329875"
 }
 ```
-- **uniqueProduct:** To indicate the generation of a new product/ new product state send a MQTT message to `MQTT-to-postgres`
+- **uniqueProduct:** To indicate the generation of a new product or a new product state send a MQTT message to `MQTT-to-postgres`
 under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`
 ```json
 {
@@ -100,7 +103,7 @@ under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`
   "end_timestamp_ms": 1611171016443,
   "product_id": "test123",
   "is_scrap": false,
-  "step_id": "1a"
+  "step_id": "1a",
   "uniqueProductAlternativeID": "12493857-a"
 }
 ```
@@ -108,11 +111,11 @@ under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`
 #### Generating the contextualized messages
 The goal is to convert messages under the `processValue` and the `processValueString` topics, containing all relevant data,
 into messages under the topic `productTag`, `productTagString` and `addParentToChild`. The latter messages contain AID's
-which hold the contextualization information.
+which hold the contextualization information - they are tied to a single product.
 
-The implementation of the generation of the above mentioned messages with contextualized information (information tied to individual products)
-is up to the user and depends heavily on the specific process. To help with this we want to present a general logic
-and talk about the advantages and disadvantages of it:
+The implementation of the generation of the above mentioned messages with contextualized information is up to the user 
+and depends heavily on the specific process. To help with this we want to present a general logic and talk about the 
+advantages and disadvantages of it:
 
 
 #### General steps:
@@ -120,16 +123,17 @@ and talk about the advantages and disadvantages of it:
 2. Fill containers step by step when relevant messages come in.
 3. If full, send the container.
 4. If the message from the first production step for the new product is received before the container is full, 
-   send container and set missing fields to null. Also send error message.
+   send container and set missing fields to null. Also send an error message.
 
 #### Example process:
-1. parent AID scanned -> barcode sent under `processValueString` topic
+1. parent AID 1 scanned -> barcode sent under `processValueString` topic
 2. screws fixed -> torque `processValue` send
 3. child AID scanned -> barcode `processValueString` send
-4. parent AID scanned -> barcode `processValueString` send
+4. parent AID 2 scanned -> barcode `processValueString` send
 
-Example of generating a message under `productTagString` topic containing the measured torque value:
-- when parent AID scanned -> make empty container for message because scanning parent AID is first step
+Example of generating a message under `productTagString` topic containing the measured torque value for the Example
+process:
+- when parent AID scanned: make empty container for message because scanning parent AID is first step
 ```json
 {
 "timestamp_ms": 
@@ -138,7 +142,7 @@ Example of generating a message under `productTagString` topic containing the me
 "value":
 }
 ```
-- when torque value comes in fill in value and timestamp
+- when torque value comes in: fill in value and timestamp
 ```json
 {
 "timestamp_ms": 13498435234,
@@ -147,7 +151,7 @@ Example of generating a message under `productTagString` topic containing the me
 "value": 1.458
 }
 ```
-- when child AID comes in fill it in:
+- when child AID comes in: fill it in:
 ```json
 {
 "timestamp_ms": 13498435234,
@@ -156,7 +160,7 @@ Example of generating a message under `productTagString` topic containing the me
 "value": 1.458
 }
 ```
-Now it is full -> send it away. \
+Now the container is full: send it away. \
 **Important:** always send the `uniqueProduct` message first and afterwards the messages for the related 
 `productTag`/`productTagString` and messages on the `addParentToChild` topic.
 
@@ -168,10 +172,10 @@ simple | not stateless
 general usability good |might need a lot of different containers if the number of e.g. `productTag` messages gets to big
 
 ### uniqueProductID and uniqueProductAlternativeID
-At this point it makes sense to talk about uniqueProductID's and uniqueProductAlternativeID's short UID's and AID's.
+At this point it makes sense to talk about uniqueProductID's and uniqueProductAlternativeID's, in short UID's and AID's.
 The concept behind these different types of ID's is crucial to understand, if you want to understand the later presented 
-datastructures. Neither UID nor AID are related to the type of a product but to a single product itself. The UID is generated for 
-every state a product was/is in and is mainly important for the database. The AID on the other hand might be from a 
+datastructures. Neither UID nor AID are defining the type of a product, they identify a single product itself. The UID 
+is generated for every state a product was/is in and is mainly important for the database. The AID on the other hand might be from a 
 physical label, or a written product number. It is usually the relevant ID for engineers and for production planning.
 
 #### Difference of UID (uniqueProductID) and AID (alternativeUniqueProductID)
@@ -214,9 +218,9 @@ with inheritance at creation | `<asset>/uniqueProduct` + `addParentToChild` (UID
 MQTT messages under the `productTag` topic should not be used to show transport of a part. If transport is relevant, 
 change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniqueProduct` topic).
 
-####Example process to show the usage of AID's and UID's in the production:
+#### Example process to show the usage of AID's and UID's in the production:
 {{< imgproc productIDExample Fit "2026x1211" >}}{{< /imgproc >}}
-####Explanation of the diagram:
+#### Explanation of the diagram:
 Assembly Station 1:
 - ProductA and ProductB are combined into ProductC
 - Because ProductA and ProductB have not been "seen" by the digital shadow, they get a new UID and asset = "storage" 
@@ -402,7 +406,7 @@ This graphic displays the MQTT messages `MQTT-to-postgres` receives.
 
 
 
-##Long term: planned features
+## Long term: planned features
 We plan to integrate further functionalities to the digital shadow.
 Possible candidates are:
 - multiple new REST API's to use the digital shadow more flexible
