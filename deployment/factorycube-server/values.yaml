@@ -38,7 +38,14 @@ factoryinsight:
        cpu: 1000m         
     requests:
        cpu: 200m      
-  
+
+### factoryinput ###
+factoryinput:
+  #This is currently just a mock to start grafanaproxy !
+  enabled: true
+  user: "factoryinput"
+    
+
 ### grafanaproxy ###
 grafanaproxy:
   enabled: true  
@@ -47,6 +54,15 @@ grafanaproxy:
     tag: testing
     pullPolicy: Always
   replicas: 1
+  service:
+    annotations: {}
+    type: LoadBalancer 
+    port: 13337
+    targetPort: 80
+    protocol: TCP
+    labels: {}
+    portName: service
+    name: http
   resources:
     limits:
        cpu: 1000m

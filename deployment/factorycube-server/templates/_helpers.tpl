@@ -90,3 +90,12 @@ Labels for grafanaproxy
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-grafanaproxy
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
+
+
+{{/*
+Labels for factoryinput 
+*/}}
+{{- define "factorycube-server.labels.factoryinput" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinput
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}

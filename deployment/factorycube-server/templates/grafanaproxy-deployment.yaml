@@ -9,7 +9,7 @@ metadata:
   annotations:
     {{- toYaml .Values.grafanaproxy.annotations | nindent 4 }}
   {{- end }}
-spec:
+spec:     
   replicas: {{ .Values.grafanaproxy.replicas }} 
   selector:
     matchLabels:
@@ -21,7 +21,7 @@ spec:
       name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
       labels:
         {{- include "factorycube-server.labels.grafanaproxy" . | nindent 8 }}
-    spec:
+    spec:  
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
