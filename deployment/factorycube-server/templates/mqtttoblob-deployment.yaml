@@ -50,7 +50,7 @@ spec:
               value: "1883"
               
             - name: BROKER_URL
-              value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service
+              value: mqtt://{{ include "factorycube-server.fullname" . }}-vernemq-local-service
               
             - name: BUCKET_NAME
               value: "umh"
