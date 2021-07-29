@@ -169,6 +169,31 @@ data:
         PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'
     );
      
+    -------------------- TimescaleDB table for product tags --------------------
+    CREATE TABLE IF NOT EXISTS productTagTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        uid                     TEXT                                REFERENCES uniqueProductTable (uid),
+        valueName               TEXT                                NOT NULL,
+        value                   DOUBLE PRECISION                    NULL,
+        UNIQUE(uid, valueName)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('productTagTable', 'timestamp');
+
+
+    -------------------- TimescaleDB table for product tags strings --------------------
+    CREATE TABLE IF NOT EXISTS productTagStringTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        uid                     TEXT                                REFERENCES uniqueProductTable (uid),
+        valueName               TEXT                                NOT NULL,
+        value                   TEXT                                NULL,
+        UNIQUE(uid, valueName)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('productTagStringTable', 'timestamp');
+
 
     --- MIGRATIONS
     -- Add here your migrations
