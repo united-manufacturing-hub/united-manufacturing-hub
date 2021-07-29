@@ -1,0 +1,1 @@
+See [https://docs.umh.app/docs/developers/factorycube-server/grafana-proxy/](https://docs.umh.app/docs/developers/factorycube-server/grafana-proxy/)
