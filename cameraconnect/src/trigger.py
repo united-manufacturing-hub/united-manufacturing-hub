@@ -10,6 +10,7 @@ Provided classes:
 import json
 import sys
 import time
+import logging
 
 # Import libraries that had been installed with pip install
 import paho.mqtt.client as mqtt
@@ -196,5 +197,5 @@ class ContinuousTrigger:
                 # Sleep for difference of cycle time minus loop 
                 #   time to have a constant cycle time
                 delay = self.cycle_time - loop_time
-                print("Delay to reach constant cycle time.")
+                logging.debug("Delay to reach constant cycle time.")
                 time.sleep(delay)

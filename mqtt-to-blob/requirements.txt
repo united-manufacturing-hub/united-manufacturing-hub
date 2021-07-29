@@ -1,0 +1,14 @@
+minio==7.1.0
+paho-mqtt==1.5.1
+pandas
+numpy==1.19.5
+pytz==2021.1
+docker==5.0.0
+docker-compose==1.29.2
+dockerpty==0.4.1
+Flask==1.1.2
+jmespath==0.9.4
+jsmin==2.2.2
+jsondiff==1.1.1
+jsonschema==3.2.0
+opencv-python-headless==4.5.3.56
