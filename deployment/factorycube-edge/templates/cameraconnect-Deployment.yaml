@@ -26,8 +26,8 @@ spec:
           - name: storage
             emptyDir: {}
           - name: cameraconnect-gentlproducer        
-            configMap:
-              name: cameraconnect-gentlproducer
+            hostPath:
+                path: /home/rancher/genicam_producer
         initContainers:
           - args:
             - mkdir -p /app/assets/producer_files && cp -u /genTLProducer/files.zip /app/assets/ && unzip -n /app/assets/files.zip -d /app/assets/producer_files
@@ -58,8 +58,6 @@ spec:
                   value: {{ .Values.cameraconnect.brokerURL | quote }}
                 - name: MQTT_PORT
                   value: {{ .Values.cameraconnect.brokerPort | quote }}
-                - name: IP_RANGE
-                  value: {{ .Values.cameraconnect.iprange | quote }}
                 - name: TRIGGER 
                   value: {{ .Values.cameraconnect.trigger | quote }}
                 - name: ACQUISITION_DELAY 
@@ -74,8 +72,8 @@ spec:
                   value: {{ .Values.cameraconnect.imageHeight | quote }}
                 - name: IMAGE_CHANNELS 
                   value: {{ .Values.cameraconnect.imageChannels | quote }}
-                - name: SERIAL_NUMBER 
-                  value: {{ .Values.cameraconnect.serialNumber | quote }}
+                - name: MAC_ADDRESS 
+                  value: {{ .Values.cameraconnect.macAddress | quote }}
                 - name: LOGGING_LEVEL 
                   value: {{ .Values.cameraconnect.loggingLevel | quote }}
                 - name: DEFAULT_GENTL_PRODUCER_PATH 
