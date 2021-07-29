@@ -9,6 +9,10 @@ weight: 20
 
 This tool automatically finds connected ifm gateways (e.g. the AL1350 or AL1352), extracts all relevant data and pushes the data to a MQTT broker. Technical information and usage can be found in the [documentation for sensorconnect](sensorconnect)
 
+## cameraconnect
+
+This tool automatically identifies connected cameras network-wide which support the GenICam standard and makes them utilizable. Each camera requires its own container. The camera acquisition can be triggered via MQTT. The resulting image data gets pushed to the MQTT broker. Technical information and usage can be found in the [documentation for cameraconnect](cameraconnect)
+
 ## barcodereader
 
 This tool automatically detected connected USB barcode scanners and send the data to a MQTT broker. Technical information and usage can be found in the [documentation for barcodereader](barcodereader)
