@@ -56,6 +56,14 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqtttopostgres
 {{- end }}
 
 {{/*
+Labels for mqtttoblob 
+*/}}
+{{- define "factorycube-server.labels.mqtttoblob" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqtttoblob
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}
+
+{{/*
 Labels for nodered 
 */}}
 {{- define "factorycube-server.labels.nodered" -}}
@@ -79,3 +87,19 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-timescaledb
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
 
+{{/*
+Labels for grafanaproxy 
+*/}}
+{{- define "factorycube-server.labels.grafanaproxy" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-grafanaproxy
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}
+
+
+{{/*
+Labels for factoryinput 
+*/}}
+{{- define "factorycube-server.labels.factoryinput" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinput
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}

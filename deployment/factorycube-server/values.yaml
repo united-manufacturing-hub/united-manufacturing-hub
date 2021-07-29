@@ -39,11 +39,48 @@ factoryinsight:
     requests:
        cpu: 200m      
 
-### cameraconnect ###
-cameraconnect:
+### factoryinput ###
+factoryinput:
+  #This is currently just a mock to start grafanaproxy !
+  enabled: true
+  user: "factoryinput"
+
+### mqtt-to-blob ###
+mqtttoblob:
+  # not enabeld by default
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/mqtt-to-blob
+    tag: testing
+    pullPolicy: Always
+  replicas: 1
+  pdb:
     enabled: true
+    minAvailable: 1
 
-
+### grafanaproxy ###
+grafanaproxy:
+  enabled: true  
+  image:
+    repository: unitedmanufacturinghub/grafana-proxy
+    tag: testing
+    pullPolicy: Always
+  replicas: 1
+  service:
+    annotations: {}
+    type: LoadBalancer 
+    port: 2096
+    targetPort: 80
+    protocol: TCP
+    labels: {}
+    portName: service
+    name: http
+  resources:
+    limits:
+       cpu: 1000m
+    requests:
+       cpu: 200m
+              
 ### mqtt-to-postresql ###
 mqtttopostgresql:
   enabled: true
@@ -797,7 +834,7 @@ grafana:
 
   image:
     repository: grafana/grafana
-    tag: 7.5.9
+    tag: 8.0.6
     sha: ""
     pullPolicy: IfNotPresent
 
@@ -966,17 +1003,16 @@ grafana:
 
   extraInitContainers: 
   - args:
-    - mkdir -p /var/lib/grafana/plugins && cp -u /grafanaDatasource/plugin.zip /var/lib/grafana && unzip -n /var/lib/grafana/plugin.zip -d /var/lib/grafana/plugins/
+    - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/
     command:
     - /bin/sh
     - -c
     image: busybox
-    name: init-factoryinsight-plugin
+    name: init-umh-datasource
     volumeMounts:
     - mountPath: /var/lib/grafana
       name: storage
-    - mountPath: /grafanaDatasource
-      name: grafanadatasource
+
       # subPath: ia-factoryinsight-datasource.zip
   ## Enable an Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
   extraContainers: |
@@ -995,13 +1031,8 @@ grafana:
   #     - name: proxy-web
   #       containerPort: 4181
 
-  ## Volumes that can be used in init containers that will not be mounted to deployment pods
-  extraContainerVolumes: 
-    - name: grafanadatasource
-      configMap:
-        name: grafana-datasource-configmap 
-
-  ## Enable persistence using Persistent Volume Claims
+        
+  ## Enable persistence using Persistent Volume Claims0
   ## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
   ##
   persistence:
@@ -1099,7 +1130,8 @@ grafana:
   ## 6. uncomment the annotation section in the serviceAccount: above
   ## make sure to replace arn:aws:iam::123456789000:role/iam-role-name-here with your role arn
 
-  env: {}
+  env:
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-factoryinput-panel
 
   ## "valueFrom" environment variable references that will be added to deployment pods
   ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#envvarsource-v1-core
@@ -1122,6 +1154,10 @@ grafana:
         secretKeyRef:
           name: factoryinsight-secret
           key: customerID 
+    FACTORYINSIGHT_PASSWORD:
+        secretKeyRef:
+          name: factoryinsight-secret
+          key: password 
 
 
   ## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
@@ -1200,25 +1236,23 @@ grafana:
       apiVersion: 1
       datasources:
       # <string, required> name of the datasource. Required
-      - name: UMH 
+      - name: umh-datasource
         # <string, required> datasource type. Required
-        type: ia-ia-factoryinsight-datasource
+        type: umh-datasource
         # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
         access: proxy
         # <int> org id. will default to orgId 1 if not specified
         orgId: 1
         # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
-        uid: my_unique_uid
         jsonData:
-          serverURL: $FACTORYINSIGHT_BASEURL
           customerId: $FACTORYINSIGHT_CUSTOMERID
-        # <string> json object of data that will be encrypted.
-        secureJsonData:
-          apiKey: $FACTORYINSIGHT_APIKEY
+          apiKey: $FACTORYINSIGHT_PASSWORD
+          serverUrL: "http://{external-ip}:2096/api/v1/factoryinsight/"
+          apiKeyConfigured: true
         version: 1
         # <bool> allow users to edit datasources from the UI.
         isDefault: true
-        editable: false
+        editable: true
 
   ## Configure notifiers
   ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
@@ -2153,7 +2187,7 @@ vernemq:
   image:
     pullPolicy: IfNotPresent 
     repository: vernemq/vernemq
-    tag: latest
+    tag: 1.11.0
   ingress:
     annotations: {}
     enabled: false
