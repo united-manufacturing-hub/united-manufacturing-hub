@@ -44,3 +44,4 @@ cameraconnect/assets/producer_files/*
 /docs/static/openapi/output/python/
 
 **/.idea
+**/node_modules

@@ -44,7 +44,19 @@ factoryinput:
   #This is currently just a mock to start grafanaproxy !
   enabled: true
   user: "factoryinput"
-    
+
+### mqtt-to-blob ###
+mqtttoblob:
+  # not enabeld by default
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/mqtt-to-blob
+    tag: testing
+    pullPolicy: Always
+  replicas: 1
+  pdb:
+    enabled: true
+    minAvailable: 1
 
 ### grafanaproxy ###
 grafanaproxy:
@@ -2175,7 +2187,7 @@ vernemq:
   image:
     pullPolicy: IfNotPresent 
     repository: vernemq/vernemq
-    tag: latest
+    tag: 1.11.0
   ingress:
     annotations: {}
     enabled: false
