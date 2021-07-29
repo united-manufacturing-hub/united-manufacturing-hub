@@ -1008,6 +1008,10 @@ grafana:
         secretKeyRef:
           name: factoryinsight-secret
           key: customerID 
+    FACTORYINSIGHT_PASSWORD:
+        secretKeyRef:
+          name: factoryinsight-secret
+          key: password 
 
 
   ## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
@@ -1096,8 +1100,8 @@ grafana:
         # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
         jsonData:
           customerId: $FACTORYINSIGHT_CUSTOMERID
-          apiKey: $FACTORYINSIGHT_APIKEY
-          serverUrL: "http://{grafana-proxy}/api/v1/factoryinsight/api/v1"
+          apiKey: $FACTORYINSIGHT_PASSWORD
+          serverUrL: "http://{external-ip}:2096/api/v1/factoryinsight/"
           apiKeyConfigured: true
         version: 1
         # <bool> allow users to edit datasources from the UI.

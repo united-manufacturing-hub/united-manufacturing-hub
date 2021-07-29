@@ -53,7 +53,7 @@ spec:
               valueFrom: 
                 secretKeyRef:
                   name: factoryinput-secret
-                  key: apiKey 
+                  key: password 
                   
             - name: FACTORYINPUT_USER
               valueFrom: 
