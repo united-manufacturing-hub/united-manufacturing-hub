@@ -44,7 +44,18 @@ func main() {
 		PQHost = os.Getenv("POSTGRES_HOST")
 	}
 
-	PQPort := 5432
+	// Read port and convert to integer
+	PQPortString := "5432"
+	if os.Getenv("POSTGRES_PORT") != "" {
+		PQPortString = os.Getenv("POSTGRES_PORT")
+	}
+	PQPort, err := strconv.Atoi(PQPortString)
+	if err != nil {
+		zap.S().Errorf("Cannot parse POSTGRES_PORT: not a number", PQPortString)
+		return // Abort program
+	}
+
+	// Read in other environment variables
 	PQUser := os.Getenv("POSTGRES_USER")
 	PQPassword := os.Getenv("POSTGRES_PASSWORD")
 	PWDBName := os.Getenv("POSTGRES_DATABASE")
@@ -54,7 +65,7 @@ func main() {
 
 	zap.S().Debugf("Loading accounts from environment..")
 
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 100; i++ {
 		tempUser := os.Getenv("CUSTOMER_NAME_" + strconv.Itoa(i))
 		tempPassword := os.Getenv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
 		if tempUser != "" && tempPassword != "" {

@@ -4,10 +4,8 @@ services:
   # Reads sensor data and forwards it to the MQTT Broker
   sensorconnect:
     build:
-      context: ./
-      dockerfile: ./Dockerfile
-    image: iaproduction.azurecr.io/ia-sensorconnect
-    container_name: ia_sensorconnect
+      context: ../../
+      dockerfile: ./deployment/sensorconnect/Dockerfile
     restart: unless-stopped
     logging:
         driver: "json-file"
@@ -16,15 +14,7 @@ services:
             max-size: "10m"
     environment:
       - PYTHONUNBUFFERED=0
-      - TRANSMITTERID=${CUBE_TRANSMITTERID}
-      - BROKER_URL=${MQTT_BROKER_URL}
-      - BROKER_PORT=${MQTT_BROKER_PORT}
-      - IP_RANGE=${IOLINK_IP_RANGE}
-    networks:
-      - factory_cube
-  
-# Create a network for all containers
-networks:
-  factory_cube:
-    name: factory_cube_network
-    driver: bridge
+      - TRANSMITTERID=prototyp
+      - BROKER_URL=mqtt.umh.app
+      - BROKER_PORT=8883
+      - IP_RANGE=192.168.1.0/24
