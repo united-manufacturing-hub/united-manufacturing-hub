@@ -43,6 +43,9 @@ spec:
             - name: CERTIFICATE_NAME
               value: NO_CERT
               
+            - name: LOGGING_LEVEL
+              value: "DEBUG"
+              
             - name: BROKER_PORT
               value: "1883"
               
