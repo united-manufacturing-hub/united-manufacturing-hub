@@ -54,7 +54,8 @@ Topic structure: `ia/<customerID>/<location>/<AssetID>/processValue`
 ### Contextualization + Messages for MQTT-to-postgres
 Now the information is available at the mqtt-broker and because of that to all subscribed services. But we still need to
 contextualize the information, meaning: we want to link gained data to specific products, because right now we only have
-asset specific values with timestamps.
+asset specific values with timestamps. We are using two different kinds of product ID's for that: AID's and UID's 
+([identifiers](#identifiers) are later explained in detail).
 
 First microservices should be used (stateless if possible) to convert messages under a `raw` topic into messages under 
 `processValue` or `processValueString`. This typically only requires resending the message under the appropriate topic or 
@@ -133,7 +134,7 @@ advantages and disadvantages of it:
    send container and set missing fields to null. Also send an error message.
 
 #### Example process:
-1. parent ID 1 scanned(specifically the later explained [AID](#uniqueProductAlternativeID)) -> barcode sent under 
+1. parent ID 1 scanned (specifically the later explained [AID](#identifiers)) -> barcode sent under 
    `processValueString` topic
 2. screws fixed -> torque `processValue` send
 3. child AID scanned -> barcode `processValueString` send
@@ -179,7 +180,7 @@ Pro | Con
 simple | not stateless
 general usability good |might need a lot of different containers if the number of e.g. `productTag` messages gets to big
 
-### uniqueProductID and uniqueProductAlternativeID
+### Identifiers
 At this point it makes sense to talk about uniqueProductID's and uniqueProductAlternativeID's, in short UID's and AID's.
 The concept behind these different types of ID's is crucial to understand, if you want to understand the later presented 
 datastructures. Neither UID nor AID are defining the type of a product; they identify a single product itself. The UID 
