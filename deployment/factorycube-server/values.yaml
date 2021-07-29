@@ -42,10 +42,11 @@ factoryinsight:
 ### mqtt-to-blob ###
 mqtttoblob:
   # not enabeld by default
-  enabled: false
-  image: unitedmanufacturinghub/mqtt-to-blob
-  # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
-  # tag: 0.3.2
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/mqtt-to-blob
+    tag: testing
+    pullPolicy: Always
   replicas: 1
   pdb:
     enabled: true
