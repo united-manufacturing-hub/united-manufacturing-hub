@@ -20,6 +20,12 @@ image_uid = os.environ['IMAGE_UID']
 image_bytes = os.environ['IMAGE_BYTES']
 input_var = ""
 
+logging.debug(f"Broker URL: {broker_url}")
+logging.debug(f"Broker PORT: {broker_port}")
+logging.debug(f"MINIO URL: {minio_url}")
+logging.debug(f"Bucket NAME: {bucket_name}")
+
+
 IMAGE_FOLDER = "./images/"
 
 # Connects to the mqtt client.

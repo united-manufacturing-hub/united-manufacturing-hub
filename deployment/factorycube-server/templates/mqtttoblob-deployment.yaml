@@ -42,9 +42,42 @@ spec:
           env:
             - name: CERTIFICATE_NAME
               value: NO_CERT
-
+              
+            - name: BROKER_PORT
+              value: "1883"
+              
             - name: BROKER_URL
-              value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
+              value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service
+              
+            - name: BUCKET_NAME
+              value: "umh"
+              
+            - name: TOPIC
+              value: "ia/productImage/#"
+              
+            - name: IMAGE_UID
+              value: "imageUID"
+              
+            - name: IMAGE
+              value: "image"
+              
+            - name: IMAGE_BYTES
+              value: "image_bytes"
+              
+            - name: MINIO_URL
+              value: {{ include "factorycube-server.fullname" . }}-minio-service
+              
+            - name: MINIO_ACCESS_KEY
+              valueFrom: 
+                secretKeyRef:
+                  name: umhminio-secret
+                  key: accessKey   
+              
+            - name: MINIO_SECRET_KEY
+              valueFrom: 
+                secretKeyRef:
+                  name: umhminio-secret
+                  key: secretKey       
             
             - name: MY_POD_NAME
               valueFrom:
