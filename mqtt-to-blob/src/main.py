@@ -8,7 +8,7 @@ import json
 import cv2
 
 # Settig up the env variables, see index.md for further explanation
-LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
+LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'DEBUG')
 broker_url = os.environ['BROKER_URL']
 broker_port = int(os.environ['BROKER_PORT'])
 minio_url = os.environ['MINIO_URL']
