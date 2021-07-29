@@ -178,7 +178,13 @@ data:
 
     -- #74
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
-    
+
+    -- #??
+    ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
+    ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
+    ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
+
+
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
 
