@@ -41,3 +41,17 @@ yarn build
 
 ### From Grafana's plugin store
 TODO
+
+## Usage
+1. Open Grafana and login
+2. Open umh-datasource's settings
+3. Configure your server url:
+   
+    URL: URL/IP:Port of grafanaproxy
+   
+    ```http://{URL}/api/v1/factoryinsight/```
+    
+    e.g:
+    
+    ```http://172.21.9.195:2096/api/v1/factoryinsight/```
+4. Click "Save & Test"
