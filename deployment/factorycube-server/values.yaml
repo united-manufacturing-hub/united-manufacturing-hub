@@ -39,6 +39,19 @@ factoryinsight:
     requests:
        cpu: 200m      
 
+### mqtt-to-blob ###
+mqtttoblob:
+  # not enabeld by default
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/mqtt-to-blob
+    tag: testing
+    pullPolicy: Always
+  replicas: 1
+  pdb:
+    enabled: true
+    minAvailable: 1
+
 
 ### mqtt-to-postresql ###
 mqtttopostgresql:
