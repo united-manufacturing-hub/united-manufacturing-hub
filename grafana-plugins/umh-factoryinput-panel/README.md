@@ -1,1 +1,0 @@
-See [https://docs.umh.app/docs/developers/factorycube-server/umh-factoryinput-panel/](https://docs.umh.app/docs/developers/factorycube-server/umh-factoryinput-panel/)
