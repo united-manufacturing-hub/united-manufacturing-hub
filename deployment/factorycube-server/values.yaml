@@ -1097,7 +1097,7 @@ grafana:
         jsonData:
           customerId: $FACTORYINSIGHT_CUSTOMERID
           apiKey: $FACTORYINSIGHT_APIKEY
-          serverUrL: $GRAFANA_PROXY_BASEURL
+          serverUrL: "http://{grafana-proxy}/api/v1/factoryinsight/api/v1"
           apiKeyConfigured: true
         version: 1
         # <bool> allow users to edit datasources from the UI.

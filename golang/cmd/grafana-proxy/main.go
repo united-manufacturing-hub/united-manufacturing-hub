@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -49,6 +50,13 @@ func main() {
 	if FactoryInsightBaseUrl == "" {
 		zap.S().Error("Factoryinsight base url not set")
 		return
+	}
+
+	if !strings.HasSuffix(FactoryInputBaseURL, "/") {
+		FactoryInputBaseURL = fmt.Sprintf("%s/", FactoryInputBaseURL)
+	}
+	if !strings.HasSuffix(FactoryInsightBaseUrl, "/") {
+		FactoryInsightBaseUrl = fmt.Sprintf("%s/", FactoryInsightBaseUrl)
 	}
 
 	health := healthcheck.NewHandler()
