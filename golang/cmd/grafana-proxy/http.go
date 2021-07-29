@@ -187,6 +187,10 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 		path = ""
 	}
 
+	fmt.Println("FactoryInsightBaseUrl: ", FactoryInsightBaseUrl)
+	fmt.Println("proxyUrl: ", proxyUrl)
+	fmt.Println("path: ", path)
+
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s%s", FactoryInsightBaseUrl, proxyUrl, path))
 
