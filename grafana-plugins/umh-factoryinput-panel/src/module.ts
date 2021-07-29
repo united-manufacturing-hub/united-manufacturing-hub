@@ -33,6 +33,12 @@ export const plugin = new PanelPlugin<ButtonPanelOptions>(ButtonPanel).setPanelO
         category: ['REST Integration'],
         description: 'Value',
       })
+      .addTextInput({
+        path: 'username',
+        name: 'Customer',
+        category: ['REST Integration'],
+        description: 'Grafana Organization ID',
+      })
     .addCustomEditor({
       id: 'payload',
       path: 'payload',
@@ -135,5 +141,5 @@ export const plugin = new PanelPlugin<ButtonPanelOptions>(ButtonPanel).setPanelO
       name: 'Text',
       description: 'The description of the button',
       defaultValue: 'The default button label',
-    });
+    })
 });

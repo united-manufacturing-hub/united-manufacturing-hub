@@ -70,6 +70,7 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/:service/*data", getProxyHandler)
+		v1.POST("/:service/*data", postProxyHandler)
 		v1.OPTIONS("/:service/*data", optionsCORSHAndler)
 	}
 
@@ -104,7 +105,7 @@ type getProxyRequestPath struct {
 	OriginalURI string `uri:"data" binding:"required"`
 }
 
-func getProxyHandler(c *gin.Context) {
+func handleProxyRequest(c *gin.Context, method string) {
 	fmt.Println("getProxyHandler")
 	// Jaeger tracing
 	var span opentracing.Span
@@ -141,15 +142,23 @@ func getProxyHandler(c *gin.Context) {
 	// Switch to handle our services
 	switch getProxyRequestPath.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, getProxyRequestPath)
+		HandleFactoryInput(c, getProxyRequestPath, method)
 	case "factoryinsight":
-		HandleFactoryInsight(c, getProxyRequestPath)
+		HandleFactoryInsight(c, getProxyRequestPath, method)
 	default:
 		c.AbortWithStatus(http.StatusBadRequest)
 	}
 }
 
-func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath) {
+func postProxyHandler(c *gin.Context) {
+	handleProxyRequest(c, "GET")
+}
+
+func getProxyHandler(c *gin.Context) {
+	handleProxyRequest(c, "GET")
+}
+
+func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string) {
 	fmt.Println("HandleFactoryInsight")
 	// Jaeger tracing
 	var span opentracing.Span
@@ -182,11 +191,11 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath) {
 		return
 	}
 
-	DoProxiedRequest(c, err, u, "", authHeader)
+	DoProxiedRequest(c, err, u, "", authHeader, method)
 }
 
 // HandleFactoryInput handles proxy requests to factoryinput
-func HandleFactoryInput(c *gin.Context, request getProxyRequestPath) {
+func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method string) {
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get("tracing-context"); ok {
@@ -260,10 +269,10 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath) {
 		return
 	}
 	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
-	DoProxiedRequest(c, err, u, sessionCookie, ak)
+	DoProxiedRequest(c, err, u, sessionCookie, ak, method)
 }
 
-func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string) {
+func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string) {
 	fmt.Println("DoProxiedRequest")
 	// Proxy request to backend
 	client := &http.Client{}
@@ -283,7 +292,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 			c.AbortWithError(http.StatusInternalServerError, err)
 		}
 	} else {
-		req, err := http.NewRequest("GET", u.String(), nil)
+		req, err := http.NewRequest(method, u.String(), nil)
 		if err != nil {
 			fmt.Println("Request error: ", err)
 			return
