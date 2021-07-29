@@ -151,7 +151,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 }
 
 func postProxyHandler(c *gin.Context) {
-	handleProxyRequest(c, "GET")
+	handleProxyRequest(c, "POST")
 }
 
 func getProxyHandler(c *gin.Context) {
