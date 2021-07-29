@@ -7,6 +7,19 @@ description: >
 
 ## Getting started
 
+### Using the Helm chart
+
+By default cameraconnect will be deactivated in factorycube-edge. First, you need to enable it in the factorycube-edge values. Then you need to create a folder on the node in `/home/rancher/gentl_producer` and move your genTL producer files (*.cti) and all required libaries into that folder. Then apply your settings to the Helm chart with `helm upgrade`.
+
+Another idea for changing it:
+`helm install ....... --set 'cameraconnect.enabled=true'`
+
+Or overwroite it in the `development_values.yaml`
+
+Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP (e.g., the IP of your node). Usually you can use the Kubernetes internal DNS. But cameraconnect needs to be in hostMode = true and hterefore you need to access from external. 
+
+### Development setup
+
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
 1. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose

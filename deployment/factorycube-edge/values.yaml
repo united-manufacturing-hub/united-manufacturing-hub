@@ -48,7 +48,7 @@ sensorconnect:
 ### cameraconnect ###
 
 cameraconnect:
-  enabled: true
+  enabled: false
   image: unitedmanufacturinghub/cameraconnect
   # tag: development
   brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
