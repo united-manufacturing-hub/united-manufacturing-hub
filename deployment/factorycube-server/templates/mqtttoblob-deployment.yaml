@@ -11,11 +11,10 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.mqtttoblob.replicas }} 
-  serviceName: mqtt-to-blob
   selector:
     matchLabels:
       name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
-  updateStrategy:  
+  strategy:  
     type: RollingUpdate
   template:
     metadata:
@@ -25,19 +24,21 @@ spec:
     spec:
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchLabels:
-                name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
-            topologyKey: "kubernetes.io/hostname"
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+                topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
-          {{- if .Values.mqtttoblob.tag -}}
-          image: {{ .Values.mqtttoblob.image }}:{{ .Values.mqtttoblob.tag }}
+          {{- if .Values.mqtttoblob.image.tag }}
+          image: {{ .Values.mqtttoblob.image.repository }}:{{ .Values.mqtttoblob.image.tag }}
           {{- else }}
-          image: {{ .Values.mqtttoblob.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.mqtttoblob.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.mqtttoblob.image.pullPolicy }}
           env:
             - name: CERTIFICATE_NAME
               value: NO_CERT
