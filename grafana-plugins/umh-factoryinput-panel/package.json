@@ -1,6 +1,6 @@
 {
   "name": "umh-factoryinput-panel",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "This plugins allows sending of MQTT messages to the UMH stack via the factoryinput API",
   "scripts": {
     "build": "grafana-toolkit plugin:build",
