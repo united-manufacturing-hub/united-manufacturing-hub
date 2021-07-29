@@ -57,7 +57,7 @@ grafanaproxy:
   service:
     annotations: {}
     type: LoadBalancer 
-    port: 13337
+    port: 2096
     targetPort: 80
     protocol: TCP
     labels: {}
