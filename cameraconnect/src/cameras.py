@@ -463,7 +463,7 @@ class GenICam(CamGeneral):
         # If camera was already configured and configurations
         #   has been saved in user set, then set and load user
         #   set here and return
-        if self.user_set_selector is not "Default":
+        if self.user_set_selector != "Default":
             self.ia.remote_device.node_map.UserSetSelector.value = self.user_set_selector
             self.ia.remote_device.node_map.UserSetLoad.execute()
             # Do not execute the code afterwards in this function
@@ -493,7 +493,7 @@ class GenICam(CamGeneral):
         # Set ROI always centered in camera sensor
         # Therefore calculate Offset X and Offset Y where the
         #   readout region should start and assign it to features
-        if self.user_set_selector is not "Default":
+        if self.user_set_selector != "Default":
             self.ia.remote_device.node_map.OffsetX.value = int(
                 (self.ia.remote_device.node_map.WidthMax.value - self.ia.remote_device.node_map.Width.value) / 2)
             self.ia.remote_device.node_map.OffsetY.value = int(
