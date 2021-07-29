@@ -133,7 +133,8 @@ advantages and disadvantages of it:
    send container and set missing fields to null. Also send an error message.
 
 #### Example process:
-1. parent AID 1 scanned -> barcode sent under `processValueString` topic
+1. parent ID 1 scanned(specifically the later explained [AID](#uniqueProductAlternativeID)) -> barcode sent under 
+   `processValueString` topic
 2. screws fixed -> torque `processValue` send
 3. child AID scanned -> barcode `processValueString` send
 4. parent AID 2 scanned -> barcode `processValueString` send
@@ -198,15 +199,18 @@ If moving the object produces problems (e.g. moving a not yet tested object in t
 should have gotten a new UID on its regular way.
 
 #### Example 1: Testing
-Even thought testing a product doesn't change the part itself, it changes its state in the production process:
+Even though testing a product doesn't change the part itself, it changes its state in the production process:
 - it gets something like a virtual "certificate"
 - the value increases because of that
 
 -> Make a new UID.
 
 #### Example 2: Transport
-Monitored Transport over a significant distance (not the transport between two nearby assets).
+Monitored Transport from China to Germany (This would be a significant distance: transport data would be useful to 
+include into digital shadow)
 - parts value increases
+- transport is separately paid
+- not easy to revert
 
 -> Make a new UID
 #### Life of a single UID
@@ -226,9 +230,10 @@ Assembly Station 1:
 - Because ProductA and ProductB have not been "seen" by the digital shadow, they get a new UID and asset = "storage" 
   assigned (placeholder asset for unknown/unspecified origin).
 - After ProductC is now produced it gets a new UID and as an asset, Assy1, because it is the child at Assembly Station 1
-- The AID of ProductA ("A") is a physical label. Because ProductB doesn't have a physical Label, it gets a generated 
-  AID. For ProductC we can now choose either the AID from ProductA or from ProductB. Because "A" is a physical label, it 
-  makes sense to use the AID of ProductA.
+- The AID of the child can always be freely chosen out of the parent AID's. The AID of ProductA ("A") is a physical 
+  label. Because ProductB doesn't have a physical Label, it gets a generated AID. For ProductC (child) we can now choose 
+  either the AID from ProductA or from ProductB. Because "A" is a physical label, it   makes sense to use the AID of 
+  ProductA.
 
 Now the ProductC is transported to Assembly Station 2. Because it is a short transport, doesn't add value etc. we do not
 need to produce a new UID after the transport of ProductA.
@@ -237,9 +242,9 @@ Assembly Station 2:
 - ProductC stays the same (in the sense that it is keeping its UID before and after the transport), because of the easy
   transport. 
 - ProductD is new and not produced at assembly station 2, so it gets asset = "storage" assigned
-- ProductC and ProductD are combined into ProductE. ProductE gets a new UID. We again freely choose the AID we want to 
-  use (AID C was chosen, maybe because after the assembly of ProductC and ProductD, the AID Label on ProductC is not 
-  accessible while the AID Label on the ProductD is).
+- ProductC and ProductD are combined into ProductE. ProductE gets a new UID. Both AID's are physical. We again freely 
+  choose the AID we want to use (AID C was chosen, maybe because after the assembly of ProductC and ProductD, the AID 
+  Label on ProductC is not accessible while the AID Label on the ProductD is).
 
 
 Assembly Station 3:
