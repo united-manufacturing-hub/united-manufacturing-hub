@@ -274,7 +274,7 @@ class GenICam(CamGeneral):
         (opt.) exposure_auto[string]:
                                     Determine if camera should
                                     automatically adjust the
-                                    exporsure time.
+                                    exposure time.
                                     Your settings will only be
                                     executed if the camera supports
                                     this. You do not have to check
@@ -317,7 +317,7 @@ class GenICam(CamGeneral):
         fetch an image.
     """
 
-    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, mac_address, genTL_producer_path_list,
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, mac_address, gen_tl_producer_path_list,
                  user_set_selector="Default", image_width=None, image_height=None, pixel_format=None,
                  image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
                  image_storage_path=None) -> None:
@@ -463,7 +463,7 @@ class GenICam(CamGeneral):
         # If camera was already configured and configurations
         #   has been saved in user set, then set and load user
         #   set here and return
-        if self.user_set_selector is not "Default":
+        if self.user_set_selector != "Default":
             self.ia.remote_device.node_map.UserSetSelector.value = self.user_set_selector
             self.ia.remote_device.node_map.UserSetLoad.execute()
             # Do not execute the code afterwards in this function
@@ -493,7 +493,7 @@ class GenICam(CamGeneral):
         # Set ROI always centered in camera sensor
         # Therefore calculate Offset X and Offset Y where the
         #   readout region should start and assign it to features
-        if self.user_set_selector is not "Default":
+        if self.user_set_selector != "Default":
             self.ia.remote_device.node_map.OffsetX.value = int(
                 (self.ia.remote_device.node_map.WidthMax.value - self.ia.remote_device.node_map.Width.value) / 2)
             self.ia.remote_device.node_map.OffsetY.value = int(
