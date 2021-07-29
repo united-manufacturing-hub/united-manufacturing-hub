@@ -55,8 +55,19 @@ yarn build
 
 TODO
 
-## Usage
 
+## Usage
+1. Select UMH-Factoryinput-Panel inside of your dashboard
+2. Fill out all form fields
+3. Set the grafana proxy url, as shown below
+
+   URL: URL/IP:Port of grafanaproxy
+
+   ```http://{URL}/api/v1/factoryinput/```
+
+   e.g:
+
+   ```http://172.21.9.195:2096/api/v1/factoryinput/```
 
 
 ## License
