@@ -27,6 +27,8 @@ var FactoryInputUser string
 var FactoryInputBaseURL string
 var FactoryInsightBaseUrl string
 
+const tracingContext = "tracing-context"
+
 func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -66,12 +68,13 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 		c.String(http.StatusOK, "online")
 	})
 
+	const serviceRoute = "/:service/*data"
 	// Version of the API
 	v1 := router.Group("/api/v1")
 	{
-		v1.GET("/:service/*data", getProxyHandler)
-		v1.POST("/:service/*data", postProxyHandler)
-		v1.OPTIONS("/:service/*data", optionsCORSHAndler)
+		v1.GET(serviceRoute, getProxyHandler)
+		v1.POST(serviceRoute, postProxyHandler)
+		v1.OPTIONS(serviceRoute, optionsCORSHAndler)
 	}
 
 	err = router.Run(":80")
@@ -109,7 +112,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 	fmt.Println("getProxyHandler")
 	// Jaeger tracing
 	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
+	if cspan, ok := c.Get(tracingContext); ok {
 		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "getProxyHandler", c.Request.Method, c.Request.URL.Path)
 	} else {
 		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "getProxyHandler", c.Request.Method, c.Request.URL.Path)
@@ -162,7 +165,7 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 	fmt.Println("HandleFactoryInsight")
 	// Jaeger tracing
 	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
+	if cspan, ok := c.Get(tracingContext); ok {
 		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInsight", c.Request.Method, c.Request.URL.Path)
 	} else {
 		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInsight", c.Request.Method, c.Request.URL.Path)
@@ -206,7 +209,7 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method string) {
 	// Jaeger tracing
 	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
+	if cspan, ok := c.Get(tracingContext); ok {
 		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
 	} else {
 		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
