@@ -45,7 +45,8 @@ TODO
 ## Usage
 1. Open Grafana and login
 2. Open umh-datasource's settings
-3. Configure your server url:
+3. Configure your customer name & API Key (automatically configured in Helm deployment)
+4. Configure your server url:
    
     URL: URL/IP:Port of grafanaproxy
    
@@ -54,4 +55,4 @@ TODO
     e.g:
     
     ```http://172.21.9.195:2096/api/v1/factoryinsight/```
-4. Click "Save & Test"
+5. Click "Save & Test"
