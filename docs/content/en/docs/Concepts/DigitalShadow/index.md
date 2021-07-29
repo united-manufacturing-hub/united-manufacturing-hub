@@ -183,11 +183,10 @@ general usability good |might need a lot of different containers if the number o
 ### Identifiers
 At this point it makes sense to talk about uniqueProductID's and uniqueProductAlternativeID's, in short UID's and AID's.
 The concept behind these different types of ID's is crucial to understand, if you want to understand the later presented 
-datastructures. Neither UID nor AID are defining the type of a product; they identify a single product itself. The UID 
-is generated for every state a product was/is in and is mainly important for the database. The AID on the other hand 
-might be from a physical label, or a written product number. It is usually the relevant ID for engineers and for 
-production planning. The physical labels stay the same after assembly (the same AID can be related to multiple different
-UID's). If we have multiple labels on one part we can also choose one of them for the AID.
+datastructures. UID and AID are identifying a single product. The UID is generated for every state a product was/is 
+in and is mainly important for the database. The AID on the other hand might be from a physical label, or a written 
+product number. It is usually the relevant ID for engineers and for production planning. The physical labels stay 
+the same after assembly (the same AID can be related to multiple different UID's). If we have multiple labels on one part we can also choose one of them for the AID.
 
 AID's and UID's are stored  in combination one-to-one in the uniqueProductTable (timescaleDB).
 
@@ -245,7 +244,7 @@ Assembly Station 2:
 - ProductD is new and not produced at assembly station 2, so it gets asset = "storage" assigned
 - ProductC and ProductD are combined into ProductE. ProductE gets a new UID. Both AID's are physical. We again freely 
   choose the AID we want to use (AID C was chosen, maybe because after the assembly of ProductC and ProductD, the AID 
-  Label on ProductC is not accessible while the AID Label on the ProductD is).
+  Label on ProductD is not accessible while the AID Label on the ProductC is).
 
 
 Assembly Station 3:
