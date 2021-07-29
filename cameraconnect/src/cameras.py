@@ -274,7 +274,7 @@ class GenICam(CamGeneral):
         (opt.) exposure_auto[string]:
                                     Determine if camera should
                                     automatically adjust the
-                                    exporsure time.
+                                    exposure time.
                                     Your settings will only be
                                     executed if the camera supports
                                     this. You do not have to check
@@ -317,7 +317,7 @@ class GenICam(CamGeneral):
         fetch an image.
     """
 
-    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, mac_address, genTL_producer_path_list,
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, mac_address, gen_tl_producer_path_list,
                  user_set_selector="Default", image_width=None, image_height=None, pixel_format=None,
                  image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
                  image_storage_path=None) -> None:
