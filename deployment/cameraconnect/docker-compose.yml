@@ -1,0 +1,33 @@
+version: '3.7'
+
+services:
+  cameraconnect:
+    image: cameraconnect_image
+    build:
+        context: ../../
+        dockerfile: ./deployment/cameraconnect/Dockerfile
+    container_name: cameraconnect_container
+    #restart: unless-stopped
+    env_file:
+      - ./example_env
+    volumes:
+      - "../../cameraconnect/assets:/app/assets/"
+    networks:
+      - camera_vlan
+      - dockernet
+
+networks:
+  camera_vlan:
+    driver: macvlan
+    driver_opts:
+      parent: enp1s0 #adjust to system settings
+    ipam:
+      driver: default
+      config:
+        - subnet: "192.168.1.100/24"
+  dockernet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "192.168.0.0/24"

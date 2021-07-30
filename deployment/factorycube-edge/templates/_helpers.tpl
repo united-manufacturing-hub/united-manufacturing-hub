@@ -77,6 +77,14 @@ app.kubernetes.io/name: {{ include "factorycube-edge.name" . }}-sensorconnect
 {{- end }}
 
 {{/*
+Labels for cameraconnect
+*/}}
+{{- define "factorycube-edge.labels.cameraconnect" -}}
+app.kubernetes.io/name: {{ include "factorycube-edge.name" . }}-cameraconnect
+{{ include "factorycube-edge.labels.common" . }}
+{{- end }}
+
+{{/*
 Labels for vernemq
 */}}
 {{- define "factorycube-edge.labels.vernemq" -}}

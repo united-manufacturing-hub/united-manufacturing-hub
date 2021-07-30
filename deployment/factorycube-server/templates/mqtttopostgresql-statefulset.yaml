@@ -46,7 +46,7 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
-          {{- if .Values.mqtttopostgresql.tag -}}
+          {{- if .Values.mqtttopostgresql.tag }}
           image: {{ .Values.mqtttopostgresql.image }}:{{ .Values.mqtttopostgresql.tag }}
           {{- else }}
           image: {{ .Values.mqtttopostgresql.image }}:{{ .Chart.AppVersion }}

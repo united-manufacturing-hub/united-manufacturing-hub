@@ -1,9 +1,12 @@
 # TODO: #11 Add all other APIs as well.
-
+# TODO make inline schemas into proper models
 openapi: '3.0.2'
 info:
   title: factoryinsight
   version: '1.0'
+  description: >
+    this api is designed to be used with grafana
+
 servers:
   - url: https://api.industrial-analytics.net/api/v1
 
@@ -109,10 +112,16 @@ components:
     BasicAuth:
       type: http
       scheme: basic
+  schemas: # todo move inline data objects to schemas
+    blank:
+      properties:
+        none:
+          type: string
 
 paths:
   /{customer}:
     get:
+      operationId: get_customer_locations
       parameters:
         - $ref: '#/components/parameters/customer'
       responses:
@@ -130,6 +139,7 @@ paths:
                   
   /{customer}/{location}:
     get:
+      operationId: get_location_assets
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -149,6 +159,7 @@ paths:
 
   /{customer}/{location}/{asset}:
     get:
+      operationId: get_asset_datapoints
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -190,6 +201,7 @@ paths:
 
   /{customer}/{location}/{asset}/state:
     get:
+      operationId: get_asset_states
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -209,7 +221,6 @@ paths:
                     type: array
                     items:
                       type: string
-                      
                     description: the column names
                     example:
                       - DCCAachen-AachenPlant-WeavingMachine-state
@@ -218,17 +229,23 @@ paths:
                     type: array
                     items:
                       type: array
-                    description: the returned data
+                      items:
+                        anyOf:
+                          - type: string
+                          - type: integer
+                          - type: number
                     example:
-                      - 
-                        - "No shift"
-                        - 1605187036148
-                      - 
+                      -
+                        -   "No shift"
+                        -   1605187036148
+                      -
                         - "Producing"
                         - 1605201132835
+                    description: the returned data
 
   /{customer}/{location}/{asset}/count:
     get:
+      operationId: get_asset_counts
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -256,6 +273,12 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf:
+                          - type: number
+                          - type: integer
+
+
                     description: the returned data
                     example:
                       - 
@@ -270,6 +293,7 @@ paths:
 
   /{customer}/{location}/{asset}/currentState:
     get:
+      operationId: get_current_asset_state
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -292,9 +316,14 @@ paths:
                       - timestamp
                   datapoints:
                     type: array
-                    maxLength: 1
+                    maxLength: 1 # todo change to dict
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -303,6 +332,7 @@ paths:
   
   /{customer}/{location}/{asset}/recommendation:
     get:
+      operationId: get_current_asset_recommendation
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -332,6 +362,12 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
+                          - type: object # this will make problems with certain generators
                     description: the returned data
                     example:
                       - 
@@ -345,6 +381,7 @@ paths:
   
   /{customer}/{location}/{asset}/timeRange:
     get:
+      operationId: get_asset_data_timerange
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -357,7 +394,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  columnNames:
+                  columnNames: # change to dictionary
                     type: array
                     items:
                       type: string
@@ -369,6 +406,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                            format: date-time
                     description: the returned data
                     example:
                       - 
@@ -377,6 +418,7 @@ paths:
 
   /{customer}/{location}/{asset}/aggregatedStates:
     get:
+      operationId: get_asset_aggregatedStates
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -402,7 +444,7 @@ paths:
                     items:
                       type: string
                     description: the column names
-                    example:
+                    example: #convert following entry into list of dicts with named keys
                         - 
                           - "category"
                           - "state"
@@ -411,6 +453,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data. duration is the amount of seconds.
                     example:
                         - 
@@ -428,6 +475,7 @@ paths:
 
   /{customer}/{location}/{asset}/availability:
     get:
+      operationId: get_asset_availability
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -454,6 +502,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: integer
+                          - type: number
                     description: the returned data
                     maxLength: 1
                     minimum: 0
@@ -464,6 +516,7 @@ paths:
 
   /{customer}/{location}/{asset}/performance:
     get:
+      operationId: get_asset_performance
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -490,6 +543,9 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                            # todo fix this data model, only doing triage to create a generatable client
+                        type: number
                     description: the returned data
                     maxLength: 1
                     minimum: 0
@@ -500,6 +556,7 @@ paths:
 
   /{customer}/{location}/{asset}/quality:
     get:
+      operationId: get_asset_quality
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -526,6 +583,9 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        type: number
+                         # todo fix this data model, only doing triage to create a generatable client
                     description: the returned data
                     maxLength: 1
                     minimum: 0
@@ -536,6 +596,7 @@ paths:
 
   /{customer}/{location}/{asset}/oee:
     get:
+      operationId: get_asset_oee
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -565,22 +626,28 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                            format: date-time
+                          - type: number
                     description: the returned data
                     minimum: 0
                     maximum: 1
                     example:
-                      - 
+                      -
                         - 0.1779839097022094,
                         - "2020-11-02T17:07:22Z"
-                      - 
+                      -
                         - 0.018431700156319477,
                         - "2020-11-03T17:07:22Z"
-                      - 
+                      -
                         - 0.036663254805344575,
                         - "2020-11-12T17:07:22Z"
 
   /{customer}/{location}/{asset}/shifts:
     get:
+      operationId: get_asset_shifts
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -609,6 +676,8 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                       type: integer # todo fix this data model, only doing triage to create a generatable client
                     description: the returned data
                     example:
                       - 
@@ -623,6 +692,7 @@ paths:
 
   /{customer}/{location}/{asset}/productionSpeed:
     get:
+      operationId: get_asset_production_speed
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -650,6 +720,8 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        type: number
                     description: the returned data
                     example:
                       - 
@@ -664,6 +736,7 @@ paths:
 
   /{customer}/{location}/{asset}/qualityRate:
     get:
+      operationId: get_asset_quality_rate
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -690,6 +763,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: #todo only doing triage
+                          - type: number
+                          - type: integer
                     description: the returned data
                     example:
                       - 
@@ -704,6 +781,7 @@ paths:
 
   /{customer}/{location}/{asset}/stateHistogram:
     get:
+      operationId: get_asset_state_histogram
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -732,6 +810,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -746,6 +829,7 @@ paths:
 
   /{customer}/{location}/{asset}/factoryLocations:
     get:
+      operationId: get_asset_factory_location
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -772,6 +856,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -781,6 +870,7 @@ paths:
   
   /{customer}/{location}/{asset}/averageCleaningTime:
     get:
+      operationId: get_asset_average_cleaning_time
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -808,6 +898,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -822,6 +917,7 @@ paths:
   
   /{customer}/{location}/{asset}/averageChangeoverTime:
     get:
+      operationId: get_asset_average_changeover_time
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -849,6 +945,12 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                            format: date-time
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -863,6 +965,7 @@ paths:
                         
   /{customer}/{location}/{asset}/upcomingMaintenanceActivities:
     get:
+      operationId: get_asset_umpcoming_maintenance_activities
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -896,6 +999,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -918,7 +1026,9 @@ paths:
                         - 0     
                         
   /{customer}/{location}/{asset}/maintenanceComponents:
+
     get:
+      operationId: get_asset_maintenance_components
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -941,6 +1051,7 @@ paths:
   
   /{customer}/{location}/{asset}/maintenanceActivities:
     get:
+      operationId: get_asset_maintenance_activities
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -969,6 +1080,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -982,6 +1098,7 @@ paths:
   
   /{customer}/{location}/{asset}/uniqueProducts:
     get:
+      operationId: get_asset_unique_products
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1014,6 +1131,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -1035,6 +1157,7 @@ paths:
 
   /{customer}/{location}/{asset}/orderTable:
     get:
+      operationId: get_asset_order_table
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1097,6 +1220,11 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 
@@ -1136,6 +1264,7 @@ paths:
 
   /{customer}/{location}/{asset}/orderTimeline:
     get:
+      operationId: get_asset_order_timeline
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1162,6 +1291,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: string
+                          - type: integer
                     description: the returned data
                     example:
                       - 
@@ -1176,6 +1309,7 @@ paths:
 
   /{customer}/{location}/{asset}/process_{processValue}:
     get:
+      operationId: get_asset_process_value
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
@@ -1203,6 +1337,10 @@ paths:
                     type: array
                     items:
                       type: array
+                      items:
+                        anyOf: # todo fix this data model, only doing triage to create a generatable client
+                          - type: integer
+                          - type: number
                     description: the returned data
                     example:
                       - 

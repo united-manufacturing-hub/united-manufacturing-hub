@@ -35,7 +35,7 @@ barcodereader:
   customerID: "raw"
   location: "barcodereader"
   machineID: "barcodereader"
-
+  #
 ### sensorconnect ###
 
 sensorconnect:
@@ -44,6 +44,27 @@ sensorconnect:
   iprange: "ENTER_IP_RANGE" #e.g. 172.21.9.0/24
   brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
+
+### cameraconnect ###
+
+cameraconnect:
+  enabled: false
+  image: unitedmanufacturinghub/cameraconnect
+  # tag: development
+  brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
+  brokerPort: 1883 # do not change
+  trigger: "MQTT"
+  acquisitionDelay: "0.0"
+  cycleTime: "4"
+  cameraInterface: "GenICam"
+  imageWidth: "800"
+  imageHeight: "800"
+  imageChannels: "3"
+  macAddress: "02-2625A-09849"
+  exposureTime: "1000"
+  exposureAuto: "Off"
+  pixelFormat: "Mono8"
+  loggingLevel: "INFO"
 
 ### nodered ###
 

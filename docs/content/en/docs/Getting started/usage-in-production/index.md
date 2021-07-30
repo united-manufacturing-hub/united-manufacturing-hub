@@ -440,3 +440,6 @@ vernemq:
 - You can change the configuration in `nodered.settings`
 - We recommend that you set a password for accessing the webinterface in the `nodered.settings`. See also [the official tutorial from nodered](https://nodered.org/docs/user-guide/runtime/securing-node-red#generating-the-password-hash)
 
+#### MinIO
+
+We strongly recommend to change all passwords and salts specified in values.yaml

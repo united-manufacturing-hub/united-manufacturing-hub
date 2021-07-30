@@ -1,0 +1,67 @@
+openapi: '3.0.2'
+info:
+  title: grafana-auth
+  version: '1.0'
+servers:
+  - url: http://todo.net
+
+components:
+  parameters:
+    service:
+      in: path
+      name: service
+      schema:
+        type: string
+      required: true
+      description: requested service
+      example:
+        - factoryinsight
+        - factoryinput
+
+    query:
+      in: path
+      name: query
+      schema:
+        type: string
+      required: true
+      description: Query to be proxied
+      example:
+        example/example/example
+
+  schemas:
+    asset_states:
+      properties:
+      additionalProperties:
+        anyOf:
+          - type: string
+          - type: integer
+          - type: number
+
+
+paths:
+  /api/v1/{service}/{query}:
+    get:
+      summary: This api call proxies your request to factoryinsight/factoryinput, using your grafana login
+      parameters:
+        - $ref: '#/components/parameters/service'
+        - $ref: '#/components/parameters/query'
+      requestBody:
+        description:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/asset_states'
+      responses:
+        '200':
+          description: Your request succeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/asset_states'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+security:
+  - BasicAuth: []

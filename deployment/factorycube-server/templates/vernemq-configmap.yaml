@@ -8,6 +8,10 @@ metadata:
 data:  
   vernemq-acl: |   
      {{ .Values.vernemq.AclConfig | nindent 5 }}
+
+     user MQTT_TO_BLOB
+     topic read ia/+/+/+/productImage
+     topic read $share/MQTT-TO-BLOB/ia/+/+/+/productImage
      
      user MQTT_TO_POSTGRESQL
      topic read ia/#
