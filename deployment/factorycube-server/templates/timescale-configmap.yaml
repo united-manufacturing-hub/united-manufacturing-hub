@@ -178,8 +178,6 @@ data:
         value                   DOUBLE PRECISION                    NULL,
         UNIQUE(uid, valueName)
     );
-    -- creating hypertable
-    SELECT create_hypertable('productTagTable', 'timestamp');
 
 
     -------------------- TimescaleDB table for product tags strings --------------------
@@ -191,8 +189,7 @@ data:
         value                   TEXT                                NULL,
         UNIQUE(uid, valueName)
     );
-    -- creating hypertable
-    SELECT create_hypertable('productTagStringTable', 'timestamp');
+
 
     -------------------- TimescaleDB table for product inheritance info --------------------
     CREATE TABLE IF NOT EXISTS productInheritanceTable
@@ -202,8 +199,7 @@ data:
         child_uid               TEXT                                REFERENCES uniqueProductTable (uid),
         UNIQUE(parent_uid, child_uid)
     );
-    -- creating hypertable
-    SELECT create_hypertable('productInheritanceTable', 'timestamp');
+
     CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
     CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
 
