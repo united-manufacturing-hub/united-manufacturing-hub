@@ -221,6 +221,7 @@ data:
     ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
     ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
     ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
+    ALTER TABLE uniqueProductTablev ADD PRIMARY KEY (uid);
 
 
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
