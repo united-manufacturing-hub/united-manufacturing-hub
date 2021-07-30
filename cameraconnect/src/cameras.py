@@ -641,7 +641,7 @@ class GenICam(CamGeneral):
         # If TimeoutException because no image was fetchable,
         #   restart the acquisition process
         except TimeoutException:
-            logging.WARNING("Timeout ocurred during fetching an image. Camera reset and restart.")
+            logging.error("Timeout ocurred during fetching an image. Camera reset and restart.")
             self.ia.destroy()
             self.h.reset()
             self._connect()
