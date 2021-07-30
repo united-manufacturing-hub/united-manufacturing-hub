@@ -99,10 +99,10 @@ if __name__ == "__main__":
     logging.debug(f"MINIO URL: {minio_url}")
     logging.debug(f"Bucket NAME: {bucket_name}")
 
-
     global_client = mqtt.Client()
     global_client.on_connect = on_connect
     global_client.on_message = on_message
+    global_client.username = "MQTT-TO-BLOB"
     global_client.connect(broker_url, broker_port)
     global_client.subscribe(topic, qos=0)
     global_client.loop_forever()
