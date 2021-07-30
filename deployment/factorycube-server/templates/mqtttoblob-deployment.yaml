@@ -58,15 +58,6 @@ spec:
             - name: TOPIC
               value: "ia/productImage/#"
               
-            - name: IMAGE_UID
-              value: "imageUID"
-              
-            - name: IMAGE
-              value: "image"
-              
-            - name: IMAGE_BYTES
-              value: "image_bytes"
-              
             - name: MINIO_URL
               value: {{ include "factorycube-server.fullname" . }}-minio-service
               
