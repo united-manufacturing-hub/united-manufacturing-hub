@@ -457,8 +457,9 @@ class GenICam(CamGeneral):
 
         # Get list of all available features of the camera
         node_map = dir(self.ia.remote_device.node_map)
+        logging.debug("Adjustable parameters for connected camera:")
         for setting in node_map:
-            print(setting)
+            logging.debug(setting)
 
         # If camera was already configured and configurations
         #   has been saved in user set, then set and load user
@@ -640,7 +641,7 @@ class GenICam(CamGeneral):
         # If TimeoutException because no image was fetchable,
         #   restart the acquisition process
         except TimeoutException:
-            logging.WARNING("Timeout ocurred during fetching an image. Camera reset and restart.")
+            logging.error("Timeout ocurred during fetching an image. Camera reset and restart.")
             self.ia.destroy()
             self.h.reset()
             self._connect()
