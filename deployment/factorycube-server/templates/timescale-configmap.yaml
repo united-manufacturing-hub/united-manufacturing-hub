@@ -213,7 +213,7 @@ data:
     -- #74
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
 
-    -- #??
+    -- #297
     ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
     ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
     ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
