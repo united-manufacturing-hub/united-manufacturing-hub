@@ -52,7 +52,7 @@ def on_message(client, userdata, message):
         return
 
     # Get image_id
-    uid = result.Image.image_id
+    uid = result.image.image_id
 
     # Reading out image_bytes and decoding it from base64
     im_bytes = base64.b64decode(result.image.image_bytes)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     global_client = mqtt.Client()
     global_client.on_connect = on_connect
     global_client.on_message = on_message
-    global_client.username = "MQTT-TO-BLOB"
+    global_client.username_pw_set("MQTT_TO_BLOB", password=None)
     global_client.connect(broker_url, broker_port)
     global_client.subscribe(topic, qos=0)
     global_client.loop_forever()
