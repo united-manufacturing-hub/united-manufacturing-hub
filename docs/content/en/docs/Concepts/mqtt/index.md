@@ -48,9 +48,9 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 ### Topic: `ia/rawImage/`
 All raw data coming in via [cameraconnect].
 
-Topic structure: `ia/rawImage/<TransmitterID>/<SerialNumberCamera>`
+Topic structure: `ia/rawImage/<TransmitterID>/<MAC Adress of Camera>`
 
-`image_id:` a unique identifier for every image acquired
+`image_id:` a unique identifier for every image acquired\
 `image_bytes:` base64 encoded image in JPG format in bytes\
 `image_height:` height of the image in pixel\
 `image_width:` width of the image in pixel\
@@ -65,7 +65,7 @@ This means that the transmitter with the serial number 2020-0102 has one camera 
 {
 	"timestamp_ms": 214423040823,
 	"image":  {
-		"image_id": "<SerialNumberCamera>_<timestamp_ms>",
+		"image_id": "<MACaddress>_<timestamp_ms>",
 		"image_bytes": 3495ask484...,
 		"image_heigth": 800,
 		"image_width": 1203,

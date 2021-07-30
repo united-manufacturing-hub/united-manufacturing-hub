@@ -94,7 +94,8 @@ class CamGeneral(ABC):
             {
             'timestamp_ms': timestamp_ms,
             'image':
-                    {'image_bytes': encoded_image,
+                    {'image_id':"<mac_address>_<timestamp>"
+                    'image_bytes': encoded_image,
                     'image_height': image.shape[0],
                     'image_width': image.shape[1],
                     'image_channels':image.shape[2]},
@@ -126,10 +127,11 @@ class CamGeneral(ABC):
         prepared_message = {
             'timestamp_ms': str(timestamp_ms),
             'image':
-                {'image_bytes': encoded_image,
-                 'image_height': image.shape[0],
-                 'image_width': image.shape[1],
-                 'image_channels': image.shape[2]},
+                {'image_id':(str(self.mac_address)+"_"+str(timestamp_ms)),
+                'image_bytes': encoded_image,
+                'image_height': image.shape[0],
+                'image_width': image.shape[1],
+                'image_channels': image.shape[2]},
         }
 
         # Get json formatted string, convert python object into
