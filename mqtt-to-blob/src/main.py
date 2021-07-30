@@ -7,6 +7,8 @@ import base64
 import json
 import cv2
 
+import ProductImage
+
 # Settig up the env variables, see index.md for further explanation
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'DEBUG')
 broker_url = os.environ['BROKER_URL']
@@ -16,8 +18,7 @@ minio_access_key = os.environ['MINIO_ACCESS_KEY']
 minio_secret = os.environ['MINIO_SECRET_KEY']
 bucket_name = os.environ['BUCKET_NAME']
 topic = os.environ['TOPIC']
-image_uid = os.environ['IMAGE_UID']
-image_bytes = os.environ['IMAGE_BYTES']
+
 input_var = ""
 
 IMAGE_FOLDER = "./images/"
@@ -44,10 +45,18 @@ def on_connect(client, userdata, flags, rc):
 
 
 def on_message(client, userdata, message):
-    input_var = json.loads(message.payload)
-    im = input_var["image"]
-    uid = input_var[image_uid]
-    im_bytes = base64.b64decode(im[image_bytes])
+    try:
+        result = ProductImage.product_image_from_dict(json.loads(message.payload))
+    except:
+        logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
+        return
+
+    # Get image_id
+    uid = result.Image.image_id
+
+    # Reading out image_bytes and decoding it from base64
+    im_bytes = base64.b64decode(result.image.image_bytes)
+
     im_arr = np.frombuffer(im_bytes, dtype=np.uint8)
     img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
     img_saver = cv2.imwrite(IMAGE_FOLDER+uid+".jpg", img)
