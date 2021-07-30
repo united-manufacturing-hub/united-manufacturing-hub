@@ -88,23 +88,3 @@ This chapter explains all used environment variables.
 
 **Example value:**  testbucket
 
-### imageUID
-
-**Description:** Specifies the name of the stored image and is included in the MQTT message. 
-Must only be changed if the message's identifier has changed as well. 
-
-**Type:** string
-
-**Possible values:** all
-
-**Example value:**  imageUID
-
-### image_bytes
-
-**Description:** Part of the MQTT message which includes the picture in a Base64 JSON format. 
-
-**Type:** JSON
-
-**Possible values:** all
-
-**Example value:**  alongstringwithoutspaces
