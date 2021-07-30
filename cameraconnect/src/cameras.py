@@ -457,8 +457,9 @@ class GenICam(CamGeneral):
 
         # Get list of all available features of the camera
         node_map = dir(self.ia.remote_device.node_map)
+        logging.debug("Adjustable parameters for connected camera:")
         for setting in node_map:
-            print(setting)
+            logging.debug(setting)
 
         # If camera was already configured and configurations
         #   has been saved in user set, then set and load user
