@@ -2074,6 +2074,10 @@ vernemq:
 
      user ia_nodered
      topic ia/#
+
+     user MQTT-TO-BLOB
+     topic ia/+/+/+/productImage
+     topic read $share/MQTT-TO-BLOB/ia/+/+/+/productImage
   CACert: |-
     -----BEGIN CERTIFICATE-----
     MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
