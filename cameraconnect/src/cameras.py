@@ -125,7 +125,7 @@ class CamGeneral(ABC):
         encoded_image = base64.b64encode(im_bytes).decode()
         # Preparation of the message that will be published
         prepared_message = {
-            'timestamp_ms': str(timestamp_ms),
+            'timestamp_ms': timestamp_ms,
             'image':
                 {'image_id':(str(self.mac_address)+"_"+str(timestamp_ms)),
                 'image_bytes': encoded_image,
