@@ -190,33 +190,35 @@ data:
     CREATE TABLE IF NOT EXISTS productTagTable
     (
         timestamp               TIMESTAMPTZ                         NOT NULL,
-        uid                     TEXT                                REFERENCES uniqueProductTable (uid),
+        product_uid             SERIAL                              REFERENCES uniqueProductTable (uid),
         valueName               TEXT                                NOT NULL,
         value                   DOUBLE PRECISION                    NULL,
-        UNIQUE(uid, valueName)
+        UNIQUE(product_uid, valueName)
     );
-
+    -- creating hypertable
+    SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
 
     -------------------- TimescaleDB table for product tags strings --------------------
     CREATE TABLE IF NOT EXISTS productTagStringTable
     (
         timestamp               TIMESTAMPTZ                         NOT NULL,
-        uid                     TEXT                                REFERENCES uniqueProductTable (uid),
+        product_uid             SERIAL                              REFERENCES uniqueProductTable (uid),
         valueName               TEXT                                NOT NULL,
         value                   TEXT                                NULL,
-        UNIQUE(uid, valueName)
+        UNIQUE(product_uid, valueName)
     );
-
+    -- creating hypertable
+    SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
 
     -------------------- TimescaleDB table for product inheritance info --------------------
     CREATE TABLE IF NOT EXISTS productInheritanceTable
     (
         timestamp               TIMESTAMPTZ                         NOT NULL,
-        parent_uid              TEXT                                REFERENCES uniqueProductTable (uid),
-        child_uid               TEXT                                REFERENCES uniqueProductTable (uid),
+        parent_uid              SERIAL                                REFERENCES uniqueProductTable (uid),
+        child_uid               SERIAL                                REFERENCES uniqueProductTable (uid),
         UNIQUE(parent_uid, child_uid)
     );
-
+    -- creating hypertable
     CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
     CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
 
