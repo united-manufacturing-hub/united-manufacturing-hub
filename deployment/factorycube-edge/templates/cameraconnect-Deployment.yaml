@@ -74,6 +74,12 @@ spec:
                   value: {{ .Values.cameraconnect.imageChannels | quote }}
                 - name: MAC_ADDRESS 
                   value: {{ .Values.cameraconnect.macAddress | quote }}
+                - name: EXPOSURE_TIME 
+                  value: {{ .Values.cameraconnect.exposureTime | quote }}
+                - name: EXPOSURE_AUTO
+                  value: {{ .Values.cameraconnect.exposureAuto | quote }}
+                - name: PIXEL_FORMAT
+                  value: {{ .Values.cameraconnect.pixelFormat | quote }}
                 - name: LOGGING_LEVEL 
                   value: {{ .Values.cameraconnect.loggingLevel | quote }}
                 - name: DEFAULT_GENTL_PRODUCER_PATH 
