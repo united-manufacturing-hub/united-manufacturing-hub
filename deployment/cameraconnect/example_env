@@ -1,0 +1,89 @@
+### ------------- GLOBAL SETTINGS -------------
+
+# Location settings
+CUSTOMER_ID=ExampleID
+LOCATION=ExampleLocation
+MACHINE_ID=ExampleID
+
+
+## ------------- MQTT SETTINGS -------------
+
+#Use 192.168.0.1 your MQTT Broker answers on localhost
+MQTT_HOST=192.168.0.1
+MQTT_PORT=1883
+
+# Set transmitter-id/serial-number of the system
+CUBE_TRANSMITTERID=EXAMPLE_TRANSMITTERID
+
+
+### ------------- IMAGE ACQUISITION ------------
+
+# Choose between a continous trigger with a fixed cycle time 
+#   between each acquisition or a trigger over MQTT 
+# Possible values: Continuous, MQTT
+# No default
+TRIGGER=Continuous
+
+# IF "MQTT" set the time between the trigger and image 
+#   acquisition. If a timestamp in ms since epoch is 
+#   provided in MQTT trigger message, this timestamp
+#   is used. Epoch is defined as January 1, 1970, 00:00:00 
+#   (UTC). If no timestamp is provided in trigger message, 
+#   a timestamp is generated as soon as message is 
+#   received at image acquirer. This acquisition delay can
+#   be used to avoid problems caused by varying latency.
+#   Use 0.0 for stationary inspection processes to do it
+#   as fast as possible without any delay.
+# Possible values: Floats in seconds
+# Default: 0.0
+ACQUISITION_DELAY=0.0
+
+# If "Continuous" set cycle time of your process
+# If the cycle time is less than the processing time for each 
+#   image, an error is thrown
+# Possible values: Floats in seconds
+# Default: 10.0
+CYCLE_TIME=5
+
+#if IMAGE_PATH is not defined, no images will be saved
+IMAGE_PATH=/app/assets/images/
+
+
+## ------------- CAMERA SETTINGS -----------------
+
+# Set camera interface 
+# Possible values: GenICam, DummyCamera
+# No default
+CAMERA_INTERFACE=GenICam
+
+EXPOSURE_TIME=1000
+
+#see doc strings for explanation
+#Possible values: Off, Continuous, Once
+EXPOSURE_AUTO=Continuous
+
+#Possible values: Mono8, RGB8Packed, BGR8Packed
+PIXEL_FORMAT=Mono8
+
+#if the width or height values surpass the maximum capabilities of the camera
+#the maximum values are selected automatically
+IMAGE_WIDTH=50000
+IMAGE_HEIGHT=50000
+
+IMAGE_CHANNELS=3
+# Possible values: String without quotation marks
+
+#MAC address of camera, it is written on the camera
+#format: 0030532B879C
+#000f315cd0b5
+MAC_ADDRESS=0030532B879C
+
+#set path were gentl producers are located
+DEFAULT_GENTL_PRODUCER_PATH=/app/assets/producer_files
+
+## ------------- DEVELOPER SETTINGS -----------------
+
+#set logging level
+#possible values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+#default INFO
+LOGGING_LEVEL=DEBUG

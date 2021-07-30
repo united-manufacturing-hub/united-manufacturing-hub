@@ -1,0 +1,4 @@
+paho-mqtt==1.5.1
+numpy==1.21.1
+minio==7.1.0
+opencv-python-headless
