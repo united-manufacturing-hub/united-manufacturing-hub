@@ -169,6 +169,22 @@ data:
         PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'
     );
      
+
+    --- MIGRATIONS
+    -- Add here your migrations
+
+    -- #2
+    ALTER TABLE configurationTable ADD IF NOT EXISTS AutomaticallyIdentifyChangeovers BOOLEAN DEFAULT true;
+
+    -- #74
+    ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
+
+    -- #297
+    ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
+    ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
+    ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
+    ALTER TABLE uniqueProductTable ADD PRIMARY KEY (uid);
+
     -------------------- TimescaleDB table for product tags --------------------
     CREATE TABLE IF NOT EXISTS productTagTable
     (
@@ -202,22 +218,6 @@ data:
 
     CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
     CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
-
-
-    --- MIGRATIONS
-    -- Add here your migrations
-
-    -- #2
-    ALTER TABLE configurationTable ADD IF NOT EXISTS AutomaticallyIdentifyChangeovers BOOLEAN DEFAULT true;
-
-    -- #74
-    ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
-
-    -- #297
-    ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
-    ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
-    ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
-    ALTER TABLE uniqueProductTable ADD PRIMARY KEY (uid);
 
 
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
