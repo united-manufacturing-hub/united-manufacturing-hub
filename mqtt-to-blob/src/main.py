@@ -52,7 +52,7 @@ def on_message(client, userdata, message):
         return
 
     # Get image_id
-    uid = result.Image.image_id
+    uid = result.image.image_id
 
     # Reading out image_bytes and decoding it from base64
     im_bytes = base64.b64decode(result.image.image_bytes)
