@@ -412,7 +412,7 @@ class GenICam(CamGeneral):
                 try:
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
                 except:
-                    logging.error("Camera ist not reachable. It is most likely in the wrong subnet. Check your network definition and the camera ip address.")
+                    logging.error("Camera ist not reachable. Most likely another container already occupies the same camera. One camera can only be used by exactly one container at the time.")
                     sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
