@@ -67,7 +67,7 @@ This means that the transmitter with the serial number 2020-0102 has one camera 
 	"image":  {
 		"image_id": "<MACaddress>_<timestamp_ms>",
 		"image_bytes": 3495ask484...,
-		"image_heigth": 800,
+		"image_height": 800,
 		"image_width": 1203,
 		"image_channels": 3
 	}
