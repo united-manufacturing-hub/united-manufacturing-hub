@@ -97,7 +97,10 @@ function:
 }
 ```
 - **uniqueProduct:** To indicate the generation of a new product or a new product state send a MQTT message to `MQTT-to-postgres`
-under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`.
+under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`. The `is_scap` entry in the `uniqueProduct` MQTT 
+  message is always `false`, except we are sure that the part is actually scrap. If we don't know if a product is scrap 
+  or not, the `is_scrap` flag is set to `false`.
+  
   There are two cases of when to send a message under the `uniqueProduct` topic:
   - The exact product doesn't already have a UID (-> This is the case, if it has not been produced at an asset 
   incorporated in the digital shadow). Specify a space holder asset = "storage" in the MQTT message for the 
