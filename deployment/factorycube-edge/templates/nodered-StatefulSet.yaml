@@ -46,6 +46,7 @@ spec:
           npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
           npm list node-red-contrib-opc-da || npm install node-red-contrib-opc-da;
           npm list node-red-contrib-opcda-client || npm install node-red-contrib-opcda-client;
+          npm list node-red-contrib-cron-plus || node-red-contrib-cron-plus;
         volumeMounts:
         - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
           mountPath: /data
