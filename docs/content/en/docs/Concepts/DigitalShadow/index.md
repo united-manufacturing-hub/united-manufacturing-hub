@@ -102,7 +102,7 @@ under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`.
   - The exact product doesn't already have a UID (-> This is the case, if it has not been produced at an asset 
   incorporated in the digital shadow). Specify a space holder asset = "storage" in the MQTT message for the 
     `uniqueProduct` topic.
-  - The product was produced at the current asset/step (it is now different from before, e.g. after machining or after 
+  - The product was produced at the current asset (it is now different from before, e.g. after machining or after 
     something was screwed in). The newly produced product is always the "child" of the process. Products it was made 
     out of are called the "parents". 
 ```json
@@ -111,7 +111,6 @@ under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`.
   "end_timestamp_ms": 1611171016443,
   "product_id": "test123",
   "is_scrap": false,
-  "step_id": "1a",
   "uniqueProductAlternativeID": "12493857-a"
 }
 ```
@@ -380,12 +379,12 @@ microservice doing that task. It accepts specific requests, accesses the timesca
 the data in the desired format.
 
 #### Implemented functionality for digital shadow
-The following function returns all uniqueProducts for that specific asset and step_id in a specified time range. One datapoint contains one 
+The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one 
 childUID, all parentUID's and all available alternativeUniqueProductID's. All uniqueProductTags and 
 uniqueProductTagStrings (value and timestamp) for the childUID are returned to the same datapoint.
 
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
-from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID` and `step_id`.
+from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID`.
 
 Example Format: 
 ```json
