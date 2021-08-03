@@ -80,7 +80,7 @@ function:
 ```json
 {
 "timestamp_ms": 1243204549,
-"aid": 32493855304,
+"AID": 32493855304,
 "name": "QualityClass",
 "value": "Quality2483"
 }
