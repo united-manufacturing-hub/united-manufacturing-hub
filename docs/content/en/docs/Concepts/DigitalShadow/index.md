@@ -80,7 +80,7 @@ function:
 ```json
 {
 "timestamp_ms": 1243204549,
-"AID": 32493855304,
+"AID": "32493855304",
 "name": "QualityClass",
 "value": "Quality2483"
 }
@@ -225,7 +225,7 @@ change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniq
 #### Example process to show the usage of AID's and UID's in the production:
 {{< imgproc productIDExample Fit "2026x1211" >}}{{< /imgproc >}}
 #### Explanation of the diagram:
-Assembly Station 1:
+**Assembly Station 1:**
 - ProductA and ProductB are combined into ProductC
 - Because ProductA and ProductB have not been "seen" by the digital shadow, they get a new UID and asset = "storage" 
   assigned (placeholder asset for unknown/unspecified origin).
@@ -234,11 +234,76 @@ Assembly Station 1:
   label. Because ProductB doesn't have a physical Label, it gets a generated AID. For ProductC (child) we can now choose 
   either the AID from ProductA or from ProductB. Because "A" is a physical label, it   makes sense to use the AID of 
   ProductA.
+  
+MQTT messages to send at Assembly 1:
+- `uniqueProduct` message for ProductA origin, with asset = storage, under the topic: `ia/testcustomer/testlocation/
+  storage/uniqueProduct`
+  ```json
+  {
+    "begin_timestamp_ms": 1611171012717,
+    "end_timestamp_ms": 1611171016443,
+    "product_id": "test123",
+    "is_scrap": false,
+    "uniqueProductAlternativeID": "A"
+  }
+  ```
+- `uniqueProduct` message for ProductB origin, with asset = storage, under the topic: `ia/testcustomer/testlocation/
+  storage/uniqueProduct`
+  ```json
+  {
+    "begin_timestamp_ms": 1611171012717,
+    "end_timestamp_ms": 1611171016443,
+    "product_id": "test124",
+    "is_scrap": false,
+    "uniqueProductAlternativeID": "B"
+  }
+  ```
+- `uniqueProduct` message for ProductC, with asset = Assy1, under the topic: `ia/testcustomer/testlocation/
+  Assy1/uniqueProduct`
+  ```json
+  {
+    "begin_timestamp_ms": 1611171012717,
+    "end_timestamp_ms": 1611171016443,
+    "product_id": "test125",
+    "is_scrap": false,
+    "uniqueProductAlternativeID": "A"
+  }
+  ```
+- `addParentToChild` message describing the inheritance from ProductA to ProductC, under the topic: `ia/testcustomer/
+  testlocation/Assy1/addParentToChild`
+  ```json
+  {
+  "timestamp_ms": 124387,
+  "childAID": "A",
+  "parentAID": "A"
+  }
+  ```
+
+- `addParentToChild` message describing the inheritance from ProductB to ProductC, under the topic: `ia/testcustomer/
+  testlocation/Assy1/addParentToChild`
+  ```json
+  {
+  "timestamp_ms": 124387,
+  "childAID": "A",
+  "parentAID": "B"
+  }
+  ```
+  
+- `productTag` message for e.g. a measured process value like the temperature,under the topic: `ia/testcustomer/
+  testlocation/Assy1/productTag`
+  ```json
+  {
+  "timestamp_ms": 1243204549,
+  "AID": "A",
+  "name": "temperature",
+  "value": 35.4
+  }
+  ```
 
 Now the ProductC is transported to Assembly Station 2. Because it is a short transport, doesn't add value etc. we do not
 need to produce a new UID after the transport of ProductA.
 
-Assembly Station 2:
+**Assembly Station 2:**
 - ProductC stays the same (in the sense that it is keeping its UID before and after the transport), because of the easy
   transport. 
 - ProductD is new and not produced at assembly station 2, so it gets asset = "storage" assigned
@@ -247,7 +312,7 @@ Assembly Station 2:
   Label on ProductD is not accessible while the AID Label on the ProductC is).
 
 
-Assembly Station 3:
+**Assembly Station 3:**
 - At Assembly Station ProductE comes in and is turned into ProductF
 - ProductF gets a new UID and keeps the AID of ProductE. It now gets the Assy3 assigned as asset.
 
