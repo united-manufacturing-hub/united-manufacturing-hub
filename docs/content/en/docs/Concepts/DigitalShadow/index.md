@@ -238,8 +238,8 @@ change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniq
   ProductA.
   
 MQTT messages to send at Assembly 1:
-- `uniqueProduct` message for ProductA origin, with asset = storage, under the topic: `ia/testcustomer/testlocation/
-  storage/uniqueProduct`
+- `uniqueProduct` message for ProductA origin, with asset = storage, under the topic: 
+  `ia/testcustomer/testlocation/storage/uniqueProduct`
   ```json
   {
     "begin_timestamp_ms": 1611171012717,
@@ -249,8 +249,8 @@ MQTT messages to send at Assembly 1:
     "uniqueProductAlternativeID": "A"
   }
   ```
-- `uniqueProduct` message for ProductB origin, with asset = storage, under the topic: `ia/testcustomer/testlocation/
-  storage/uniqueProduct`
+- `uniqueProduct` message for ProductB origin, with asset = storage, under the topic: 
+  `ia/testcustomer/testlocation/storage/uniqueProduct`
   ```json
   {
     "begin_timestamp_ms": 1611171012717,
@@ -260,8 +260,8 @@ MQTT messages to send at Assembly 1:
     "uniqueProductAlternativeID": "B"
   }
   ```
-- `uniqueProduct` message for ProductC, with asset = Assy1, under the topic: `ia/testcustomer/testlocation/
-  Assy1/uniqueProduct`
+- `uniqueProduct` message for ProductC, with asset = Assy1, under the topic: 
+  `ia/testcustomer/testlocation/Assy1/uniqueProduct`
   ```json
   {
     "begin_timestamp_ms": 1611171012717,
@@ -271,8 +271,8 @@ MQTT messages to send at Assembly 1:
     "uniqueProductAlternativeID": "A"
   }
   ```
-- `addParentToChild` message describing the inheritance from ProductA to ProductC, under the topic: `ia/testcustomer/
-  testlocation/Assy1/addParentToChild`
+- `addParentToChild` message describing the inheritance from ProductA to ProductC, under the topic: 
+  `ia/testcustomer/testlocation/Assy1/addParentToChild`
   ```json
   {
   "timestamp_ms": 124387,
@@ -281,8 +281,8 @@ MQTT messages to send at Assembly 1:
   }
   ```
 
-- `addParentToChild` message describing the inheritance from ProductB to ProductC, under the topic: `ia/testcustomer/
-  testlocation/Assy1/addParentToChild`
+- `addParentToChild` message describing the inheritance from ProductB to ProductC, under the topic: 
+  `ia/testcustomer/testlocation/Assy1/addParentToChild`
   ```json
   {
   "timestamp_ms": 124387,
@@ -291,8 +291,8 @@ MQTT messages to send at Assembly 1:
   }
   ```
   
-- `productTag` message for e.g. a measured process value like the temperature,under the topic: `ia/testcustomer/
-  testlocation/Assy1/productTag`
+- `productTag` message for e.g. a measured process value like the temperature,under the topic: 
+  `ia/testcustomer/testlocation/Assy1/productTag`
   ```json
   {
   "timestamp_ms": 1243204549,
