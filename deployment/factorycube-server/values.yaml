@@ -51,7 +51,6 @@ mqtttoblob:
   enabled: true
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
-    tag: latest
     pullPolicy: Always
   replicas: 1
   pdb:
@@ -63,7 +62,6 @@ grafanaproxy:
   enabled: true  
   image:
     repository: unitedmanufacturinghub/grafana-proxy
-    tag: latest
     pullPolicy: Always
   replicas: 1
   service:
