@@ -1076,7 +1076,7 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 	for _, item := range itemArray {
 		//Todo erstellen
-		var pt ProductTagQueue
+		var pt productTagQueue
 
 		err = item.ToObject(&pt)
 
