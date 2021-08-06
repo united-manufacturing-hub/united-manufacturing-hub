@@ -1047,6 +1047,96 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 }
 
+//ToDo remove /update
+func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
+		INSERT INTO productTagTable (valueName, value, timestamp_ms, product_uid) 
+		VALUES ($1, $2, to_timestamp($3 / 1000.0), $4) 
+		ON CONFLICT DO NOTHING;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		//Todo erstellen
+		var pt ProductTagQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		//Todo: check Names, Add AID
+		var uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		// Create statement
+		_, err = stmt.Exec(pt.valueName, pt.value, pt.TimestampMS, uid)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+	return
+
+}
+
+
+
+
+
 // storeIntoDatabaseRoutineShift fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
 	prefix := prefixAddShift
@@ -1907,5 +1997,30 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 		PQErrorHandling("GetComponentID() db.QueryRow()", err)
 	}
 
+	return
+}
+
+// Todo (naming conventions), sachen
+func GetUniqueProductID(aid int, assetID int) (uid int, err error) {
+
+	err = db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;",  aid, assetID).Scan(&uid)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found", aid, assetID)
+	} else if err != nil {
+		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
+	}
+	return
+}
+
+
+// Todo (naming conventions), sachen (latest ID, not from specified asset!!), SQL schön formatieren
+func GetLatestUniqueProductID(aid int, assetID int) (uid int, err error) {
+
+	err = db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",  aid, assetID).Scan(&uid)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found", aid, assetID)
+	} else if err != nil {
+		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
+	}
 	return
 }
