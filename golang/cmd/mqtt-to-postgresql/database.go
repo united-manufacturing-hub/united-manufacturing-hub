@@ -1117,7 +1117,7 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 		}
 
 		//Todo: check Names, Add AID
-		var uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		var uid = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		// Create statement
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
@@ -1231,7 +1231,7 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 		}
 
 		//Todo: check Names, Add AID
-		var uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		var uid = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		// Create statement
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
@@ -1345,8 +1345,8 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 		}
 
 		//Todo: check Names, Add AID
-		var childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
-		var parentUid, err = GetLatestUniqueProductID(pt.ParentAID, pt.DBAssetID)
+		var childUid = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
+		var parentUid = GetLatestParentUniqueProductID(pt.ParentAID, pt.DBAssetID)
 		// Create statement
 		_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
 		if err != nil {
@@ -2256,9 +2256,9 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 }
 
 // Todo (naming conventions), sachen
-func GetUniqueProductID(aid string, assetID int) (uid int, err error) {
+func GetUniqueProductID(aid string, assetID int) (uid int) {
 
-	err = db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;",  aid, assetID).Scan(&uid)
+	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;",  aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found", aid, assetID)
 	} else if err != nil {
@@ -2269,13 +2269,13 @@ func GetUniqueProductID(aid string, assetID int) (uid int, err error) {
 
 
 // Todo (naming conventions), sachen (latest ID, not from specified asset!!), SQL schön formatieren
-func GetLatestUniqueProductID(aid string, assetID int) (uid int, err error) {
+func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 
-	err = db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",  aid, assetID).Scan(&uid)
+	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",  aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found", aid, assetID)
 	} else if err != nil {
-		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
+		PQErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
 	}
 	return
 }
