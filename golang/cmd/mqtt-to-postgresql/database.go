@@ -1075,7 +1075,6 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 	}
 
 	for _, item := range itemArray {
-		//Todo erstellen
 		var pt productTagQueue
 
 		err = item.ToObject(&pt)
@@ -1090,7 +1089,7 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 		//Todo: check Names, Add AID
 		var uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		// Create statement
-		_, err = stmt.Exec(pt.valueName, pt.value, pt.TimestampMS, uid)
+		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
 			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
