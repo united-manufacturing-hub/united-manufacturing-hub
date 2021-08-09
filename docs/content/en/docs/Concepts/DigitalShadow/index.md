@@ -391,12 +391,6 @@ from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `A
 
 Example Format: 
 ```json
-[
-   row
-
-]
-
-  row:
 {
 "ValveHeadAlternativeUniqueID": str<123>,
 "TorqueScrew1": number<5.0>,
