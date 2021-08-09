@@ -979,9 +979,10 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 	}
 
 	var stmt *sql.Stmt
+	//ToDo: Check naming with SQL
 	stmt, err = txn.Prepare(`
-		INSERT INTO uniqueProductTable (uid, asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id) 
-		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7,$8) 
+		INSERT INTO uniqueProductTable (asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, uniqueProductAlternativeID) 
+		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7) 
 		ON CONFLICT DO NOTHING;`)
 
 	if err != nil {
@@ -1004,7 +1005,7 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 			}
 		}
 		// Create statement
-		_, err = stmt.Exec(pt.UID, pt.DBAssetID, pt.TimestampMsBegin, pt.TimestampMsEnd, pt.ProductID, pt.IsScrap, pt.QualityClass, pt.StationID)
+		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, pt.EndTimestampMs, pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
 		if err != nil {
 			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
@@ -1047,7 +1048,6 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 }
 
-//ToDo remove /update
 func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 	// Begin transaction
@@ -2000,7 +2000,7 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 }
 
 // Todo (naming conventions), sachen
-func GetUniqueProductID(aid int, assetID int) (uid int, err error) {
+func GetUniqueProductID(aid string, assetID int) (uid int, err error) {
 
 	err = db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;",  aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
