@@ -620,6 +620,7 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 
 
 type addParentToChildQueue struct {
+	DBAssetID   int
 	TimestampMs int64  `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
@@ -641,8 +642,10 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
 	}
 
+	DBassetID := GetAssetID(customerID, location, assetID)
 	newObject := addParentToChildQueue{
-		TimestampMs:parsedPayload.TimestampMs,
+		DBAssetID:  	DBassetID,
+		TimestampMs:	parsedPayload.TimestampMs,
 		ChildAID: 		parsedPayload.ChildAID,
 		ParentAID:   	parsedPayload.ParentAID,
 	}
