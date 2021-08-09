@@ -1048,6 +1048,36 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 }
 
+
+// storeIntoDatabaseRoutineProductTag fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineProductTag(pg *goque.PrefixQueue) {
+	prefix := prefixProductTag
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseProductTag(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
 func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 	// Begin transaction
