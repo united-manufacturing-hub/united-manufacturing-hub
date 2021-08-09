@@ -2256,11 +2256,11 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 }
 
 // Todo (naming conventions), sachen
-func GetUniqueProductID(aid string, assetID int) (uid int) {
+func GetUniqueProductID(aid string, DBassetID int) (uid int) {
 
-	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;",  aid, assetID).Scan(&uid)
+	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;",  aid, DBassetID).Scan(&uid)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found", aid, assetID)
+		zap.S().Errorf("No Results Found", aid, DBassetID)
 	} else if err != nil {
 		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
 	}
