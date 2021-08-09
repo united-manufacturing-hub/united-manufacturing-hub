@@ -445,7 +445,7 @@ Example Return:
 ]
 ```
 #### Implemented logic of factoryinsight to achieve the functionality
-1. Get all productUID's and AID's from `uniqueProductTable` within the specified time and from the specified asset and station.
+1. Get all productUID's and AID's from `uniqueProductTable` within the specified time and from the specified asset.
 2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
 3. Get the AID's for the parentUID's from the `uniqueProductTable`.
 4. Get all key, value pairs from the `productTagTable` and `productTagStringTable` for the in step 1 selected UID's.
