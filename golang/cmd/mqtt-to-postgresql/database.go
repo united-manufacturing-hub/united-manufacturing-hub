@@ -981,7 +981,7 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
 		INSERT INTO uniqueProductTable (asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, uniqueProductAlternativeID) 
-		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7) 
+		VALUES ($1, to_timestamp($2 / 1000.0),to_timestamp($3 / 1000.0),$4,$5,$6) 
 		ON CONFLICT DO NOTHING;`)
 
 	if err != nil {
