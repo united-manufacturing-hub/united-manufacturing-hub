@@ -2255,7 +2255,7 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 	return
 }
 
-// Todo (naming conventions), sachen
+
 func GetUniqueProductID(aid string, DBassetID int) (uid int) {
 
 	uid,  cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
@@ -2273,7 +2273,6 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int) {
 }
 
 
-// Todo (naming conventions), sachen (latest ID, not from specified asset!!), SQL schön formatieren
 func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 
 	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",  aid, assetID).Scan(&uid)
