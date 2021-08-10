@@ -178,7 +178,51 @@ data:
 
     -- #74
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
-    
+
+    -- #297
+    ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
+    ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
+    ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
+    ALTER TABLE uniqueProductTable ALTER COLUMN uid TYPE SERIAL;
+    ALTER TABLE uniqueProductTable ADD PRIMARY KEY (uid);
+
+    -------------------- TimescaleDB table for product tags --------------------
+    CREATE TABLE IF NOT EXISTS productTagTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        product_uid             SERIAL                              REFERENCES uniqueProductTable (uid),
+        valueName               TEXT                                NOT NULL,
+        value                   DOUBLE PRECISION                    NULL,
+        UNIQUE(product_uid, valueName)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
+
+    -------------------- TimescaleDB table for product tags strings --------------------
+    CREATE TABLE IF NOT EXISTS productTagStringTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        product_uid             SERIAL                              REFERENCES uniqueProductTable (uid),
+        valueName               TEXT                                NOT NULL,
+        value                   TEXT                                NULL,
+        UNIQUE(product_uid, valueName)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
+
+    -------------------- TimescaleDB table for product inheritance info --------------------
+    CREATE TABLE IF NOT EXISTS productInheritanceTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        parent_uid              SERIAL                                REFERENCES uniqueProductTable (uid),
+        child_uid               SERIAL                                REFERENCES uniqueProductTable (uid),
+        UNIQUE(parent_uid, child_uid)
+    );
+    -- creating hypertable
+    CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
+    CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
+
+
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
 
