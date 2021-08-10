@@ -43,7 +43,7 @@ components:
         description: name of the asset
         example:
           WeavingMachine
-      
+
       from:
         in: query
         name: from
@@ -107,6 +107,7 @@ components:
         description: name of the process value to retrieve data
         example:
           energyConsumption
+
       uniqueProductID:
         in: query
         name: uniqueProductID
@@ -116,6 +117,15 @@ components:
         description: unique id of the product to search for
         example:
           energyConsumption
+
+      uniqueImageID:
+        in: query
+        name: uniqueImageID
+        schema:
+          type: string
+        required: true
+        example:
+          sdf9283oujk234jdfgdfggdfgdfgdfgdfg
 
   securitySchemes:
     BasicAuth:
@@ -169,6 +179,8 @@ components:
         - process_SignalLamp
         - process_TotalActivePower
         - process_TotalApparentPower
+        - uniqueImageID
+        - productPicture
 
     asset_state: #TODO changing asset state and asset datapoint to be linked properly requires changing the datamodel
       properties:
@@ -194,7 +206,6 @@ components:
           example:
             - - "Unbekannter Zustand 1"
               - 1608298176825
-
     asset_states:
         properties:
           columnNames:
@@ -220,9 +231,6 @@ components:
               - - "Producing"
                 - 1605201132835
             description: the returned data
-
-
-
     asset_counts:
         properties:
           columnNames:
@@ -340,7 +348,6 @@ components:
                 - 150000
                 - 6185.870000000001
     asset_availability:
-
         properties:
           columnNames:
             type: array
@@ -980,8 +987,72 @@ components:
                 - "Torque"
                 - 5.4
 
+    asset_unique_ImageID:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "ImageID"
+              - "Timestamp begin"
+              - "Timestamp end"
+              - "Is Scrap"
+              - "Quality class"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+                  - type: integer
+                  - type: number
+            description: the returned data
+            example:
+              - - "161063193099727336211610631932133"
+                - 1610631930997
+                - 1610631932133
+                - "test123"
+                - false
+                - "1a"
+              - - "16106319890449364101610631989682"
+                - 1610631989044
+                - 1610631989682
+                - "test123"
+                - false
+                - "1a"
 
-
+    asset_product_picture:
+        properties:
+          columnNames:
+            type: array
+            items:
+              type: string
+            description: the column names
+            example:
+              - "ImageUID"
+              - "JSON-code"
+          datapoints:
+            type: array
+            items:
+              type: array
+              items:
+                anyOf: # todo fix this data model, only doing triage to create a generatable client
+                  - type: string
+            description: the returned data
+            example:
+              -
+                - "129380123822"
+                - "35435453qweqwe432321654213qweqwvsdvcxcv546543543242210135153wer435we4r3w5er21er212"
+              -
+                - "129380123823"
+                - "35435453qweqwe432321654213qweqwvsdvcxcv546543543243210135223wer435we4r3w5er21er212"
+              -
+                - "129380123824"
+                - "35435453qweqwe432321654213qweqwvsdvcxc2246543543243210135153wer435we4r3w5er21er212"
+                - 5.4
 
 paths:
   /{customer}:
@@ -1501,6 +1572,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/customer_product_tags"
+
+  /{customer}/{location}/{asset}/uniqueImageID:
+    get:
+      operationId: get_asset_unique_ImageID
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the all unique products in the selected time range in a data format that can be consumed easily by Grafana.
+            The data model behind unique products is explained at mqtt.md
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/asset_unique_ImageID"
+
+  /{customer}/{location}/{asset}/productPicture:
+    get:
+      operationId: get_asset_product_picture
+      servers:
+      - url: https://play.min.io
+        description: override base path for the get productPictures from the min.io server.
+      parameters:
+        - $ref: '#/components/parameters/uniqueImageID'
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This returns the image in json format corresponding to the timeframe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/asset_product_picture"
 
 security:
   - BasicAuth: []

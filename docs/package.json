@@ -16,8 +16,11 @@
     "url": "https://github.com/google/docsy-example/issues"
   },
   "homepage": "https://github.com/google/docsy-example#readme",
-  "dependencies": {},
+  "dependencies": {
+    "redoc": "^2.0.0-rc.55"
+  },
   "devDependencies": {
+    "@openapitools/openapi-generator-cli": "^2.3.10",
     "autoprefixer": "^9.8.6",
     "postcss-cli": "^7.1.2"
   }
