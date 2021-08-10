@@ -1542,7 +1542,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 
 	var stmt *sql.Stmt
 
-	stmt, err = txn.Prepare(`UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`)
+	stmt, err = txn.Prepare(`UPDATE uniqueProductTable SET is_scrap = True WHERE uniqueProductID = $1 AND asset_id = $2;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
 		if err != nil {
@@ -2256,7 +2256,7 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int) {
 
 	uid,  cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
 	if !cacheHit { // data NOT found
-		err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
+		err := db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
 		if err == sql.ErrNoRows {
 			zap.S().Errorf("No Results Found", aid, DBassetID)
 		} else if err != nil {
@@ -2271,7 +2271,7 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int) {
 
 func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 
-	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",
+	err := db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",
 		aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found", aid, assetID)
