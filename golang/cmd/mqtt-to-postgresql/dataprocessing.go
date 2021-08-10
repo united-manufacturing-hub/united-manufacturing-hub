@@ -537,7 +537,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 
 
 type productTagQueue struct {
-	DBAssetID        int
+	DBAssetID   int
 	TimestampMs int64   `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
@@ -578,7 +578,7 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 }
 
 type productTagStringQueue struct {
-	DBAssetID        int
+	DBAssetID   int
 	TimestampMs int64   `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
