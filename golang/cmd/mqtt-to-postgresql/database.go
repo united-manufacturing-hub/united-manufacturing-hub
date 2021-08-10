@@ -979,7 +979,6 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 	}
 
 	var stmt *sql.Stmt
-	//ToDo: Check naming with SQL
 	stmt, err = txn.Prepare(`
 		INSERT INTO uniqueProductTable (asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, uniqueProductAlternativeID) 
 		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7) 
@@ -1116,7 +1115,6 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 			}
 		}
 
-		//Todo: check Names, Add AID
 		var uid = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		// Create statement
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
@@ -1230,7 +1228,6 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 			}
 		}
 
-		//Todo: check Names, Add AID
 		var uid = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		// Create statement
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
@@ -1344,7 +1341,6 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 			}
 		}
 
-		//Todo: check Names, Add AID
 		var childUid = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
 		var parentUid = GetLatestParentUniqueProductID(pt.ParentAID, pt.DBAssetID)
 		// Create statement
