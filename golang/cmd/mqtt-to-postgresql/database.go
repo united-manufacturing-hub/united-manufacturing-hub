@@ -2275,7 +2275,8 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int) {
 
 func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 
-	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",  aid, assetID).Scan(&uid)
+	err := db.QueryRow("SELECT uid FROM uniqueProductTable WHERE aid = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",
+		aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found", aid, assetID)
 	} else if err != nil {
