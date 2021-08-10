@@ -46,8 +46,8 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
-          {{- if .Values.mqtttopostgresql.tag }}
-          image: {{ .Values.mqtttopostgresql.image }}:{{ .Values.mqtttopostgresql.tag }}
+          {{- if .Values.mqtttopostgresql.image.tag }}
+          image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Values.mqtttopostgresql.image.tag }}
           {{- else }}
           image: {{ .Values.mqtttopostgresql.image }}:{{ .Chart.AppVersion }}
           {{- end }}
@@ -55,7 +55,7 @@ spec:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.mqtttopostgresql.image.pullPolicy}}
           env:
           #
             - name: POSTGRES_HOST
