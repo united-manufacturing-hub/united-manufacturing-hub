@@ -182,7 +182,7 @@ data:
     -- #297
     ALTER TABLE uniqueProductTable ADD IF NOT EXISTS aid TEXT NOT NULL;
     ALTER TABLE uniqueProductTable DROP IF EXISTS quality_class RESTRICT;
-    ALTER TABLE uniqueProductTable RENAME COLUMN station_id TO step_id;
+    ALTER TABLE uniqueProductTable DROP IF EXISTS station_id RESTRICT;
     ALTER TABLE uniqueProductTable ALTER COLUMN uid TYPE SERIAL;
     ALTER TABLE uniqueProductTable ADD PRIMARY KEY (uid);
 
