@@ -11,7 +11,7 @@ servers:
   - url: https://api.industrial-analytics.net/api/v1
 
 components:
-  
+
   parameters:
 
       customer:
@@ -33,7 +33,7 @@ components:
         description: name of the location
         example:
           AachenPlant
-      
+
       asset:
         in: path
         name: asset
@@ -53,7 +53,7 @@ components:
         description: pictures needed
         example:
           sfs86dfs6df68sd86f
-      
+
       from:
         in: query
         name: from
@@ -146,14 +146,13 @@ paths:
                 example:
                   - AachenPlant
                   - DuesseldorfPlant
-                  
+
   /{customer}/{location}:
     get:
       operationId: get_location_assets
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
-        
       responses:
         '200':
           description: available assets for that customer and location
@@ -172,12 +171,12 @@ paths:
       operationId: get_asset_datapoints
       parameters:
         - $ref: '#/components/parameters/customer'
-        - $ref: '#/components/parameters/location'sfs86dfs6df68sd86f
+        - $ref: '#/components/parameters/location'
         - $ref: '#/components/parameters/asset'
       responses:
         '200':
           description: available datapoints for that customer, location and asset
-          content:sfs86dfs6df68sd86f
+          content:
             application/json:
               schema:
                 type: array
@@ -225,7 +224,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+
                 properties:
                   columnNames:
                     type: array
@@ -287,19 +286,16 @@ paths:
                         anyOf:
                           - type: number
                           - type: integer
-
-
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1250
                         - 0
                         - 1605201148990
-                      - 
+                      -
                         - 625
                         - 0
                         - 1605201408149
-
 
   /{customer}/{location}/{asset}/currentState:
     get:
@@ -314,7 +310,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+
                 properties:
                   columnNames:
                     type: array
@@ -336,10 +332,10 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "Unbekannter Zustand 1"
                         - 1608298176825
-  
+
   /{customer}/{location}/{asset}/recommendation:
     get:
       operationId: get_current_asset_recommendation
@@ -380,7 +376,7 @@ paths:
                           - type: object # this will make problems with certain generators
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1600707538210
                         - 1
                         - {"Threshold":30,"StoppedForTime":612685}
@@ -388,7 +384,7 @@ paths:
                         - "Maschine DCCAachen-Demonstrator einschalten oder Stoppgrund auswählen."
                         - "Machine DCCAachen-Demonstrator is not running since 612685 seconds (status: 8, threshold: 30)"
                         - "Maschine DCCAachen-Demonstrator steht seit 612685 Sekunden still (Status: 8, Schwellwert: 30)"
-  
+
   /{customer}/{location}/{asset}/timeRange:
     get:
       operationId: get_asset_data_timerange
@@ -422,7 +418,7 @@ paths:
                             format: date-time
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "2020-11-03T12:27:22Z"
                         - "2021-02-01T18:51:50Z"
 
@@ -440,9 +436,9 @@ paths:
         - $ref: '#/components/parameters/aggregationType'
       responses:
         '200':
-          description: This sums up the duration of all states in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This sums up the duration of all states in the selected time range in a data format that can be consumed easily by Grafana.
             With aggregationType additional aggregations can be selected, e.g. grouping it additionally by the hour of the day.
-            If aggregationType = 0, then the category column is omitted. 
+            If aggregationType = 0, then the category column is omitted.
             There is still a bug, that keepStatesInteger is not properly working in some cases #84
           content:
             application/json:
@@ -455,7 +451,7 @@ paths:
                       type: string
                     description: the column names
                     example: #convert following entry into list of dicts with named keys
-                        - 
+                        -
                           - "category"
                           - "state"
                           - "duration"
@@ -470,11 +466,11 @@ paths:
                           - type: number
                     description: the returned data. duration is the amount of seconds.
                     example:
-                        - 
+                        -
                           - 9
                           - 150000
                           - 3638.4260000000004
-                        - 
+                        -
                           - 9
                           - 160000
                           - 2001.471
@@ -494,7 +490,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the availability in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the availability in the selected time range in a data format that can be consumed easily by Grafana.
             The way how availability is defined can be configured in the database.
           content:
             application/json:
@@ -521,7 +517,7 @@ paths:
                     minimum: 0
                     maximum: 1
                     example:
-                      - 
+                      -
                         - 0.039953472102622754
 
   /{customer}/{location}/{asset}/performance:
@@ -535,7 +531,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the performance in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the performance in the selected time range in a data format that can be consumed easily by Grafana.
             The way how performance is defined can be configured in the database.
           content:
             application/json:
@@ -561,7 +557,7 @@ paths:
                     minimum: 0
                     maximum: 1
                     example:
-                      - 
+                      -
                         - 0.039953472102622754
 
   /{customer}/{location}/{asset}/quality:
@@ -575,7 +571,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the quality in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the quality in the selected time range in a data format that can be consumed easily by Grafana.
             Quality is defined by goodProducts / totalProducts
           content:
             application/json:
@@ -601,7 +597,7 @@ paths:
                     minimum: 0
                     maximum: 1
                     example:
-                      - 
+                      -
                         - 0.80
 
   /{customer}/{location}/{asset}/oee:
@@ -615,7 +611,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the OEE in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the OEE in the selected time range in a data format that can be consumed easily by Grafana.
             The result is then split up for each day.
             The way how OEE is defined can be configured in the database.
             There is an open issue here #85
@@ -666,7 +662,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns all shifts in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns all shifts in the selected time range in a data format that can be consumed easily by Grafana.
             The timestamp is returned as UNIX timestamp in milliseconds.
             shiftName = 0 means noShift, shiftName = 1 means shift.
           content:
@@ -690,15 +686,15 @@ paths:
                        type: integer # todo fix this data model, only doing triage to create a generatable client
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1608019200032
-                        - 1 
-                      - 
+                        - 1
+                      -
                         - 1608030000032
                         - 0
-                      - 
+                      -
                         - 1608033600016
-                        - 1 
+                        - 1
 
   /{customer}/{location}/{asset}/productionSpeed:
     get:
@@ -711,7 +707,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the production speed in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the production speed in the selected time range in a data format that can be consumed easily by Grafana.
             The production speed is in units/hour.
           content:
             application/json:
@@ -734,15 +730,15 @@ paths:
                         type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 13560
-                        - 1604077800000 
-                      - 
+                        - 1604077800000
+                      -
                         - 1260
                         - 1604077860000
-                      - 
+                      -
                         - 36360
-                        - 1604077920000   
+                        - 1604077920000
 
   /{customer}/{location}/{asset}/qualityRate:
     get:
@@ -755,7 +751,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the quality rate in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the quality rate in the selected time range in a data format that can be consumed easily by Grafana.
           content:
             application/json:
               schema:
@@ -779,15 +775,15 @@ paths:
                           - type: integer
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 0.80
-                        - 1604077800000 
-                      - 
+                        - 1604077800000
+                      -
                         - 0.85
                         - 1604077860000
-                      - 
+                      -
                         - 0.82
-                        - 1604077920000   
+                        - 1604077920000
 
   /{customer}/{location}/{asset}/stateHistogram:
     get:
@@ -802,7 +798,7 @@ paths:
         - $ref: '#/components/parameters/keepStatesInteger'
       responses:
         '200':
-          description: This returns the frequency of each state in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the frequency of each state in the selected time range in a data format that can be consumed easily by Grafana.
           content:
             application/json:
               schema:
@@ -827,15 +823,15 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "Maschine läuft"
                         - 147
-                      - 
+                      -
                         - "Unbekannter Stopp"
                         - 6
-                      - 
+                      -
                         - "Mikrostopp"
-                        - 1  
+                        - 1
 
   /{customer}/{location}/{asset}/factoryLocations:
     get:
@@ -846,7 +842,7 @@ paths:
         - $ref: '#/components/parameters/asset'
       responses:
         '200':
-          description: This returns all locations including a metric and geohash in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns all locations including a metric and geohash in the selected time range in a data format that can be consumed easily by Grafana.
             **Work in progress, currently only returning dummy data!**
           content:
             application/json:
@@ -873,11 +869,11 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "Aachen"
                         - 80
                         - u1h2fe
-  
+
   /{customer}/{location}/{asset}/averageCleaningTime:
     get:
       operationId: get_asset_average_cleaning_time
@@ -889,7 +885,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the average cleaning time in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the average cleaning time in the selected time range in a data format that can be consumed easily by Grafana.
             **Currently not working! See issue 93**
           content:
             application/json:
@@ -915,16 +911,16 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1556,
                         - "2020-11-02T17:07:22Z"
-                      - 
+                      -
                         - 1526,
                         - "2020-11-03T17:07:22Z"
-                      - 
+                      -
                         - 756,
-                        - "2020-11-12T17:07:22Z"                 
-  
+                        - "2020-11-12T17:07:22Z"
+
   /{customer}/{location}/{asset}/averageChangeoverTime:
     get:
       operationId: get_asset_average_changeover_time
@@ -936,7 +932,7 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns the average changeover time in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the average changeover time in the selected time range in a data format that can be consumed easily by Grafana.
             **Currently not working! See issue 93**
           content:
             application/json:
@@ -963,16 +959,16 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1556,
                         - "2020-11-02T17:07:22Z"
-                      - 
+                      -
                         - 1526,
                         - "2020-11-03T17:07:22Z"
-                      - 
+                      -
                         - 756,
-                        - "2020-11-12T17:07:22Z"           
-                        
+                        - "2020-11-12T17:07:22Z"
+
   /{customer}/{location}/{asset}/upcomingMaintenanceActivities:
     get:
       operationId: get_asset_umpcoming_maintenance_activities
@@ -982,10 +978,10 @@ paths:
         - $ref: '#/components/parameters/asset'
       responses:
         '200':
-          description: This returns the upcoming maintenance activities in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the upcoming maintenance activities in the selected time range in a data format that can be consumed easily by Grafana.
             The duration is in days. Negative values mean the maintenance activity is overdue.
             Status = 0 means the component is "critical".
-            Status = 1 means the component is "orange" (under a third of the total runtime is remaining). 
+            Status = 1 means the component is "orange" (under a third of the total runtime is remaining).
             Status = 2 means the component is "green" (over a third of the total runtime is remaining).
             Activity is here as a string.
             **Work in progress**"Is Scrap"
@@ -1016,25 +1012,25 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "bernd2"
                         - "Pumpe 21"
                         - "Austausch"
                         - -69.5
-                        - 0    
-                      - 
+                        - 0
+                      -
                         - "bernd2"
                         - "Pumpe 20"
                         - "Austausch"
                         - -79.08
-                        - 0  
-                      - 
+                        - 0
+                      -
                         - "bernd2"
                         - "Pumpe 20"
                         - "Inspektion"
                         - -61.06
-                        - 0     
-                        
+                        - 0
+
   /{customer}/{location}/{asset}/maintenanceComponents:
 
     get:
@@ -1058,7 +1054,7 @@ paths:
                 example:
                   - Pumpe 20
                   - Pumpe 21
-  
+
   /{customer}/{location}/{asset}/maintenanceActivities:
     get:
       operationId: get_asset_maintenance_activities
@@ -1068,8 +1064,8 @@ paths:
         - $ref: '#/components/parameters/asset'
       responses:
         '200':
-          description: This shows all past maintenance activities in a data format that can be consumed easily by Grafana. 
-            Activity is here an integer symbolizing a string. 
+          description: This shows all past maintenance activities in a data format that can be consumed easily by Grafana.
+            Activity is here an integer symbolizing a string.
             The timestamp is a UNIX timestamp in milliseconds
             **Work in progress**
           content:
@@ -1097,15 +1093,15 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "Pumpe 20"
                         - 0
                         - 1605178879502
-                      - 
+                      -
                         - "Pumpe 21"
                         - 1
-                        - 1605189835901                      
-  
+                        - 1605189835901
+
   /{customer}/{location}/{asset}/uniqueProducts:
     get:
       operationId: get_asset_unique_products
@@ -1118,7 +1114,7 @@ paths:
         - $ref: '#/components/parameters/UID'
       responses:
         '200':
-          description: This returns the all unique products in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the all unique products in the selected time range in a data format that can be consumed easily by Grafana.
             The data model behind unique products is explained at mqtt.md
           content:
             application/json:
@@ -1149,22 +1145,22 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "161063193099727336211610631932133"
                         - 1610631930997
                         - 1610631932133
                         - "test123"
                         - false
                         - ""
-                        - "1a"   
-                      - 
+                        - "1a"
+                      -
                         - "16106319890449364101610631989682"
                         - 1610631989044
                         - 1610631989682
                         - "test123"
                         - false
                         - ""
-                        - "1a"              
+                        - "1a"
 
   /{customer}/{location}/{asset}/orderTable:
     get:
@@ -1177,10 +1173,10 @@ paths:
         - $ref: '#/components/parameters/to'
       responses:
         '200':
-          description: This returns all orders with additional information in the selected time range in a data format that can be consumed easily by Grafana. 
-            The backend calculates automatically for each order how many pieces were actually produced, 
-            what the difference between target and actual duration is and 
-            how long the machine has actually been running, 
+          description: This returns all orders with additional information in the selected time range in a data format that can be consumed easily by Grafana.
+            The backend calculates automatically for each order how many pieces were actually produced,
+            what the difference between target and actual duration is and
+            how long the machine has actually been running,
             how long the total changeover time was, etc.
             All durations are in seconds.
           content:
@@ -1238,7 +1234,7 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - "10463444"
                         - "product10463444"
                         - 1595824438000
@@ -1271,7 +1267,7 @@ paths:
                         - 0
                         - 0
                         - 0
-                        - "redacted-redacted"                          
+                        - "redacted-redacted"
 
   /{customer}/{location}/{asset}/orderTimeline:
     get:
@@ -1308,13 +1304,13 @@ paths:
                           - type: integer
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1592500042000
                         - "noOrder"
-                      - 
+                      -
                         - 1595824438000
                         - "104638"
-                      - 
+                      -
                         - 1595825648000
                         - "noOrder"
 
@@ -1330,7 +1326,7 @@ paths:
         - $ref: '#/components/parameters/processValue'
       responses:
         '200':
-          description: This returns the selected process value in the selected time range in a data format that can be consumed easily by Grafana. 
+          description: This returns the selected process value in the selected time range in a data format that can be consumed easily by Grafana.
           content:
             application/json:
               schema:
@@ -1354,13 +1350,13 @@ paths:
                           - type: number
                     description: the returned data
                     example:
-                      - 
+                      -
                         - 1606236115808
                         - 1
-                      - 
+                      -
                         - 1606236192305
                         - 0
-                      - 
+                      -
                         - 1606236217103
                         - 0
 
@@ -1368,17 +1364,21 @@ paths:
     get:
       operationId: get_product_picture
       servers:
-        - url: https://min.io/playground
-          description: override base path for the get productPictures from the min.io server.
+      - url: https://play.min.io
+        description: override base path for the get productPictures from the min.io server.
       parameters:
         - $ref: '#/components/parameters/uid'
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
       responses:
         '200':
           description: This returns all pictures with the called UID for showing purposes.
           content:
             application/json:
               schema:
-                type: object
                 properties:
                   columnNames:
                     type: array
@@ -1386,17 +1386,23 @@ paths:
                       type: string
                     description: the column names
                     example:
-                      - "35435453qweqwe432321654213qweqwvsdvcxcv546543543243210135153wer435we4r3w5er21er212,we1r01,ew"
+                      - "ImageUID"
+                      - "JSON-code"
                   datapoints:
                     type: array
                     items:
-                      type: array
-                      items:
+                      type: string
                     description: the returned data
                     example:
                       -
-                        - 1592500042000
-                        - "UID"
+                        - 129380123822
+                        - 35435453qweqwe432321654213qweqwvsdvcxcv546543543242210135153wer435we4r3w5er21er212
+                      -
+                        - 129380123823
+                        - 35435453qweqwe432321654213qweqwvsdvcxcv546543543243210135223wer435we4r3w5er21er212
+                      -
+                        - 129380123824
+                        - 35435453qweqwe432321654213qweqwvsdvcxc2246543543243210135153wer435we4r3w5er21er212
 
 security:
   - BasicAuth: []
