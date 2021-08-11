@@ -1115,7 +1115,12 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 			}
 		}
 
-		var uid = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		var uid int
+		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		if err != nil {
+			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
+			return
+		}
 		// Create statement
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
@@ -1228,7 +1233,12 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 			}
 		}
 
-		var uid = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		var uid int
+		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		if err != nil {
+			zap.S().Errorf("Stopped writing productTagString in Database, uid not found")
+			return
+		}
 		// Create statement
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
@@ -1341,7 +1351,12 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 			}
 		}
 
-		var childUid = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
+		var childUid int
+		childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
+		if err != nil {
+			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
+			return
+		}
 		var parentUid = GetLatestParentUniqueProductID(pt.ParentAID, pt.DBAssetID)
 		// Create statement
 		_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
@@ -2252,11 +2267,11 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 }
 
 
-func GetUniqueProductID(aid string, DBassetID int) (uid int) {
+func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 
 	uid,  cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
 	if !cacheHit { // data NOT found
-		err := db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
+		err = db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
 		if err == sql.ErrNoRows {
 			zap.S().Errorf("No Results Found", aid, DBassetID)
 		} else if err != nil {
