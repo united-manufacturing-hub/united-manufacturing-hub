@@ -212,7 +212,7 @@ data:
         UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
-     SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
+    SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
 
     -------------------- TimescaleDB table for product inheritance info --------------------
     CREATE TABLE IF NOT EXISTS productInheritanceTable
