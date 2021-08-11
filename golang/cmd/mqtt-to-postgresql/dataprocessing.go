@@ -633,7 +633,7 @@ type addParentToChild struct {
 }
 
 
-// ProcessAddParentToChildString adds a new AddParentToChild to the database
+// ProcessAddParentToChild adds a new AddParentToChild to the database
 func ProcessAddParentToChild(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
 	var parsedPayload addParentToChild
 
