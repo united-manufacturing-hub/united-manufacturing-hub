@@ -650,7 +650,7 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 		ParentAID:   	parsedPayload.ParentAID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixProductTagString), newObject)
+	_, err = pg.EnqueueObject([]byte(prefixAddParentToChild), newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
