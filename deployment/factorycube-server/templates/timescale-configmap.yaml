@@ -200,7 +200,7 @@ data:
         UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
-    -- SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
+     SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
 
     -------------------- TimescaleDB table for product tags strings --------------------
     CREATE TABLE IF NOT EXISTS productTagStringTable
@@ -212,7 +212,7 @@ data:
         UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
-    -- SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
+     SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
 
     -------------------- TimescaleDB table for product inheritance info --------------------
     CREATE TABLE IF NOT EXISTS productInheritanceTable
@@ -223,8 +223,8 @@ data:
         UNIQUE(parent_uid, child_uid)
     );
     -- creating hypertable
-    -- CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
-    -- CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
+     CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
+     CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
 
 
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
