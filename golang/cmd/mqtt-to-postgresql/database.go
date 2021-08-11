@@ -1092,7 +1092,7 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
-		INSERT INTO productTagTable (valueName, value, timestamp_ms, product_uid) 
+		INSERT INTO productTagTable (valueName, value, timestamp, product_uid) 
 		VALUES ($1, $2, to_timestamp($3 / 1000.0), $4) 
 		ON CONFLICT DO NOTHING;`)
 
@@ -1205,7 +1205,7 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
-		INSERT INTO productTagStringTable (valueName, value, timestamp_ms, product_uid) 
+		INSERT INTO productTagStringTable (valueName, value, timestamp, product_uid) 
 		VALUES ($1, $2, to_timestamp($3 / 1000.0), $4) 
 		ON CONFLICT DO NOTHING;`)
 
