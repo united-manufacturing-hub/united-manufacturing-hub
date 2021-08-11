@@ -184,8 +184,8 @@ data:
     ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS quality_class RESTRICT;
     ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS station_id RESTRICT;
     ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS uid CASCADE;
-    ALTER TABLE uniqueProductTable ADD COLUMN uniqueProductID SERIAL PRIMARY KEY;
-    ALTER TABLE uniqueProductTable DROP CONSTRAINT uniqueproducttable_check;
+    ALTER TABLE uniqueProductTable ADD COLUMN IF NOT EXISTS uniqueProductID SERIAL PRIMARY KEY;
+    ALTER TABLE uniqueProductTable DROP CONSTRAINT IF EXISTS uniqueproducttable_check;
     ALTER TABLE uniqueProductTable ALTER COLUMN end_timestamp_ms DROP NOT NULL;
 
     -- ALTER TABLE uniqueProductTable ADD CONSTRAINT checkTimestampOrder CHECK ((begin_timestamp_ms < end_timestamp_ms) OR (end_timestamp_ms IS NULL));
