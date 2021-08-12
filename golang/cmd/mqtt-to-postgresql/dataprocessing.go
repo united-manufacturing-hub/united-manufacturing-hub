@@ -206,14 +206,14 @@ type uniqueProductQueue struct {
 	DBAssetID        		   int
 	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
 	EndTimestampMs             int64  `json:"end_timestamp_ms"`
-	ProductID                  string `json:"productID"`
+	ProductID                  int    `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 type uniqueProduct struct {
 	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
 	EndTimestampMs             int64  `json:"end_timestamp_ms"`
-	ProductID                  string `json:"productID"`
+	ProductName                string `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
@@ -228,11 +228,19 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
+	productID, err := GetProductID(DBassetID, parsedPayload.ProductName)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)
+		return
+	} else if err != nil { // never executed
+		PQErrorHandling("GetProductID db.QueryRow()", err)
+	}
+
 	newObject := uniqueProductQueue{
 		DBAssetID:        			DBassetID,
 		BeginTimestampMs:           parsedPayload.BeginTimestampMs,
 		EndTimestampMs: 			parsedPayload.EndTimestampMs,
-		ProductID:   				parsedPayload.ProductID,
+		ProductID:   				productID,
 		IsScrap:        			parsedPayload.IsScrap,
 		UniqueProductAlternativeID: parsedPayload.UniqueProductAlternativeID,
 	}
