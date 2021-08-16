@@ -1004,7 +1004,7 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 			}
 		}
 		// Create statement
-		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, pt.EndTimestampMs, pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
+		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(pt.EndTimestampMs), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
 		if err != nil {
 			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
@@ -2294,4 +2294,15 @@ func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 		PQErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
 	}
 	return
+}
+
+// NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
+func NewNullInt64 (i int64) sql.NullInt64 {
+	if i == 0  {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{
+		Int64: i,
+		Valid: true,
+	}
 }
