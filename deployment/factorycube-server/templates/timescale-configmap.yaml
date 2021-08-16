@@ -190,8 +190,7 @@ data:
     ALTER TABLE uniqueProductTable ALTER COLUMN product_id SET DATA TYPE INTEGER;
     ALTER TABLE uniqueProductTable ADD CONSTRAINT productID_reference FOREIGN KEY (product_id) REFERENCES productTable (product_id);
     ALTER TABLE uniqueProductTable ALTER COLUMN  end_timestamp_ms DROP NOT NULL;
-    --Todo: Check doesn't work because mqtt-to-postgres writes 1970-01-01 00:00:00+00 time instead of null for end timestamp
-    --ALTER TABLE uniqueProductTable ADD CONSTRAINT checkTimestampOrder CHECK ((begin_timestamp_ms < end_timestamp_ms) OR (end_timestamp_ms IS NULL));
+    ALTER TABLE uniqueProductTable ADD CONSTRAINT checkTimestampOrder CHECK ((begin_timestamp_ms < end_timestamp_ms) OR (end_timestamp_ms IS NULL));
 
 
     -------------------- TimescaleDB table for product tags --------------------
