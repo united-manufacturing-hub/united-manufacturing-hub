@@ -2046,10 +2046,10 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 	// TODO: #99 Return timestamps in RFC3339 in /uniqueProducts
 
 	// Fetching from the database
-	uniqueProducts, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsRequest.From, getUniqueProductsRequest.To)
+	uniqueProductsWithTags, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsWithTagsRequest.From, getUniqueProductsWithTagsRequest.To)
 	if err != nil {
 		handleInternalServerError(span, c, err)
 		return
 	}
-	c.JSON(http.StatusOK, uniqueProducts)
+	c.JSON(http.StatusOK, uniqueProductsWithTags)
 }
