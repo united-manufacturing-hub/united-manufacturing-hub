@@ -1565,9 +1565,56 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		error = err
 		return
 	}
+	//Defining the base column names
 	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap", "Quality class", "Station ID"}
 
-	sqlStatement := `
+	//sqlStatementColumnNames retreives additional Column names
+	sqlStatementAdditionalColumnNames := `
+	SELECT valueName
+	FROM productTagTable, productTagStringTable
+		LEFT JOIN productTagTable ON uniqueProductID = product_uid
+	WHERE asset_id = $1 
+		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
+	ORDER BY begin_timestamp_ms ASC;`
+
+	names, err := db.Query(sqlStatementAdditionalColumnNames, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
+		error = err
+		return
+	}
+
+
+	defer names.Close()
+
+	for names.Next() {
+
+		var columnName string
+
+		err := names.Scan(&columnName)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
+			error = err
+			return
+		}
+		data.ColumnNames = append(data.ColumnNames, columnName)
+	}
+	err = names.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
+		error = err
+		return
+	}
+
+
+
+
+	//getting the data
+	sqlStatementData := `
 	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id 
 	FROM uniqueProductTable 
 		LEFT JOIN productTagTable ON uniqueProductID = product_uid
@@ -1577,12 +1624,14 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY begin_timestamp_ms ASC;`
 
-	rows, err := db.Query(sqlStatement, assetID, from, to)
+
+
+	rows, err := db.Query(sqlStatementData, assetID, from, to)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(span, sqlStatementData, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(span, sqlStatementData, err, false)
 		error = err
 		return
 	}
@@ -1601,7 +1650,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &qualityClass, &stationID)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(span, sqlStatementData, err, false)
 			error = err
 			return
 		}
@@ -1618,7 +1667,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(span, sqlStatementData, err, false)
 		error = err
 		return
 	}
