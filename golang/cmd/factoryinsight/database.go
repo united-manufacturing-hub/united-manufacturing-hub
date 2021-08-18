@@ -1544,3 +1544,84 @@ func GetAssetID(parentSpan opentracing.Span, customerID string, location string,
 
 	return
 }
+
+// GetUniqueProductsWithTags gets all unique products with tags and parents for a specific asset in a specific time range
+func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+
+	// Jaeger tracing
+	span := opentracing.StartSpan(
+		"GetUniqueProductsWithTags",
+		opentracing.ChildOf(parentSpan.Context()))
+	defer span.Finish()
+
+	span.SetTag("customerID", customerID)
+	span.SetTag("location", location)
+	span.SetTag("asset", asset)
+	span.SetTag("from", from)
+	span.SetTag("to", to)
+
+	assetID, err := GetAssetID(span, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap", "Quality class", "Station ID"}
+
+	sqlStatement := `
+	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id 
+	FROM uniqueProductTable 
+		LEFT JOIN productTagTable ON uniqueProductID = product_uid
+		LEFT JOIN productTagStringTable ON uniqueProuctID = product_uid
+	WHERE asset_id = $1 
+		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
+	ORDER BY begin_timestamp_ms ASC;`
+
+	rows, err := db.Query(sqlStatement, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+
+		var UID string
+		var timestampBegin time.Time
+		var timestampEnd time.Time
+		var productID string
+		var isScrap bool
+		var qualityClass string
+		var stationID string
+
+		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &qualityClass, &stationID)
+		if err != nil {
+			PQErrorHandling(span, sqlStatement, err, false)
+			error = err
+			return
+		}
+		fullRow := []interface{}{
+			UID,
+			float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			productID,
+			isScrap,
+			qualityClass,
+			stationID,
+		}
+		data.Datapoints = append(data.Datapoints, fullRow)
+	}
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	return
+}

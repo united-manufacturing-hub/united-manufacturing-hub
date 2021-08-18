@@ -353,6 +353,8 @@ func getDataHandler(c *gin.Context) {
 		processOrderTableRequest(c, getDataRequest)
 	case "orderTimeline":
 		processOrderTimelineRequest(c, getDataRequest)
+	case "uniqueProductsWithTags":
+		processUniqueProductsWithTagsRequest(c, getDataRequest)
 	default:
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
@@ -1257,6 +1259,11 @@ type getQualityRateRequest struct {
 	AggregationInterval int       `form:"aggregationInterval"`
 }
 
+type getUniqueProductsWithTagsRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Jaeger tracing
 	var span opentracing.Span
@@ -2013,4 +2020,36 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	}
 
 	c.JSON(http.StatusOK, data)
+}
+
+
+func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
+
+	// Jaeger tracing
+	var span opentracing.Span
+	if cspan, ok := c.Get("tracing-context"); ok {
+		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
+	} else {
+		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
+	}
+	defer span.Finish()
+
+	var getUniqueProductsWithTagsRequest getUniqueProductsWithTagsRequest
+	var err error
+
+	err = c.BindQuery(&getUniqueProductsWithTagsRequest)
+	if err != nil {
+		handleInvalidInputError(span, c, err)
+		return
+	}
+
+	// TODO: #99 Return timestamps in RFC3339 in /uniqueProducts
+
+	// Fetching from the database
+	uniqueProducts, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsRequest.From, getUniqueProductsRequest.To)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+	c.JSON(http.StatusOK, uniqueProducts)
 }
