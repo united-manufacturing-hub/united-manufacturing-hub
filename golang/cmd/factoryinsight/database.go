@@ -1638,27 +1638,34 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			error = err
 			return
 		}
+		//if productTag name not yet known, add to data.ColumnNames, store index for data.DataPoints and extend slice
 		if !sliceContains(data.ColumnNames, valueName.String) && (valueName.Valid == true) {
 			index := len(data.ColumnNames)
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
+			//go through rows of tempDataPoints and append one element each
+			for range tempDataPoints {
+				tempDataPoints = append(tempDataPoints, nil)
+			}
 		}
 
 		//if same uid as row before, add value to datapoint
 		if UID == tempDataPoints[len(tempDataPoints)-1][0] {
-			tempDataPoints[len(tempDataPoints)-1][len(tempDataPoints)] = value
+			tempDataPoints[len(tempDataPoints)-1][newColumns[valueName.String]] = value
 		}
-		else { //create new row in tempDatapoints
+		else { //create new row in tempDataPoints
 			fullRow := []interface{}{
 				UID,
 				float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
 				float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
 				productID,
 				isScrap,
-				valueName,
-				value,
 			}
-			tempDatapoints = append(tempDatapoints, fullRow)
+			for range newColumns {
+				fullRow = append(fullRow, nil)
+			}
+			fullRow[newColumns[valueName.String]] = value
+			tempDataPoints = append(tempDataPoints, fullRow)
 		}
 	}
 	err = rows.Err()
