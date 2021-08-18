@@ -1565,65 +1565,27 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		error = err
 		return
 	}
-	//Defining the base column names
-	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap", "Quality class", "Station ID"}
-
-	//sqlStatementColumnNames retreives additional Column names
-	sqlStatementAdditionalColumnNames := `
-	SELECT valueName
-	FROM productTagTable, productTagStringTable
-		LEFT JOIN productTagTable ON uniqueProductID = product_uid
-	WHERE asset_id = $1 
-		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
-		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
-	ORDER BY begin_timestamp_ms ASC;`
-
-	names, err := db.Query(sqlStatementAdditionalColumnNames, assetID, from, to)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
-		return
-	} else if err != nil {
-		PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
-		error = err
-		return
-	}
-
-
-	defer names.Close()
-
-	for names.Next() {
-
-		var columnName string
-
-		err := names.Scan(&columnName)
-		if err != nil {
-			PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
-			error = err
-			return
-		}
-		data.ColumnNames = append(data.ColumnNames, columnName)
-	}
-	err = names.Err()
-	if err != nil {
-		PQErrorHandling(span, sqlStatementAdditionalColumnNames, err, false)
-		error = err
-		return
-	}
-
-
-
 
 	//getting the data
+	//todo add aid
 	sqlStatementData := `
-	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id 
+	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
-		LEFT JOIN productTagTable ON uniqueProductID = product_uid
-		LEFT JOIN productTagStringTable ON uniqueProuctID = product_uid
+		LEFT JOIN productTagTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
-	ORDER BY begin_timestamp_ms ASC;`
-
+	ORDER BY uid ASC;` // fix name for product table in <productTagTable.product_uid>
+	// use 2 sql statements 1 for tags with scalar values 1 for tags with string values
+	// see http://go-database-sql.org/retrieving.html
+	sqlStatementDataStrings := `
+	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
+	FROM uniqueProductTable 
+		LEFT JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
+	WHERE asset_id = $1 
+		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
+	ORDER BY uid ASC;`
 
 
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
@@ -1638,17 +1600,91 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	defer rows.Close()
 
+	rowsStrings, err := db.Query(sqlStatementDataStrings, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		error = err
+		return
+	}
+
+	defer rowsStrings.Close()
+
+
+	//Defining the base column names
+	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap"}
+	var newColumns map[string]int
+
+	//tempData
+	var tempDataPoints [][]interface{}
+	var tempDataPointsString  [][]interface{}
+
+
 	for rows.Next() {
+
+		var UID int
+		var timestampBegin time.Time
+		var timestampEnd sql.NullTime
+		var productID int
+		var isScrap bool
+		var valueName sql.NullString
+		var value sql.NullFloat64
+
+		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementData, err, false)
+			error = err
+			return
+		}
+		if !sliceContains(data.ColumnNames, valueName.String) && (valueName.Valid == true) {
+			index := len(data.ColumnNames)
+			data.ColumnNames = append(data.ColumnNames, valueName.String)
+			newColumns[valueName.String] = index
+		}
+
+		//if same uid as row before, add value to datapoint
+		if UID == tempDataPoints[len(tempDataPoints)-1][0] {
+			tempDataPoints[len(tempDataPoints)-1][len(tempDataPoints)] = value
+		}
+		else { //create new row in tempDatapoints
+			fullRow := []interface{}{
+				UID,
+				float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+				float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+				productID,
+				isScrap,
+				valueName,
+				value,
+			}
+			tempDatapoints = append(tempDatapoints, fullRow)
+		}
+	}
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatementData, err, false)
+		error = err
+		return
+	}
+
+
+	for rowsStrings.Next() {
 
 		var UID string
 		var timestampBegin time.Time
-		var timestampEnd time.Time
+		var timestampEnd sql.NullTime
 		var productID string
 		var isScrap bool
-		var qualityClass string
-		var stationID string
+		var valueName sql.NullString
+		var value sql.NullString
 
-		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &qualityClass, &stationID)
+
+		if !sliceContains(data.ColumnNames, valueName) {
+			data.ColumnNames = append(data.ColumnNames, valueName)
+			newColumns = append(newColumns, valueName)
+		}
+		err := rowsStrings.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(span, sqlStatementData, err, false)
 			error = err
@@ -1660,17 +1696,26 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
 			productID,
 			isScrap,
-			qualityClass,
-			stationID,
+			valueName,
+			value,
 		}
-		data.Datapoints = append(data.Datapoints, fullRow)
+		tempDataPointsString = append(tempDataPointsString, fullRow)
 	}
-	err = rows.Err()
+	err = rowsStrings.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatementData, err, false)
+		PQErrorHandling(span, sqlStatementDataStrings, err, false)
 		error = err
 		return
 	}
-
 	return
+}
+
+
+func sliceContains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
