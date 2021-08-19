@@ -1648,19 +1648,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			}
 		}
 
-		//if same uid as row before, add value to datapoint
-		//todo: case no entry in data.Datapoints
-		lastUID, ok := data.Datapoints[len(data.Datapoints)-1][0].(int)
-		if ok == false {
-			zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
-			return
-		}
-		if UID == lastUID && value.Valid && valueName.Valid {
-			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value.Float64
-		} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
-			zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
-			return
-		} else { //create new row in tempDataPoints
+
+		if data.Datapoints == nil {		//if no row in data.Datapoints, create new row
 			var fullRow []interface{}
 			fullRow = append(fullRow, UID)
 			fullRow = append(fullRow, AID)
@@ -1672,15 +1661,42 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			}
 			fullRow = append(fullRow, productID)
 			fullRow = append(fullRow, isScrap)
-
-			for range newColumns {
-				fullRow = append(fullRow, nil)
-			}
-			if valueName.Valid == true && value.Valid == true {//if a value is specified, add to data.Datapoints
-				fullRow[newColumns[valueName.String]] = value.Float64
-			}
 			data.Datapoints = append(data.Datapoints, fullRow)
+		} else { //if there are already rows in Data.datapoint
+			//if same uid as row before, add value to datapoint
+			lastUID, ok := data.Datapoints[len(data.Datapoints)-1][0].(int)
+			if ok == false {
+				zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
+				return
+			}
+			if UID == lastUID && value.Valid && valueName.Valid {
+				data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value.Float64
+			} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
+				zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
+				return
+			} else { //create new row in tempDataPoints
+				var fullRow []interface{}
+				fullRow = append(fullRow, UID)
+				fullRow = append(fullRow, AID)
+				fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+				if timestampEnd.Valid {
+					fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+				} else {
+					fullRow = append(fullRow, nil)
+				}
+				fullRow = append(fullRow, productID)
+				fullRow = append(fullRow, isScrap)
+
+				for range newColumns {
+					fullRow = append(fullRow, nil)
+				}
+				if valueName.Valid == true && value.Valid == true {//if a value is specified, add to data.Datapoints
+					fullRow[newColumns[valueName.String]] = value.Float64
+				}
+				data.Datapoints = append(data.Datapoints, fullRow)
+			}
 		}
+
 	}
 	err = rows.Err()
 	if err != nil {
