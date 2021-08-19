@@ -1652,13 +1652,13 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		//todo: case no entry in data.Datapoints
 		lastUID, ok := data.Datapoints[len(data.Datapoints)-1][0].(int)
 		if ok == false {
-			zap.S().Debug("GetUniqueProductsWithTags: casting uid to int error")
+			zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
 			return
 		}
 		if UID == lastUID && value.Valid && valueName.Valid {
 			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value.Float64
 		} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
-			zap.S().Debug("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't")
+			zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
 			return
 		} else { //create new row in tempDataPoints
 			var fullRow []interface{}
@@ -1707,7 +1707,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			return
 		}
 		if !valueName.Valid || !value.Valid{
-			zap.S().Debug("GetUniqueProductsWithTags: valueName or value for productTagString not valid")
+			zap.S().Errorf("GetUniqueProductsWithTags: valueName or value for productTagString not valid", UID, timestampBegin)
 			return
 		}
 		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
@@ -1728,7 +1728,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		if contains { //true if uid already in data.Datapoints
 			data.Datapoints[index][newColumns[valueName.String]] = value.String
 		} else { //throw error
-			zap.S().Debug("GetUniqueProductsWithTags: UID not found: Error!")
+			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
 			return
 		}
 	}
@@ -1747,8 +1747,7 @@ func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains b
 	for index, a := range slice {
 		numberFromSlice, ok := a[column].(int)
 		if ok == false {
-			zap.S().Debug("sliceContainsInt: casting numberFromSlice to int error")
-			return
+			zap.S().Errorf("sliceContainsInt: casting numberFromSlice to int error", index)
 		}
 		if numberFromSlice == number {
 			return true, index
