@@ -49,7 +49,7 @@ spec:
           {{- if .Values.mqtttopostgresql.image.tag }}
           image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Values.mqtttopostgresql.image.tag }}
           {{- else }}
-          image: {{ .Values.mqtttopostgresql.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
           ports:
             - name: metrics
