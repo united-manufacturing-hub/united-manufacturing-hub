@@ -1546,7 +1546,8 @@ func GetAssetID(parentSpan opentracing.Span, customerID string, location string,
 }
 
 // GetUniqueProductsWithTags gets all unique products with tags and parents for a specific asset in a specific time range
-func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, location string, asset string,
+	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
 	// Jaeger tracing
 	span := opentracing.StartSpan(
@@ -1567,26 +1568,25 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 
 	//getting the data
-	//todo add aid
 	sqlStatementData := `
-	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
+	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
 		LEFT JOIN productTagTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
-	ORDER BY uid ASC;` // fix name for product table in <productTagTable.product_uid>
+	ORDER BY uniqueProductID ASC;` // fix name for product table in <productTagTable.product_uid>
 	// use 2 sql statements 1 for tags with scalar values 1 for tags with string values
 	// see http://go-database-sql.org/retrieving.html
 	//todo should be inner join?
 	sqlStatementDataStrings := `
-	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
+	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
 		LEFT JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
-	ORDER BY uid ASC;`
+	ORDER BY uniqueProductID ASC;`
 
 
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
@@ -1674,8 +1674,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
-	searchIndex := 0
-
 	for rowsStrings.Next() {
 		var UID int
 		var timestampBegin time.Time
@@ -1685,7 +1683,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		var valueName sql.NullString
 		var value sql.NullString
 
-		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		err := rowsStrings.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(span, sqlStatementData, err, false)
 			error = err
@@ -1698,14 +1696,20 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
+			//todo test
 			for range tempDataPoints {
 				tempDataPoints = append(tempDataPoints, nil)
 			}
 		}
 
 
-		//if same uid as row before, add value to datapoint
-		uidContained, index := sliceContainsInt()
+
+
+
+		sliceUID := constructColumnSlice(tempDataPoints, 0)
+
+		contains, index := sliceContainsInt(sliceIntUID, UID)
+
 		if sliceContainsInt(tempDataPoints[len(tempDataPoints)-1][0] ).Contains{
 			tempDataPoints[len(tempDataPoints)-1][newColumns[valueName.String]] = value
 		} else { //create new row in tempDataPoints
@@ -1761,4 +1765,11 @@ func sliceContainsInt(s []int, e int) (Contains bool, Index int) {
 		Index = Index + 1
 	}
 	return false, 0
+}
+
+func constructColumnSlice(dataPoints [][]interface{}, rowIndex int) (slice []interface{}) {
+	for range dataPoints {
+		slice = append(slice, dataPoints[rowIndex])
+	}
+	return
 }
