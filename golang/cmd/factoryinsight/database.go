@@ -1642,9 +1642,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
-			//todo test
-			for range data.Datapoints {
-				data.Datapoints = append(data.Datapoints, nil)
+			for index, slice := range data.Datapoints {
+				slice = append(slice, nil)
+				data.Datapoints[index] = slice
 			}
 		}
 
@@ -1717,9 +1717,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
-			//todo test
-			for range data.Datapoints {
-				data.Datapoints = append(data.Datapoints, nil)
+			for index, slice := range data.Datapoints {
+				slice = append(slice, nil)
+				data.Datapoints[index] = slice
 			}
 		}
 
