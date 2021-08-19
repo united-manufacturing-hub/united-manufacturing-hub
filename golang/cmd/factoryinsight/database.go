@@ -1633,6 +1633,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			error = err
 			return
 		}
+
+
 		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
 		_, newColumnsContains := newColumns[valueName.String]
 		if !newColumnsContains {
@@ -1655,8 +1657,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		}
 		if UID == lastUID && value.Valid && valueName.Valid {
 			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value.Float64
-			return
-		} else if UID == lastUID && (!value.Valid || !valueName.Valid){
+		} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
 			zap.S().Debug("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't")
 			return
 		} else { //create new row in tempDataPoints
