@@ -1634,11 +1634,13 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			return
 		}
 		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
-		if !sliceContainsString(data.ColumnNames, valueName.String) && valueName.Valid {
+		_, newColumnsContains := newColumns[valueName.String]
+		if !newColumnsContains {
 			index := len(data.ColumnNames)
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
+			//todo test
 			for range data.Datapoints {
 				data.Datapoints = append(data.Datapoints, nil)
 			}
@@ -1686,7 +1688,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
-	// uid, valueName and value always exist
+	// uid, valueName and value should always exist
 	for rowsStrings.Next() {
 		var UID int
 		var AID string
@@ -1703,9 +1705,13 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			error = err
 			return
 		}
-
-		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints and extend slice
-		if !sliceContainsString(data.ColumnNames, valueName.String) && valueName.Valid {
+		if !valueName.Valid || !value.Valid{
+			zap.S().Debug("GetUniqueProductsWithTags: valueName or value for productTagString not valid")
+			return
+		}
+		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		_, newColumnsContains := newColumns[valueName.String]
+		if !newColumnsContains {
 			index := len(data.ColumnNames)
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
@@ -1735,14 +1741,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 }
 
 
-func sliceContainsString(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
-}
 
 func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
 	for index, a := range slice {
