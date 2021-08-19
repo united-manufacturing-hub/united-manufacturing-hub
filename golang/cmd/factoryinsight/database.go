@@ -1578,11 +1578,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	ORDER BY uniqueProductID ASC;` // fix name for product table in <productTagTable.product_uid>
 	// use 2 sql statements 1 for tags with scalar values 1 for tags with string values
 	// see http://go-database-sql.org/retrieving.html
-	//todo: should be inner join?
 	sqlStatementDataStrings := `
 	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
-		INNER JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
+		INNER JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagStringTable.product_uid
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
@@ -1613,7 +1612,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	defer rowsStrings.Close()
 
 	//Defining the base column names
-	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap"}
+	data.ColumnNames = []string{"UID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
 	var newColumns map[string]int
 
 	//Rows can contain valueName and value or not: if not they contain null
@@ -1634,8 +1633,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			error = err
 			return
 		}
-		//if productTag name not yet known, add to data.ColumnNames, store index for data.DataPoints and extend slice
-		if !sliceContainsString(data.ColumnNames, valueName.String) && (valueName.Valid == true) {
+		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
+		if !sliceContainsString(data.ColumnNames, valueName.String) && valueName.Valid {
 			index := len(data.ColumnNames)
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
@@ -1646,14 +1645,24 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		}
 
 		//if same uid as row before, add value to datapoint
-		if UID == data.Datapoints[len(data.Datapoints)-1][0] {
-			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value
+		//todo: case no entry in data.Datapoints
+		lastUID, ok := data.Datapoints[len(data.Datapoints)-1][0].(int)
+		if ok == false {
+			zap.S().Debug("GetUniqueProductsWithTags: casting uid to int error")
+			return
+		}
+		if UID == lastUID && value.Valid && valueName.Valid {
+			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value.Float64
+			return
+		} else if UID == lastUID && (!value.Valid || !valueName.Valid){
+			zap.S().Debug("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't")
+			return
 		} else { //create new row in tempDataPoints
 			var fullRow []interface{}
 			fullRow = append(fullRow, UID)
 			fullRow = append(fullRow, AID)
 			fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-			if timestampEnd.Valid == true {
+			if timestampEnd.Valid {
 				fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
 			} else {
 				fullRow = append(fullRow, nil)
@@ -1665,7 +1674,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				fullRow = append(fullRow, nil)
 			}
 			if valueName.Valid == true && value.Valid == true {//if a value is specified, add to data.Datapoints
-				fullRow[newColumns[valueName.String]] = value
+				fullRow[newColumns[valueName.String]] = value.Float64
 			}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
@@ -1696,7 +1705,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		}
 
 		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints and extend slice
-		if !sliceContainsString(data.ColumnNames, valueName.String) && (valueName.Valid == true) {
+		if !sliceContainsString(data.ColumnNames, valueName.String) && valueName.Valid {
 			index := len(data.ColumnNames)
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
@@ -1707,12 +1716,12 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			}
 		}
 
-		contains, index := sliceContainsInt(data.Datapoints, UID, 1)
+		contains, index := sliceContainsInt(data.Datapoints, UID, 0)
 
 		if contains { //true if uid already in data.Datapoints
-			data.Datapoints[index][newColumns[valueName.String]] = value
+			data.Datapoints[index][newColumns[valueName.String]] = value.String
 		} else { //throw error
-			zap.S().Debug("GetUniqueProductsWithTags: UID not found Error!")
+			zap.S().Debug("GetUniqueProductsWithTags: UID not found: Error!")
 			return
 		}
 	}
@@ -1736,12 +1745,15 @@ func sliceContainsString(s []string, e string) bool {
 }
 
 func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
-	Index = 0
-	for _, a := range slice {
-		if a[column].(int) == number {
-			return true, Index
+	for index, a := range slice {
+		numberFromSlice, ok := a[column].(int)
+		if ok == false {
+			zap.S().Debug("sliceContainsInt: casting numberFromSlice to int error")
+			return
 		}
-		Index = Index + 1
+		if numberFromSlice == number {
+			return true, index
+		}
 	}
 	return false, 0
 }
