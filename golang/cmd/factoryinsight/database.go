@@ -1578,7 +1578,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	ORDER BY uniqueProductID ASC;` // fix name for product table in <productTagTable.product_uid>
 	// use 2 sql statements 1 for tags with scalar values 1 for tags with string values
 	// see http://go-database-sql.org/retrieving.html
-	//todo should be inner join?
+	//todo: should be inner join?
 	sqlStatementDataStrings := `
 	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
@@ -1612,12 +1612,11 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	defer rowsStrings.Close()
 
-
 	//Defining the base column names
 	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap"}
 	var newColumns map[string]int
 
-
+	//Rows can contain valueName and value or not: if not they contain null
 	for rows.Next() {
 
 		var UID int
@@ -1650,17 +1649,24 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		if UID == data.Datapoints[len(data.Datapoints)-1][0] {
 			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value
 		} else { //create new row in tempDataPoints
-			fullRow := []interface{}{
-				UID,
-				float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-				float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-				productID,
-				isScrap,
+			var fullRow []interface{}
+			fullRow = append(fullRow, UID)
+			fullRow = append(fullRow, AID)
+			fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+			if timestampEnd.Valid == true {
+				fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+			} else {
+				fullRow = append(fullRow, nil)
 			}
+			fullRow = append(fullRow, productID)
+			fullRow = append(fullRow, isScrap)
+
 			for range newColumns {
 				fullRow = append(fullRow, nil)
 			}
-			fullRow[newColumns[valueName.String]] = value
+			if valueName.Valid == true && value.Valid == true {//if a value is specified, add to data.Datapoints
+				fullRow[newColumns[valueName.String]] = value
+			}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
 	}
@@ -1671,6 +1677,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
+	// uid, valueName and value always exist
 	for rowsStrings.Next() {
 		var UID int
 		var AID string
@@ -1702,32 +1709,12 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 		contains, index := sliceContainsInt(data.Datapoints, UID, 1)
 
-		if contains{ //
-			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value
-		} else { //create new row in tempDataPoints
-			fullRow := []interface{}{
-				UID,
-				float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-				float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-				productID,
-				isScrap,
-			}
-			for range newColumns {
-				fullRow = append(fullRow, nil)
-			}
-			fullRow[newColumns[valueName.String]] = value
-			data.Datapoints = append(data.Datapoints, fullRow)
+		if contains { //true if uid already in data.Datapoints
+			data.Datapoints[index][newColumns[valueName.String]] = value
+		} else { //throw error
+			zap.S().Debug("GetUniqueProductsWithTags: UID not found Error!")
+			return
 		}
-		fullRow := []interface{}{
-			UID,
-			float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			productID,
-			isScrap,
-			valueName,
-			value,
-		}
-		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rowsStrings.Err()
 	if err != nil {
