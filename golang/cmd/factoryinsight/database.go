@@ -1582,12 +1582,11 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	sqlStatementDataStrings := `
 	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
-		LEFT JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
+		INNER JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY uniqueProductID ASC;`
-
 
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
 	if err == sql.ErrNoRows {
@@ -1618,13 +1617,11 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap"}
 	var newColumns map[string]int
 
-	//tempData
-	var tempDataPoints [][]interface{}
-
 
 	for rows.Next() {
 
 		var UID int
+		var AID string
 		var timestampBegin time.Time
 		var timestampEnd sql.NullTime
 		var productID int
@@ -1632,7 +1629,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		var valueName sql.NullString
 		var value sql.NullFloat64
 
-		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(span, sqlStatementData, err, false)
 			error = err
@@ -1644,14 +1641,14 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
-			for range tempDataPoints {
-				tempDataPoints = append(tempDataPoints, nil)
+			for range data.Datapoints {
+				data.Datapoints = append(data.Datapoints, nil)
 			}
 		}
 
 		//if same uid as row before, add value to datapoint
-		if UID == tempDataPoints[len(tempDataPoints)-1][0] {
-			tempDataPoints[len(tempDataPoints)-1][newColumns[valueName.String]] = value
+		if UID == data.Datapoints[len(data.Datapoints)-1][0] {
+			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value
 		} else { //create new row in tempDataPoints
 			fullRow := []interface{}{
 				UID,
@@ -1664,7 +1661,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				fullRow = append(fullRow, nil)
 			}
 			fullRow[newColumns[valueName.String]] = value
-			tempDataPoints = append(tempDataPoints, fullRow)
+			data.Datapoints = append(data.Datapoints, fullRow)
 		}
 	}
 	err = rows.Err()
@@ -1676,6 +1673,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	for rowsStrings.Next() {
 		var UID int
+		var AID string
 		var timestampBegin time.Time
 		var timestampEnd sql.NullTime
 		var productID int
@@ -1683,7 +1681,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		var valueName sql.NullString
 		var value sql.NullString
 
-		err := rowsStrings.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		err := rowsStrings.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(span, sqlStatementData, err, false)
 			error = err
@@ -1697,21 +1695,15 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
 			//todo test
-			for range tempDataPoints {
-				tempDataPoints = append(tempDataPoints, nil)
+			for range data.Datapoints {
+				data.Datapoints = append(data.Datapoints, nil)
 			}
 		}
 
+		contains, index := sliceContainsInt(data.Datapoints, UID, 1)
 
-
-
-
-		sliceUID := constructColumnSlice(tempDataPoints, 0)
-
-		contains, index := sliceContainsInt(sliceIntUID, UID)
-
-		if sliceContainsInt(tempDataPoints[len(tempDataPoints)-1][0] ).Contains{
-			tempDataPoints[len(tempDataPoints)-1][newColumns[valueName.String]] = value
+		if contains{ //
+			data.Datapoints[len(data.Datapoints)-1][newColumns[valueName.String]] = value
 		} else { //create new row in tempDataPoints
 			fullRow := []interface{}{
 				UID,
@@ -1724,7 +1716,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				fullRow = append(fullRow, nil)
 			}
 			fullRow[newColumns[valueName.String]] = value
-			tempDataPoints = append(tempDataPoints, fullRow)
+			data.Datapoints = append(data.Datapoints, fullRow)
 		}
 		fullRow := []interface{}{
 			UID,
@@ -1735,7 +1727,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			valueName,
 			value,
 		}
-		tempDataPoints = append(tempDataPoints, fullRow)
+		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rowsStrings.Err()
 	if err != nil {
@@ -1756,20 +1748,13 @@ func sliceContainsString(s []string, e string) bool {
 	return false
 }
 
-func sliceContainsInt(s []int, e int) (Contains bool, Index int) {
+func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
 	Index = 0
-	for _, a := range s {
-		if a == e {
+	for _, a := range slice {
+		if a[column].(int) == number {
 			return true, Index
 		}
 		Index = Index + 1
 	}
 	return false, 0
-}
-
-func constructColumnSlice(dataPoints [][]interface{}, rowIndex int) (slice []interface{}) {
-	for range dataPoints {
-		slice = append(slice, dataPoints[rowIndex])
-	}
-	return
 }
