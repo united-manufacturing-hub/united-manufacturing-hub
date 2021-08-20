@@ -679,3 +679,60 @@ func TestSliceContainsInt(t *testing.T) {
 	}
 
 }
+
+
+func TestChangeOutputFormat(t *testing.T) {
+
+	var data [][]interface{}
+	var dataExtended [][]interface{}
+	var columnNames []string
+
+	columnNames = []string{"uid","aid", "Force"}
+	var row1 []interface{}
+	var row2 []interface{}
+	var row3 []interface{}
+	row1 = append(row1, 1)
+	row1 = append(row1, "A102")
+	row1 = append(row1, 45.5)
+	row2 = append(row2, 2)
+	row2 = append(row2, "A103")
+	row2 = append(row2, 455)
+	row3 = append(row3, 3)
+	row3 = append(row3, "A104")
+	row3 = append(row3, 545)
+	data = append(data, row1)
+	data = append(data, row2)
+	data = append(data, row3)
+
+	//Handling if inputColumnName is not new
+	dataOutput, columnNamesOutput, columnIndex := ChangeOutputFormat(data, columnNames, "Force")
+	if !reflect.DeepEqual(dataOutput, data) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnNamesOutput, columnNames) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnIndex, 2) {
+		t.Error()
+	}
+
+	//Handling if inputColumnName is new
+	columnNamesExtended := append(columnNames, "Temperature")
+	row1 = append(row1, nil)
+	row2 = append(row2, nil)
+	row3 = append(row3, nil)
+	dataExtended = append(dataExtended, row1)
+	dataExtended = append(dataExtended, row2)
+	dataExtended = append(dataExtended, row3)
+
+	dataOutput, columnNamesOutput, columnIndex = ChangeOutputFormat(data, columnNames, "Temperature")
+	if !reflect.DeepEqual(dataOutput, dataExtended) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnNamesOutput, columnNamesExtended) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnIndex, 3) {
+		t.Error()
+	}
+}
