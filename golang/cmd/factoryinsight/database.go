@@ -1635,13 +1635,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			return
 		}
 
-
 		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
 		if valueName.Valid {
 			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
 		}
-
-
 
 		if data.Datapoints == nil {		//if no row in data.Datapoints, create new row
 			var fullRow []interface{}
