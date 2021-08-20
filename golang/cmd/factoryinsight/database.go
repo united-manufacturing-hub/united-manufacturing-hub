@@ -1636,17 +1636,20 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 
 		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
-		_, newColumnsContains := newColumns[valueName.String]
-		if !newColumnsContains {
-			index := len(data.ColumnNames)
-			data.ColumnNames = append(data.ColumnNames, valueName.String)
-			newColumns[valueName.String] = index
-			//go through rows of tempDataPoints and append one element each
-			for i, slice := range data.Datapoints {
-				slice = append(slice, nil)
-				data.Datapoints[i] = slice
+		if value.Valid && valueName.Valid {
+			_, newColumnsContains := newColumns[valueName.String]
+			if !newColumnsContains {
+				index := len(data.ColumnNames)
+				data.ColumnNames = append(data.ColumnNames, valueName.String)
+				newColumns[valueName.String] = index
+				//go through rows of tempDataPoints and append one element each
+				for i, slice := range data.Datapoints {
+					slice = append(slice, nil)
+					data.Datapoints[i] = slice
+				}
 			}
 		}
+
 
 
 		if data.Datapoints == nil {		//if no row in data.Datapoints, create new row
@@ -1772,7 +1775,7 @@ func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains b
 	return false, 0
 }
 
-//changeOutputFormat tests, if inputName is already in Output format and adds, if not
+//changeOutputFormat tests, if inputName is already in output format and adds, if not
 func changeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{},
 columnNamesOutput []string, columnIndex int) {
 	for i, name := range columnNames {
