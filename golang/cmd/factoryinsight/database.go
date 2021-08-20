@@ -1638,7 +1638,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
 		if valueName.Valid {
-			data.Datapoints, data.ColumnNames, indexColumn = changeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
+			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
 		}
 
 
@@ -1725,9 +1725,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			return
 		}
 		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
-		data.Datapoints, data.ColumnNames, indexColumn = changeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
+		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
 		var contains bool
-		contains, indexRow = sliceContainsInt(data.Datapoints, UID, 0)
+		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
 		if contains { //true if uid already in data.Datapoints
 			data.Datapoints[indexRow][indexColumn] = value.String
@@ -1746,51 +1746,3 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 }
 
 
-
-func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
-	for index, a := range slice {
-		numberFromSlice, ok := a[column].(int)
-		if ok == false {
-			zap.S().Errorf("sliceContainsInt: casting numberFromSlice to int error", index)
-		}
-		if numberFromSlice == number {
-			return true, index
-		}
-	}
-	return false, 0
-}
-
-//changeOutputFormat tests, if inputName is already in output format and adds, if not
-func changeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{},
-columnNamesOutput []string, columnIndex int) {
-	for i, name := range columnNames {
-		if name == inputColumnName {
-			return data, columnNames, i
-		}
-	}
-	// inputColumnName not previously found in existing columnNames: add to output
-	columnNames = append(columnNames, inputColumnName)
-	for i, slice := range data {
-		slice = lengthenSliceToFitNames(slice, columnNames)
-		data[i] = slice
-	}
-	columnIndex = len(columnNames) - 1
-	return data, columnNames, columnIndex
-}
-
-
-func lengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
-	sliceLength := len(slice)
-	namesLength := len(names)
-	if sliceLength == namesLength {
-		return
-	} else if sliceLength < namesLength {
-		for sliceLength < namesLength {
-			slice = append(slice, nil)
-		}
-		return sliceOutput
-	} else {
-		zap.S().Errorf("lengthenSliceToFitNames: slice not correctly processed")
-	}
-	return
-}

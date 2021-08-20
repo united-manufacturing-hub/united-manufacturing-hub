@@ -1873,3 +1873,53 @@ func ConvertNewToOldStateEntryArray(stateArray []datamodel.StateEntry) (resultSt
 
 	return
 }
+
+
+
+func SliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
+	for index, a := range slice {
+		numberFromSlice, ok := a[column].(int)
+		if ok == false {
+			zap.S().Errorf("sliceContainsInt: casting numberFromSlice to int error", index)
+		}
+		if numberFromSlice == number {
+			return true, index
+		}
+	}
+	return false, 0
+}
+
+//ChangeOutputFormat tests, if inputName is already in output format and adds, if not
+func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{},
+	columnNamesOutput []string, columnIndex int) {
+	for i, name := range columnNames {
+		if name == inputColumnName {
+			return data, columnNames, i
+		}
+	}
+	// inputColumnName not previously found in existing columnNames: add to output
+	columnNames = append(columnNames, inputColumnName)
+	for i, slice := range data {
+		slice = LengthenSliceToFitNames(slice, columnNames)
+		data[i] = slice
+	}
+	columnIndex = len(columnNames) - 1
+	return data, columnNames, columnIndex
+}
+
+
+func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
+	sliceLength := len(slice)
+	namesLength := len(names)
+	if sliceLength == namesLength {
+		return
+	} else if sliceLength < namesLength {
+		for sliceLength < namesLength {
+			slice = append(slice, nil)
+		}
+		return sliceOutput
+	} else {
+		zap.S().Errorf("lengthenSliceToFitNames: slice not correctly processed")
+	}
+	return
+}
