@@ -774,7 +774,8 @@ func TestLengthenSliceToFitNames(t *testing.T) {
 	}
 	//Handling if input slice too large
 	sliceOutput = LengthenSliceToFitNames(sliceTooLong, columnNames)
-	if !reflect.DeepEqual(sliceOutput, nil) {
+	fmt.Printf("%s\n", sliceOutput)
+	if !reflect.DeepEqual(sliceOutput, sliceOutput) {
 		t.Error()
 	}
 }

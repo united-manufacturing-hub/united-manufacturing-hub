@@ -1918,7 +1918,7 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 		}
 		return slice
 	} else {
-		zap.S().Errorf("lengthenSliceToFitNames: slice not correctly processed")
+		zap.S().Errorf("lengthenSliceToFitNames: slice too long")
 	}
-	return nil
+	return slice
 }
