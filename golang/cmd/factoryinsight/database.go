@@ -1769,11 +1769,11 @@ columnNamesOutput []string, columnIndex int) {
 		}
 	}
 	// inputColumnName not previously found in existing columnNames: add to output
+	columnNames = append(columnNames, inputColumnName)
 	for i, slice := range data {
-		slice = append(slice, nil)
+		slice = lengthenSliceToFitNames(slice, columnNames)
 		data[i] = slice
 	}
-	columnNames = append(columnNames, inputColumnName)
 	columnIndex = len(columnNames) - 1
 	return data, columnNames, columnIndex
 }
@@ -1785,6 +1785,12 @@ func lengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 	if sliceLength == namesLength {
 		return
 	} else if sliceLength < namesLength {
-		for 
+		for sliceLength < namesLength {
+			slice = append(slice, nil)
+		}
+		return sliceOutput
+	} else {
+		zap.S().Errorf("lengthenSliceToFitNames: slice not correctly processed")
 	}
+	return
 }
