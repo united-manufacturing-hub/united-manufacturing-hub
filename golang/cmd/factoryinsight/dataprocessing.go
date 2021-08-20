@@ -1909,15 +1909,14 @@ func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnN
 
 
 func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
-	sliceLength := len(slice)
-	namesLength := len(names)
-	if sliceLength == namesLength {
-		return
-	} else if sliceLength < namesLength {
-		for sliceLength < namesLength {
+	lengthNames := len(names)
+	if len(slice) == lengthNames {
+		return slice
+	} else if len(slice) < lengthNames {
+		for len(slice) < lengthNames {
 			slice = append(slice, nil)
 		}
-		return sliceOutput
+		return slice
 	} else {
 		zap.S().Errorf("lengthenSliceToFitNames: slice not correctly processed")
 	}
