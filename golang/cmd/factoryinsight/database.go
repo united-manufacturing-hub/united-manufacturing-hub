@@ -1616,7 +1616,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	var indexRow int
 	var indexColumn int
 
-	//Rows can contain valueName and value or not: if not they contain null
+	//Rows can contain valueName and value or not: if not, they contain null
 	for rows.Next() {
 
 		var UID int
@@ -1652,6 +1652,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			}
 			fullRow = append(fullRow, productID)
 			fullRow = append(fullRow, isScrap)
+			fullRow =  LengthenSliceToFitNames(fullRow, data.ColumnNames)
+			if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data.Datapoints
+				fullRow[indexColumn] = value.Float64
+			}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else { //if there are already rows in Data.datapoint
 			//if same uid as row before, add value to datapoint
@@ -1662,7 +1666,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				return
 			}
 			if UID == lastUID && value.Valid && valueName.Valid {
-				data.Datapoints[len(data.Datapoints)-1][indexColumn] = value.Float64
+				data.Datapoints[indexRow][indexColumn] = value.Float64
 			} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
 				zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
 				return
@@ -1679,10 +1683,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				fullRow = append(fullRow, productID)
 				fullRow = append(fullRow, isScrap)
 
-				for {
-					fullRow = append(fullRow, nil)
-				}
-				if valueName.Valid == true && value.Valid == true {//if a value is specified, add to data.Datapoints
+				fullRow =  LengthenSliceToFitNames(fullRow, data.ColumnNames)
+				if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data.Datapoints
 					fullRow[indexColumn] = value.Float64
 				}
 				data.Datapoints = append(data.Datapoints, fullRow)
