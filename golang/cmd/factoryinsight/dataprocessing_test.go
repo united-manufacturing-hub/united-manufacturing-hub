@@ -639,3 +639,43 @@ func Test_processStatesOptimized(t *testing.T) {
 		})
 	}
 }
+
+func TestSliceContainsInt(t *testing.T) {
+
+	var slice [][]interface{}
+
+	var row1 []interface{}
+	var row2 []interface{}
+	var row3 []interface{}
+	row1 = append(row1, 1)
+	row1 = append(row1, "test")
+	row1 = append(row1, 45)
+	row2 = append(row2, 2)
+	row2 = append(row2, "testas")
+	row2 = append(row2, 455)
+	row3 = append(row3, 3)
+	row3 = append(row3, "testaser")
+	row3 = append(row3, 545)
+	slice = append(slice, row1)
+	slice = append(slice, row2)
+	slice = append(slice, row3)
+
+
+	resultContains, resultIndex := SliceContainsInt(slice, 2, 0)
+
+	if !reflect.DeepEqual(resultContains, true) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(resultIndex, 1) {
+		t.Error()
+	}
+
+	resultContains, resultIndex = SliceContainsInt(slice, 4, 0)
+	if !reflect.DeepEqual(resultContains, false) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(resultIndex, 0) {
+		t.Error()
+	}
+
+}
