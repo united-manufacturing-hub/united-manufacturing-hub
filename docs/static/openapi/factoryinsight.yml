@@ -127,6 +127,8 @@ components:
         example:
           sdf9283oujk234jdfgdfggdfgdfgdfgdfg
           #ToDO add Formater
+          #Added example: cameraID/milliseconds
+          #sdfjhksda19273/1629478025909
 
   securitySchemes:
     BasicAuth:
