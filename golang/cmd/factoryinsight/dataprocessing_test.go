@@ -738,3 +738,43 @@ func TestChangeOutputFormat(t *testing.T) {
 		t.Error()
 	}
 }
+
+
+
+func TestLengthenSliceToFitNames(t *testing.T) {
+
+	var sliceTooSmall []interface{}
+	var sliceTooSmallExpectedOutput []interface{}
+	var sliceExact []interface{}
+	var sliceTooLong []interface{}
+	var columnNames []string
+	columnNames = []string{"uid", "aid", "Force"}
+	sliceTooSmall = append(sliceTooSmall, 1)
+	sliceTooSmall = append(sliceTooSmall, "A102")
+	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, 1)
+	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, "A102")
+	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, nil)
+	sliceExact = append(sliceExact, 2)
+	sliceExact = append(sliceExact, "A103")
+	sliceExact = append(sliceExact, 455)
+	sliceTooLong = append(sliceTooLong, 3)
+	sliceTooLong = append(sliceTooLong, "A104")
+	sliceTooLong = append(sliceTooLong, 545)
+	sliceTooLong = append(sliceTooLong, "EntryTooMuch")
+
+	//Handling if input slice too small
+	sliceOutput := LengthenSliceToFitNames(sliceTooSmall, columnNames)
+	if !reflect.DeepEqual(sliceOutput, sliceTooSmallExpectedOutput) {
+		t.Error()
+	}
+	//Handling if input slice correct
+	sliceOutput = LengthenSliceToFitNames(sliceExact, columnNames)
+	if !reflect.DeepEqual(sliceOutput, sliceExact) {
+		t.Error()
+	}
+	//Handling if input slice too large
+	sliceOutput = LengthenSliceToFitNames(sliceTooLong, columnNames)
+	if !reflect.DeepEqual(sliceOutput, nil) {
+		t.Error()
+	}
+}
