@@ -726,6 +726,8 @@ func TestChangeOutputFormat(t *testing.T) {
 	dataExtended = append(dataExtended, row3)
 
 	dataOutput, columnNamesOutput, columnIndex = ChangeOutputFormat(data, columnNames, "Temperature")
+	fmt.Printf("%s\n", columnNamesOutput)
+	fmt.Printf("%s\n", dataOutput)
 	if !reflect.DeepEqual(dataOutput, dataExtended) {
 		t.Error()
 	}
