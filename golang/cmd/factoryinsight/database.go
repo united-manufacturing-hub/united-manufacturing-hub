@@ -1642,9 +1642,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
-			for index, slice := range data.Datapoints {
+			for i, slice := range data.Datapoints {
 				slice = append(slice, nil)
-				data.Datapoints[index] = slice
+				data.Datapoints[i] = slice
 			}
 		}
 
@@ -1733,9 +1733,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.ColumnNames = append(data.ColumnNames, valueName.String)
 			newColumns[valueName.String] = index
 			//go through rows of tempDataPoints and append one element each
-			for index, slice := range data.Datapoints {
+			for i, slice := range data.Datapoints {
 				slice = append(slice, nil)
-				data.Datapoints[index] = slice
+				data.Datapoints[i] = slice
 			}
 		}
 
@@ -1770,4 +1770,22 @@ func sliceContainsInt(slice [][]interface{}, number int, column int) (Contains b
 		}
 	}
 	return false, 0
+}
+
+//changeOutputFormat tests, if inputName is already in Output format and adds, if not
+func changeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{},
+columnNamesOutput []string, columnIndex int) {
+	for i, name := range columnNames {
+		if name == inputColumnName {
+			return data, columnNames, i
+		}
+	}
+	// inputColumnName not previously found in existing columnNames: add to output
+	for i, slice := range data {
+		slice = append(slice, nil)
+		data[i] = slice
+	}
+	columnNames = append(columnNames, inputColumnName)
+	columnIndex = len(columnNames) - 1
+	return data, columnNames, columnIndex
 }
