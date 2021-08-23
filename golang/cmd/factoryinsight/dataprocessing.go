@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -1921,4 +1922,26 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 		zap.S().Errorf("lengthenSliceToFitNames: slice too long")
 	}
 	return slice
+}
+
+func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn int, UID int, AID string,
+	timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString,
+	value sql.NullFloat64) (dataOut [][]interface{}){
+	var fullRow []interface{}
+	fullRow = append(fullRow, UID)
+	fullRow = append(fullRow, AID)
+	fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	if timestampEnd.Valid {
+		fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	} else {
+		fullRow = append(fullRow, nil)
+	}
+	fullRow = append(fullRow, productID)
+	fullRow = append(fullRow, isScrap)
+	fullRow =  LengthenSliceToFitNames(fullRow, columnNames)
+	if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data
+		fullRow[indexColumn] = value.Float64
+	}
+	dataOut = append(data, fullRow)
+	return
 }

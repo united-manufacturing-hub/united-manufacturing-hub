@@ -1641,22 +1641,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		}
 
 		if data.Datapoints == nil {		//if no row in data.Datapoints, create new row
-			var fullRow []interface{}
-			fullRow = append(fullRow, UID)
-			fullRow = append(fullRow, AID)
-			fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-			if timestampEnd.Valid {
-				fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-			} else {
-				fullRow = append(fullRow, nil)
-			}
-			fullRow = append(fullRow, productID)
-			fullRow = append(fullRow, isScrap)
-			fullRow =  LengthenSliceToFitNames(fullRow, data.ColumnNames)
-			if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data.Datapoints
-				fullRow[indexColumn] = value.Float64
-			}
-			data.Datapoints = append(data.Datapoints, fullRow)
+			data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
+				timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 		} else { //if there are already rows in Data.datapoint
 			//if same uid as row before, add value to datapoint
 			indexRow = len(data.Datapoints) - 1
@@ -1671,23 +1657,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
 				return
 			} else if UID != lastUID { //create new row in tempDataPoints
-				var fullRow []interface{}
-				fullRow = append(fullRow, UID)
-				fullRow = append(fullRow, AID)
-				fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-				if timestampEnd.Valid {
-					fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-				} else {
-					fullRow = append(fullRow, nil)
-				}
-				fullRow = append(fullRow, productID)
-				fullRow = append(fullRow, isScrap)
-
-				fullRow =  LengthenSliceToFitNames(fullRow, data.ColumnNames)
-				if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data.Datapoints
-					fullRow[indexColumn] = value.Float64
-				}
-				data.Datapoints = append(data.Datapoints, fullRow)
+				data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
+					timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 			} else {
 				zap.S().Errorf("GetUniqueProductsWithTags: logic error", UID, timestampBegin)
 				return
@@ -1744,24 +1715,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	return
 }
 
-func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn int, UID int, AID string,
-timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString,
-value sql.NullFloat64) (dataOut [][]interface{}){
-	var fullRow []interface{}
-	fullRow = append(fullRow, UID)
-	fullRow = append(fullRow, AID)
-	fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	if timestampEnd.Valid {
-		fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	} else {
-		fullRow = append(fullRow, nil)
-	}
-	fullRow = append(fullRow, productID)
-	fullRow = append(fullRow, isScrap)
-	fullRow =  LengthenSliceToFitNames(fullRow, columnNames)
-	if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data
-		fullRow[indexColumn] = value.Float64
-	}
-	dataOut = append(data, fullRow)
-	return
-}
+
+
+
