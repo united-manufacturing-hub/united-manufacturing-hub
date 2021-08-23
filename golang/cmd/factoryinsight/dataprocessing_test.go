@@ -809,28 +809,35 @@ func TestCreateNewRowInData(t *testing.T) {
 	value.Float64 = 23.24
 	value.Valid = true
 
-	columnNames = []string{"uid","aid", "Force"}
+	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Speed"}
 	var row1 []interface{}
 	var row2 []interface{}
-	var row3 []interface{}
+
 	row1 = append(row1, 1)
 	row1 = append(row1, "A102")
-	row1 = append(row1, 45.5)
+	row1 = append(row1, time.Unix(32023904, 0))
+	row1 = append(row1, time.Unix(32023898, 0))
+	row1 = append(row1, 10011)
+	row1 = append(row1, false)
+	row1 = append(row1, 1.13)
+
 	row2 = append(row2, 2)
 	row2 = append(row2, "A103")
-	row2 = append(row2, 455)
-	row3 = append(row3, 3)
-	row3 = append(row3, "A104")
-	row3 = append(row3, 545)
+	row2 = append(row2, time.Unix(32024904, 0))
+	row2 = append(row2, time.Unix(32024898, 0))
+	row2 = append(row2, 10011)
+	row2 = append(row2, false)
+	row2 = append(row2, 1.01)
+
 	data = append(data, row1)
 	data = append(data, row2)
-	data = append(data, row3)
 
 
-	dataOutput := CreateNewRowInData(data, columnNames, 3, UID, AID,
+
+	dataOutput := CreateNewRowInData(data, columnNames, 6, UID, AID,
 		timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 	fmt.Printf("%s\n", dataOutput)
-	if !reflect.DeepEqual(len(data), 3) {
+	if !reflect.DeepEqual(len(dataOutput), 3) {
 		t.Error()
 	}
 }
