@@ -1587,6 +1587,18 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY uniqueProductID ASC;`
 
+	sqlStatementDataInheritance := `
+	SELECT unProdTab.uniqueProductID, unProdTab.begin_timestamp_ms, prodTab.product_name, unProdTabForAID.uniqueProductAlternativeID
+	FROM uniqueProductTable unProdTab, productInheritanceTable prodInher, uniqueProductTable unProdTabForAID, productTable prodTab
+		INNER JOIN prodInher ON unProdTab.uniqueProductID = prodInher.child_uid
+		INNER JOIN unProdTabForAID ON prodInher.parent_uid = unProdTabForAID.uniqueProductID
+		INNER JOIN prodTab ON unProdTabForAID.product_id = prodTab.product_id
+	WHERE unProdTab.asset_id = $1 
+		AND (unProdTab.begin_timestamp_ms BETWEEN $2 AND $3 OR unProdTab.end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (unProdTab.begin_timestamp_ms < $2 AND unProdTab.end_timestamp_ms > $3) 
+	ORDER BY unProdTab.uniqueProductID ASC;`
+
+
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(span, sqlStatementData, err, false)
@@ -1610,6 +1622,19 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 
 	defer rowsStrings.Close()
+
+
+	rowsInheritance, err := db.Query(sqlStatementDataInheritance, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		error = err
+		return
+	}
+
+	defer rowsInheritance.Close()
 
 	//Defining the base column names
 	data.ColumnNames = []string{"UID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
@@ -1708,6 +1733,43 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		error = err
 		return
 	}
+
+
+
+	// uid, valueName and value should always exist
+	for rowsInheritance.Next() {
+		var UID int
+		var timestampBegin time.Time
+		var productName string
+		var AID string
+
+		err := rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementData, err, false)
+			error = err
+			return
+		}
+
+		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, productName)
+		var contains bool
+		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
+
+		if contains { //true if uid already in data.Datapoints
+			data.Datapoints[indexRow][indexColumn] = AID
+		} else { //throw error
+			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
+			return
+		}
+	}
+	err = rowsInheritance.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		error = err
+		return
+	}
+
+
 	return
 }
 
