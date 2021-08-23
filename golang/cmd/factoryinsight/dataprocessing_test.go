@@ -813,18 +813,23 @@ func TestCreateNewRowInData(t *testing.T) {
 	var row1 []interface{}
 	var row2 []interface{}
 
+	row1TimeBegin := time.Unix(32023904, 0)
+	row1TimeEnd := time.Unix(32023898, 0)
+	row2TimeBegin := time.Unix(32024904, 0)
+	row2TimeEnd := 	time.Unix(32024898, 0)
+
 	row1 = append(row1, 1)
 	row1 = append(row1, "A102")
-	row1 = append(row1, time.Unix(32023904, 0))
-	row1 = append(row1, time.Unix(32023898, 0))
+	row1 = append(row1, float64(row1TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
 	row1 = append(row1, 10011)
 	row1 = append(row1, false)
 	row1 = append(row1, 1.13)
 
 	row2 = append(row2, 2)
 	row2 = append(row2, "A103")
-	row2 = append(row2, time.Unix(32024904, 0))
-	row2 = append(row2, time.Unix(32024898, 0))
+	row2 = append(row2, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
 	row2 = append(row2, 10011)
 	row2 = append(row2, false)
 	row2 = append(row2, 1.01)
