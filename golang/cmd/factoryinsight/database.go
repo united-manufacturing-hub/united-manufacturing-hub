@@ -1769,7 +1769,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
-
+	//todo: check if output dimensions are correct
 	return
 }
 
