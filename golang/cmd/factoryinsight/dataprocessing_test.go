@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"reflect"
 	"testing"
@@ -776,6 +777,60 @@ func TestLengthenSliceToFitNames(t *testing.T) {
 	sliceOutput = LengthenSliceToFitNames(sliceTooLong, columnNames)
 	fmt.Printf("%s\n", sliceOutput)
 	if !reflect.DeepEqual(sliceOutput, sliceOutput) {
+		t.Error()
+	}
+}
+
+
+
+func TestCreateNewRowInData(t *testing.T) {
+
+	var UID int
+	var AID string
+	var timestampBegin time.Time
+	var timestampEnd sql.NullTime
+	var productID int
+	var isScrap bool
+	var valueName sql.NullString
+	var value sql.NullFloat64
+	var data [][]interface{}
+	var columnNames []string
+
+
+	UID = 12
+	AID = "TestInsertedAID124"
+	timestampBegin = time.Unix(32023904, 0)
+	timestampEnd.Time = time.Unix(32023999, 0)
+	timestampEnd.Valid = true
+	productID = 23438
+	isScrap = false
+	valueName.String = "Force"
+	valueName.Valid = true
+	value.Float64 = 23.24
+	value.Valid = true
+
+	columnNames = []string{"uid","aid", "Force"}
+	var row1 []interface{}
+	var row2 []interface{}
+	var row3 []interface{}
+	row1 = append(row1, 1)
+	row1 = append(row1, "A102")
+	row1 = append(row1, 45.5)
+	row2 = append(row2, 2)
+	row2 = append(row2, "A103")
+	row2 = append(row2, 455)
+	row3 = append(row3, 3)
+	row3 = append(row3, "A104")
+	row3 = append(row3, 545)
+	data = append(data, row1)
+	data = append(data, row2)
+	data = append(data, row3)
+
+
+	dataOutput := CreateNewRowInData(data, columnNames, 3, UID, AID,
+		timestampBegin, timestampEnd, productID, isScrap, valueName, value)
+	fmt.Printf("%s\n", dataOutput)
+	if !reflect.DeepEqual(len(data), 3) {
 		t.Error()
 	}
 }
