@@ -927,12 +927,13 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	fmt.Printf("%s\n", data)
 
+	//Case: No Error
 	err := CheckOutputDimensions(data, columnNames)
-
 	if !reflect.DeepEqual(err, nil) {
 		t.Error()
 	}
 
+	//Case: Error because last row too short
 	data = append(data, rowTooShort)
 	err = nil
 	err = CheckOutputDimensions(data, columnNames)
@@ -940,11 +941,11 @@ func TestCheckOutputDimensions(t *testing.T) {
 		t.Error()
 	}
 
+	//Case: Error because last row too long
 	data[2] = rowTooLong
 	fmt.Printf("%s\n", data)
 	err = nil
 	err = CheckOutputDimensions(data, columnNames)
-	fmt.Printf("%s\n", err)
 	if err == nil {
 		t.Error()
 	}
