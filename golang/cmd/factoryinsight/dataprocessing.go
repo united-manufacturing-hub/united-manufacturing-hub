@@ -1908,7 +1908,7 @@ func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnN
 	return data, columnNames, columnIndex
 }
 
-
+//LengthenSliceToFitNames receives an interface slice and checks if the name is included, if not it adds the name to the slice.
 func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
 	lengthNames := len(names)
 	if len(slice) == lengthNames {
@@ -1924,6 +1924,7 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 	return slice
 }
 
+//CreateNewRowInData adds a Row to data, and fills in null, where no information is known yet.
 func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn int, UID int, AID string,
 	timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString,
 	value sql.NullFloat64) (dataOut [][]interface{}){
