@@ -1955,5 +1955,5 @@ func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err erro
 			zap.S().Errorf("CheckOutputDimensions: dimensions wrong")
 		}
 	}
-	return nil
+	return
 }

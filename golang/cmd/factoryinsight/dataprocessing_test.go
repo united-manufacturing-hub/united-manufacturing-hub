@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -928,7 +927,6 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	fmt.Printf("%s\n", data)
 
-	expectedError := errors.New("error: data row length not consistent with columnname length")
 	err := CheckOutputDimensions(data, columnNames)
 
 	if !reflect.DeepEqual(err, nil) {
@@ -936,15 +934,18 @@ func TestCheckOutputDimensions(t *testing.T) {
 	}
 
 	data = append(data, rowTooShort)
+	err = nil
 	err = CheckOutputDimensions(data, columnNames)
-	if !reflect.DeepEqual(err, expectedError) {
+	if err == nil {
 		t.Error()
 	}
 
 	data[2] = rowTooLong
 	fmt.Printf("%s\n", data)
+	err = nil
 	err = CheckOutputDimensions(data, columnNames)
-	if !reflect.DeepEqual(err, expectedError) {
+	fmt.Printf("%s\n", err)
+	if err == nil {
 		t.Error()
 	}
 }
