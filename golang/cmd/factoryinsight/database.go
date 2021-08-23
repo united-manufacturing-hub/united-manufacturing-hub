@@ -1579,7 +1579,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	// use 2 sql statements 1 for tags with scalar values 1 for tags with string values
 	// see http://go-database-sql.org/retrieving.html
 	sqlStatementDataStrings := `
-	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
+	SELECT uniqueProductID, valueName, value
 	FROM uniqueProductTable 
 		INNER JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagStringTable.product_uid
 	WHERE asset_id = $1 
@@ -1676,15 +1676,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	// uid, valueName and value should always exist
 	for rowsStrings.Next() {
 		var UID int
-		var AID string
-		var timestampBegin time.Time
-		var timestampEnd sql.NullTime
-		var productID int
-		var isScrap bool
 		var valueName sql.NullString
 		var value sql.NullString
 
-		err := rowsStrings.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		err := rowsStrings.Scan(&UID, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(span, sqlStatementData, err, false)
 			error = err
