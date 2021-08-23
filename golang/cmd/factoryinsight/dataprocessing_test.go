@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -860,6 +861,90 @@ func TestCreateNewRowInData(t *testing.T) {
 		t.Error()
 	}
 	if !reflect.DeepEqual(len(dataOutput[2]), 9) {
+		t.Error()
+	}
+}
+
+
+
+func TestCheckOutputDimensions(t *testing.T) {
+	var data [][]interface{}
+	var columnNames []string
+
+	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Torque", "Speed", "Force"}
+	var row1 []interface{}
+	var row2 []interface{}
+	var rowTooShort []interface{}
+	var rowTooLong []interface{}
+
+	row1TimeBegin := time.Unix(32023904, 0)
+	row1TimeEnd := time.Unix(32023898, 0)
+	row2TimeBegin := time.Unix(32024904, 0)
+	row2TimeEnd := 	time.Unix(32024898, 0)
+
+	row1 = append(row1, 1)
+	row1 = append(row1, "A102")
+	row1 = append(row1, float64(row1TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row1 = append(row1, 10011)
+	row1 = append(row1, false)
+	row1 = append(row1, 45.6)
+	row1 = append(row1, 1.13)
+	row1 = append(row1, 0.023)
+
+	row2 = append(row2, 2)
+	row2 = append(row2, "A103")
+	row2 = append(row2, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row2 = append(row2, 10011)
+	row2 = append(row2, false)
+	row2 = append(row2, 44.6)
+	row2 = append(row2, 1.01)
+	row2 = append(row2, 0.021)
+
+	rowTooShort = append(rowTooShort, 2)
+	rowTooShort = append(rowTooShort, "A103")
+	rowTooShort = append(rowTooShort, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	rowTooShort = append(rowTooShort, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	rowTooShort = append(rowTooShort, 10011)
+	rowTooShort = append(rowTooShort, false)
+	rowTooShort = append(rowTooShort, 44.6)
+	rowTooShort = append(rowTooShort, 1.01)
+
+	rowTooLong = append(rowTooLong, 2)
+	rowTooLong = append(rowTooLong, "A103")
+	rowTooLong = append(rowTooLong, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	rowTooLong = append(rowTooLong, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	rowTooLong = append(rowTooLong, 10011)
+	rowTooLong = append(rowTooLong, false)
+	rowTooLong = append(rowTooLong, 44.6)
+	rowTooLong = append(rowTooLong, 1.01)
+	rowTooLong = append(rowTooLong, 0.021)
+	rowTooLong = append(rowTooLong, "entryTooMuch")
+
+
+	data = append(data, row1)
+	data = append(data, row2)
+
+	fmt.Printf("%s\n", data)
+
+	expectedError := errors.New("error: data row length not consistent with columnname length")
+	err := CheckOutputDimensions(data, columnNames)
+
+	if !reflect.DeepEqual(err, nil) {
+		t.Error()
+	}
+
+	data = append(data, rowTooShort)
+	err = CheckOutputDimensions(data, columnNames)
+	if !reflect.DeepEqual(err, expectedError) {
+		t.Error()
+	}
+
+	data[2] = rowTooLong
+	fmt.Printf("%s\n", data)
+	err = CheckOutputDimensions(data, columnNames)
+	if !reflect.DeepEqual(err, expectedError) {
 		t.Error()
 	}
 }
