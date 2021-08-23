@@ -1637,7 +1637,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	defer rowsInheritance.Close()
 
 	//Defining the base column names
-	data.ColumnNames = []string{"UID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
+	data.ColumnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
 	var indexRow int
 	var indexColumn int
 
