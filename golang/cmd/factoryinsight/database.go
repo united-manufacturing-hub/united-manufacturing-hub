@@ -1736,7 +1736,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 
 
-	// uid, valueName and value should always exist
+	// all queried values should always exist
 	for rowsInheritance.Next() {
 		var UID int
 		var timestampBegin time.Time
@@ -1750,7 +1750,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			return
 		}
 
-		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		//if productName (describing type of product) not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
 		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, productName)
 		var contains bool
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
