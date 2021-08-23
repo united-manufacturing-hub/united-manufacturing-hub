@@ -109,6 +109,12 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			go ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
 		case "endOrder":
 			go ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
+		case "productTag":
+			go ProcessProductTag(customerID, location, assetID, payloadType, payload, pg)
+		case "productTagString":
+			go ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
+		case "addParentToChild":
+			go ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
 		}
 	}
 }

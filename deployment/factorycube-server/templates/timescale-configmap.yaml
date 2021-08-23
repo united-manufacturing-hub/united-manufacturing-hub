@@ -168,7 +168,7 @@ data:
     	AvailabilityLossStates INTEGER[] DEFAULT '{40000, 180000, 190000, 200000, 210000, 220000}',
         PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'
     );
-     
+
 
     --- MIGRATIONS
     -- Add here your migrations
@@ -178,7 +178,58 @@ data:
 
     -- #74
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
-    
+
+    -- #297
+    ALTER TABLE uniqueProductTable ADD COLUMN IF NOT EXISTS uniqueProductAlternativeID TEXT NOT NULL;
+    ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS quality_class RESTRICT;
+    ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS station_id RESTRICT;
+    ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS uid CASCADE;
+    ALTER TABLE uniqueProductTable ADD COLUMN IF NOT EXISTS uniqueProductID SERIAL PRIMARY KEY;
+    ALTER TABLE uniqueProductTable DROP CONSTRAINT IF EXISTS uniqueproducttable_check;
+    ALTER TABLE uniqueProductTable ALTER COLUMN end_timestamp_ms DROP NOT NULL;
+    ALTER TABLE uniqueProductTable ALTER COLUMN product_id SET DATA TYPE INTEGER;
+    ALTER TABLE uniqueProductTable ADD CONSTRAINT productID_reference FOREIGN KEY (product_id) REFERENCES productTable (product_id);
+    ALTER TABLE uniqueProductTable ALTER COLUMN  end_timestamp_ms DROP NOT NULL;
+    ALTER TABLE uniqueProductTable ADD CONSTRAINT checkTimestampOrder CHECK ((begin_timestamp_ms < end_timestamp_ms) OR (end_timestamp_ms IS NULL));
+
+
+    -------------------- TimescaleDB table for product tags --------------------
+    CREATE TABLE IF NOT EXISTS productTagTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+        valueName               TEXT                                NOT NULL,
+        value                   DOUBLE PRECISION                    NULL,
+        UNIQUE(product_uid, valueName)
+    );
+    -- creating hypertable
+     SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
+
+    -------------------- TimescaleDB table for product tags strings --------------------
+    CREATE TABLE IF NOT EXISTS productTagStringTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+        valueName               TEXT                                NOT NULL,
+        value                   TEXT                                NULL,
+        UNIQUE(product_uid, valueName)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
+
+    -------------------- TimescaleDB table for product inheritance info --------------------
+    CREATE TABLE IF NOT EXISTS productInheritanceTable
+    (
+        timestamp               TIMESTAMPTZ                         NOT NULL,
+        parent_uid              SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+        child_uid               SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+        UNIQUE(parent_uid, child_uid)
+    );
+    -- creating hypertable
+     CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
+     CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
+
+
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
 

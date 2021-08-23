@@ -567,3 +567,59 @@ func StoreAssetIDToCache(customerID string, location string, assetID string, DBa
 		return
 	}
 }
+
+
+
+// GetUniqueProductIDFromCache gets uniqueProduct from cache
+func GetUniqueProductIDFromCache(aid string, DBassetID int) (uid int, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getUniqueProductID-%s-%d", aid, DBassetID)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if err == redis.Nil { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("error getting key from redis", key, err)
+		return
+	} else if value == "null" {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		uid, err = strconv.Atoi(value)
+
+		if err != nil {
+			zap.S().Errorf("error converting value to integer", key, err)
+			return
+		}
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreUniqueProductIDToCache stores uniqueProductID to cache
+func StoreUniqueProductIDToCache(aid string, DBassetID int, uid int) {
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getUniqueProductID-%s-%d", aid, DBassetID)
+
+	if uid == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(uid)
+
+	err := rdb.Set(ctx, key, b, dataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed")
+		return
+	}
+}
