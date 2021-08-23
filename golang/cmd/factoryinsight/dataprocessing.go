@@ -1946,3 +1946,14 @@ func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn 
 	dataOut = append(data, fullRow)
 	return
 }
+
+func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err error) {
+	length := len(columnNames)
+	for _, row := range data {
+		if length != len(row) {
+			err = errors.New("error: data row length not consistent with columnname length")
+			zap.S().Errorf("CheckOutputDimensions: dimensions wrong")
+		}
+	}
+	return nil
+}
