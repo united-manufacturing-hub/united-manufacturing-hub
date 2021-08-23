@@ -859,4 +859,7 @@ func TestCreateNewRowInData(t *testing.T) {
 	if !reflect.DeepEqual(dataOutput[2][8], nil) {
 		t.Error()
 	}
+	if !reflect.DeepEqual(len(dataOutput[2]), 9) {
+		t.Error()
+	}
 }
