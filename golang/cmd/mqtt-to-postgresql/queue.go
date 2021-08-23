@@ -23,6 +23,9 @@ const prefixAddOrder = "addOrder"
 const prefixStartOrder = "startOrder"
 const prefixEndOrder = "endOrder"
 const prefixAddMaintenanceActivity = "addMaintenanceActivity"
+const prefixProductTag = "productTag"
+const prefixProductTagString = "productTagString"
+const prefixAddParentToChild = "addParentToChild"
 
 type QueueObject struct {
 	Object    interface{}

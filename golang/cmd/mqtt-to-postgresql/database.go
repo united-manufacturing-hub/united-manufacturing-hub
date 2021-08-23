@@ -980,8 +980,8 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
-		INSERT INTO uniqueProductTable (uid, asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id) 
-		VALUES ($1, $2, to_timestamp($3 / 1000.0),to_timestamp($4 / 1000.0),$5,$6,$7,$8) 
+		INSERT INTO uniqueProductTable (asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, uniqueProductAlternativeID) 
+		VALUES ($1, to_timestamp($2 / 1000.0),to_timestamp($3 / 1000.0),$4,$5,$6) 
 		ON CONFLICT DO NOTHING;`)
 
 	if err != nil {
@@ -1004,7 +1004,7 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 			}
 		}
 		// Create statement
-		_, err = stmt.Exec(pt.UID, pt.DBAssetID, pt.TimestampMsBegin, pt.TimestampMsEnd, pt.ProductID, pt.IsScrap, pt.QualityClass, pt.StationID)
+		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(pt.EndTimestampMs), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
 		if err != nil {
 			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
@@ -1046,6 +1046,362 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 	return
 
 }
+
+
+// storeIntoDatabaseRoutineProductTag fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineProductTag(pg *goque.PrefixQueue) {
+	prefix := prefixProductTag
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseProductTag(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
+		INSERT INTO productTagTable (valueName, value, timestamp, product_uid) 
+		VALUES ($1, $2, to_timestamp($3 / 1000.0), $4) 
+		ON CONFLICT DO NOTHING;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt productTagQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		var uid int
+		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		if err != nil {
+			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
+			return
+		}
+		// Create statement
+		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+	return
+
+}
+
+
+// storeIntoDatabaseRoutineProductTagString fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineProductTagString(pg *goque.PrefixQueue) {
+	prefix := prefixProductTagString
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseProductTagString(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
+		INSERT INTO productTagStringTable (valueName, value, timestamp, product_uid) 
+		VALUES ($1, $2, to_timestamp($3 / 1000.0), $4) 
+		ON CONFLICT DO NOTHING;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt productTagStringQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		var uid int
+		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		if err != nil {
+			zap.S().Errorf("Stopped writing productTagString in Database, uid not found")
+			return
+		}
+		// Create statement
+		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+	return
+
+}
+
+
+// storeIntoDatabaseRoutineAddParentToChild fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineAddParentToChild(pg *goque.PrefixQueue) {
+	prefix := prefixAddParentToChild
+
+	for range time.Tick(time.Duration(1) * time.Second) {
+
+		// GetItemsFromQueue
+
+		itemArray, err := getAllItemsInQueue(prefix, pg)
+		if err != nil {
+			zap.S().Errorf("Failed to get items from database", prefix)
+			continue
+		}
+
+		if len(itemArray) == 0 {
+			zap.S().Debugf("Queue empty", prefix)
+			continue
+		}
+
+		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
+
+		err = storeItemsIntoDatabaseAddParentToChild(itemArray)
+		if err != nil {
+			zap.S().Errorf("Failed to store items in database", prefix)
+			addMultipleItemsToQueue(prefix, pg, itemArray)
+		}
+	}
+}
+
+func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`
+		INSERT INTO productInheritanceTable (parent_uid, child_uid, timestamp) 
+		VALUES ($1, $2, to_timestamp($3 / 1000.0)) 
+		ON CONFLICT DO NOTHING;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt addParentToChildQueue
+
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		var childUid int
+		childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
+		if err != nil {
+			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
+			return
+		}
+		var parentUid = GetLatestParentUniqueProductID(pt.ParentAID, pt.DBAssetID)
+		// Create statement
+		_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+	return
+
+}
+
 
 // storeIntoDatabaseRoutineShift fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
@@ -1201,7 +1557,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 
 	var stmt *sql.Stmt
 
-	stmt, err = txn.Prepare(`UPDATE uniqueProductTable SET is_scrap = True WHERE uid = $1 AND asset_id = $2;`)
+	stmt, err = txn.Prepare(`UPDATE uniqueProductTable SET is_scrap = True WHERE uniqueProductID = $1 AND asset_id = $2;`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
 		if err != nil {
@@ -1908,4 +2264,45 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 	}
 
 	return
+}
+
+
+func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
+
+	uid,  cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
+	if !cacheHit { // data NOT found
+		err = db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
+		if err == sql.ErrNoRows {
+			zap.S().Errorf("No Results Found", aid, DBassetID)
+		} else if err != nil {
+			PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
+		}
+		internal.StoreUniqueProductIDToCache(aid, DBassetID, uid)
+	}
+
+	return
+}
+
+
+func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
+
+	err := db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",
+		aid, assetID).Scan(&uid)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found", aid, assetID)
+	} else if err != nil {
+		PQErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
+	}
+	return
+}
+
+// NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
+func NewNullInt64 (i int64) sql.NullInt64 {
+	if i == 0  {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{
+		Int64: i,
+		Valid: true,
+	}
 }
