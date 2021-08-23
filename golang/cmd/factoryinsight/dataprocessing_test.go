@@ -798,7 +798,7 @@ func TestCreateNewRowInData(t *testing.T) {
 
 
 	UID = 12
-	AID = "TestInsertedAID124"
+	AID = "A106"
 	timestampBegin = time.Unix(32023904, 0)
 	timestampEnd.Time = time.Unix(32023999, 0)
 	timestampEnd.Valid = true
@@ -806,10 +806,10 @@ func TestCreateNewRowInData(t *testing.T) {
 	isScrap = false
 	valueName.String = "Force"
 	valueName.Valid = true
-	value.Float64 = 23.24
+	value.Float64 = 1.38
 	value.Valid = true
 
-	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Speed"}
+	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Torque", "Speed", "Force"}
 	var row1 []interface{}
 	var row2 []interface{}
 
@@ -824,7 +824,9 @@ func TestCreateNewRowInData(t *testing.T) {
 	row1 = append(row1, float64(row1TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
 	row1 = append(row1, 10011)
 	row1 = append(row1, false)
+	row1 = append(row1, 45.6)
 	row1 = append(row1, 1.13)
+	row1 = append(row1, 0.023)
 
 	row2 = append(row2, 2)
 	row2 = append(row2, "A103")
@@ -832,17 +834,29 @@ func TestCreateNewRowInData(t *testing.T) {
 	row2 = append(row2, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
 	row2 = append(row2, 10011)
 	row2 = append(row2, false)
+	row2 = append(row2, 44.6)
 	row2 = append(row2, 1.01)
+	row2 = append(row2, 0.021)
 
 	data = append(data, row1)
 	data = append(data, row2)
 
 
 
-	dataOutput := CreateNewRowInData(data, columnNames, 6, UID, AID,
+	dataOutput := CreateNewRowInData(data, columnNames, 7, UID, AID,
 		timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 	fmt.Printf("%s\n", dataOutput)
 	if !reflect.DeepEqual(len(dataOutput), 3) {
+		t.Error()
+	}
+
+	if !reflect.DeepEqual(dataOutput[2][6], nil) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(dataOutput[2][7], value.Float64) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(dataOutput[2][8], nil) {
 		t.Error()
 	}
 }
