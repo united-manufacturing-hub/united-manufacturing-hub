@@ -1589,10 +1589,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	sqlStatementDataInheritance := `
 	SELECT unProdTab.uniqueProductID, unProdTab.begin_timestamp_ms, prodTab.product_name, unProdTabForAID.uniqueProductAlternativeID
-	FROM uniqueProductTable unProdTab, productInheritanceTable prodInher, uniqueProductTable unProdTabForAID, productTable prodTab
-		INNER JOIN prodInher ON unProdTab.uniqueProductID = prodInher.child_uid
-		INNER JOIN unProdTabForAID ON prodInher.parent_uid = unProdTabForAID.uniqueProductID
-		INNER JOIN prodTab ON unProdTabForAID.product_id = prodTab.product_id
+	FROM uniqueProductTable unProdTab
+		INNER JOIN productInheritanceTable prodInher ON unProdTab.uniqueProductID = prodInher.child_uid
+		INNER JOIN uniqueProductTable unProdTabForAID ON prodInher.parent_uid = unProdTabForAID.uniqueProductID
+		INNER JOIN productTable prodTab ON unProdTabForAID.product_id = prodTab.product_id
 	WHERE unProdTab.asset_id = $1 
 		AND (unProdTab.begin_timestamp_ms BETWEEN $2 AND $3 OR unProdTab.end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (unProdTab.begin_timestamp_ms < $2 AND unProdTab.end_timestamp_ms > $3) 
