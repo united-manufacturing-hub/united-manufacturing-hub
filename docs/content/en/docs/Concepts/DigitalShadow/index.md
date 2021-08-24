@@ -383,11 +383,11 @@ the data in the desired format.
 
 #### Implemented functionality for digital shadow
 The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one 
-childUID, all parentUID's and all available alternativeUniqueProductID's. All uniqueProductTags and 
+childUID, AID and all parentAID's regarding the asset. All uniqueProductTags and 
 uniqueProductTagStrings (value and timestamp) for the childUID are returned to the same datapoint.
 
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
-from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID`.
+from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format).
 
 Example Return with two data points: 
 ```json
@@ -446,7 +446,7 @@ Example Return with two data points:
 2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
 3. Get the AID's for the parentUID's from the `uniqueProductTable`.
 4. Get all key, value pairs from the `productTagTable` and `productTagStringTable` for the in step 1 selected UID's.
-5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values and timestamps.
+5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values.
 
 ### SQL Database to connect to Tableau server
 
@@ -455,10 +455,10 @@ tableau server can't directly connect to the REST API, we need to either use a d
 tableau web data connector. We were advised against the tableau web data connector 
 (general info about tableau webdata connectors: 
 https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm ). Because of that we implemented a 
-sql database. We used MySQL because it is opensource, works well with node-red and with tableau, which makes it the best choice for
-the task. 
+sql database. We used timescaleDB because it is opensource, works well with node-red and with tableau and is fast with 
+timeseries data, which makes it the best choice for the task. 
 According to the structure overview in the beginning of this article we are using node-red to fetch the required data
-from the REST API of `factoryinsight` and push it into the MySQL database. The MySQL database can then be accessed by 
+from the REST API of `factoryinsight` and push it into the timescaleDB. The database can then be accessed by 
 the tableau server.
 
 ## Industry Example
