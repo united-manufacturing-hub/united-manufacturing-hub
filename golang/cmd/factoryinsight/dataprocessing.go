@@ -1890,7 +1890,7 @@ func SliceContainsInt(slice [][]interface{}, number int, column int) (Contains b
 	return false, 0
 }
 
-//ChangeOutputFormat tests, if inputName is already in output format and adds, if not
+//ChangeOutputFormat tests, if inputColumnName is already in output format and adds name, if not
 func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{},
 	columnNamesOutput []string, columnIndex int) {
 	for i, name := range columnNames {
@@ -1908,7 +1908,7 @@ func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnN
 	return data, columnNames, columnIndex
 }
 
-//LengthenSliceToFitNames receives an interface slice and checks if the name is included, if not it adds the name to the slice.
+//LengthenSliceToFitNames receives an interface slice and checks if it is as long as the names slice, if not it adds nil entries.
 func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
 	lengthNames := len(names)
 	if len(slice) == lengthNames {
@@ -1924,7 +1924,7 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 	return slice
 }
 
-//CreateNewRowInData adds a Row to data, and fills in null, where no information is known yet.
+//CreateNewRowInData adds a Row to data, and fills in nil, where no information is known yet.
 func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn int, UID int, AID string,
 	timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString,
 	value sql.NullFloat64) (dataOut [][]interface{}){
@@ -1947,6 +1947,7 @@ func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn 
 	return
 }
 
+//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
 func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err error) {
 	length := len(columnNames)
 	for _, row := range data {
