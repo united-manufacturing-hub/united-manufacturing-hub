@@ -135,10 +135,6 @@ components:
       type: http
       scheme: basic
   schemas: # todo move inline data objects to schemas
-    blank:
-      properties:
-        none:
-          type: string
     customer_location:
         type: array
         items:
