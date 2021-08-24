@@ -389,61 +389,58 @@ uniqueProductTagStrings (value and timestamp) for the childUID are returned to t
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
 from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID`.
 
-Example Format: 
+Example Return with two data points: 
 ```json
 {
-"ValveHeadAlternativeUniqueID": str<123>,
-"TorqueScrew1": number<5.0>,
-"TorqueScrew2": number<5.0>,
-"TorqueScrew3": number<5.0>,
-"TorqueScrew4": number<5.0>,
-"gasketUID": number<5.0>,
-"childUID": number<5.0>,
-"Timestamp_ValveHeadID": number<5.0>,
-"Timestamp_GasketImageID": number<5.0>
+  "columnNames":
+  [
+    "UID",
+    "AID",
+    "TimestampBegin",
+    "TimestampEnd",
+    "ProductID",
+    "IsScrap",
+    "torque2",
+    "torque1",
+    "torque3",
+    "torque4",
+    "VH_Type123",
+    "Gasket_Type123"
+  ],
+  "datapoints":
+  [
+    [
+      2,
+      "57000458",
+      1629807326485,
+      null,
+      15,
+      false,
+      5.694793469033914,
+      5.500782656464146,
+      5.868141105450906,
+      5.780416969961664,
+      "57000458",
+      "12000459"
+    ],
+    [
+      6,
+      "57000459",
+      1629807443961,
+      null,
+      15,
+      false,
+      5.835010327979067,
+      5.9666619086350945,
+      5.425482064635844,
+      5.6943075975030535,
+      "57000459",
+      "12000460"
+    ]
+  ]
 }
 ```
 
-
-Example Return:
-```json
-[
-  {
-    "ValveHeadAlternativeUniqueID": "123",
-    "TorqueScrew1": 5.2,
-    "TorqueScrew2": 5.0,
-    "TorqueScrew3": 5.0,
-    "TorqueScrew4": 5.0,
-    "gasketUID":5.0,
-    "childUID": 5.0,
-    "Timestamp_ValveHeadID": 5.0,
-    "Timestamp_GasketImageID": 5.0
-  },
-  {
-    "ValveHeadAlternativeUniqueID": "124",
-    "TorqueScrew1" : 5.0,
-    "TorqueScrew2" : 5.0,
-    "TorqueScrew3" : 5.0,
-    "TorqueScrew4" : 5.0,
-    "gasketUID" : 5.0,
-    "childUID" : 5.0,
-    "Timestamp_ValveHeadID": 5.0,
-    "Timestamp_GasketImageID": 5.0
-  },
-  {
-    "ValveHeadAlternativeUniqueID": "125",
-    "TorqueScrew1" : 5.0,
-    "TorqueScrew2" : 5.0,
-    "TorqueScrew3" : 5.0,
-    "TorqueScrew4" : 5.0,
-    "gasketUID" : 5.0,
-    "childUID":  5.0,
-    "Timestamp_ValveHeadID": 5.0,
-    "Timestamp_GasketImageID": 5.0
-  }
-
-]
-```
 #### Implemented logic of factoryinsight to achieve the functionality
 1. Get all productUID's and AID's from `uniqueProductTable` within the specified time and from the specified asset.
 2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
