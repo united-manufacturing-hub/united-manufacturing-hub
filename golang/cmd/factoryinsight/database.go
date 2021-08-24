@@ -1567,7 +1567,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
-	//getting the data
+	//getting all uniqueProducts and if existing all productTags (float)
 	sqlStatementData := `
 	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
@@ -1575,9 +1575,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
-	ORDER BY uniqueProductID ASC;` // fix name for product table in <productTagTable.product_uid>
-	// use 2 sql statements 1 for tags with scalar values 1 for tags with string values
-	// see http://go-database-sql.org/retrieving.html
+	ORDER BY uniqueProductID ASC;`
+
+	//getting productTagString (string) data linked to UID's
 	sqlStatementDataStrings := `
 	SELECT uniqueProductID, begin_timestamp_ms, valueName, value
 	FROM uniqueProductTable 
@@ -1587,6 +1587,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY uniqueProductID ASC;`
 
+	//getting inheritance data (product_name and AID of parents at the specified asset)
 	sqlStatementDataInheritance := `
 	SELECT unProdTab.uniqueProductID, unProdTab.begin_timestamp_ms, prodTab.product_name, unProdTabForAID.uniqueProductAlternativeID
 	FROM uniqueProductTable unProdTab
@@ -1638,6 +1639,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	//Defining the base column names
 	data.ColumnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
+
 	var indexRow int
 	var indexColumn int
 
@@ -1669,7 +1671,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
 				timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 		} else { //if there are already rows in Data.datapoint
-			//if same uid as row before, add value to datapoint
 			indexRow = len(data.Datapoints) - 1
 			lastUID, ok := data.Datapoints[indexRow][0].(int)
 			if ok == false {
@@ -1698,7 +1699,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
-	// uid, valueName and value should always exist
+	// all queried values should always exist here
 	for rowsStrings.Next() {
 		var UID int
 		var timestampBegin time.Time
@@ -1720,7 +1721,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		var contains bool
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
-		if contains { //true if uid already in data.Datapoints
+		if contains { //true if UID already in data.Datapoints
 			data.Datapoints[indexRow][indexColumn] = value.String
 		} else { //throw error
 			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
@@ -1736,7 +1737,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 
 
-	// all queried values should always exist
+	// all queried values should always exist here
 	for rowsInheritance.Next() {
 		var UID int
 		var timestampBegin time.Time
@@ -1755,9 +1756,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		var contains bool
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
-		if contains { //true if uid already in data.Datapoints
+		if contains { //true if UID already in data.Datapoints
 			data.Datapoints[indexRow][indexColumn] = AID
-		} else { //throw error
+		} else {
 			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
 			return
 		}
