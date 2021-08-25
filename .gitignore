@@ -45,3 +45,18 @@ cameraconnect/assets/producer_files/*
 
 **/.idea
 **/node_modules
+#openapi generated files (docs are left in repo)
+/docs/static/openapi/output/factory_input/python/
+/docs/static/openapi/output/factory_input/rust/
+/docs/static/openapi/output/factory_input/go/
+/docs/static/openapi/output/factory_insight/go/
+/docs/static/openapi/output/factory_insight/python/
+/docs/static/openapi/output/factory_insight/rust/
+
+docs/static/openapi/output/factory_input/html/.openapi-generator/
+
+docs/static/openapi/output/factory_insight/html/.openapi-generator/
+
+docs/static/openapi/output/factory_insight/markdown/.openapi-generator/
+
+docs/static/openapi/output/factory_input/markdown/.openapi-generator/
