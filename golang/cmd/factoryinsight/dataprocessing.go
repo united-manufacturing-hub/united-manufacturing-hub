@@ -1924,7 +1924,7 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 	return slice
 }
 
-//CreateNewRowInData adds a Row to data, and fills in nil, where no information is known yet.
+//CreateNewRowInData adds a Row to data specifically for uniqueProductsWithTags, and fills in nil, where no information is known yet.
 func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn int, UID int, AID string,
 	timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString,
 	value sql.NullFloat64) (dataOut [][]interface{}){
