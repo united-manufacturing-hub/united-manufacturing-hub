@@ -1032,6 +1032,7 @@ components:
               - "Timestamp end"
               - "Is Scrap"
               - "Quality class"
+              - "Quality probability"
           datapoints:
             type: array
             items:
@@ -1049,12 +1050,14 @@ components:
                 - "test123"
                 - false
                 - "1a"
+                - 0.1
               - - "16106319890449364101610631989682"
                 - 1610631989044
                 - 1610631989682
                 - "test123"
                 - false
                 - "1a"
+                - 0.98
 
     asset_product_picture:
         properties:

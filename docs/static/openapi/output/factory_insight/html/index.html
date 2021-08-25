@@ -1510,7 +1510,7 @@ ul.nav-tabs {
     "columnNames" : {
       "type" : "array",
       "description" : "the column names",
-      "example" : [ "ImageID", "Timestamp begin", "Timestamp end", "Is Scrap", "Quality class" ],
+      "example" : [ "ImageID", "Timestamp begin", "Timestamp end", "Is Scrap", "Quality class", "Quality probability" ],
       "items" : {
         "type" : "string"
       }
@@ -1518,7 +1518,7 @@ ul.nav-tabs {
     "datapoints" : {
       "type" : "array",
       "description" : "the returned data",
-      "example" : [ [ "161063193099727336211610631932133", 1610631930997, 1610631932133, "test123", false, "1a" ], [ "16106319890449364101610631989682", 1610631989044, 1610631989682, "test123", false, "1a" ] ],
+      "example" : [ [ "161063193099727336211610631932133", 1610631930997, 1610631932133, "test123", false, "1a", 0.1 ], [ "16106319890449364101610631989682", 1610631989044, 1610631989682, "test123", false, "1a", 0.98 ] ],
       "items" : {
         "type" : "array",
         "items" : {
