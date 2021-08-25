@@ -1233,10 +1233,10 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 		error = err
 		return
 	}
-	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap", "Quality class", "Station ID"}
+	data.ColumnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
 
 	sqlStatement := `
-	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id 
+	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap 
 	FROM uniqueProductTable 
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
@@ -1257,29 +1257,31 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 
 	for rows.Next() {
 
-		var UID string
+		var UID int
+		var AID string
 		var timestampBegin time.Time
-		var timestampEnd time.Time
-		var productID string
+		var timestampEnd sql.NullTime
+		var productID int
 		var isScrap bool
-		var qualityClass string
-		var stationID string
 
-		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &qualityClass, &stationID)
+		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
 		if err != nil {
 			PQErrorHandling(span, sqlStatement, err, false)
 			error = err
 			return
 		}
-		fullRow := []interface{}{
-			UID,
-			float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			productID,
-			isScrap,
-			qualityClass,
-			stationID,
+		var fullRow []interface{}
+		fullRow = append(fullRow, UID)
+		fullRow = append(fullRow, AID)
+		fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+		if timestampEnd.Valid {
+			fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+		} else {
+			fullRow = append(fullRow, nil)
 		}
+		fullRow = append(fullRow, productID)
+		fullRow = append(fullRow, isScrap)
+
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rows.Err()
@@ -1289,6 +1291,11 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 		return
 	}
 
+	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
+	if err != nil {
+		error = err
+		return
+	}
 	return
 }
 
