@@ -60,6 +60,7 @@ paths:
   /{customer}/{location}/{asset}/{value}:
     post:
       summary: Create MQTT Message from Rest call
+      operationId: publishJson # only fixing spec
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'

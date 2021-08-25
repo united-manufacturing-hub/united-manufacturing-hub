@@ -129,6 +129,39 @@ components:
           #ToDO add Formater
           #Added example: cameraID/milliseconds
           #sdfjhksda19273/1629478025909
+      NumberOfImages:
+        in: query
+        name: NumberOfImages
+        required: false
+        schema:
+          type: integer
+        description: >-
+          max number of images to get, ordered by time desc, this means 1
+          yields the last image recorded, this does not overwrite, but specify the number
+          of images to get, aka the number of images returned can only get lower
+        example:
+          1
+      TagName:
+        in: query
+        name: TagName
+        required: false
+        schema:
+          type: string
+        description: >-
+          filters output by entries with a tag of type Tag Type
+        example:
+          "QualityClass"
+      TagValue:
+        in: query
+        name: TagValue
+        required: false
+        schema:
+          type: string
+        description: >-
+          filters output by entries with tag of type Tag Type and this vlaue.
+          requires tag name to be set
+        example:
+          "scrap"
 
   securitySchemes:
     BasicAuth:
@@ -1581,6 +1614,9 @@ paths:
         - $ref: '#/components/parameters/asset'
         - $ref: '#/components/parameters/from'
         - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/NumberOfImages'
+        - $ref: '#/components/parameters/TagName'
+        - $ref: '#/components/parameters/TagValue'
         #ToDo latest as parameter to get latest image?
       responses:
         '200':
