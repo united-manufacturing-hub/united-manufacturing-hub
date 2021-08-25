@@ -13408,7 +13408,7 @@ name of the asset
                             <pre class="prettyprint"><code class="language-bsh">curl -X GET\
  -H "Authorization: Basic [[basicHash]]"\
  -H "Accept: application/json"\
- "https://api.industrial-analytics.net/api/v1/{customer}/{location}/{asset}/uniqueImageID?from=&to="</code></pre>
+ "https://api.industrial-analytics.net/api/v1/{customer}/{location}/{asset}/uniqueImageID?from=&to=&NumberOfImages=&TagName=&TagValue="</code></pre>
                           </div>
                           <div class="tab-pane" id="examples-Default-getAssetUniqueImageId-0-java">
                             <pre class="prettyprint"><code class="language-java">import org.openapitools.client.*;
@@ -13435,9 +13435,12 @@ public class DefaultApiExample {
         String asset = WeavingMachine; // String | name of the asset
         date from = 2020-11-10T00:00:00.000Z; // date | Get data from this timestamp on (in RFC3339 format)
         date to = 2020-11-10T00:00:00.000Z; // date | Get data till this timestamp (in RFC3339 format)
+        Integer numberOfImages = 1; // Integer | max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower
+        String tagName = QualityClass; // String | filters output by entries with a tag of type Tag Type
+        String tagValue = scrap; // String | filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set
         
         try {
-            asset_unique_ImageID result = apiInstance.getAssetUniqueImageId(customer, location, asset, from, to);
+            asset_unique_ImageID result = apiInstance.getAssetUniqueImageId(customer, location, asset, from, to, numberOfImages, tagName, tagValue);
             System.out.println(result);
         } catch (ApiException e) {
             System.err.println("Exception when calling DefaultApi#getAssetUniqueImageId");
@@ -13459,9 +13462,12 @@ public class DefaultApiExample {
         String asset = WeavingMachine; // String | name of the asset
         date from = 2020-11-10T00:00:00.000Z; // date | Get data from this timestamp on (in RFC3339 format)
         date to = 2020-11-10T00:00:00.000Z; // date | Get data till this timestamp (in RFC3339 format)
+        Integer numberOfImages = 1; // Integer | max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower
+        String tagName = QualityClass; // String | filters output by entries with a tag of type Tag Type
+        String tagValue = scrap; // String | filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set
         
         try {
-            asset_unique_ImageID result = apiInstance.getAssetUniqueImageId(customer, location, asset, from, to);
+            asset_unique_ImageID result = apiInstance.getAssetUniqueImageId(customer, location, asset, from, to, numberOfImages, tagName, tagValue);
             System.out.println(result);
         } catch (ApiException e) {
             System.err.println("Exception when calling DefaultApi#getAssetUniqueImageId");
@@ -13488,12 +13494,18 @@ String *location = AachenPlant; // name of the location (default to null)
 String *asset = WeavingMachine; // name of the asset (default to null)
 date *from = 2020-11-10T00:00:00.000Z; // Get data from this timestamp on (in RFC3339 format) (default to null)
 date *to = 2020-11-10T00:00:00.000Z; // Get data till this timestamp (in RFC3339 format) (default to null)
+Integer *numberOfImages = 1; // max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower (optional) (default to null)
+String *tagName = QualityClass; // filters output by entries with a tag of type Tag Type (optional) (default to null)
+String *tagValue = scrap; // filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set (optional) (default to null)
 
 [apiInstance getAssetUniqueImageIdWith:customer
     location:location
     asset:asset
     from:from
     to:to
+    numberOfImages:numberOfImages
+    tagName:tagName
+    tagValue:tagValue
               completionHandler: ^(asset_unique_ImageID output, NSError* error) {
     if (output) {
         NSLog(@"%@", output);
@@ -13521,6 +13533,11 @@ var location = AachenPlant; // {String} name of the location
 var asset = WeavingMachine; // {String} name of the asset
 var from = 2020-11-10T00:00:00.000Z; // {date} Get data from this timestamp on (in RFC3339 format)
 var to = 2020-11-10T00:00:00.000Z; // {date} Get data till this timestamp (in RFC3339 format)
+var opts = {
+  'numberOfImages': 1, // {Integer} max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower
+  'tagName': QualityClass, // {String} filters output by entries with a tag of type Tag Type
+  'tagValue': scrap // {String} filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set
+};
 
 var callback = function(error, data, response) {
   if (error) {
@@ -13529,7 +13546,7 @@ var callback = function(error, data, response) {
     console.log('API called successfully. Returned data: ' + data);
   }
 };
-api.getAssetUniqueImageId(customer, location, asset, from, to, callback);
+api.getAssetUniqueImageId(customer, location, asset, from, to, opts, callback);
 </code></pre>
                             </div>
 
@@ -13560,9 +13577,12 @@ namespace Example
             var asset = WeavingMachine;  // String | name of the asset (default to null)
             var from = 2020-11-10T00:00:00.000Z;  // date | Get data from this timestamp on (in RFC3339 format) (default to null)
             var to = 2020-11-10T00:00:00.000Z;  // date | Get data till this timestamp (in RFC3339 format) (default to null)
+            var numberOfImages = 1;  // Integer | max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower (optional)  (default to null)
+            var tagName = QualityClass;  // String | filters output by entries with a tag of type Tag Type (optional)  (default to null)
+            var tagValue = scrap;  // String | filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set (optional)  (default to null)
 
             try {
-                asset_unique_ImageID result = apiInstance.getAssetUniqueImageId(customer, location, asset, from, to);
+                asset_unique_ImageID result = apiInstance.getAssetUniqueImageId(customer, location, asset, from, to, numberOfImages, tagName, tagValue);
                 Debug.WriteLine(result);
             } catch (Exception e) {
                 Debug.Print("Exception when calling DefaultApi.getAssetUniqueImageId: " + e.Message );
@@ -13588,9 +13608,12 @@ $location = AachenPlant; // String | name of the location
 $asset = WeavingMachine; // String | name of the asset
 $from = 2020-11-10T00:00:00.000Z; // date | Get data from this timestamp on (in RFC3339 format)
 $to = 2020-11-10T00:00:00.000Z; // date | Get data till this timestamp (in RFC3339 format)
+$numberOfImages = 1; // Integer | max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower
+$tagName = QualityClass; // String | filters output by entries with a tag of type Tag Type
+$tagValue = scrap; // String | filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set
 
 try {
-    $result = $api_instance->getAssetUniqueImageId($customer, $location, $asset, $from, $to);
+    $result = $api_instance->getAssetUniqueImageId($customer, $location, $asset, $from, $to, $numberOfImages, $tagName, $tagValue);
     print_r($result);
 } catch (Exception $e) {
     echo 'Exception when calling DefaultApi->getAssetUniqueImageId: ', $e->getMessage(), PHP_EOL;
@@ -13614,9 +13637,12 @@ my $location = AachenPlant; # String | name of the location
 my $asset = WeavingMachine; # String | name of the asset
 my $from = 2020-11-10T00:00:00.000Z; # date | Get data from this timestamp on (in RFC3339 format)
 my $to = 2020-11-10T00:00:00.000Z; # date | Get data till this timestamp (in RFC3339 format)
+my $numberOfImages = 1; # Integer | max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower
+my $tagName = QualityClass; # String | filters output by entries with a tag of type Tag Type
+my $tagValue = scrap; # String | filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set
 
 eval { 
-    my $result = $api_instance->getAssetUniqueImageId(customer => $customer, location => $location, asset => $asset, from => $from, to => $to);
+    my $result = $api_instance->getAssetUniqueImageId(customer => $customer, location => $location, asset => $asset, from => $from, to => $to, numberOfImages => $numberOfImages, tagName => $tagName, tagValue => $tagValue);
     print Dumper($result);
 };
 if ($@) {
@@ -13642,9 +13668,12 @@ location = AachenPlant # String | name of the location (default to null)
 asset = WeavingMachine # String | name of the asset (default to null)
 from = 2020-11-10T00:00:00.000Z # date | Get data from this timestamp on (in RFC3339 format) (default to null)
 to = 2020-11-10T00:00:00.000Z # date | Get data till this timestamp (in RFC3339 format) (default to null)
+numberOfImages = 1 # Integer | max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower (optional) (default to null)
+tagName = QualityClass # String | filters output by entries with a tag of type Tag Type (optional) (default to null)
+tagValue = scrap # String | filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set (optional) (default to null)
 
 try: 
-    api_response = api_instance.get_asset_unique_image_id(customer, location, asset, from, to)
+    api_response = api_instance.get_asset_unique_image_id(customer, location, asset, from, to, numberOfImages=numberOfImages, tagName=tagName, tagValue=tagValue)
     pprint(api_response)
 except ApiException as e:
     print("Exception when calling DefaultApi->getAssetUniqueImageId: %s\n" % e)</code></pre>
@@ -13659,9 +13688,12 @@ pub fn main() {
     let asset = WeavingMachine; // String
     let from = 2020-11-10T00:00:00.000Z; // date
     let to = 2020-11-10T00:00:00.000Z; // date
+    let numberOfImages = 1; // Integer
+    let tagName = QualityClass; // String
+    let tagValue = scrap; // String
 
     let mut context = DefaultApi::Context::default();
-    let result = client.getAssetUniqueImageId(customer, location, asset, from, to, &context).wait();
+    let result = client.getAssetUniqueImageId(customer, location, asset, from, to, numberOfImages, tagName, tagValue, &context).wait();
 
     println!("{:?}", result);
 }
@@ -13809,6 +13841,66 @@ Get data till this timestamp (in RFC3339 format)
                 <div class="inner required">
                     Required
                 </div>
+        </div>
+    </div>
+</td>
+</tr>
+
+                                <tr><td style="width:150px;">NumberOfImages</td>
+<td>
+
+
+    <div id="d2e199_getAssetUniqueImageId_numberOfImages">
+        <div class="json-schema-view">
+            <div class="primitive">
+                <span class="type">
+                    Integer
+                </span>
+
+                    <div class="inner description marked">
+max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower
+                    </div>
+            </div>
+        </div>
+    </div>
+</td>
+</tr>
+
+                                <tr><td style="width:150px;">TagName</td>
+<td>
+
+
+    <div id="d2e199_getAssetUniqueImageId_tagName">
+        <div class="json-schema-view">
+            <div class="primitive">
+                <span class="type">
+                    String
+                </span>
+
+                    <div class="inner description marked">
+filters output by entries with a tag of type Tag Type
+                    </div>
+            </div>
+        </div>
+    </div>
+</td>
+</tr>
+
+                                <tr><td style="width:150px;">TagValue</td>
+<td>
+
+
+    <div id="d2e199_getAssetUniqueImageId_tagValue">
+        <div class="json-schema-view">
+            <div class="primitive">
+                <span class="type">
+                    String
+                </span>
+
+                    <div class="inner description marked">
+filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set
+                    </div>
+            </div>
         </div>
     </div>
 </td>

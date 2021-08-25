@@ -4,14 +4,16 @@ All URIs are relative to *https://api.industrial-analytics.net/factoryinput/v1*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**customerLocationAssetValuePost**](DefaultApi.md#customerLocationAssetValuePost) | **POST** /{customer}/{location}/{asset}/{value} | Create MQTT Message from Rest call
+[**publishJson**](DefaultApi.md#publishJson) | **POST** /{customer}/{location}/{asset}/{value} | Create MQTT Message from Rest call
 
 
-<a name="customerLocationAssetValuePost"></a>
-# **customerLocationAssetValuePost**
-> customerLocationAssetValuePost(customer, location, asset, value, body)
+<a name="publishJson"></a>
+# **publishJson**
+> publishJson(customer, location, asset, value, body)
 
 Create MQTT Message from Rest call
+
+    pulish mqtt message through rest
 
 ### Parameters
 

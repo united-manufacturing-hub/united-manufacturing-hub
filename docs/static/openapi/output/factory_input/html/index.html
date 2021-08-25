@@ -865,8 +865,8 @@ ul.nav-tabs {
             <li class="nav-fixed nav-header active" data-group="_"><a href="#api-_">API Summary</a></li>
 
                   <li class="nav-header" data-group="Default"><a href="#api-Default">API Methods - Default</a></li>
-                    <li data-group="Default" data-name="customerLocationAssetValuePost" class="">
-                      <a href="#api-Default-customerLocationAssetValuePost">customerLocationAssetValuePost</a>
+                    <li data-group="Default" data-name="publishJson" class="">
+                      <a href="#api-Default-publishJson">publishJson</a>
                     </li>
           </ul>
         </nav>
@@ -891,16 +891,16 @@ ul.nav-tabs {
         <div id="sections">
                 <section id="api-Default">
                   <h1>Default</h1>
-                    <div id="api-Default-customerLocationAssetValuePost">
-                      <article id="api-Default-customerLocationAssetValuePost-0" data-group="User" data-name="customerLocationAssetValuePost" data-version="0">
+                    <div id="api-Default-publishJson">
+                      <article id="api-Default-publishJson-0" data-group="User" data-name="publishJson" data-version="0">
                         <div class="pull-left">
-                          <h1>customerLocationAssetValuePost</h1>
+                          <h1>publishJson</h1>
                           <p>Create MQTT Message from Rest call</p>
                         </div>
                         <div class="pull-right"></div>
                         <div class="clearfix"></div>
                         <p></p>
-                        <p class="marked"></p>
+                        <p class="marked">pulish mqtt message through rest</p>
                         <p></p>
                         <br />
                         <pre class="prettyprint language-html prettyprinted" data-type="post"><code><span class="pln">/{customer}/{location}/{asset}/{value}</span></code></pre>
@@ -908,28 +908,28 @@ ul.nav-tabs {
                           <h3>Usage and SDK Samples</h3>
                         </p>
                         <ul class="nav nav-tabs nav-tabs-examples">
-                          <li class="active"><a href="#examples-Default-customerLocationAssetValuePost-0-curl">Curl</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-java">Java</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-android">Android</a></li>
-                          <!--<li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-groovy">Groovy</a></li>-->
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-objc">Obj-C</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-javascript">JavaScript</a></li>
-                          <!--<li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-angular">Angular</a></li>-->
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-csharp">C#</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-php">PHP</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-perl">Perl</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-python">Python</a></li>
-                          <li class=""><a href="#examples-Default-customerLocationAssetValuePost-0-rust">Rust</a></li>
+                          <li class="active"><a href="#examples-Default-publishJson-0-curl">Curl</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-java">Java</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-android">Android</a></li>
+                          <!--<li class=""><a href="#examples-Default-publishJson-0-groovy">Groovy</a></li>-->
+                          <li class=""><a href="#examples-Default-publishJson-0-objc">Obj-C</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-javascript">JavaScript</a></li>
+                          <!--<li class=""><a href="#examples-Default-publishJson-0-angular">Angular</a></li>-->
+                          <li class=""><a href="#examples-Default-publishJson-0-csharp">C#</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-php">PHP</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-perl">Perl</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-python">Python</a></li>
+                          <li class=""><a href="#examples-Default-publishJson-0-rust">Rust</a></li>
                         </ul>
 
                         <div class="tab-content">
-                          <div class="tab-pane active" id="examples-Default-customerLocationAssetValuePost-0-curl">
+                          <div class="tab-pane active" id="examples-Default-publishJson-0-curl">
                             <pre class="prettyprint"><code class="language-bsh">curl -X POST\
  -H "Authorization: Basic [[basicHash]]"\
  -H "Content-Type: application/json"\
  "https://api.industrial-analytics.net/factoryinput/v1/{customer}/{location}/{asset}/{value}"</code></pre>
                           </div>
-                          <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-java">
+                          <div class="tab-pane" id="examples-Default-publishJson-0-java">
                             <pre class="prettyprint"><code class="language-java">import org.openapitools.client.*;
 import org.openapitools.client.auth.*;
 import org.openapitools.client.model.*;
@@ -956,9 +956,9 @@ public class DefaultApiExample {
         Object body = Object; // Object | 
         
         try {
-            apiInstance.customerLocationAssetValuePost(customer, location, asset, value, body);
+            apiInstance.publishJson(customer, location, asset, value, body);
         } catch (ApiException e) {
-            System.err.println("Exception when calling DefaultApi#customerLocationAssetValuePost");
+            System.err.println("Exception when calling DefaultApi#publishJson");
             e.printStackTrace();
         }
     }
@@ -966,7 +966,7 @@ public class DefaultApiExample {
 </code></pre>
                           </div>
 
-                          <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-android">
+                          <div class="tab-pane" id="examples-Default-publishJson-0-android">
                             <pre class="prettyprint"><code class="language-java">import org.openapitools.client.api.DefaultApi;
 
 public class DefaultApiExample {
@@ -979,19 +979,19 @@ public class DefaultApiExample {
         Object body = Object; // Object | 
         
         try {
-            apiInstance.customerLocationAssetValuePost(customer, location, asset, value, body);
+            apiInstance.publishJson(customer, location, asset, value, body);
         } catch (ApiException e) {
-            System.err.println("Exception when calling DefaultApi#customerLocationAssetValuePost");
+            System.err.println("Exception when calling DefaultApi#publishJson");
             e.printStackTrace();
         }
     }
 }</code></pre>
                           </div>
   <!--
-  <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-groovy">
+  <div class="tab-pane" id="examples-Default-publishJson-0-groovy">
   <pre class="prettyprint language-json prettyprinted" data-type="json"><code>Coming Soon!</code></pre>
   </div> -->
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-objc">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-objc">
                               <pre class="prettyprint"><code class="language-cpp">Configuration *apiConfig = [Configuration sharedConfig];
 
 // Configure HTTP basic authorization (authentication scheme: BasicAuth)
@@ -1007,7 +1007,7 @@ String *value = count; // selected value. only characters, numbers, - and _ allo
 Object *body = Object; // 
 
 // Create MQTT Message from Rest call
-[apiInstance customerLocationAssetValuePostWith:customer
+[apiInstance publishJsonWith:customer
     location:location
     asset:asset
     value:value
@@ -1020,7 +1020,7 @@ Object *body = Object; //
 </code></pre>
                             </div>
 
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-javascript">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-javascript">
                               <pre class="prettyprint"><code class="language-js">var Factoryinput = require('factoryinput');
 var defaultClient = Factoryinput.ApiClient.instance;
 
@@ -1044,14 +1044,14 @@ var callback = function(error, data, response) {
     console.log('API called successfully.');
   }
 };
-api.customerLocationAssetValuePost(customer, location, asset, value, body, callback);
+api.publishJson(customer, location, asset, value, body, callback);
 </code></pre>
                             </div>
 
-                            <!--<div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-angular">
+                            <!--<div class="tab-pane" id="examples-Default-publishJson-0-angular">
               <pre class="prettyprint language-json prettyprinted" data-type="json"><code>Coming Soon!</code></pre>
             </div>-->
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-csharp">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-csharp">
                               <pre class="prettyprint"><code class="language-cs">using System;
 using System.Diagnostics;
 using Org.OpenAPITools.Api;
@@ -1060,7 +1060,7 @@ using Org.OpenAPITools.Model;
 
 namespace Example
 {
-    public class customerLocationAssetValuePostExample
+    public class publishJsonExample
     {
         public void main()
         {
@@ -1078,9 +1078,9 @@ namespace Example
 
             try {
                 // Create MQTT Message from Rest call
-                apiInstance.customerLocationAssetValuePost(customer, location, asset, value, body);
+                apiInstance.publishJson(customer, location, asset, value, body);
             } catch (Exception e) {
-                Debug.Print("Exception when calling DefaultApi.customerLocationAssetValuePost: " + e.Message );
+                Debug.Print("Exception when calling DefaultApi.publishJson: " + e.Message );
             }
         }
     }
@@ -1088,7 +1088,7 @@ namespace Example
 </code></pre>
                             </div>
 
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-php">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-php">
                               <pre class="prettyprint"><code class="language-php"><&#63;php
 require_once(__DIR__ . '/vendor/autoload.php');
 
@@ -1105,14 +1105,14 @@ $value = count; // String | selected value. only characters, numbers, - and _ al
 $body = Object; // Object | 
 
 try {
-    $api_instance->customerLocationAssetValuePost($customer, $location, $asset, $value, $body);
+    $api_instance->publishJson($customer, $location, $asset, $value, $body);
 } catch (Exception $e) {
-    echo 'Exception when calling DefaultApi->customerLocationAssetValuePost: ', $e->getMessage(), PHP_EOL;
+    echo 'Exception when calling DefaultApi->publishJson: ', $e->getMessage(), PHP_EOL;
 }
 ?></code></pre>
                             </div>
 
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-perl">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-perl">
                               <pre class="prettyprint"><code class="language-perl">use Data::Dumper;
 use WWW::OPenAPIClient::Configuration;
 use WWW::OPenAPIClient::DefaultApi;
@@ -1130,14 +1130,14 @@ my $value = count; # String | selected value. only characters, numbers, - and _ 
 my $body = WWW::OPenAPIClient::Object::Object->new(); # Object | 
 
 eval { 
-    $api_instance->customerLocationAssetValuePost(customer => $customer, location => $location, asset => $asset, value => $value, body => $body);
+    $api_instance->publishJson(customer => $customer, location => $location, asset => $asset, value => $value, body => $body);
 };
 if ($@) {
-    warn "Exception when calling DefaultApi->customerLocationAssetValuePost: $@\n";
+    warn "Exception when calling DefaultApi->publishJson: $@\n";
 }</code></pre>
                             </div>
 
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-python">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-python">
                               <pre class="prettyprint"><code class="language-python">from __future__ import print_statement
 import time
 import openapi_client
@@ -1158,12 +1158,12 @@ body = Object # Object |
 
 try: 
     # Create MQTT Message from Rest call
-    api_instance.customer_location_asset_value_post(customer, location, asset, value, body)
+    api_instance.publish_json(customer, location, asset, value, body)
 except ApiException as e:
-    print("Exception when calling DefaultApi->customerLocationAssetValuePost: %s\n" % e)</code></pre>
+    print("Exception when calling DefaultApi->publishJson: %s\n" % e)</code></pre>
                             </div>
 
-                            <div class="tab-pane" id="examples-Default-customerLocationAssetValuePost-0-rust">
+                            <div class="tab-pane" id="examples-Default-publishJson-0-rust">
                               <pre class="prettyprint"><code class="language-rust">extern crate DefaultApi;
 
 pub fn main() {
@@ -1174,7 +1174,7 @@ pub fn main() {
     let body = Object; // Object
 
     let mut context = DefaultApi::Context::default();
-    let result = client.customerLocationAssetValuePost(customer, location, asset, value, body, &context).wait();
+    let result = client.publishJson(customer, location, asset, value, body, &context).wait();
 
     println!("{:?}", result);
 }
@@ -1199,7 +1199,7 @@ pub fn main() {
 <td>
 
 
-    <div id="d2e199_customerLocationAssetValuePost_customer">
+    <div id="d2e199_publishJson_customer">
         <div class="json-schema-view">
             <div class="primitive">
                 <span class="type">
@@ -1222,7 +1222,7 @@ name of the customer. only characters, numbers, - and _ allowed
 <td>
 
 
-    <div id="d2e199_customerLocationAssetValuePost_location">
+    <div id="d2e199_publishJson_location">
         <div class="json-schema-view">
             <div class="primitive">
                 <span class="type">
@@ -1245,7 +1245,7 @@ name of the location. only characters, numbers, - and _ allowed
 <td>
 
 
-    <div id="d2e199_customerLocationAssetValuePost_asset">
+    <div id="d2e199_publishJson_asset">
         <div class="json-schema-view">
             <div class="primitive">
                 <span class="type">
@@ -1268,7 +1268,7 @@ name of the asset. only characters, numbers, - and _ allowed
 <td>
 
 
-    <div id="d2e199_customerLocationAssetValuePost_value">
+    <div id="d2e199_publishJson_value">
         <div class="json-schema-view">
             <div class="primitive">
                 <span class="type">
@@ -1330,12 +1330,12 @@ $(document).ready(function() {
   }
 
   var view = new JSONSchemaView(schema,2,{isBodyParam: true});
-  var result = $('#d2e199_customerLocationAssetValuePost_body');
+  var result = $('#d2e199_publishJson_body');
   result.empty();
   result.append(view.render());
 });
 </script>
-<div id="d2e199_customerLocationAssetValuePost_body"></div>
+<div id="d2e199_publishJson_body"></div>
 </td>
 </tr>
 
@@ -1344,71 +1344,71 @@ $(document).ready(function() {
 
 
                           <h2>Responses</h2>
-                            <h3 id="examples-Default-customerLocationAssetValuePost-title-200"></h3>
-                            <p id="examples-Default-customerLocationAssetValuePost-description-200" class="marked"></p>
+                            <h3 id="examples-Default-publishJson-title-200"></h3>
+                            <p id="examples-Default-publishJson-description-200" class="marked"></p>
                             <script>
                               var responseDefault200_description = `MQTT Message created`;
                               var responseDefault200_description_break = responseDefault200_description.indexOf('\n');
                               if (responseDefault200_description_break == -1) {
-                                $("#examples-Default-customerLocationAssetValuePost-title-200").text("Status: 200 - " + responseDefault200_description);
+                                $("#examples-Default-publishJson-title-200").text("Status: 200 - " + responseDefault200_description);
                               } else {
-                                $("#examples-Default-customerLocationAssetValuePost-title-200").text("Status: 200 - " + responseDefault200_description.substring(0, responseDefault200_description_break));
-                                $("#examples-Default-customerLocationAssetValuePost-description-200").html(responseDefault200_description.substring(responseDefault200_description_break));
+                                $("#examples-Default-publishJson-title-200").text("Status: 200 - " + responseDefault200_description.substring(0, responseDefault200_description_break));
+                                $("#examples-Default-publishJson-description-200").html(responseDefault200_description.substring(responseDefault200_description_break));
                               }
                             </script>
 
 
-                            <ul id="responses-detail-Default-customerLocationAssetValuePost-200" class="nav nav-tabs nav-tabs-examples" >
+                            <ul id="responses-detail-Default-publishJson-200" class="nav nav-tabs nav-tabs-examples" >
 
 
                             </ul>
 
 
-                            <div class="tab-content" id="responses-Default-customerLocationAssetValuePost-200-wrapper" style='margin-bottom: 10px;'>
+                            <div class="tab-content" id="responses-Default-publishJson-200-wrapper" style='margin-bottom: 10px;'>
                             </div>
-                            <h3 id="examples-Default-customerLocationAssetValuePost-title-400"></h3>
-                            <p id="examples-Default-customerLocationAssetValuePost-description-400" class="marked"></p>
+                            <h3 id="examples-Default-publishJson-title-400"></h3>
+                            <p id="examples-Default-publishJson-description-400" class="marked"></p>
                             <script>
                               var responseDefault400_description = `Not a JSON`;
                               var responseDefault400_description_break = responseDefault400_description.indexOf('\n');
                               if (responseDefault400_description_break == -1) {
-                                $("#examples-Default-customerLocationAssetValuePost-title-400").text("Status: 400 - " + responseDefault400_description);
+                                $("#examples-Default-publishJson-title-400").text("Status: 400 - " + responseDefault400_description);
                               } else {
-                                $("#examples-Default-customerLocationAssetValuePost-title-400").text("Status: 400 - " + responseDefault400_description.substring(0, responseDefault400_description_break));
-                                $("#examples-Default-customerLocationAssetValuePost-description-400").html(responseDefault400_description.substring(responseDefault400_description_break));
+                                $("#examples-Default-publishJson-title-400").text("Status: 400 - " + responseDefault400_description.substring(0, responseDefault400_description_break));
+                                $("#examples-Default-publishJson-description-400").html(responseDefault400_description.substring(responseDefault400_description_break));
                               }
                             </script>
 
 
-                            <ul id="responses-detail-Default-customerLocationAssetValuePost-400" class="nav nav-tabs nav-tabs-examples" >
+                            <ul id="responses-detail-Default-publishJson-400" class="nav nav-tabs nav-tabs-examples" >
 
 
                             </ul>
 
 
-                            <div class="tab-content" id="responses-Default-customerLocationAssetValuePost-400-wrapper" style='margin-bottom: 10px;'>
+                            <div class="tab-content" id="responses-Default-publishJson-400-wrapper" style='margin-bottom: 10px;'>
                             </div>
-                            <h3 id="examples-Default-customerLocationAssetValuePost-title-401"></h3>
-                            <p id="examples-Default-customerLocationAssetValuePost-description-401" class="marked"></p>
+                            <h3 id="examples-Default-publishJson-title-401"></h3>
+                            <p id="examples-Default-publishJson-description-401" class="marked"></p>
                             <script>
                               var responseDefault401_description = `Not authorized`;
                               var responseDefault401_description_break = responseDefault401_description.indexOf('\n');
                               if (responseDefault401_description_break == -1) {
-                                $("#examples-Default-customerLocationAssetValuePost-title-401").text("Status: 401 - " + responseDefault401_description);
+                                $("#examples-Default-publishJson-title-401").text("Status: 401 - " + responseDefault401_description);
                               } else {
-                                $("#examples-Default-customerLocationAssetValuePost-title-401").text("Status: 401 - " + responseDefault401_description.substring(0, responseDefault401_description_break));
-                                $("#examples-Default-customerLocationAssetValuePost-description-401").html(responseDefault401_description.substring(responseDefault401_description_break));
+                                $("#examples-Default-publishJson-title-401").text("Status: 401 - " + responseDefault401_description.substring(0, responseDefault401_description_break));
+                                $("#examples-Default-publishJson-description-401").html(responseDefault401_description.substring(responseDefault401_description_break));
                               }
                             </script>
 
 
-                            <ul id="responses-detail-Default-customerLocationAssetValuePost-401" class="nav nav-tabs nav-tabs-examples" >
+                            <ul id="responses-detail-Default-publishJson-401" class="nav nav-tabs nav-tabs-examples" >
 
 
                             </ul>
 
 
-                            <div class="tab-content" id="responses-Default-customerLocationAssetValuePost-401-wrapper" style='margin-bottom: 10px;'>
+                            <div class="tab-content" id="responses-Default-publishJson-401-wrapper" style='margin-bottom: 10px;'>
                             </div>
                         </article>
                       </div>

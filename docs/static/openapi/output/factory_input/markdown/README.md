@@ -7,7 +7,7 @@ All URIs are relative to *https://api.industrial-analytics.net/factoryinput/v1*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*DefaultApi* | [**customerLocationAssetValuePost**](Apis/DefaultApi.md#customerlocationassetvaluepost) | **POST** /{customer}/{location}/{asset}/{value} | Create MQTT Message from Rest call
+*DefaultApi* | [**publishJson**](Apis/DefaultApi.md#publishjson) | **POST** /{customer}/{location}/{asset}/{value} | Create MQTT Message from Rest call
 
 
 <a name="documentation-for-models"></a>

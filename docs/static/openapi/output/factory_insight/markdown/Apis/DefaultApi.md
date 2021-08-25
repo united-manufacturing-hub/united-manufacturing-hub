@@ -702,7 +702,7 @@ Name | Type | Description  | Notes
 
 <a name="getAssetUniqueImageId"></a>
 # **getAssetUniqueImageId**
-> asset_unique_ImageID getAssetUniqueImageId(customer, location, asset, from, to)
+> asset_unique_ImageID getAssetUniqueImageId(customer, location, asset, from, to, NumberOfImages, TagName, TagValue)
 
 
 
@@ -715,6 +715,9 @@ Name | Type | Description  | Notes
  **asset** | **String**| name of the asset | [default to null]
  **from** | **date**| Get data from this timestamp on (in RFC3339 format) | [default to null]
  **to** | **date**| Get data till this timestamp (in RFC3339 format) | [default to null]
+ **NumberOfImages** | **Integer**| max number of images to get, ordered by time desc, this means 1 yields the last image recorded, this does not overwrite, but specify the number of images to get, aka the number of images returned can only get lower | [optional] [default to null]
+ **TagName** | **String**| filters output by entries with a tag of type Tag Type | [optional] [default to null]
+ **TagValue** | **String**| filters output by entries with tag of type Tag Type and this vlaue. requires tag name to be set | [optional] [default to null]
 
 ### Return type
 

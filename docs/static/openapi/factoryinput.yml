@@ -61,6 +61,7 @@ paths:
     post:
       summary: Create MQTT Message from Rest call
       operationId: publishJson # only fixing spec
+      description: pulish mqtt message through rest
       parameters:
         - $ref: '#/components/parameters/customer'
         - $ref: '#/components/parameters/location'
