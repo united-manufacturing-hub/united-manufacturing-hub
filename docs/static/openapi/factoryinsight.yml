@@ -1614,10 +1614,9 @@ paths:
         - $ref: '#/components/parameters/asset'
         - $ref: '#/components/parameters/from'
         - $ref: '#/components/parameters/to'
-        - $ref: '#/components/parameters/NumberOfImages'
-        - $ref: '#/components/parameters/TagName'
-        - $ref: '#/components/parameters/TagValue'
-        #ToDo latest as parameter to get latest image?
+        - $ref: '#/components/parameters/NumberOfImages' # todo not implemented
+        - $ref: '#/components/parameters/TagName' # todo not implemented
+        - $ref: '#/components/parameters/TagValue' # todo not implemented
       responses:
         '200':
           description: This returns the all unique products in the selected time range in a data format that can be consumed easily by Grafana.
