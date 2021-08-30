@@ -1291,6 +1291,7 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 		return
 	}
 
+	//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
 	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
 	if err != nil {
 		error = err
