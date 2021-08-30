@@ -249,6 +249,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "uniqueProducts")
 	values = append(values, "orderTable")
 	values = append(values, "orderTimeline")
+	values = append(values, "uniqueProductsWithTags")
 
 	// Get from cache if possible
 	var cacheHit bool
