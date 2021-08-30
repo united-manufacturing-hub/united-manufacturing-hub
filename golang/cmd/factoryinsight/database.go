@@ -1669,7 +1669,8 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			return
 		}
 
-		//if productTag name not in data.ColumnNames yet, add to data.ColumnNames, store index of column for data.DataPoints and extend slice
+		//if productTag valueName not in data.ColumnNames yet (because the valueName of productTag comes up for the first time
+		//in the current row), add valueName to data.ColumnNames, store index of column for data.DataPoints and extend slice
 		if valueName.Valid {
 			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
 		}
@@ -1684,6 +1685,9 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 				zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
 				return
 			}
+			//check if the last row of data.Datapoints already has the same UID, as the current row, and if the
+			//productTag information of the current row is valid. If yes: add productTag information of current row to
+			//data.Datapoints
 			if UID == lastUID && value.Valid && valueName.Valid {
 				data.Datapoints[indexRow][indexColumn] = value.Float64
 			} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
@@ -1719,13 +1723,15 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			error = err
 			return
 		}
+		//Because of the inner join and the not null constraints of productTagString information in the postgresDB, both
+		//valueName and value should be valid
 		if !valueName.Valid || !value.Valid{
 			zap.S().Errorf("GetUniqueProductsWithTags: valueName or value for productTagString not valid", UID, timestampBegin)
 			return
 		}
 		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
 		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
-		var contains bool
+		var contains bool //indicates, if the UID is already contained in the data.Datpoints slice or not
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
 		if contains { //true if UID already in data.Datapoints
@@ -1777,6 +1783,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		return
 	}
 
+	//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
 	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
 	if err != nil {
 		error = err

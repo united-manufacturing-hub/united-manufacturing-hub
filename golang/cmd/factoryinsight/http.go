@@ -2043,7 +2043,6 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 		return
 	}
 
-	// TODO: #99 Return timestamps in RFC3339 in /uniqueProducts
 
 	// Fetching from the database
 	uniqueProductsWithTags, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsWithTagsRequest.From, getUniqueProductsWithTagsRequest.To)
