@@ -199,7 +199,7 @@ data:
         timestamp               TIMESTAMPTZ                         NOT NULL,
         product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
         valueName               TEXT                                NOT NULL,
-        value                   DOUBLE PRECISION                    NULL,
+        value                   DOUBLE PRECISION                    NOT NULL,
         UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
@@ -211,7 +211,7 @@ data:
         timestamp               TIMESTAMPTZ                         NOT NULL,
         product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
         valueName               TEXT                                NOT NULL,
-        value                   TEXT                                NULL,
+        value                   TEXT                                NOT NULL,
         UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
