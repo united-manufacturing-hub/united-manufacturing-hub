@@ -2211,11 +2211,25 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 	var stmtCS *sql.Stmt
 	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1, scrap = $2 WHERE asset_id = $3`)
 
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
 	var stmtC *sql.Stmt
-	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1 WHERE asset_id = $3`)
+	stmtC, err = txn.Prepare(`UPDATE counttable SET count = $1 WHERE asset_id = $2`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
 
 	var stmtS *sql.Stmt
-	stmtCS, err = txn.Prepare(`UPDATE counttable SET scrap = $2 WHERE asset_id = $3`)
+	stmtS, err = txn.Prepare(`UPDATE counttable SET scrap = $1 WHERE asset_id = $2`)
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
@@ -2235,8 +2249,11 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 			}
 		}
 
+		// pt.Count is -1, if not modified by user
 		if pt.Count != -1 {
+			// pt.Scrap is -1, if not modified by user
 			if pt.Scrap != -1 {
+				zap.S().Debugf("CS !", pt.Count, pt.Scrap, pt.DBAssetID)
 				_, err = stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
 				if err != nil {
 					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
@@ -2245,6 +2262,7 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 					}
 				}
 			} else {
+				zap.S().Debugf("C !", pt.Count, pt.DBAssetID)
 				_, err = stmtC.Exec(pt.Count, pt.DBAssetID)
 				if err != nil {
 					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
@@ -2254,7 +2272,9 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 				}
 			}
 		} else {
+			// pt.Scrap is -1, if not modified by user
 			if pt.Scrap != -1 {
+				zap.S().Debugf("S !", pt.Scrap, pt.DBAssetID)
 				_, err = stmtS.Exec(pt.Scrap, pt.DBAssetID)
 				if err != nil {
 					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)

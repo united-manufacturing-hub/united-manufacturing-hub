@@ -740,6 +740,7 @@ func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string,
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -767,6 +768,9 @@ type modifyProducesPiece struct {
 }
 
 func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+
+	// pt.Scrap is -1, if not modified by user
+	// pt.Count is -1, if not modified by user
 	parsedPayload := modifyProducesPiece{
 		Count: -1,
 		Scrap: -1,
@@ -775,6 +779,7 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
