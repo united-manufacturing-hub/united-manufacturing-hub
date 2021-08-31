@@ -2237,13 +2237,31 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 
 		if pt.Count != -1 {
 			if pt.Scrap != -1 {
-				stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
+				_, err = stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
+				if err != nil {
+					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					if err != nil {
+						return
+					}
+				}
 			} else {
-				stmtC.Exec(pt.Count, pt.DBAssetID)
+				_, err = stmtC.Exec(pt.Count, pt.DBAssetID)
+				if err != nil {
+					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					if err != nil {
+						return
+					}
+				}
 			}
 		} else {
 			if pt.Scrap != -1 {
-				stmtS.Exec(pt.Scrap, pt.DBAssetID)
+				_, err = stmtS.Exec(pt.Scrap, pt.DBAssetID)
+				if err != nil {
+					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					if err != nil {
+						return
+					}
+				}
 			} else {
 				zap.S().Errorf("Invalid amount for Count and Script")
 			}
