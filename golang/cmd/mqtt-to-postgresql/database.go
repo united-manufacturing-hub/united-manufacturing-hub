@@ -1846,7 +1846,8 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 		}
 
 		//Get last row in time range
-		val, err := StmtGetLastInRange.Query(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+		var val *sql.Rows
+		val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
 		if err != nil {
 			err = PQErrorHandlingTransaction("StmtGetLastInRange.Exec()", err, txn)
 			if err != nil {
