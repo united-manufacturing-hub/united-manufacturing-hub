@@ -1879,6 +1879,7 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 				}
 			}
 
+			//Insert new state and re-insert last old state, inside timeframe with new begins
 			_, err = StmtInsertStateChangeWithOldValue.Exec(pt.StartTimeStamp, pt.AssetID, pt.NewState, pt.EndTimeStamp, LastRowAssetId, LastRowState)
 			if err != nil {
 				err = PQErrorHandlingTransaction("StmtInsertStateChangeWithOldValue.Exec()", err, txn)
@@ -1888,6 +1889,7 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 			}
 
 		} else {
+			//No old state in timeframe, just insert new state
 			_, err = StmtInsertStateChangeWithoutOldValue.Exec(pt.StartTimeStamp, pt.AssetID, pt.NewState)
 			if err != nil {
 				err = PQErrorHandlingTransaction("StmtInsertStateChangeWithoutOldValue.Exec()", err, txn)
