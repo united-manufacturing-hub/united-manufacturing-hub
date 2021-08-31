@@ -115,6 +115,12 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			go ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
 		case "addParentToChild":
 			go ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
+		case "modifyStates":
+			go ProcessModifyStates(customerID, location, assetID, payloadType, payload, pg)
+		case "modifyShifts":
+			go ProcessModifyShifts(customerID, location, assetID, payloadType, payload, pg)
+		case "modifyProducedPieces":
+			go ProcessModifyProducesPieces(customerID, location, assetID, payloadType, payload, pg)
 		}
 	}
 }

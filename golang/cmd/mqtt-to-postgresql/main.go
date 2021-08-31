@@ -121,6 +121,7 @@ func main() {
 	go storeIntoDatabaseRoutineProductTag(pg)
 	go storeIntoDatabaseRoutineProductTagString(pg)
 	go storeIntoDatabaseRoutineAddParentToChild(pg)
+	go modifyInDatabaseRoutineModifyState(pg)
 	select {} // block forever
 }
 

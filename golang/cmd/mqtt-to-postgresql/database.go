@@ -1779,6 +1779,180 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 
 }
 
+func modifyInDatabaseRoutineModifyState(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixModifyStates, modifyStateInDatabase)
+}
+
+func modifyStateInDatabase(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtGetLastInRange *sql.Stmt
+	StmtGetLastInRange, err = txn.Prepare(`SELECT timestamp, asset_id, state FROM statetable WHERE timestamp >= $1 AND timestamp <= $2 AND asset_id = $3 ORDER BY timestamp DESC LIMIT 1;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtDeleteInRange *sql.Stmt
+	StmtDeleteInRange, err = txn.Prepare(`DELETE FROM statetable WHERE timestamp >= $1 AND timestamp <= $2 AND asset_id = $3;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtInsertStateChangeWithOldValue *sql.Stmt
+	StmtInsertStateChangeWithOldValue, err = txn.Prepare(`INSERT INTO statetable (timestamp, asset_id, state) VALUES ($1,$2,$3),($4,$5,$6);`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtInsertStateChangeWithoutOldValue *sql.Stmt
+	StmtInsertStateChangeWithoutOldValue, err = txn.Prepare(`INSERT INTO statetable (timestamp, asset_id, state) VALUES ($1,$2,$3);`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt modifyStates
+		err = item.ToObject(&pt)
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		//Get last row in time range
+		val, err := StmtGetLastInRange.Query(pt.StartTimeStamp, pt.EndTimeStamp, pt.AssetID)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtGetLastInRange.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		//If there is a row inside timeframe
+		if val.NextResultSet() {
+			var (
+				LastRowTimestamp int64
+				LastRowAssetId   int64
+				LastRowState     int64
+			)
+			val.Next()
+			err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("rows.Scan()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+			//Delete all rows inside timeframe
+			_, err = StmtDeleteInRange.Exec(pt.StartTimeStamp, pt.EndTimeStamp, pt.AssetID)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtDeleteInRange.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+			_, err = StmtInsertStateChangeWithOldValue.Exec(pt.StartTimeStamp, pt.AssetID, pt.NewState, pt.EndTimeStamp, LastRowAssetId, LastRowState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertStateChangeWithOldValue.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+		} else {
+			_, err = StmtInsertStateChangeWithoutOldValue.Exec(pt.StartTimeStamp, pt.AssetID, pt.NewState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertStateChangeWithoutOldValue.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+		}
+
+	}
+
+	// Close Statement
+	err = StmtGetLastInRange.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtGetLastInRange.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = StmtDeleteInRange.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtDeleteInRange.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = StmtInsertStateChangeWithOldValue.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtInsertStateChangeWithOldValue.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = StmtInsertStateChangeWithoutOldValue.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtInsertStateChangeWithoutOldValue.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	// Get from cache if possible
