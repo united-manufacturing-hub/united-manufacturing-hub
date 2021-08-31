@@ -11,11 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/beeker1121/goque"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
+
+var globalPQ *goque.PrefixQueue
 
 func main() {
 
@@ -76,6 +79,8 @@ func main() {
 	}
 	defer closeQueue(pg)
 
+	globalPQ = pg
+
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
 	mqttTopic := os.Getenv("MQTT_TOPIC")
@@ -128,7 +133,10 @@ func main() {
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
-
+	err := closeQueue(globalPQ)
+	if err != nil {
+		zap.S().Errorf("Error while closing queue gracefully", err)
+	}
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
 	ShutdownDB()

@@ -92,13 +92,16 @@ func storeIntoDatabaseRoutineRecommendation(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+			return
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -346,13 +349,16 @@ func storeIntoDatabaseRoutineProcessValueFloat64(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+			return
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix, err)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -517,13 +523,16 @@ func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+			return
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -688,13 +697,15 @@ func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -717,13 +728,15 @@ func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -826,13 +839,15 @@ func storeIntoDatabaseRoutineScrapCount(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -946,13 +961,15 @@ func storeIntoDatabaseRoutineUniqueProduct(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1056,13 +1073,15 @@ func storeIntoDatabaseRoutineProductTag(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1172,13 +1191,15 @@ func storeIntoDatabaseRoutineProductTagString(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1288,13 +1309,15 @@ func storeIntoDatabaseRoutineAddParentToChild(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1405,13 +1428,15 @@ func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1516,13 +1541,15 @@ func storeIntoDatabaseRoutineUniqueProductScrap(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1623,13 +1650,15 @@ func storeIntoDatabaseRoutineAddProduct(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1732,13 +1761,15 @@ func storeIntoDatabaseRoutineAddOrder(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1841,13 +1872,15 @@ func storeIntoDatabaseRoutineStartOrder(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1951,13 +1984,15 @@ func storeIntoDatabaseRoutineEndOrder(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -2061,13 +2096,15 @@ func storeIntoDatabaseRoutineAddMaintenanceActivity(pg *goque.PrefixQueue) {
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf("Stopping routine as database has been closed", prefix)
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 

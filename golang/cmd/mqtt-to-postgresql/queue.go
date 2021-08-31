@@ -58,7 +58,8 @@ func getAllItemsInQueue(prefix string, pq *goque.PrefixQueue) (itemsInQueue []go
 
 	for !keepRunning {
 		item, err2 := pq.Dequeue([]byte(prefix))
-		if err2 == goque.ErrEmpty || err2 == goque.ErrOutOfBounds {
+
+		if err2 == goque.ErrEmpty || err2 == goque.ErrOutOfBounds || err2 == goque.ErrDBClosed {
 			return
 		} else if err2 != nil {
 			err = err2
