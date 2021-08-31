@@ -2212,7 +2212,7 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1, scrap = $2 WHERE asset_id = $3`)
 
 	var stmtC *sql.Stmt
-	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1WHERE asset_id = $3`)
+	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1 WHERE asset_id = $3`)
 
 	var stmtS *sql.Stmt
 	stmtCS, err = txn.Prepare(`UPDATE counttable SET scrap = $2 WHERE asset_id = $3`)
