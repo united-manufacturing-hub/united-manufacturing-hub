@@ -347,7 +347,7 @@ func storeIntoDatabaseRoutineProcessValueFloat64(pg *goque.PrefixQueue) {
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
 		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
+			zap.S().Errorf("Failed to get items from database", prefix, err)
 			continue
 		}
 
@@ -1047,7 +1047,6 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 }
 
-
 // storeIntoDatabaseRoutineProductTag fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineProductTag(pg *goque.PrefixQueue) {
 	prefix := prefixProductTag
@@ -1088,7 +1087,6 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 			return
 		}
 	}
-
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
@@ -1165,7 +1163,6 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 }
 
-
 // storeIntoDatabaseRoutineProductTagString fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineProductTagString(pg *goque.PrefixQueue) {
 	prefix := prefixProductTagString
@@ -1206,7 +1203,6 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 			return
 		}
 	}
-
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
@@ -1283,7 +1279,6 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 
 }
 
-
 // storeIntoDatabaseRoutineAddParentToChild fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineAddParentToChild(pg *goque.PrefixQueue) {
 	prefix := prefixAddParentToChild
@@ -1324,7 +1319,6 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 			return
 		}
 	}
-
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
@@ -1401,7 +1395,6 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 	return
 
 }
-
 
 // storeIntoDatabaseRoutineShift fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
@@ -2266,10 +2259,9 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 	return
 }
 
-
 func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 
-	uid,  cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
+	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
 	if !cacheHit { // data NOT found
 		err = db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
 		if err == sql.ErrNoRows {
@@ -2282,7 +2274,6 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 
 	return
 }
-
 
 func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 
@@ -2297,8 +2288,8 @@ func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 }
 
 // NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
-func NewNullInt64 (i int64) sql.NullInt64 {
-	if i == 0  {
+func NewNullInt64(i int64) sql.NullInt64 {
+	if i == 0 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{
