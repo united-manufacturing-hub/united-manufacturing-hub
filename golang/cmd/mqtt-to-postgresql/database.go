@@ -60,6 +60,8 @@ func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (re
 		return
 	}
 
+	zap.S().Warnf("PostgreSQL error: ", err, sqlStatement)
+
 	err2 := txn.Rollback()
 	if err2 != nil {
 		PQErrorHandling("txn.Rollback()", err2)
@@ -100,7 +102,7 @@ func processQueue(pg *goque.PrefixQueue, prefix string, f func(itemArray []goque
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
@@ -1796,7 +1798,7 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 	}
 
 	var StmtGetLastInRange *sql.Stmt
-	StmtGetLastInRange, err = txn.Prepare(`SELECT timestamp, asset_id, state FROM statetable WHERE timestamp >= $1 AND timestamp <= $2 AND asset_id = $3 ORDER BY timestamp DESC LIMIT 1;`)
+	StmtGetLastInRange, err = txn.Prepare(`SELECT extract(epoch from timestamp)*1000, asset_id, state FROM statetable WHERE timestamp > to_timestamp($1 / 1000.0) AND asset_id = $2 ORDER BY timestamp ASC LIMIT 1;`)
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
@@ -1806,7 +1808,7 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 	}
 
 	var StmtDeleteInRange *sql.Stmt
-	StmtDeleteInRange, err = txn.Prepare(`DELETE FROM statetable WHERE timestamp >= $1 AND timestamp <= $2 AND asset_id = $3;`)
+	StmtDeleteInRange, err = txn.Prepare(`DELETE FROM statetable WHERE timestamp >= to_timestamp($1 / 1000.0) AND timestamp <= to_timestamp($2 / 1000.0) AND asset_id = $3;`)
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
@@ -1815,9 +1817,8 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	var StmtInsertStateChangeWithOldValue *sql.Stmt
-	StmtInsertStateChangeWithOldValue, err = txn.Prepare(`INSERT INTO statetable (timestamp, asset_id, state) VALUES ($1,$2,$3),($4,$5,$6);`)
-
+	var StmtInsertNewState *sql.Stmt
+	StmtInsertNewState, err = txn.Prepare(`INSERT INTO statetable (timestamp, asset_id, state) VALUES (to_timestamp($1 / 1000.0),$2,$3);`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
 		if err != nil {
@@ -1825,9 +1826,8 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	var StmtInsertStateChangeWithoutOldValue *sql.Stmt
-	StmtInsertStateChangeWithoutOldValue, err = txn.Prepare(`INSERT INTO statetable (timestamp, asset_id, state) VALUES ($1,$2,$3);`)
-
+	var StmtDeleteOldState *sql.Stmt
+	StmtDeleteOldState, err = txn.Prepare(`DELETE FROM statetable WHERE timestamp = to_timestamp($1 / 1000.0);`)
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
 		if err != nil {
@@ -1847,7 +1847,7 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 
 		//Get last row in time range
 		var val *sql.Rows
-		val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+		val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.DBAssetID)
 		if err != nil {
 			err = PQErrorHandlingTransaction("StmtGetLastInRange.Exec()", err, txn)
 			if err != nil {
@@ -1855,14 +1855,17 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 			}
 		}
 
+		zap.S().Debugf("Looking up", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+
 		//If there is a row inside timeframe
-		if val.NextResultSet() {
+		if val.Next() {
+			zap.S().Debugf("Got NextResultSet")
 			var (
-				LastRowTimestamp int64
-				LastRowAssetId   int64
-				LastRowState     int64
+				LastRowTimestamp    float64
+				LastRowTimestampInt int64
+				LastRowAssetId      int64
+				LastRowState        int64
 			)
-			val.Next()
 			err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
 			if err != nil {
 				err = PQErrorHandlingTransaction("rows.Scan()", err, txn)
@@ -1870,8 +1873,16 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 					return
 				}
 			}
+			LastRowTimestampInt = int64(int(LastRowTimestamp))
+			zap.S().Debugf("Row: ", LastRowState, LastRowTimestampInt, LastRowAssetId)
+
+			err = val.Close()
+			if err != nil {
+				return
+			}
 
 			//Delete all rows inside timeframe
+			zap.S().Debugf("DeleteState: ", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
 			_, err = StmtDeleteInRange.Exec(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
 			if err != nil {
 				err = PQErrorHandlingTransaction("StmtDeleteInRange.Exec()", err, txn)
@@ -1880,20 +1891,39 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 				}
 			}
 
-			//Insert new state and re-insert last old state, inside timeframe with new begins
-			_, err = StmtInsertStateChangeWithOldValue.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState, pt.EndTimeStamp, LastRowAssetId, LastRowState)
+			zap.S().Debugf("NewState: ", pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+			//Insert new state
+			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
 			if err != nil {
-				err = PQErrorHandlingTransaction("StmtInsertStateChangeWithOldValue.Exec()", err, txn)
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+			//Update old state, inside timeframe with new begins
+			zap.S().Debugf("UpdateState: ", pt.EndTimeStamp, LastRowTimestampInt, pt.DBAssetID, LastRowState)
+			_, err = StmtDeleteOldState.Exec(LastRowTimestampInt)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+			_, err = StmtInsertNewState.Exec(pt.EndTimeStamp, pt.DBAssetID, LastRowState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
 				if err != nil {
 					return
 				}
 			}
 
 		} else {
+			zap.S().Debugf("No Rows !")
 			//No old state in timeframe, just insert new state
-			_, err = StmtInsertStateChangeWithoutOldValue.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
 			if err != nil {
-				err = PQErrorHandlingTransaction("StmtInsertStateChangeWithoutOldValue.Exec()", err, txn)
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
 				if err != nil {
 					return
 				}
@@ -1917,16 +1947,17 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 			return
 		}
 	}
-	err = StmtInsertStateChangeWithOldValue.Close()
+	err = StmtInsertNewState.Close()
 	if err != nil {
-		err = PQErrorHandlingTransaction("StmtInsertStateChangeWithOldValue.Close()", err, txn)
+		err = PQErrorHandlingTransaction("StmtInsertNewState.Close()", err, txn)
 		if err != nil {
 			return
 		}
 	}
-	err = StmtInsertStateChangeWithoutOldValue.Close()
+
+	err = StmtDeleteOldState.Close()
 	if err != nil {
-		err = PQErrorHandlingTransaction("StmtInsertStateChangeWithoutOldValue.Close()", err, txn)
+		err = PQErrorHandlingTransaction("StmtDeleteOldState.Close()", err, txn)
 		if err != nil {
 			return
 		}
@@ -2052,7 +2083,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(itemArray []goque.Item) (err err
 	}
 
 	var stmt *sql.Stmt
-	stmt, err = txn.Prepare(`DELETE FROM shifttable WHERE asset_id = $1 AND begin_timestamp = $2;`)
+	stmt, err = txn.Prepare(`DELETE FROM shifttable WHERE asset_id = $1 AND begin_timestamp = to_timestamp($2 / 1000.0);`)
 
 	if err != nil {
 		PQErrorHandling("Prepare()", err)
