@@ -755,6 +755,38 @@ func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string,
 	}
 }
 
+type modifyProducesPieceQueue struct {
+	DBAssetID int
+	Count     int `json:"count"`
+	Scrap     int `json:"scrap"`
+}
+
+type modifyProducesPiece struct {
+	Count int `json:"count"`
+	Scrap int `json:"scrap"`
+}
+
 func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
-	//TODO
+	parsedPayload := modifyProducesPiece{
+		Count: -1,
+		Scrap: -1,
+	}
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := modifyProducesPieceQueue{
+		DBAssetID: DBassetID,
+		Count:     parsedPayload.Count,
+		Scrap:     parsedPayload.Scrap,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixModifyProducesPiece), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
 }

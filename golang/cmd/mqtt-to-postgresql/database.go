@@ -2160,6 +2160,111 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}
 }
 
+func modifyInDatabaseRoutineModifyCountAndScrap(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixModifyProducesPiece, modifyInDatabaseModifyCountAndScrap)
+}
+
+func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	var stmtCS *sql.Stmt
+	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1, scrap = $2 WHERE asset_id = $3`)
+
+	var stmtC *sql.Stmt
+	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1WHERE asset_id = $3`)
+
+	var stmtS *sql.Stmt
+	stmtCS, err = txn.Prepare(`UPDATE counttable SET scrap = $2 WHERE asset_id = $3`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt modifyProducesPieceQueue
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		if pt.Count != -1 {
+			if pt.Scrap != -1 {
+				stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
+			} else {
+				stmtC.Exec(pt.Count, pt.DBAssetID)
+			}
+		} else {
+			if pt.Scrap != -1 {
+				stmtS.Exec(pt.Scrap, pt.DBAssetID)
+			} else {
+				zap.S().Errorf("Invalid amount for Count and Script")
+			}
+		}
+	}
+
+	// Close Statement
+	err = stmtC.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmtC.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = stmtCS.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmtCS.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = stmtS.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmtS.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 // GetAssetID gets the assetID from the database
 func GetAssetID(customerID string, location string, assetID string) (DBassetID int) {
 

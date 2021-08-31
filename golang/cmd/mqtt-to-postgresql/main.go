@@ -124,6 +124,7 @@ func main() {
 	go modifyInDatabaseRoutineModifyState(pg)
 	go deleteInDatabaseRoutineDeleteShiftById(pg)
 	go deleteInDatabaseRoutineDeleteShiftByAssetIdAndTimestamp(pg)
+	go modifyInDatabaseRoutineModifyCountAndScrap(pg)
 	select {} // block forever
 }
 
