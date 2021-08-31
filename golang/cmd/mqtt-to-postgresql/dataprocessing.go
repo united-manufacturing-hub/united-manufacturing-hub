@@ -663,13 +663,13 @@ type modifyStateQueue struct {
 	DBAssetID      int
 	StartTimeStamp int64
 	EndTimeStamp   int64
-	NewState       string
+	NewState       int
 }
 
 type modifyState struct {
-	StartTimeStamp int64  `json:"start_time_stamp"`
-	EndTimeStamp   int64  `json:"end_time_stamp"`
-	NewState       string `json:"new_state"`
+	StartTimeStamp int64 `json:"start_time_stamp"`
+	EndTimeStamp   int64 `json:"end_time_stamp"`
+	NewState       int   `json:"new_state"`
 }
 
 func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
