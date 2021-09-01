@@ -326,9 +326,9 @@ This level contains only highly aggregated production data.
 
 Topic: `ia/<customerID>/<location>/<AssetID>/state`
 
-A message is sent here each time the asset changes status. Subsequent changes are not possible. Different statuses can also be process steps, such as "setup", "post-processing", etc. You can find a list of all supported states [here](state.md)
+A message is sent here each time the asset changes status. Subsequent changes are not possible. Different statuses can also be process steps, such as "setup", "post-processing", etc. You can find a list of all supported states [here](/docs/concepts/mqtt/ )
 
-`state` in the JSON is a integer according to [this datamodel](state.md)
+`state` in the JSON is a integer according to [this datamodel](/docs/concepts/mqtt/ )
 
 #### Example for /state
 
