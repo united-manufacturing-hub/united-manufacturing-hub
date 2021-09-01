@@ -60,6 +60,8 @@ func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (re
 		return
 	}
 
+	zap.S().Warnf("PostgreSQL error: ", err, sqlStatement)
+
 	err2 := txn.Rollback()
 	if err2 != nil {
 		PQErrorHandling("txn.Rollback()", err2)
@@ -85,8 +87,10 @@ func PQErrorHandling(sqlStatement string, err error) {
 
 // storeIntoDatabaseRoutineRecommendation fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineRecommendation(pg *goque.PrefixQueue) {
-	prefix := prefixRecommendation
+	processQueue(pg, prefixRecommendation, storeItemsIntoDatabaseRecommendation)
+}
 
+func processQueue(pg *goque.PrefixQueue, prefix string, f func(itemArray []goque.Item) (err error)) {
 	for range time.Tick(time.Duration(1) * time.Second) {
 
 		// GetItemsFromQueue
@@ -98,13 +102,13 @@ func storeIntoDatabaseRoutineRecommendation(pg *goque.PrefixQueue) {
 		}
 
 		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
+			//zap.S().Debugf("Queue empty", prefix)
 			continue
 		}
 
 		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
 
-		err = storeItemsIntoDatabaseRecommendation(itemArray)
+		err = f(itemArray)
 		if err != nil {
 			zap.S().Errorf("Failed to store items in database", prefix)
 			addMultipleItemsToQueue(prefix, pg, itemArray)
@@ -339,31 +343,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 
 // storeIntoDatabaseRoutineProcessValueFloat64 fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineProcessValueFloat64(pg *goque.PrefixQueue) {
-	prefix := prefixProcessValueFloat64
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseProcessValueFloat64(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixProcessValueFloat64, storeItemsIntoDatabaseProcessValueFloat64)
 }
 
 func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
@@ -510,31 +490,7 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineProcessValue fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) {
-	prefix := prefixProcessValue
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseProcessValue(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixProcessValue, storeItemsIntoDatabaseProcessValue)
 }
 
 func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
@@ -681,60 +637,12 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineCount fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
-	prefix := prefixCount
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseCount(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixCount, storeItemsIntoDatabaseCount)
 }
 
 // storeIntoDatabaseRoutineState fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {
-	prefix := prefixState
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseState(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixState, storeItemsIntoDatabaseState)
 }
 
 func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
@@ -819,31 +727,7 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineScrapCount from queue and sends it to the database
 func storeIntoDatabaseRoutineScrapCount(pg *goque.PrefixQueue) {
-	prefix := prefixScrapCount
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseScrapCount(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixScrapCount, storeItemsIntoDatabaseScrapCount)
 }
 
 func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
@@ -939,31 +823,7 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineUniqueProduct fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineUniqueProduct(pg *goque.PrefixQueue) {
-	prefix := prefixUniqueProduct
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseUniqueProduct(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixUniqueProduct, storeItemsIntoDatabaseUniqueProduct)
 }
 
 func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
@@ -1047,34 +907,9 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 }
 
-
 // storeIntoDatabaseRoutineProductTag fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineProductTag(pg *goque.PrefixQueue) {
-	prefix := prefixProductTag
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseProductTag(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixProductTag, storeItemsIntoDatabaseProductTag)
 }
 
 func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
@@ -1088,7 +923,6 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 			return
 		}
 	}
-
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
@@ -1165,34 +999,9 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 }
 
-
 // storeIntoDatabaseRoutineProductTagString fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineProductTagString(pg *goque.PrefixQueue) {
-	prefix := prefixProductTagString
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseProductTagString(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixProductTagString, storeItemsIntoDatabaseProductTagString)
 }
 
 func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) {
@@ -1206,7 +1015,6 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 			return
 		}
 	}
-
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
@@ -1283,34 +1091,9 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 
 }
 
-
 // storeIntoDatabaseRoutineAddParentToChild fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineAddParentToChild(pg *goque.PrefixQueue) {
-	prefix := prefixAddParentToChild
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseAddParentToChild(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixAddParentToChild, storeItemsIntoDatabaseAddParentToChild)
 }
 
 func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) {
@@ -1324,7 +1107,6 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 			return
 		}
 	}
-
 
 	var stmt *sql.Stmt
 	stmt, err = txn.Prepare(`
@@ -1402,34 +1184,9 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 
 }
 
-
 // storeIntoDatabaseRoutineShift fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
-	prefix := prefixAddShift
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseShift(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixAddShift, storeItemsIntoDatabaseShift)
 }
 
 func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
@@ -1516,31 +1273,7 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineUniqueProductScrap fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineUniqueProductScrap(pg *goque.PrefixQueue) {
-	prefix := prefixUniqueProductScrap
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseUniqueProductScrap(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixUniqueProductScrap, storeItemsIntoDatabaseUniqueProductScrap)
 }
 
 func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error) {
@@ -1623,31 +1356,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 
 // storeIntoDatabaseRoutineAddProduct fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineAddProduct(pg *goque.PrefixQueue) {
-	prefix := prefixAddProduct
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseAddProduct(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixAddProduct, storeItemsIntoDatabaseAddProduct)
 }
 
 func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
@@ -1732,31 +1441,7 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineAddOrder fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineAddOrder(pg *goque.PrefixQueue) {
-	prefix := prefixAddOrder
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseAddOrder(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixAddOrder, storeItemsIntoDatabaseAddOrder)
 }
 
 func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
@@ -1841,31 +1526,7 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineStartOrder fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineStartOrder(pg *goque.PrefixQueue) {
-	prefix := prefixStartOrder
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseStartOrder(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixStartOrder, storeItemsIntoDatabaseStartOrder)
 }
 
 func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
@@ -1951,31 +1612,7 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineEndOrder fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineEndOrder(pg *goque.PrefixQueue) {
-	prefix := prefixEndOrder
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseEndOrder(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixEndOrder, storeItemsIntoDatabaseEndOrder)
 }
 
 func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
@@ -2061,31 +1698,7 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 
 // storeIntoDatabaseRoutineAddMaintenanceActivity fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineAddMaintenanceActivity(pg *goque.PrefixQueue) {
-	prefix := prefixAddMaintenanceActivity
-
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = storeItemsIntoDatabaseAddMaintenanceActivity(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
+	processQueue(pg, prefixAddMaintenanceActivity, storeItemsIntoDatabaseAddMaintenanceActivity)
 }
 
 func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err error) {
@@ -2168,6 +1781,370 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 
 }
 
+func modifyInDatabaseRoutineModifyState(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixModifyState, modifyStateInDatabase)
+}
+
+func modifyStateInDatabase(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtGetLastInRange *sql.Stmt
+	StmtGetLastInRange, err = txn.Prepare(`SELECT extract(epoch from timestamp)*1000, asset_id, state FROM statetable WHERE timestamp > to_timestamp($1 / 1000.0) AND asset_id = $2 ORDER BY timestamp ASC LIMIT 1;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtDeleteInRange *sql.Stmt
+	StmtDeleteInRange, err = txn.Prepare(`DELETE FROM statetable WHERE timestamp >= to_timestamp($1 / 1000.0) AND timestamp <= to_timestamp($2 / 1000.0) AND asset_id = $3;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtInsertNewState *sql.Stmt
+	StmtInsertNewState, err = txn.Prepare(`INSERT INTO statetable (timestamp, asset_id, state) VALUES (to_timestamp($1 / 1000.0),$2,$3);`)
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var StmtDeleteOldState *sql.Stmt
+	StmtDeleteOldState, err = txn.Prepare(`DELETE FROM statetable WHERE timestamp = to_timestamp($1 / 1000.0);`)
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt modifyStateQueue
+		err = item.ToObject(&pt)
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		//Get last row in time range
+		var val *sql.Rows
+		val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.DBAssetID)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtGetLastInRange.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		zap.S().Debugf("Looking up", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+
+		//If there is a row inside timeframe
+		if val.Next() {
+			zap.S().Debugf("Got NextResultSet")
+			var (
+				LastRowTimestamp    float64
+				LastRowTimestampInt int64
+				LastRowAssetId      int64
+				LastRowState        int64
+			)
+			err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("rows.Scan()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+			LastRowTimestampInt = int64(int(LastRowTimestamp))
+			zap.S().Debugf("Row: ", LastRowState, LastRowTimestampInt, LastRowAssetId)
+
+			err = val.Close()
+			if err != nil {
+				return
+			}
+
+			//Delete all rows inside timeframe
+			zap.S().Debugf("DeleteState: ", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+			_, err = StmtDeleteInRange.Exec(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtDeleteInRange.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+			zap.S().Debugf("NewState: ", pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+			//Insert new state
+			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+			//Update old state, inside timeframe with new begins
+			zap.S().Debugf("UpdateState: ", pt.EndTimeStamp, LastRowTimestampInt, pt.DBAssetID, LastRowState)
+			_, err = StmtDeleteOldState.Exec(LastRowTimestampInt)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+			_, err = StmtInsertNewState.Exec(pt.EndTimeStamp, pt.DBAssetID, LastRowState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+		} else {
+			zap.S().Debugf("No Rows !")
+			//No old state in timeframe, just insert new state
+			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+			if err != nil {
+				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+		}
+
+	}
+
+	// Close Statement
+	err = StmtGetLastInRange.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtGetLastInRange.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = StmtDeleteInRange.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtDeleteInRange.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = StmtInsertNewState.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtInsertNewState.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	err = StmtDeleteOldState.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtDeleteOldState.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func deleteInDatabaseRoutineDeleteShiftById(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixDeleteShiftById, deleteShiftInDatabaseById)
+}
+
+func deleteShiftInDatabaseById(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`DELETE FROM shifttable WHERE id = $1;`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+
+		var pt deleteShiftByIdQueue
+		err = item.ToObject(&pt)
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		_, err = stmt.Exec(pt.ShiftId)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func deleteInDatabaseRoutineDeleteShiftByAssetIdAndTimestamp(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixDeleteShiftByAssetIdAndBeginTimestamp, deleteShiftInDatabaseByAssetIdAndTimestamp)
+}
+
+func deleteShiftInDatabaseByAssetIdAndTimestamp(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	var stmt *sql.Stmt
+	stmt, err = txn.Prepare(`DELETE FROM shifttable WHERE asset_id = $1 AND begin_timestamp = to_timestamp($2 / 1000.0);`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+
+		var pt deleteShiftByAssetIdAndBeginTimestampQueue
+		err = item.ToObject(&pt)
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStamp)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+	// Close Statement
+	err = stmt.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	// Get from cache if possible
@@ -2213,6 +2190,149 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	if err != nil {
 		PQErrorHandling("tx.Commit()", err)
 	}
+}
+
+func modifyInDatabaseRoutineModifyCountAndScrap(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixModifyProducesPiece, modifyInDatabaseModifyCountAndScrap)
+}
+
+func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	var stmtCS *sql.Stmt
+	stmtCS, err = txn.Prepare(`UPDATE counttable SET count = $1, scrap = $2 WHERE asset_id = $3`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var stmtC *sql.Stmt
+	stmtC, err = txn.Prepare(`UPDATE counttable SET count = $1 WHERE asset_id = $2`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	var stmtS *sql.Stmt
+	stmtS, err = txn.Prepare(`UPDATE counttable SET scrap = $1 WHERE asset_id = $2`)
+
+	if err != nil {
+		PQErrorHandling("Prepare()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, item := range itemArray {
+		var pt modifyProducesPieceQueue
+		err = item.ToObject(&pt)
+
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		// pt.Count is -1, if not modified by user
+		if pt.Count != -1 {
+			// pt.Scrap is -1, if not modified by user
+			if pt.Scrap != -1 {
+				zap.S().Debugf("CS !", pt.Count, pt.Scrap, pt.DBAssetID)
+				_, err = stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
+				if err != nil {
+					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					if err != nil {
+						return
+					}
+				}
+			} else {
+				zap.S().Debugf("C !", pt.Count, pt.DBAssetID)
+				_, err = stmtC.Exec(pt.Count, pt.DBAssetID)
+				if err != nil {
+					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					if err != nil {
+						return
+					}
+				}
+			}
+		} else {
+			// pt.Scrap is -1, if not modified by user
+			if pt.Scrap != -1 {
+				zap.S().Debugf("S !", pt.Scrap, pt.DBAssetID)
+				_, err = stmtS.Exec(pt.Scrap, pt.DBAssetID)
+				if err != nil {
+					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+					if err != nil {
+						return
+					}
+				}
+			} else {
+				zap.S().Errorf("Invalid amount for Count and Script")
+			}
+		}
+	}
+
+	// Close Statement
+	err = stmtC.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmtC.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = stmtCS.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmtCS.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+	err = stmtS.Close()
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmtS.Close()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 // GetAssetID gets the assetID from the database
@@ -2266,10 +2386,9 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 	return
 }
 
-
 func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 
-	uid,  cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
+	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
 	if !cacheHit { // data NOT found
 		err = db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2;", aid, DBassetID).Scan(&uid)
 		if err == sql.ErrNoRows {
@@ -2282,7 +2401,6 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 
 	return
 }
-
 
 func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 
@@ -2297,8 +2415,8 @@ func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
 }
 
 // NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
-func NewNullInt64 (i int64) sql.NullInt64 {
-	if i == 0  {
+func NewNullInt64(i int64) sql.NullInt64 {
+	if i == 0 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{

@@ -26,6 +26,10 @@ const prefixAddMaintenanceActivity = "addMaintenanceActivity"
 const prefixProductTag = "productTag"
 const prefixProductTagString = "productTagString"
 const prefixAddParentToChild = "addParentToChild"
+const prefixModifyState = "modifyState"
+const prefixModifyProducesPiece = "modifyProducedPieces"
+const prefixDeleteShiftById = "deleteShiftById"
+const prefixDeleteShiftByAssetIdAndBeginTimestamp = "deleteShiftByAssetIdAndBeginTimestamp"
 
 type QueueObject struct {
 	Object    interface{}
