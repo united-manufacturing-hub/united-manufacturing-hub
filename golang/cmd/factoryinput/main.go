@@ -74,8 +74,8 @@ func main() {
 	}
 
 	// also add admin access
-	RESTUser := GetEnv("FACTORYINSIGHT_USER")
-	RESTPassword := GetEnv("FACTORYINSIGHT_PASSWORD")
+	RESTUser := GetEnv("FACTORYINPUT_USER")
+	RESTPassword := GetEnv("FACTORYINPUT_PASSWORD")
 	accounts[RESTUser] = RESTPassword
 
 	// get currentVersion
