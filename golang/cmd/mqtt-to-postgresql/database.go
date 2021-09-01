@@ -499,6 +499,12 @@ func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) {
 }
 
 
+// storeIntoDatabaseRoutineCount fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixCount, storeItemsIntoDatabaseCount)
+}
+
+func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 	// Begin transaction
 	txn, err := db.Begin()
 
@@ -639,10 +645,6 @@ func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) {
 	return
 }
 
-// storeIntoDatabaseRoutineCount fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixCount, storeItemsIntoDatabaseCount)
-}
 
 // storeIntoDatabaseRoutineState fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {
