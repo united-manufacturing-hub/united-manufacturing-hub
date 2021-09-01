@@ -46,6 +46,5 @@ dependencies:
     condition: timescaledb-single.enabled
   - name: minio-operator
     version: 4.1.7
-    namespace: minio-operator
     repository: https://operator.min.io/
     condition: minio-operator.enabled
