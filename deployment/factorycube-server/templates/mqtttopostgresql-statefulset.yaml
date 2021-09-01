@@ -44,6 +44,7 @@ spec:
               matchLabels:
                 name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
             topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 70
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
           {{- if .Values.mqtttopostgresql.image.tag }}
