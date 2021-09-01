@@ -41,10 +41,10 @@ factoryinsight:
 
 ### factoryinput ###
 factoryinput:
-  #This is currently just a mock to start grafanaproxy !
   enabled: true
   image:
     repository: scarjit/factoryinput
+    tag: latest
     pullPolicy: Always
   replicas: 1
   storageRequest: 1Gi
@@ -69,6 +69,7 @@ grafanaproxy:
   enabled: true  
   image:
     repository: unitedmanufacturinghub/grafana-proxy
+    tag: latest
     pullPolicy: Always
   replicas: 1
   service:
