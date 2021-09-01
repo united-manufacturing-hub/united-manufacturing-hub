@@ -76,7 +76,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) MQT
 	opts.AddBroker(mqttBrokerURL)
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("MQTT_TO_POSTGRESQL")
+		opts.SetUsername("FACTORYINPUT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
