@@ -119,13 +119,13 @@ This chapter explains all used environment variables.
 
 ### MY_POD_NAME
 
-**Description:** Password for accessing redis sentinel  
+**Description:** The pod name. Used only for tracing, logging and  MQTT client id. 
 
 **Type:** string
 
 **Possible values:** all 
 
-**Example value:** changeme 
+**Example value:** app-mqtttopostgresql-0 
 
 ### MQTT_TOPIC
 
