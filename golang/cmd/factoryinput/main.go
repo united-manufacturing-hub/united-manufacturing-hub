@@ -119,8 +119,7 @@ func main() {
 	//Setup MQTT
 	zap.S().Debugf("Setting up MQTT")
 	podName := GetEnv("MY_POD_NAME")
-	mqttTopic := GetEnv("MQTT_TOPIC")
-	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, podName)
+	SetupMQTT(certificateName, mqttBrokerURL, podName)
 
 	//Setup rest
 	SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
