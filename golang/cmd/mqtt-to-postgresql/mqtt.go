@@ -82,47 +82,47 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 		switch payloadType {
 		case "state":
-			go ProcessStateData(customerID, location, assetID, payloadType, payload, pg)
+			ProcessStateData(customerID, location, assetID, payloadType, payload, pg)
 		case "processValue":
-			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
+			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		case "processvalue":
-			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
+			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		case "count":
-			go ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
+			ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
 		case "scrapCount":
-			go ProcessScrapCountData(customerID, location, assetID, payloadType, payload, pg)
+			ProcessScrapCountData(customerID, location, assetID, payloadType, payload, pg)
 		case "recommendation":
-			go ProcessRecommendationData(customerID, location, assetID, payloadType, payload, pg)
+			ProcessRecommendationData(customerID, location, assetID, payloadType, payload, pg)
 		case "addShift":
-			go ProcessAddShift(customerID, location, assetID, payloadType, payload, pg)
+			ProcessAddShift(customerID, location, assetID, payloadType, payload, pg)
 		case "addMaintenanceActivity":
-			go ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload, pg)
+			ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload, pg)
 		case "uniqueProduct":
-			go ProcessUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
+			ProcessUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
 		case "scrapUniqueProduct":
-			go ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
+			ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
 		case "addProduct":
-			go ProcessAddProduct(customerID, location, assetID, payloadType, payload, pg)
+			ProcessAddProduct(customerID, location, assetID, payloadType, payload, pg)
 		case "addOrder":
-			go ProcessAddOrder(customerID, location, assetID, payloadType, payload, pg)
+			ProcessAddOrder(customerID, location, assetID, payloadType, payload, pg)
 		case "startOrder":
-			go ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
+			ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
 		case "endOrder":
-			go ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
+			ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
 		case "productTag":
-			go ProcessProductTag(customerID, location, assetID, payloadType, payload, pg)
+			ProcessProductTag(customerID, location, assetID, payloadType, payload, pg)
 		case "productTagString":
-			go ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
+			ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
 		case "addParentToChild":
-			go ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
+			ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
 		case "modifyState":
-			go ProcessModifyState(customerID, location, assetID, payloadType, payload, pg)
+			ProcessModifyState(customerID, location, assetID, payloadType, payload, pg)
 		case "deleteShiftById":
-			go ProcessDeleteShiftById(customerID, location, assetID, payloadType, payload, pg)
+			ProcessDeleteShiftById(customerID, location, assetID, payloadType, payload, pg)
 		case "deleteShiftByAssetIdAndBeginTimestamp":
-			go ProcessDeleteShiftByAssetIdAndBeginTime(customerID, location, assetID, payloadType, payload, pg)
+			ProcessDeleteShiftByAssetIdAndBeginTime(customerID, location, assetID, payloadType, payload, pg)
 		case "modifyProducedPieces":
-			go ProcessModifyProducesPiece(customerID, location, assetID, payloadType, payload, pg)
+			ProcessModifyProducesPiece(customerID, location, assetID, payloadType, payload, pg)
 		}
 	}
 }
