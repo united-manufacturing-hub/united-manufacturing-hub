@@ -38,7 +38,7 @@ jobs:
           fi
 
       - name: Run chart-testing (lint)
-        run: ct lint --target-branch main --chart-dirs "deployment" --chart-repos "https://charts.bitnami.com/bitnami,https://vernemq.github.io/docker-vernemq,https://grafana.github.io/helm-charts,https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/,https://operator.min.io/"
+        run: ct lint --target-branch main --chart-dirs "deployment" --chart-repos "bitnami=https://charts.bitnami.com/bitnami,vernemq=https://vernemq.github.io/docker-vernemq,grafana=https://grafana.github.io/helm-charts,timescale=https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/,minio=https://operator.min.io/"
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.2.0
