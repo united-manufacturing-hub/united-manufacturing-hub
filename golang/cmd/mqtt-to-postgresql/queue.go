@@ -55,8 +55,8 @@ func closeQueue(pq *goque.PrefixQueue) (err error) {
 
 // getAllItemsInQueue gets all items in the current queue with the exception that it will never get more than 10000 messages at one time
 func getAllItemsInQueue(prefix string, pq *goque.PrefixQueue) (itemsInQueue []goque.Item, err error) {
-
-	for i := 0; i < 10000; i++ { //
+	// TODO: for performance optimization get length and allocate itemsInQueue with make
+	for i := 0; i < 10000; i++ { //take the first 10000 messages (if it is not empty, see if)
 		item, err2 := pq.Dequeue([]byte(prefix))
 
 		if err2 == goque.ErrEmpty {
@@ -70,8 +70,9 @@ func getAllItemsInQueue(prefix string, pq *goque.PrefixQueue) (itemsInQueue []go
 		}
 
 		//zap.S().Debugf("Adding item", item.ToString())
-		itemsInQueue = append(itemsInQueue, *item)
+		itemsInQueue = append(itemsInQueue, *item) // see TODO above
 	}
+	zap.S().Warnf("Reached maximum level of 10000 messages")
 
 	return
 }
