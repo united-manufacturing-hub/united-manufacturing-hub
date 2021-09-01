@@ -5,7 +5,9 @@
 ### factoryinsight ###
 factoryinsight:
   enabled: true
-  image: unitedmanufacturinghub/factoryinsight
+  image:
+    repository: unitedmanufacturinghub/factoryinsight
+    pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
   # tag: 0.3.2 
   replicas: 2
@@ -1235,24 +1237,25 @@ grafana:
     datasources.yaml:
       apiVersion: 1
       datasources:
-      # <string, required> name of the datasource. Required
-      - name: umh-datasource
-        # <string, required> datasource type. Required
-        type: umh-datasource
-        # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
-        access: proxy
-        # <int> org id. will default to orgId 1 if not specified
-        orgId: 1
-        # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
-        jsonData:
-          customerId: $FACTORYINSIGHT_CUSTOMERID
-          apiKey: $FACTORYINSIGHT_PASSWORD
-          serverUrL: "http://{external-ip}:2096/api/v1/factoryinsight/"
-          apiKeyConfigured: true
-        version: 1
-        # <bool> allow users to edit datasources from the UI.
-        isDefault: true
-        editable: true
+        # <string, required> name of the datasource. Required
+        - name: umh-datasource
+          # <string, required> datasource type. Required
+          type: umh-datasource
+          # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
+          access: proxy
+          # <int> org id. will default to orgId 1 if not specified
+          orgId: 1
+          url: "http://factorycube-server-factoryinsight-service/"
+          # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
+          jsonData:
+            customerId: $FACTORYINSIGHT_CUSTOMERID
+            apiKey: $FACTORYINSIGHT_PASSWORD
+            serverURL: "http://factorycube-server-factoryinsight-service/"
+            apiKeyConfigured: true
+          version: 1
+          # <bool> allow users to edit datasources from the UI.
+          isDefault: true
+          editable: false
 
   ## Configure notifiers
   ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
