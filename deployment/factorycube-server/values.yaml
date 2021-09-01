@@ -43,10 +43,11 @@ factoryinsight:
 
 ### factoryinput ###
 factoryinput:
+  user: factoryinput
   enabled: true
   image:
-    repository: scarjit/factoryinput
-    tag: latest
+    repository: unitedmanufacturinghub/factoryinput
+    #tag: latest
     pullPolicy: Always
   replicas: 1
   storageRequest: 1Gi
