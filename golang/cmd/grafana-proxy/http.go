@@ -85,9 +85,8 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 
 func optionsCORSHAndler(c *gin.Context) {
 	fmt.Println("optionsCORSHAndler")
+	AddCorsHeaders(c)
 	c.Status(http.StatusOK)
-	c.Header("Access-Control-Allow-Headers", "*")
-	c.Header("Access-Control-Allow-Origin", "*")
 }
 
 func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err error) {
@@ -153,17 +152,27 @@ func handleProxyRequest(c *gin.Context, method string) {
 	}
 }
 
+func AddCorsHeaders(c *gin.Context) {
+	origin := c.GetHeader("Origin")
+	if len(origin) == 0 {
+		zap.S().Debugf("Add cors wildcard")
+		origin = "*"
+	} else {
+		zap.S().Debugf("Set cors origin to: %s", origin)
+	}
+	c.Header("Access-Control-Allow-Headers", "*")
+	c.Header("Access-Control-Allow-Origin", origin)
+}
+
 func postProxyHandler(c *gin.Context) {
 	// Add cors headers for reply to original requester
-	c.Header("Access-Control-Allow-Headers", "*")
-	c.Header("Access-Control-Allow-Origin", "*")
+	AddCorsHeaders(c)
 	handleProxyRequest(c, "POST")
 }
 
 func getProxyHandler(c *gin.Context) {
 	// Add cors headers for reply to original requester
-	c.Header("Access-Control-Allow-Headers", "*")
-	c.Header("Access-Control-Allow-Origin", "*")
+	AddCorsHeaders(c)
 	handleProxyRequest(c, "GET")
 }
 
@@ -222,6 +231,8 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	}
 	defer span.Finish()
 
+	zap.S().Warnf("HandleFactoryInput")
+
 	// Grafana sessionCookie not present in request
 	sessionCookie, err := c.Cookie("grafana_session")
 	if err != nil {
@@ -230,6 +241,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		return
 	}
 
+	zap.S().Warnf("CheckUserLoggedIn")
 	// Check if user is logged in
 	loggedIn, err := CheckUserLoggedIn(sessionCookie)
 	if err != nil {
@@ -238,12 +250,14 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 
 	// Abort if not logged in
 	if !loggedIn {
+		zap.S().Warnf("StatusForbidden")
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 
 	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
 
+	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
 	if err != nil {
@@ -265,6 +279,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		value := s[4]
 	*/
 
+	zap.S().Warnf("GetOrgas")
 	// Get grafana organizations of user
 	orgas, err := user.GetOrgas(sessionCookie)
 	if err != nil {
@@ -283,10 +298,12 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 
 	// Abort if not in allowed org
 	if !allowedOrg {
+		zap.S().Warnf("!allowedOrg")
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
+	zap.S().Warnf("DoProxiedRequest")
 	DoProxiedRequest(c, err, u, sessionCookie, ak, method)
 }
 
