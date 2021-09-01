@@ -76,6 +76,8 @@ func newTLSConfig(certificateName string) *tls.Config {
 }
 
 func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	zap.S().Debugf("processMessage: %s, %s, %s, %s, %p", customerID, location, assetID, payloadType, payload)
+
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	if customerID != "raw" {
