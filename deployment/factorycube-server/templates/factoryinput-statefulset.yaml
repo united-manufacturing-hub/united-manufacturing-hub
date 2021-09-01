@@ -11,7 +11,7 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.factoryinput.replicas }}
-  serviceName: mqtt-to-postgresql
+  serviceName: factoryinput
   volumeClaimTemplates:
     - metadata:
         name: {{ include "factorycube-server.fullname" . }}-factoryinput-data
@@ -41,6 +41,7 @@ spec:
                 matchLabels:
                   name: {{ include "factorycube-server.fullname" . }}-factoryinput
               topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 70
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-factoryinput
           {{- if .Values.factoryinput.image.tag }}
@@ -64,6 +65,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+
+            - name: VERSION
+              value: "1"
+
           volumeMounts:
             - name: {{ include "factorycube-server.fullname" . }}-factoryinput-data
               mountPath: /data
@@ -88,7 +93,7 @@ spec:
           #volumes:
           #- name: secret-volume
           #secret:
-          #secretName: mqtt-to-postgresql-secret
+          #secretName: factoryinput-secret
       serviceAccountName: ""
       restartPolicy: Always
   {{- end -}}
