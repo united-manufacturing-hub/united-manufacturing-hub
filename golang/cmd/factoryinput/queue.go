@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const queuePath = "/data/queue"
+const queuePath = "/data/factoryinsight/queue"
 
 var queue *goque.Queue
 
