@@ -58,6 +58,9 @@ spec:
             - name: CERTIFICATE_NAME
               value: NO_CERT
 
+            - name: LOGGING_LEVEL
+              value: DEBUG
+
             - name: BROKER_URL
               value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
 
@@ -68,6 +71,18 @@ spec:
 
             - name: VERSION
               value: "1"
+
+            - name: FACTORYINPUT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: customerID
+
+            - name: FACTORYINPUT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: password
 
           volumeMounts:
             - name: {{ include "factorycube-server.fullname" . }}-factoryinput-data
