@@ -47,7 +47,15 @@ func main() {
 	shutdownEnabled = false
 
 	// Setup logger and set as global
-	logger, _ := zap.NewProduction()
+	var logger *zap.Logger
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	switch logLevel {
+	case "PRODUCTION":
+		logger, _ = zap.NewProduction()
+	default:
+		logger, _ = zap.NewDevelopment()
+	}
+
 	zap.ReplaceGlobals(logger)
 	defer func(logger *zap.Logger) {
 		err := logger.Sync()
@@ -120,10 +128,11 @@ func main() {
 	zap.S().Debugf("Setting up MQTT")
 	podName := GetEnv("MY_POD_NAME")
 	SetupMQTT(certificateName, mqttBrokerURL, podName)
+	zap.S().Debugf("Finished setting up MQTT")
 
 	//Setup rest
-	SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
-
+	zap.S().Debugf("SetupRestAPI")
+	go SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
 	zap.S().Debugf("Jaeger & REST API initialized..", jaegerHost, jaegerPort)
 
 	// Allow graceful shutdown
@@ -154,9 +163,11 @@ func main() {
 		iMqttQueueHandler = 10
 	}
 	for i := 0; i < iMqttQueueHandler; i++ {
+		zap.S().Debugf("Starting MQTT handlers")
 		go MqttQueueHandler()
 	}
 
+	zap.S().Debugf("Started %d MqTTQueueHandlers", iMqttQueueHandler)
 	select {} // block forever
 }
 
