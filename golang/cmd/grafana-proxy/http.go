@@ -154,10 +154,16 @@ func handleProxyRequest(c *gin.Context, method string) {
 }
 
 func postProxyHandler(c *gin.Context) {
+	// Add cors headers for reply to original requester
+	c.Header("Access-Control-Allow-Headers", "*")
+	c.Header("Access-Control-Allow-Origin", "*")
 	handleProxyRequest(c, "POST")
 }
 
 func getProxyHandler(c *gin.Context) {
+	// Add cors headers for reply to original requester
+	c.Header("Access-Control-Allow-Headers", "*")
+	c.Header("Access-Control-Allow-Origin", "*")
 	handleProxyRequest(c, "GET")
 }
 
@@ -287,10 +293,6 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 	fmt.Println("DoProxiedRequest")
 	// Proxy request to backend
 	client := &http.Client{}
-
-	// Add cors headers for reply to original requester
-	c.Header("Access-Control-Allow-Headers", "*")
-	c.Header("Access-Control-Allow-Origin", "*")
 
 	fmt.Println("Request URL: ", u.String())
 	//CORS request !
