@@ -1,0 +1,190 @@
+package main
+
+/*
+Important principles: stateless as much as possible
+*/
+
+/*
+Target architecture:
+
+Incoming REST call --> http.go
+There is one function for that specific call. It parses the parameters and executes further functions:
+1. One or multiple function getting the data from the database (database.go)
+2. Only one function processing everything. In this function no database calls are allowed to be as stateless as possible (dataprocessing.go)
+Then the results are bundled together and a return JSON is created.
+*/
+
+import (
+	"fmt"
+	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/gin-gonic/gin"
+	"github.com/heptiolabs/healthcheck"
+	"go.uber.org/zap"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+)
+
+var shutdownEnabled bool
+var mqttClient MQTT.Client
+
+func main() {
+	shutdownEnabled = false
+
+	// Setup logger and set as global
+	logger, _ := zap.NewProduction()
+	zap.ReplaceGlobals(logger)
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(logger)
+
+	// Loading up user accounts
+	accounts := gin.Accounts{}
+
+	zap.S().Debugf("Loading accounts from environment..")
+
+	for i := 1; i <= 100; i++ {
+		tempUser := os.Getenv("CUSTOMER_NAME_" + strconv.Itoa(i))
+		tempPassword := os.Getenv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
+		if tempUser != "" && tempPassword != "" {
+			zap.S().Infof("Added account for " + tempUser)
+			accounts[tempUser] = tempPassword
+		}
+	}
+
+	// also add admin access
+	RESTUser := os.Getenv("FACTORYINSIGHT_USER")
+	RESTPassword := os.Getenv("FACTORYINSIGHT_PASSWORD")
+	accounts[RESTUser] = RESTPassword
+
+	// get currentVersion
+	version := os.Getenv("VERSION")
+
+	zap.S().Debugf("Starting program..")
+
+	health := healthcheck.NewHandler()
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(10000))
+	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Failed to bind healthcheck to port", err)
+			ShutdownApplicationGraceful()
+		}
+	}()
+
+	zap.S().Debugf("Healthcheck initialized..")
+
+	jaegerHost := os.Getenv("JAEGER_HOST")
+	jaegerPort := os.Getenv("JAEGER_PORT")
+
+	//Setup queue
+	err := setupQueue()
+	if err != nil {
+		zap.S().Errorf("Error setting up remote queue", err)
+		return
+	}
+	defer func() {
+		err := closeQueue()
+		if err != nil {
+			zap.S().Errorf("Failed to close queue, might be corrupted !", err)
+		}
+	}()
+
+	// Read environment variables
+	certificateName := os.Getenv("CERTIFICATE_NAME")
+	mqttBrokerURL := os.Getenv("BROKER_URL")
+
+	//Setup MQTT
+	zap.S().Debugf("Setting up MQTT")
+	podName := os.Getenv("MY_POD_NAME")
+	mqttTopic := os.Getenv("MQTT_TOPIC")
+	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, podName)
+
+	//Setup rest
+	SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
+
+	zap.S().Debugf("Jaeger & REST API initialized..", jaegerHost, jaegerPort)
+
+	// Allow graceful shutdown
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	go func() {
+		// before you trapped SIGTERM your process would
+		// have exited, so we are now on borrowed time.
+		//
+		// Kubernetes sends SIGTERM 30 seconds before
+		// shutting down the pod.
+
+		sig := <-sigs
+
+		// Log the received signal
+		zap.S().Infof("Recieved SIGTERM", sig)
+
+		// ... close TCP connections here.
+		ShutdownApplicationGraceful()
+
+	}()
+
+	mqttQueueHandler := os.Getenv("MQTT_QUEUE_HANDLER")
+	iMqttQueueHandler, err := strconv.Atoi(mqttQueueHandler)
+	if err != nil {
+		zap.S().Warnf("Failed to read MQTT_QUEUE_HANDLER, defaulting to 10")
+		iMqttQueueHandler = 10
+	}
+	for i := 0; i < iMqttQueueHandler; i++ {
+		go MqttQueueHandler()
+	}
+
+	select {} // block forever
+}
+
+func isShutdownEnabled() healthcheck.Check {
+	return func() error {
+		if shutdownEnabled {
+			return fmt.Errorf("shutdown")
+		}
+		return nil
+	}
+}
+
+// ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
+func ShutdownApplicationGraceful() {
+	zap.S().Infof("Shutting down application")
+	shutdownEnabled = true
+	time.Sleep(15 * time.Second) // Wait until all remaining open connections are handled
+	ShutdownMQTT()
+	time.Sleep(1000 * time.Millisecond)
+
+	//Check if MQTT client is still connected
+	for i := 0; i < 10; i++ {
+		if mqttClient.IsConnected() {
+			zap.S().Warnf("MQTT client is still connected !")
+			time.Sleep(10 * time.Second)
+		} else {
+			break
+		}
+	}
+
+	if mqttClient.IsConnected() {
+		zap.S().Errorf("Gracefull shutdown of MQTT client failed !")
+	}
+
+	// Close queue
+	err := closeQueue()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue", err)
+	}
+
+	zap.S().Infof("Successfull shutdown. Exiting.")
+	// Gracefully exit.
+	// (Use runtime.GoExit() if you need to call defers)
+	os.Exit(0)
+}
