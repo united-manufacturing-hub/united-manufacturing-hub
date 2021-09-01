@@ -1,3 +1,4 @@
+#!/bin/sh
 docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli validate -i /local/factoryinput.yml
 docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate -g python -i /local/factoryinput.yml -o /local/output/factory_input/python
 docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate -g go -i /local/factoryinput.yml -o /local/output/factory_input/go

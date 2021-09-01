@@ -1,3 +1,4 @@
+#!/bin/sh
 docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli validate -i /local/factoryinsight.yml
 docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate -g python -i /local/factoryinsight.yml -o /local/output/factory_insight/python
 docker run --rm -v "$PWD:/local" openapitools/openapi-generator-cli generate -g go -i /local/factoryinsight.yml -o /local/output/factory_insight/go
