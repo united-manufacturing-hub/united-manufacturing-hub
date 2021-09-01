@@ -31,6 +31,18 @@ import (
 var shutdownEnabled bool
 var mqttClient MQTT.Client
 
+// GetEnv get's env variable, and also outputs warning if not set
+func GetEnv(variableName string) (envValue string) {
+	if len(variableName) == 0 {
+		zap.S().Warnf("Attempting to get env variable without name")
+	}
+	envValue = os.Getenv(variableName)
+	if len(envValue) == 0 {
+		zap.S().Warnf("Env variable %s is empty", variableName)
+	}
+	return
+}
+
 func main() {
 	shutdownEnabled = false
 
@@ -57,14 +69,17 @@ func main() {
 			accounts[tempUser] = tempPassword
 		}
 	}
+	if len(accounts) == 0 {
+		zap.S().Warnf("No customer accounts set up")
+	}
 
 	// also add admin access
-	RESTUser := os.Getenv("FACTORYINSIGHT_USER")
-	RESTPassword := os.Getenv("FACTORYINSIGHT_PASSWORD")
+	RESTUser := GetEnv("FACTORYINSIGHT_USER")
+	RESTPassword := GetEnv("FACTORYINSIGHT_PASSWORD")
 	accounts[RESTUser] = RESTPassword
 
 	// get currentVersion
-	version := os.Getenv("VERSION")
+	version := GetEnv("VERSION")
 
 	zap.S().Debugf("Starting program..")
 
@@ -81,8 +96,8 @@ func main() {
 
 	zap.S().Debugf("Healthcheck initialized..")
 
-	jaegerHost := os.Getenv("JAEGER_HOST")
-	jaegerPort := os.Getenv("JAEGER_PORT")
+	jaegerHost := GetEnv("JAEGER_HOST")
+	jaegerPort := GetEnv("JAEGER_PORT")
 
 	//Setup queue
 	err := setupQueue()
@@ -98,13 +113,13 @@ func main() {
 	}()
 
 	// Read environment variables
-	certificateName := os.Getenv("CERTIFICATE_NAME")
-	mqttBrokerURL := os.Getenv("BROKER_URL")
+	certificateName := GetEnv("CERTIFICATE_NAME")
+	mqttBrokerURL := GetEnv("BROKER_URL")
 
 	//Setup MQTT
 	zap.S().Debugf("Setting up MQTT")
-	podName := os.Getenv("MY_POD_NAME")
-	mqttTopic := os.Getenv("MQTT_TOPIC")
+	podName := GetEnv("MY_POD_NAME")
+	mqttTopic := GetEnv("MQTT_TOPIC")
 	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, podName)
 
 	//Setup rest
@@ -133,7 +148,7 @@ func main() {
 
 	}()
 
-	mqttQueueHandler := os.Getenv("MQTT_QUEUE_HANDLER")
+	mqttQueueHandler := GetEnv("MQTT_QUEUE_HANDLER")
 	iMqttQueueHandler, err := strconv.Atoi(mqttQueueHandler)
 	if err != nil {
 		zap.S().Warnf("Failed to read MQTT_QUEUE_HANDLER, defaulting to 10")
