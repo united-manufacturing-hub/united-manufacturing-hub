@@ -225,6 +225,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Grafana sessionCookie not present in request
 	sessionCookie, err := c.Cookie("grafana_session")
 	if err != nil {
+		zap.S().Warnf("No grafana_session in cookie !")
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
