@@ -133,10 +133,14 @@ func main() {
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
+
+	time.Sleep(15 * time.Second) // Wait that all data is processed
+
 	err := closeQueue(globalPQ)
 	if err != nil {
 		zap.S().Errorf("Error while closing queue gracefully", err)
 	}
+
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
 	ShutdownDB()
