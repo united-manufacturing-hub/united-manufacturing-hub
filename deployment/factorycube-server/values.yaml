@@ -6,9 +6,8 @@
 factoryinsight:
   enabled: true
   image:
-    repository: larswitte/factoryinsight
-    tag: testing
-    pullPolicy: Always
+    repository: unitedmanufacturinghub/factoryinsight
+    pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
   # tag: 0.3.2 
   replicas: 2
