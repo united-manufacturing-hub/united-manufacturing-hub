@@ -6,7 +6,7 @@ mqttBridgeTopic: "ia" # /# will be automatically appended to the string specifie
 
 # Certficiates for MQTT Bridge
 mqttBridgeCACert: |
-  Please add certificate here
+  Plea TEST se add certificate here
 mqttBridgeCert: |
   Please add certificate here
 mqttBridgePrivkey: |
