@@ -102,13 +102,10 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) MQT
 }
 
 func MqttQueueHandler() {
+	if shutdownEnabled {
+		zap.S().Warnf("SHUTDOWN ENABLED !")
+	}
 	for !shutdownEnabled {
-		if mqttClient.IsConnected() {
-			zap.S().Errorf("MQTT client disconnected, while program is running, waiting for it to re-connect")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
 		mqttData, err := dequeueMQTT()
 
 		if err != nil {
