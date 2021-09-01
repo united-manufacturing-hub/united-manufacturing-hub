@@ -5,17 +5,11 @@ description: >
   Documentation of mqtt-to-postgresql
 ---
 
-TODO: #80 fill out standardized documentation for mqtt-to-postgresql
-
-# |NAME OF DOCKER CONTAINER|
-
-|This is a short description of the docker container.|
+mqtt-to-postgresql subscribes to the MQTT broker (in the stack this is [VerneMQ](https://github.com/vernemq/vernemq)), parses incoming messages on the topic "ia/#" and stores them in the postgresql / [timescaleDB database](https://github.com/timescale/timescaledb) (if they are in the correct [datamodel](../../../Concepts/mqtt/))
 
 ## Getting started
 
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
-
-|TUTORIAL|
 
 docker-compose -f ./deployment/mqtt-to-postgresql/docker-compose-mqtt-to-postgresql-development.yml --env-file ./.env up -d --build
 
