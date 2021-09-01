@@ -121,6 +121,10 @@ func main() {
 	go storeIntoDatabaseRoutineProductTag(pg)
 	go storeIntoDatabaseRoutineProductTagString(pg)
 	go storeIntoDatabaseRoutineAddParentToChild(pg)
+	go modifyInDatabaseRoutineModifyState(pg)
+	go deleteInDatabaseRoutineDeleteShiftById(pg)
+	go deleteInDatabaseRoutineDeleteShiftByAssetIdAndTimestamp(pg)
+	go modifyInDatabaseRoutineModifyCountAndScrap(pg)
 	select {} // block forever
 }
 
