@@ -148,7 +148,10 @@ func handleProxyRequest(c *gin.Context, method string) {
 	case "factoryinsight":
 		HandleFactoryInsight(c, getProxyRequestPath, method)
 	default:
-		c.AbortWithStatus(http.StatusBadRequest)
+		{
+			zap.S().Warnf("getProxyRequestPath.Service", getProxyRequestPath.Service)
+			c.AbortWithStatus(http.StatusBadRequest)
+		}
 	}
 }
 
@@ -160,8 +163,10 @@ func AddCorsHeaders(c *gin.Context) {
 	} else {
 		zap.S().Debugf("Set cors origin to: %s", origin)
 	}
-	c.Header("Access-Control-Allow-Headers", "*")
+	c.Header("Access-Control-Allow-Headers", "content-type, Authorization")
+	c.Header("Access-Control-Allow-Credentials", "true")
 	c.Header("Access-Control-Allow-Origin", origin)
+	c.Header("Access-Control-Allow-Methods", "*")
 }
 
 func postProxyHandler(c *gin.Context) {
@@ -245,6 +250,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Check if user is logged in
 	loggedIn, err := CheckUserLoggedIn(sessionCookie)
 	if err != nil {
+		zap.S().Warnf("Login error")
 		handleInvalidInputError(span, c, err)
 	}
 
@@ -261,6 +267,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
 	if err != nil {
+		zap.S().Warnf("url.Parse failed", fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
 		handleInvalidInputError(span, c, err)
 		return
 	}
@@ -268,6 +275,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
 	if len(s) != 5 {
+		zap.S().Warnf("String split failed", len(s))
 		handleInvalidInputError(span, c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
 		return
 	}
@@ -283,6 +291,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Get grafana organizations of user
 	orgas, err := user.GetOrgas(sessionCookie)
 	if err != nil {
+		zap.S().Warnf("GetOrgas failed", err, sessionCookie)
 		handleInvalidInputError(span, c, err)
 		return
 	}
