@@ -17,7 +17,7 @@ var shutdownEnabled bool
 func main() {
 
 	// Setup logger and set as global
-	logger, _ := zap.NewProduction()
+	logger, _ := zap.NewDevelopment()
 	zap.ReplaceGlobals(logger)
 	defer func(logger *zap.Logger) {
 		err := logger.Sync()
