@@ -5,6 +5,7 @@ import (
 
 	"database/sql"
 	"encoding/json"
+
 	"github.com/beeker1121/goque"
 
 	"go.uber.org/zap"
@@ -27,6 +28,7 @@ func ProcessStateData(customerID string, location string, assetID string, payloa
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -64,6 +66,7 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	// this should not happen. Throw a warning message and ignore (= do not try to store in database)
@@ -106,6 +109,7 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -140,6 +144,7 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -176,6 +181,7 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -224,6 +230,7 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -266,6 +273,7 @@ func ProcessScrapUniqueProduct(customerID string, location string, assetID strin
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -298,6 +306,7 @@ func ProcessAddProduct(customerID string, location string, assetID string, paylo
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -334,6 +343,7 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -378,6 +388,7 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -411,6 +422,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -449,6 +461,7 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	_, err = pg.EnqueueObject([]byte(prefixRecommendation), parsedPayload)
@@ -479,6 +492,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -564,6 +578,7 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -604,6 +619,7 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -642,6 +658,7 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)

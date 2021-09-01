@@ -19,6 +19,8 @@ var db *sql.DB
 
 var isDryRun bool
 
+const warnStoppingRoutineAsDatabaseHasBeenClosed = "Stopping routine as database has been closed"
+
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, sslmode string, dryRun string) {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PWDBName, sslmode)
@@ -96,7 +98,10 @@ func processQueue(pg *goque.PrefixQueue, prefix string, f func(itemArray []goque
 		// GetItemsFromQueue
 
 		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err != nil {
+		if err == goque.ErrDBClosed {
+			zap.S().Warnf(warnStoppingRoutineAsDatabaseHasBeenClosed, prefix)
+			return
+		} else if err != nil {
 			zap.S().Errorf("Failed to get items from database", prefix)
 			continue
 		}
@@ -493,8 +498,13 @@ func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) {
 	processQueue(pg, prefixProcessValue, storeItemsIntoDatabaseProcessValue)
 }
 
-func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 
+// storeIntoDatabaseRoutineCount fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixCount, storeItemsIntoDatabaseCount)
+}
+
+func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 	// Begin transaction
 	txn, err := db.Begin()
 
@@ -635,10 +645,6 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 	return
 }
 
-// storeIntoDatabaseRoutineCount fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixCount, storeItemsIntoDatabaseCount)
-}
 
 // storeIntoDatabaseRoutineState fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {

@@ -11,11 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/beeker1121/goque"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
+
+var globalPQ *goque.PrefixQueue
 
 func main() {
 
@@ -49,7 +52,7 @@ func main() {
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
-	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go http.ListenAndServe("0.0.0.0:8086", health)
 
 	dryRun := os.Getenv("DRY_RUN")
@@ -75,6 +78,8 @@ func main() {
 		return
 	}
 	defer closeQueue(pg)
+
+	globalPQ = pg
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
@@ -132,6 +137,13 @@ func main() {
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
+
+	time.Sleep(15 * time.Second) // Wait that all data is processed
+
+	err := closeQueue(globalPQ)
+	if err != nil {
+		zap.S().Errorf("Error while closing queue gracefully", err)
+	}
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
