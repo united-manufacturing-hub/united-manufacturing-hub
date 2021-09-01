@@ -45,7 +45,14 @@ factoryinsight:
 factoryinput:
   #This is currently just a mock to start grafanaproxy !
   enabled: true
-  user: "factoryinput"
+  image:
+    repository: scarjit/factoryinput
+    pullPolicy: Always
+  replicas: 1
+  storageRequest: 1Gi
+  pdb:
+    enabled: true
+    minAvailable: 1
 
 ### mqtt-to-blob ###
 mqtttoblob:

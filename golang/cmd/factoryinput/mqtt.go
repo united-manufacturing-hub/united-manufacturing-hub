@@ -70,7 +70,7 @@ func ShutdownMQTT() {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, podName string) MQTT.Client {
+func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) MQTT.Client {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -78,21 +78,13 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, p
 		opts.SetClientID(podName)
 		opts.SetUsername("MQTT_TO_POSTGRESQL")
 
-		if mqttTopic == "" {
-			mqttTopic = "$share/MQTT_TO_POSTGRESQL/ia/#"
-		}
-
-		zap.S().Infof("Running in Kubernetes mode", podName, mqttTopic)
+		zap.S().Infof("Running in Kubernetes mode", podName)
 
 	} else {
 		tlsconfig := newTLSConfig(certificateName)
 		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
 
-		if mqttTopic == "" {
-			mqttTopic = "ia/#"
-		}
-
-		zap.S().Infof("Running in normal mode", mqttTopic, certificateName)
+		zap.S().Infof("Running in normal mode", certificateName)
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(onConnect)
@@ -105,8 +97,6 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, p
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
-
-	zap.S().Infof("MQTT subscribed", mqttTopic)
 
 	return mqttClient
 }
