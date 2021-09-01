@@ -675,3 +675,140 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 		return
 	}
 }
+
+type modifyStateQueue struct {
+	DBAssetID      int
+	StartTimeStamp int64
+	EndTimeStamp   int64
+	NewState       int
+}
+
+type modifyState struct {
+	StartTimeStamp int64 `json:"start_time_stamp"`
+	EndTimeStamp   int64 `json:"end_time_stamp"`
+	NewState       int   `json:"new_state"`
+}
+
+func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload modifyState
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := modifyStateQueue{
+		DBAssetID:      DBassetID,
+		StartTimeStamp: parsedPayload.StartTimeStamp,
+		EndTimeStamp:   parsedPayload.EndTimeStamp,
+		NewState:       parsedPayload.NewState,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixModifyState), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type deleteShiftByIdQueue struct {
+	DBAssetID int
+	ShiftId   int `json:"shift_id"`
+}
+
+type deleteShiftById struct {
+	ShiftId int `json:"shift_id"`
+}
+
+func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload deleteShiftById
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := deleteShiftByIdQueue{
+		DBAssetID: DBassetID,
+		ShiftId:   parsedPayload.ShiftId,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixDeleteShiftById), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type deleteShiftByAssetIdAndBeginTimestampQueue struct {
+	DBAssetID      int
+	BeginTimeStamp int `json:"begin_time_stamp"`
+}
+
+type deleteShiftByAssetIdAndBeginTimestamp struct {
+	BeginTimeStamp int `json:"begin_time_stamp"`
+}
+
+func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload deleteShiftByAssetIdAndBeginTimestamp
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := deleteShiftByAssetIdAndBeginTimestampQueue{
+		DBAssetID:      DBassetID,
+		BeginTimeStamp: parsedPayload.BeginTimeStamp,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixDeleteShiftByAssetIdAndBeginTimestamp), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type modifyProducesPieceQueue struct {
+	DBAssetID int
+	Count     int `json:"count"`
+	Scrap     int `json:"scrap"`
+}
+
+type modifyProducesPiece struct {
+	Count int `json:"count"`
+	Scrap int `json:"scrap"`
+}
+
+func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+
+	// pt.Scrap is -1, if not modified by user
+	// pt.Count is -1, if not modified by user
+	parsedPayload := modifyProducesPiece{
+		Count: -1,
+		Scrap: -1,
+	}
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := modifyProducesPieceQueue{
+		DBAssetID: DBassetID,
+		Count:     parsedPayload.Count,
+		Scrap:     parsedPayload.Scrap,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixModifyProducesPiece), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}

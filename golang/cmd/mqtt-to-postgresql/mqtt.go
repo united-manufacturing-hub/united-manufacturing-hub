@@ -115,6 +115,14 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
 		case "addParentToChild":
 			ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
+		case "modifyState":
+			ProcessModifyState(customerID, location, assetID, payloadType, payload, pg)
+		case "deleteShiftById":
+			ProcessDeleteShiftById(customerID, location, assetID, payloadType, payload, pg)
+		case "deleteShiftByAssetIdAndBeginTimestamp":
+			ProcessDeleteShiftByAssetIdAndBeginTime(customerID, location, assetID, payloadType, payload, pg)
+		case "modifyProducedPieces":
+			ProcessModifyProducesPiece(customerID, location, assetID, payloadType, payload, pg)
 		}
 	}
 }
