@@ -37,8 +37,8 @@ jobs:
             echo "::set-output name=changed::true"
           fi
 
-      - name: Run chart-testing (lint)
-        run: ct lint --target-branch main --chart-dirs "deployment" --chart-repos "bitnami=https://charts.bitnami.com/bitnami,vernemq=https://vernemq.github.io/docker-vernemq,grafana=https://grafana.github.io/helm-charts,timescale=https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/,minio=https://operator.min.io/" --validate-yaml false
+      # - name: Run chart-testing (lint)
+      #   run: ct lint --target-branch main --chart-dirs "deployment" --chart-repos "bitnami=https://charts.bitnami.com/bitnami,vernemq=https://vernemq.github.io/docker-vernemq,grafana=https://grafana.github.io/helm-charts,timescale=https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/,minio=https://operator.min.io/" --validate-yaml false
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.2.0
