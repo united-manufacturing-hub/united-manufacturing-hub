@@ -16,8 +16,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ include "factorycube-server.fullname" . }}-factoryinsight-deployment
-  minReplicas: {{ .Values.factoryinsight.hpa.minReplicas }} 
-  maxReplicas: {{ .Values.factoryinsight.hpa.maxReplicas }} 
+  minReplicas: {{ .Values.factoryinsight.hpa.minReplicas }}
+  maxReplicas: {{ .Values.factoryinsight.hpa.maxReplicas }}
   metrics:
   - type: Resource
     resource:
