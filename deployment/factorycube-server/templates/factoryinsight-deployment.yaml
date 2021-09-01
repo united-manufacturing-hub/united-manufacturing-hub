@@ -34,10 +34,10 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-factoryinsight
-          {{- if .Values.factoryinsight.tag }}
-          image: {{ .Values.factoryinsight.image }}:{{ .Values.factoryinsight.tag }}
+          {{- if .Values.factoryinsight.image.tag }}
+          image: {{ .Values.factoryinsight.image.repository }}:{{ .Values.factoryinsight.image.tag }}
           {{- else }}
-          image: {{ .Values.factoryinsight.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.factoryinsight.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
           imagePullPolicy: IfNotPresent
           ports:
