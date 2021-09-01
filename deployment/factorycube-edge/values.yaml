@@ -41,7 +41,7 @@ barcodereader:
 sensorconnect:
   enabled: true
   image: unitedmanufacturinghub/sensorconnect
-  iprange: "ENTER_IP_RANGE"  #e.g. 172.21.9.0/24
+  iprange: "ENTER_IP_RANGE"  # e.g. 172.21.9.0/24
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
   brokerPort: 1883  # do not change
 
