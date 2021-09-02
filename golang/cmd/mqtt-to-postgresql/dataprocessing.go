@@ -558,20 +558,15 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 
 type processValueStringQueue struct {
 	DBAssetID   int
-	TimestampMs int64 	`json:"timestamp_ms"`
-	Name        string	`json:"name"`
-	Value       string		`json:"value"`
+	TimestampMs int64
+	Name        string
+	Value       string
 }
 
-type processValueString struct {
-	TimestampMs int64 	`json:"timestamp_ms"`
-	Name        string	`json:"name"`
-	Value       string	`json:"value"`
-}
 
-// ProcessProcessValueString adds a new productTagString to the database
+// ProcessProcessValueString adds a new processValueString to the database
 func ProcessProcessValueString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
-	var parsedPayload processValueString
+	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -580,17 +575,48 @@ func ProcessProcessValueString(customerID string, location string, assetID strin
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
-	newObject := processValueStringQueue{
-		DBAssetID:   DBassetID,
-		TimestampMs: parsedPayload.TimestampMs,
-		Name:        parsedPayload.Name,
-		Value:       parsedPayload.Value,
-	}
 
-	_, err = pg.EnqueueObject([]byte(prefixProcessValueString), newObject)
-	if err != nil {
-		zap.S().Errorf("Error enqueuing", err)
-		return
+	// process unknown data structure according to https://blog.golang.org/json
+	m := parsedPayload.(map[string]interface{})
+
+	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
+		timestampMs, ok := val.(int64)
+		if !ok {
+			timestampMsFloat, ok2 := val.(float64)
+			if !ok2 {
+				zap.S().Errorf("Timestamp not int64 nor float64", payload, val)
+				return
+			}
+			timestampMs = int64(timestampMsFloat)
+		}
+
+		// loop through map
+		for k, v := range m {
+			switch k {
+			case "timestamp_ms":
+			case "measurement":
+			case "serial_number":
+				break //ignore them
+			default:
+				value, ok := v.(string)
+				if !ok {
+						zap.S().Errorf("Process value recieved that is not a string", k, v)
+						break
+					}
+				newObject := processValueStringQueue{
+					DBAssetID:   DBassetID,
+					TimestampMs: timestampMs,
+					Name:        k,
+					Value:       value,
+				}
+				_, err = pg.EnqueueObject([]byte("processValueString"), newObject)
+				if err != nil {
+					zap.S().Errorf("Error enqueuing", err)
+					return
+				}
+			}
+		}
+
 	}
 }
 
