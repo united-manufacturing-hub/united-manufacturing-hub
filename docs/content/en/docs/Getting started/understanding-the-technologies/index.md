@@ -3,8 +3,38 @@ title: "0. Understanding the technologies"
 linkTitle: "0. Understanding the technologies"
 weight: 1
 description: >
-   This section gives you an introduction into the used technologies. A rough understanding of these technologies is fundamental for installing and working with the system
+   Strongly recommended. This section gives you an introduction into the used technologies. A rough understanding of these technologies is fundamental for installing and working with the system. Additionally, this article provides further learning materials for certain technologies.
 ---
+
+
+## Introduction into IT / OT
+
+The materials presented below are usually teached in a 2-3 h workshop session. You can find the presentation further below. 
+
+## Deep-dive: IT technologies and techniques
+
+### Flashing a operating system onto a USB-stick
+
+### Installing operating systems from a USB-stick
+
+### Connecting with SSH
+
+### ...
+
+## Deep Dive: OT technologies and techniques
+
+### ...
+
+
+
+
+
+
+
+
+
+
+# LEGACY
 
 ## Why your IT loves us
 
