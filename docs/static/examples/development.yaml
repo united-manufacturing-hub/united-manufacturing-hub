@@ -120,6 +120,10 @@ write_files:
         echo "Install factorycube-server..."
         helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server
         echo "Installed factorycube-server!"
+        
+        echo "Enabling SSH password authentification..."
+        sudo vim /etc/ssh/ssh_config -c "%s/PasswordAuthentication  no/PasswordAuthentication  yes/g | write | quit" && sudo service sshd restart
+        echo "Enabled SSH password authentification!"
 
         echo "Initial setup finished! This might take now awhile..."
     else

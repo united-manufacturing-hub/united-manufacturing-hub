@@ -26,12 +26,11 @@ Note: this content is also available in a presence workshop with an experienced 
 - a computer monitor connected with the edge device 
 - a keyboard connected with the edge device
 
-[^flash-usb]: LINK TO TECHNIQUES
-[^SSH-client]: LINK TO TECHNIQUES
-[^network-setup]: LINK TO TECHNIQUES WITH THIS IMAGE
-[^versioning]: LINK TO TECHNOLOQIES
+[^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/getting-started/understanding-the-technologies/#flashing-a-operating-system-onto-a-usb-stick)
+[^SSH-client]: See also out guide: [How to connect via SSH](/docs/getting-started/understanding-the-technologies/#connecting-with-ssh)
+[^network-setup]: See also out guide: [How to setup a development network](/docs/getting-started/understanding-the-technologies/#development-network)
+[^versioning]: See also out guide: [What is semantic versioning](/docs/getting-started/understanding-the-technologies/#versioning)
 
-{{< imgproc development-network.png Fit "500x300" >}}{{< /imgproc >}}
 
 
 ### Installation
@@ -41,13 +40,11 @@ This step is also available via a step-by-step video: **TODO**
 #### k3OS
 
 1. Insert your USB-stick with k3OS into your edge device and boot from it [^boot-usb]
-2. [Install k3OS](/docs/tutorials/install-k3os/). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](TODO)
-
-Thats it! The device will automatically restart and download and install the stack. The installation has successfully started when you see the messages `factorycube-server deployed!` and `factorycube-edge deployed!`.
+2. [Install k3OS](/docs/tutorials/install-k3os/). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](/examples/development.yaml)
 
 This process takes around 15 - 20 minutes depending on your internet connection and there will be no further information about the installation status on the output of the device visible (the information on the computer screen).
 
-[^boot-usb]: LINK TO TECHNIQUES
+[^boot-usb]: See also out guide: [How to boot from a USB-stick](/docs/getting-started/understanding-the-technologies/#installing-operating-systems-from-a-usb-stick)
 
 #### Getting access to the device
 
@@ -62,23 +59,27 @@ To verify whether the installation worked and access [Grafana] (the dashboard) a
 
 The login console will look like "messed up" due to the logs of the installation process in the steps above. 
 
-TODO: image
+{{< imgproc 1.png Fit "800x500" >}}Immediatly after start. Nothing is messed up yet.{{< /imgproc >}}
+{{< imgproc 2.png Fit "800x500" >}}"Messed up" login screen{{< /imgproc >}}
 
 You can "clean it up" by pressing two times enter. 
 
-TODO: image
-
 You can also immediatly proceed with entering the default username `rancher` (do not forget to press enter) and the default password `rancher` to login. 
+{{< imgproc 3.png Fit "800x500" >}}Logging into k3OS using the username `rancher`{{< /imgproc >}}
+{{< imgproc 4.png Fit "800x500" >}}Logging into k3OS using the password `rancher`{{< /imgproc >}}
 
 After a successfull login you should see the current IP address of the device on your computer screen.
 
-TODO: image
+{{< imgproc 5.png Fit "800x500" >}}Successfully logged into k3OS{{< /imgproc >}}
+
 
 #### Step 2: Enable SSH password authentification 
 
-Enable SSH password authentification in k3OS [^ssh-password-authentication]. This is only necessary in development environments. For production environments we recommend using a certificate to authenticate, which is enabled by default. This can be archieved by modifying the cloud-init file and [linking to a public key stored on your GitHub account.](https://gist.github.com/dmangiarelli/1a0ae107aaa5c478c51e#ssh-setup-with-putty)
+Enable SSH password authentification in k3OS [^ssh-password-authentication]. This is currently not necessary anymore as the automated setup script will do that automatically, **therefore this step can be skipped**. This paragraph only exists to remind you that this setting is not the default behavior of k3OS and should be deactivated in production environments.
 
-[^ssh-password-authentication]: /docs/tutorials/add-username-password-authentification-k3os-ssh/ 
+For production environments we recommend using a certificate to authenticate, which is enabled by default. This can be archieved by modifying the cloud-init file and [linking to a public key stored on your GitHub account.](https://gist.github.com/dmangiarelli/1a0ae107aaa5c478c51e#ssh-setup-with-putty)
+
+[^ssh-password-authentication]: See also out guide: [Enabling k3os password authentication](/docs/tutorials/add-username-password-authentification-k3os-ssh/)
 
 #### Step 3: Connect via SSH
 

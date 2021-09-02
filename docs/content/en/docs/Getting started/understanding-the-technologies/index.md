@@ -19,6 +19,10 @@ The materials presented below are usually teached in a 2-3 h workshop session. Y
 
 ### Connecting with SSH
 
+### Development network
+
+{{< imgproc development-network.png Fit "500x300" >}}{{< /imgproc >}}
+
 ### Versioning
 
 ### ...
