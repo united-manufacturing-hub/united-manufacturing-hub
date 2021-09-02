@@ -556,6 +556,44 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 	}
 }
 
+type processValueStringQueue struct {
+	DBAssetID   int
+	TimestampMs int64 	`json:"timestamp_ms"`
+	Name        string	`json:"name"`
+	Value       string		`json:"value"`
+}
+
+type processValueString struct {
+	TimestampMs int64 	`json:"timestamp_ms"`
+	Name        string	`json:"name"`
+	Value       string	`json:"value"`
+}
+
+// ProcessProcessValueString adds a new productTagString to the database
+func ProcessProcessValueString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload processValueString
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := processValueStringQueue{
+		DBAssetID:   DBassetID,
+		TimestampMs: parsedPayload.TimestampMs,
+		Name:        parsedPayload.Name,
+		Value:       parsedPayload.Value,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixProcessValueString), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
 type productTagQueue struct {
 	DBAssetID   int
 	TimestampMs int64   `json:"timestamp_ms"`

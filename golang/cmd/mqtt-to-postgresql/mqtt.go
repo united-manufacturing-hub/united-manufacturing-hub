@@ -87,6 +87,8 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		case "processvalue":
 			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
+		case "processValueString":
+			ProcessProcessValueString(customerID, location, assetID, payloadType, payload, pg)
 		case "count":
 			ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
 		case "scrapCount":

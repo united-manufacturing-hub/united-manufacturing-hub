@@ -11,6 +11,7 @@ const queuePath = "/data/queue"
 
 const prefixProcessValueFloat64 = "processValueFloat64"
 const prefixProcessValue = "processValue"
+const prefixProcessValueString = "processValueString"
 const prefixCount = "count"
 const prefixRecommendation = "recommendation"
 const prefixState = "state"

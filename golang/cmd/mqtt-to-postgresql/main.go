@@ -116,7 +116,7 @@ func main() {
 	go storeIntoDatabaseRoutineEndOrder(pg)
 	go storeIntoDatabaseRoutineProcessValue(pg)
 	go storeIntoDatabaseRoutineProcessValueFloat64(pg)
-	go storeIntoDatabaseProcessValueString(pg)
+	go storeIntoDatabaseRoutineProcessValueString(pg)
 	go storeIntoDatabaseRoutineRecommendation(pg)
 	go storeIntoDatabaseRoutineScrapCount(pg)
 	go storeIntoDatabaseRoutineShift(pg)

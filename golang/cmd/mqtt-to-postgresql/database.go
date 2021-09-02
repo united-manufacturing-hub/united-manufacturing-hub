@@ -645,6 +645,153 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 	return
 }
 
+func storeItemsIntoDatabaseProcessValueString(itemArray []goque.Item) (err error) {
+
+	// Begin transaction
+	txn, err := db.Begin()
+
+	if err != nil {
+		err = PQErrorHandlingTransaction("db.Begin()", err, txn)
+	}
+
+	// 1. Prepare statement: create temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			CREATE TEMP TABLE tmp_processvaluestringtable 
+				( LIKE processValueStringTable INCLUDING DEFAULTS ) ON COMMIT DROP 
+			;
+		`)
+		if err != nil {
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
+		}
+
+		// Create statement
+		_, err = stmt.Exec()
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+	// 2. Prepare statement: copying into temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluestringtable", "timestamp", "asset_id", "value", "valuename"))
+		if err != nil {
+			err = PQErrorHandlingTransaction("Prepare()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		for _, item := range itemArray {
+
+			var pt processValueStringQueue
+
+			err = item.ToObject(&pt)
+
+			if err != nil {
+				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+
+			// Create statement
+			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+			if err != nil {
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+
+	// 3. Prepare statement: copy from temp table into main table
+	{
+
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO processvaluestringtable (SELECT * FROM tmp_processvaluestringtable) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			PQErrorHandling("Prepare()", err)
+			if err != nil {
+				return
+			}
+		}
+
+		// Create statement
+		_, err = stmt.Exec()
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+		// Close Statement
+		err = stmt.Close()
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Close()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+
+	// if dry run, print statement and rollback
+	if isDryRun {
+		zap.S().Debugf("PREPARED STATEMENT")
+		err = txn.Rollback()
+		if err != nil {
+			PQErrorHandling("txn.Rollback()", err)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	// Commit all statements
+	err = txn.Commit()
+	if err != nil {
+		PQErrorHandling("txn.Commit()", err)
+	}
+	return
+}
+
+// storeIntoDatabaseRoutineProcessValueString fetches data from queue and sends it to the database
+func storeIntoDatabaseRoutineProcessValueString(pg *goque.PrefixQueue) {
+	processQueue(pg, prefixProcessValueString, storeItemsIntoDatabaseProcessValueString)
+}
+
 
 // storeIntoDatabaseRoutineState fetches data from queue and sends it to the database
 func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {
