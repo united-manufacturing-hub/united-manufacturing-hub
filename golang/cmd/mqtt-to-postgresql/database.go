@@ -2394,19 +2394,13 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 
 // GetUniqueProductID returns the UID linked to the latest combination DBassetID and aid were recorded together
 func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
-
-	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
-	if !cacheHit { // data NOT found
-		err = db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",
-			aid, DBassetID).Scan(&uid)
-		if err == sql.ErrNoRows {
-			zap.S().Errorf("No Results Found", aid, DBassetID)
-		} else if err != nil {
-			PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
-		}
-		internal.StoreUniqueProductIDToCache(aid, DBassetID, uid)
+	err = db.QueryRow("SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;",
+		aid, DBassetID).Scan(&uid)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found", aid, DBassetID)
+	} else if err != nil {
+		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
 	}
-
 	return
 }
 
