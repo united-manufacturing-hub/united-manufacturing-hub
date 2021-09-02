@@ -594,8 +594,8 @@ func ProcessProcessValueString(customerID string, location string, assetID strin
 		for k, v := range m {
 			switch k {
 			case "timestamp_ms":
-			case "measurement":
-			case "serial_number":
+			case "measurement": //only to ignore legacy messages todo: highlight in documentation
+			case "serial_number"://only to ignore legacy messages todo: highlight in documentation
 				break //ignore them
 			default:
 				value, ok := v.(string)
