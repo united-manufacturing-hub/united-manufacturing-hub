@@ -91,7 +91,7 @@ write_files:
         Ub7w8oJqMapWI3XxHOLOAi6o
         -----END PRIVATE KEY-----
 
-  path: /home/rancher/configs/development.yaml
+  path: /home/rancher/configs/factorycube-edge-development.yaml
 
 - content: |
     #!/bin/bash
