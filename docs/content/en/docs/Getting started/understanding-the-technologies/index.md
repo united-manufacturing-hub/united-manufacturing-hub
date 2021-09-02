@@ -45,7 +45,6 @@ Enter the password and press enter. The default password of the auto setup will 
 
 ### Versioning
 
-### Connect to Kubernetes using Lens
 
 ### ...
 
