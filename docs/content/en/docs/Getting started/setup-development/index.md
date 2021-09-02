@@ -42,8 +42,6 @@ This step is also available via a step-by-step video: **TODO**
 
 1. Insert your USB-stick with k3OS into your edge device and boot from it [^boot-usb]
 2. [Install k3OS](TODO). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](TODO)
-3. If the installation fails with not beeing able to fetch the file above check the URL and the network configuration
-4. If the installation fails with expired or untrusted certificates (`curl: (60) SSL certificate problem: certificate is not yet valid` or similar), [check out this guide](TODO).
 
 Thats it! The device will automatically restart and download and install the stack. The installation has successfully started when you see the messages `factorycube-server deployed!` and `factorycube-edge deployed!`.
 
