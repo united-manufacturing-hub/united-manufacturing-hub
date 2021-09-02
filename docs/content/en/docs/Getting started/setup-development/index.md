@@ -11,7 +11,7 @@ There are three options to setup a development environment:
 2. using [minikube](https://kubernetes.io/en/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack)
 3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps)
 
-The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.
+**The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.**
 
 ## Option 1: using a seperate device in combination with k3OS and our installation script
 

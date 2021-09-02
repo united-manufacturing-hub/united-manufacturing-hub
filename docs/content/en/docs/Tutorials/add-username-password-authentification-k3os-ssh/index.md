@@ -18,6 +18,6 @@ description: >
 2. Set the value `PasswordAuthentication` in the file `/etc/ssh/sshd_config` to `yes` and restart the service `sshd`. You can use the following command:
 
 ```bash
-sudo vim /etc/ssh/ssh_config -c "%s/PasswordAuthentication  no/PasswordAuthentication  yes/g | write | quit" && sudo service sshd restart
+sudo vim /etc/ssh/sshd_config -c "%s/PasswordAuthentication  no/PasswordAuthentication  yes/g | write | quit" && sudo service sshd restart
 
 ```
