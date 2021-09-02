@@ -19,6 +19,8 @@ The materials presented below are usually teached in a 2-3 h workshop session. Y
 
 ### Connecting with SSH
 
+### Versioning
+
 ### ...
 
 ## Deep Dive: OT technologies and techniques

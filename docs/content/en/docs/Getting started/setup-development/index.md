@@ -9,7 +9,7 @@ description: >
 There are three options to setup a development environment:
 1. using a seperate device in combination with k3OS and our installation script (preferred)
 2. using [minikube](https://kubernetes.io/en/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack)
-3. manual installation (recommended for production enviroments, if you want to have fine grained control over the installation steps)
+3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps)
 
 The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.
 
@@ -20,7 +20,7 @@ Note: this content is also available in a presence workshop with an experienced 
 ### Prerequisites
 
 - a edge device with x86 architecture. We recommend using the [K300 from OnLogic](https://www.onlogic.com/eu-en/k300/)
-- the [latest version of k3OS](https://github.com/rancher/k3os/releases/) installed on a bootable USB-stick [^flash-usb]. 
+- the [latest version of k3OS](https://github.com/rancher/k3os/releases/) [^versioning] installed on a bootable USB-stick [^flash-usb]. 
 - a computer with SSH / SFTP client [^SSH-client] and [Lens](https://k8slens.dev/) (for accessing the Kubernetes cluster) installed. We recommend a laptop with an Ethernet port or with an Ethernet adapter. 
 - local LAN (with DHCP) available via atleast two Ethernet cables and access to the internet.[^network-setup].
 - a computer monitor connected with the edge device 
@@ -29,6 +29,7 @@ Note: this content is also available in a presence workshop with an experienced 
 [^flash-usb]: LINK TO TECHNIQUES
 [^SSH-client]: LINK TO TECHNIQUES
 [^network-setup]: LINK TO TECHNIQUES WITH THIS IMAGE
+[^versioning]: LINK TO TECHNOLOQIES
 
 {{< imgproc development-network.png Fit "500x300" >}}{{< /imgproc >}}
 
@@ -40,9 +41,9 @@ This step is also available via a step-by-step video: **TODO**
 #### k3OS
 
 1. Insert your USB-stick with k3OS into your edge device and boot from it [^boot-usb]
-2. [Install k3OS](TODO). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself.
+2. [Install k3OS](TODO). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](TODO)
 3. If the installation fails with not beeing able to fetch the file above check the URL and the network configuration
-4. If the installation fails with expired or untrusted certificates, [check out this guide](TODO).
+4. If the installation fails with expired or untrusted certificates (`curl: (60) SSL certificate problem: certificate is not yet valid` or similar), [check out this guide](TODO).
 
 Thats it! The device will automatically restart and download and install the stack. The installation has successfully started when you see the messages `factorycube-server deployed!` and `factorycube-edge deployed!`.
 
@@ -111,11 +112,16 @@ Node-RED is accessible by opening the following URL in your browser: `http://<IP
 
 Once you have access, you can proceed with the second article [Connecting machines and creating dashboards](docs/getting-started/connecting-machines-creating-dashboards/).
 
+## Option 2: using minikube
+
+**TODO**
 
 
-# LEGACY
+## Option 3: manual installation
 
-## Prerequisites
+**TODO**
+
+### Prerequisites
 
 - k3os (AMD64) installed on a bootable USB-stick (you can get it here: https://github.com/rancher/k3os/releases/ ). You can create a bootable USB-stick using [balenaEtcher](https://www.balena.io/etcher/)
 - a laptop with SSH / SFTP client (e.g. [MobaXTerm](https://mobaxterm.mobatek.net/)) and [Lens](https://k8slens.dev/) (for accessing the Kubernetes cluster) installed
@@ -125,9 +131,9 @@ Once you have access, you can proceed with the second article [Connecting machin
 - network setup and internet access according to the image below
 
 
-## Steps
+### Steps
 
-### k3OS
+#### k3OS
 
 1. Install k3OS on your edge device using the bootable USB-stick (Press "entf or delete" repeatedly to enter the BIOS of the Factorycube and then boot from the USB stick with K3OS)
 2. Choose the desired partition (in most cases 1)
@@ -137,7 +143,7 @@ Once you have access, you can proceed with the second article [Connecting machin
 6. Remove the USB stick after the message that the system will restart in 5 seconds.
 7. You can now disconnect Monitor and keyboard as you will do everything else via SSH.
 
-### General setup
+#### General setup
 
 1. Connect via SSH e.g. with MobaXTerm (Username: rancher, Port: 22, remote host: ip of your edge device)
 2. Authenticate with your private key which belongs to the to the public key stored in Github. (For MobaXTerm: Advanced SSH Settings -> private key and select your private key)
@@ -156,7 +162,7 @@ If this command fails with a `curl: (60) SSL certificate problem: certificate is
 kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server
 ```
 
-### Install factorycube-edge
+#### Install factorycube-edge
 
 Warning: in production you should use your own certificates and not the ones provided by us as this is highly insecure when exposed to the internet and any insecure network. A tutorial to setup PKI infrastructure for MQTT according to [this guide](../../tutorials/pki)
 
@@ -182,7 +188,7 @@ mqttBridgePrivkey: |
 
 6. Execute `helm install factorycube-edge /home/rancher/united-manufacturing-hub/deployment/factorycube-edge --values "/home/rancher/united-manufacturing-hub/deployment/factorycube-edge/development_values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml  -n factorycube-edge` (change kubeconfig and serialNumber accordingly) (Please pay attention to the correct path. The path may be /home/rancher/united-manufacturing-hub-main ... or similar)
 
-### Install factorycube-server
+#### Install factorycube-server
 
 Warning: in production this should be installed on a seperate device / in the cloud to ensure High Availability and provide automated backups. 
 
@@ -191,7 +197,7 @@ Warning: in production this should be installed on a seperate device / in the cl
 
 Everything should be now successfully setup and you can connect your edge devices and start creating dashboards! **Keep in mind**: the default development_values.yaml should only be used for development environments and never for production. See also notes below.
 
-## Using it
+#### Using it
 
 You can now access Grafana and nodered via HTTP / HTTPS (depending on your setup). Default user for Grafana is admin. You can find the password in the secret RELEASE-NAME-grafana. Grafana is available via port 8080, nodered via 1880. 
 
