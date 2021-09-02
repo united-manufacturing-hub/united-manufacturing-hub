@@ -97,9 +97,11 @@ write_files:
     #!/bin/bash
     LOCKDIR=/home/rancher/DO_NOT_DELETE
     if mkdir $LOCKDIR; then
-        echo "Initial setup!"
+        echo "Initial setup! Waiting 20 seconds for full startup..."
+        
+        sleep 20
 
-        echo "Installing helm..."
+        echo "Continuing with installation. Installing helm..."
         export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh
         echo "Helm installed!"
 
@@ -112,11 +114,11 @@ write_files:
         echo "Created namespaces!"
 
         echo "Install factorycube-edge..."
-        helm install united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge
+        helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge
         echo "Installed factorycube-edge!"
 
         echo "Install factorycube-server..."
-        helm install united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server
+        helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server
         echo "Installed factorycube-server!"
 
         echo "Initial setup finished! This might take now awhile..."
