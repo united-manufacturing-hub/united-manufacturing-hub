@@ -75,60 +75,61 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 }
 
-func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	if customerID != "raw" {
 
 		switch payloadType {
-		case "state":
+		case Prefix.State:
 			ProcessStateData(customerID, location, assetID, payloadType, payload, pg)
-		case "processValue":
+		case Prefix.ProcessValue:
 			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
+		//TODO is still still needed ?
 		case "processvalue":
 			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
-		case "count":
+		case Prefix.Count:
 			ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
-		case "scrapCount":
+		case Prefix.ScrapCount:
 			ProcessScrapCountData(customerID, location, assetID, payloadType, payload, pg)
-		case "recommendation":
+		case Prefix.Recommendation:
 			ProcessRecommendationData(customerID, location, assetID, payloadType, payload, pg)
-		case "addShift":
+		case Prefix.AddShift:
 			ProcessAddShift(customerID, location, assetID, payloadType, payload, pg)
-		case "addMaintenanceActivity":
+		case Prefix.AddMaintenanceActivity:
 			ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload, pg)
-		case "uniqueProduct":
+		case Prefix.UniqueProduct:
 			ProcessUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
-		case "scrapUniqueProduct":
+		case Prefix.UniqueProductScrap:
 			ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
-		case "addProduct":
+		case Prefix.AddProduct:
 			ProcessAddProduct(customerID, location, assetID, payloadType, payload, pg)
-		case "addOrder":
+		case Prefix.AddOrder:
 			ProcessAddOrder(customerID, location, assetID, payloadType, payload, pg)
-		case "startOrder":
+		case Prefix.StartOrder:
 			ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
-		case "endOrder":
+		case Prefix.EndOrder:
 			ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
-		case "productTag":
+		case Prefix.ProductTag:
 			ProcessProductTag(customerID, location, assetID, payloadType, payload, pg)
-		case "productTagString":
+		case Prefix.ProductTagString:
 			ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
-		case "addParentToChild":
+		case Prefix.AddParentToChild:
 			ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
-		case "modifyState":
+		case Prefix.ModifyState:
 			ProcessModifyState(customerID, location, assetID, payloadType, payload, pg)
-		case "deleteShiftById":
+		case Prefix.DeleteShiftById:
 			ProcessDeleteShiftById(customerID, location, assetID, payloadType, payload, pg)
-		case "deleteShiftByAssetIdAndBeginTimestamp":
+		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
 			ProcessDeleteShiftByAssetIdAndBeginTime(customerID, location, assetID, payloadType, payload, pg)
-		case "modifyProducedPieces":
+		case Prefix.ModifyProducesPieces:
 			ProcessModifyProducesPiece(customerID, location, assetID, payloadType, payload, pg)
 		}
 	}
 }
 
 // getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
-func getOnMessageRecieved(pg *goque.PrefixQueue) func(MQTT.Client, MQTT.Message) {
+func getOnMessageRecieved(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
 
@@ -181,7 +182,7 @@ func ShutdownMQTT() {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.PrefixQueue) {
+func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.PriorityQueue) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
