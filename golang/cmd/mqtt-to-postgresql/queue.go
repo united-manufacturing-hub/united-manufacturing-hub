@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"time"
 
 	"github.com/beeker1121/goque"
@@ -156,19 +158,19 @@ func addItemWithPrioToQueue(pq *goque.PriorityQueue, prefix string, item []byte,
 	return
 }
 
-func addNewItemToQueue(pq *goque.PriorityQueue, prefix string, item []byte) (err error) {
+func addNewBinarizedItemToQueue(pq *goque.PriorityQueue, prefix string, item []byte) (err error) {
 	err = addItemWithPrioToQueue(pq, prefix, item, 0)
 	return
 }
 
-func addNewItemsToQueue(pq *goque.PriorityQueue, prefix string, items [][]byte) (err error) {
-	zap.S().Debugf("addNewItemsToQueue")
-	for _, item := range items {
-		err = addNewItemToQueue(pq, prefix, item)
-		if err != nil {
-			return
-		}
+func addNewItemToQueue(pq *goque.PriorityQueue, prefix string, item interface{}) (err error) {
+	var buffer bytes.Buffer
+	enc := gob.NewEncoder(&buffer)
+	if err = enc.Encode(item); err != nil {
+		return
 	}
+
+	err = addNewBinarizedItemToQueue(pq, prefix, buffer.Bytes())
 	return
 }
 
