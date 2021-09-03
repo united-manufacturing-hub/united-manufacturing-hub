@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var globalPQ *goque.PrefixQueue
+var globalPQ *goque.PriorityQueue
 
 func main() {
 
@@ -109,32 +109,19 @@ func main() {
 
 	// Start queue processing goroutines
 	go reportQueueLength(pg)
-	go storeIntoDatabaseRoutineAddMaintenanceActivity(pg)
-	go storeIntoDatabaseRoutineAddOrder(pg)
-	go storeIntoDatabaseRoutineAddProduct(pg)
-	go storeIntoDatabaseRoutineCount(pg)
-	go storeIntoDatabaseRoutineEndOrder(pg)
-	go storeIntoDatabaseRoutineProcessValue(pg)
-	go storeIntoDatabaseRoutineProcessValueFloat64(pg)
-	go storeIntoDatabaseRoutineRecommendation(pg)
-	go storeIntoDatabaseRoutineScrapCount(pg)
-	go storeIntoDatabaseRoutineShift(pg)
-	go storeIntoDatabaseRoutineStartOrder(pg)
-	go storeIntoDatabaseRoutineState(pg)
-	go storeIntoDatabaseRoutineUniqueProduct(pg)
-	go storeIntoDatabaseRoutineUniqueProductScrap(pg)
-	go storeIntoDatabaseRoutineProductTag(pg)
-	go storeIntoDatabaseRoutineProductTagString(pg)
-	go storeIntoDatabaseRoutineAddParentToChild(pg)
-	go modifyInDatabaseRoutineModifyState(pg)
-	go deleteInDatabaseRoutineDeleteShiftById(pg)
-	go deleteInDatabaseRoutineDeleteShiftByAssetIdAndTimestamp(pg)
-	go modifyInDatabaseRoutineModifyCountAndScrap(pg)
+
+	for i := 0; i < 1000; i++ {
+		processQueue(pg)
+	}
+
 	select {} // block forever
 }
 
+var shuttingDown = false
+
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
+	shuttingDown = true
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
 
