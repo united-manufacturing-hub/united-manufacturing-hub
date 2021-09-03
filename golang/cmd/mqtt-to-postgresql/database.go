@@ -87,41 +87,7 @@ func PQErrorHandling(sqlStatement string, err error) {
 	ShutdownApplicationGraceful()
 }
 
-// storeIntoDatabaseRoutineRecommendation fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineRecommendation(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixRecommendation, storeItemsIntoDatabaseRecommendation)
-}
-
-func processQueue(pg *goque.PrefixQueue, prefix string, f func(itemArray []goque.Item) (err error)) {
-	for range time.Tick(time.Duration(1) * time.Second) {
-
-		// GetItemsFromQueue
-
-		itemArray, err := getAllItemsInQueue(prefix, pg)
-		if err == goque.ErrDBClosed {
-			zap.S().Warnf(warnStoppingRoutineAsDatabaseHasBeenClosed, prefix)
-			return
-		} else if err != nil {
-			zap.S().Errorf("Failed to get items from database", prefix)
-			continue
-		}
-
-		if len(itemArray) == 0 {
-			//zap.S().Debugf("Queue empty", prefix)
-			continue
-		}
-
-		zap.S().Debugf("Got items from queue", prefix, len(itemArray))
-
-		err = f(itemArray)
-		if err != nil {
-			zap.S().Errorf("Failed to store items in database", prefix)
-			addMultipleItemsToQueue(prefix, pg, itemArray)
-		}
-	}
-}
-
-func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseRecommendation(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -147,27 +113,23 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt recommendationStruct
 
-		var pt recommendationStruct
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.UID, pt.RecommendationType, pt.Enabled, pt.RecommendationValues, pt.RecommendationTextEN, pt.RecommendationTextDE, pt.DiagnoseTextEN, pt.DiagnoseTextDE)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.TimestampMs, pt.UID, pt.RecommendationType, pt.Enabled, pt.RecommendationValues, pt.RecommendationTextEN, pt.RecommendationTextDE, pt.DiagnoseTextEN, pt.DiagnoseTextDE)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -204,7 +166,7 @@ func storeItemsIntoDatabaseRecommendation(itemArray []goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseProcessValueFloat64(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -255,30 +217,26 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 			}
 		}
 
-		for _, item := range itemArray {
+		var pt processValueFloat64Queue
 
-			var pt processValueFloat64Queue
+		err = item.ToObject(&pt)
 
-			err = item.ToObject(&pt)
-
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
+		}
 
-			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+		timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
 
-			// Create statement
-			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+		// Create statement
+		_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
-
 		}
 
 		// Close Statement
@@ -346,12 +304,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(itemArray []goque.Item) (err erro
 	return
 }
 
-// storeIntoDatabaseRoutineProcessValueFloat64 fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineProcessValueFloat64(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixProcessValueFloat64, storeItemsIntoDatabaseProcessValueFloat64)
-}
-
-func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseProcessValue(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -402,30 +355,26 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 			}
 		}
 
-		for _, item := range itemArray {
+		var pt processValueQueue
 
-			var pt processValueQueue
+		err = item.ToObject(&pt)
 
-			err = item.ToObject(&pt)
-
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
+		}
 
-			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+		timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
 
-			// Create statement
-			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+		// Create statement
+		_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
-
 		}
 
 		// Close Statement
@@ -493,18 +442,7 @@ func storeItemsIntoDatabaseProcessValue(itemArray []goque.Item) (err error) {
 	return
 }
 
-// storeIntoDatabaseRoutineProcessValue fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineProcessValue(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixProcessValue, storeItemsIntoDatabaseProcessValue)
-}
-
-
-// storeIntoDatabaseRoutineCount fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineCount(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixCount, storeItemsIntoDatabaseCount)
-}
-
-func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseCount(item goque.Item) (err error) {
 	// Begin transaction
 	txn, err := db.Begin()
 
@@ -554,30 +492,26 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 			}
 		}
 
-		for _, item := range itemArray {
+		var pt countQueue
 
-			var pt countQueue
+		err = item.ToObject(&pt)
 
-			err = item.ToObject(&pt)
-
+		if err != nil {
+			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
+		}
 
-			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+		timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
 
-			// Create statement
-			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
+		// Create statement
+		_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
+		if err != nil {
+			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
-
 		}
 
 		// Close Statement
@@ -645,13 +579,7 @@ func storeItemsIntoDatabaseCount(itemArray []goque.Item) (err error) {
 	return
 }
 
-
-// storeIntoDatabaseRoutineState fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineState(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixState, storeItemsIntoDatabaseState)
-}
-
-func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseState(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -675,27 +603,23 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt stateQueue
 
-		var pt stateQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.State)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.State)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -731,12 +655,7 @@ func storeItemsIntoDatabaseState(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineScrapCount from queue and sends it to the database
-func storeIntoDatabaseRoutineScrapCount(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixScrapCount, storeItemsIntoDatabaseScrapCount)
-}
-
-func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseScrapCount(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -771,27 +690,23 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt scrapCountQueue
 
-		var pt scrapCountQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.Scrap)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.Scrap)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -827,12 +742,7 @@ func storeItemsIntoDatabaseScrapCount(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineUniqueProduct fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineUniqueProduct(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixUniqueProduct, storeItemsIntoDatabaseUniqueProduct)
-}
-
-func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseUniqueProduct(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -856,28 +766,23 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 			return
 		}
 	}
+	var pt uniqueProductQueue
 
-	for _, item := range itemArray {
+	err = item.ToObject(&pt)
 
-		var pt uniqueProductQueue
-
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(pt.EndTimestampMs), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(pt.EndTimestampMs), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -913,12 +818,7 @@ func storeItemsIntoDatabaseUniqueProduct(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineProductTag fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineProductTag(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixProductTag, storeItemsIntoDatabaseProductTag)
-}
-
-func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseProductTag(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -943,33 +843,30 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
-		var pt productTagQueue
+	var pt productTagQueue
 
-		err = item.ToObject(&pt)
+	err = item.ToObject(&pt)
 
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
-		}
-
-		var uid int
-		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
-		if err != nil {
-			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
 			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
-		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
-		}
+	}
 
+	var uid int
+	uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+	if err != nil {
+		zap.S().Errorf("Stopped writing productTag in Database, uid not found")
+		return
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// Close Statement
@@ -1005,12 +902,7 @@ func storeItemsIntoDatabaseProductTag(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineProductTagString fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineProductTagString(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixProductTagString, storeItemsIntoDatabaseProductTagString)
-}
-
-func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseProductTagString(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1035,33 +927,30 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 		}
 	}
 
-	for _, item := range itemArray {
-		var pt productTagStringQueue
+	var pt productTagStringQueue
 
-		err = item.ToObject(&pt)
+	err = item.ToObject(&pt)
 
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
-		}
-
-		var uid int
-		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
-		if err != nil {
-			zap.S().Errorf("Stopped writing productTagString in Database, uid not found")
 			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
-		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
-		}
+	}
 
+	var uid int
+	uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
+	if err != nil {
+		zap.S().Errorf("Stopped writing productTagString in Database, uid not found")
+		return
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// Close Statement
@@ -1097,12 +986,7 @@ func storeItemsIntoDatabaseProductTagString(itemArray []goque.Item) (err error) 
 
 }
 
-// storeIntoDatabaseRoutineAddParentToChild fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineAddParentToChild(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixAddParentToChild, storeItemsIntoDatabaseAddParentToChild)
-}
-
-func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseAddParentToChild(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1127,34 +1011,31 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 		}
 	}
 
-	for _, item := range itemArray {
-		var pt addParentToChildQueue
+	var pt addParentToChildQueue
 
-		err = item.ToObject(&pt)
+	err = item.ToObject(&pt)
 
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
-		}
-
-		var childUid int
-		childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
-		if err != nil {
-			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
 			return
 		}
-		var parentUid = GetLatestParentUniqueProductID(pt.ParentAID, pt.DBAssetID)
-		// Create statement
-		_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
-		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
-		}
+	}
 
+	var childUid int
+	childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
+	if err != nil {
+		zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
+		return
+	}
+	var parentUid = GetLatestParentUniqueProductID(pt.ParentAID, pt.DBAssetID)
+	// Create statement
+	_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+		if err != nil {
+			return
+		}
 	}
 
 	// Close Statement
@@ -1190,12 +1071,7 @@ func storeItemsIntoDatabaseAddParentToChild(itemArray []goque.Item) (err error) 
 
 }
 
-// storeIntoDatabaseRoutineShift fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineShift(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixAddShift, storeItemsIntoDatabaseShift)
-}
-
-func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseShift(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1221,27 +1097,23 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt addShiftQueue
 
-		var pt addShiftQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1277,12 +1149,7 @@ func storeItemsIntoDatabaseShift(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineUniqueProductScrap fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineUniqueProductScrap(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixUniqueProductScrap, storeItemsIntoDatabaseUniqueProductScrap)
-}
-
-func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseUniqueProductScrap(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1304,27 +1171,23 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt scrapUniqueProductQueue
 
-		var pt scrapUniqueProductQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.UID, pt.DBAssetID)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.UID, pt.DBAssetID)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1360,12 +1223,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(itemArray []goque.Item) (err error
 
 }
 
-// storeIntoDatabaseRoutineAddProduct fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineAddProduct(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixAddProduct, storeItemsIntoDatabaseAddProduct)
-}
-
-func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseAddProduct(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1389,27 +1247,23 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt addProductQueue
 
-		var pt addProductQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.DBAssetID, pt.ProductName, pt.TimePerUnitInSeconds)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.DBAssetID, pt.ProductName, pt.TimePerUnitInSeconds)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1445,12 +1299,7 @@ func storeItemsIntoDatabaseAddProduct(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineAddOrder fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineAddOrder(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixAddOrder, storeItemsIntoDatabaseAddOrder)
-}
-
-func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseAddOrder(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1474,27 +1323,23 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt addOrderQueue
 
-		var pt addOrderQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1530,12 +1375,7 @@ func storeItemsIntoDatabaseAddOrder(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineStartOrder fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineStartOrder(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixStartOrder, storeItemsIntoDatabaseStartOrder)
-}
-
-func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseStartOrder(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1560,27 +1400,23 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt startOrderQueue
 
-		var pt startOrderQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1616,12 +1452,7 @@ func storeItemsIntoDatabaseStartOrder(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineEndOrder fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineEndOrder(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixEndOrder, storeItemsIntoDatabaseEndOrder)
-}
-
-func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseEndOrder(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1646,27 +1477,23 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt endOrderQueue
 
-		var pt endOrderQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1702,12 +1529,7 @@ func storeItemsIntoDatabaseEndOrder(itemArray []goque.Item) (err error) {
 
 }
 
-// storeIntoDatabaseRoutineAddMaintenanceActivity fetches data from queue and sends it to the database
-func storeIntoDatabaseRoutineAddMaintenanceActivity(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixAddMaintenanceActivity, storeItemsIntoDatabaseAddMaintenanceActivity)
-}
-
-func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err error) {
+func storeItemsIntoDatabaseAddMaintenanceActivity(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1731,27 +1553,23 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 		}
 	}
 
-	for _, item := range itemArray {
+	var pt addMaintenanceActivityQueue
 
-		var pt addMaintenanceActivityQueue
+	err = item.ToObject(&pt)
 
-		err = item.ToObject(&pt)
-
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-		// Create statement
-		_, err = stmt.Exec(pt.ComponentID, pt.Activity, pt.TimestampMs)
+	}
+	// Create statement
+	_, err = stmt.Exec(pt.ComponentID, pt.Activity, pt.TimestampMs)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
 	}
 
 	// Close Statement
@@ -1787,11 +1605,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(itemArray []goque.Item) (err e
 
 }
 
-func modifyInDatabaseRoutineModifyState(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixModifyState, modifyStateInDatabase)
-}
-
-func modifyStateInDatabase(itemArray []goque.Item) (err error) {
+func modifyStateInDatabase(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1841,101 +1655,98 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
-		var pt modifyStateQueue
-		err = item.ToObject(&pt)
+	var pt modifyStateQueue
+	err = item.ToObject(&pt)
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
+	}
 
-		//Get last row in time range
-		var val *sql.Rows
-		val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.DBAssetID)
+	//Get last row in time range
+	var val *sql.Rows
+	val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.DBAssetID)
+	if err != nil {
+		err = PQErrorHandlingTransaction("StmtGetLastInRange.Exec()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("StmtGetLastInRange.Exec()", err, txn)
+			return
+		}
+	}
+
+	zap.S().Debugf("Looking up", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+
+	//If there is a row inside timeframe
+	if val.Next() {
+		zap.S().Debugf("Got NextResultSet")
+		var (
+			LastRowTimestamp    float64
+			LastRowTimestampInt int64
+			LastRowAssetId      int64
+			LastRowState        int64
+		)
+		err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
+		if err != nil {
+			err = PQErrorHandlingTransaction("rows.Scan()", err, txn)
+			if err != nil {
+				return
+			}
+		}
+		LastRowTimestampInt = int64(int(LastRowTimestamp))
+		zap.S().Debugf("Row: ", LastRowState, LastRowTimestampInt, LastRowAssetId)
+
+		err = val.Close()
+		if err != nil {
+			return
+		}
+
+		//Delete all rows inside timeframe
+		zap.S().Debugf("DeleteState: ", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+		_, err = StmtDeleteInRange.Exec(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtDeleteInRange.Exec()", err, txn)
 			if err != nil {
 				return
 			}
 		}
 
-		zap.S().Debugf("Looking up", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
-
-		//If there is a row inside timeframe
-		if val.Next() {
-			zap.S().Debugf("Got NextResultSet")
-			var (
-				LastRowTimestamp    float64
-				LastRowTimestampInt int64
-				LastRowAssetId      int64
-				LastRowState        int64
-			)
-			err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
-			if err != nil {
-				err = PQErrorHandlingTransaction("rows.Scan()", err, txn)
-				if err != nil {
-					return
-				}
-			}
-			LastRowTimestampInt = int64(int(LastRowTimestamp))
-			zap.S().Debugf("Row: ", LastRowState, LastRowTimestampInt, LastRowAssetId)
-
-			err = val.Close()
+		zap.S().Debugf("NewState: ", pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+		//Insert new state
+		_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
 			if err != nil {
 				return
 			}
+		}
 
-			//Delete all rows inside timeframe
-			zap.S().Debugf("DeleteState: ", pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
-			_, err = StmtDeleteInRange.Exec(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+		//Update old state, inside timeframe with new begins
+		zap.S().Debugf("UpdateState: ", pt.EndTimeStamp, LastRowTimestampInt, pt.DBAssetID, LastRowState)
+		_, err = StmtDeleteOldState.Exec(LastRowTimestampInt)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("StmtDeleteInRange.Exec()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
-
-			zap.S().Debugf("NewState: ", pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
-			//Insert new state
-			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+		}
+		_, err = StmtInsertNewState.Exec(pt.EndTimeStamp, pt.DBAssetID, LastRowState)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
 			if err != nil {
-				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
-				if err != nil {
-					return
-				}
-			}
-
-			//Update old state, inside timeframe with new begins
-			zap.S().Debugf("UpdateState: ", pt.EndTimeStamp, LastRowTimestampInt, pt.DBAssetID, LastRowState)
-			_, err = StmtDeleteOldState.Exec(LastRowTimestampInt)
-			if err != nil {
-				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
-				if err != nil {
-					return
-				}
-			}
-			_, err = StmtInsertNewState.Exec(pt.EndTimeStamp, pt.DBAssetID, LastRowState)
-			if err != nil {
-				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
-				if err != nil {
-					return
-				}
-			}
-
-		} else {
-			zap.S().Debugf("No Rows !")
-			//No old state in timeframe, just insert new state
-			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
-			if err != nil {
-				err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
-				if err != nil {
-					return
-				}
+				return
 			}
 		}
 
+	} else {
+		zap.S().Debugf("No Rows !")
+		//No old state in timeframe, just insert new state
+		_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+		if err != nil {
+			err = PQErrorHandlingTransaction("StmtInsertNewState.Exec()", err, txn)
+			if err != nil {
+				return
+			}
+		}
 	}
 
 	// Close Statement
@@ -1993,11 +1804,7 @@ func modifyStateInDatabase(itemArray []goque.Item) (err error) {
 	return
 }
 
-func deleteInDatabaseRoutineDeleteShiftById(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixDeleteShiftById, deleteShiftInDatabaseById)
-}
-
-func deleteShiftInDatabaseById(itemArray []goque.Item) (err error) {
+func deleteShiftInDatabaseById(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -2019,26 +1826,23 @@ func deleteShiftInDatabaseById(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
-
-		var pt deleteShiftByIdQueue
-		err = item.ToObject(&pt)
+	var pt deleteShiftByIdQueue
+	err = item.ToObject(&pt)
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
-		_, err = stmt.Exec(pt.ShiftId)
-		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
-		}
-
 	}
+
+	_, err = stmt.Exec(pt.ShiftId)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
@@ -2072,11 +1876,7 @@ func deleteShiftInDatabaseById(itemArray []goque.Item) (err error) {
 	return
 }
 
-func deleteInDatabaseRoutineDeleteShiftByAssetIdAndTimestamp(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixDeleteShiftByAssetIdAndBeginTimestamp, deleteShiftInDatabaseByAssetIdAndTimestamp)
-}
-
-func deleteShiftInDatabaseByAssetIdAndTimestamp(itemArray []goque.Item) (err error) {
+func deleteShiftInDatabaseByAssetIdAndTimestamp(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -2098,26 +1898,23 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(itemArray []goque.Item) (err err
 		}
 	}
 
-	for _, item := range itemArray {
-
-		var pt deleteShiftByAssetIdAndBeginTimestampQueue
-		err = item.ToObject(&pt)
+	var pt deleteShiftByAssetIdAndBeginTimestampQueue
+	err = item.ToObject(&pt)
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
-
-		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStamp)
-		if err != nil {
-			err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-			if err != nil {
-				return
-			}
-		}
-
 	}
+
+	_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStamp)
+	if err != nil {
+		err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+		if err != nil {
+			return
+		}
+	}
+
 	// Close Statement
 	err = stmt.Close()
 	if err != nil {
@@ -2160,8 +1957,6 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 		return
 	}
 
-	// Otherwise, add to table
-
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -2198,11 +1993,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}
 }
 
-func modifyInDatabaseRoutineModifyCountAndScrap(pg *goque.PrefixQueue) {
-	processQueue(pg, prefixModifyProducesPiece, modifyInDatabaseModifyCountAndScrap)
-}
-
-func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
+func modifyInDatabaseModifyCountAndScrap(item goque.Item) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -2244,53 +2035,51 @@ func modifyInDatabaseModifyCountAndScrap(itemArray []goque.Item) (err error) {
 		}
 	}
 
-	for _, item := range itemArray {
-		var pt modifyProducesPieceQueue
-		err = item.ToObject(&pt)
+	var pt modifyProducesPieceQueue
+	err = item.ToObject(&pt)
 
+	if err != nil {
+		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
-			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
-			if err != nil {
-				return
-			}
+			return
 		}
+	}
 
-		// pt.Count is -1, if not modified by user
-		if pt.Count != -1 {
-			// pt.Scrap is -1, if not modified by user
-			if pt.Scrap != -1 {
-				zap.S().Debugf("CS !", pt.Count, pt.Scrap, pt.DBAssetID)
-				_, err = stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
+	// pt.Count is -1, if not modified by user
+	if pt.Count != -1 {
+		// pt.Scrap is -1, if not modified by user
+		if pt.Scrap != -1 {
+			zap.S().Debugf("CS !", pt.Count, pt.Scrap, pt.DBAssetID)
+			_, err = stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
+			if err != nil {
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 				if err != nil {
-					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-					if err != nil {
-						return
-					}
-				}
-			} else {
-				zap.S().Debugf("C !", pt.Count, pt.DBAssetID)
-				_, err = stmtC.Exec(pt.Count, pt.DBAssetID)
-				if err != nil {
-					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-					if err != nil {
-						return
-					}
+					return
 				}
 			}
 		} else {
-			// pt.Scrap is -1, if not modified by user
-			if pt.Scrap != -1 {
-				zap.S().Debugf("S !", pt.Scrap, pt.DBAssetID)
-				_, err = stmtS.Exec(pt.Scrap, pt.DBAssetID)
+			zap.S().Debugf("C !", pt.Count, pt.DBAssetID)
+			_, err = stmtC.Exec(pt.Count, pt.DBAssetID)
+			if err != nil {
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
 				if err != nil {
-					err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
-					if err != nil {
-						return
-					}
+					return
 				}
-			} else {
-				zap.S().Errorf("Invalid amount for Count and Script")
 			}
+		}
+	} else {
+		// pt.Scrap is -1, if not modified by user
+		if pt.Scrap != -1 {
+			zap.S().Debugf("S !", pt.Scrap, pt.DBAssetID)
+			_, err = stmtS.Exec(pt.Scrap, pt.DBAssetID)
+			if err != nil {
+				err = PQErrorHandlingTransaction("stmt.Exec()", err, txn)
+				if err != nil {
+					return
+				}
+			}
+		} else {
+			zap.S().Errorf("Invalid amount for Count and Script")
 		}
 	}
 
