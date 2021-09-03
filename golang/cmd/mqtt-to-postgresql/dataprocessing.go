@@ -22,7 +22,7 @@ type state struct {
 }
 
 // ProcessStateData processes an incoming state message
-func ProcessStateData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessStateData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload state
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -39,7 +39,7 @@ func ProcessStateData(customerID string, location string, assetID string, payloa
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixState), newObject)
+	err = addNewItemToQueue(pg, Prefix.State, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -60,7 +60,7 @@ type count struct {
 }
 
 // ProcessCountData processes an incoming count message
-func ProcessCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload count
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -84,7 +84,7 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixCount), newObject)
+	err = addNewItemToQueue(pg, Prefix.Count, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -103,7 +103,7 @@ type scrapCount struct {
 }
 
 // ProcessScrapCountData processes an incoming scrapCount message
-func ProcessScrapCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessScrapCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload scrapCount
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -120,7 +120,7 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixScrapCount), newObject)
+	err = addNewItemToQueue(pg, Prefix.ScrapCount, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -138,7 +138,7 @@ type addShift struct {
 }
 
 // ProcessAddShift adds a new shift to the database
-func ProcessAddShift(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessAddShift(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload addShift
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -154,7 +154,7 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 		DBAssetID:      DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixAddShift), newObject)
+	err = addNewItemToQueue(pg, Prefix.AddShift, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -175,7 +175,7 @@ type addMaintenanceActivity struct {
 }
 
 // ProcessAddMaintenanceActivity adds a new maintenance activity to the database
-func ProcessAddMaintenanceActivity(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessAddMaintenanceActivity(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload addMaintenanceActivity
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -199,7 +199,7 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 		ComponentID:   componentID,
 		Activity:      parsedPayload.Activity,
 	}
-	_, err = pg.EnqueueObject([]byte(prefixAddMaintenanceActivity), newObject)
+	err = addNewItemToQueue(pg, Prefix.AddMaintenanceActivity, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -224,7 +224,7 @@ type uniqueProduct struct {
 }
 
 // ProcessUniqueProduct adds a new uniqueProduct to the database
-func ProcessUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload uniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -251,7 +251,7 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 		UniqueProductAlternativeID: parsedPayload.UniqueProductAlternativeID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixUniqueProduct), newObject)
+	err = addNewItemToQueue(pg, Prefix.UniqueProduct, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -267,7 +267,7 @@ type scrapUniqueProduct struct {
 }
 
 // ProcessScrapUniqueProduct sets isScrap of a uniqueProduct to true
-func ProcessScrapUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessScrapUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload scrapUniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -282,7 +282,7 @@ func ProcessScrapUniqueProduct(customerID string, location string, assetID strin
 		DBAssetID: DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixUniqueProductScrap), newObject)
+	err = addNewItemToQueue(pg, Prefix.UniqueProductScrap, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -300,7 +300,7 @@ type addProduct struct {
 }
 
 // ProcessAddProduct adds a new product to the database
-func ProcessAddProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessAddProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload addProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -316,7 +316,7 @@ func ProcessAddProduct(customerID string, location string, assetID string, paylo
 		TimePerUnitInSeconds: parsedPayload.TimePerUnitInSeconds,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixAddProduct), newObject)
+	err = addNewItemToQueue(pg, Prefix.AddProduct, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -337,7 +337,7 @@ type addOrder struct {
 }
 
 // ProcessAddOrder adds a new order without begin and end timestamp to the database
-func ProcessAddOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessAddOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload addOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -363,7 +363,7 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 		TargetUnits: parsedPayload.TargetUnits,
 		ProductID:   productID,
 	}
-	_, err = pg.EnqueueObject([]byte(prefixAddOrder), newObject)
+	err = addNewItemToQueue(pg, Prefix.AddOrder, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -382,7 +382,7 @@ type startOrder struct {
 }
 
 // ProcessStartOrder starts an order by adding beginTimestamp
-func ProcessStartOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessStartOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload startOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -398,7 +398,7 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixStartOrder), newObject)
+	err = addNewItemToQueue(pg, Prefix.StartOrder, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -416,7 +416,7 @@ type endOrder struct {
 }
 
 // ProcessEndOrder starts an order by adding endTimestamp
-func ProcessEndOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessEndOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload endOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -432,7 +432,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 		DBAssetID:   DBassetID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixEndOrder), newObject)
+	err = addNewItemToQueue(pg, Prefix.EndOrder, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -455,7 +455,7 @@ type recommendationStruct struct {
 }
 
 // ProcessRecommendationData processes an incoming count message
-func ProcessRecommendationData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessRecommendationData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload recommendationStruct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -464,7 +464,7 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 		return
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixRecommendation), parsedPayload)
+	err = addNewItemToQueue(pg, Prefix.Recommendation, parsedPayload)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -486,7 +486,7 @@ type processValueFloat64Queue struct {
 }
 
 // ProcessProcessValueData processes an incoming processValue message
-func ProcessProcessValueData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessProcessValueData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -532,7 +532,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 						Name:        k,
 						Value:       valueFloat64,
 					}
-					_, err = pg.EnqueueObject([]byte(prefixProcessValueFloat64), newObject)
+					err = addNewItemToQueue(pg, Prefix.ProcessValueFloat64, newObject)
 					if err != nil {
 						zap.S().Errorf("Error enqueuing", err)
 						return
@@ -545,7 +545,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 					Name:        k,
 					Value:       value,
 				}
-				_, err = pg.EnqueueObject([]byte("processValue"), newObject)
+				err = addNewItemToQueue(pg, Prefix.ProcessValue, newObject)
 				if err != nil {
 					zap.S().Errorf("Error enqueuing", err)
 					return
@@ -572,7 +572,7 @@ type productTag struct {
 }
 
 // ProcessProductTag adds a new productTag to the database
-func ProcessProductTag(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessProductTag(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload productTag
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -590,7 +590,7 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 		Value:       parsedPayload.Value,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixProductTag), newObject)
+	err = addNewItemToQueue(pg, Prefix.ProductTag, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -613,7 +613,7 @@ type productTagString struct {
 }
 
 // ProcessProductTagString adds a new productTagString to the database
-func ProcessProductTagString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessProductTagString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload productTagString
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -631,7 +631,7 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 		Value:       parsedPayload.Value,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixProductTagString), newObject)
+	err = addNewItemToQueue(pg, Prefix.ProductTagString, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -652,7 +652,7 @@ type addParentToChild struct {
 }
 
 // ProcessAddParentToChild adds a new AddParentToChild to the database
-func ProcessAddParentToChild(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessAddParentToChild(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload addParentToChild
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -669,7 +669,7 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 		ParentAID:   parsedPayload.ParentAID,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixAddParentToChild), newObject)
+	err = addNewItemToQueue(pg, Prefix.AddParentToChild, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -689,7 +689,7 @@ type modifyState struct {
 	NewState       int   `json:"new_state"`
 }
 
-func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload modifyState
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -705,7 +705,7 @@ func ProcessModifyState(customerID string, location string, assetID string, payl
 		NewState:       parsedPayload.NewState,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixModifyState), newObject)
+	err = addNewItemToQueue(pg, Prefix.ModifyState, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -721,7 +721,7 @@ type deleteShiftById struct {
 	ShiftId int `json:"shift_id"`
 }
 
-func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload deleteShiftById
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -735,7 +735,7 @@ func ProcessDeleteShiftById(customerID string, location string, assetID string, 
 		ShiftId:   parsedPayload.ShiftId,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixDeleteShiftById), newObject)
+	err = addNewItemToQueue(pg, Prefix.DeleteShiftById, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -751,7 +751,7 @@ type deleteShiftByAssetIdAndBeginTimestamp struct {
 	BeginTimeStamp int `json:"begin_time_stamp"`
 }
 
-func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 	var parsedPayload deleteShiftByAssetIdAndBeginTimestamp
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -766,7 +766,7 @@ func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string,
 		BeginTimeStamp: parsedPayload.BeginTimeStamp,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixDeleteShiftByAssetIdAndBeginTimestamp), newObject)
+	err = addNewItemToQueue(pg, Prefix.DeleteShiftByAssetIdAndBeginTimestamp, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -784,7 +784,7 @@ type modifyProducesPiece struct {
 	Scrap int `json:"scrap"`
 }
 
-func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
 
 	// pt.Scrap is -1, if not modified by user
 	// pt.Count is -1, if not modified by user
@@ -806,7 +806,7 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 		Scrap:     parsedPayload.Scrap,
 	}
 
-	_, err = pg.EnqueueObject([]byte(prefixModifyProducesPiece), newObject)
+	err = addNewItemToQueue(pg, Prefix.ModifyProducesPieces, newObject)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
