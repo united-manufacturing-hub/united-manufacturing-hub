@@ -16,5 +16,9 @@ data:
      user MQTT_TO_POSTGRESQL
      topic read ia/#
      topic read $share/MQTT_TO_POSTGRESQL/ia/#
-     
+
+     user FACTORYINPUT
+     topic write ia/#
+     topic write $share/FACTORYINPUT/ia/#
+
      {{- end -}}

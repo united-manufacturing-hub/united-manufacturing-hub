@@ -85,9 +85,8 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 
 func optionsCORSHAndler(c *gin.Context) {
 	fmt.Println("optionsCORSHAndler")
+	AddCorsHeaders(c)
 	c.Status(http.StatusOK)
-	c.Header("Access-Control-Allow-Headers", "*")
-	c.Header("Access-Control-Allow-Origin", "*")
 }
 
 func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err error) {
@@ -149,15 +148,36 @@ func handleProxyRequest(c *gin.Context, method string) {
 	case "factoryinsight":
 		HandleFactoryInsight(c, getProxyRequestPath, method)
 	default:
-		c.AbortWithStatus(http.StatusBadRequest)
+		{
+			zap.S().Warnf("getProxyRequestPath.Service", getProxyRequestPath.Service)
+			c.AbortWithStatus(http.StatusBadRequest)
+		}
 	}
 }
 
+func AddCorsHeaders(c *gin.Context) {
+	origin := c.GetHeader("Origin")
+	if len(origin) == 0 {
+		zap.S().Debugf("Add cors wildcard")
+		origin = "*"
+	} else {
+		zap.S().Debugf("Set cors origin to: %s", origin)
+	}
+	c.Header("Access-Control-Allow-Headers", "content-type, Authorization")
+	c.Header("Access-Control-Allow-Credentials", "true")
+	c.Header("Access-Control-Allow-Origin", origin)
+	c.Header("Access-Control-Allow-Methods", "*")
+}
+
 func postProxyHandler(c *gin.Context) {
+	// Add cors headers for reply to original requester
+	AddCorsHeaders(c)
 	handleProxyRequest(c, "POST")
 }
 
 func getProxyHandler(c *gin.Context) {
+	// Add cors headers for reply to original requester
+	AddCorsHeaders(c)
 	handleProxyRequest(c, "GET")
 }
 
@@ -216,30 +236,38 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	}
 	defer span.Finish()
 
+	zap.S().Warnf("HandleFactoryInput")
+
 	// Grafana sessionCookie not present in request
 	sessionCookie, err := c.Cookie("grafana_session")
 	if err != nil {
+		zap.S().Warnf("No grafana_session in cookie !")
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
+	zap.S().Warnf("CheckUserLoggedIn")
 	// Check if user is logged in
 	loggedIn, err := CheckUserLoggedIn(sessionCookie)
 	if err != nil {
+		zap.S().Warnf("Login error")
 		handleInvalidInputError(span, c, err)
 	}
 
 	// Abort if not logged in
 	if !loggedIn {
+		zap.S().Warnf("StatusForbidden")
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 
 	proxyUrl := strings.TrimPrefix(string(request.OriginalURI), "/")
 
+	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
 	if err != nil {
+		zap.S().Warnf("url.Parse failed", fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
 		handleInvalidInputError(span, c, err)
 		return
 	}
@@ -247,6 +275,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
 	if len(s) != 5 {
+		zap.S().Warnf("String split failed", len(s))
 		handleInvalidInputError(span, c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
 		return
 	}
@@ -258,9 +287,11 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		value := s[4]
 	*/
 
+	zap.S().Warnf("GetOrgas")
 	// Get grafana organizations of user
 	orgas, err := user.GetOrgas(sessionCookie)
 	if err != nil {
+		zap.S().Warnf("GetOrgas failed", err, sessionCookie)
 		handleInvalidInputError(span, c, err)
 		return
 	}
@@ -276,10 +307,12 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 
 	// Abort if not in allowed org
 	if !allowedOrg {
+		zap.S().Warnf("!allowedOrg")
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
+	zap.S().Warnf("DoProxiedRequest")
 	DoProxiedRequest(c, err, u, sessionCookie, ak, method)
 }
 
@@ -287,10 +320,6 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 	fmt.Println("DoProxiedRequest")
 	// Proxy request to backend
 	client := &http.Client{}
-
-	// Add cors headers for reply to original requester
-	c.Header("Access-Control-Allow-Headers", "*")
-	c.Header("Access-Control-Allow-Origin", "*")
 
 	fmt.Println("Request URL: ", u.String())
 	//CORS request !
