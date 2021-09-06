@@ -5,7 +5,6 @@ import (
 
 	"database/sql"
 	"encoding/json"
-
 	"github.com/beeker1121/goque"
 
 	"go.uber.org/zap"
