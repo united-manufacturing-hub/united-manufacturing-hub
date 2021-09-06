@@ -5,15 +5,27 @@
 
 version: 2
 updates:
-  #- package-ecosystem: "github-actions"
-  #  # Workflow files stored in the
-  #  # default location of `.github/workflows`
-  #  directory: "/"
-  #  schedule:
-  #    interval: "daily"
-   
+  - package-ecosystem: "github-actions"
+    # Workflow files stored in the
+    # default location of `.github/workflows`
+    directory: "/.github/workflows"
+    schedule:
+      interval: "daily"
+  
   - package-ecosystem: "gomod"
     directory: "/golang"
+    target-branch: "staging"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "docker"
+    directory: "/deployment/mqtt-bridge"
+    target-branch: "staging"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "docker"
+    directory: "/deployment/grafana-proxy"
     target-branch: "staging"
     schedule:
       interval: "daily"
@@ -38,6 +50,18 @@ updates:
   
   - package-ecosystem: "docker"
     directory: "/deployment/sensorconnect"
+    target-branch: "staging"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "pip"
+    directory: "/mqtt-to-blob"
+    target-branch: "staging"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "pip"
+    directory: "/cameraconnect"
     target-branch: "staging"
     schedule:
       interval: "daily"
