@@ -76,6 +76,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 }
 
 func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Infof("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	if customerID != "raw" {
@@ -124,6 +125,8 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			ProcessDeleteShiftByAssetIdAndBeginTime(customerID, location, assetID, payloadType, payload, pg)
 		case Prefix.ModifyProducesPieces:
 			ProcessModifyProducesPiece(customerID, location, assetID, payloadType, payload, pg)
+		default:
+			zap.S().Warnf("Unknown Prefix: %s", payloadType)
 		}
 	}
 }

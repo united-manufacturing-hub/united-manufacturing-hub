@@ -39,7 +39,12 @@ func ProcessStateData(customerID string, location string, assetID string, payloa
 		DBAssetID:   DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.State, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.State, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -84,7 +89,12 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 		DBAssetID:   DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.Count, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.Count, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -120,7 +130,12 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 		DBAssetID:   DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.ScrapCount, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.ScrapCount, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -154,7 +169,12 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 		DBAssetID:      DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.AddShift, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.AddShift, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -199,7 +219,12 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 		ComponentID:   componentID,
 		Activity:      parsedPayload.Activity,
 	}
-	err = addNewItemToQueue(pg, Prefix.AddMaintenanceActivity, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.AddMaintenanceActivity, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -251,7 +276,12 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 		UniqueProductAlternativeID: parsedPayload.UniqueProductAlternativeID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.UniqueProduct, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.UniqueProduct, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -282,7 +312,12 @@ func ProcessScrapUniqueProduct(customerID string, location string, assetID strin
 		DBAssetID: DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.UniqueProductScrap, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.UniqueProductScrap, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -316,7 +351,12 @@ func ProcessAddProduct(customerID string, location string, assetID string, paylo
 		TimePerUnitInSeconds: parsedPayload.TimePerUnitInSeconds,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.AddProduct, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.AddProduct, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -363,7 +403,12 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 		TargetUnits: parsedPayload.TargetUnits,
 		ProductID:   productID,
 	}
-	err = addNewItemToQueue(pg, Prefix.AddOrder, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.AddOrder, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -398,7 +443,12 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 		DBAssetID:   DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.StartOrder, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.StartOrder, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -432,7 +482,12 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 		DBAssetID:   DBassetID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.EndOrder, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.EndOrder, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -464,7 +519,12 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 		return
 	}
 
-	err = addNewItemToQueue(pg, Prefix.Recommendation, parsedPayload)
+	marshal, err := json.Marshal(parsedPayload)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.Recommendation, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -532,7 +592,12 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 						Name:        k,
 						Value:       valueFloat64,
 					}
-					err = addNewItemToQueue(pg, Prefix.ProcessValueFloat64, newObject)
+					marshal, err := json.Marshal(newObject)
+					if err != nil {
+						return
+					}
+
+					err = addNewItemToQueue(pg, Prefix.ProcessValueFloat64, marshal)
 					if err != nil {
 						zap.S().Errorf("Error enqueuing", err)
 						return
@@ -545,7 +610,12 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 					Name:        k,
 					Value:       value,
 				}
-				err = addNewItemToQueue(pg, Prefix.ProcessValue, newObject)
+				marshal, err := json.Marshal(newObject)
+				if err != nil {
+					return
+				}
+
+				err = addNewItemToQueue(pg, Prefix.ProcessValue, marshal)
 				if err != nil {
 					zap.S().Errorf("Error enqueuing", err)
 					return
@@ -590,7 +660,12 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 		Value:       parsedPayload.Value,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.ProductTag, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.ProductTag, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -631,7 +706,12 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 		Value:       parsedPayload.Value,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.ProductTagString, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.ProductTagString, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -669,7 +749,12 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 		ParentAID:   parsedPayload.ParentAID,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.AddParentToChild, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.AddParentToChild, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -705,7 +790,12 @@ func ProcessModifyState(customerID string, location string, assetID string, payl
 		NewState:       parsedPayload.NewState,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.ModifyState, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.ModifyState, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -735,7 +825,12 @@ func ProcessDeleteShiftById(customerID string, location string, assetID string, 
 		ShiftId:   parsedPayload.ShiftId,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.DeleteShiftById, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.DeleteShiftById, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -766,7 +861,12 @@ func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string,
 		BeginTimeStamp: parsedPayload.BeginTimeStamp,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.DeleteShiftByAssetIdAndBeginTimestamp, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.DeleteShiftByAssetIdAndBeginTimestamp, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return
@@ -806,7 +906,12 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 		Scrap:     parsedPayload.Scrap,
 	}
 
-	err = addNewItemToQueue(pg, Prefix.ModifyProducesPieces, newObject)
+	marshal, err := json.Marshal(newObject)
+	if err != nil {
+		return
+	}
+
+	err = addNewItemToQueue(pg, Prefix.ModifyProducesPieces, marshal)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)
 		return

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
 	"time"
 
 	"github.com/beeker1121/goque"
@@ -30,6 +28,7 @@ func closeQueue(pq *goque.PriorityQueue) (err error) {
 	return
 }
 
+// processQueue get's item from queue and processes it, depending on prefix
 func processQueue(pg *goque.PriorityQueue) {
 	zap.S().Infof("Starting new processQueue worker")
 	for !shuttingDown {
@@ -38,105 +37,94 @@ func processQueue(pg *goque.PriorityQueue) {
 			continue
 		}
 
+		zap.S().Debugf("pg.Length() != 0")
 		item, prio, err := GetNextItemInQueue(pg)
 		if err != nil {
-			err := reInsertItemOnFailure(pg, item.prefix, item.Object, prio)
+			err := ReInsertItemOnFailure(pg, item, prio)
 			if err != nil {
 				zap.S().Errorf("Failed to re-queue failed item, shutting down !", err)
 				ShutdownApplicationGraceful()
 				return
 			}
 		}
-
-		i := goque.Item{}
-		i.Value = item.Object
+		zap.S().Debugf("Got an item ! Prefix: %s | Value: %s", item.Prefix, item)
 
 		var processError error
-		switch item.prefix {
+		switch item.Prefix {
 		case Prefix.ProcessValueFloat64:
-			processError = storeItemsIntoDatabaseProcessValueFloat64(i)
+			processError = storeItemsIntoDatabaseProcessValueFloat64(item)
 		case Prefix.ProcessValue:
-			processError = storeItemsIntoDatabaseProcessValue(i)
+			processError = storeItemsIntoDatabaseProcessValue(item)
 		case Prefix.Count:
-			processError = storeItemsIntoDatabaseCount(i)
+			processError = storeItemsIntoDatabaseCount(item)
 		case Prefix.Recommendation:
-			processError = storeItemsIntoDatabaseRecommendation(i)
+			processError = storeItemsIntoDatabaseRecommendation(item)
 		case Prefix.State:
-			processError = storeItemsIntoDatabaseState(i)
+			processError = storeItemsIntoDatabaseState(item)
 		case Prefix.UniqueProduct:
-			processError = storeItemsIntoDatabaseUniqueProduct(i)
+			processError = storeItemsIntoDatabaseUniqueProduct(item)
 		case Prefix.ScrapCount:
-			processError = storeItemsIntoDatabaseScrapCount(i)
+			processError = storeItemsIntoDatabaseScrapCount(item)
 		case Prefix.AddShift:
-			processError = storeItemsIntoDatabaseShift(i)
+			processError = storeItemsIntoDatabaseShift(item)
 		case Prefix.UniqueProductScrap:
-			processError = storeItemsIntoDatabaseUniqueProductScrap(i)
+			processError = storeItemsIntoDatabaseUniqueProductScrap(item)
 		case Prefix.AddProduct:
-			processError = storeItemsIntoDatabaseAddProduct(i)
+			processError = storeItemsIntoDatabaseAddProduct(item)
 		case Prefix.AddOrder:
-			processError = storeItemsIntoDatabaseAddOrder(i)
+			processError = storeItemsIntoDatabaseAddOrder(item)
 		case Prefix.StartOrder:
-			processError = storeItemsIntoDatabaseStartOrder(i)
+			processError = storeItemsIntoDatabaseStartOrder(item)
 		case Prefix.EndOrder:
-			processError = storeItemsIntoDatabaseEndOrder(i)
+			processError = storeItemsIntoDatabaseEndOrder(item)
 		case Prefix.AddMaintenanceActivity:
-			processError = storeItemsIntoDatabaseAddMaintenanceActivity(i)
+			processError = storeItemsIntoDatabaseAddMaintenanceActivity(item)
 		case Prefix.ProductTag:
-			processError = storeItemsIntoDatabaseProductTag(i)
+			processError = storeItemsIntoDatabaseProductTag(item)
 		case Prefix.ProductTagString:
-			processError = storeItemsIntoDatabaseProductTagString(i)
+			processError = storeItemsIntoDatabaseProductTagString(item)
 		case Prefix.AddParentToChild:
-			processError = storeItemsIntoDatabaseAddParentToChild(i)
+			processError = storeItemsIntoDatabaseAddParentToChild(item)
 		case Prefix.ModifyState:
-			processError = modifyStateInDatabase(i)
+			processError = modifyStateInDatabase(item)
 		case Prefix.ModifyProducesPieces:
-			processError = modifyInDatabaseModifyCountAndScrap(i)
+			processError = modifyInDatabaseModifyCountAndScrap(item)
 		case Prefix.DeleteShiftById:
-			processError = deleteShiftInDatabaseById(i)
+			processError = deleteShiftInDatabaseById(item)
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-			processError = deleteShiftInDatabaseByAssetIdAndTimestamp(i)
+			processError = deleteShiftInDatabaseByAssetIdAndTimestamp(item)
+		default:
+			zap.S().Errorf("GQ Item with invalid Prefix! ", item.Prefix)
 		}
-
 		if processError != nil {
 			zap.S().Warnf("processError: %s", processError)
-			err := reInsertItemOnFailure(pg, item.prefix, item.Object, prio)
+			err := ReInsertItemOnFailure(pg, item, prio)
 			if err != nil {
 				zap.S().Errorf("Failed to re-queue failed item, shutting down !", err)
 				ShutdownApplicationGraceful()
 				return
 			}
 		}
+
 	}
 	zap.S().Infof("processQueue worker shutting down")
 }
 
 type QueueObject struct {
-	Object []byte
-	prefix string
+	Prefix  string
+	Payload []byte
 }
 
-func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, err error) {
-	priorityItem, err := pg.Dequeue()
-	if err != nil {
-		return QueueObject{}, 0, err
-	}
-	prio = priorityItem.Priority
-	err = priorityItem.ToObject(&item)
-	if err != nil {
-		return QueueObject{}, 0, err
-	}
-	return
-}
-
-func reInsertItemOnFailure(pg *goque.PriorityQueue, prefix string, object []byte, prio uint8) (err error) {
+// ReInsertItemOnFailure This functions re-inserts an item with lowered priority
+func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uint8) (err error) {
 	if prio < 255 {
 		prio += 1
-		err = addItemWithPrioToQueue(pg, prefix, object, prio)
+		err = addItemWithPriorityToQueue(pg, object, prio)
 		if err != nil {
 			return
 		}
 	} else {
-		zap.S().Errorf("Item %s for prefix %s failed 255 times, waiting before requing")
+		zap.S().Errorf("Item %s for Prefix %s failed 255 times, waiting before requing")
 		if shuttingDown {
 			zap.S().Errorf("Application is shuting down, while having corrupt item !")
 		} else {
@@ -144,7 +132,7 @@ func reInsertItemOnFailure(pg *goque.PriorityQueue, prefix string, object []byte
 		}
 		// Let this fail once, then put it on hold, to avoid blocking the rest
 		// Also gets the lowest priority to not block queue
-		err = addItemWithPrioToQueue(pg, prefix, object, 255)
+		err = addItemWithPriorityToQueue(pg, object, 255)
 		if err != nil {
 			return
 		}
@@ -152,31 +140,53 @@ func reInsertItemOnFailure(pg *goque.PriorityQueue, prefix string, object []byte
 	return
 }
 
-func addItemWithPrioToQueue(pq *goque.PriorityQueue, prefix string, item []byte, priority uint8) (err error) {
-	qo := QueueObject{prefix: prefix, Object: item}
-	_, err = pq.EnqueueObject(priority, qo)
-	return
-}
-
-func addNewBinarizedItemToQueue(pq *goque.PriorityQueue, prefix string, item []byte) (err error) {
-	err = addItemWithPrioToQueue(pq, prefix, item, 0)
-	return
-}
-
-func addNewItemToQueue(pq *goque.PriorityQueue, prefix string, item interface{}) (err error) {
-	var buffer bytes.Buffer
-	enc := gob.NewEncoder(&buffer)
-	if err = enc.Encode(item); err != nil {
-		return
+// GetNextItemInQueue retrieves the next item in queue
+func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, err error) {
+	priorityItem, err := pg.Dequeue()
+	if err != nil {
+		return QueueObject{}, 0, err
 	}
-
-	err = addNewBinarizedItemToQueue(pq, prefix, buffer.Bytes())
+	zap.S().Debugf("GetNextItemInQueue", priorityItem)
+	prio = priorityItem.Priority
+	err = priorityItem.ToObjectFromJSON(&item)
+	if err != nil {
+		return QueueObject{}, 0, err
+	}
 	return
 }
 
+// addItemWithPriorityToQueue adds an item with given priority to queue
+func addItemWithPriorityToQueue(pq *goque.PriorityQueue, item QueueObject, priority uint8) (err error) {
+	zap.S().Debugf("addItemWithPriorityToQueue", item.Prefix, item.Payload, priority)
+	var pi *goque.PriorityItem
+	pi, err = pq.EnqueueObjectAsJSON(priority, item)
+	zap.S().Debugf("addItemWithPriorityToQueue", pi)
+	return
+}
+
+// addNewItemToQueue adds an item with 0 priority to queue
+func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []byte) (err error) {
+	zap.S().Debugf("addNewItemToQueue", payload)
+	item := QueueObject{
+		Prefix:  payloadType,
+		Payload: payload,
+	}
+	err = addItemWithPriorityToQueue(pq, item, 0)
+	return
+}
+
+// reportQueueLength prints the current Queue length
 func reportQueueLength(pg *goque.PriorityQueue) {
 	for true {
-		zap.S().Infof("Current elements in queue", pg.Length())
+		zap.S().Infof("Current elements in queue: %d", pg.Length())
+		if pg.Length() > 0 {
+			peek, err := pg.Peek()
+			if err != nil {
+				continue
+			}
+			var qo QueueObject
+			zap.S().Infof("%s", peek.ToObject(&qo))
+		}
 		time.Sleep(10 * time.Second)
 	}
 }

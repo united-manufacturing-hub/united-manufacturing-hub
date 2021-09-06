@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/beeker1121/goque"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
@@ -18,8 +18,6 @@ import (
 var db *sql.DB
 
 var isDryRun bool
-
-const warnStoppingRoutineAsDatabaseHasBeenClosed = "Stopping routine as database has been closed"
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, sslmode string, dryRun string) {
@@ -87,7 +85,7 @@ func PQErrorHandling(sqlStatement string, err error) {
 	ShutdownApplicationGraceful()
 }
 
-func storeItemsIntoDatabaseRecommendation(item goque.Item) (err error) {
+func storeItemsIntoDatabaseRecommendation(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -115,7 +113,7 @@ func storeItemsIntoDatabaseRecommendation(item goque.Item) (err error) {
 
 	var pt recommendationStruct
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -166,7 +164,7 @@ func storeItemsIntoDatabaseRecommendation(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseProcessValueFloat64(item goque.Item) (err error) {
+func storeItemsIntoDatabaseProcessValueFloat64(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -219,7 +217,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(item goque.Item) (err error) {
 
 		var pt processValueFloat64Queue
 
-		err = item.ToObject(&pt)
+		err = json.Unmarshal(item.Payload, &pt)
 
 		if err != nil {
 			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -304,7 +302,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(item goque.Item) (err error) {
 	return
 }
 
-func storeItemsIntoDatabaseProcessValue(item goque.Item) (err error) {
+func storeItemsIntoDatabaseProcessValue(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -357,7 +355,7 @@ func storeItemsIntoDatabaseProcessValue(item goque.Item) (err error) {
 
 		var pt processValueQueue
 
-		err = item.ToObject(&pt)
+		err = json.Unmarshal(item.Payload, &pt)
 
 		if err != nil {
 			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -442,7 +440,7 @@ func storeItemsIntoDatabaseProcessValue(item goque.Item) (err error) {
 	return
 }
 
-func storeItemsIntoDatabaseCount(item goque.Item) (err error) {
+func storeItemsIntoDatabaseCount(item QueueObject) (err error) {
 	// Begin transaction
 	txn, err := db.Begin()
 
@@ -494,7 +492,7 @@ func storeItemsIntoDatabaseCount(item goque.Item) (err error) {
 
 		var pt countQueue
 
-		err = item.ToObject(&pt)
+		err = json.Unmarshal(item.Payload, &pt)
 
 		if err != nil {
 			err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -579,7 +577,7 @@ func storeItemsIntoDatabaseCount(item goque.Item) (err error) {
 	return
 }
 
-func storeItemsIntoDatabaseState(item goque.Item) (err error) {
+func storeItemsIntoDatabaseState(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -605,7 +603,7 @@ func storeItemsIntoDatabaseState(item goque.Item) (err error) {
 
 	var pt stateQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -655,7 +653,7 @@ func storeItemsIntoDatabaseState(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseScrapCount(item goque.Item) (err error) {
+func storeItemsIntoDatabaseScrapCount(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -692,7 +690,7 @@ func storeItemsIntoDatabaseScrapCount(item goque.Item) (err error) {
 
 	var pt scrapCountQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -742,7 +740,7 @@ func storeItemsIntoDatabaseScrapCount(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseUniqueProduct(item goque.Item) (err error) {
+func storeItemsIntoDatabaseUniqueProduct(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -768,7 +766,7 @@ func storeItemsIntoDatabaseUniqueProduct(item goque.Item) (err error) {
 	}
 	var pt uniqueProductQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -818,7 +816,7 @@ func storeItemsIntoDatabaseUniqueProduct(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseProductTag(item goque.Item) (err error) {
+func storeItemsIntoDatabaseProductTag(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -845,7 +843,7 @@ func storeItemsIntoDatabaseProductTag(item goque.Item) (err error) {
 
 	var pt productTagQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -902,7 +900,7 @@ func storeItemsIntoDatabaseProductTag(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseProductTagString(item goque.Item) (err error) {
+func storeItemsIntoDatabaseProductTagString(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -929,7 +927,7 @@ func storeItemsIntoDatabaseProductTagString(item goque.Item) (err error) {
 
 	var pt productTagStringQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -986,7 +984,7 @@ func storeItemsIntoDatabaseProductTagString(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseAddParentToChild(item goque.Item) (err error) {
+func storeItemsIntoDatabaseAddParentToChild(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1013,7 +1011,7 @@ func storeItemsIntoDatabaseAddParentToChild(item goque.Item) (err error) {
 
 	var pt addParentToChildQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1071,7 +1069,7 @@ func storeItemsIntoDatabaseAddParentToChild(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseShift(item goque.Item) (err error) {
+func storeItemsIntoDatabaseShift(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1099,7 +1097,7 @@ func storeItemsIntoDatabaseShift(item goque.Item) (err error) {
 
 	var pt addShiftQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1149,7 +1147,7 @@ func storeItemsIntoDatabaseShift(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseUniqueProductScrap(item goque.Item) (err error) {
+func storeItemsIntoDatabaseUniqueProductScrap(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1173,7 +1171,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(item goque.Item) (err error) {
 
 	var pt scrapUniqueProductQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1223,7 +1221,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseAddProduct(item goque.Item) (err error) {
+func storeItemsIntoDatabaseAddProduct(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1249,7 +1247,7 @@ func storeItemsIntoDatabaseAddProduct(item goque.Item) (err error) {
 
 	var pt addProductQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1299,7 +1297,7 @@ func storeItemsIntoDatabaseAddProduct(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseAddOrder(item goque.Item) (err error) {
+func storeItemsIntoDatabaseAddOrder(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1325,7 +1323,7 @@ func storeItemsIntoDatabaseAddOrder(item goque.Item) (err error) {
 
 	var pt addOrderQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1375,7 +1373,7 @@ func storeItemsIntoDatabaseAddOrder(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseStartOrder(item goque.Item) (err error) {
+func storeItemsIntoDatabaseStartOrder(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1402,7 +1400,7 @@ func storeItemsIntoDatabaseStartOrder(item goque.Item) (err error) {
 
 	var pt startOrderQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1452,7 +1450,7 @@ func storeItemsIntoDatabaseStartOrder(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseEndOrder(item goque.Item) (err error) {
+func storeItemsIntoDatabaseEndOrder(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1479,7 +1477,7 @@ func storeItemsIntoDatabaseEndOrder(item goque.Item) (err error) {
 
 	var pt endOrderQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1529,7 +1527,7 @@ func storeItemsIntoDatabaseEndOrder(item goque.Item) (err error) {
 
 }
 
-func storeItemsIntoDatabaseAddMaintenanceActivity(item goque.Item) (err error) {
+func storeItemsIntoDatabaseAddMaintenanceActivity(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1555,7 +1553,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(item goque.Item) (err error) {
 
 	var pt addMaintenanceActivityQueue
 
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
@@ -1605,7 +1603,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(item goque.Item) (err error) {
 
 }
 
-func modifyStateInDatabase(item goque.Item) (err error) {
+func modifyStateInDatabase(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1656,7 +1654,7 @@ func modifyStateInDatabase(item goque.Item) (err error) {
 	}
 
 	var pt modifyStateQueue
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
@@ -1804,7 +1802,7 @@ func modifyStateInDatabase(item goque.Item) (err error) {
 	return
 }
 
-func deleteShiftInDatabaseById(item goque.Item) (err error) {
+func deleteShiftInDatabaseById(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1827,7 +1825,7 @@ func deleteShiftInDatabaseById(item goque.Item) (err error) {
 	}
 
 	var pt deleteShiftByIdQueue
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
@@ -1876,7 +1874,7 @@ func deleteShiftInDatabaseById(item goque.Item) (err error) {
 	return
 }
 
-func deleteShiftInDatabaseByAssetIdAndTimestamp(item goque.Item) (err error) {
+func deleteShiftInDatabaseByAssetIdAndTimestamp(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -1899,7 +1897,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(item goque.Item) (err error) {
 	}
 
 	var pt deleteShiftByAssetIdAndBeginTimestampQueue
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)
 		if err != nil {
@@ -1993,7 +1991,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}
 }
 
-func modifyInDatabaseModifyCountAndScrap(item goque.Item) (err error) {
+func modifyInDatabaseModifyCountAndScrap(item QueueObject) (err error) {
 
 	// Begin transaction
 	txn, err := db.Begin()
@@ -2036,7 +2034,7 @@ func modifyInDatabaseModifyCountAndScrap(item goque.Item) (err error) {
 	}
 
 	var pt modifyProducesPieceQueue
-	err = item.ToObject(&pt)
+	err = json.Unmarshal(item.Payload, &pt)
 
 	if err != nil {
 		err = PQErrorHandlingTransaction("item.ToObject()", err, txn)

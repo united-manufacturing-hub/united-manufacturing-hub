@@ -110,8 +110,8 @@ func main() {
 	// Start queue processing goroutines
 	go reportQueueLength(pg)
 
-	for i := 0; i < 1000; i++ {
-		processQueue(pg)
+	for i := 0; i < 1; i++ {
+		go processQueue(pg)
 	}
 
 	select {} // block forever
