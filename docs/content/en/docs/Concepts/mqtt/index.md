@@ -88,7 +88,8 @@ In this level the data is already assigned to a machine.
 
 Topic structure: `ia/<customerID>/<location>/<AssetID>/<Measurement>` e.g. `ia/dccaachen/aachen/demonstrator/count`.
 
-An asset can be a machine, plant or line (Explicitly not a single station of an assembly cell).
+An asset can be a step, machine, plant or line. It uniquely identifies the smallest location necessary for modeling the 
+process.
 
 By definition all topic names should be lower case only!
 

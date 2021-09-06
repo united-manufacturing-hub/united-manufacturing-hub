@@ -23,6 +23,13 @@ const prefixAddOrder = "addOrder"
 const prefixStartOrder = "startOrder"
 const prefixEndOrder = "endOrder"
 const prefixAddMaintenanceActivity = "addMaintenanceActivity"
+const prefixProductTag = "productTag"
+const prefixProductTagString = "productTagString"
+const prefixAddParentToChild = "addParentToChild"
+const prefixModifyState = "modifyState"
+const prefixModifyProducesPiece = "modifyProducedPieces"
+const prefixDeleteShiftById = "deleteShiftById"
+const prefixDeleteShiftByAssetIdAndBeginTimestamp = "deleteShiftByAssetIdAndBeginTimestamp"
 
 type QueueObject struct {
 	Object    interface{}
@@ -50,23 +57,26 @@ func closeQueue(pq *goque.PrefixQueue) (err error) {
 	return
 }
 
+// getAllItemsInQueue gets all items in the current queue with the exception that it will never get more than 10000 messages at one time
 func getAllItemsInQueue(prefix string, pq *goque.PrefixQueue) (itemsInQueue []goque.Item, err error) {
-	keepRunning := false
-
-	for !keepRunning {
+	// TODO: for performance optimization get length and allocate itemsInQueue with make
+	for i := 0; i < 10000; i++ { //take the first 10000 messages (if it is not empty, see if)
 		item, err2 := pq.Dequeue([]byte(prefix))
-		if err2 == goque.ErrEmpty || err2 == goque.ErrOutOfBounds {
+
+		if err2 == goque.ErrEmpty {
+			return // abort queue as it is empty
+		} else if err2 == goque.ErrOutOfBounds { // TODO: Check why this in the code
 			return
-		} else if err2 != nil {
+		} else if err2 != nil { // Raise error
 			err = err2
 			zap.S().Errorf("Error Dequeueing", err2)
 			return
 		}
 
 		//zap.S().Debugf("Adding item", item.ToString())
-		itemsInQueue = append(itemsInQueue, *item)
-
+		itemsInQueue = append(itemsInQueue, *item) // see TODO above
 	}
+	zap.S().Warnf("Reached maximum level of 10000 messages")
 
 	return
 }

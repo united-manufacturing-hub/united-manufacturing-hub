@@ -5,6 +5,7 @@ import (
 
 	"database/sql"
 	"encoding/json"
+
 	"github.com/beeker1121/goque"
 
 	"go.uber.org/zap"
@@ -27,6 +28,7 @@ func ProcessStateData(customerID string, location string, assetID string, payloa
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -64,6 +66,7 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	// this should not happen. Throw a warning message and ignore (= do not try to store in database)
@@ -106,6 +109,7 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -140,6 +144,7 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -176,6 +181,7 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -202,23 +208,19 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 }
 
 type uniqueProductQueue struct {
-	DBAssetID        int
-	UID              string
-	TimestampMsBegin int64
-	TimestampMsEnd   int64
-	ProductID        string
-	IsScrap          bool
-	QualityClass     string
-	StationID        string
+	DBAssetID                  int
+	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
+	EndTimestampMs             int64  `json:"end_timestamp_ms"`
+	ProductID                  int    `json:"productID"`
+	IsScrap                    bool   `json:"isScrap"`
+	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 type uniqueProduct struct {
-	UID              string `json:"UID"`
-	TimestampMsBegin int64  `json:"begin_timestamp_ms"`
-	TimestampMsEnd   int64  `json:"end_timestamp_ms"`
-	ProductID        string `json:"productID"`
-	IsScrap          bool   `json:"isScrap"`
-	QualityClass     string `json:"qualityClass"`
-	StationID        string `json:"stationID"`
+	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
+	EndTimestampMs             int64  `json:"end_timestamp_ms"`
+	ProductName                string `json:"productID"`
+	IsScrap                    bool   `json:"isScrap"`
+	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 
 // ProcessUniqueProduct adds a new uniqueProduct to the database
@@ -228,18 +230,25 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
+	productID, err := GetProductID(DBassetID, parsedPayload.ProductName)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)
+		return
+	} else if err != nil { // never executed
+		PQErrorHandling("GetProductID db.QueryRow()", err)
+	}
+
 	newObject := uniqueProductQueue{
-		DBAssetID:        DBassetID,
-		UID:              parsedPayload.UID,
-		TimestampMsBegin: parsedPayload.TimestampMsBegin,
-		TimestampMsEnd:   parsedPayload.TimestampMsEnd,
-		ProductID:        parsedPayload.ProductID,
-		IsScrap:          parsedPayload.IsScrap,
-		QualityClass:     parsedPayload.QualityClass,
-		StationID:        parsedPayload.StationID,
+		DBAssetID:                  DBassetID,
+		BeginTimestampMs:           parsedPayload.BeginTimestampMs,
+		EndTimestampMs:             parsedPayload.EndTimestampMs,
+		ProductID:                  productID,
+		IsScrap:                    parsedPayload.IsScrap,
+		UniqueProductAlternativeID: parsedPayload.UniqueProductAlternativeID,
 	}
 
 	_, err = pg.EnqueueObject([]byte(prefixUniqueProduct), newObject)
@@ -264,6 +273,7 @@ func ProcessScrapUniqueProduct(customerID string, location string, assetID strin
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -296,6 +306,7 @@ func ProcessAddProduct(customerID string, location string, assetID string, paylo
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -332,6 +343,7 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -376,6 +388,7 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -409,6 +422,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -447,6 +461,7 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	_, err = pg.EnqueueObject([]byte(prefixRecommendation), parsedPayload)
@@ -477,6 +492,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
 		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
@@ -537,5 +553,262 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 			}
 		}
 
+	}
+}
+
+type productTagQueue struct {
+	DBAssetID   int
+	TimestampMs int64   `json:"timestamp_ms"`
+	AID         string  `json:"AID"`
+	Name        string  `json:"name"`
+	Value       float64 `json:"value"`
+}
+
+type productTag struct {
+	TimestampMs int64   `json:"timestamp_ms"`
+	AID         string  `json:"AID"`
+	Name        string  `json:"name"`
+	Value       float64 `json:"value"`
+}
+
+// ProcessProductTag adds a new productTag to the database
+func ProcessProductTag(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload productTag
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := productTagQueue{
+		DBAssetID:   DBassetID,
+		TimestampMs: parsedPayload.TimestampMs,
+		AID:         parsedPayload.AID,
+		Name:        parsedPayload.Name,
+		Value:       parsedPayload.Value,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixProductTag), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type productTagStringQueue struct {
+	DBAssetID   int
+	TimestampMs int64  `json:"timestamp_ms"`
+	AID         string `json:"AID"`
+	Name        string `json:"name"`
+	Value       string `json:"value"`
+}
+
+type productTagString struct {
+	TimestampMs int64  `json:"timestamp_ms"`
+	AID         string `json:"AID"`
+	Name        string `json:"name"`
+	Value       string `json:"value"`
+}
+
+// ProcessProductTagString adds a new productTagString to the database
+func ProcessProductTagString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload productTagString
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := productTagStringQueue{
+		DBAssetID:   DBassetID,
+		TimestampMs: parsedPayload.TimestampMs,
+		AID:         parsedPayload.AID,
+		Name:        parsedPayload.Name,
+		Value:       parsedPayload.Value,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixProductTagString), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type addParentToChildQueue struct {
+	DBAssetID   int
+	TimestampMs int64  `json:"timestamp_ms"`
+	ChildAID    string `json:"childAID"`
+	ParentAID   string `json:"parentAID"`
+}
+
+type addParentToChild struct {
+	TimestampMs int64  `json:"timestamp_ms"`
+	ChildAID    string `json:"childAID"`
+	ParentAID   string `json:"parentAID"`
+}
+
+// ProcessAddParentToChild adds a new AddParentToChild to the database
+func ProcessAddParentToChild(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload addParentToChild
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := addParentToChildQueue{
+		DBAssetID:   DBassetID,
+		TimestampMs: parsedPayload.TimestampMs,
+		ChildAID:    parsedPayload.ChildAID,
+		ParentAID:   parsedPayload.ParentAID,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixAddParentToChild), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type modifyStateQueue struct {
+	DBAssetID      int
+	StartTimeStamp int64
+	EndTimeStamp   int64
+	NewState       int
+}
+
+type modifyState struct {
+	StartTimeStamp int64 `json:"start_time_stamp"`
+	EndTimeStamp   int64 `json:"end_time_stamp"`
+	NewState       int   `json:"new_state"`
+}
+
+func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload modifyState
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := modifyStateQueue{
+		DBAssetID:      DBassetID,
+		StartTimeStamp: parsedPayload.StartTimeStamp,
+		EndTimeStamp:   parsedPayload.EndTimeStamp,
+		NewState:       parsedPayload.NewState,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixModifyState), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type deleteShiftByIdQueue struct {
+	DBAssetID int
+	ShiftId   int `json:"shift_id"`
+}
+
+type deleteShiftById struct {
+	ShiftId int `json:"shift_id"`
+}
+
+func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload deleteShiftById
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := deleteShiftByIdQueue{
+		DBAssetID: DBassetID,
+		ShiftId:   parsedPayload.ShiftId,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixDeleteShiftById), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type deleteShiftByAssetIdAndBeginTimestampQueue struct {
+	DBAssetID      int
+	BeginTimeStamp int `json:"begin_time_stamp"`
+}
+
+type deleteShiftByAssetIdAndBeginTimestamp struct {
+	BeginTimeStamp int `json:"begin_time_stamp"`
+}
+
+func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+	var parsedPayload deleteShiftByAssetIdAndBeginTimestamp
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := deleteShiftByAssetIdAndBeginTimestampQueue{
+		DBAssetID:      DBassetID,
+		BeginTimeStamp: parsedPayload.BeginTimeStamp,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixDeleteShiftByAssetIdAndBeginTimestamp), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
+	}
+}
+
+type modifyProducesPieceQueue struct {
+	DBAssetID int
+	Count     int `json:"count"`
+	Scrap     int `json:"scrap"`
+}
+
+type modifyProducesPiece struct {
+	Count int `json:"count"`
+	Scrap int `json:"scrap"`
+}
+
+func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+
+	// pt.Scrap is -1, if not modified by user
+	// pt.Count is -1, if not modified by user
+	parsedPayload := modifyProducesPiece{
+		Count: -1,
+		Scrap: -1,
+	}
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+	newObject := modifyProducesPieceQueue{
+		DBAssetID: DBassetID,
+		Count:     parsedPayload.Count,
+		Scrap:     parsedPayload.Scrap,
+	}
+
+	_, err = pg.EnqueueObject([]byte(prefixModifyProducesPiece), newObject)
+	if err != nil {
+		zap.S().Errorf("Error enqueuing", err)
+		return
 	}
 }
