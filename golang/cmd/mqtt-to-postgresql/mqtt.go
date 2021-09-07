@@ -78,8 +78,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 }
 
 func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue, basePrio uint8) {
-
-	zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
+	//zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	var err error
@@ -162,12 +161,11 @@ func RetryMQTT(item QueueObject, prio uint8) {
 		zap.S().Errorf("Failed to unmarshal item", item)
 		return
 	}
-	processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.PayloadType, pt.Payload, globalDBPQ, prio)
+	go processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.PayloadType, pt.Payload, globalDBPQ, prio)
 	return
 }
 
 func EnqueueMQTT(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue, prio uint8) {
-
 	newObject := MQTTQueueMessage{
 		CustomerID:  customerID,
 		Location:    location,
@@ -196,14 +194,12 @@ type MQTTQueueMessage struct {
 	Payload     []byte
 }
 
-// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
-func getOnMessageRecieved(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Message) {
+var rp = regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
 
+// getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is received by a specific topic
+func getOnMessageReceived(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Message) {
 	return func(client MQTT.Client, message MQTT.Message) {
-
 		//Check whether topic has the correct structure
-		rp := regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
-
 		res := rp.FindStringSubmatch(message.Topic())
 		if res == nil {
 			return
@@ -281,6 +277,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, h
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(OnConnect)
 	opts.SetConnectionLostHandler(OnConnectionLost)
+	opts.SetOrderMatters(false)
 
 	zap.S().Debugf("Broker configured", mqttBrokerURL, certificateName)
 
@@ -291,7 +288,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, h
 	}
 
 	// Subscribe
-	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageRecieved(pg)); token.Wait() && token.Error() != nil {
+	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 	zap.S().Infof("MQTT subscribed", mqttTopic)

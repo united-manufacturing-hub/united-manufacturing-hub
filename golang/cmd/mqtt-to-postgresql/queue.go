@@ -291,7 +291,6 @@ type QueueObject struct {
 
 // ReInsertItemOnFailure This functions re-inserts an item with lowered priority
 func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uint8) (err error) {
-
 	if prio < 255 {
 		prio += 1
 		err = addItemWithPriorityToQueue(pg, object, prio)
@@ -317,12 +316,10 @@ func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uin
 
 // GetNextItemInQueue retrieves the next item in queue
 func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, err error) {
-
 	priorityItem, err := pg.Dequeue()
 	if err != nil {
 		return QueueObject{}, 0, err
 	}
-	zap.S().Debugf("GetNextItemInQueue", priorityItem)
 	prio = priorityItem.Priority
 	err = priorityItem.ToObjectFromJSON(&item)
 	if err != nil {
@@ -332,7 +329,7 @@ func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, 
 }
 
 func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObject, err error) {
-
+	items = make([]QueueObject, pg.Length())
 	for i := 0; i < 1000; i++ {
 		var item *goque.PriorityItem
 		item, err = pg.DequeueByPriority(prio)
@@ -360,16 +357,12 @@ func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObj
 
 // addItemWithPriorityToQueue adds an item with given priority to queue
 func addItemWithPriorityToQueue(pq *goque.PriorityQueue, item QueueObject, priority uint8) (err error) {
-
-	var pi *goque.PriorityItem
-	pi, err = pq.EnqueueObjectAsJSON(priority, item)
-	zap.S().Debugf("addItemWithPriorityToQueue", pi)
+	_, err = pq.EnqueueObjectAsJSON(priority, item)
 	return
 }
 
 // addNewItemToQueue adds an item with 0 priority to queue
 func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []byte) (err error) {
-
 	item := QueueObject{
 		Prefix:  payloadType,
 		Payload: payload,
@@ -380,7 +373,6 @@ func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []by
 
 // addItemWithPriorityToQueue adds an item with given priority to queue
 func addRawItemWithPriorityToQueue(pq *goque.PriorityQueue, payloadType string, payload []byte, priority uint8) (err error) {
-
 	item := QueueObject{
 		Prefix:  payloadType,
 		Payload: payload,
@@ -391,7 +383,6 @@ func addRawItemWithPriorityToQueue(pq *goque.PriorityQueue, payloadType string, 
 
 // reportQueueLength prints the current Queue length
 func reportQueueLength(pg *goque.PriorityQueue) {
-
 	for true {
 		zap.S().Infof("Current elements in queue: %d", pg.Length())
 		time.Sleep(10 * time.Second)

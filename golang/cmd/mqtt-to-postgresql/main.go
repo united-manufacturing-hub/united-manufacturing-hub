@@ -116,7 +116,7 @@ func main() {
 	// Start queue processing goroutines
 	go reportQueueLength(pg)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		go processDBQueue(pg)
 	}
 
