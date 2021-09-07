@@ -264,7 +264,8 @@ func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, 
 
 func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObject, err error) {
 	for i := 0; i < 1000; i++ {
-		item, err := pg.DequeueByPriority(prio)
+		var item *goque.PriorityItem
+		item, err = pg.DequeueByPriority(prio)
 		if err != nil {
 			if err == goque.ErrEmpty {
 				break
