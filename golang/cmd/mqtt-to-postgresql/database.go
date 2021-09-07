@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/omeid/pgerror"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -308,7 +309,13 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 	}
 	// 2. Prepare statement: copying into temp table
 	{
-		stmt := txn.Stmt(statement.CopyInTmpProcessValueTable64)
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable64", "timestamp", "asset_id", "value", "valuename"))
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 		for _, item := range items {
 			var pt processValueFloat64Queue
 			err = json.Unmarshal(item.Payload, &pt)
@@ -327,6 +334,12 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 
 			}
 		}
+		err = stmt.Close()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 	}
 
 	// 3. Prepare statement: copy from temp table into main table
@@ -368,7 +381,12 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 	}
 	// 2. Prepare statement: copying into temp table
 	{
-		stmt := txn.Stmt(statement.CopyInTmpProcessValueTable)
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable", "timestamp", "asset_id", "value", "valuename"))
+		if err != nil {
+			faultyItems = items
+			return
+		}
 		for _, item := range items {
 			var pt processValueQueue
 			err = json.Unmarshal(item.Payload, &pt)
@@ -386,6 +404,12 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 				continue
 
 			}
+		}
+
+		err = stmt.Close()
+		if err != nil {
+			faultyItems = items
+			return
 		}
 	}
 
@@ -428,7 +452,13 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 	}
 	// 2. Prepare statement: copying into temp table
 	{
-		stmt := txn.Stmt(statement.CopyInTmpCountTable)
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_counttable", "timestamp", "asset_id", "count", "scrap"))
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 		for _, item := range items {
 			var pt countQueue
 			err = json.Unmarshal(item.Payload, &pt)
@@ -447,6 +477,13 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 
 			}
 		}
+
+		err = stmt.Close()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 	}
 
 	// 3. Prepare statement: copy from temp table into main table

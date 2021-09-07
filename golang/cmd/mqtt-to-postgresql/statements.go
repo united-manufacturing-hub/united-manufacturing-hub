@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"github.com/lib/pq"
 	"go.uber.org/zap"
 )
 
@@ -10,15 +9,12 @@ type statementRegistry struct {
 	InsertIntoRecommendationTable *sql.Stmt
 
 	CreateTmpProcessValueTable64                          *sql.Stmt
-	CopyInTmpProcessValueTable64                          *sql.Stmt
 	InsertIntoProcessValueTableFromTmpProcessValueTable64 *sql.Stmt
 
 	CreateTmpProcessValueTable                          *sql.Stmt
-	CopyInTmpProcessValueTable                          *sql.Stmt
 	InsertIntoProcessValueTableFromTmpProcessValueTable *sql.Stmt
 
 	CreateTmpCountTable                   *sql.Stmt
-	CopyInTmpCountTable                   *sql.Stmt
 	InsertIntoCountTableFromTmpCountTable *sql.Stmt
 
 	InsertIntoStateTable *sql.Stmt
@@ -97,8 +93,6 @@ func newStatementRegistry() *statementRegistry {
 			;
 		`),
 
-		CopyInTmpProcessValueTable64: prep(pq.CopyIn("tmp_processvaluetable64", "timestamp", "asset_id", "value", "valuename")),
-
 		InsertIntoProcessValueTableFromTmpProcessValueTable64: prep(`
 			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
 		`),
@@ -109,8 +103,6 @@ func newStatementRegistry() *statementRegistry {
 			;
 		`),
 
-		CopyInTmpProcessValueTable: prep(pq.CopyIn("tmp_processvaluetable", "timestamp", "asset_id", "value", "valuename")),
-
 		InsertIntoProcessValueTableFromTmpProcessValueTable: prep(`
 			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable) ON CONFLICT DO NOTHING;
 		`),
@@ -120,8 +112,6 @@ func newStatementRegistry() *statementRegistry {
 				( LIKE counttable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
 		`),
-
-		CopyInTmpCountTable: prep(pq.CopyIn("tmp_counttable", "timestamp", "asset_id", "count", "scrap")),
 
 		InsertIntoCountTableFromTmpCountTable: prep(`
 			INSERT INTO counttable (SELECT * FROM tmp_counttable) ON CONFLICT DO NOTHING;
