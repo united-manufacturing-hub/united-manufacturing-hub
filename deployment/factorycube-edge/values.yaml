@@ -54,7 +54,7 @@ cameraconnect:
   brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
   brokerPort: 1883 # do not change
   trigger: "MQTT" # trigger to activate image , supports "MQTT", "Continuous"
-  acquisitionDelay: "0.0"
+  acquisitionDelay: "0.0" # time to wait between trigger received and image acquired
   cycleTime: "4" # time between images
   cameraInterface: "GenICam" # camera interface, currenty only uses GenIcam
   imageWidth: "800" # in pixels
