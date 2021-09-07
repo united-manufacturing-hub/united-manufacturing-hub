@@ -24,6 +24,11 @@ helm upgrade factorycube-edge united-manufacturing-hub/factorycube-edge \
 ````
 Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP (e.g., the IP of your node). Usually you can use the Kubernetes internal DNS. But cameraconnect needs to be in hostMode = true and therefore you need to access it through the external ip. 
 
+### cti files
+cti files for you camaeras can not be included for license reasons, to include ti files you must create the folder 
+`/home/rancher/genicam_producer` and place a zip file containing all the files you wish to use there. the script will
+look for all cti files in that directory.
+
 ### Development setup
 
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
