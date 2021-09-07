@@ -317,14 +317,6 @@ func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []by
 func reportQueueLength(pg *goque.PriorityQueue) {
 	for true {
 		zap.S().Infof("Current elements in queue: %d", pg.Length())
-		if pg.Length() > 0 {
-			peek, err := pg.Peek()
-			if err != nil {
-				continue
-			}
-			var qo QueueObject
-			zap.S().Infof("%s", peek.ToObject(&qo))
-		}
 		time.Sleep(10 * time.Second)
 	}
 }
