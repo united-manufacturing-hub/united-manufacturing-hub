@@ -143,7 +143,7 @@ func NewNullInt64(i int64) sql.NullInt64 {
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(customerID string, location string, assetID string) (DBassetID int) {
+func GetAssetID(customerID string, location string, assetID string) (DBassetID int32) {
 	zap.S().Debugf("GetAssetID")
 
 	// Get from cache if possible
@@ -169,7 +169,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID i
 }
 
 // GetProductID gets the productID for a asset and a productName from the database
-func GetProductID(DBassetID int, productName string) (productID int, err error) {
+func GetProductID(DBassetID int32, productName string) (productID int32, err error) {
 	zap.S().Debugf("GetProductID")
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
 	if err == sql.ErrNoRows {
@@ -182,7 +182,7 @@ func GetProductID(DBassetID int, productName string) (productID int, err error) 
 }
 
 // GetComponentID gets the componentID from the database
-func GetComponentID(assetID int, componentName string) (componentID int) {
+func GetComponentID(assetID int32, componentName string) (componentID int32) {
 	zap.S().Debugf("GetComponentID")
 
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
@@ -195,7 +195,7 @@ func GetComponentID(assetID int, componentName string) (componentID int) {
 	return
 }
 
-func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
+func GetUniqueProductID(aid string, DBassetID int32) (uid int32, err error) {
 	zap.S().Debugf("GetUniqueProductID")
 
 	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
@@ -212,7 +212,7 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 	return
 }
 
-func GetLatestParentUniqueProductID(aid string, assetID int) (uid int) {
+func GetLatestParentUniqueProductID(aid string, assetID int32) (uid int32) {
 	zap.S().Debugf("GetLatestParentUniqueProductID")
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
@@ -799,7 +799,7 @@ func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueO
 			continue
 		}
 
-		var uid int
+		var uid int32
 		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		if err != nil {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
@@ -850,7 +850,7 @@ func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []
 			continue
 		}
 
-		var uid int
+		var uid int32
 		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		if err != nil {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
@@ -901,7 +901,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []
 			continue
 		}
 
-		var childUid int
+		var childUid int32
 		childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
 		if err != nil {
 			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")

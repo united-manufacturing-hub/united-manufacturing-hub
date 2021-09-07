@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var globalPQ *goque.PriorityQueue
+var globalDBPQ *goque.PriorityQueue
 
 func main() {
 	zap.S().Debugf("main")
@@ -73,14 +73,15 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	pg, err := setupQueue()
+	const queuePathDB = "/data/dbqueue"
+	pg, err := setupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue", err)
 		return
 	}
 	defer closeQueue(pg)
 
-	globalPQ = pg
+	globalDBPQ = pg
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
@@ -112,7 +113,7 @@ func main() {
 	go reportQueueLength(pg)
 
 	for i := 0; i < 1; i++ {
-		go processQueue(pg)
+		go processDBQueue(pg)
 	}
 
 	select {} // block forever
@@ -139,7 +140,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	err := closeQueue(globalPQ)
+	err := closeQueue(globalDBPQ)
 	if err != nil {
 		zap.S().Errorf("Error while closing queue gracefully", err)
 	}

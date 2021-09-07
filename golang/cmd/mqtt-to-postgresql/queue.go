@@ -7,9 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const queuePath = "/data/queue"
-
-func setupQueue() (pq *goque.PriorityQueue, err error) {
+func setupQueue(queuePath string) (pq *goque.PriorityQueue, err error) {
 	zap.S().Debugf("setupQueue")
 	pq, err = goque.OpenPriorityQueue(queuePath, goque.ASC)
 	if err != nil {
@@ -30,10 +28,10 @@ func closeQueue(pq *goque.PriorityQueue) (err error) {
 	return
 }
 
-// processQueue get's item from queue and processes it, depending on prefix
-func processQueue(pg *goque.PriorityQueue) {
-	zap.S().Debugf("processQueue")
-	zap.S().Infof("Starting new processQueue worker")
+// processDBQueue get's item from queue and processes it, depending on prefix
+func processDBQueue(pg *goque.PriorityQueue) {
+	zap.S().Debugf("processDBQueue")
+	zap.S().Infof("Starting new processDBQueue worker")
 	for !shuttingDown {
 		if pg.Length() == 0 {
 			time.Sleep(10 * time.Millisecond)
@@ -143,6 +141,8 @@ func processQueue(pg *goque.PriorityQueue) {
 				ListdeleteShiftInDatabaseById = append(ListdeleteShiftInDatabaseById, xitem)
 			case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
 				ListdeleteShiftInDatabaseByAssetIdAndTimestamp = append(ListdeleteShiftInDatabaseByAssetIdAndTimestamp, xitem)
+			case Prefix.RawMQTTRequeue:
+				RetryMQTT(xitem, prio)
 			default:
 				zap.S().Errorf("GQ Item with invalid Prefix! ", xitem.Prefix)
 			}
@@ -277,7 +277,7 @@ func processQueue(pg *goque.PriorityQueue) {
 		}
 
 	}
-	zap.S().Infof("processQueue worker shutting down")
+	zap.S().Infof("processDBQueue worker shutting down")
 }
 
 type QueueObject struct {
@@ -371,6 +371,17 @@ func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []by
 		Payload: payload,
 	}
 	err = addItemWithPriorityToQueue(pq, item, 0)
+	return
+}
+
+// addItemWithPriorityToQueue adds an item with given priority to queue
+func addRawItemWithPriorityToQueue(pq *goque.PriorityQueue, payloadType string, payload []byte, priority uint8) (err error) {
+	zap.S().Debugf("addNewItemToQueue", payload)
+	item := QueueObject{
+		Prefix:  payloadType,
+		Payload: payload,
+	}
+	err = addItemWithPriorityToQueue(pq, item, priority)
 	return
 }
 
