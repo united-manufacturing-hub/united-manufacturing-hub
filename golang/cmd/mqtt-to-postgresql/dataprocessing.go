@@ -14,11 +14,11 @@ import (
 type stateQueue struct {
 	DBAssetID   int32
 	State       int32
-	TimestampMs int64
+	TimestampMs uint64
 }
 type state struct {
-	State       int32 `json:"state"`
-	TimestampMs int64 `json:"timestamp_ms"`
+	State       int32  `json:"state"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 // ProcessStateData processes an incoming state message
@@ -58,12 +58,12 @@ type countQueue struct {
 	DBAssetID   int32
 	Count       int32
 	Scrap       int32
-	TimestampMs int64
+	TimestampMs uint64
 }
 type count struct {
-	Count       int32 `json:"count"`
-	Scrap       int32 `json:"scrap"`
-	TimestampMs int64 `json:"timestamp_ms"`
+	Count       int32  `json:"count"`
+	Scrap       int32  `json:"scrap"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 // ProcessCountData processes an incoming count message
@@ -108,11 +108,11 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 type scrapCountQueue struct {
 	DBAssetID   int32
 	Scrap       int32
-	TimestampMs int64
+	TimestampMs uint64
 }
 type scrapCount struct {
-	Scrap       int32 `json:"scrap"`
-	TimestampMs int64 `json:"timestamp_ms"`
+	Scrap       int32  `json:"scrap"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 // ProcessScrapCountData processes an incoming scrapCount message
@@ -242,15 +242,15 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 
 type uniqueProductQueue struct {
 	DBAssetID                  int32
-	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64  `json:"end_timestamp_ms"`
+	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
+	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
 	ProductID                  int32  `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 type uniqueProduct struct {
-	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64  `json:"end_timestamp_ms"`
+	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
+	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
 	ProductName                string `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
@@ -436,11 +436,11 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 
 type startOrderQueue struct {
 	DBAssetID   int32
-	TimestampMs int64
+	TimestampMs uint64
 	OrderName   string
 }
 type startOrder struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	OrderName   string `json:"order_id"`
 }
 
@@ -477,11 +477,11 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 
 type endOrderQueue struct {
 	DBAssetID   int32
-	TimestampMs int64
+	TimestampMs uint64
 	OrderName   string
 }
 type endOrder struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	OrderName   string `json:"order_id"`
 }
 
@@ -557,14 +557,14 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 
 type processValueQueue struct {
 	DBAssetID   int32
-	TimestampMs int64
+	TimestampMs uint64
 	Name        string
 	Value       int32
 }
 
 type processValueFloat64Queue struct {
 	DBAssetID   int32
-	TimestampMs int64
+	TimestampMs uint64
 	Name        string
 	Value       float64
 }
@@ -586,14 +586,18 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 	m := parsedPayload.(map[string]interface{})
 
 	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
-		timestampMs, ok := val.(int64)
+		timestampMs, ok := val.(uint64)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
 			if !ok2 {
 				zap.S().Errorf("Timestamp not int64 nor float64", payload, val)
 				return nil
 			}
-			timestampMs = int64(timestampMsFloat)
+			if timestampMsFloat < 0 {
+				zap.S().Errorf("Timestamp is negative !", payload, val)
+				return nil
+			}
+			timestampMs = uint64(timestampMsFloat)
 		}
 
 		// loop through map
@@ -654,14 +658,14 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 
 type productTagQueue struct {
 	DBAssetID   int32
-	TimestampMs int64   `json:"timestamp_ms"`
+	TimestampMs uint64  `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
 	Value       float64 `json:"value"`
 }
 
 type productTag struct {
-	TimestampMs int64   `json:"timestamp_ms"`
+	TimestampMs uint64  `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
 	Value       float64 `json:"value"`
@@ -702,14 +706,14 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 
 type productTagStringQueue struct {
 	DBAssetID   int32
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
 }
 
 type productTagString struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
@@ -750,13 +754,13 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 
 type addParentToChildQueue struct {
 	DBAssetID   int32
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
 }
 
 type addParentToChild struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
 }
@@ -960,7 +964,7 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 
 type processValueStringQueue struct {
 	DBAssetID   int32
-	TimestampMs int64
+	TimestampMs uint64
 	Name        string
 	Value       string
 }
@@ -982,14 +986,18 @@ func ProcessProcessValueString(customerID string, location string, assetID strin
 	m := parsedPayload.(map[string]interface{})
 
 	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
-		timestampMs, ok := val.(int64)
+		timestampMs, ok := val.(uint64)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
 			if !ok2 {
-				zap.S().Errorf("Timestamp not int32 nor float64", payload, val)
+				zap.S().Errorf("Timestamp not int64 nor float64", payload, val)
 				return nil
 			}
-			timestampMs = int64(timestampMsFloat)
+			if timestampMsFloat < 0 {
+				zap.S().Errorf("Timestamp is negative !", payload, val)
+				return nil
+			}
+			timestampMs = uint64(timestampMsFloat)
 		}
 
 		// loop through map
