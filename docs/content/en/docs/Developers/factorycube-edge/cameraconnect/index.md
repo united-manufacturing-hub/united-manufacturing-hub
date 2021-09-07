@@ -16,8 +16,14 @@ By default cameraconnect will be deactivated in factorycube-edge. First, you nee
 With Lens you can change the values under the apps/releases tab on the left side. select factorycube-edge and change your config values.
 
 
-Or overwrite it in the `~/configs/development_values.yaml` file on the cube itself.
+Or overwrite it in the `~/configs/development_values.yaml` file on the cube itself. 
 
+To apply the changes to the development_values.yaml you will need to execute this command 
+````shell
+helm upgrade factorycube-edge united-manufacturing-hub/factorycube-edge \
+--values "/home/rancher/configs/factorycube-edge-development.yaml" \
+--set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge
+````
 Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP (e.g., the IP of your node). Usually you can use the Kubernetes internal DNS. But cameraconnect needs to be in hostMode = true and therefore you need to access it through the external ip. 
 
 ### Development setup
