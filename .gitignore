@@ -60,3 +60,4 @@ docs/static/openapi/output/factory_insight/html/.openapi-generator/
 docs/static/openapi/output/factory_insight/markdown/.openapi-generator/
 
 docs/static/openapi/output/factory_input/markdown/.openapi-generator/
+**/values_test.yaml
