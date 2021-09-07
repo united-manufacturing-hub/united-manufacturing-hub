@@ -6,6 +6,7 @@ func newPrefixRegistry() *prefixRegistry {
 	return &prefixRegistry{
 		ProcessValueFloat64:                   "processValueFloat64",
 		ProcessValue:                          "processValue",
+		ProcessValueString:                    "processValueString",
 		Count:                                 "count",
 		Recommendation:                        "recommendation",
 		State:                                 "state",
@@ -31,6 +32,7 @@ func newPrefixRegistry() *prefixRegistry {
 type prefixRegistry struct {
 	ProcessValueFloat64                   string
 	ProcessValue                          string
+	ProcessValueString                    string
 	Count                                 string
 	Recommendation                        string
 	State                                 string

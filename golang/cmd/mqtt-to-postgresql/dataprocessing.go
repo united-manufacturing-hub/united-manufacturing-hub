@@ -916,3 +916,71 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 		return
 	}
 }
+
+type processValueStringQueue struct {
+	DBAssetID   int
+	TimestampMs int64
+	Name        string
+	Value       string
+}
+
+// ProcessProcessValueString adds a new processValueString to the database
+func ProcessProcessValueString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	var parsedPayload interface{}
+
+	err := json.Unmarshal(payload, &parsedPayload)
+	if err != nil {
+		zap.S().Errorf("json.Unmarshal failed", err, payload)
+		return
+	}
+
+	DBassetID := GetAssetID(customerID, location, assetID)
+
+	// process unknown data structure according to https://blog.golang.org/json
+	m := parsedPayload.(map[string]interface{})
+
+	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
+		timestampMs, ok := val.(int64)
+		if !ok {
+			timestampMsFloat, ok2 := val.(float64)
+			if !ok2 {
+				zap.S().Errorf("Timestamp not int64 nor float64", payload, val)
+				return
+			}
+			timestampMs = int64(timestampMsFloat)
+		}
+
+		// loop through map
+		for k, v := range m {
+			switch k {
+			case "timestamp_ms":
+			case "measurement": //only to ignore legacy messages todo: highlight in documentation
+			case "serial_number": //only to ignore legacy messages todo: highlight in documentation
+				break //ignore them
+			default:
+				value, ok := v.(string)
+				if !ok {
+					zap.S().Errorf("Process value recieved that is not a string", k, v)
+					break
+				}
+				newObject := processValueStringQueue{
+					DBAssetID:   DBassetID,
+					TimestampMs: timestampMs,
+					Name:        k,
+					Value:       value,
+				}
+				marshal, err := json.Marshal(newObject)
+				if err != nil {
+					return
+				}
+
+				err = addNewItemToQueue(pg, Prefix.ProcessValue, marshal)
+				if err != nil {
+					zap.S().Errorf("Error enqueuing", err)
+					return
+				}
+			}
+		}
+
+	}
+}

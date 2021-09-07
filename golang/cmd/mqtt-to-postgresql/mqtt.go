@@ -87,10 +87,13 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		case Prefix.ProcessValue:
 			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		//TODO is still still needed ?
-		case "processvalue":{
-			zap.S().Warnf("Depreciated")
-			ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
-		}
+		case "processvalue":
+			{
+				zap.S().Warnf("Depreciated")
+				ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
+			}
+		case Prefix.ProcessValueString:
+			ProcessProcessValueString(customerID, location, assetID, payloadType, payload, pg)
 		case Prefix.Count:
 			ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
 		case Prefix.ScrapCount:

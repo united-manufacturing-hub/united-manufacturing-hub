@@ -69,6 +69,7 @@ type statementRegistry struct {
 	SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc *sql.Stmt
 
 	SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId *sql.Stmt
+	CreateTmpProcessValueTableString                                                     *sql.Stmt
 }
 
 func (r statementRegistry) Shutdown() (err error) {
@@ -102,6 +103,12 @@ func newStatementRegistry() *statementRegistry {
 		CreateTmpCountTable: prep(`
 			CREATE TEMP TABLE tmp_counttable
 				( LIKE counttable INCLUDING DEFAULTS ) ON COMMIT DROP 
+			;
+		`),
+
+		CreateTmpProcessValueTableString: prep(`
+			CREATE TEMP TABLE tmp_processvaluestringtable 
+				( LIKE processValueStringTable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
 		`),
 

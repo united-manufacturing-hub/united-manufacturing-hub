@@ -63,6 +63,7 @@ func processQueue(pg *goque.PriorityQueue) {
 
 		var ListstoreItemsIntoDatabaseProcessValueFloat64 []QueueObject
 		var ListstoreItemsIntoDatabaseProcessValue []QueueObject
+		var ListstoreItemsIntoDatabaseProcessValueString []QueueObject
 		var ListstoreItemsIntoDatabaseCount []QueueObject
 		var ListstoreItemsIntoDatabaseRecommendation []QueueObject
 		var ListstoreItemsIntoDatabaseState []QueueObject
@@ -89,6 +90,8 @@ func processQueue(pg *goque.PriorityQueue) {
 				ListstoreItemsIntoDatabaseProcessValueFloat64 = append(ListstoreItemsIntoDatabaseProcessValueFloat64, item)
 			case Prefix.ProcessValue:
 				ListstoreItemsIntoDatabaseProcessValue = append(ListstoreItemsIntoDatabaseProcessValue, item)
+			case Prefix.ProcessValueString:
+				ListstoreItemsIntoDatabaseProcessValueString = append(ListstoreItemsIntoDatabaseProcessValueString, item)
 			case Prefix.Count:
 				ListstoreItemsIntoDatabaseCount = append(ListstoreItemsIntoDatabaseCount, item)
 			case Prefix.Recommendation:
@@ -135,6 +138,7 @@ func processQueue(pg *goque.PriorityQueue) {
 		var processError error
 		var faultystoreItemsIntoDatabaseProcessValueFloat64 []QueueObject
 		var faultystoreItemsIntoDatabaseProcessValue []QueueObject
+		var faultystoreItemsIntoDatabaseProcessValueString []QueueObject
 		var faultystoreItemsIntoDatabaseCount []QueueObject
 		var faultystoreItemsIntoDatabaseRecommendation []QueueObject
 		var faultystoreItemsIntoDatabaseState []QueueObject
@@ -157,6 +161,7 @@ func processQueue(pg *goque.PriorityQueue) {
 
 		faultystoreItemsIntoDatabaseProcessValueFloat64, processError = storeItemsIntoDatabaseProcessValueFloat64(ListstoreItemsIntoDatabaseProcessValueFloat64)
 		faultystoreItemsIntoDatabaseProcessValue, processError = storeItemsIntoDatabaseProcessValue(ListstoreItemsIntoDatabaseProcessValue)
+		faultystoreItemsIntoDatabaseProcessValueString, processError = storeItemsIntoDatabaseProcessValueString(ListstoreItemsIntoDatabaseProcessValueString)
 		faultystoreItemsIntoDatabaseCount, processError = storeItemsIntoDatabaseCount(ListstoreItemsIntoDatabaseCount)
 		faultystoreItemsIntoDatabaseRecommendation, processError = storeItemsIntoDatabaseRecommendation(ListstoreItemsIntoDatabaseRecommendation)
 		faultystoreItemsIntoDatabaseState, processError = storeItemsIntoDatabaseState(ListstoreItemsIntoDatabaseState)
@@ -180,6 +185,7 @@ func processQueue(pg *goque.PriorityQueue) {
 		var faulty []QueueObject
 		faulty = append(faulty, faultystoreItemsIntoDatabaseProcessValueFloat64...)
 		faulty = append(faulty, faultystoreItemsIntoDatabaseProcessValue...)
+		faulty = append(faulty, faultystoreItemsIntoDatabaseProcessValueString...)
 		faulty = append(faulty, faultystoreItemsIntoDatabaseCount...)
 		faulty = append(faulty, faultystoreItemsIntoDatabaseRecommendation...)
 		faulty = append(faulty, faultystoreItemsIntoDatabaseState...)

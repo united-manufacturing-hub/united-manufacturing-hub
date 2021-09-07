@@ -191,7 +191,7 @@ data:
     ALTER TABLE uniqueProductTable ADD CONSTRAINT productID_reference FOREIGN KEY (product_id) REFERENCES productTable (product_id);
     ALTER TABLE uniqueProductTable ALTER COLUMN  end_timestamp_ms DROP NOT NULL;
     ALTER TABLE uniqueProductTable ADD CONSTRAINT checkTimestampOrder CHECK ((begin_timestamp_ms < end_timestamp_ms) OR (end_timestamp_ms IS NULL));
-
+    ALTER TABLE processValueTable ALTER COLUMN value SET NOT NULL;
 
     -------------------- TimescaleDB table for product tags --------------------
     CREATE TABLE IF NOT EXISTS productTagTable
@@ -228,6 +228,20 @@ data:
     -- creating hypertable
      CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
      CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
+
+    -------------------- TimescaleDB table for process values string --------------------
+    CREATE TABLE IF NOT EXISTS processValueStringTable
+    (
+      timestamp               TIMESTAMPTZ                         NOT NULL,
+      asset_id                SERIAL                              REFERENCES assetTable (id),
+      valueName               TEXT                                NOT NULL,
+      value                   TEXT                                NOT NULL,
+      UNIQUE(timestamp, asset_id, valueName)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('processValueStringTable', 'timestamp');
+    -- creating an index to increase performance
+    CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
 
 
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};

@@ -368,6 +368,91 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 	return
 }
 
+func storeItemsIntoDatabaseProcessValueString(items []QueueObject) (faultyItems []QueueObject, err error) {
+	txn, err := db.Begin()
+	if err != nil {
+		faultyItems = items
+		return
+	}
+
+	defer func() {
+		err = deferCallback(txn)
+		if err != nil {
+			return
+		}
+	}()
+
+	// 1. Prepare statement: create temp table
+	//These statements' auto close
+	{
+		stmt := txn.Stmt(statement.CreateTmpProcessValueTableString)
+		_, err = stmt.Exec()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+	}
+	// 2. Prepare statement: copying into temp table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluestringtable", "timestamp", "asset_id", "value", "valuename"))
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+		for _, item := range items {
+			var pt processValueStringQueue
+			err = json.Unmarshal(item.Payload, &pt)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal item", item)
+				continue
+			}
+
+			timestamp := time.Unix(0, pt.TimestampMs*int64(1000000)).Format("2006-01-02T15:04:05.000Z")
+
+			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
+			if err != nil {
+				faultyItems = append(faultyItems, item)
+				err = nil
+				continue
+
+			}
+		}
+		err = stmt.Close()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+	}
+
+	// 3. Prepare statement: copy from temp table into main table
+	{
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO processvaluestringtable (SELECT * FROM tmp_processvaluestringtable) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+		_, err = stmt.Exec()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+		err = stmt.Close()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+	}
+	return
+}
+
 func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []QueueObject, err error) {
 	txn, err := db.Begin()
 	if err != nil {
