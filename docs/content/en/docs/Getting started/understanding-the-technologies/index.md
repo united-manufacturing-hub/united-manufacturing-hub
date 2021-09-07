@@ -269,17 +269,19 @@ Look into the other world to get alternative solutions and inspiration e.g.
 
 #### Best-practices 3: Reduce complexity in machine connection with tools like Node-RED
 
+*See also [Node-RED in Industrial IoT: a growing standard](/docs/concepts/node-red-in-industrial-iot/)*
+
 #### Best-practices 4: Connect IT and OT securely using a Demilitarized Zone (DMZ)
 
-Link to blog
+*See also [Why are our networks open by default and how do I protect my valuable industrial assets?](https://www.linkedin.com/pulse/why-our-networks-open-default-how-do-i-protect-my-valuable-proch/?trk=articles_directory)*
 
 #### Architecture
 
-See concepts
+*See also [Architecture](/docs/concepts/)*
 
 #### Example projects
 
-Link to projects
+*See also [Examples](/docs/examples/)*
 
 ## Deep-dive: IT technologies and techniques
 
