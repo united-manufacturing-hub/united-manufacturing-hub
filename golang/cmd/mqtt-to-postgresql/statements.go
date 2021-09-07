@@ -8,14 +8,14 @@ import (
 type statementRegistry struct {
 	InsertIntoRecommendationTable *sql.Stmt
 
-	CreateTmpProcessValueTable64                          *sql.Stmt
-	InsertIntoProcessValueTableFromTmpProcessValueTable64 *sql.Stmt
+	CreateTmpProcessValueTable64                           *sql.Stmt
+	xInsertIntoProcessValueTableFromTmpProcessValueTable64 *sql.Stmt
 
-	CreateTmpProcessValueTable                          *sql.Stmt
-	InsertIntoProcessValueTableFromTmpProcessValueTable *sql.Stmt
+	CreateTmpProcessValueTable                           *sql.Stmt
+	xInsertIntoProcessValueTableFromTmpProcessValueTable *sql.Stmt
 
-	CreateTmpCountTable                   *sql.Stmt
-	InsertIntoCountTableFromTmpCountTable *sql.Stmt
+	CreateTmpCountTable                    *sql.Stmt
+	xInsertIntoCountTableFromTmpCountTable *sql.Stmt
 
 	InsertIntoStateTable *sql.Stmt
 
@@ -93,28 +93,16 @@ func newStatementRegistry() *statementRegistry {
 			;
 		`),
 
-		InsertIntoProcessValueTableFromTmpProcessValueTable64: prep(`
-			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
-		`),
-
 		CreateTmpProcessValueTable: prep(`
 			CREATE TEMP TABLE tmp_processvaluetable 
 				( LIKE processValueTable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
 		`),
 
-		InsertIntoProcessValueTableFromTmpProcessValueTable: prep(`
-			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable) ON CONFLICT DO NOTHING;
-		`),
-
 		CreateTmpCountTable: prep(`
 			CREATE TEMP TABLE tmp_counttable
 				( LIKE counttable INCLUDING DEFAULTS ) ON COMMIT DROP 
 			;
-		`),
-
-		InsertIntoCountTableFromTmpCountTable: prep(`
-			INSERT INTO counttable (SELECT * FROM tmp_counttable) ON CONFLICT DO NOTHING;
 		`),
 
 		InsertIntoStateTable: prep(`

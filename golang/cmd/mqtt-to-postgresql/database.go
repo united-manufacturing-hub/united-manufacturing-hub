@@ -344,9 +344,22 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 
 	// 3. Prepare statement: copy from temp table into main table
 	{
-		//These statements' auto close
-		stmt := txn.Stmt(statement.InsertIntoProcessValueTableFromTmpProcessValueTable64)
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 		_, err = stmt.Exec()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
 			return
@@ -415,9 +428,22 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 
 	// 3. Prepare statement: copy from temp table into main table
 	{
-		//These statements' auto close
-		stmt := txn.Stmt(statement.InsertIntoProcessValueTableFromTmpProcessValueTable)
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 		_, err = stmt.Exec()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
 			return
@@ -488,9 +514,22 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 
 	// 3. Prepare statement: copy from temp table into main table
 	{
-		//These statements' auto close
-		stmt := txn.Stmt(statement.InsertIntoCountTableFromTmpCountTable)
+		var stmt *sql.Stmt
+		stmt, err = txn.Prepare(`
+			INSERT INTO counttable (SELECT * FROM tmp_counttable) ON CONFLICT DO NOTHING;
+		`)
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
 		_, err = stmt.Exec()
+		if err != nil {
+			faultyItems = items
+			return
+		}
+
+		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
 			return
