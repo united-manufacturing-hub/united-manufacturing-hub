@@ -93,28 +93,39 @@ func PQErrorHandling(sqlStatement string, err error) {
 	ShutdownApplicationGraceful()
 }
 
-func deferCallback(txn *sql.Tx) (err error) {
+func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 	zap.S().Debugf("deferCallback")
+
+	if errIn != nil {
+		zap.S().Debugf("Got error from callee: %s", errIn)
+		errOut = txn.Rollback()
+		return
+	} else {
+		zap.S().Debugf("No error from callee")
+	}
+
 	if isDryRun {
 		zap.S().Debugf("PREPARED STATEMENT")
-		err = txn.Rollback()
-		if err != nil {
-			if err != sql.ErrTxDone {
-				PQErrorHandling("txn.Rollback()", err)
+		errOut = txn.Rollback()
+		if errOut != nil {
+			if errOut != sql.ErrTxDone {
+				PQErrorHandling("txn.Rollback()", errOut)
 			} else {
-				zap.S().Warnf("%s", err)
+				zap.S().Warnf("%s", errOut)
 			}
 
 		}
 	} else {
-		err = txn.Commit()
-		if err != nil {
-			if err != sql.ErrTxDone {
-				PQErrorHandling("txn.Commit()", err)
+		zap.S().Debugf("Attempting to Commit")
+		errOut = txn.Commit()
+		if errOut != nil {
+			if errOut != sql.ErrTxDone {
+				PQErrorHandling("txn.Commit()", errOut)
 			} else {
-				zap.S().Warnf("%s", err)
+				zap.S().Warnf("Commit failed: %s", errOut)
 			}
 		}
+		zap.S().Debugf("Commited")
 	}
 	return
 }
@@ -228,8 +239,9 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -255,8 +267,9 @@ func storeItemsIntoDatabaseRecommendation(items []QueueObject) (faultyItems []Qu
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -276,6 +289,7 @@ func storeItemsIntoDatabaseRecommendation(items []QueueObject) (faultyItems []Qu
 		_, err = stmt.Exec(pt.TimestampMs, pt.UID, pt.RecommendationType, pt.Enabled, pt.RecommendationValues, pt.RecommendationTextEN, pt.RecommendationTextDE, pt.DiagnoseTextEN, pt.DiagnoseTextDE)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -293,8 +307,9 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -331,6 +346,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
 				err = nil
 				continue
 
@@ -379,8 +395,9 @@ func storeItemsIntoDatabaseProcessValueString(items []QueueObject) (faultyItems 
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -417,6 +434,7 @@ func storeItemsIntoDatabaseProcessValueString(items []QueueObject) (faultyItems 
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
 				err = nil
 				continue
 
@@ -465,8 +483,9 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -502,6 +521,7 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
 				err = nil
 				continue
 
@@ -550,8 +570,9 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -588,6 +609,7 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
 				err = nil
 				continue
 
@@ -637,8 +659,9 @@ func storeItemsIntoDatabaseState(items []QueueObject) (faultyItems []QueueObject
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -658,6 +681,7 @@ func storeItemsIntoDatabaseState(items []QueueObject) (faultyItems []QueueObject
 		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.State)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -675,8 +699,9 @@ func storeItemsIntoDatabaseScrapCount(items []QueueObject) (faultyItems []QueueO
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -693,9 +718,12 @@ func storeItemsIntoDatabaseScrapCount(items []QueueObject) (faultyItems []QueueO
 		}
 
 		// Create statement
+		zap.S().Debugf("[PRE]\tstoreItemsIntoDatabaseScrapCount")
 		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.Scrap)
+		zap.S().Debugf("[POST]\tstoreItemsIntoDatabaseScrapCount")
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -713,8 +741,9 @@ func storeItemsIntoDatabaseUniqueProduct(items []QueueObject) (faultyItems []Que
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -734,6 +763,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []QueueObject) (faultyItems []Que
 		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(pt.EndTimestampMs), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -751,8 +781,9 @@ func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueO
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -773,6 +804,7 @@ func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueO
 		if err != nil {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -782,6 +814,7 @@ func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueO
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -799,8 +832,9 @@ func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -821,6 +855,7 @@ func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []
 		if err != nil {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -830,6 +865,7 @@ func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -847,8 +883,9 @@ func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -869,6 +906,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []
 		if err != nil {
 			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -879,6 +917,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []
 		_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -896,8 +935,9 @@ func storeItemsIntoDatabaseShift(items []QueueObject) (faultyItems []QueueObject
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -917,6 +957,7 @@ func storeItemsIntoDatabaseShift(items []QueueObject) (faultyItems []QueueObject
 		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -934,8 +975,9 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []QueueObject) (faultyItems 
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -955,6 +997,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []QueueObject) (faultyItems 
 		_, err = stmt.Exec(pt.UID, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -972,8 +1015,9 @@ func storeItemsIntoDatabaseAddProduct(items []QueueObject) (faultyItems []QueueO
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -993,6 +1037,7 @@ func storeItemsIntoDatabaseAddProduct(items []QueueObject) (faultyItems []QueueO
 		_, err = stmt.Exec(pt.DBAssetID, pt.ProductName, pt.TimePerUnitInSeconds)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1010,8 +1055,9 @@ func storeItemsIntoDatabaseAddOrder(items []QueueObject) (faultyItems []QueueObj
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1031,6 +1077,7 @@ func storeItemsIntoDatabaseAddOrder(items []QueueObject) (faultyItems []QueueObj
 		_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1048,8 +1095,9 @@ func storeItemsIntoDatabaseStartOrder(items []QueueObject) (faultyItems []QueueO
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1066,9 +1114,12 @@ func storeItemsIntoDatabaseStartOrder(items []QueueObject) (faultyItems []QueueO
 		}
 
 		// Create statement
+		zap.S().Debugf("[PRE]\tstoreItemsIntoDatabaseStartOrder")
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
+		zap.S().Debugf("[POST]\tstoreItemsIntoDatabaseStartOrder")
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1086,8 +1137,9 @@ func storeItemsIntoDatabaseEndOrder(items []QueueObject) (faultyItems []QueueObj
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1107,6 +1159,7 @@ func storeItemsIntoDatabaseEndOrder(items []QueueObject) (faultyItems []QueueObj
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1124,8 +1177,9 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []QueueObject) (faultyIt
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1145,6 +1199,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []QueueObject) (faultyIt
 		_, err = stmt.Exec(pt.ComponentID, pt.Activity, pt.TimestampMs)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1162,8 +1217,9 @@ func modifyStateInDatabase(items []QueueObject) (faultyItems []QueueObject, err 
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1257,8 +1313,9 @@ func deleteShiftInDatabaseById(items []QueueObject) (faultyItems []QueueObject, 
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1278,6 +1335,7 @@ func deleteShiftInDatabaseById(items []QueueObject) (faultyItems []QueueObject, 
 		_, err = stmt.Exec(pt.ShiftId)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1295,8 +1353,9 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []QueueObject) (faultyItem
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1316,6 +1375,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []QueueObject) (faultyItem
 		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStamp)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
+			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1333,8 +1393,9 @@ func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []Que
 	}
 
 	defer func() {
-		err = deferCallback(txn)
-		if err != nil {
+		errx := deferCallback(txn, err)
+		if errx != nil {
+			err = errx
 			return
 		}
 	}()
@@ -1361,6 +1422,7 @@ func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []Que
 
 				if err != nil {
 					faultyItems = append(faultyItems, item)
+					zap.S().Debugf("Got an error before err = nil: %s", err)
 					err = nil
 					continue
 				}
@@ -1370,6 +1432,7 @@ func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []Que
 
 				if err != nil {
 					faultyItems = append(faultyItems, item)
+					zap.S().Debugf("Got an error before err = nil: %s", err)
 					err = nil
 					continue
 				}
@@ -1382,6 +1445,7 @@ func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []Que
 
 				if err != nil {
 					faultyItems = append(faultyItems, item)
+					zap.S().Debugf("Got an error before err = nil: %s", err)
 					err = nil
 					continue
 				}

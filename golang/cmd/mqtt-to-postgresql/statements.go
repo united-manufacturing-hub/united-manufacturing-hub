@@ -125,7 +125,7 @@ func newStatementRegistry() *statementRegistry {
 			FROM (
 				SELECT *, sum(count) OVER (ORDER BY timestamp DESC) AS running_total
 				FROM countTable
-				WHERE timestamp < $1 AND timestamp > ($1::TIMESTAMP - INTERVAL '1 DAY') AND asset_id = $2
+				WHERE timestamp < to_timestamp($1/1000) AND timestamp > (to_timestamp($1/1000)::TIMESTAMP - INTERVAL '1 DAY') AND asset_id = $2
 			) t
 			WHERE running_total <= $3)
 		;`),
