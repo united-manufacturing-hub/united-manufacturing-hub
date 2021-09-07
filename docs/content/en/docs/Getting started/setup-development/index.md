@@ -7,9 +7,9 @@ description: >
 ---
 
 There are three options to setup a development environment:
-1. using a seperate device in combination with k3OS and our installation script (preferred)
-2. using [minikube](https://kubernetes.io/en/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack)
-3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps)
+1. using a seperate device in combination with k3OS and our installation script (preferred). This requires an external device and is a fully automated installation.
+2. using [minikube](https://kubernetes.io/en/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack). This method allows you to install the stack on your device and is semi-automated.
+3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps). This can be executed either on an external device or on your device.
 
 **The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.**
 
@@ -19,7 +19,9 @@ Note: this content is also available in a presence workshop with an experienced 
 
 ### Prerequisites
 
-- a edge device with x86 architecture. We recommend using the [K300 from OnLogic](https://www.onlogic.com/eu-en/k300/)
+{{< imgproc prerequisites_k3os.png Fit "1280x500" >}}This installation methods requires some previous setup{{< /imgproc >}}
+
+- an edge device with x86 architecture. We recommend using the [K300 from OnLogic](https://www.onlogic.com/eu-en/k300/)
 - the [latest version of k3OS](https://github.com/rancher/k3os/releases/) [^versioning] installed on a bootable USB-stick [^flash-usb]. 
 - a computer with SSH / SFTP client [^SSH-client] and [Lens](https://k8slens.dev/) (for accessing the Kubernetes cluster) installed. We recommend a laptop with an Ethernet port or with an Ethernet adapter. 
 - local LAN (with DHCP) available via atleast two Ethernet cables and access to the internet.[^network-setup].
@@ -48,7 +50,7 @@ This process takes around 15 - 20 minutes depending on your internet connection 
 
 #### Getting access to the device
 
-To verify whether the installation worked and access [Grafana] (the dashboard) and [Node-RED], we will first enable SSH via password authentification, fetch the login details for [Kubernetes] and then login via [Lens].
+To verify whether the installation worked and to access [Grafana] (the dashboard) and [Node-RED], we will first enable SSH via password authentification, fetch the login details for [Kubernetes] and then login via [Lens].
 
 [Grafana]: https://grafana.com/
 [Node-RED]: https://nodered.org/
@@ -85,6 +87,9 @@ For production environments we recommend using a certificate to authenticate, wh
 
 Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr`. 
 
+Username: `rancher`
+Password: `rancher`
+
 #### Step 4: Getting Kubernetes credentials
 
 Execute `cat /etc/rancher/k3s/k3s.yaml` in your SSH session on your laptop  to retrieve the Kubernetes credentials. Copy the content of the result into your clipboard.
@@ -93,7 +98,7 @@ Execute `cat /etc/rancher/k3s/k3s.yaml` in your SSH session on your laptop  to r
 
 {{< imgproc k3s_secret_2.png Fit "1280x500" >}}Copy the content{{< /imgproc >}}
 
-Connect with the edge device and the Kubernetes credentials in your clipboard.
+Connect with the edge device using the software [Lens] and the Kubernetes credentials from your clipboard.
 
 {{< imgproc k3s_secret_3.png Fit "1280x500" >}}Add a new cluster in Lens{{< /imgproc >}}
 {{< imgproc k3s_secret_4.png Fit "1280x500" >}}Select `Paste as text`{{< /imgproc >}}
