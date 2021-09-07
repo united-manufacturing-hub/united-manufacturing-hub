@@ -23,7 +23,7 @@ import logging
 # Import self-written modules
 from cameras import GenICam
 from cameras import DummyCamera
-from trigger import MqttTrigger,ContinuousTrigger
+from trigger import MqttTrigger, ContinuousTrigger
 
 IMAGE_PATH = os.environ.get('IMAGE_PATH', None)
 
@@ -39,11 +39,11 @@ CYCLE_TIME = float(os.environ.get('CYCLE_TIME', 10.0))
 
 ## CAMERA SETTINGS
 CAMERA_INTERFACE = os.environ.get('CAMERA_INTERFACE')
-MAC_ADDRESS = os.environ.get('MAC_ADDRESS','')
-TRANSMITTER_ID = os.environ.get('CUBE_TRANSMITTERID','')
+MAC_ADDRESS = os.environ.get('MAC_ADDRESS', '')
+TRANSMITTER_ID = os.environ.get('CUBE_TRANSMITTERID', '')
 
-MQTT_TOPIC_TRIGGER = "ia/trigger/"+TRANSMITTER_ID+"/"+MAC_ADDRESS
-MQTT_TOPIC_IMAGE = "ia/rawImage/"+TRANSMITTER_ID+"/"+MAC_ADDRESS
+MQTT_TOPIC_TRIGGER = "ia/trigger/" + TRANSMITTER_ID + "/" + MAC_ADDRESS
+MQTT_TOPIC_IMAGE = "ia/rawImage/" + TRANSMITTER_ID + "/" + MAC_ADDRESS
 
 # GenICam settings
 DEFAULT_GENTL_PRODUCER_PATH = os.environ.get('DEFAULT_GENTL_PRODUCER_PATH', '/app/assets/producer_files')
@@ -84,14 +84,13 @@ if __name__ == "__main__":
     logging.debug("Set image width: " + str(IMAGE_WIDTH))
     logging.debug("Set image height: " + str(IMAGE_HEIGHT))
 
-    #detect available cti files as camera producers
+    # detect available cti files as camera producers
     cti_file_list = []
-    for name in glob.glob(str(DEFAULT_GENTL_PRODUCER_PATH)+'/**/*.cti', recursive=True):
-
+    for name in glob.glob(str(DEFAULT_GENTL_PRODUCER_PATH) + '/**/*.cti', recursive=True):
         cti_file_list.append(str(name))
 
-    #if no cti files are found, log error and exit program
-    if len(cti_file_list)==0:
+    # if no cti files are found, log error and exit program
+    if len(cti_file_list) == 0:
         logging.error("No producer file discovered")
         exit(1)
 
@@ -99,20 +98,23 @@ if __name__ == "__main__":
     if CAMERA_INTERFACE == "DummyCamera":
         cam = DummyCamera(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, 0, image_storage_path=IMAGE_PATH)
     elif CAMERA_INTERFACE == "GenICam":
-        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH, exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO)
-    else: 
+        cam = GenICam(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH,
+                      image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH,
+                      exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO)
+    else:
         # Stop system, not possible to run with this settings
-        sys.exit("Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
+        sys.exit(
+            "Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
 
     # Check trigger type and use appropriate instance of the
     #   trigger classes
     if TRIGGER == "Continuous":
         # Never jumps out of the processes of the instance
-        ContinuousTrigger(cam,CAMERA_INTERFACE,CYCLE_TIME)
+        ContinuousTrigger(cam, CAMERA_INTERFACE, CYCLE_TIME)
     elif TRIGGER == "MQTT":
         # Starts an asynchroneous process for working with 
         #   the received mqtt data
-        trigger = MqttTrigger(cam,CAMERA_INTERFACE,ACQUISITION_DELAY,MQTT_HOST,MQTT_PORT,MQTT_TOPIC_TRIGGER)
+        trigger = MqttTrigger(cam, CAMERA_INTERFACE, ACQUISITION_DELAY, MQTT_HOST, MQTT_PORT, MQTT_TOPIC_TRIGGER)
 
         # Run forever to stay connected 
         while True:
@@ -121,4 +123,5 @@ if __name__ == "__main__":
             logging.debug("Still running.")
     else:
         # Stop system, not possible to run with this setting
-        sys.exit("Environment Error: TRIGGER not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
+        sys.exit(
+            "Environment Error: TRIGGER not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
