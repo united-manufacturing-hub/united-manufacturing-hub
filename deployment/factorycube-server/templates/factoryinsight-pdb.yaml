@@ -1,7 +1,7 @@
 {{- if .Values.factoryinsight.enabled -}}
 {{- if .Values.factoryinsight.pdb.enabled -}}
 
-apiVersion: policy/v1
+apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-server.fullname" . }}-factoryinsight-pdb

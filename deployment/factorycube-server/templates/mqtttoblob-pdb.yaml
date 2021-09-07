@@ -1,7 +1,7 @@
 {{- if .Values.mqtttoblob.enabled -}}
 {{- if .Values.mqtttoblob.pdb.enabled -}}
 
-apiVersion: policy/v1
+apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-server.fullname" . }}-mqtttoblob-pdb
