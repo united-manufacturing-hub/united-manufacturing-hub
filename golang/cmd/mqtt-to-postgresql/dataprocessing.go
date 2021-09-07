@@ -7,18 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/beeker1121/goque"
-
 	"go.uber.org/zap"
 )
 
 type stateQueue struct {
 	DBAssetID   uint32
 	State       uint32
-	TimestampMs uint64
+	TimestampMs uint32
 }
 type state struct {
 	State       uint32 `json:"state"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 }
 
 // ProcessStateData processes an incoming state message
@@ -58,12 +57,12 @@ type countQueue struct {
 	DBAssetID   uint32
 	Count       uint32
 	Scrap       uint32
-	TimestampMs uint64
+	TimestampMs uint32
 }
 type count struct {
 	Count       uint32 `json:"count"`
 	Scrap       uint32 `json:"scrap"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 }
 
 // ProcessCountData processes an incoming count message
@@ -108,11 +107,11 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 type scrapCountQueue struct {
 	DBAssetID   uint32
 	Scrap       uint32
-	TimestampMs uint64
+	TimestampMs uint32
 }
 type scrapCount struct {
 	Scrap       uint32 `json:"scrap"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 }
 
 // ProcessScrapCountData processes an incoming scrapCount message
@@ -149,12 +148,12 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 
 type addShiftQueue struct {
 	DBAssetID      uint32
-	TimestampMs    uint64
-	TimestampMsEnd uint64
+	TimestampMs    uint32
+	TimestampMsEnd uint32
 }
 type addShift struct {
-	TimestampMs    uint64 `json:"timestamp_ms"`
-	TimestampMsEnd uint64 `json:"timestamp_ms_end"`
+	TimestampMs    uint32 `json:"timestamp_ms"`
+	TimestampMsEnd uint32 `json:"timestamp_ms_end"`
 }
 
 // ProcessAddShift adds a new shift to the database
@@ -190,13 +189,13 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 
 type addMaintenanceActivityQueue struct {
 	DBAssetID     uint32
-	TimestampMs   uint64
+	TimestampMs   uint32
 	ComponentName string
 	Activity      int32
 	ComponentID   int32
 }
 type addMaintenanceActivity struct {
-	TimestampMs   uint64 `json:"timestamp_ms"`
+	TimestampMs   uint32 `json:"timestamp_ms"`
 	ComponentName string `json:"component"`
 	Activity      int32  `json:"activity"`
 }
@@ -242,15 +241,15 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 
 type uniqueProductQueue struct {
 	DBAssetID                  uint32
-	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
-	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
+	BeginTimestampMs           uint32 `json:"begin_timestamp_ms"`
+	EndTimestampMs             uint32 `json:"end_timestamp_ms"`
 	ProductID                  int32  `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 type uniqueProduct struct {
-	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
-	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
+	BeginTimestampMs           uint32 `json:"begin_timestamp_ms"`
+	EndTimestampMs             uint32 `json:"end_timestamp_ms"`
 	ProductName                string `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
@@ -436,11 +435,11 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 
 type startOrderQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64
+	TimestampMs uint32
 	OrderName   string
 }
 type startOrder struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 	OrderName   string `json:"order_id"`
 }
 
@@ -477,11 +476,11 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 
 type endOrderQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64
+	TimestampMs uint32
 	OrderName   string
 }
 type endOrder struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 	OrderName   string `json:"order_id"`
 }
 
@@ -518,7 +517,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 
 type recommendationStruct struct {
 	UID                  string
-	TimestampMs          uint64 `json:"timestamp_ms"`
+	TimestampMs          uint32 `json:"timestamp_ms"`
 	Customer             string
 	Location             string
 	Asset                string
@@ -557,14 +556,14 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 
 type processValueQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64
+	TimestampMs uint32
 	Name        string
 	Value       int32
 }
 
 type processValueFloat64Queue struct {
 	DBAssetID   uint32
-	TimestampMs uint64
+	TimestampMs uint32
 	Name        string
 	Value       float64
 }
@@ -586,7 +585,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 	m := parsedPayload.(map[string]interface{})
 
 	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
-		timestampMs, ok := val.(uint64)
+		timestampMs, ok := val.(uint32)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
 			if !ok2 {
@@ -597,7 +596,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 				zap.S().Errorf("Timestamp is negative !", payload, val)
 				return nil
 			}
-			timestampMs = uint64(timestampMsFloat)
+			timestampMs = uint32(timestampMsFloat)
 		}
 
 		// loop through map
@@ -658,14 +657,14 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 
 type productTagQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64  `json:"timestamp_ms"`
+	TimestampMs uint32  `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
 	Value       float64 `json:"value"`
 }
 
 type productTag struct {
-	TimestampMs uint64  `json:"timestamp_ms"`
+	TimestampMs uint32  `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
 	Value       float64 `json:"value"`
@@ -706,14 +705,14 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 
 type productTagStringQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
 }
 
 type productTagString struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
@@ -754,13 +753,13 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 
 type addParentToChildQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
 }
 
 type addParentToChild struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
+	TimestampMs uint32 `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
 }
@@ -799,14 +798,14 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 
 type modifyStateQueue struct {
 	DBAssetID        uint32
-	StartTimeStampMs uint64
-	EndTimeStampMs   uint64
+	StartTimeStampMs uint32
+	EndTimeStampMs   uint32
 	NewState         uint32
 }
 
 type modifyState struct {
-	StartTimeStampMs uint64 `json:"start_time_stamp"`
-	EndTimeStampMs   uint64 `json:"end_time_stamp"`
+	StartTimeStampMs uint32 `json:"start_time_stamp"`
+	EndTimeStampMs   uint32 `json:"end_time_stamp"`
 	NewState         uint32 `json:"new_state"`
 }
 
@@ -879,11 +878,11 @@ func ProcessDeleteShiftById(customerID string, location string, assetID string, 
 
 type deleteShiftByAssetIdAndBeginTimestampQueue struct {
 	DBAssetID        uint32
-	BeginTimeStampMs uint64 `json:"begin_time_stamp"`
+	BeginTimeStampMs uint32 `json:"begin_time_stamp"`
 }
 
 type deleteShiftByAssetIdAndBeginTimestamp struct {
-	BeginTimeStampMs uint64 `json:"begin_time_stamp"`
+	BeginTimeStampMs uint32 `json:"begin_time_stamp"`
 }
 
 func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
@@ -968,7 +967,7 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 
 type processValueStringQueue struct {
 	DBAssetID   uint32
-	TimestampMs uint64
+	TimestampMs uint32
 	Name        string
 	Value       string
 }
@@ -990,7 +989,7 @@ func ProcessProcessValueString(customerID string, location string, assetID strin
 	m := parsedPayload.(map[string]interface{})
 
 	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
-		timestampMs, ok := val.(uint64)
+		timestampMs, ok := val.(uint32)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
 			if !ok2 {
@@ -1001,7 +1000,7 @@ func ProcessProcessValueString(customerID string, location string, assetID strin
 				zap.S().Errorf("Timestamp is negative !", payload, val)
 				return nil
 			}
-			timestampMs = uint64(timestampMsFloat)
+			timestampMs = uint32(timestampMsFloat)
 		}
 
 		// loop through map

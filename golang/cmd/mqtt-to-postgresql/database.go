@@ -341,7 +341,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 				continue
 			}
 
-			timestamp := time.Unix(0, int64(pt.TimestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
+			timestamp := time.Unix(0, int64(pt.TimestampMs*uint32(1000000))).Format("2006-01-02T15:04:05.000Z")
 
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
@@ -429,7 +429,7 @@ func storeItemsIntoDatabaseProcessValueString(items []QueueObject) (faultyItems 
 				continue
 			}
 
-			timestamp := time.Unix(0, int64(pt.TimestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
+			timestamp := time.Unix(0, int64(pt.TimestampMs*uint32(1000000))).Format("2006-01-02T15:04:05.000Z")
 
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
@@ -516,7 +516,7 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 				continue
 			}
 
-			timestamp := time.Unix(0, int64(pt.TimestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
+			timestamp := time.Unix(0, int64(pt.TimestampMs*uint32(1000000))).Format("2006-01-02T15:04:05.000Z")
 
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
@@ -604,7 +604,7 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 				continue
 			}
 
-			timestamp := time.Unix(0, int64(pt.TimestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
+			timestamp := time.Unix(0, int64(pt.TimestampMs*uint32(1000000))).Format("2006-01-02T15:04:05.000Z")
 
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
 			if err != nil {
