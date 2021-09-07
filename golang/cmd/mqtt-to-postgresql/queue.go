@@ -10,6 +10,7 @@ import (
 const queuePath = "/data/queue"
 
 func setupQueue() (pq *goque.PriorityQueue, err error) {
+	zap.S().Debugf("setupQueue")
 	pq, err = goque.OpenPriorityQueue(queuePath, goque.ASC)
 	if err != nil {
 		zap.S().Errorf("Error opening queue", err)
@@ -19,6 +20,7 @@ func setupQueue() (pq *goque.PriorityQueue, err error) {
 }
 
 func closeQueue(pq *goque.PriorityQueue) (err error) {
+	zap.S().Debugf("closeQueue")
 	err = pq.Close()
 	if err != nil {
 		zap.S().Errorf("Error closing queue", err)
@@ -30,6 +32,7 @@ func closeQueue(pq *goque.PriorityQueue) (err error) {
 
 // processQueue get's item from queue and processes it, depending on prefix
 func processQueue(pg *goque.PriorityQueue) {
+	zap.S().Debugf("processQueue")
 	zap.S().Infof("Starting new processQueue worker")
 	for !shuttingDown {
 		if pg.Length() == 0 {
@@ -41,7 +44,24 @@ func processQueue(pg *goque.PriorityQueue) {
 
 		item, prio, err := GetNextItemInQueue(pg)
 		if err != nil {
-			err := ReInsertItemOnFailure(pg, item, prio)
+			if err != goque.ErrEmpty {
+				err = ReInsertItemOnFailure(pg, item, prio)
+				if err != nil {
+					zap.S().Errorf("Failed to re-queue failed item, shutting down !", err)
+					ShutdownApplicationGraceful()
+					return
+				}
+			} else {
+				err = nil
+			}
+		}
+
+		zap.S().Debugf("First item: %s", item.Prefix, item.Payload)
+
+		var items []QueueObject
+		items, err = GetNextItemsWithPrio(pg, prio)
+		if err != nil {
+			err = ReInsertItemOnFailure(pg, item, prio)
 			if err != nil {
 				zap.S().Errorf("Failed to re-queue failed item, shutting down !", err)
 				ShutdownApplicationGraceful()
@@ -49,17 +69,8 @@ func processQueue(pg *goque.PriorityQueue) {
 			}
 		}
 
-		var items []QueueObject
-		items, err = GetNextItemsWithPrio(pg, prio)
-		if err != nil {
-			err := ReInsertItemOnFailure(pg, item, prio)
-			if err != nil {
-				zap.S().Errorf("Failed to re-queue failed item, shutting down !", err)
-				ShutdownApplicationGraceful()
-				return
-			}
-		}
 		items = append(items, item)
+		zap.S().Debugf("Working with %d items", len(items))
 
 		var ListstoreItemsIntoDatabaseProcessValueFloat64 []QueueObject
 		var ListstoreItemsIntoDatabaseProcessValue []QueueObject
@@ -84,54 +95,56 @@ func processQueue(pg *goque.PriorityQueue) {
 		var ListdeleteShiftInDatabaseById []QueueObject
 		var ListdeleteShiftInDatabaseByAssetIdAndTimestamp []QueueObject
 
-		for _, item := range items {
+		for _, xitem := range items {
+			zap.S().Debugf("Switching: %s", xitem.Prefix)
 			switch item.Prefix {
 			case Prefix.ProcessValueFloat64:
-				ListstoreItemsIntoDatabaseProcessValueFloat64 = append(ListstoreItemsIntoDatabaseProcessValueFloat64, item)
+				ListstoreItemsIntoDatabaseProcessValueFloat64 = append(ListstoreItemsIntoDatabaseProcessValueFloat64, xitem)
 			case Prefix.ProcessValue:
-				ListstoreItemsIntoDatabaseProcessValue = append(ListstoreItemsIntoDatabaseProcessValue, item)
+				ListstoreItemsIntoDatabaseProcessValue = append(ListstoreItemsIntoDatabaseProcessValue, xitem)
 			case Prefix.ProcessValueString:
-				ListstoreItemsIntoDatabaseProcessValueString = append(ListstoreItemsIntoDatabaseProcessValueString, item)
+				ListstoreItemsIntoDatabaseProcessValueString = append(ListstoreItemsIntoDatabaseProcessValueString, xitem)
 			case Prefix.Count:
-				ListstoreItemsIntoDatabaseCount = append(ListstoreItemsIntoDatabaseCount, item)
+				zap.S().Debugf("Switched into Count")
+				ListstoreItemsIntoDatabaseCount = append(ListstoreItemsIntoDatabaseCount, xitem)
 			case Prefix.Recommendation:
-				ListstoreItemsIntoDatabaseRecommendation = append(ListstoreItemsIntoDatabaseRecommendation, item)
+				ListstoreItemsIntoDatabaseRecommendation = append(ListstoreItemsIntoDatabaseRecommendation, xitem)
 			case Prefix.State:
-				ListstoreItemsIntoDatabaseState = append(ListstoreItemsIntoDatabaseState, item)
+				ListstoreItemsIntoDatabaseState = append(ListstoreItemsIntoDatabaseState, xitem)
 			case Prefix.UniqueProduct:
-				ListstoreItemsIntoDatabaseUniqueProduct = append(ListstoreItemsIntoDatabaseUniqueProduct, item)
+				ListstoreItemsIntoDatabaseUniqueProduct = append(ListstoreItemsIntoDatabaseUniqueProduct, xitem)
 			case Prefix.ScrapCount:
-				ListstoreItemsIntoDatabaseScrapCount = append(ListstoreItemsIntoDatabaseScrapCount, item)
+				ListstoreItemsIntoDatabaseScrapCount = append(ListstoreItemsIntoDatabaseScrapCount, xitem)
 			case Prefix.AddShift:
-				ListstoreItemsIntoDatabaseShift = append(ListstoreItemsIntoDatabaseShift, item)
+				ListstoreItemsIntoDatabaseShift = append(ListstoreItemsIntoDatabaseShift, xitem)
 			case Prefix.UniqueProductScrap:
-				ListstoreItemsIntoDatabaseUniqueProductScrap = append(ListstoreItemsIntoDatabaseUniqueProductScrap, item)
+				ListstoreItemsIntoDatabaseUniqueProductScrap = append(ListstoreItemsIntoDatabaseUniqueProductScrap, xitem)
 			case Prefix.AddProduct:
-				ListstoreItemsIntoDatabaseAddProduct = append(ListstoreItemsIntoDatabaseAddProduct, item)
+				ListstoreItemsIntoDatabaseAddProduct = append(ListstoreItemsIntoDatabaseAddProduct, xitem)
 			case Prefix.AddOrder:
-				ListstoreItemsIntoDatabaseAddOrder = append(ListstoreItemsIntoDatabaseAddOrder, item)
+				ListstoreItemsIntoDatabaseAddOrder = append(ListstoreItemsIntoDatabaseAddOrder, xitem)
 			case Prefix.StartOrder:
-				ListstoreItemsIntoDatabaseStartOrder = append(ListstoreItemsIntoDatabaseStartOrder, item)
+				ListstoreItemsIntoDatabaseStartOrder = append(ListstoreItemsIntoDatabaseStartOrder, xitem)
 			case Prefix.EndOrder:
-				ListstoreItemsIntoDatabaseEndOrder = append(ListstoreItemsIntoDatabaseEndOrder, item)
+				ListstoreItemsIntoDatabaseEndOrder = append(ListstoreItemsIntoDatabaseEndOrder, xitem)
 			case Prefix.AddMaintenanceActivity:
-				ListstoreItemsIntoDatabaseAddMaintenanceActivity = append(ListstoreItemsIntoDatabaseAddMaintenanceActivity, item)
+				ListstoreItemsIntoDatabaseAddMaintenanceActivity = append(ListstoreItemsIntoDatabaseAddMaintenanceActivity, xitem)
 			case Prefix.ProductTag:
-				ListstoreItemsIntoDatabaseProductTag = append(ListstoreItemsIntoDatabaseProductTag, item)
+				ListstoreItemsIntoDatabaseProductTag = append(ListstoreItemsIntoDatabaseProductTag, xitem)
 			case Prefix.ProductTagString:
-				ListstoreItemsIntoDatabaseProductTagString = append(ListstoreItemsIntoDatabaseProductTagString, item)
+				ListstoreItemsIntoDatabaseProductTagString = append(ListstoreItemsIntoDatabaseProductTagString, xitem)
 			case Prefix.AddParentToChild:
-				ListstoreItemsIntoDatabaseAddParentToChild = append(ListstoreItemsIntoDatabaseAddParentToChild, item)
+				ListstoreItemsIntoDatabaseAddParentToChild = append(ListstoreItemsIntoDatabaseAddParentToChild, xitem)
 			case Prefix.ModifyState:
-				ListmodifyStateInDatabase = append(ListmodifyStateInDatabase, item)
+				ListmodifyStateInDatabase = append(ListmodifyStateInDatabase, xitem)
 			case Prefix.ModifyProducesPieces:
-				ListmodifyInDatabaseModifyCountAndScrap = append(ListmodifyInDatabaseModifyCountAndScrap, item)
+				ListmodifyInDatabaseModifyCountAndScrap = append(ListmodifyInDatabaseModifyCountAndScrap, xitem)
 			case Prefix.DeleteShiftById:
-				ListdeleteShiftInDatabaseById = append(ListdeleteShiftInDatabaseById, item)
+				ListdeleteShiftInDatabaseById = append(ListdeleteShiftInDatabaseById, xitem)
 			case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-				ListdeleteShiftInDatabaseByAssetIdAndTimestamp = append(ListdeleteShiftInDatabaseByAssetIdAndTimestamp, item)
+				ListdeleteShiftInDatabaseByAssetIdAndTimestamp = append(ListdeleteShiftInDatabaseByAssetIdAndTimestamp, xitem)
 			default:
-				zap.S().Errorf("GQ Item with invalid Prefix! ", item.Prefix)
+				zap.S().Errorf("GQ Item with invalid Prefix! ", xitem.Prefix)
 			}
 		}
 
@@ -159,28 +172,72 @@ func processQueue(pg *goque.PriorityQueue) {
 		var faultydeleteShiftInDatabaseById []QueueObject
 		var faultydeleteShiftInDatabaseByAssetIdAndTimestamp []QueueObject
 
-		faultystoreItemsIntoDatabaseProcessValueFloat64, processError = storeItemsIntoDatabaseProcessValueFloat64(ListstoreItemsIntoDatabaseProcessValueFloat64)
-		faultystoreItemsIntoDatabaseProcessValue, processError = storeItemsIntoDatabaseProcessValue(ListstoreItemsIntoDatabaseProcessValue)
-		faultystoreItemsIntoDatabaseProcessValueString, processError = storeItemsIntoDatabaseProcessValueString(ListstoreItemsIntoDatabaseProcessValueString)
-		faultystoreItemsIntoDatabaseCount, processError = storeItemsIntoDatabaseCount(ListstoreItemsIntoDatabaseCount)
-		faultystoreItemsIntoDatabaseRecommendation, processError = storeItemsIntoDatabaseRecommendation(ListstoreItemsIntoDatabaseRecommendation)
-		faultystoreItemsIntoDatabaseState, processError = storeItemsIntoDatabaseState(ListstoreItemsIntoDatabaseState)
-		faultystoreItemsIntoDatabaseUniqueProduct, processError = storeItemsIntoDatabaseUniqueProduct(ListstoreItemsIntoDatabaseUniqueProduct)
-		faultystoreItemsIntoDatabaseScrapCount, processError = storeItemsIntoDatabaseScrapCount(ListstoreItemsIntoDatabaseScrapCount)
-		faultystoreItemsIntoDatabaseShift, processError = storeItemsIntoDatabaseShift(ListstoreItemsIntoDatabaseShift)
-		faultystoreItemsIntoDatabaseUniqueProductScrap, processError = storeItemsIntoDatabaseUniqueProductScrap(ListstoreItemsIntoDatabaseUniqueProductScrap)
-		faultystoreItemsIntoDatabaseAddProduct, processError = storeItemsIntoDatabaseAddProduct(ListstoreItemsIntoDatabaseAddProduct)
-		faultystoreItemsIntoDatabaseAddOrder, processError = storeItemsIntoDatabaseAddOrder(ListstoreItemsIntoDatabaseAddOrder)
-		faultystoreItemsIntoDatabaseStartOrder, processError = storeItemsIntoDatabaseStartOrder(ListstoreItemsIntoDatabaseStartOrder)
-		faultystoreItemsIntoDatabaseEndOrder, processError = storeItemsIntoDatabaseEndOrder(ListstoreItemsIntoDatabaseEndOrder)
-		faultystoreItemsIntoDatabaseAddMaintenanceActivity, processError = storeItemsIntoDatabaseAddMaintenanceActivity(ListstoreItemsIntoDatabaseAddMaintenanceActivity)
-		faultystoreItemsIntoDatabaseProductTag, processError = storeItemsIntoDatabaseProductTag(ListstoreItemsIntoDatabaseProductTag)
-		faultystoreItemsIntoDatabaseProductTagString, processError = storeItemsIntoDatabaseProductTagString(ListstoreItemsIntoDatabaseProductTagString)
-		faultystoreItemsIntoDatabaseAddParentToChild, processError = storeItemsIntoDatabaseAddParentToChild(ListstoreItemsIntoDatabaseAddParentToChild)
-		faultymodifyStateInDatabase, processError = modifyStateInDatabase(ListmodifyStateInDatabase)
-		faultymodifyInDatabaseModifyCountAndScrap, processError = modifyInDatabaseModifyCountAndScrap(ListmodifyInDatabaseModifyCountAndScrap)
-		faultydeleteShiftInDatabaseById, processError = deleteShiftInDatabaseById(ListdeleteShiftInDatabaseById)
-		faultydeleteShiftInDatabaseByAssetIdAndTimestamp, processError = deleteShiftInDatabaseByAssetIdAndTimestamp(ListdeleteShiftInDatabaseByAssetIdAndTimestamp)
+		if len(ListstoreItemsIntoDatabaseProcessValueFloat64) > 0 {
+			faultystoreItemsIntoDatabaseProcessValueFloat64, processError = storeItemsIntoDatabaseProcessValueFloat64(ListstoreItemsIntoDatabaseProcessValueFloat64)
+		}
+		if len(ListstoreItemsIntoDatabaseProcessValue) > 0 {
+			faultystoreItemsIntoDatabaseProcessValue, processError = storeItemsIntoDatabaseProcessValue(ListstoreItemsIntoDatabaseProcessValue)
+		}
+		if len(ListstoreItemsIntoDatabaseProcessValueString) > 0 {
+			faultystoreItemsIntoDatabaseProcessValueString, processError = storeItemsIntoDatabaseProcessValueString(ListstoreItemsIntoDatabaseProcessValueString)
+		}
+		if len(ListstoreItemsIntoDatabaseCount) > 0 {
+			faultystoreItemsIntoDatabaseCount, processError = storeItemsIntoDatabaseCount(ListstoreItemsIntoDatabaseCount)
+		}
+		if len(ListstoreItemsIntoDatabaseRecommendation) > 0 {
+			faultystoreItemsIntoDatabaseRecommendation, processError = storeItemsIntoDatabaseRecommendation(ListstoreItemsIntoDatabaseRecommendation)
+		}
+		if len(ListstoreItemsIntoDatabaseState) > 0 {
+			faultystoreItemsIntoDatabaseState, processError = storeItemsIntoDatabaseState(ListstoreItemsIntoDatabaseState)
+		}
+		if len(ListstoreItemsIntoDatabaseUniqueProduct) > 0 {
+			faultystoreItemsIntoDatabaseUniqueProduct, processError = storeItemsIntoDatabaseUniqueProduct(ListstoreItemsIntoDatabaseUniqueProduct)
+		}
+		if len(ListstoreItemsIntoDatabaseScrapCount) > 0 {
+			faultystoreItemsIntoDatabaseScrapCount, processError = storeItemsIntoDatabaseScrapCount(ListstoreItemsIntoDatabaseScrapCount)
+		}
+		if len(ListstoreItemsIntoDatabaseShift) > 0 {
+			faultystoreItemsIntoDatabaseShift, processError = storeItemsIntoDatabaseShift(ListstoreItemsIntoDatabaseShift)
+		}
+		if len(ListstoreItemsIntoDatabaseUniqueProductScrap) > 0 {
+			faultystoreItemsIntoDatabaseUniqueProductScrap, processError = storeItemsIntoDatabaseUniqueProductScrap(ListstoreItemsIntoDatabaseUniqueProductScrap)
+		}
+		if len(ListstoreItemsIntoDatabaseAddProduct) > 0 {
+			faultystoreItemsIntoDatabaseAddProduct, processError = storeItemsIntoDatabaseAddProduct(ListstoreItemsIntoDatabaseAddProduct)
+		}
+		if len(ListstoreItemsIntoDatabaseAddOrder) > 0 {
+			faultystoreItemsIntoDatabaseAddOrder, processError = storeItemsIntoDatabaseAddOrder(ListstoreItemsIntoDatabaseAddOrder)
+		}
+		if len(ListstoreItemsIntoDatabaseStartOrder) > 0 {
+			faultystoreItemsIntoDatabaseStartOrder, processError = storeItemsIntoDatabaseStartOrder(ListstoreItemsIntoDatabaseStartOrder)
+		}
+		if len(ListstoreItemsIntoDatabaseEndOrder) > 0 {
+			faultystoreItemsIntoDatabaseEndOrder, processError = storeItemsIntoDatabaseEndOrder(ListstoreItemsIntoDatabaseEndOrder)
+		}
+		if len(ListstoreItemsIntoDatabaseAddMaintenanceActivity) > 0 {
+			faultystoreItemsIntoDatabaseAddMaintenanceActivity, processError = storeItemsIntoDatabaseAddMaintenanceActivity(ListstoreItemsIntoDatabaseAddMaintenanceActivity)
+		}
+		if len(ListstoreItemsIntoDatabaseProductTag) > 0 {
+			faultystoreItemsIntoDatabaseProductTag, processError = storeItemsIntoDatabaseProductTag(ListstoreItemsIntoDatabaseProductTag)
+		}
+		if len(ListstoreItemsIntoDatabaseProductTagString) > 0 {
+			faultystoreItemsIntoDatabaseProductTagString, processError = storeItemsIntoDatabaseProductTagString(ListstoreItemsIntoDatabaseProductTagString)
+		}
+		if len(ListstoreItemsIntoDatabaseAddParentToChild) > 0 {
+			faultystoreItemsIntoDatabaseAddParentToChild, processError = storeItemsIntoDatabaseAddParentToChild(ListstoreItemsIntoDatabaseAddParentToChild)
+		}
+		if len(ListmodifyStateInDatabase) > 0 {
+			faultymodifyStateInDatabase, processError = modifyStateInDatabase(ListmodifyStateInDatabase)
+		}
+		if len(ListmodifyInDatabaseModifyCountAndScrap) > 0 {
+			faultymodifyInDatabaseModifyCountAndScrap, processError = modifyInDatabaseModifyCountAndScrap(ListmodifyInDatabaseModifyCountAndScrap)
+		}
+		if len(ListdeleteShiftInDatabaseById) > 0 {
+			faultydeleteShiftInDatabaseById, processError = deleteShiftInDatabaseById(ListdeleteShiftInDatabaseById)
+		}
+		if len(ListdeleteShiftInDatabaseByAssetIdAndTimestamp) > 0 {
+			faultydeleteShiftInDatabaseByAssetIdAndTimestamp, processError = deleteShiftInDatabaseByAssetIdAndTimestamp(ListdeleteShiftInDatabaseByAssetIdAndTimestamp)
+		}
 
 		var faulty []QueueObject
 		faulty = append(faulty, faultystoreItemsIntoDatabaseProcessValueFloat64...)
@@ -230,6 +287,7 @@ type QueueObject struct {
 
 // ReInsertItemOnFailure This functions re-inserts an item with lowered priority
 func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uint8) (err error) {
+	zap.S().Debugf("ReInsertItemOnFailure", object, prio)
 	if prio < 255 {
 		prio += 1
 		err = addItemWithPriorityToQueue(pg, object, prio)
@@ -255,6 +313,7 @@ func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uin
 
 // GetNextItemInQueue retrieves the next item in queue
 func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, err error) {
+	zap.S().Debugf("GetNextItemInQueue")
 	priorityItem, err := pg.Dequeue()
 	if err != nil {
 		return QueueObject{}, 0, err
@@ -269,11 +328,13 @@ func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, 
 }
 
 func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObject, err error) {
+	zap.S().Debugf("GetNextItemsWithPrio", prio)
 	for i := 0; i < 1000; i++ {
 		var item *goque.PriorityItem
 		item, err = pg.DequeueByPriority(prio)
 		if err != nil {
 			if err == goque.ErrEmpty {
+				err = nil
 				break
 			} else {
 				zap.S().Errorf("Failed to dequeue items, shutting down", err)
@@ -315,6 +376,7 @@ func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []by
 
 // reportQueueLength prints the current Queue length
 func reportQueueLength(pg *goque.PriorityQueue) {
+	zap.S().Debugf("reportQueueLength")
 	for true {
 		zap.S().Infof("Current elements in queue: %d", pg.Length())
 		time.Sleep(10 * time.Second)

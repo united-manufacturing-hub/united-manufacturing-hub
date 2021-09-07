@@ -1,8 +1,11 @@
 package main
 
+import "go.uber.org/zap"
+
 var Prefix = newPrefixRegistry()
 
 func newPrefixRegistry() *prefixRegistry {
+	zap.S().Debugf("newPrefixRegistry")
 	return &prefixRegistry{
 		ProcessValueFloat64:                   "processValueFloat64",
 		ProcessValue:                          "processValue",

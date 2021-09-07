@@ -81,6 +81,7 @@ func (r statementRegistry) Shutdown() (err error) {
 }
 
 func newStatementRegistry() *statementRegistry {
+	zap.S().Debugf("newStatementRegistry")
 	return &statementRegistry{
 		InsertIntoRecommendationTable: prep(`
 		INSERT INTO recommendationTable (timestamp, uid, recommendationType, enabled, recommendationValues, recommendationTextEN, recommendationTextDE, diagnoseTextEN, diagnoseTextDE) 
@@ -213,6 +214,7 @@ func newStatementRegistry() *statementRegistry {
 }
 
 func prep(query string) *sql.Stmt {
+	zap.S().Debugf("prep")
 	if db == nil {
 		panic("Attempting to prepare statement before opening database !")
 	}

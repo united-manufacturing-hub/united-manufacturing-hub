@@ -13,15 +13,16 @@ import (
 type stateQueue struct {
 	DBAssetID   int
 	State       int
-	TimestampMs int64
+	TimestampMs int
 }
 type state struct {
-	State       int   `json:"state"`
-	TimestampMs int64 `json:"timestamp_ms"`
+	State       int `json:"state"`
+	TimestampMs int `json:"timestamp_ms"`
 }
 
 // ProcessStateData processes an incoming state message
 func ProcessStateData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessStateData")
 	var parsedPayload state
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -55,16 +56,17 @@ type countQueue struct {
 	DBAssetID   int
 	Count       int
 	Scrap       int
-	TimestampMs int64
+	TimestampMs int
 }
 type count struct {
-	Count       int   `json:"count"`
-	Scrap       int   `json:"scrap"`
-	TimestampMs int64 `json:"timestamp_ms"`
+	Count       int `json:"count"`
+	Scrap       int `json:"scrap"`
+	TimestampMs int `json:"timestamp_ms"`
 }
 
 // ProcessCountData processes an incoming count message
 func ProcessCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessCountData")
 	var parsedPayload count
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -104,15 +106,16 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 type scrapCountQueue struct {
 	DBAssetID   int
 	Scrap       int
-	TimestampMs int64
+	TimestampMs int
 }
 type scrapCount struct {
-	Scrap       int   `json:"scrap"`
-	TimestampMs int64 `json:"timestamp_ms"`
+	Scrap       int `json:"scrap"`
+	TimestampMs int `json:"timestamp_ms"`
 }
 
 // ProcessScrapCountData processes an incoming scrapCount message
 func ProcessScrapCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessScrapCountData")
 	var parsedPayload scrapCount
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -143,16 +146,17 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 
 type addShiftQueue struct {
 	DBAssetID      int
-	TimestampMs    int64
-	TimestampMsEnd int64
+	TimestampMs    int
+	TimestampMsEnd int
 }
 type addShift struct {
-	TimestampMs    int64 `json:"timestamp_ms"`
-	TimestampMsEnd int64 `json:"timestamp_ms_end"`
+	TimestampMs    int `json:"timestamp_ms"`
+	TimestampMsEnd int `json:"timestamp_ms_end"`
 }
 
 // ProcessAddShift adds a new shift to the database
 func ProcessAddShift(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessAddShift")
 	var parsedPayload addShift
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -182,19 +186,20 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 
 type addMaintenanceActivityQueue struct {
 	DBAssetID     int
-	TimestampMs   int64
+	TimestampMs   int
 	ComponentName string
 	Activity      int
 	ComponentID   int
 }
 type addMaintenanceActivity struct {
-	TimestampMs   int64  `json:"timestamp_ms"`
+	TimestampMs   int    `json:"timestamp_ms"`
 	ComponentName string `json:"component"`
 	Activity      int    `json:"activity"`
 }
 
 // ProcessAddMaintenanceActivity adds a new maintenance activity to the database
 func ProcessAddMaintenanceActivity(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessAddMaintenanceActivity")
 	var parsedPayload addMaintenanceActivity
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -233,15 +238,15 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 
 type uniqueProductQueue struct {
 	DBAssetID                  int
-	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64  `json:"end_timestamp_ms"`
+	BeginTimestampMs           int    `json:"begin_timestamp_ms"`
+	EndTimestampMs             int    `json:"end_timestamp_ms"`
 	ProductID                  int    `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 type uniqueProduct struct {
-	BeginTimestampMs           int64  `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64  `json:"end_timestamp_ms"`
+	BeginTimestampMs           int    `json:"begin_timestamp_ms"`
+	EndTimestampMs             int    `json:"end_timestamp_ms"`
 	ProductName                string `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
 	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
@@ -249,6 +254,7 @@ type uniqueProduct struct {
 
 // ProcessUniqueProduct adds a new uniqueProduct to the database
 func ProcessUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessUniqueProduct")
 	var parsedPayload uniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -297,6 +303,7 @@ type scrapUniqueProduct struct {
 
 // ProcessScrapUniqueProduct sets isScrap of a uniqueProduct to true
 func ProcessScrapUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessScrapUniqueProduct")
 	var parsedPayload scrapUniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -335,6 +342,7 @@ type addProduct struct {
 
 // ProcessAddProduct adds a new product to the database
 func ProcessAddProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessAddProduct")
 	var parsedPayload addProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -377,6 +385,7 @@ type addOrder struct {
 
 // ProcessAddOrder adds a new order without begin and end timestamp to the database
 func ProcessAddOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessAddOrder")
 	var parsedPayload addOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -417,16 +426,17 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 
 type startOrderQueue struct {
 	DBAssetID   int
-	TimestampMs int64
+	TimestampMs int
 	OrderName   string
 }
 type startOrder struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs int    `json:"timestamp_ms"`
 	OrderName   string `json:"order_id"`
 }
 
 // ProcessStartOrder starts an order by adding beginTimestamp
 func ProcessStartOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessStartOrder")
 	var parsedPayload startOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -456,16 +466,17 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 
 type endOrderQueue struct {
 	DBAssetID   int
-	TimestampMs int64
+	TimestampMs int
 	OrderName   string
 }
 type endOrder struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs int    `json:"timestamp_ms"`
 	OrderName   string `json:"order_id"`
 }
 
 // ProcessEndOrder starts an order by adding endTimestamp
 func ProcessEndOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessEndOrder")
 	var parsedPayload endOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -495,7 +506,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 
 type recommendationStruct struct {
 	UID                  string
-	TimestampMs          int64 `json:"timestamp_ms"`
+	TimestampMs          int `json:"timestamp_ms"`
 	Customer             string
 	Location             string
 	Asset                string
@@ -510,6 +521,7 @@ type recommendationStruct struct {
 
 // ProcessRecommendationData processes an incoming count message
 func ProcessRecommendationData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessRecommendationData")
 	var parsedPayload recommendationStruct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -532,20 +544,21 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 
 type processValueQueue struct {
 	DBAssetID   int
-	TimestampMs int64
+	TimestampMs int
 	Name        string
 	Value       int
 }
 
 type processValueFloat64Queue struct {
 	DBAssetID   int
-	TimestampMs int64
+	TimestampMs int
 	Name        string
 	Value       float64
 }
 
 // ProcessProcessValueData processes an incoming processValue message
 func ProcessProcessValueData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessProcessValueData")
 	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -560,14 +573,14 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 	m := parsedPayload.(map[string]interface{})
 
 	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
-		timestampMs, ok := val.(int64)
+		timestampMs, ok := val.(int)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
 			if !ok2 {
-				zap.S().Errorf("Timestamp not int64 nor float64", payload, val)
+				zap.S().Errorf("Timestamp not int nor float64", payload, val)
 				return
 			}
-			timestampMs = int64(timestampMsFloat)
+			timestampMs = int(timestampMsFloat)
 		}
 
 		// loop through map
@@ -627,14 +640,14 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 
 type productTagQueue struct {
 	DBAssetID   int
-	TimestampMs int64   `json:"timestamp_ms"`
+	TimestampMs int     `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
 	Value       float64 `json:"value"`
 }
 
 type productTag struct {
-	TimestampMs int64   `json:"timestamp_ms"`
+	TimestampMs int     `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
 	Value       float64 `json:"value"`
@@ -642,6 +655,7 @@ type productTag struct {
 
 // ProcessProductTag adds a new productTag to the database
 func ProcessProductTag(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessProductTag")
 	var parsedPayload productTag
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -673,14 +687,14 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 
 type productTagStringQueue struct {
 	DBAssetID   int
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs int    `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
 }
 
 type productTagString struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs int    `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
@@ -688,6 +702,7 @@ type productTagString struct {
 
 // ProcessProductTagString adds a new productTagString to the database
 func ProcessProductTagString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessProductTagString")
 	var parsedPayload productTagString
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -719,19 +734,20 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 
 type addParentToChildQueue struct {
 	DBAssetID   int
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs int    `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
 }
 
 type addParentToChild struct {
-	TimestampMs int64  `json:"timestamp_ms"`
+	TimestampMs int    `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
 }
 
 // ProcessAddParentToChild adds a new AddParentToChild to the database
 func ProcessAddParentToChild(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessAddParentToChild")
 	var parsedPayload addParentToChild
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -762,18 +778,19 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 
 type modifyStateQueue struct {
 	DBAssetID      int
-	StartTimeStamp int64
-	EndTimeStamp   int64
+	StartTimeStamp int
+	EndTimeStamp   int
 	NewState       int
 }
 
 type modifyState struct {
-	StartTimeStamp int64 `json:"start_time_stamp"`
-	EndTimeStamp   int64 `json:"end_time_stamp"`
-	NewState       int   `json:"new_state"`
+	StartTimeStamp int `json:"start_time_stamp"`
+	EndTimeStamp   int `json:"end_time_stamp"`
+	NewState       int `json:"new_state"`
 }
 
 func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessModifyState")
 	var parsedPayload modifyState
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -811,6 +828,7 @@ type deleteShiftById struct {
 }
 
 func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessDeleteShiftById")
 	var parsedPayload deleteShiftById
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -846,6 +864,7 @@ type deleteShiftByAssetIdAndBeginTimestamp struct {
 }
 
 func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessDeleteShiftByAssetIdAndBeginTime")
 	var parsedPayload deleteShiftByAssetIdAndBeginTimestamp
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -884,6 +903,7 @@ type modifyProducesPiece struct {
 }
 
 func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessModifyProducesPiece")
 
 	// pt.Scrap is -1, if not modified by user
 	// pt.Count is -1, if not modified by user
@@ -919,13 +939,14 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 
 type processValueStringQueue struct {
 	DBAssetID   int
-	TimestampMs int64
+	TimestampMs int
 	Name        string
 	Value       string
 }
 
 // ProcessProcessValueString adds a new processValueString to the database
 func ProcessProcessValueString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) {
+	zap.S().Debugf("ProcessProcessValueString")
 	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -940,14 +961,14 @@ func ProcessProcessValueString(customerID string, location string, assetID strin
 	m := parsedPayload.(map[string]interface{})
 
 	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
-		timestampMs, ok := val.(int64)
+		timestampMs, ok := val.(int)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
 			if !ok2 {
-				zap.S().Errorf("Timestamp not int64 nor float64", payload, val)
+				zap.S().Errorf("Timestamp not int nor float64", payload, val)
 				return
 			}
-			timestampMs = int64(timestampMsFloat)
+			timestampMs = int(timestampMsFloat)
 		}
 
 		// loop through map

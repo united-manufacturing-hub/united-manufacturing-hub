@@ -21,6 +21,7 @@ import (
 var globalPQ *goque.PriorityQueue
 
 func main() {
+	zap.S().Debugf("main")
 
 	// Setup logger and set as global
 	logger, _ := zap.NewDevelopment()
@@ -121,6 +122,7 @@ var shuttingDown = false
 
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
+	zap.S().Debugf("ShutdownApplicationGraceful")
 	shuttingDown = true
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
