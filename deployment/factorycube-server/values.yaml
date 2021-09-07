@@ -72,7 +72,7 @@ grafanaproxy:
   enabled: true  
   image:
     repository: unitedmanufacturinghub/grafana-proxy
-    tag: latest
+    #tag: latest
     pullPolicy: Always
   replicas: 1
   service:

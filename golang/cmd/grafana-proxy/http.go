@@ -84,7 +84,7 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 }
 
 func optionsCORSHAndler(c *gin.Context) {
-	fmt.Println("optionsCORSHAndler")
+	zap.S().Debugf("optionsCORSHAndler")
 	AddCorsHeaders(c)
 	c.Status(http.StatusOK)
 }
@@ -108,7 +108,7 @@ type getProxyRequestPath struct {
 }
 
 func handleProxyRequest(c *gin.Context, method string) {
-	fmt.Println("getProxyHandler")
+	zap.S().Debugf("getProxyHandler")
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get(tracingContext); ok {
@@ -139,7 +139,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 		return
 	}
 
-	fmt.Println(c.Request)
+	zap.S().Debugf("", c.Request)
 
 	// Switch to handle our services
 	switch getProxyRequestPath.Service {
@@ -182,7 +182,7 @@ func getProxyHandler(c *gin.Context) {
 }
 
 func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string) {
-	fmt.Println("HandleFactoryInsight")
+	zap.S().Debugf("HandleFactoryInsight")
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get(tracingContext); ok {
@@ -210,9 +210,9 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 		path = ""
 	}
 
-	fmt.Println("FactoryInsightBaseUrl: ", FactoryInsightBaseUrl)
-	fmt.Println("proxyUrl: ", proxyUrl)
-	fmt.Println("path: ", path)
+	zap.S().Debugf("FactoryInsightBaseUrl: ", FactoryInsightBaseUrl)
+	zap.S().Debugf("proxyUrl: ", proxyUrl)
+	zap.S().Debugf("path: ", path)
 
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s%s", FactoryInsightBaseUrl, proxyUrl, path))
@@ -312,29 +312,27 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		return
 	}
 	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
-	zap.S().Warnf("DoProxiedRequest")
 	DoProxiedRequest(c, err, u, sessionCookie, ak, method)
 }
 
 func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string) {
-	fmt.Println("DoProxiedRequest")
 	// Proxy request to backend
 	client := &http.Client{}
 
-	fmt.Println("Request URL: ", u.String())
+	zap.S().Debugf("Request URL: ", u.String())
 	//CORS request !
 	if u.String() == "" {
-		fmt.Println("CORS Answer")
+		zap.S().Debugf("CORS Answer")
 		c.Status(http.StatusOK)
 		_, err := c.Writer.Write([]byte("online"))
 		if err != nil {
-			fmt.Println("Failed to reply to CORS request")
+			zap.S().Debugf("Failed to reply to CORS request")
 			c.AbortWithError(http.StatusInternalServerError, err)
 		}
 	} else {
 		req, err := http.NewRequest(method, u.String(), nil)
 		if err != nil {
-			fmt.Println("Request error: ", err)
+			zap.S().Debugf("Request error: ", err)
 			return
 		}
 		// Add headers for backend
@@ -345,7 +343,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Println("Client.Do error: ", err)
+			zap.S().Debugf("Client.Do error: ", err)
 			return
 		}
 
@@ -361,8 +359,8 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 			log.Fatal(err)
 		}
 
-		fmt.Println("Backend answer:")
-		fmt.Println(string(bodyBytes))
+		zap.S().Debugf("Backend answer:")
+		zap.S().Debugf(string(bodyBytes))
 
 		c.Status(resp.StatusCode)
 

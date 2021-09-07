@@ -59,7 +59,7 @@ spec:
               value: NO_CERT
 
             - name: LOGGING_LEVEL
-              value: DEBUG
+              value: PRODUCTION
 
             - name: BROKER_URL
               value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
@@ -83,6 +83,15 @@ spec:
                 secretKeyRef:
                   name: factoryinput-secret
                   key: password
+
+            {{ $index := 1 }}
+            {{ range $customerName, $password := .Values.customers | default dict }}
+            - name: CUSTOMER_NAME_{{ $index }}
+              value: {{ $customerName }}
+            - name: CUSTOMER_PASSWORD_{{ $index }}
+              value: {{ $password }}
+              {{ $index = add $index 1 }}
+            {{ end }}
 
           volumeMounts:
             - name: {{ include "factorycube-server.fullname" . }}-factoryinput-data

@@ -17,7 +17,14 @@ var shutdownEnabled bool
 func main() {
 
 	// Setup logger and set as global
-	logger, _ := zap.NewDevelopment()
+	var logger *zap.Logger
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	switch logLevel {
+	case "DEVELOPMENT":
+		logger, _ = zap.NewDevelopment()
+	default:
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer func(logger *zap.Logger) {
 		err := logger.Sync()
@@ -25,10 +32,6 @@ func main() {
 			panic(err)
 		}
 	}(logger)
-
-	for i, s := range os.Environ() {
-		fmt.Println(i, s)
-	}
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")

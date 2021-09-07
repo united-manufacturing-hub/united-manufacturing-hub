@@ -50,10 +50,10 @@ func main() {
 	var logger *zap.Logger
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	switch logLevel {
-	case "PRODUCTION":
-		logger, _ = zap.NewProduction()
-	default:
+	case "DEVELOPMENT":
 		logger, _ = zap.NewDevelopment()
+	default:
+		logger, _ = zap.NewProduction()
 	}
 
 	zap.ReplaceGlobals(logger)
