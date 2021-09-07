@@ -275,11 +275,11 @@ func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObj
 		if err != nil {
 			if err == goque.ErrEmpty {
 				break
+			} else {
+				zap.S().Errorf("Failed to dequeue items, shutting down", err)
+				ShutdownApplicationGraceful()
+				return
 			}
-		} else {
-			zap.S().Errorf("Failed to dequeue items, shutting down", err)
-			ShutdownApplicationGraceful()
-			return
 		}
 		var qitem QueueObject
 		err = item.ToObjectFromJSON(&qitem)
