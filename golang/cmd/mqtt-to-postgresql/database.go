@@ -20,7 +20,7 @@ var isDryRun bool
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, sslmode string, dryRun string) {
-	zap.S().Debugf("SetupDB")
+
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PWDBName, sslmode)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
@@ -43,7 +43,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 
 // ShutdownDB closes all database connections
 func ShutdownDB() {
-	zap.S().Debugf("ShutdownDB")
+
 	err := statement.Shutdown()
 	if err != nil {
 		panic(err)
@@ -56,7 +56,7 @@ func ShutdownDB() {
 
 // PQErrorHandlingTransaction logs and handles postgresql errors in transactions
 func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (returnedErr error) {
-	zap.S().Debugf("PQErrorHandlingTransaction")
+
 	PQErrorHandling(sqlStatement, err)
 
 	if e := pgerror.UniqueViolation(err); e != nil {
@@ -79,7 +79,6 @@ func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (re
 
 // PQErrorHandling logs and handles postgresql errors
 func PQErrorHandling(sqlStatement string, err error) {
-	zap.S().Debugf("PQErrorHandling")
 
 	if e := pgerror.UniqueViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: UniqueViolation", err, sqlStatement)
@@ -94,7 +93,6 @@ func PQErrorHandling(sqlStatement string, err error) {
 }
 
 func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
-	zap.S().Debugf("deferCallback")
 
 	if errIn != nil {
 		zap.S().Debugf("Got error from callee: %s", errIn)
@@ -132,7 +130,7 @@ func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 
 // NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
 func NewNullInt64(i int64) sql.NullInt64 {
-	zap.S().Debugf("NewNullInt64")
+
 	if i == 0 {
 		return sql.NullInt64{}
 	}
@@ -144,7 +142,6 @@ func NewNullInt64(i int64) sql.NullInt64 {
 
 // GetAssetID gets the assetID from the database
 func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32) {
-	zap.S().Debugf("GetAssetID")
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -170,7 +167,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 
 // GetProductID gets the productID for a asset and a productName from the database
 func GetProductID(DBassetID uint32, productName string) (productID int32, err error) {
-	zap.S().Debugf("GetProductID")
+
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found", DBassetID, productName)
@@ -183,7 +180,6 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 
 // GetComponentID gets the componentID from the database
 func GetComponentID(assetID uint32, componentName string) (componentID int32) {
-	zap.S().Debugf("GetComponentID")
 
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
 	if err == sql.ErrNoRows {
@@ -196,7 +192,6 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32) {
 }
 
 func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error) {
-	zap.S().Debugf("GetUniqueProductID")
 
 	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
 	if !cacheHit { // data NOT found
@@ -213,7 +208,7 @@ func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error) {
 }
 
 func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32) {
-	zap.S().Debugf("GetLatestParentUniqueProductID")
+
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found", aid, assetID)
@@ -225,7 +220,7 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32) {
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
-	zap.S().Debugf("AddAssetIfNotExisting")
+
 	// Get from cache if possible
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
@@ -259,7 +254,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 }
 
 func storeItemsIntoDatabaseRecommendation(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseRecommendation")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -299,7 +294,7 @@ func storeItemsIntoDatabaseRecommendation(items []QueueObject) (faultyItems []Qu
 }
 
 func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseProcessValueFloat64")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -387,7 +382,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 }
 
 func storeItemsIntoDatabaseProcessValueString(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseProcessValueString")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -475,7 +470,7 @@ func storeItemsIntoDatabaseProcessValueString(items []QueueObject) (faultyItems 
 }
 
 func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseProcessValue")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -562,7 +557,7 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 }
 
 func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseCount")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -651,7 +646,7 @@ func storeItemsIntoDatabaseCount(items []QueueObject) (faultyItems []QueueObject
 }
 
 func storeItemsIntoDatabaseState(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseState")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -691,7 +686,7 @@ func storeItemsIntoDatabaseState(items []QueueObject) (faultyItems []QueueObject
 }
 
 func storeItemsIntoDatabaseScrapCount(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseScrapCount")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -733,7 +728,7 @@ func storeItemsIntoDatabaseScrapCount(items []QueueObject) (faultyItems []QueueO
 }
 
 func storeItemsIntoDatabaseUniqueProduct(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseUniqueProduct")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -773,7 +768,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []QueueObject) (faultyItems []Que
 }
 
 func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseProductTag")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -824,7 +819,7 @@ func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueO
 }
 
 func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseProductTagString")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -875,7 +870,7 @@ func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []
 }
 
 func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseAddParentToChild")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -927,7 +922,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []
 }
 
 func storeItemsIntoDatabaseShift(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseShift")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -967,7 +962,7 @@ func storeItemsIntoDatabaseShift(items []QueueObject) (faultyItems []QueueObject
 }
 
 func storeItemsIntoDatabaseUniqueProductScrap(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseUniqueProductScrap")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1007,7 +1002,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []QueueObject) (faultyItems 
 }
 
 func storeItemsIntoDatabaseAddProduct(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseAddProduct")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1047,7 +1042,7 @@ func storeItemsIntoDatabaseAddProduct(items []QueueObject) (faultyItems []QueueO
 }
 
 func storeItemsIntoDatabaseAddOrder(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseAddOrder")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1087,7 +1082,7 @@ func storeItemsIntoDatabaseAddOrder(items []QueueObject) (faultyItems []QueueObj
 }
 
 func storeItemsIntoDatabaseStartOrder(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseStartOrder")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1129,7 +1124,7 @@ func storeItemsIntoDatabaseStartOrder(items []QueueObject) (faultyItems []QueueO
 }
 
 func storeItemsIntoDatabaseEndOrder(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseEndOrder")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1169,7 +1164,7 @@ func storeItemsIntoDatabaseEndOrder(items []QueueObject) (faultyItems []QueueObj
 }
 
 func storeItemsIntoDatabaseAddMaintenanceActivity(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("storeItemsIntoDatabaseAddMaintenanceActivity")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1209,7 +1204,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []QueueObject) (faultyIt
 }
 
 func modifyStateInDatabase(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("modifyStateInDatabase")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1305,7 +1300,7 @@ func modifyStateInDatabase(items []QueueObject) (faultyItems []QueueObject, err 
 }
 
 func deleteShiftInDatabaseById(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("deleteShiftInDatabaseById")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1345,7 +1340,7 @@ func deleteShiftInDatabaseById(items []QueueObject) (faultyItems []QueueObject, 
 }
 
 func deleteShiftInDatabaseByAssetIdAndTimestamp(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("deleteShiftInDatabaseByAssetIdAndTimestamp")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items
@@ -1385,7 +1380,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []QueueObject) (faultyItem
 }
 
 func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []QueueObject, err error) {
-	zap.S().Debugf("modifyInDatabaseModifyCountAndScrap")
+
 	txn, err := db.Begin()
 	if err != nil {
 		faultyItems = items

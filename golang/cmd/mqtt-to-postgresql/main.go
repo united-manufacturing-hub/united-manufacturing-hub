@@ -21,10 +21,14 @@ import (
 var globalDBPQ *goque.PriorityQueue
 
 func main() {
-	zap.S().Debugf("main")
-
 	// Setup logger and set as global
-	logger, _ := zap.NewDevelopment()
+	var logger *zap.Logger
+	if os.Getenv("LOGGING_LEVEL") == "DEBUG" {
+		logger, _ = zap.NewDevelopment()
+	} else {
+
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -112,7 +116,7 @@ func main() {
 	// Start queue processing goroutines
 	go reportQueueLength(pg)
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 100; i++ {
 		go processDBQueue(pg)
 	}
 
@@ -123,7 +127,7 @@ var shuttingDown = false
 
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
-	zap.S().Errorf(
+	zap.S().Debugf(
 		`
    _____   _               _         _                                                         _   _                  _     _                    _____                                 __           _ 
   / ____| | |             | |       | |                                /\                     | | (_)                | |   (_)                  / ____|                               / _|         | |

@@ -22,7 +22,7 @@ type state struct {
 
 // ProcessStateData processes an incoming state message
 func ProcessStateData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessStateData")
+
 	var parsedPayload state
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -67,7 +67,7 @@ type count struct {
 
 // ProcessCountData processes an incoming count message
 func ProcessCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessCountData")
+
 	var parsedPayload count
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -116,7 +116,7 @@ type scrapCount struct {
 
 // ProcessScrapCountData processes an incoming scrapCount message
 func ProcessScrapCountData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessScrapCountData")
+
 	var parsedPayload scrapCount
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -158,7 +158,7 @@ type addShift struct {
 
 // ProcessAddShift adds a new shift to the database
 func ProcessAddShift(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessAddShift")
+
 	var parsedPayload addShift
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -202,7 +202,7 @@ type addMaintenanceActivity struct {
 
 // ProcessAddMaintenanceActivity adds a new maintenance activity to the database
 func ProcessAddMaintenanceActivity(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessAddMaintenanceActivity")
+
 	var parsedPayload addMaintenanceActivity
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -259,7 +259,7 @@ var ErrTryLater = errors.New("MQTT message could not be processed, please try la
 
 // ProcessUniqueProduct adds a new uniqueProduct to the database
 func ProcessUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessUniqueProduct")
+
 	var parsedPayload uniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -309,7 +309,7 @@ type scrapUniqueProduct struct {
 
 // ProcessScrapUniqueProduct sets isScrap of a uniqueProduct to true
 func ProcessScrapUniqueProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessScrapUniqueProduct")
+
 	var parsedPayload scrapUniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -349,7 +349,7 @@ type addProduct struct {
 
 // ProcessAddProduct adds a new product to the database
 func ProcessAddProduct(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessAddProduct")
+
 	var parsedPayload addProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -393,7 +393,7 @@ type addOrder struct {
 
 // ProcessAddOrder adds a new order without begin and end timestamp to the database
 func ProcessAddOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessAddOrder")
+
 	var parsedPayload addOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -445,7 +445,7 @@ type startOrder struct {
 
 // ProcessStartOrder starts an order by adding beginTimestamp
 func ProcessStartOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessStartOrder")
+
 	var parsedPayload startOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -486,7 +486,7 @@ type endOrder struct {
 
 // ProcessEndOrder starts an order by adding endTimestamp
 func ProcessEndOrder(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessEndOrder")
+
 	var parsedPayload endOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -532,7 +532,7 @@ type recommendationStruct struct {
 
 // ProcessRecommendationData processes an incoming count message
 func ProcessRecommendationData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessRecommendationData")
+
 	var parsedPayload recommendationStruct
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -570,7 +570,7 @@ type processValueFloat64Queue struct {
 
 // ProcessProcessValueData processes an incoming processValue message
 func ProcessProcessValueData(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessProcessValueData")
+
 	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -672,7 +672,7 @@ type productTag struct {
 
 // ProcessProductTag adds a new productTag to the database
 func ProcessProductTag(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessProductTag")
+
 	var parsedPayload productTag
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -720,7 +720,7 @@ type productTagString struct {
 
 // ProcessProductTagString adds a new productTagString to the database
 func ProcessProductTagString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessProductTagString")
+
 	var parsedPayload productTagString
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -766,7 +766,7 @@ type addParentToChild struct {
 
 // ProcessAddParentToChild adds a new AddParentToChild to the database
 func ProcessAddParentToChild(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessAddParentToChild")
+
 	var parsedPayload addParentToChild
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -810,7 +810,7 @@ type modifyState struct {
 }
 
 func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessModifyState")
+
 	var parsedPayload modifyState
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -849,7 +849,7 @@ type deleteShiftById struct {
 }
 
 func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessDeleteShiftById")
+
 	var parsedPayload deleteShiftById
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -886,7 +886,7 @@ type deleteShiftByAssetIdAndBeginTimestamp struct {
 }
 
 func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessDeleteShiftByAssetIdAndBeginTime")
+
 	var parsedPayload deleteShiftByAssetIdAndBeginTimestamp
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -930,7 +930,6 @@ type modifyProducesPiece struct {
 }
 
 func ProcessModifyProducesPiece(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessModifyProducesPiece")
 
 	// pt.Scrap is -1, if not modified by user
 	// pt.Count is -1, if not modified by user
@@ -974,7 +973,7 @@ type processValueStringQueue struct {
 
 // ProcessProcessValueString adds a new processValueString to the database
 func ProcessProcessValueString(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
-	zap.S().Debugf("ProcessProcessValueString")
+
 	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)

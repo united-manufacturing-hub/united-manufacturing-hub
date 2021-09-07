@@ -8,7 +8,7 @@ import (
 )
 
 func setupQueue(queuePath string) (pq *goque.PriorityQueue, err error) {
-	zap.S().Debugf("setupQueue")
+
 	pq, err = goque.OpenPriorityQueue(queuePath, goque.ASC)
 	if err != nil {
 		zap.S().Errorf("Error opening queue", err)
@@ -18,7 +18,7 @@ func setupQueue(queuePath string) (pq *goque.PriorityQueue, err error) {
 }
 
 func closeQueue(pq *goque.PriorityQueue) (err error) {
-	zap.S().Debugf("closeQueue")
+
 	err = pq.Close()
 	if err != nil {
 		zap.S().Errorf("Error closing queue", err)
@@ -30,7 +30,7 @@ func closeQueue(pq *goque.PriorityQueue) (err error) {
 
 // processDBQueue get's item from queue and processes it, depending on prefix
 func processDBQueue(pg *goque.PriorityQueue) {
-	zap.S().Debugf("processDBQueue")
+
 	zap.S().Infof("Starting new processDBQueue worker")
 	for !shuttingDown {
 		if pg.Length() == 0 {
@@ -52,6 +52,10 @@ func processDBQueue(pg *goque.PriorityQueue) {
 			} else {
 				err = nil
 			}
+		}
+		if len(item.Prefix) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 
 		zap.S().Debugf("First item: %s", item.Prefix, item.Payload)
@@ -144,7 +148,7 @@ func processDBQueue(pg *goque.PriorityQueue) {
 			case Prefix.RawMQTTRequeue:
 				RetryMQTT(xitem, prio)
 			default:
-				zap.S().Errorf("GQ Item with invalid Prefix! ", xitem.Prefix)
+				zap.S().Errorf("GQ Item with invalid Prefix! %s, len(%d)", xitem.Prefix, len(xitem.Prefix), xitem.Payload)
 			}
 		}
 
@@ -287,7 +291,7 @@ type QueueObject struct {
 
 // ReInsertItemOnFailure This functions re-inserts an item with lowered priority
 func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uint8) (err error) {
-	zap.S().Debugf("ReInsertItemOnFailure", object, prio)
+
 	if prio < 255 {
 		prio += 1
 		err = addItemWithPriorityToQueue(pg, object, prio)
@@ -313,7 +317,7 @@ func ReInsertItemOnFailure(pg *goque.PriorityQueue, object QueueObject, prio uin
 
 // GetNextItemInQueue retrieves the next item in queue
 func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, err error) {
-	zap.S().Debugf("GetNextItemInQueue")
+
 	priorityItem, err := pg.Dequeue()
 	if err != nil {
 		return QueueObject{}, 0, err
@@ -328,7 +332,7 @@ func GetNextItemInQueue(pg *goque.PriorityQueue) (item QueueObject, prio uint8, 
 }
 
 func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObject, err error) {
-	zap.S().Debugf("GetNextItemsWithPrio", prio)
+
 	for i := 0; i < 1000; i++ {
 		var item *goque.PriorityItem
 		item, err = pg.DequeueByPriority(prio)
@@ -356,7 +360,7 @@ func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObj
 
 // addItemWithPriorityToQueue adds an item with given priority to queue
 func addItemWithPriorityToQueue(pq *goque.PriorityQueue, item QueueObject, priority uint8) (err error) {
-	zap.S().Debugf("addItemWithPriorityToQueue", item.Prefix, item.Payload, priority)
+
 	var pi *goque.PriorityItem
 	pi, err = pq.EnqueueObjectAsJSON(priority, item)
 	zap.S().Debugf("addItemWithPriorityToQueue", pi)
@@ -365,7 +369,7 @@ func addItemWithPriorityToQueue(pq *goque.PriorityQueue, item QueueObject, prior
 
 // addNewItemToQueue adds an item with 0 priority to queue
 func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []byte) (err error) {
-	zap.S().Debugf("addNewItemToQueue", payload)
+
 	item := QueueObject{
 		Prefix:  payloadType,
 		Payload: payload,
@@ -376,7 +380,7 @@ func addNewItemToQueue(pq *goque.PriorityQueue, payloadType string, payload []by
 
 // addItemWithPriorityToQueue adds an item with given priority to queue
 func addRawItemWithPriorityToQueue(pq *goque.PriorityQueue, payloadType string, payload []byte, priority uint8) (err error) {
-	zap.S().Debugf("addNewItemToQueue", payload)
+
 	item := QueueObject{
 		Prefix:  payloadType,
 		Payload: payload,
@@ -387,7 +391,7 @@ func addRawItemWithPriorityToQueue(pq *goque.PriorityQueue, payloadType string, 
 
 // reportQueueLength prints the current Queue length
 func reportQueueLength(pg *goque.PriorityQueue) {
-	zap.S().Debugf("reportQueueLength")
+
 	for true {
 		zap.S().Infof("Current elements in queue: %d", pg.Length())
 		time.Sleep(10 * time.Second)

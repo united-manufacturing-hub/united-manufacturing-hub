@@ -37,7 +37,6 @@ var (
 )
 
 func newTLSConfig(certificateName string) *tls.Config {
-	zap.S().Debugf("newTLSConfig")
 
 	// Import trusted certificates from CAfile.pem.
 	// Alternatively, manually add CA certificates to
@@ -79,12 +78,15 @@ func newTLSConfig(certificateName string) *tls.Config {
 }
 
 func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue, basePrio uint8) {
-	zap.S().Debugf("processMessage")
-	zap.S().Infof("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
+
+	zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	var err error
 	if customerID != "raw" {
+		if payloadType == "" {
+			return
+		}
 
 		switch payloadType {
 		case Prefix.State:
@@ -138,15 +140,16 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		default:
 			zap.S().Warnf("Unknown Prefix: %s", payloadType)
 		}
+
+		if err == ErrTryLater {
+			EnqueueMQTT(customerID, location, assetID, payloadType, payload, pg, basePrio)
+		}
 	}
 
-	if err == ErrTryLater {
-		EnqueueMQTT(customerID, location, assetID, payloadType, payload, pg, basePrio)
-	}
 }
 
 func RetryMQTT(item QueueObject, prio uint8) {
-	zap.S().Debugf("RetryMQTT", prio)
+
 	if prio < 255 {
 		prio += 1
 	} else {
@@ -164,7 +167,7 @@ func RetryMQTT(item QueueObject, prio uint8) {
 }
 
 func EnqueueMQTT(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue, prio uint8) {
-	zap.S().Debugf("EnqueueMQTT")
+
 	newObject := MQTTQueueMessage{
 		CustomerID:  customerID,
 		Location:    location,
@@ -195,7 +198,6 @@ type MQTTQueueMessage struct {
 
 // getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
 func getOnMessageRecieved(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Message) {
-	zap.S().Debugf("getOnMessageRecieved")
 
 	return func(client MQTT.Client, message MQTT.Message) {
 
@@ -221,7 +223,7 @@ func getOnMessageRecieved(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Messag
 
 // OnConnect subscribes once the connection is established. Required to re-subscribe when cleansession is True
 func OnConnect(c MQTT.Client) {
-	zap.S().Debugf("OnConnect")
+
 	optionsReader := c.OptionsReader()
 	zap.S().Infof("Connected to MQTT broker", optionsReader.ClientID())
 	mqttConnected.Inc()
@@ -229,14 +231,14 @@ func OnConnect(c MQTT.Client) {
 
 // OnConnectionLost outputs warn message
 func OnConnectionLost(c MQTT.Client, err error) {
-	zap.S().Debugf("OnConnectionLost")
+
 	optionsReader := c.OptionsReader()
 	zap.S().Warnf("Connection lost", err, optionsReader.ClientID())
 	mqttConnected.Dec()
 }
 
 func checkConnected(c MQTT.Client) healthcheck.Check {
-	zap.S().Debugf("checkConnected")
+
 	return func() error {
 		if c.IsConnected() {
 			return nil
@@ -247,13 +249,12 @@ func checkConnected(c MQTT.Client) healthcheck.Check {
 
 // ShutdownMQTT unsubscribes and closes the MQTT connection
 func ShutdownMQTT() {
-	zap.S().Debugf("ShutdownMQTT")
+
 	mqttClient.Disconnect(1000)
 }
 
 // SetupMQTT setups MQTT and connect to the broker
 func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.PriorityQueue) {
-	zap.S().Debugf("SetupMQTT")
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
