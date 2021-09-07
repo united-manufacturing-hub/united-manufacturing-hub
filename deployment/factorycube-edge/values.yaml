@@ -46,7 +46,7 @@ sensorconnect:
   brokerPort: 1883 # do not change
 
 ### cameraconnect ###
-
+# https://docs.umh.app/docs/developers/factorycube-edge/cameraconnect/
 cameraconnect:
   enabled: false
   image: unitedmanufacturinghub/cameraconnect
