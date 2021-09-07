@@ -230,6 +230,22 @@ data:
      CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
 
 
+    -------------------- TimescaleDB table for maintenance activities --------------------
+    CREATE TABLE IF NOT EXISTS maintenanceactivities
+    (
+      id integer        SERIAL,
+      component_id SERIAL,
+      activitytype integer,
+      "timestamp" TIMESTAMPTZ NOT NULL,
+      CONSTRAINT maintenanceactivities_pkey PRIMARY KEY (id),
+      CONSTRAINT maintenanceactivities_component_id_activitytype_timestamp_key UNIQUE (component_id, activitytype, "timestamp"),
+      CONSTRAINT maintenanceactivities_component_id_fkey FOREIGN KEY (component_id)
+        REFERENCES componenttable (id) MATCH SIMPLE
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+        NOT VALID
+    )
+
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
 
