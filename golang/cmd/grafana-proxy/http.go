@@ -181,6 +181,11 @@ func getProxyHandler(c *gin.Context) {
 	handleProxyRequest(c, "GET")
 }
 
+func IsBase64(s string) bool {
+	_, err := base64.StdEncoding.DecodeString(s)
+	return err == nil
+}
+
 func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string) {
 	zap.S().Debugf("HandleFactoryInsight")
 	// Jaeger tracing
@@ -193,6 +198,18 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 	defer span.Finish()
 
 	authHeader := c.GetHeader("authorization")
+	s := strings.Split(authHeader, " ")
+	//Basic BASE64Encoded
+	if len(s) != 2 {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	if IsBase64(s[1]) {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
 	// HTTP Basic auth not present in request
 	if authHeader == "" {
 		c.AbortWithStatus(http.StatusUnauthorized)
