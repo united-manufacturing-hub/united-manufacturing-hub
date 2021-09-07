@@ -175,7 +175,7 @@ func GetUniqueProductID(aid string, DBassetID int) (uid int, err error) {
 
 	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
 	if !cacheHit { // data NOT found
-		err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetId.QueryRow(aid, DBassetID).Scan(&uid)
+		err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(aid, DBassetID).Scan(&uid)
 		if err == sql.ErrNoRows {
 			zap.S().Errorf("No Results Found", aid, DBassetID)
 		} else if err != nil {
