@@ -350,7 +350,9 @@ func GetNextItemsWithPrio(pg *goque.PriorityQueue, prio uint8) (items []QueueObj
 			ShutdownApplicationGraceful()
 			return
 		}
-		items = append(items, qitem)
+		if len(qitem.Prefix) > 0 {
+			items = append(items, qitem)
+		}
 	}
 	return
 }

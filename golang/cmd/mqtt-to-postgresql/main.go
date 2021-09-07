@@ -77,7 +77,7 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	const queuePathDB = "/data/dbqueue"
+	const queuePathDB = "/data/queue"
 	pg, err := setupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue", err)
@@ -125,7 +125,7 @@ func main() {
 
 var shuttingDown = false
 
-// ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
+// ShutdownApplicationGraceful shuts down the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
 	zap.S().Debugf(
 		`
