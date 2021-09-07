@@ -101,7 +101,7 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 }
 
 // GetCalculatateLowSpeedStatesFromCache get low speed states from cache
-func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID int32) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
+func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID uint32) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		////zap.S().Errorf("rdb == nil")
 		return
@@ -134,7 +134,7 @@ func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID
 }
 
 // StoreCalculatateLowSpeedStatesToCache stores low speed states to cache
-func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID int32, processedStateArray []datamodel.StateEntry) {
+func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID uint32, processedStateArray []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
 		////zap.S().Errorf("rdb == nil")
 		return
@@ -161,7 +161,7 @@ func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID
 }
 
 // GetStatesRawFromCache gets raw states from cache
-func GetStatesRawFromCache(assetID int32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, cacheHit bool) {
+func GetStatesRawFromCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		////zap.S().Errorf("rdb == nil")
 		return
@@ -194,7 +194,7 @@ func GetStatesRawFromCache(assetID int32, from time.Time, to time.Time, configur
 }
 
 // StoreRawStatesToCache stores raw states to cache
-func StoreRawStatesToCache(assetID int32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.StateEntry) {
+func StoreRawStatesToCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -221,7 +221,7 @@ func StoreRawStatesToCache(assetID int32, from time.Time, to time.Time, configur
 }
 
 // GetRawShiftsFromCache gets raw shifts from cache
-func GetRawShiftsFromCache(assetID int32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, cacheHit bool) {
+func GetRawShiftsFromCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -254,7 +254,7 @@ func GetRawShiftsFromCache(assetID int32, from time.Time, to time.Time, configur
 }
 
 // StoreRawShiftsToCache stores raw shifts to cache
-func StoreRawShiftsToCache(assetID int32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.ShiftEntry) {
+func StoreRawShiftsToCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.ShiftEntry) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -281,7 +281,7 @@ func StoreRawShiftsToCache(assetID int32, from time.Time, to time.Time, configur
 }
 
 // GetRawCountsFromCache gets raw counts from cache
-func GetRawCountsFromCache(assetID int32, from time.Time, to time.Time) (data []datamodel.CountEntry, cacheHit bool) {
+func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data []datamodel.CountEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -314,7 +314,7 @@ func GetRawCountsFromCache(assetID int32, from time.Time, to time.Time) (data []
 }
 
 // StoreRawCountsToCache stores raw counts to cache
-func StoreRawCountsToCache(assetID int32, from time.Time, to time.Time, data []datamodel.CountEntry) {
+func StoreRawCountsToCache(assetID uint32, from time.Time, to time.Time, data []datamodel.CountEntry) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -515,7 +515,7 @@ func StoreCustomerConfigurationToCache(customerID string, data datamodel.Custome
 }
 
 // GetAssetIDFromCache gets asset id from cache
-func GetAssetIDFromCache(customerID string, location string, assetID string) (DBassetID int32, cacheHit bool) {
+func GetAssetIDFromCache(customerID string, location string, assetID string) (DBassetID uint32, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -540,11 +540,14 @@ func GetAssetIDFromCache(customerID string, location string, assetID string) (DB
 			return
 		}
 
-		DBassetID, err = safecast.Int32(RawDBassetID)
+		var IDBassetID int32
+		IDBassetID, err = safecast.Int32(RawDBassetID)
 		if err != nil {
 			zap.S().Errorf("error converting value to integer", key, err)
 			return
 		}
+
+		DBassetID = uint32(IDBassetID)
 
 		cacheHit = true
 	}
@@ -552,7 +555,7 @@ func GetAssetIDFromCache(customerID string, location string, assetID string) (DB
 }
 
 // StoreAssetIDToCache stores asset id to cache
-func StoreAssetIDToCache(customerID string, location string, assetID string, DBassetID int32) {
+func StoreAssetIDToCache(customerID string, location string, assetID string, DBassetID uint32) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -575,7 +578,7 @@ func StoreAssetIDToCache(customerID string, location string, assetID string, DBa
 }
 
 // GetUniqueProductIDFromCache gets uniqueProduct from cache
-func GetUniqueProductIDFromCache(aid string, DBassetID int32) (uid int32, cacheHit bool) {
+func GetUniqueProductIDFromCache(aid string, DBassetID uint32) (uid uint32, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
@@ -600,11 +603,14 @@ func GetUniqueProductIDFromCache(aid string, DBassetID int32) (uid int32, cacheH
 			return
 		}
 
-		uid, err = safecast.Int32(RawUID)
+		var iuid int32
+		iuid, err = safecast.Int32(RawUID)
 		if err != nil {
 			zap.S().Errorf("error converting value to integer", key, err)
 			return
 		}
+
+		uid = uint32(iuid)
 
 		cacheHit = true
 	}
@@ -612,7 +618,7 @@ func GetUniqueProductIDFromCache(aid string, DBassetID int32) (uid int32, cacheH
 }
 
 // StoreUniqueProductIDToCache stores uniqueProductID to cache
-func StoreUniqueProductIDToCache(aid string, DBassetID int32, uid int32) {
+func StoreUniqueProductIDToCache(aid string, DBassetID uint32, uid uint32) {
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return

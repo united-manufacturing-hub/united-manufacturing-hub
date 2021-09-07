@@ -12,12 +12,12 @@ import (
 )
 
 type stateQueue struct {
-	DBAssetID   int32
-	State       int32
+	DBAssetID   uint32
+	State       uint32
 	TimestampMs uint64
 }
 type state struct {
-	State       int32  `json:"state"`
+	State       uint32 `json:"state"`
 	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
@@ -55,14 +55,14 @@ func ProcessStateData(customerID string, location string, assetID string, payloa
 }
 
 type countQueue struct {
-	DBAssetID   int32
-	Count       int32
-	Scrap       int32
+	DBAssetID   uint32
+	Count       uint32
+	Scrap       uint32
 	TimestampMs uint64
 }
 type count struct {
-	Count       int32  `json:"count"`
-	Scrap       int32  `json:"scrap"`
+	Count       uint32 `json:"count"`
+	Scrap       uint32 `json:"scrap"`
 	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
@@ -106,12 +106,12 @@ func ProcessCountData(customerID string, location string, assetID string, payloa
 }
 
 type scrapCountQueue struct {
-	DBAssetID   int32
-	Scrap       int32
+	DBAssetID   uint32
+	Scrap       uint32
 	TimestampMs uint64
 }
 type scrapCount struct {
-	Scrap       int32  `json:"scrap"`
+	Scrap       uint32 `json:"scrap"`
 	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
@@ -148,13 +148,13 @@ func ProcessScrapCountData(customerID string, location string, assetID string, p
 }
 
 type addShiftQueue struct {
-	DBAssetID      int32
-	TimestampMs    int32
-	TimestampMsEnd int32
+	DBAssetID      uint32
+	TimestampMs    uint64
+	TimestampMsEnd uint64
 }
 type addShift struct {
-	TimestampMs    int32 `json:"timestamp_ms"`
-	TimestampMsEnd int32 `json:"timestamp_ms_end"`
+	TimestampMs    uint64 `json:"timestamp_ms"`
+	TimestampMsEnd uint64 `json:"timestamp_ms_end"`
 }
 
 // ProcessAddShift adds a new shift to the database
@@ -189,14 +189,14 @@ func ProcessAddShift(customerID string, location string, assetID string, payload
 }
 
 type addMaintenanceActivityQueue struct {
-	DBAssetID     int32
-	TimestampMs   int32
+	DBAssetID     uint32
+	TimestampMs   uint64
 	ComponentName string
 	Activity      int32
 	ComponentID   int32
 }
 type addMaintenanceActivity struct {
-	TimestampMs   int32  `json:"timestamp_ms"`
+	TimestampMs   uint64 `json:"timestamp_ms"`
 	ComponentName string `json:"component"`
 	Activity      int32  `json:"activity"`
 }
@@ -241,7 +241,7 @@ func ProcessAddMaintenanceActivity(customerID string, location string, assetID s
 }
 
 type uniqueProductQueue struct {
-	DBAssetID                  int32
+	DBAssetID                  uint32
 	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
 	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
 	ProductID                  int32  `json:"productID"`
@@ -301,7 +301,7 @@ func ProcessUniqueProduct(customerID string, location string, assetID string, pa
 }
 
 type scrapUniqueProductQueue struct {
-	DBAssetID int32
+	DBAssetID uint32
 	UID       string
 }
 type scrapUniqueProduct struct {
@@ -339,7 +339,7 @@ func ProcessScrapUniqueProduct(customerID string, location string, assetID strin
 }
 
 type addProductQueue struct {
-	DBAssetID            int32
+	DBAssetID            uint32
 	ProductName          string
 	TimePerUnitInSeconds float64
 }
@@ -380,16 +380,16 @@ func ProcessAddProduct(customerID string, location string, assetID string, paylo
 }
 
 type addOrderQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	ProductName string
 	OrderName   string
-	TargetUnits int32
+	TargetUnits uint32
 	ProductID   int32
 }
 type addOrder struct {
 	ProductName string `json:"product_id"`
 	OrderName   string `json:"order_id"`
-	TargetUnits int32  `json:"target_units"`
+	TargetUnits uint32 `json:"target_units"`
 }
 
 // ProcessAddOrder adds a new order without begin and end timestamp to the database
@@ -435,7 +435,7 @@ func ProcessAddOrder(customerID string, location string, assetID string, payload
 }
 
 type startOrderQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64
 	OrderName   string
 }
@@ -476,7 +476,7 @@ func ProcessStartOrder(customerID string, location string, assetID string, paylo
 }
 
 type endOrderQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64
 	OrderName   string
 }
@@ -518,7 +518,7 @@ func ProcessEndOrder(customerID string, location string, assetID string, payload
 
 type recommendationStruct struct {
 	UID                  string
-	TimestampMs          int32 `json:"timestamp_ms"`
+	TimestampMs          uint64 `json:"timestamp_ms"`
 	Customer             string
 	Location             string
 	Asset                string
@@ -556,14 +556,14 @@ func ProcessRecommendationData(customerID string, location string, assetID strin
 }
 
 type processValueQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64
 	Name        string
 	Value       int32
 }
 
 type processValueFloat64Queue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64
 	Name        string
 	Value       float64
@@ -657,7 +657,7 @@ func ProcessProcessValueData(customerID string, location string, assetID string,
 }
 
 type productTagQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64  `json:"timestamp_ms"`
 	AID         string  `json:"AID"`
 	Name        string  `json:"name"`
@@ -705,7 +705,7 @@ func ProcessProductTag(customerID string, location string, assetID string, paylo
 }
 
 type productTagStringQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64 `json:"timestamp_ms"`
 	AID         string `json:"AID"`
 	Name        string `json:"name"`
@@ -753,7 +753,7 @@ func ProcessProductTagString(customerID string, location string, assetID string,
 }
 
 type addParentToChildQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64 `json:"timestamp_ms"`
 	ChildAID    string `json:"childAID"`
 	ParentAID   string `json:"parentAID"`
@@ -798,16 +798,16 @@ func ProcessAddParentToChild(customerID string, location string, assetID string,
 }
 
 type modifyStateQueue struct {
-	DBAssetID      int32
-	StartTimeStamp int32
-	EndTimeStamp   int32
-	NewState       int32
+	DBAssetID        uint32
+	StartTimeStampMs uint64
+	EndTimeStampMs   uint64
+	NewState         uint32
 }
 
 type modifyState struct {
-	StartTimeStamp int32 `json:"start_time_stamp"`
-	EndTimeStamp   int32 `json:"end_time_stamp"`
-	NewState       int32 `json:"new_state"`
+	StartTimeStampMs uint64 `json:"start_time_stamp"`
+	EndTimeStampMs   uint64 `json:"end_time_stamp"`
+	NewState         uint32 `json:"new_state"`
 }
 
 func ProcessModifyState(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
@@ -821,10 +821,10 @@ func ProcessModifyState(customerID string, location string, assetID string, payl
 
 	DBassetID := GetAssetID(customerID, location, assetID)
 	newObject := modifyStateQueue{
-		DBAssetID:      DBassetID,
-		StartTimeStamp: parsedPayload.StartTimeStamp,
-		EndTimeStamp:   parsedPayload.EndTimeStamp,
-		NewState:       parsedPayload.NewState,
+		DBAssetID:        DBassetID,
+		StartTimeStampMs: parsedPayload.StartTimeStampMs,
+		EndTimeStampMs:   parsedPayload.EndTimeStampMs,
+		NewState:         parsedPayload.NewState,
 	}
 
 	marshal, err := json.Marshal(newObject)
@@ -841,12 +841,12 @@ func ProcessModifyState(customerID string, location string, assetID string, payl
 }
 
 type deleteShiftByIdQueue struct {
-	DBAssetID int32
-	ShiftId   int32 `json:"shift_id"`
+	DBAssetID uint32
+	ShiftId   uint32 `json:"shift_id"`
 }
 
 type deleteShiftById struct {
-	ShiftId int32 `json:"shift_id"`
+	ShiftId uint32 `json:"shift_id"`
 }
 
 func ProcessDeleteShiftById(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
@@ -878,12 +878,12 @@ func ProcessDeleteShiftById(customerID string, location string, assetID string, 
 }
 
 type deleteShiftByAssetIdAndBeginTimestampQueue struct {
-	DBAssetID      int32
-	BeginTimeStamp int32 `json:"begin_time_stamp"`
+	DBAssetID        uint32
+	BeginTimeStampMs uint64 `json:"begin_time_stamp"`
 }
 
 type deleteShiftByAssetIdAndBeginTimestamp struct {
-	BeginTimeStamp int32 `json:"begin_time_stamp"`
+	BeginTimeStampMs uint64 `json:"begin_time_stamp"`
 }
 
 func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue) error {
@@ -898,8 +898,8 @@ func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string,
 
 	DBassetID := GetAssetID(customerID, location, assetID)
 	newObject := deleteShiftByAssetIdAndBeginTimestampQueue{
-		DBAssetID:      DBassetID,
-		BeginTimeStamp: parsedPayload.BeginTimeStamp,
+		DBAssetID:        DBassetID,
+		BeginTimeStampMs: parsedPayload.BeginTimeStampMs,
 	}
 
 	marshal, err := json.Marshal(newObject)
@@ -916,13 +916,17 @@ func ProcessDeleteShiftByAssetIdAndBeginTime(customerID string, location string,
 }
 
 type modifyProducesPieceQueue struct {
-	DBAssetID int32
-	Count     int32 `json:"count"`
-	Scrap     int32 `json:"scrap"`
+	DBAssetID uint32
+	// Has to be int32 to allow transmission of "not changed" value (value < 0)
+	Count int32 `json:"count"`
+	// Has to be int32 to allow transmission of "not changed" value (value < 0)
+	Scrap int32 `json:"scrap"`
 }
 
 type modifyProducesPiece struct {
+	// Has to be int32 to allow transmission of "not changed" value (value < 0)
 	Count int32 `json:"count"`
+	// Has to be int32 to allow transmission of "not changed" value (value < 0)
 	Scrap int32 `json:"scrap"`
 }
 
@@ -963,7 +967,7 @@ func ProcessModifyProducesPiece(customerID string, location string, assetID stri
 }
 
 type processValueStringQueue struct {
-	DBAssetID   int32
+	DBAssetID   uint32
 	TimestampMs uint64
 	Name        string
 	Value       string

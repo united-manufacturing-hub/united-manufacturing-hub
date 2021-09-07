@@ -143,7 +143,7 @@ func NewNullInt64(i int64) sql.NullInt64 {
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(customerID string, location string, assetID string) (DBassetID int32) {
+func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32) {
 	zap.S().Debugf("GetAssetID")
 
 	// Get from cache if possible
@@ -169,7 +169,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID i
 }
 
 // GetProductID gets the productID for a asset and a productName from the database
-func GetProductID(DBassetID int32, productName string) (productID int32, err error) {
+func GetProductID(DBassetID uint32, productName string) (productID int32, err error) {
 	zap.S().Debugf("GetProductID")
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
 	if err == sql.ErrNoRows {
@@ -182,7 +182,7 @@ func GetProductID(DBassetID int32, productName string) (productID int32, err err
 }
 
 // GetComponentID gets the componentID from the database
-func GetComponentID(assetID int32, componentName string) (componentID int32) {
+func GetComponentID(assetID uint32, componentName string) (componentID int32) {
 	zap.S().Debugf("GetComponentID")
 
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
@@ -195,7 +195,7 @@ func GetComponentID(assetID int32, componentName string) (componentID int32) {
 	return
 }
 
-func GetUniqueProductID(aid string, DBassetID int32) (uid int32, err error) {
+func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error) {
 	zap.S().Debugf("GetUniqueProductID")
 
 	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
@@ -212,7 +212,7 @@ func GetUniqueProductID(aid string, DBassetID int32) (uid int32, err error) {
 	return
 }
 
-func GetLatestParentUniqueProductID(aid string, assetID int32) (uid int32) {
+func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32) {
 	zap.S().Debugf("GetLatestParentUniqueProductID")
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
@@ -799,7 +799,7 @@ func storeItemsIntoDatabaseProductTag(items []QueueObject) (faultyItems []QueueO
 			continue
 		}
 
-		var uid int32
+		var uid uint32
 		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		if err != nil {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
@@ -850,7 +850,7 @@ func storeItemsIntoDatabaseProductTagString(items []QueueObject) (faultyItems []
 			continue
 		}
 
-		var uid int32
+		var uid uint32
 		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		if err != nil {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
@@ -901,7 +901,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []QueueObject) (faultyItems []
 			continue
 		}
 
-		var childUid int32
+		var childUid uint32
 		childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
 		if err != nil {
 			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
@@ -1240,7 +1240,7 @@ func modifyStateInDatabase(items []QueueObject) (faultyItems []QueueObject, err 
 
 		// Create statement
 		var val *sql.Rows
-		val, err = StmtGetLastInRange.Query(pt.StartTimeStamp, pt.DBAssetID)
+		val, err = StmtGetLastInRange.Query(pt.StartTimeStampMs, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
 			//DONT RESET ERROR HERE
@@ -1271,14 +1271,14 @@ func modifyStateInDatabase(items []QueueObject) (faultyItems []QueueObject, err 
 				}
 			}
 
-			_, err = StmtDeleteInRange.Exec(pt.StartTimeStamp, pt.EndTimeStamp, pt.DBAssetID)
+			_, err = StmtDeleteInRange.Exec(pt.StartTimeStampMs, pt.EndTimeStampMs, pt.DBAssetID)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
 				//DONT RESET ERROR HERE
 				continue
 			}
 
-			_, err = StmtInsertNewState.Exec(pt.StartTimeStamp, pt.DBAssetID, pt.NewState)
+			_, err = StmtInsertNewState.Exec(pt.StartTimeStampMs, pt.DBAssetID, pt.NewState)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
 				//DONT RESET ERROR HERE
@@ -1292,7 +1292,7 @@ func modifyStateInDatabase(items []QueueObject) (faultyItems []QueueObject, err 
 				continue
 			}
 
-			_, err = StmtInsertNewState.Exec(pt.EndTimeStamp, pt.DBAssetID, LastRowState)
+			_, err = StmtInsertNewState.Exec(pt.EndTimeStampMs, pt.DBAssetID, LastRowState)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
 				//DONT RESET ERROR HERE
@@ -1372,7 +1372,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []QueueObject) (faultyItem
 		}
 
 		// Create statement
-		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStamp)
+		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStampMs)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
 			zap.S().Debugf("Got an error before err = nil: %s", err)
@@ -1414,9 +1414,9 @@ func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []Que
 		}
 
 		// pt.Count is -1, if not modified by user
-		if pt.Count != -1 {
+		if pt.Count > 0 {
 			// pt.Scrap is -1, if not modified by user
-			if pt.Scrap != -1 {
+			if pt.Scrap > 0 {
 				zap.S().Debugf("CS !", pt.Count, pt.Scrap, pt.DBAssetID)
 				_, err = stmtCS.Exec(pt.Count, pt.Scrap, pt.DBAssetID)
 
@@ -1439,7 +1439,7 @@ func modifyInDatabaseModifyCountAndScrap(items []QueueObject) (faultyItems []Que
 			}
 		} else {
 			// pt.Scrap is -1, if not modified by user
-			if pt.Scrap != -1 {
+			if pt.Scrap > 0 {
 				zap.S().Debugf("S !", pt.Scrap, pt.DBAssetID)
 				_, err = stmtS.Exec(pt.Scrap, pt.DBAssetID)
 
