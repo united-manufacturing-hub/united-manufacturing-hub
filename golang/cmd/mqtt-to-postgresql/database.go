@@ -94,17 +94,20 @@ func deferCallback(txn *sql.Tx) (err error) {
 		zap.S().Debugf("PREPARED STATEMENT")
 		err = txn.Rollback()
 		if err != nil {
-			PQErrorHandling("txn.Rollback()", err)
-		}
-		if err != nil {
-			return
+			if err != sql.ErrTxDone {
+				PQErrorHandling("txn.Rollback()", err)
+			} else {
+				zap.S().Warnf("%s", err)
+			}
+
 		}
 	} else {
 		err = txn.Commit()
 		if err != nil {
-			PQErrorHandling("txn.Commit()", err)
-			if err != nil {
-				return
+			if err != sql.ErrTxDone {
+				PQErrorHandling("txn.Commit()", err)
+			} else {
+				zap.S().Warnf("%s", err)
 			}
 		}
 	}
@@ -228,21 +231,6 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 			PQErrorHandling("tx.Rollback()", err2)
 		}
 		PQErrorHandling("INSERT INTO ASSETTABLE", err)
-	}
-
-	// if dry run, print statement and rollback
-	if isDryRun {
-		zap.S().Debugf("PREPARED STATEMENT")
-		err = txn.Rollback()
-		if err != nil {
-			PQErrorHandling("tx.Rollback()", err)
-		}
-		return
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		PQErrorHandling("tx.Commit()", err)
 	}
 }
 
