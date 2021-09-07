@@ -42,8 +42,8 @@ CAMERA_INTERFACE = os.environ.get('CAMERA_INTERFACE')
 MAC_ADDRESS = os.environ.get('MAC_ADDRESS', '')
 TRANSMITTER_ID = os.environ.get('CUBE_TRANSMITTERID', '')
 
-MQTT_TOPIC_TRIGGER = "ia/trigger/" + TRANSMITTER_ID + "/" + MAC_ADDRESS
-MQTT_TOPIC_IMAGE = "ia/rawImage/" + TRANSMITTER_ID + "/" + MAC_ADDRESS
+MQTT_TOPIC_TRIGGER = "ia/trigger/" + TRANSMITTER_ID + "/" + MAC_ADDRESS  # todo add variable for first part of topic
+MQTT_TOPIC_IMAGE = "ia/rawImage/" + TRANSMITTER_ID + "/" + MAC_ADDRESS  # todo add variable for first part of topic
 
 # GenICam settings
 DEFAULT_GENTL_PRODUCER_PATH = os.environ.get('DEFAULT_GENTL_PRODUCER_PATH', '/app/assets/producer_files')
