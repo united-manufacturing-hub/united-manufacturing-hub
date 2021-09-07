@@ -12,11 +12,11 @@ By default, k3OS allows SSH connections only using certificates. This is a much 
 ## Prerequisites
 
 - Edge device running [k3OS](https://github.com/rancher/k3os)
-- SSH access to that device
+- physical access to that device
 
 ## Tutorial
 
-1. Access the edge device via SSH
+1. Access the edge device via computer screen and keyboard and login with username `rancher` and `rancher`
 2. Set the value `PasswordAuthentication` in the file `/etc/ssh/sshd_config` to `yes` and restart the service `sshd`. You can use the following command:
 
 ```bash
