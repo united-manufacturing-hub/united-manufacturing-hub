@@ -31,8 +31,9 @@ from genicam.gentl import TimeoutException
 from genicam.genapi import OutOfRangeException
 from harvesters.core import Harvester
 
-#Console Style elements for outpu
-HORIZONTAL_CONSOLE_LINE = "\n"+"_"*80+"\n"
+# Console Style elements for outpu
+HORIZONTAL_CONSOLE_LINE = "\n" + "_" * 80 + "\n"
+
 
 class CamGeneral(ABC):
     """
@@ -127,11 +128,11 @@ class CamGeneral(ABC):
         prepared_message = {
             'timestamp_ms': timestamp_ms,
             'image':
-                {'image_id':(str(self.mac_address)+"_"+str(timestamp_ms)),
-                'image_bytes': encoded_image,
-                'image_height': image.shape[0],
-                'image_width': image.shape[1],
-                'image_channels': image.shape[2]},
+                {'image_id': (str(self.mac_address) + "_" + str(timestamp_ms)),
+                 'image_bytes': encoded_image,
+                 'image_height': image.shape[0],
+                 'image_width': image.shape[1],
+                 'image_channels': image.shape[2]},
         }
 
         # Get json formatted string, convert python object into
@@ -375,7 +376,7 @@ class GenICam(CamGeneral):
         self.h = Harvester()
 
         # Add path of GenTL Producer
-        #self.h.add_file(self.gen_tl_producer_path)
+        # self.h.add_file(self.gen_tl_producer_path)
 
         for path in self.gen_tl_producer_path_list:
             self.h.add_file(path)
@@ -407,20 +408,24 @@ class GenICam(CamGeneral):
         #   argument
 
         for camera in self.h.device_info_list:
-            #read cameras mac address
-            #ATTENTION: only works with BAUMER SDK
-            device_mac_address = str(camera.id_).replace("_","").replace("devicemodul","")
-            if device_mac_address.upper() == self.mac_address.upper().replace(":",""):
+            # read cameras mac address
+            # ATTENTION: only works with BAUMER SDK
+            device_mac_address = str(camera.id_).replace("_", "").replace("devicemodul", "")
+            logging.debug(f"current device_mac_address: {device_mac_address.upper()}, {self.mac_address.upper().replace(':', '')}")
+
+            if device_mac_address.upper() == self.mac_address.upper().replace(":", ""):
                 try:
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
                 except:
-                    logging.error("Camera ist not reachable. Most likely another container already occupies the same camera. One camera can only be used by exactly one container at the time.")
+                    logging.error(
+                        "Camera ist not reachable. Most likely another container already occupies the same camera. One camera can only be used by exactly one container at the time.")
                     sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
 
         if not hasattr(self, "ia"):
-            logging.error("No camera with the specified MAC address available. Please specify MAC address in env file correctly.")
+            logging.error(
+                "No camera with the specified MAC address available. Please specify MAC address in env file correctly.")
             sys.exit("Invalid MAC address.")
         ## Set some default settings
         # This is required because of a bug in the harvesters
@@ -548,7 +553,6 @@ class GenICam(CamGeneral):
         self.ia.start_acquisition()
         logging.debug("Acquisition started.")
 
-
     # Get image out of image stream
     def get_image(self) -> None:
         """
@@ -571,9 +575,9 @@ class GenICam(CamGeneral):
             #   with an old image, but we want the newest image,
             #   This here is probably not the best way to solve
             #   the problem. It is a workaround.
-            with self.ia.fetch_buffer(timeout=20) as buffer:
-                # Do not use this buffer, use the next one
-                pass
+            #with self.ia.fetch_buffer(timeout=20) as buffer:
+            #    # Do not use this buffer, use the next one
+            #    pass
 
             # Due to with statement buffer will automatically be
             #   queued
@@ -671,14 +675,14 @@ class GenICam(CamGeneral):
 
         logging.debug("Disconnected from GenICam camera.")
 
+
 class DummyCamera(CamGeneral):
 
     def get_image(self) -> None:
-
         # Default value
         retrieved_image = None
 
-        #reads a static image which is part of stack
+        # reads a static image which is part of stack
         img = cv2.imread("/app/assets/dummy_image.jpg")
         logging.debug(HORIZONTAL_CONSOLE_LINE)
         logging.debug("Image fetched.")
@@ -699,4 +703,3 @@ class DummyCamera(CamGeneral):
             cv2.imwrite(img_save_dir, retrieved_image)
 
             logging.debug("Image saved to {}".format(img_save_dir))
-
