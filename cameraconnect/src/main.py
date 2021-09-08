@@ -62,30 +62,32 @@ if EXPOSURE_TIME.upper() == "OFF" or EXPOSURE_TIME.upper() == "NONE":
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
-LOG_FILE = os.environ.get("LOG_FILE", None) # todo undocumented
+LOG_FILE = os.environ.get("LOG_FILE", None)  # todo undocumented
 if IMAGE_CHANNELS != 'None':
     IMAGE_CHANNELS = int(IMAGE_CHANNELS)
-if EXPOSURE_TIME != 'None':
-    try:
-        EXPOSURE_TIME = float(EXPOSURE_TIME)
-    except TypeError:
-        exposure_default = 15000.0
-        logging.error(f"exposure not valid setting to default of  {exposure_default}")
-        EXPOSURE_TIME = exposure_default
+
 
 ### End of loading settings ###
 if __name__ == "__main__":
 
     if LOGGING_LEVEL == "DEBUG":
-        logging.basicConfig(level=logging.DEBUG, filename=LOG_FILE)
+        logging.basicConfig(level=logging.DEBUG, filename=LOG_FILE,filemode="w")
     elif LOGGING_LEVEL == "INFO":
-        logging.basicConfig(level=logging.INFO, filename=LOG_FILE)
+        logging.basicConfig(level=logging.INFO, filename=LOG_FILE,filemode="w")
     elif LOGGING_LEVEL == "WARNING":
         logging.basicConfig(level=logging.WARNING, filename=LOG_FILE)
     elif LOGGING_LEVEL == "ERROR":
         logging.basicConfig(level=logging.ERROR, filename=LOG_FILE)
     elif LOGGING_LEVEL == "CRITICAL":
         logging.basicConfig(level=logging.CRITICAL, filename=LOG_FILE)
+
+    if EXPOSURE_TIME != 'None':
+        try:
+            EXPOSURE_TIME = float(EXPOSURE_TIME)
+        except TypeError:
+            exposure_default = 15000.0
+            #logging.error(f"exposure not valid setting to default of  {exposure_default}")
+            EXPOSURE_TIME = exposure_default
 
     logging.debug("Exposure time: " + str(EXPOSURE_TIME))
     logging.debug("Image channels: " + str(IMAGE_CHANNELS))
