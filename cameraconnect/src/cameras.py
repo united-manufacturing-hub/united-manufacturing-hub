@@ -338,7 +338,8 @@ class GenICam(CamGeneral):
                          mqtt_port=mqtt_port,
                          mqtt_topic=mqtt_topic,
                          mac_address=mac_address)
-
+        logging.debug("-" * 80)
+        logging.debug(f"initialised {super()} with {mqtt_host} {mqtt_port} {mqtt_topic} {mac_address}")
         self.gen_tl_producer_path_list = gen_tl_producer_path_list
         self.user_set_selector = user_set_selector
         self.image_width = image_width
@@ -356,6 +357,8 @@ class GenICam(CamGeneral):
         self._connect()
 
         # Apply configurations
+        logging.debug("#" * 31 + "applying settings" + "#" * 32)
+
         self._apply_settings()
 
         # Start acquisition
@@ -411,10 +414,12 @@ class GenICam(CamGeneral):
             # read cameras mac address
             # ATTENTION: only works with BAUMER SDK
             device_mac_address = str(camera.id_).replace("_", "").replace("devicemodul", "")
-            logging.debug(f"current device_mac_address: {device_mac_address.upper()}, {self.mac_address.upper().replace(':', '')}")
+            logging.debug(
+                f"current device_mac_address: {device_mac_address.upper()}, {self.mac_address.upper().replace(':', '')}")
 
             if device_mac_address.upper() == self.mac_address.upper().replace(":", ""):
                 try:
+                    logging.debug(f"attempting to connect to device {camera.id_}")
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
                 except:
                     logging.error(
@@ -422,6 +427,15 @@ class GenICam(CamGeneral):
                     sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
+            else:
+                try:
+                    logging.debug(f"attempting to connect to device {camera.id_}")
+                    self.ia = self.h.create_image_acquirer(id_=camera.id_)
+                except:
+                    logging.error(
+                        "Camera ist not reachable. Most likely another container already occupies the same camera. One camera can only be used by exactly one container at the time.")
+                    sys.exit("Camera not reachable.")
+                logging.debug("Using:" + str(camera))
 
         if not hasattr(self, "ia"):
             logging.error(
@@ -512,6 +526,7 @@ class GenICam(CamGeneral):
             self.ia.remote_device.node_map.PixelFormat.value = self.pixel_format
 
         # Set Exposure time
+        logging.debug(f"exposure auto :{self.exposure_auto} , exposure time {self.exposure_time}")
         if self.exposure_auto is not None:
             try:
                 self.ia.remote_device.node_map.ExposureTimeAbs.value = self.exposure_time
@@ -575,7 +590,7 @@ class GenICam(CamGeneral):
             #   with an old image, but we want the newest image,
             #   This here is probably not the best way to solve
             #   the problem. It is a workaround.
-            #with self.ia.fetch_buffer(timeout=20) as buffer:
+            # with self.ia.fetch_buffer(timeout=20) as buffer:
             #    # Do not use this buffer, use the next one
             #    pass
 
