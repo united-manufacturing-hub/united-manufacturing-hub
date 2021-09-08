@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -127,6 +128,15 @@ func handleProxyRequest(c *gin.Context, method string) {
 		handleInvalidInputError(span, c, err)
 		return
 	}
+	var bodyBytes []byte
+	if c.Request.Body != nil {
+		bodyBytes, err = ioutil.ReadAll(c.Request.Body)
+		if err != nil {
+			handleInvalidInputError(span, c, err)
+			return
+		}
+	}
+	zap.S().Warnf("Read %d bytes from original request", len(bodyBytes))
 
 	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(getProxyRequestPath.OriginalURI))
 	if err != nil {
@@ -144,9 +154,9 @@ func handleProxyRequest(c *gin.Context, method string) {
 	// Switch to handle our services
 	switch getProxyRequestPath.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, getProxyRequestPath, method)
+		HandleFactoryInput(c, getProxyRequestPath, method, bodyBytes)
 	case "factoryinsight":
-		HandleFactoryInsight(c, getProxyRequestPath, method)
+		HandleFactoryInsight(c, getProxyRequestPath, method, bodyBytes)
 	default:
 		{
 			zap.S().Warnf("getProxyRequestPath.Service", getProxyRequestPath.Service)
@@ -186,7 +196,7 @@ func IsBase64(s string) bool {
 	return err == nil
 }
 
-func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string) {
+func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string, bytes []byte) {
 	zap.S().Debugf("HandleFactoryInsight")
 	// Jaeger tracing
 	var span opentracing.Span
@@ -239,11 +249,11 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 		return
 	}
 
-	DoProxiedRequest(c, err, u, "", authHeader, method)
+	DoProxiedRequest(c, err, u, "", authHeader, method, bytes)
 }
 
 // HandleFactoryInput handles proxy requests to factoryinput
-func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method string) {
+func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
 	// Jaeger tracing
 	var span opentracing.Span
 	if cspan, ok := c.Get(tracingContext); ok {
@@ -282,27 +292,25 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 
 	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
-	u, err := url.Parse(fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
+	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
+	zap.S().Warnf("Proxified URL: %s", u.String())
 	if err != nil {
-		zap.S().Warnf("url.Parse failed", fmt.Sprintf("%s%s", FactoryInputBaseURL, proxyUrl))
+		zap.S().Warnf("url.Parse failed", fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
 		handleInvalidInputError(span, c, err)
 		return
 	}
 
 	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
-	if len(s) != 5 {
+	if len(s) != 7 {
 		zap.S().Warnf("String split failed", len(s))
 		handleInvalidInputError(span, c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
 		return
 	}
 
-	customer := s[1]
-	/*
-		location := s[2]
-		asset := s[3]
-		value := s[4]
-	*/
+	zap.S().Debugf("splits: ", s)
+
+	customer := s[3]
 
 	zap.S().Warnf("GetOrgas")
 	// Get grafana organizations of user
@@ -313,10 +321,13 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		return
 	}
 
+	zap.S().Warnf("My Orgas: ", orgas)
+	zap.S().Warnf("Customer: %s", customer)
 	// Check if user is in orga, with same name as customer
 	allowedOrg := false
 	for _, orgsElement := range orgas {
 		if orgsElement.Name == customer {
+			zap.S().Warnf("%s vs %s", orgsElement.Name, customer)
 			allowedOrg = true
 			break
 		}
@@ -329,10 +340,10 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		return
 	}
 	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
-	DoProxiedRequest(c, err, u, sessionCookie, ak, method)
+	DoProxiedRequest(c, err, u, sessionCookie, ak, method, bodyBytes)
 }
 
-func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string) {
+func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string, bodyBytes []byte) {
 	// Proxy request to backend
 	client := &http.Client{}
 
@@ -347,9 +358,18 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 			c.AbortWithError(http.StatusInternalServerError, err)
 		}
 	} else {
-		req, err := http.NewRequest(method, u.String(), nil)
+
+		var req *http.Request
+		if bodyBytes != nil && len(bodyBytes) > 0 {
+			zap.S().Warnf("Request with body bytes: ", bodyBytes)
+			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
+		} else {
+			zap.S().Warnf("Request without body bytes")
+			req, err = http.NewRequest(method, u.String(), nil)
+
+		}
 		if err != nil {
-			zap.S().Debugf("Request error: ", err)
+			zap.S().Warnf("Request error: ", err)
 			return
 		}
 		// Add headers for backend

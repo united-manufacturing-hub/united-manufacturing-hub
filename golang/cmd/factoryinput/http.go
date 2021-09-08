@@ -154,6 +154,7 @@ func postMQTTHandler(c *gin.Context) {
 	}
 
 	jsonData := string(jsonBytes)
+	zap.S().Warnf("jsonData: %s", jsonData)
 
 	if !IsJSON(jsonData) {
 		handleInvalidInputError(span, c, errors.New("Input is not valid JSON"))
