@@ -12,7 +12,7 @@ By default, k3OS allows SSH connections only using certificates. This is a much 
 ## Prerequisites
 
 - Edge device running [k3OS](https://github.com/rancher/k3os)
-- physical access to that device
+- Physical access to that device
 
 ## Tutorial
 
