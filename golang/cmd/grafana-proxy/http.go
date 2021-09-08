@@ -361,6 +361,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 		resp, err := client.Do(req)
 		if err != nil {
 			zap.S().Debugf("Client.Do error: ", err)
+			c.AbortWithStatus(500)
 			return
 		}
 
