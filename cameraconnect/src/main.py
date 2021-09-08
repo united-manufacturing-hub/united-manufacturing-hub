@@ -72,8 +72,8 @@ if EXPOSURE_TIME != 'None':
         exposure_default = 15000.0
         logging.error(f"exposure not valid setting to default of  {exposure_default}")
         EXPOSURE_TIME = exposure_default
-### End of loading settings ###
 
+### End of loading settings ###
 if __name__ == "__main__":
 
     if LOGGING_LEVEL == "DEBUG":
