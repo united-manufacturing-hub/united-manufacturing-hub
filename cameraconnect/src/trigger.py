@@ -189,6 +189,7 @@ class ContinuousTrigger:
             #   it to get the time which the current loop needed 
             #   to run the code
             loop_time = time.time() - timer_start
+            logging.debug(f"cycle time: {cycle_time}")
             # If the processing time is longer than the cycle 
             #   time throw error
             if loop_time > self.cycle_time:
