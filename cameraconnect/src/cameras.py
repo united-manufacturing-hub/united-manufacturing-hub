@@ -582,6 +582,7 @@ class GenICam(CamGeneral):
         """
         # Try to fetch a buffer that has been filled up with an
         #   image
+        logging.debug("#" * 36 + "get image" + "#" * 35)
         try:
             # Default value
             retrieved_image = None
@@ -590,9 +591,10 @@ class GenICam(CamGeneral):
             #   with an old image, but we want the newest image,
             #   This here is probably not the best way to solve
             #   the problem. It is a workaround.
-            # with self.ia.fetch_buffer(timeout=20) as buffer:
-            #    # Do not use this buffer, use the next one
-            #    pass
+            with self.ia.fetch_buffer(timeout=20) as buffer:
+                # Do not use this buffer, use the next one
+                pass
+                logging.debug(f"buffer {buffer}")
 
             # Due to with statement buffer will automatically be
             #   queued
