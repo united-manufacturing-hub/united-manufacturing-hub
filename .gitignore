@@ -63,3 +63,5 @@ docs/static/openapi/output/factory_input/markdown/.openapi-generator/
 **/values_test.yaml
 *.venv*
 *.venv
+
+cameraconnect/src/__pycache__/
