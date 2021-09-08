@@ -421,7 +421,7 @@ class GenICam(CamGeneral):
             if not first:
                 logging.debug(f"camera {camera} is not first one with target  id")
                 continue
-            if device_mac_address.upper() == self.mac_address.upper().replace(":", ""):
+            if device_mac_address.upper() == self.mac_address.upper().replace(":", ""): # fixme id detection system is in need of improvement, fix plz
 
                 try:
                     logging.debug(f"attempting to connect to device {camera.id_}")
