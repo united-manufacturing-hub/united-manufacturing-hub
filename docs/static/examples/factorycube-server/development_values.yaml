@@ -1,12 +1,13 @@
-serialNumber: prototypv1
-
+# mqttBridgeURL points factorycube-edge to factorycube-server
 mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"
 mqttBridgeTopic: "ia/factoryinsight"
 
+# scans only localhost by default to prevent spamming the network
 sensorconnect:
-  iprange: "172.21.21.0/24"
+  iprange: "127.0.0.1/32"
 
 # Certficiates for MQTT Bridge
+# These are development certificates. DO NOT USE IN PRODUCTION (some idiots will still do it...)
 mqttBridgeCACert: |
     -----BEGIN CERTIFICATE-----
     MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
@@ -78,4 +79,3 @@ mqttBridgePrivkey: |
     Hjisp/sALgNP4jyR8w1a/OUIwBR5UhDFfPSwctyE12ojEn4syegh0sUK3i2m3Fmf
     Ub7w8oJqMapWI3XxHOLOAi6o
     -----END PRIVATE KEY-----
-

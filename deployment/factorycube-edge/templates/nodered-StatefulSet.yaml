@@ -40,13 +40,7 @@ spec:
         args:
         - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi; 
           cd /data;
-          npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
-          npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
-          npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
-          npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
-          npm list node-red-contrib-opc-da || npm install node-red-contrib-opc-da;
-          npm list node-red-contrib-opcda-client || npm install node-red-contrib-opcda-client;
-          npm list node-red-contrib-cron-plus || node-red-contrib-cron-plus;
+          {{ default "" .Values.nodered.pluginInstallLines | nindent 10}}
         volumeMounts:
         - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
           mountPath: /data
