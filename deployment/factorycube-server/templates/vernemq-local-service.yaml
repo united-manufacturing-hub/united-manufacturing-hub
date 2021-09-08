@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: vernemq
     app.kubernetes.io/instance: {{ include "factorycube-server.fullname" . }}
-    app.kubernetes.io/managed-by: helm 
+    app.kubernetes.io/managed-by: helm
 spec:
   type: ClusterIP
   ports:

@@ -42,8 +42,8 @@ spec:
           mountPath: /data
         - name: {{ include "factorycube-server.fullname" . }}-nodered-config
           mountPath: /data/settings.js
-          subPath: nodered-config 
-          readOnly: true  
+          subPath: nodered-config
+          readOnly: true
         env:
         - name: TZ
           value: {{ .Values.nodered.timezone }}
@@ -51,8 +51,8 @@ spec:
       - name: {{ include "factorycube-server.fullname" . }}-nodered-data
         persistentVolumeClaim:
           claimName: {{ include "factorycube-server.fullname" . }}-nodered-claim
-      - name: {{ include "factorycube-server.fullname" . }}-nodered-config 
+      - name: {{ include "factorycube-server.fullname" . }}-nodered-config
         configMap:
-          name: {{ include "factorycube-server.fullname" . }}-nodered-config 
+          name: {{ include "factorycube-server.fullname" . }}-nodered-config
 
 {{- end }}
