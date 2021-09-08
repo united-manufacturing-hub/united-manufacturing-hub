@@ -44,7 +44,7 @@ class MqttTrigger:
         A connected instance of MqttTrigger
     """
 
-    def __init__(self,cam,interface,acquisition_delay,mqtt_host,mqtt_port,mqtt_topic) -> None:
+    def __init__(self, cam, interface, acquisition_delay, mqtt_host, mqtt_port, mqtt_topic) -> None:
         """
         Connect MQTT client.
 
@@ -64,13 +64,14 @@ class MqttTrigger:
 
         # Connect to the Broker
         self.client = mqtt.Client()
-        self.client.connect(self.mqtt_host, self.mqtt_port) 
+        self.client.connect(self.mqtt_host, self.mqtt_port)
         # Start the loop to be always able to receive messages 
         #   from broker
-        
+
         # Tests 10.04.2021
-        self.client.on_subscribe = lambda client, userdata, mid, granted_qos: print("Subscribed to topic: {}".format(self.mqtt_topic))
-        
+        self.client.on_subscribe = lambda client, userdata, mid, granted_qos: print(
+            "Subscribed to topic: {}".format(self.mqtt_topic))
+
         self.client.loop_start()
         # Subscribe to the given mqtt_topic
         self.client.subscribe(self.mqtt_topic)
@@ -79,7 +80,7 @@ class MqttTrigger:
         self.client.on_message = self._on_message
 
     # Is called always when a new message is received
-    def _on_message(self,client,userdata,msg) -> None:
+    def _on_message(self, client, userdata, msg) -> None:
         """
         Callback function for MQTT on_message. 
         Message must be a encoded json!
@@ -98,18 +99,18 @@ class MqttTrigger:
             None     
         """
         # If no acquisition delay skip the following
-        if self.acquisition_delay > 0.0:  
+        if self.acquisition_delay > 0.0:
             # Get timestamp of time  when trigger was received. 
             #   Measured in ms since epoch. Epoch is defined as 
             #   January 1, 1970, 00:00:00 (UTC)
             timestamp_ms = int(round(time.time() * 1000))
 
         # Deserialize Json
-        message = json.loads(msg.payload)   
+        message = json.loads(msg.payload)
         print("Image acquisition trigger received")
 
         # If no acquisition delay skip the following
-        if self.acquisition_delay > 0.0:        
+        if self.acquisition_delay > 0.0:
             # Check if timestamp in ms is provided in message. Then
             #   use this timestamp instead.
             if 'timestamp_ms' in message:
@@ -119,15 +120,16 @@ class MqttTrigger:
         # If no acquisition delay skip the following
         if self.acquisition_delay > 0.0:
             if time_to_get_image < round(time.time() * 1000):
-                sys.exit("Environment Error: ACQUISITION_DELAY to short ||| Set acquisition delay is shorter than the processing time.")
-            while time_to_get_image > round(time.time() * 1000):# Get an image 
+                sys.exit(
+                    "Environment Error: ACQUISITION_DELAY to short ||| Set acquisition delay is shorter than the processing time.")
+            while time_to_get_image > round(time.time() * 1000):  # Get an image
                 # Avoid CPU overloading
                 time.sleep(0.1)
 
         # Get an image 
         print("Get an image.")
         self.cam.get_image()
-    
+
     def disconnect(self) -> None:
         """
         Disconnects from MQTT broker.
@@ -163,7 +165,7 @@ class ContinuousTrigger:
         stay forever.
     """
 
-    def __init__(self,cam,interface,cycle_time) -> None:
+    def __init__(self, cam, interface, cycle_time) -> None:
         """
         While-loop with time measuring to have always the same 
         cycle time.
@@ -182,7 +184,7 @@ class ContinuousTrigger:
         while True:
             # Get actual time and save it as start time
             timer_start = time.time()
-            
+
             self.cam.get_image()
 
             # Get actual time and subtract the start time from
@@ -193,12 +195,14 @@ class ContinuousTrigger:
             # If the processing time is longer than the cycle 
             #   time throw error
             if loop_time > self.cycle_time:
-                logging.critical("Environment Error: CYCLE_TIME to short ||| Set cycle time is shorter than the processing time for each image.")
+                logging.critical(
+                    "Environment Error: CYCLE_TIME to short ||| Set cycle time is shorter than the processing time for each image.")
                 logging.error(f"cycle time: {cycle_time} loop took {loop_time}")
-
+                # print(f"cycle time: {cycle_time} loop took {loop_time}")  # workaround for fucked up logging todo remove
             else:
                 # Sleep for difference of cycle time minus loop 
                 #   time to have a constant cycle time
                 delay = self.cycle_time - loop_time
-                logging.debug("Delay to reach constant cycle time.")
+                logging.debug(f"Delay {delay} s to reach constant cycle time.")
+                # print(f"Delay {delay} s to reach constant cycle time.")  # workaround for fucked up logging todo remove
                 time.sleep(delay)
