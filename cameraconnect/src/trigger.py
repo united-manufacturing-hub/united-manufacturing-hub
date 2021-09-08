@@ -193,7 +193,9 @@ class ContinuousTrigger:
             # If the processing time is longer than the cycle 
             #   time throw error
             if loop_time > self.cycle_time:
-                sys.exit("Environment Error: CYCLE_TIME to short ||| Set cycle time is shorter than the processing time for each image.")
+                logging.critical("Environment Error: CYCLE_TIME to short ||| Set cycle time is shorter than the processing time for each image.")
+                logging.error(f"cycle time: {cycle_time} loop took {loop_time}")
+
             else:
                 # Sleep for difference of cycle time minus loop 
                 #   time to have a constant cycle time

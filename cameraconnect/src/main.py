@@ -62,7 +62,7 @@ if EXPOSURE_TIME.upper() == "OFF" or EXPOSURE_TIME.upper() == "NONE":
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
-
+LOG_FILE = os.environ.get("LOG_FILE", None)
 if IMAGE_CHANNELS != 'None':
     IMAGE_CHANNELS = int(IMAGE_CHANNELS)
 if EXPOSURE_TIME != 'None':
@@ -77,15 +77,15 @@ if EXPOSURE_TIME != 'None':
 if __name__ == "__main__":
 
     if LOGGING_LEVEL == "DEBUG":
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG, filename=LOG_FILE)
     elif LOGGING_LEVEL == "INFO":
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO, filename=LOG_FILE)
     elif LOGGING_LEVEL == "WARNING":
-        logging.basicConfig(level=logging.WARNING)
+        logging.basicConfig(level=logging.WARNING, filename=LOG_FILE)
     elif LOGGING_LEVEL == "ERROR":
-        logging.basicConfig(level=logging.ERROR)
+        logging.basicConfig(level=logging.ERROR, filename=LOG_FILE)
     elif LOGGING_LEVEL == "CRITICAL":
-        logging.basicConfig(level=logging.CRITICAL)
+        logging.basicConfig(level=logging.CRITICAL, filename=LOG_FILE)
 
     logging.debug("Exposure time: " + str(EXPOSURE_TIME))
     logging.debug("Image channels: " + str(IMAGE_CHANNELS))
