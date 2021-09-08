@@ -194,15 +194,11 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32) {
 
 func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error) {
 
-	uid, cacheHit := internal.GetUniqueProductIDFromCache(aid, DBassetID)
-	if !cacheHit { // data NOT found
-		err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(aid, DBassetID).Scan(&uid)
-		if err == sql.ErrNoRows {
-			zap.S().Errorf("No Results Found", aid, DBassetID)
-		} else if err != nil {
-			PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
-		}
-		internal.StoreUniqueProductIDToCache(aid, DBassetID, uid)
+	err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(aid, DBassetID).Scan(&uid)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found", aid, DBassetID)
+	} else if err != nil {
+		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
 	}
 
 	return
