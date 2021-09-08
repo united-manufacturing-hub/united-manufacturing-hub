@@ -326,7 +326,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []QueueObject) (faultyItems
 		}
 
 		for _, item := range items {
-			var pt processValueFloat64Queue
+			var pt processValueFloat64QueueRaw
 			err = json.Unmarshal(item.Payload, &pt)
 			if err != nil {
 				zap.S().Errorf("Failed to unmarshal item", item)
@@ -501,7 +501,7 @@ func storeItemsIntoDatabaseProcessValue(items []QueueObject) (faultyItems []Queu
 			return
 		}
 		for _, item := range items {
-			var pt processValueQueue
+			var pt processValueQueueRaw
 			err = json.Unmarshal(item.Payload, &pt)
 			if err != nil {
 				zap.S().Errorf("Failed to unmarshal item", item)

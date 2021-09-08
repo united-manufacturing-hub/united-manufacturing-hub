@@ -6,23 +6,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type scrapCountQueue struct {
-	DBAssetID   uint32
-	Scrap       uint32
-	TimestampMs uint64
+type scrapUniqueProductQueue struct {
+	DBAssetID uint32
+	UID       string
 }
-type scrapCount struct {
-	Scrap       uint32 `json:"scrap"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+type scrapUniqueProduct struct {
+	UID string `json:"UID"`
 }
 
-type ScrapCountHandler struct {
+type ScrapUniqueProductHandler struct {
 	pg       *goque.PriorityQueue
 	shutdown bool
 }
 
-func (r ScrapCountHandler) Setup() (err error) {
-	const queuePathDB = "/data/ScrapCount"
+func (r ScrapUniqueProductHandler) Setup() (err error) {
+	const queuePathDB = "/data/ScrapUniqueProduct"
 	r.pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
@@ -32,13 +30,13 @@ func (r ScrapCountHandler) Setup() (err error) {
 	return
 }
 
-func (r ScrapCountHandler) process() {
+func (r ScrapUniqueProductHandler) process() {
 	for !r.shutdown {
 		//TODO
 	}
 }
 
-func (r ScrapCountHandler) enqueue(bytes []byte, priority uint8) {
+func (r ScrapUniqueProductHandler) enqueue(bytes []byte, priority uint8) {
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes)
@@ -46,15 +44,15 @@ func (r ScrapCountHandler) enqueue(bytes []byte, priority uint8) {
 	}
 }
 
-func (r ScrapCountHandler) Shutdown() (err error) {
+func (r ScrapUniqueProductHandler) Shutdown() (err error) {
 	r.shutdown = true
 	err = CloseQueue(r.pg)
 	return
 }
 
-func (r ScrapCountHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
+func (r ScrapUniqueProductHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
 
-	var parsedPayload scrapCount
+	var parsedPayload scrapUniqueProduct
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -63,11 +61,9 @@ func (r ScrapCountHandler) EnqueueMQTT(customerID string, location string, asset
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
-
-	newObject := scrapCountQueue{
-		TimestampMs: parsedPayload.TimestampMs,
-		Scrap:       parsedPayload.Scrap,
-		DBAssetID:   DBassetID,
+	newObject := scrapUniqueProductQueue{
+		UID:       parsedPayload.UID,
+		DBAssetID: DBassetID,
 	}
 
 	marshal, err := json.Marshal(newObject)

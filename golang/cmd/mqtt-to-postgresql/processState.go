@@ -22,7 +22,7 @@ type StateHandler struct {
 }
 
 func (r StateHandler) Setup() (err error) {
-	const queuePathDB = "/data/state/state"
+	const queuePathDB = "/data/State"
 	r.pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)

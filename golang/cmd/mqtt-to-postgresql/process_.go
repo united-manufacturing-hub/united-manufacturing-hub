@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
 )
@@ -12,7 +11,7 @@ type XHandler struct {
 }
 
 func (r XHandler) Setup() (err error) {
-	const queuePathDB = "/data/state/X"
+	const queuePathDB = "/data/X"
 	r.pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
@@ -43,6 +42,8 @@ func (r XHandler) Shutdown() (err error) {
 }
 
 func (r XHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
+
+	var marshal []byte
 
 	r.enqueue(marshal, 0)
 	return

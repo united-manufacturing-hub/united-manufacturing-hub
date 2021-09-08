@@ -3,17 +3,13 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"time"
-
-	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
+	"io/ioutil"
 
 	"regexp" // pattern matching
 )
@@ -77,11 +73,10 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 }
 
-func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue, basePrio uint8) {
+func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) {
 	//zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
 	AddAssetIfNotExisting(assetID, location, customerID)
 
-	var err error
 	if customerID != "raw" {
 		if payloadType == "" {
 			return
@@ -89,115 +84,62 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 		switch payloadType {
 		case Prefix.State:
-			err = ProcessStateData(customerID, location, assetID, payloadType, payload, pg)
 		case Prefix.ProcessValue:
-			err = ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 		//TODO is still still needed ?
 		case "processvalue":
 			{
 				zap.S().Warnf("Depreciated")
-				err = ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
 			}
 		case Prefix.ProcessValueString:
-			err = ProcessProcessValueString(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.Count:
-			err = ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.ScrapCount:
-			err = ProcessScrapCountData(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.Recommendation:
-			err = ProcessRecommendationData(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.AddShift:
-			err = ProcessAddShift(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.AddMaintenanceActivity:
-			err = ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.UniqueProduct:
-			err = ProcessUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.UniqueProductScrap:
-			err = ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.AddProduct:
-			err = ProcessAddProduct(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.AddOrder:
-			err = ProcessAddOrder(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.StartOrder:
-			err = ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.EndOrder:
-			err = ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.ProductTag:
-			err = ProcessProductTag(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.ProductTagString:
-			err = ProcessProductTagString(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.AddParentToChild:
-			err = ProcessAddParentToChild(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.ModifyState:
-			err = ProcessModifyState(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.DeleteShiftById:
-			err = ProcessDeleteShiftById(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-			err = ProcessDeleteShiftByAssetIdAndBeginTime(customerID, location, assetID, payloadType, payload, pg)
+
 		case Prefix.ModifyProducesPieces:
-			err = ProcessModifyProducesPiece(customerID, location, assetID, payloadType, payload, pg)
+
 		default:
 			zap.S().Warnf("Unknown Prefix: %s", payloadType)
 		}
 
-		if err == ErrTryLater {
-			EnqueueMQTT(customerID, location, assetID, payloadType, payload, pg, basePrio)
-		}
 	}
 
-}
-
-func RetryMQTT(item QueueObject, prio uint8) {
-
-	if prio < 255 {
-		prio += 1
-	} else {
-		prio = 254
-		time.Sleep(10 * time.Second)
-	}
-	var pt MQTTQueueMessage
-	err := json.Unmarshal(item.Payload, &pt)
-	if err != nil {
-		zap.S().Errorf("Failed to unmarshal item", item)
-		return
-	}
-	go processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.PayloadType, pt.Payload, globalDBPQ, prio)
-	return
-}
-
-func EnqueueMQTT(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PriorityQueue, prio uint8) {
-	newObject := MQTTQueueMessage{
-		CustomerID:  customerID,
-		Location:    location,
-		AssetID:     assetID,
-		PayloadType: payloadType,
-		Payload:     payload,
-	}
-
-	marshal, err := json.Marshal(newObject)
-	if err != nil {
-		return
-	}
-	err = addRawItemWithPriorityToQueue(pg, Prefix.RawMQTTRequeue, marshal, prio)
-	if err != nil {
-		zap.S().Errorf("Error enqueuing", err)
-		return
-	}
-	return
-}
-
-type MQTTQueueMessage struct {
-	CustomerID  string
-	Location    string
-	AssetID     string
-	PayloadType string
-	Payload     []byte
 }
 
 var rp = regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
 
 // getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is received by a specific topic
-func getOnMessageReceived(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Message) {
+func getOnMessageReceived() func(MQTT.Client, MQTT.Message) {
 	return func(client MQTT.Client, message MQTT.Message) {
 		//Check whether topic has the correct structure
 		res := rp.FindStringSubmatch(message.Topic())
@@ -213,7 +155,7 @@ func getOnMessageReceived(pg *goque.PriorityQueue) func(MQTT.Client, MQTT.Messag
 
 		mqttTotal.Inc()
 
-		go processMessage(customerID, location, assetID, payloadType, payload, pg, 0)
+		go processMessage(customerID, location, assetID, payloadType, payload)
 	}
 }
 
@@ -250,7 +192,7 @@ func ShutdownMQTT() {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.PriorityQueue) {
+func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -288,7 +230,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, h
 	}
 
 	// Subscribe
-	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
+	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived()); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 	zap.S().Infof("MQTT subscribed", mqttTopic)

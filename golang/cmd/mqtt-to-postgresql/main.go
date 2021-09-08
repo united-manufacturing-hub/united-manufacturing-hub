@@ -20,6 +20,28 @@ import (
 
 var globalDBPQ *goque.PriorityQueue
 
+var addOrderHandler AddOrderHandler
+var addParentToChildHandler AddParentToChildHandler
+var addProductHandler AddProductHandler
+var addShiftHandler AddShiftHandler
+var countHandler CountHandler
+var deleteShiftByAssetIdAndBeginTimestampHandler DeleteShiftByAssetIdAndBeginTimestampHandler
+var deleteShiftByIdHandler DeleteShiftByIdHandler
+var endOrderHandler EndOrderHandler
+var maintenanceActivityHandler MaintenanceActivityHandler
+var modifyProducedPieceHandler ModifyProducedPieceHandler
+var modifyStateHandler ModifyStateHandler
+var productTagHandler ProductTagHandler
+var recommendationDataHandler RecommendationDataHandler
+var scrapCountHandler ScrapCountHandler
+var scrapUniqueProductHandler ScrapUniqueProductHandler
+var startOrderHandler StartOrderHandler
+var productTagStringHandler ProductTagStringHandler
+var stateHandler StateHandler
+var uniqueProductHandler UniqueProductHandler
+var valueDataHandler ValueDataHandler
+var valueStringHandler ValueStringHandler
+
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
@@ -77,20 +99,32 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	const queuePathDB = "/data/priorityQueue"
-	pg, err := SetupQueue(queuePathDB)
-	if err != nil {
-		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
-		return
-	}
-	defer CloseQueue(pg)
-
-	globalDBPQ = pg
+	addOrderHandler.Setup()
+	addParentToChildHandler.Setup()
+	addProductHandler.Setup()
+	addShiftHandler.Setup()
+	countHandler.Setup()
+	deleteShiftByAssetIdAndBeginTimestampHandler.Setup()
+	deleteShiftByIdHandler.Setup()
+	endOrderHandler.Setup()
+	maintenanceActivityHandler.Setup()
+	modifyProducedPieceHandler.Setup()
+	modifyStateHandler.Setup()
+	productTagHandler.Setup()
+	recommendationDataHandler.Setup()
+	scrapCountHandler.Setup()
+	scrapUniqueProductHandler.Setup()
+	startOrderHandler.Setup()
+	productTagStringHandler.Setup()
+	stateHandler.Setup()
+	uniqueProductHandler.Setup()
+	valueDataHandler.Setup()
+	valueStringHandler.Setup()
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
 	mqttTopic := os.Getenv("MQTT_TOPIC")
-	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName, pg)
+	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -112,14 +146,6 @@ func main() {
 		ShutdownApplicationGraceful()
 
 	}()
-
-	// Start queue processing goroutines
-	go reportQueueLength(pg)
-
-	// Start goroutines to process queue
-	for i := 0; i < 1; i++ {
-		go processDBQueue(pg)
-	}
 
 	select {} // block forever
 }

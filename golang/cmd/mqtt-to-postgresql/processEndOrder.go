@@ -6,25 +6,22 @@ import (
 	"go.uber.org/zap"
 )
 
-type countQueue struct {
+type endOrderQueue struct {
 	DBAssetID   uint32
-	Count       uint32
-	Scrap       uint32
 	TimestampMs uint64
+	OrderName   string
 }
-type count struct {
-	Count       uint32 `json:"count"`
-	Scrap       uint32 `json:"scrap"`
+type endOrder struct {
 	TimestampMs uint64 `json:"timestamp_ms"`
+	OrderName   string `json:"order_id"`
 }
-
-type CountHandler struct {
+type EndOrderHandler struct {
 	pg       *goque.PriorityQueue
 	shutdown bool
 }
 
-func (r CountHandler) Setup() (err error) {
-	const queuePathDB = "/data/Count"
+func (r EndOrderHandler) Setup() (err error) {
+	const queuePathDB = "/data/EndOrder"
 	r.pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
@@ -34,13 +31,13 @@ func (r CountHandler) Setup() (err error) {
 	return
 }
 
-func (r CountHandler) process() {
+func (r EndOrderHandler) process() {
 	for !r.shutdown {
 		//TODO
 	}
 }
 
-func (r CountHandler) enqueue(bytes []byte, priority uint8) {
+func (r EndOrderHandler) enqueue(bytes []byte, priority uint8) {
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes)
@@ -48,15 +45,15 @@ func (r CountHandler) enqueue(bytes []byte, priority uint8) {
 	}
 }
 
-func (r CountHandler) Shutdown() (err error) {
+func (r EndOrderHandler) Shutdown() (err error) {
 	r.shutdown = true
 	err = CloseQueue(r.pg)
 	return
 }
 
-func (r CountHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
+func (r EndOrderHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
 
-	var parsedPayload count
+	var parsedPayload endOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -64,18 +61,10 @@ func (r CountHandler) EnqueueMQTT(customerID string, location string, assetID st
 		return
 	}
 
-	// this should not happen. Throw a warning message and ignore (= do not try to store in database)
-	if parsedPayload.Count <= 0 {
-		zap.S().Warnf("count <= 0", customerID, location, assetID, payload, parsedPayload)
-		return
-	}
-
 	DBassetID := GetAssetID(customerID, location, assetID)
-
-	newObject := countQueue{
+	newObject := endOrderQueue{
 		TimestampMs: parsedPayload.TimestampMs,
-		Count:       parsedPayload.Count,
-		Scrap:       parsedPayload.Scrap,
+		OrderName:   parsedPayload.OrderName,
 		DBAssetID:   DBassetID,
 	}
 
@@ -85,9 +74,5 @@ func (r CountHandler) EnqueueMQTT(customerID string, location string, assetID st
 	}
 
 	r.enqueue(marshal, 0)
-	if err != nil {
-		zap.S().Errorf("Error enqueuing", err)
-		return
-	}
 	return
 }

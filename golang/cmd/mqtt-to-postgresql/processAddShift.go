@@ -22,7 +22,7 @@ type AddShiftHandler struct {
 }
 
 func (r AddShiftHandler) Setup() (err error) {
-	const queuePathDB = "/data/state/AddShift"
+	const queuePathDB = "/data/AddShift"
 	r.pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)

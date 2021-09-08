@@ -25,7 +25,7 @@ type MaintenanceActivityHandler struct {
 }
 
 func (r MaintenanceActivityHandler) Setup() (err error) {
-	const queuePathDB = "/data/state/X"
+	const queuePathDB = "/data/MaintenanceActivity"
 	r.pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
