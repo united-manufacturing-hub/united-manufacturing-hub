@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func setupQueue(queuePath string) (pq *goque.PriorityQueue, err error) {
+func SetupQueue(queuePath string) (pq *goque.PriorityQueue, err error) {
 
 	pq, err = goque.OpenPriorityQueue(queuePath, goque.ASC)
 	if err != nil {
@@ -17,7 +17,7 @@ func setupQueue(queuePath string) (pq *goque.PriorityQueue, err error) {
 	return
 }
 
-func closeQueue(pq *goque.PriorityQueue) (err error) {
+func CloseQueue(pq *goque.PriorityQueue) (err error) {
 
 	err = pq.Close()
 	if err != nil {

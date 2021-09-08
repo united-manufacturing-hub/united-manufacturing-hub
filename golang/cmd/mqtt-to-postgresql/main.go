@@ -77,13 +77,13 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	const queuePathDB = "/data/queue"
-	pg, err := setupQueue(queuePathDB)
+	const queuePathDB = "/data/priorityQueue"
+	pg, err := SetupQueue(queuePathDB)
 	if err != nil {
-		zap.S().Errorf("Error setting up remote queue", err)
+		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer closeQueue(pg)
+	defer CloseQueue(pg)
 
 	globalDBPQ = pg
 
@@ -151,7 +151,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	err := closeQueue(globalDBPQ)
+	err := CloseQueue(globalDBPQ)
 	if err != nil {
 		zap.S().Errorf("Error while closing queue gracefully", err)
 	}
