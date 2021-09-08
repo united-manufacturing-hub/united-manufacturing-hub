@@ -409,7 +409,8 @@ class GenICam(CamGeneral):
         # If multiple cameras in device list, choose the right
         #   one by changing the list_index or by using another
         #   argument
-
+        first = True  # in case one camera is detected multiple times
+        self.__remove_duplicate_entry_from_harvester()
         for camera in self.h.device_info_list:
             # read cameras mac address
             # ATTENTION: only works with BAUMER SDK
@@ -417,14 +418,19 @@ class GenICam(CamGeneral):
             logging.debug(
                 f"current device_mac_address: {device_mac_address.upper()}, {self.mac_address.upper().replace(':', '')}")
 
+            if not first:
+                logging.debug(f"camera {camera} is not first one with target  id")
+                continue
             if device_mac_address.upper() == self.mac_address.upper().replace(":", ""):
+
                 try:
                     logging.debug(f"attempting to connect to device {camera.id_}")
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
-                except:
+                    first = False
+                except Exception as _e:
                     logging.error(
                         "Camera is not reachable. Most likely another container already occupies the same camera. "
-                        "One camera can only be used by exactly one container at any time.")
+                        f"One camera can only be used by exactly one container at any time. {_e}")
                     sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
@@ -432,11 +438,13 @@ class GenICam(CamGeneral):
                 try:
                     logging.debug(f"attempting to connect to device {camera.id_}")
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
-                except:
+                    first = False
+                except Exception as _e:
                     logging.error(
                         "Camera is not reachable. Most likely another container already occupies the same camera. "
-                        "One camera can only be used by exactly one container at any time.")
+                        f"One camera can only be used by exactly one container at any time. {_e}")
                     sys.exit("Camera not reachable.")
+
                 logging.debug("Using:" + str(camera))
 
         if not hasattr(self, "ia"):
@@ -453,7 +461,20 @@ class GenICam(CamGeneral):
         #   acquisition process. The buffers will be announced
         #   to the target GenTL Producer. Need this so that we
         #   always get the correct actual image.
-        self.ia.num_buffers = 1
+        self.ia.num_buffers = 3  # test for stemmer imaging todo
+
+    def __remove_duplicate_entry_from_harvester(self):
+        """
+        removes duplicate entries from the harvester camera list,
+        required for stemmer imaging under widows with alied vision cameras, probably also for others
+        """
+        new_list = []
+        for d in self.h.device_info_list:
+            if any([n_d.id_ == d.id_ for n_d in new_list]):
+                continue
+            else:
+                new_list.append(d)
+        self.h._device_info_list = new_list
 
     def _apply_settings(self) -> None:
         """
