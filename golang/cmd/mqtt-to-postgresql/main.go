@@ -117,7 +117,7 @@ func main() {
 	go reportQueueLength(pg)
 
 	// Start goroutines to process queue
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1; i++ {
 		go processDBQueue(pg)
 	}
 
@@ -129,6 +129,11 @@ var shuttingDown = false
 
 // ShutdownApplicationGraceful shuts down the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
+	if shuttingDown {
+		//Already shutting down
+		return
+	}
+	shuttingDown = true
 	zap.S().Debugf(
 		`
    _____   _               _         _                                                         _   _                  _     _                    _____                                 __           _ 
@@ -140,7 +145,7 @@ func ShutdownApplicationGraceful() {
                                                                               | |     | |                                                                                                             
                                                                               |_|     |_|
 `)
-	shuttingDown = true
+
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
 
