@@ -92,6 +92,8 @@ func PQErrorHandling(sqlStatement string, err error) {
 	ShutdownApplicationGraceful()
 }
 
+// deferCallback runs at the end of every database function
+// Either commits or rolls back the transaction, depending on if the tx was successful
 func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 
 	if errIn != nil {
@@ -130,7 +132,6 @@ func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 
 // NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
 func NewNullInt64(i int64) sql.NullInt64 {
-
 	if i == 0 {
 		return sql.NullInt64{}
 	}

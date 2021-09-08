@@ -116,6 +116,7 @@ func main() {
 	// Start queue processing goroutines
 	go reportQueueLength(pg)
 
+	// Start goroutines to process queue
 	for i := 0; i < 10; i++ {
 		go processDBQueue(pg)
 	}
@@ -123,6 +124,7 @@ func main() {
 	select {} // block forever
 }
 
+// Set to true to stop processDBQueue goroutines
 var shuttingDown = false
 
 // ShutdownApplicationGraceful shuts down the entire application including MQTT and database
