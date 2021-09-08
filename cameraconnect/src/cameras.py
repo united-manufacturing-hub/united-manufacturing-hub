@@ -423,7 +423,8 @@ class GenICam(CamGeneral):
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
                 except:
                     logging.error(
-                        "Camera ist not reachable. Most likely another container already occupies the same camera. One camera can only be used by exactly one container at the time.")
+                        "Camera is not reachable. Most likely another container already occupies the same camera. "
+                        "One camera can only be used by exactly one container at any time.")
                     sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
@@ -433,7 +434,8 @@ class GenICam(CamGeneral):
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
                 except:
                     logging.error(
-                        "Camera ist not reachable. Most likely another container already occupies the same camera. One camera can only be used by exactly one container at the time.")
+                        "Camera is not reachable. Most likely another container already occupies the same camera. "
+                        "One camera can only be used by exactly one container at any time.")
                     sys.exit("Camera not reachable.")
                 logging.debug("Using:" + str(camera))
 
