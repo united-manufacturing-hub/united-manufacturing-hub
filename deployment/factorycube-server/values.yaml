@@ -96,7 +96,7 @@ mqtttopostgresql:
     minAvailable: 1
 
 minio-operator:
-    enabled: true
+    enabled: false
     loadBalancerEnabled: true
     service:
         annotations: {}

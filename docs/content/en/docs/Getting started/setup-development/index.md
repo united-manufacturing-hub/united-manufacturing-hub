@@ -1,90 +1,177 @@
 ---
-title: "1. Quick start"
-linkTitle: "1. Quick start"
+title: "1. Installation"
+linkTitle: "1. Installation"
 weight: 1
 description: >
-  This section explains how the system (edge and server) can be setup quickly on a single edge device. This is only recommended for development and testing environments.
+  This section explains how the system (edge and server) can be setup for development and testing enviroments.
 ---
 
+There are three options to setup a development environment:
+1. using a seperate device in combination with k3OS and our installation script (preferred). This requires an external device and is a fully automated installation.
+2. using [minikube](https://kubernetes.io/en/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack). This method allows you to install the stack on your device and is semi-automated.
+3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps). This can be executed either on an external device or on your device.
 
-## Prerequisites
+**The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.**
 
-- k3os (AMD64) installed on a bootable USB-stick (you can get it here: https://github.com/rancher/k3os/releases/ ). You can create a bootable USB-stick using [balenaEtcher](https://www.balena.io/etcher/)
-- a laptop with SSH / SFTP client (e.g. [MobaXTerm](https://mobaxterm.mobatek.net/)) and [Lens](https://k8slens.dev/) (for accessing the Kubernetes cluster) installed
-- a edge device (currently only x86 systems supported)
-- keyboard, monitor, cables
-- A GitHub account with a public key. If you do not know how to do it [check out this tutorial](https://gist.github.com/dmangiarelli/1a0ae107aaa5c478c51e#ssh-setup-with-putty). You can download puttygen [here](https://the.earth.li/~sgtatham/putty/latest/w64/puttygen.exe)
-- network setup and internet access according to the image below
+## Option 1: using a seperate device in combination with k3OS and our installation script
 
-{{< imgproc development-network.png Fit "500x300" >}}{{< /imgproc >}}
+Note: this content is also available in a presence workshop with an experienced facilitator guiding the participants through the installation and answering questions. Contact us for more information!
 
-## Steps
+### Prerequisites
 
-### k3OS
+{{< imgproc prerequisites_k3os.png Fit "1280x500" >}}This installation methods requires some previous setup{{< /imgproc >}}
 
-1. Install k3OS on your edge device using the bootable USB-stick (Press "entf or delete" repeatedly to enter the BIOS of the Factorycube and then boot from the USB stick with K3OS)
-2. Choose the desired partition (in most cases 1)
-3. Do not use a cloud configuration file
-4. When asked, enter your GitHub username. In the future you will access the device via SSH with your private key. After the installation the system will reboot and show after successfull startup the IP adress of the device. If no IP is shown please check your network setup (especially whether you have DHCP activated). If you want to use the classic username / password authentification we recommend reading this article on [how to access SSH for username / password authentification in k3OS](../../Tutorials/add-username-password-authentification-k3os-ssh)
-5. Configure K3OS as "server"
-6. Remove the USB stick after the message that the system will restart in 5 seconds.
-7. You can now disconnect Monitor and keyboard as you will do everything else via SSH.
+- an edge device with x86 architecture. We recommend using the [K300 from OnLogic](https://www.onlogic.com/eu-en/k300/)
+- the [latest version of k3OS](https://github.com/rancher/k3os/releases/) [^versioning] installed on a bootable USB-stick [^flash-usb]. 
+- a computer with SSH / SFTP client [^SSH-client] and [Lens](https://k8slens.dev/) (for accessing the Kubernetes cluster) installed. We recommend a laptop with an Ethernet port or with an Ethernet adapter. 
+- local LAN (with DHCP) available via atleast two Ethernet cables and access to the internet.[^network-setup].
+- a computer monitor connected with the edge device 
+- a keyboard connected with the edge device
 
-### General setup
+[^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/getting-started/understanding-the-technologies/#flashing-a-operating-system-onto-a-usb-stick)
+[^SSH-client]: See also out guide: [How to connect via SSH](/docs/getting-started/understanding-the-technologies/#connecting-with-ssh)
+[^network-setup]: See also out guide: [How to setup a development network](/docs/getting-started/understanding-the-technologies/#development-network)
+[^versioning]: See also out guide: [What is semantic versioning](/docs/getting-started/understanding-the-technologies/#versioning)
 
-1. Connect via SSH e.g. with MobaXTerm (Username: rancher, Port: 22, remote host: ip of your edge device)
-2. Authenticate with your private key which belongs to the to the public key stored in Github. (For MobaXTerm: Advanced SSH Settings -> private key and select your private key)
-3. confirm the setting and connect
-4. Install helm on your edge device
-```bash
-export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh
-```
-If this command fails with a `curl: (60) SSL certificate problem: certificate is not yet valid` (+ you are in a university or otherwise restricted network), [take a look here](../../tutorials/how-to-fix-ntp-issues/).
+### Installation
 
-5. Clone or copy the content of the [united-manufacturing-hub repository on Github](https://github.com/united-manufacturing-hub/united-manufacturing-hub) into the home folder (`/home/rancher/united-manufacturing-hub`). You can use the following command to do that for you (you might need to adjust the version number): `curl -L https://github.com/united-manufacturing-hub/united-manufacturing-hub/tarball/v0.4.2 | tar zx && mv $(find . -maxdepth 1  -type d -name "united-manufacturing-hub*") united-manufacturing-hub`
-6. Execute `cat /etc/rancher/k3s/k3s.yaml` to retrieve the secrets to connect to your Kubernetes cluster
-7. Paste the file into Lens when adding a new cluster and adjust the IP 127.0.0.1 (only change the IP address. The port, the numbers after the colon, remain the same). You should now see the cluster in Lens.
-8. Create two namespaces in your Kubernetes cluster called `factorycube-edge` and `factorycube-server` by executing the following command:
-```bash
-kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server
-```
+This step is also available via a step-by-step video: **TODO**
 
-### Install factorycube-edge
+#### k3OS
 
-Warning: in production you should use your own certificates and not the ones provided by us as this is highly insecure when exposed to the internet and any insecure network. A tutorial to setup PKI infrastructure for MQTT according to [this guide](../../tutorials/pki)
+**TODO: REMOVE. PLEASE USE THE FOLLOWING URL INSTEAD OF THE ONE MENTIONED UNTIL EVERYTHING IS MERGED WITH MAIN! https://bit.ly/3DGEsjT**
 
-1. Go into the folder `/home/rancher/united-manufacturing-hub/deployment/factorycube-edge`
-2. Create a new file called `development_values.yaml` using `touch development_values.yaml`
-3. Copy the following content to that file or use the following example [`development_values.yaml`](/examples/factorycube-server/development_values.yaml). 
-4. **(Only if you did not use example file)** Copy the certificates in `deplotment/factorycube-server/developmentCertificates/pki/` and then `ca.crt`, `issued/TESTING.crt` and `issued/private/TESTING.key` into `development_values.yaml`. Additionally use as `mqttBridgeURL` `ssl://factorycube-server-vernemq-local-service.factorycube-server:8883`. 
-5. Adjust `iprange` to your network IP range
+1. Insert your USB-stick with k3OS into your edge device and boot from it [^boot-usb]
+2. [Install k3OS](/docs/tutorials/install-k3os/). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](/examples/development.yaml)
 
-Example for `development_values.yaml`:
-```yaml
-mqttBridgeURL: "ssl://mqtt.umh.app:8883"
-mqttBridgeTopic: "ia/factoryinsight"
-sensorconnect:
-  iprange: "172.16.1.0/24"
-mqttBridgeCACert: |
-  ENTER CERT HERE
-mqttBridgeCert: |
-  ENTER CERT HERE
-mqttBridgePrivkey: |
-  ENTER CERT HERE
-```
+This process takes around 15 - 20 minutes depending on your internet connection and there will be no further information about the installation status on the output of the device visible (the information on the computer screen).
 
-6. Execute `helm install factorycube-edge /home/rancher/united-manufacturing-hub/deployment/factorycube-edge --values "/home/rancher/united-manufacturing-hub/deployment/factorycube-edge/development_values.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml  -n factorycube-edge` (change kubeconfig and serialNumber accordingly) (Please pay attention to the correct path. The path may be /home/rancher/united-manufacturing-hub-main ... or similar)
+[^boot-usb]: See also out guide: [How to boot from a USB-stick](/docs/getting-started/understanding-the-technologies/#installing-operating-systems-from-a-usb-stick)
 
-### Install factorycube-server
+#### Getting access to the device
 
-Warning: in production this should be installed on a seperate device / in the cloud to ensure High Availability and provide automated backups. 
+To verify whether the installation worked and to access [Grafana] (the dashboard) and [Node-RED], we will first enable SSH via password authentification, fetch the login details for [Kubernetes] and then login via [Lens].
 
-1. Configure values.yaml according to your needs. For the development version you do not need to do anything. For help in configuring you can take a look into the respective documentation of the subcharts ([Grafana](https://github.com/grafana/helm-charts), [redis](https://github.com/bitnami/charts/tree/master/bitnami/redis), [timescaleDB](https://github.com/timescale/timescaledb-kubernetes/tree/master/charts/timescaledb-single), [verneMQ](https://github.com/vernemq/docker-vernemq/tree/master/helm/vernemq)) or into the documentation of the subcomponents ([factoryinsight](../../developers/factorycube-server/factoryinsight), [mqtt-to-postgresql](../../developers/factorycube-server/mqtt-to-postgresql))
-2. Execute `helm install factorycube-server /home/rancher/united-manufacturing-hub/deployment/factorycube-server --values "/home/rancher/united-manufacturing-hub/deployment/factorycube-server/values.yaml" --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server` and wait. Helm will automatically install the entire stack across multiple node. It can take up to several minutes until everything is setup. (Please pay attention to the correct path. The path may be /home/rancher/united-manufacturing-hub-main ... or similar)
+[Grafana]: https://grafana.com/
+[Node-RED]: https://nodered.org/
+[Kubernetes]: https://kubernetes.io/
+[Lens]: https://k8slens.dev/
 
-Everything should be now successfully setup and you can connect your edge devices and start creating dashboards! **Keep in mind**: the default development_values.yaml should only be used for development environments and never for production. See also notes below.
+##### Step 1: Login
 
-## Using it
+The login console will look like "messed up" due to the logs of the installation process in the steps above. 
 
-You can now access Grafana and nodered via HTTP / HTTPS (depending on your setup). Default user for Grafana is admin. You can find the password in the secret RELEASE-NAME-grafana. Grafana is available via port 8080, nodered via 1880. 
+{{< imgproc 1.png Fit "1280x500" >}}Immediatly after start. Nothing is messed up yet.{{< /imgproc >}}
+{{< imgproc 2.png Fit "1280x500" >}}"Messed up" login screen{{< /imgproc >}}
 
+You can "clean it up" by pressing two times enter. 
+
+You can also immediatly proceed with entering the default username `rancher` (do not forget to press enter) and the default password `rancher` to login. 
+{{< imgproc 3.png Fit "1280x500" >}}Logging into k3OS using the username `rancher`{{< /imgproc >}}
+{{< imgproc 4.png Fit "1280x500" >}}Logging into k3OS using the password `rancher`{{< /imgproc >}}
+
+After a successfull login you should see the current IP address of the device on your computer screen.
+
+{{< imgproc 5.png Fit "1280x500" >}}Successfully logged into k3OS{{< /imgproc >}}
+
+
+#### Step 2: Enable SSH password authentification 
+
+Enable SSH password authentification in k3OS [^ssh-password-authentication]. This is currently not necessary anymore as the automated setup script will do that automatically, **therefore this step can be skipped**. This paragraph only exists to remind you that this setting is not the default behavior of k3OS and should be deactivated in production environments.
+
+For production environments we recommend using a certificate to authenticate, which is enabled by default. This can be archieved by modifying the cloud-init file and [linking to a public key stored on your GitHub account.](https://gist.github.com/dmangiarelli/1a0ae107aaa5c478c51e#ssh-setup-with-putty)
+
+[^ssh-password-authentication]: See also out guide: [Enabling k3os password authentication](/docs/tutorials/add-username-password-authentification-k3os-ssh/)
+
+#### Step 3: Connect via SSH
+
+Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr`. 
+
+Username: `rancher`
+Password: `rancher`
+
+#### Step 4: Getting Kubernetes credentials
+
+Execute `cat /etc/rancher/k3s/k3s.yaml` in your SSH session on your laptop  to retrieve the Kubernetes credentials. Copy the content of the result into your clipboard.
+
+{{< imgproc k3s_secret_1.png Fit "1280x500" >}}Execute `cat /etc/rancher/k3s/k3s.yaml`{{< /imgproc >}}
+
+{{< imgproc k3s_secret_2.png Fit "1280x500" >}}Copy the content{{< /imgproc >}}
+
+Connect with the edge device using the software [Lens] and the Kubernetes credentials from your clipboard.
+
+{{< imgproc k3s_secret_3.png Fit "1280x500" >}}Add a new cluster in Lens{{< /imgproc >}}
+{{< imgproc k3s_secret_4.png Fit "1280x500" >}}Select `Paste as text`{{< /imgproc >}}
+{{< imgproc k3s_secret_5.png Fit "1280x500" >}}Paste from the clipboard{{< /imgproc >}}
+{{< imgproc k3s_secret_6.png Fit "1280x500" >}}{{< /imgproc >}}
+
+Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device.
+
+{{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
+{{< imgproc k3s_secret_8.png Fit "1280x500" >}}{{< /imgproc >}}
+
+You have now access to the Kubernetes cluster!
+
+### Verifying the installation and extracting credentials to connect with the dashboard
+
+The installation is finished when all Pods are "Running". You can do that by clicking on Pods on the left side.
+
+{{< imgproc verify_1.png Fit "1280x500" >}}Click in Lens on Workloads and then on Pods{{< /imgproc >}}
+
+{{< imgproc verify_2.png Fit "1280x500" >}}Select the relevant namespaces `factorycube-server` and `factorycube-edge`{{< /imgproc >}}
+
+{{< imgproc verify_3.png Fit "1280x500" >}}everything should be running{{< /imgproc >}}
+
+Some credentials are automatically generated by the system. One of them are the login credentials of Grafana. You can retrieve them by clicking on "Secrets" on the left side in [Lens]. Then search for a secret called "grafana-secret" and open it. Press "decode" and copy the password into your clipboard.
+
+{{< imgproc verify_4.png Fit "1280x500" >}}Press on the left side in Lens on Configuration and then Secret.{{< /imgproc >}}
+
+{{< imgproc verify_5.png Fit "1280x500" >}}Then select grafana-secret{{< /imgproc >}}
+
+{{< imgproc verify_6.png Fit "1280x500" >}}Then click on the eye on the right side of adminpassword to decrypt it{{< /imgproc >}}
+
+### Opening Grafana and Node-RED
+
+Grafana is now accessible by opening the following URL in your browser: `http://<IP>:8080` (e.g., `http://192.168.1.2:8080`). You can login by using the username `admin` and password from your clipboard.
+
+Node-RED is accessible by opening the following URL in your browser: `http://<IP>:1880/nodered`.
+
+**Once you have access, you can proceed with the second article [Connecting machines and creating dashboards](/docs/getting-started/connecting-machines-creating-dashboards/).**
+
+## Option 2: using minikube
+
+This option is only recommended for developers. Therefore, the installation is targeted for them and might not be as detailed as option 1.
+
+### Prerequisites
+
+- minikube installed according to the [official documentation](https://minikube.sigs.k8s.io/docs/start/)
+- repository cloned using `git clone https://github.com/united-manufacturing-hub/united-manufacturing-hub.git` or downloaded and extracted using the download button on GitHub.
+- helm [^helm] and kubectl [^kubectl] installed
+
+[^helm]: Can be installed using the following command: `export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh`
+[^kubectl]: Can be installed on Ubuntu using the following command: `sudo apt-get install kubectl`
+
+### Steps
+
+1. Start minikube using `minikube start`. If minikube fails to start, see the [drivers page](https://minikube.sigs.k8s.io/docs/drivers/) for help setting up a compatible container or virtual-machine manager.
+{{< imgproc minikube_1.png Fit "1280x500" >}}Output of the command `minikube start`{{< /imgproc >}}
+2. If everything went well, kubectl is now configured to use the minikube cluster by default. `kubectl version` should look like in the screenshot.
+{{< imgproc minikube_2.png Fit "1280x500" >}}Expected output of `kubectl version`{{< /imgproc >}}
+3. Go into the cloned repository and into the folder `deployment/factorycube-edge`
+4. execute: `kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server`
+{{< imgproc minikube_3.png Fit "1280x500" >}}Expected output of `kubectl create namespace`{{< /imgproc >}}
+5. Execute the following command to get an example development configuration: `curl https://docs.umh.app/examples/factorycube-server/development_values.yaml --output development_values.yaml`
+{{< imgproc minikube_4.png Fit "1280x500" >}}Output of curl{{< /imgproc >}}
+6. Install factorycube-edge by executing the following command: `helm install factorycube-edge . --values ./development_values.yaml -n factorycube-edge`
+{{< imgproc minikube_5.png Fit "1280x500" >}}Output of `helm install`{{< /imgproc >}}
+7. Go to the factorcube-server folder, e.g. `cd ../factorycube-server`
+8. Install factorycube-server by executing the following command: `helm install factorycube-server . -n factorycube-server`
+{{< imgproc minikube_6.png Fit "1280x500" >}}Output of `helm install`{{< /imgproc >}}
+
+Now go grab a coffee and wait 15-20 minutes until all pods are "Running".
+
+Now you should be able to see the cluster using [Lens]
+
+## Option 3: manual installation
+
+For a manual installation, we recommend that you take a look at the installation script and follow these commands manually and adjust them when needed. 
