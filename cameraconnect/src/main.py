@@ -55,6 +55,10 @@ IMAGE_CHANNELS = os.environ.get('IMAGE_CHANNELS', 'None')
 EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')
 
 EXPOSURE_AUTO = os.environ.get('EXPOSURE_AUTO', 'Off')
+if EXPOSURE_AUTO.upper() == "OFF" or EXPOSURE_AUTO.upper() == "NONE":
+    EXPOSURE_AUTO = None
+if EXPOSURE_TIME.upper() == "OFF" or EXPOSURE_TIME.upper() == "NONE":
+    EXPOSURE_TIME = None
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
@@ -62,8 +66,12 @@ LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
 if IMAGE_CHANNELS != 'None':
     IMAGE_CHANNELS = int(IMAGE_CHANNELS)
 if EXPOSURE_TIME != 'None':
-    EXPOSURE_TIME = float(EXPOSURE_TIME)
-
+    try:
+        EXPOSURE_TIME = float(EXPOSURE_TIME)
+    except TypeError:
+        exposure_default = 15000.0
+        logging.error(f"exposure not valid setting to default of  {exposure_default}")
+        EXPOSURE_TIME = exposure_default
 ### End of loading settings ###
 
 if __name__ == "__main__":
