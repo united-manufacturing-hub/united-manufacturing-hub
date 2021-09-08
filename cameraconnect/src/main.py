@@ -62,7 +62,7 @@ if EXPOSURE_TIME.upper() == "OFF" or EXPOSURE_TIME.upper() == "NONE":
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
-LOG_FILE = os.environ.get("LOG_FILE", None)
+LOG_FILE = os.environ.get("LOG_FILE", None) # todo undocumented
 if IMAGE_CHANNELS != 'None':
     IMAGE_CHANNELS = int(IMAGE_CHANNELS)
 if EXPOSURE_TIME != 'None':
