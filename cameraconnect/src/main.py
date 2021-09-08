@@ -98,9 +98,11 @@ if __name__ == "__main__":
     if CAMERA_INTERFACE == "DummyCamera":
         cam = DummyCamera(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, 0, image_storage_path=IMAGE_PATH)
     elif CAMERA_INTERFACE == "GenICam":
+        logging.debug("looking for GenICam")
         cam = GenICam(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH,
                       image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH,
                       exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO)
+
     else:
         # Stop system, not possible to run with this settings
         sys.exit(
@@ -108,6 +110,7 @@ if __name__ == "__main__":
 
     # Check trigger type and use appropriate instance of the
     #   trigger classes
+    logging.debug(f"looking for trigger type {TRIGGER}")
     if TRIGGER == "Continuous":
         # Never jumps out of the processes of the instance
         ContinuousTrigger(cam, CAMERA_INTERFACE, CYCLE_TIME)
