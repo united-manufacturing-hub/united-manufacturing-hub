@@ -114,11 +114,11 @@ write_files:
         echo "Created namespaces!"
 
         echo "Install factorycube-edge..."
-        helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge
+        helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge --devel
         echo "Installed factorycube-edge!"
 
         echo "Install factorycube-server..."
-        helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server
+        helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server --devel
         echo "Installed factorycube-server!"
         
         echo "Enabling SSH password authentification..."
