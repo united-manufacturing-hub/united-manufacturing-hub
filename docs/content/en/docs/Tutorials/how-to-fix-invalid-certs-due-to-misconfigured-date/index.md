@@ -5,6 +5,8 @@ description: >
   curl might fail and not download helm as the certificate is not yet valid. This happens especially when you are in a restricted network and the edge device is not able fetch the current date and time via NTP.  
 ---
 
+
+
 ## Issue 1
 
 While executing the command `export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh` on k3OS you might get a error message like this:
@@ -18,9 +20,9 @@ establish a secure connection to it. To learn more about this situation and
 how to fix it, please visit the web page mentioned above.
 ```
 
-Checking the time with `date` results in a timestamp from 2017.
+Checking the time with `date` results in a timestamp from 2017. There are two possible solutions.
 
-### Possible solution
+### Possible solution 1: configure NTP
 
 The time is not configured properly. It can happen that your NTP server is blocked (especially if you are inside a university network). 
 
@@ -32,6 +34,10 @@ Alarm clock
 ```
 
 We recommend using the NTP server from the local university or ask your system administrator. For the RWTH Aachen / FH Aachen you can use `sudo ntpd -d -q -n -p ntp1.rwth-aachen.de` as specified [here](https://help.itc.rwth-aachen.de/service/uvjppv3cuan8/)
+
+### Possible solution 2: set hardware clock via BIOS
+
+Go into the BIOS and set the hardware clock of the device manually.
 
 ## Issue 2
 
