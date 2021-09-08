@@ -1,14 +1,14 @@
 {{- if index .Values "timescaledb-single" "enabled" -}}
 apiVersion: v1
 kind: ConfigMap
-metadata:  
-  name: timescale-post-init 
-data:  
+metadata:
+  name: timescale-post-init
+data:
   0_create_dbs.sh: |-
     #!/bin/bash
 
     psql -d "$1" <<__SQL__
-    
+
     CREATE USER {{ index .Values "grafana" "grafana.ini" "database" "user" }};
     CREATE DATABASE {{ index .Values "grafana" "grafana.ini" "database" "name" }} OWNER {{ index .Values "grafana" "grafana.ini" "database" "user" }};
     GRANT ALL PRIVILEGES ON DATABASE {{ index .Values "grafana" "grafana.ini" "database" "name" }} TO {{ index .Values "grafana" "grafana.ini" "database" "user" }};
@@ -18,12 +18,12 @@ data:
     CREATE USER {{ .Values.factoryinsight.db_user }};
     CREATE DATABASE {{ .Values.factoryinsight.db_database }} OWNER {{ .Values.factoryinsight.db_user }};
     GRANT ALL PRIVILEGES ON DATABASE {{ .Values.factoryinsight.db_database }} TO {{ .Values.factoryinsight.db_user }};
-    
+
     \c {{ .Values.factoryinsight.db_database }}
-    
+
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
-    
+
     -------------------- Table with all assets --------------------
     CREATE TABLE IF NOT EXISTS assetTable
     (
@@ -33,7 +33,7 @@ data:
         customer VARCHAR(20) NOT NULL,
         unique (assetID, location, customer)
     );
-    
+
     -------------------- TimescaleDB table for states --------------------
     CREATE TABLE IF NOT EXISTS stateTable
     (
@@ -44,10 +44,10 @@ data:
     );
     -- creating hypertable
     SELECT create_hypertable('stateTable', 'timestamp');
-    
+
     -- creating an index to increase performance
     CREATE INDEX ON stateTable (asset_id, timestamp DESC);
-    
+
     -------------------- TimescaleDB table for counts --------------------
     CREATE TABLE IF NOT EXISTS countTable
     (
@@ -58,10 +58,10 @@ data:
     );
     -- creating hypertable
     SELECT create_hypertable('countTable', 'timestamp');
-    
+
     -- creating an index to increase performance
     CREATE INDEX ON countTable (asset_id, timestamp DESC);
-    
+
     -------------------- TimescaleDB table for process values --------------------
     CREATE TABLE IF NOT EXISTS processValueTable
     (
@@ -73,10 +73,10 @@ data:
     );
     -- creating hypertable
     SELECT create_hypertable('processValueTable', 'timestamp');
-    
+
     -- creating an index to increase performance
     CREATE INDEX ON processValueTable (asset_id, timestamp DESC);
-    
+
     -------------------- TimescaleDB table for uniqueProduct --------------------
     CREATE TABLE IF NOT EXISTS uniqueProductTable
     (
@@ -91,11 +91,11 @@ data:
         UNIQUE(uid, asset_id, station_id),
         CHECK (begin_timestamp_ms < end_timestamp_ms)
     );
-    
+
     -- creating an index to increase performance
     CREATE INDEX ON uniqueProductTable (asset_id, uid, station_id);
-    
-    
+
+
     -------------------- TimescaleDB table for recommendations  --------------------
     CREATE TABLE IF NOT EXISTS recommendationTable
     (
@@ -109,7 +109,7 @@ data:
         recommendationTextDE    TEXT,
         recommendationTextEN    TEXT
     );
-    
+
     -------------------- TimescaleDB table for shifts --------------------
     -- Using btree_gist to avoid overlapping shifts
     -- Source: https://gist.github.com/fphilipe/0a2a3d50a9f3834683bf
@@ -125,8 +125,8 @@ data:
         CHECK (begin_timestamp < end_timestamp),
     	EXCLUDE USING gist (asset_id WITH =, tstzrange(begin_timestamp, end_timestamp) WITH &&)
     );
-    
-    
+
+
     -------------------- TimescaleDB table for products --------------------
     CREATE TABLE IF NOT EXISTS productTable
     (
@@ -137,7 +137,7 @@ data:
     	UNIQUE(product_name, asset_id),
     	CHECK (time_per_unit_in_seconds > 0)
     );
-    
+
     -------------------- TimescaleDB table for orders --------------------
     CREATE TABLE IF NOT EXISTS orderTable
     (
@@ -153,7 +153,7 @@ data:
     	CHECK (target_units > 0),
         EXCLUDE USING gist (asset_id WITH =, tstzrange(begin_timestamp, end_timestamp) WITH &&) WHERE (begin_timestamp IS NOT NULL AND end_timestamp IS NOT NULL)
     );
-    
+
     -------------------- TimescaleDB table for configuration --------------------
     CREATE TABLE IF NOT EXISTS configurationTable
     (
@@ -7521,6 +7521,6 @@ data:
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:01:01+00',1,10000);
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:05+00',1,40000);
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
-    
-    __SQL__   
+
+    __SQL__
 {{- end -}}
