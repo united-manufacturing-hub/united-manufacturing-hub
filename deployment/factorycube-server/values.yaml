@@ -43,9 +43,18 @@ factoryinsight:
 
 ### factoryinput ###
 factoryinput:
-  #This is currently just a mock to start grafanaproxy !
+  user: factoryinsight
   enabled: true
-  user: "factoryinput"
+  service:
+    annotations: {}
+  image:
+    repository: unitedmanufacturinghub/factoryinput
+    pullPolicy: IfNotPresent
+  replicas: 1
+  storageRequest: 1Gi
+  pdb:
+    enabled: true
+    minAvailable: 1
 
 ### mqtt-to-blob ###
 mqtttoblob:
@@ -64,7 +73,7 @@ grafanaproxy:
   enabled: true
   image:
     repository: unitedmanufacturinghub/grafana-proxy
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   service:
     annotations: {}
@@ -836,7 +845,7 @@ grafana:
 
   image:
     repository: grafana/grafana
-    tag: 8.0.6
+    tag: 8.1.3
     sha: ""
     pullPolicy: IfNotPresent
 
