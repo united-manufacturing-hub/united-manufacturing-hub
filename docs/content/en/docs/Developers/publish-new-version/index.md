@@ -18,6 +18,7 @@ helm package ../factorycube-edge/
 7. Commit changes. Wait for all container and deploy previews to be created. Conduct test on K300 by specifying the new cloud-init file e.g., `https://deploy-preview-515--umh-docs.netlify.app/examples/development.yaml` (you can create a bit.ly link for that)
 8. Test
 9. Conduct steps 3 - 6 with changed version v0.6.0 (instead of v0.6.0-prerelease) and changed repo index url: https://repo.umh.app
-10. Merge PR from staging to main
-11. Add a new release containing a changelog of all changes
+10. Execute `npx semantic-release --branches "master" --branches "v0.6.0" --plugins "@semantic-release/commit-analyzer" --plugins "@semantic-release/release-notes-generator" --plugins "@semantic-release/changelog"`
+11. Merge PR from staging to main
+12. Add a new release containing a changelog of all changes
 
