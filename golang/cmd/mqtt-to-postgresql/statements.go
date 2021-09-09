@@ -8,14 +8,11 @@ import (
 type statementRegistry struct {
 	InsertIntoRecommendationTable *sql.Stmt
 
-	CreateTmpProcessValueTable64                           *sql.Stmt
-	xInsertIntoProcessValueTableFromTmpProcessValueTable64 *sql.Stmt
+	CreateTmpProcessValueTable64 *sql.Stmt
 
-	CreateTmpProcessValueTable                           *sql.Stmt
-	xInsertIntoProcessValueTableFromTmpProcessValueTable *sql.Stmt
+	CreateTmpProcessValueTable *sql.Stmt
 
-	CreateTmpCountTable                    *sql.Stmt
-	xInsertIntoCountTableFromTmpCountTable *sql.Stmt
+	CreateTmpCountTable *sql.Stmt
 
 	InsertIntoStateTable *sql.Stmt
 
@@ -86,23 +83,11 @@ func (r statementRegistry) Shutdown() (err error) {
 	if err != nil {
 		return
 	}
-	err = r.xInsertIntoProcessValueTableFromTmpProcessValueTable64.Close()
-	if err != nil {
-		return
-	}
 	err = r.CreateTmpProcessValueTable.Close()
 	if err != nil {
 		return
 	}
-	err = r.xInsertIntoProcessValueTableFromTmpProcessValueTable.Close()
-	if err != nil {
-		return
-	}
 	err = r.CreateTmpCountTable.Close()
-	if err != nil {
-		return
-	}
-	err = r.xInsertIntoCountTableFromTmpCountTable.Close()
 	if err != nil {
 		return
 	}
