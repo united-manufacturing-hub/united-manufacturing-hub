@@ -1,7 +1,6 @@
 ---
 title: "sensorconnect"
 linkTitle: "sensorconnect"
-date: 2021-03-15
 description: >
   This docker container automatically detects ifm gateways in the specified network and reads their sensor values in the highest possible data frequency. The MQTT output is specified in [the MQTT documentation](../../../concepts/mqtt/)
 ---

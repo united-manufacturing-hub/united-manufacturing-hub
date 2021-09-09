@@ -36,7 +36,7 @@ type User struct {
 	AvatarURL      string        `json:"avatarUrl"`
 }
 
-const GrafanaUrl = "http://localhost:3000"
+const GrafanaUrl = "http://factorycube-server-grafana:8080"
 
 func GetUser(sessioncookie string) (User, error) {
 	url := fmt.Sprintf("%s/api/user", GrafanaUrl)
