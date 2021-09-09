@@ -5,6 +5,10 @@ description: >
   The following guide describes how to catch data from the MQTT-Broker and push them to the blob storage from MIN.io
 ---
 
+{{% notice warning %}}
+This microservice is still in development and is not considered stable for production use.
+{{% /notice %}}
+
 ## Getting started
 
 The following guide describes how to catch data from the MQTT-Broker and push them to the blob storage from MIN.io

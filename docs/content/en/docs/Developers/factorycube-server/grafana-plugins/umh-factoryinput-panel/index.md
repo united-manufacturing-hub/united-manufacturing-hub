@@ -6,6 +6,9 @@ description: >
 # United Manufacturing Hub - Factoryinput Panel
 ---
 
+{{% notice warning %}}
+This microservice is still in development and is not considered stable for production use.
+{{% /notice %}}
 
 ## What is United Manufacturing Hub - Factoryinput Panel
 UMH Factoryinput Panel allows to easily execute MQTT messages inside the UMH stack from the Grafana Panel.
