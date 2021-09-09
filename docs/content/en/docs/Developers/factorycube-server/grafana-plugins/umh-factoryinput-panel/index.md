@@ -2,13 +2,11 @@
 title: "factoryinput-panel"
 linktitle: "factoryinput-panel"
 date: 2021-27-07
-description: >
-# United Manufacturing Hub - Factoryinput Panel
+description: Documentation of factoryinput-panel
 ---
 
-{{% notice warning %}}
-This microservice is still in development and is not considered stable for production use.
-{{% /notice %}}
+**This microservice is still in development and is not considered stable for production use.**
+
 ## Getting started
 UMH Factoryinput Panel allows to easily execute MQTT messages inside the UMH stack from the Grafana Panel.
 
@@ -116,7 +114,7 @@ yarn build
 ## Technical information
 Below you will find a schematic of this flow, through our stack
 
-{{< imgproc grafana_to_mqtt_stack.svg Fit "500x300" >}}{{< /imgproc >}}
+{{< imgproc grafana_to_mqtt_stack.png Fit "1920x1080" >}}{{< /imgproc >}}
 
 
 ## License
