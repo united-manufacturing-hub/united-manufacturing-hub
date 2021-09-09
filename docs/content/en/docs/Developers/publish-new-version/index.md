@@ -19,6 +19,7 @@ helm package ../factorycube-edge/
 8. Test
 9. Conduct steps 3 - 6 with changed version v0.6.0 (instead of v0.6.0-prerelease) and changed repo index url: https://repo.umh.app
 10. Execute `npx semantic-release --branches "master" --branches "v0.6.0" --plugins "@semantic-release/commit-analyzer" --plugins "@semantic-release/release-notes-generator" --plugins "@semantic-release/changelog"`
-11. Merge PR from staging to main
-12. Add a new release containing a changelog of all changes
+11. Remove old helm packages from prerelease from repo
+12. Merge PR from staging to main
+13. Add a new release containing a changelog of all changes
 
