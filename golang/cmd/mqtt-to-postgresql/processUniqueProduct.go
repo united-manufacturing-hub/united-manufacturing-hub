@@ -133,8 +133,12 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 	if err == sql.ErrNoRows || !success {
 		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)
 		go func() {
-			time.Sleep(1 * time.Second)
-			r.EnqueueMQTT(customerID, location, assetID, payload)
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.UniqueProduct)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
 		}()
 	} else if err != nil { // never executed
 		PQErrorHandling("GetProductID db.QueryRow()", err)

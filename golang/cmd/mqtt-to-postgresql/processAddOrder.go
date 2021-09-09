@@ -131,8 +131,12 @@ func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID
 	if err == sql.ErrNoRows || !success {
 		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName, parsedPayload.OrderName)
 		go func() {
-			time.Sleep(1 * time.Second)
-			r.EnqueueMQTT(customerID, location, assetID, payload)
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
 		}()
 		return
 	} else if err != nil { // never executed

@@ -38,6 +38,7 @@ var stateHandler StateHandler
 var uniqueProductHandler UniqueProductHandler
 var valueDataHandler ValueDataHandler
 var valueStringHandler ValueStringHandler
+var storedRawMQTTHandler StoredRawMQTTHandler
 
 func main() {
 	// Setup logger and set as global
@@ -117,6 +118,7 @@ func main() {
 	uniqueProductHandler = *NewUniqueProductHandler()
 	valueDataHandler = *NewValueDataHandler()
 	valueStringHandler = *NewValueStringHandler()
+	storedRawMQTTHandler = *NewStoredRawMQTTHandler()
 
 	addOrderHandler.Setup()
 	addParentToChildHandler.Setup()
@@ -139,6 +141,7 @@ func main() {
 	uniqueProductHandler.Setup()
 	valueDataHandler.Setup()
 	valueStringHandler.Setup()
+	storedRawMQTTHandler.Setup()
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
@@ -198,87 +201,93 @@ func ShutdownApplicationGraceful() {
 
 	err := addOrderHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = addParentToChildHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = addProductHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = addShiftHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = countHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = deleteShiftByAssetIdAndBeginTimestampHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = deleteShiftByIdHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = endOrderHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = maintenanceActivityHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = modifyProducedPieceHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = modifyStateHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = productTagHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = recommendationDataHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = scrapCountHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = scrapUniqueProductHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = startOrderHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = productTagStringHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = stateHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = uniqueProductHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = valueDataHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 	err = valueStringHandler.Shutdown()
 	if err != nil {
-		return
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+
+	time.Sleep(5 * time.Second)
+	err = storedRawMQTTHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
 	}
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
