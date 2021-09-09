@@ -106,7 +106,7 @@ func (r AddShiftHandler) enqueue(bytes []byte, priority uint8) {
 func (r AddShiftHandler) Shutdown() (err error) {
 	zap.S().Warnf("[AddShiftHandler] shutting down !")
 	r.shutdown = true
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)
 	return
 }

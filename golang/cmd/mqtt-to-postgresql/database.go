@@ -95,6 +95,10 @@ func PQErrorHandling(sqlStatement string, err error) {
 // deferCallback runs at the end of every database function
 // Either commits or rolls back the transaction, depending on if the tx was successful
 func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
+	if txn == nil {
+		PQErrorHandling("Transaction is nil", errIn)
+		return
+	}
 
 	if errIn != nil {
 		zap.S().Debugf("Got error from callee: %s", errIn)

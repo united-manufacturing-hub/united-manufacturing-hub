@@ -111,7 +111,7 @@ func (r CountHandler) enqueue(bytes []byte, priority uint8) {
 func (r CountHandler) Shutdown() (err error) {
 	zap.S().Warnf("[CountHandler] shutting down !")
 	r.shutdown = true
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)
 	return
 }
