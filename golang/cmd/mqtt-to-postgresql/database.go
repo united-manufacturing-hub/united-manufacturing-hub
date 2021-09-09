@@ -150,7 +150,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 
 	err := statement.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.QueryRow(assetID, location, customerID).Scan(&DBassetID)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found")
+		zap.S().Errorf("No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
 	} else if err != nil {
 		PQErrorHandling("GetAssetID db.QueryRow()", err)
 	}
@@ -167,7 +167,7 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found", DBassetID, productName)
+		zap.S().Errorf("No Results Found DBAssetID: %d, productName: %s", DBassetID, productName)
 	} else if err != nil {
 		PQErrorHandling("GetProductID db.QueryRow()", err)
 	}
@@ -180,7 +180,7 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32) {
 
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found")
+		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
 	} else if err != nil {
 		PQErrorHandling("GetComponentID() db.QueryRow()", err)
 	}
@@ -192,7 +192,7 @@ func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error) {
 
 	err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(aid, DBassetID).Scan(&uid)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found", aid, DBassetID)
+		zap.S().Errorf("No Results Found aid: %s, DBassetID: %d", aid, DBassetID)
 	} else if err != nil {
 		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
 	}
@@ -204,7 +204,7 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32) {
 
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found", aid, assetID)
+		zap.S().Errorf("No Results Found aid: %s, assetID: %d", aid, assetID)
 	} else if err != nil {
 		PQErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
 	}
@@ -777,7 +777,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 	}()
 
 	//These statements' auto close
-	stmt := txn.Stmt(statement.InsertIntoUniqueProductTable)
+	stmt := txn.Stmt(statement.InsertIntoProductTagTable)
 
 	for _, item := range items {
 		var pt productTagQueue
@@ -790,7 +790,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		var uid uint32
 		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		if err != nil {
-			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
+			zap.S().Errorf("Stopped writing productTag in Database, uid not found. AID: %s, DBAssetID %d", pt.AID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
 			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
@@ -841,7 +841,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		var uid uint32
 		uid, err = GetUniqueProductID(pt.AID, pt.DBAssetID)
 		if err != nil {
-			zap.S().Errorf("Stopped writing productTag in Database, uid not found")
+			zap.S().Errorf("Stopped writing productTag in Database, uid not found. AID: %s, DBAssetID %d", pt.AID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
 			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
@@ -892,7 +892,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		var childUid uint32
 		childUid, err = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
 		if err != nil {
-			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found")
+			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found. ChildAID: %s, DBAssetID: %d", pt.ChildAID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
 			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
@@ -1103,9 +1103,7 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 		}
 
 		// Create statement
-		zap.S().Debugf("[PRE]\tstoreItemsIntoDatabaseStartOrder")
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
-		zap.S().Debugf("[POST]\tstoreItemsIntoDatabaseStartOrder")
 		if err != nil {
 			faultyItems = append(faultyItems, item)
 			zap.S().Debugf("Got an error before err = nil: %s", err)
