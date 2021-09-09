@@ -161,7 +161,7 @@ func GetAssets(parentSpan opentracing.Span, customerID string, location string) 
 }
 
 // GetComponents retrieves all assets for a given customer
-func GetComponents(parentSpan opentracing.Span, assetID int) (components []string, error error) {
+func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []string, error error) {
 
 	// Jaeger tracing
 	span := opentracing.StartSpan(
