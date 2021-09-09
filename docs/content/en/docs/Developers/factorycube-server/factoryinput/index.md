@@ -4,9 +4,9 @@ linktitle: "factoryinput"
 description: > Documentation of factoryinput
 ---
 
-This program provides an REST endpoint, to send MQTT messages via HTTP requests. It is typically accessed via [grafana-proxy](../grafana-proxy).
-
 ## Getting Started
+
+This program provides an REST endpoint, to send MQTT messages via HTTP requests. It is typically accessed via [grafana-proxy](../grafana-proxy).
 
 A quick tutorial on how to use it can be found in [this guide](../../../Tutorials/use-factoryinput)
 
@@ -36,7 +36,7 @@ This chapter explains all used environment variables.
 
 ### VERSION
 
-**Description:** The version of the API used (currently not used yet) 
+**Description:** The version of the API to host. Currently, only 1 is a valid value
 
 **Type:** int
 
@@ -103,6 +103,17 @@ Example value: tcp://factorycube-server-vernemq-local-service:1883
 **Possible values:** DEVELOPMENT, PRODUCTION
 
 **Example value:**  PRODUCTION
+
+
+### MQTT_QUEUE_HANDLER
+
+**Description:** Number of queue workers to spawn. If not set, it defaults to 10
+
+**Type:** uint
+
+**Possible values:** 0-65535
+
+**Example value:**  10
 
 ## Other
 
