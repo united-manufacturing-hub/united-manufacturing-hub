@@ -1,13 +1,10 @@
 ---
 title: "grafana-proxy"
 linktitle: "grafana-proxy"
-date: 2021-07-09
-description: >
-# United Manufacturing Hub - Grafana Proxy
+description: > Documentation of grafana-proxy
 ---
 
-This program proxies requests to backend services,
-if the requesting user is logged into grafana and part of the organization he requests.
+This program proxies requests to backend services, if the requesting user is logged into grafana and part of the organization he requests.
 
 ## Usage
 

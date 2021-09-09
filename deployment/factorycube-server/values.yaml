@@ -43,14 +43,13 @@ factoryinsight:
 
 ### factoryinput ###
 factoryinput:
-  user: factoryinput
+  user: factoryinsight
   enabled: true
   service:
     annotations: {}
   image:
     repository: unitedmanufacturinghub/factoryinput
-    #tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
   pdb:
@@ -74,8 +73,7 @@ grafanaproxy:
   enabled: true  
   image:
     repository: unitedmanufacturinghub/grafana-proxy
-    #tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   service:
     annotations: {}
