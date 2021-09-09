@@ -167,6 +167,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 
 func AddCorsHeaders(c *gin.Context) {
 	origin := c.GetHeader("Origin")
+	zap.S().Debugf("Requesting origin: %s", origin)
 	if len(origin) == 0 {
 		zap.S().Debugf("Add cors wildcard")
 		origin = "*"
