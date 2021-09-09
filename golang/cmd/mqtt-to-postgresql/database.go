@@ -92,9 +92,9 @@ func PQErrorHandling(sqlStatement string, err error) {
 	ShutdownApplicationGraceful()
 }
 
-// CommitOrRollbackonError runs at the end of every database function
+// CommitOrRollbackOnError runs at the end of every database function
 // Either commits or rolls back the transaction, depending on if the tx was successful
-func CommitOrRollbackonError(txn *sql.Tx, errIn error) (errOut error) {
+func CommitOrRollbackOnError(txn *sql.Tx, errIn error) (errOut error) {
 	if txn == nil {
 		PQErrorHandling("Transaction is nil", errIn)
 		return
@@ -243,7 +243,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -267,7 +267,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -307,7 +307,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -395,7 +395,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -483,7 +483,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -570,7 +570,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -659,7 +659,7 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -699,7 +699,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -741,7 +741,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -781,7 +781,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -833,7 +833,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -885,7 +885,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -947,7 +947,7 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -987,7 +987,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1027,7 +1027,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1067,7 +1067,7 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1108,7 +1108,7 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1148,7 +1148,7 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1188,7 +1188,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1228,7 +1228,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1324,7 +1324,7 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1364,7 +1364,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
@@ -1404,7 +1404,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 	}
 
 	defer func() {
-		errx := CommitOrRollbackonError(txn, err)
+		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
 			return
