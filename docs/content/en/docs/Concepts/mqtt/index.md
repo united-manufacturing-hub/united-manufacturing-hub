@@ -302,6 +302,8 @@ A message is sent here every time a process value has been prepared. Unique nami
 
 `<valueName>` in the JSON is a integer or float representing a process value, e.g. temperature.
 
+**Note: as <valueName> is a integer or float, booleans like "true" or "false" are not possible. Please convert them to integer, e.g., "true" --> 1, "false" --> 0**
+
 #### Example for /processValue
 
 ```json
