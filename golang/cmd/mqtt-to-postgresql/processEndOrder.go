@@ -32,9 +32,43 @@ func (r EndOrderHandler) Setup() (err error) {
 }
 
 func (r EndOrderHandler) process() {
+	var items []*goque.PriorityItem
 	for !r.shutdown {
-		//TODO
+		items = r.dequeue()
+		faultyItems, err := storeItemsIntoDatabaseEndOrder(items)
+		if err != nil {
+			return
+		}
+		// Empty the array, without de-allocating memory
+		items = items[:0]
+		for _, faultyItem := range faultyItems {
+			var prio uint8
+			prio = faultyItem.Priority + 1
+			if faultyItem.Priority >= 255 {
+				prio = 254
+			}
+			r.enqueue(faultyItem.Value, prio)
+		}
 	}
+}
+
+func (r EndOrderHandler) dequeue() (items []*goque.PriorityItem) {
+	if r.pg.Length() > 0 {
+		item, err := r.pg.Dequeue()
+		if err != nil {
+			return
+		}
+		items = append(items, item)
+
+		for true {
+			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			if err != nil {
+				break
+			}
+			items = append(items, nextItem)
+		}
+	}
+	return
 }
 
 func (r EndOrderHandler) enqueue(bytes []byte, priority uint8) {
@@ -52,7 +86,7 @@ func (r EndOrderHandler) Shutdown() (err error) {
 }
 
 func (r EndOrderHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
-
+	zap.S().Debugf("[EndOrderHandler]")
 	var parsedPayload endOrder
 
 	err := json.Unmarshal(payload, &parsedPayload)

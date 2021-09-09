@@ -99,27 +99,90 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	addOrderHandler.Setup()
-	addParentToChildHandler.Setup()
-	addProductHandler.Setup()
-	addShiftHandler.Setup()
-	countHandler.Setup()
-	deleteShiftByAssetIdAndBeginTimestampHandler.Setup()
-	deleteShiftByIdHandler.Setup()
-	endOrderHandler.Setup()
-	maintenanceActivityHandler.Setup()
-	modifyProducedPieceHandler.Setup()
-	modifyStateHandler.Setup()
-	productTagHandler.Setup()
-	recommendationDataHandler.Setup()
-	scrapCountHandler.Setup()
-	scrapUniqueProductHandler.Setup()
-	startOrderHandler.Setup()
-	productTagStringHandler.Setup()
-	stateHandler.Setup()
-	uniqueProductHandler.Setup()
-	valueDataHandler.Setup()
-	valueStringHandler.Setup()
+	err := addOrderHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = addParentToChildHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = addProductHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = addShiftHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = countHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = deleteShiftByAssetIdAndBeginTimestampHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = deleteShiftByIdHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = endOrderHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = maintenanceActivityHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = modifyProducedPieceHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = modifyStateHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = productTagHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = recommendationDataHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = scrapCountHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = scrapUniqueProductHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = startOrderHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = productTagStringHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = stateHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = uniqueProductHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = valueDataHandler.Setup()
+	if err != nil {
+		return
+	}
+	err = valueStringHandler.Setup()
+	if err != nil {
+		return
+	}
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")

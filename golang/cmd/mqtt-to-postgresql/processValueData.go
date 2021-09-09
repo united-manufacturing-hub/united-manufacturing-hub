@@ -6,39 +6,133 @@ import (
 	"go.uber.org/zap"
 )
 
-type processValueQueue struct {
+type processValueQueueI32 struct {
+	DBAssetID   uint32
+	TimestampMs uint64
+	Name        string
+	ValueInt32  int32
+}
+type processValueQueueF64 struct {
 	DBAssetID    uint32
 	TimestampMs  uint64
 	Name         string
 	ValueFloat64 float64
-	ValueInt32   int32
-	IsFloat64    bool
 }
 
 type ValueDataHandler struct {
-	pg       *goque.PriorityQueue
+	pgI32    *goque.PriorityQueue
+	pgF64    *goque.PriorityQueue
 	shutdown bool
 }
 
 func (r ValueDataHandler) Setup() (err error) {
-	const queuePathDB = "/data/ValueData"
-	r.pg, err = SetupQueue(queuePathDB)
+	const queuePathDBI32 = "/data/ValueDataI32"
+	r.pgI32, err = SetupQueue(queuePathDBI32)
 	if err != nil {
-		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
+		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBI32, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(r.pgI32)
+
+	const queuePathDBF64 = "/data/ValueDataF64"
+	r.pgF64, err = SetupQueue(queuePathDBF64)
+	if err != nil {
+		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBF64, err)
+		return
+	}
+	defer CloseQueue(r.pgF64)
+
 	return
 }
 
-func (r ValueDataHandler) process() {
+func (r ValueDataHandler) processI32() {
+	var items []*goque.PriorityItem
 	for !r.shutdown {
-		//TODO
+		items = r.dequeueI32()
+		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
+		if err != nil {
+			return
+		}
+		// Empty the array, without de-allocating memory
+		items = items[:0]
+		for _, faultyItem := range faultyItems {
+			var prio uint8
+			prio = faultyItem.Priority + 1
+			if faultyItem.Priority >= 255 {
+				prio = 254
+			}
+			r.enqueueI32(faultyItem.Value, prio)
+		}
+	}
+}
+func (r ValueDataHandler) processF64() {
+	var items []*goque.PriorityItem
+	for !r.shutdown {
+		items = r.dequeueF64()
+		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
+		if err != nil {
+			return
+		}
+		// Empty the array, without de-allocating memory
+		items = items[:0]
+		for _, faultyItem := range faultyItems {
+			var prio uint8
+			prio = faultyItem.Priority + 1
+			if faultyItem.Priority >= 255 {
+				prio = 254
+			}
+			r.enqueueF64(faultyItem.Value, prio)
+		}
 	}
 }
 
-func (r ValueDataHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+func (r ValueDataHandler) dequeueF64() (items []*goque.PriorityItem) {
+	if r.pgF64.Length() > 0 {
+		item, err := r.pgF64.Dequeue()
+		if err != nil {
+			return
+		}
+		items = append(items, item)
+
+		for true {
+			nextItem, err := r.pgF64.DequeueByPriority(item.Priority)
+			if err != nil {
+				break
+			}
+			items = append(items, nextItem)
+		}
+	}
+	return
+}
+
+func (r ValueDataHandler) dequeueI32() (items []*goque.PriorityItem) {
+	if r.pgI32.Length() > 0 {
+		item, err := r.pgI32.Dequeue()
+		if err != nil {
+			return
+		}
+		items = append(items, item)
+
+		for true {
+			nextItem, err := r.pgI32.DequeueByPriority(item.Priority)
+			if err != nil {
+				break
+			}
+			items = append(items, nextItem)
+		}
+	}
+	return
+}
+
+func (r ValueDataHandler) enqueueI32(bytes []byte, priority uint8) {
+	_, err := r.pgI32.Enqueue(priority, bytes)
+	if err != nil {
+		zap.S().Warnf("Failed to enqueue item", bytes)
+		return
+	}
+}
+func (r ValueDataHandler) enqueueF64(bytes []byte, priority uint8) {
+	_, err := r.pgF64.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes)
 		return
@@ -47,12 +141,12 @@ func (r ValueDataHandler) enqueue(bytes []byte, priority uint8) {
 
 func (r ValueDataHandler) Shutdown() (err error) {
 	r.shutdown = true
-	err = CloseQueue(r.pg)
+	err = CloseQueue(r.pgI32)
 	return
 }
 
 func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
-
+	zap.S().Debugf("[ValueDataHandler]")
 	var parsedPayload interface{}
 
 	err := json.Unmarshal(payload, &parsedPayload)
@@ -96,34 +190,30 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 						zap.S().Errorf("Process value recieved that is not an integer nor float", k, v)
 						break
 					}
-					newObject := processValueQueue{
+					newObject := processValueQueueF64{
 						DBAssetID:    DBassetID,
 						TimestampMs:  timestampMs,
 						Name:         k,
 						ValueFloat64: valueFloat64,
-						ValueInt32:   -1,
-						IsFloat64:    true,
 					}
 					marshal, err := json.Marshal(newObject)
 					if err != nil {
 						return
 					}
-					r.enqueue(marshal, 0)
+					r.enqueueF64(marshal, 0)
 					break
 				}
-				newObject := processValueQueue{
-					DBAssetID:    DBassetID,
-					TimestampMs:  timestampMs,
-					Name:         k,
-					ValueFloat64: -1,
-					ValueInt32:   value,
-					IsFloat64:    false,
+				newObject := processValueQueueI32{
+					DBAssetID:   DBassetID,
+					TimestampMs: timestampMs,
+					Name:        k,
+					ValueInt32:  value,
 				}
 				marshal, err := json.Marshal(newObject)
 				if err != nil {
 					return
 				}
-				r.enqueue(marshal, 0)
+				r.enqueueI32(marshal, 0)
 			}
 		}
 

@@ -42,7 +42,7 @@ func (r XHandler) Shutdown() (err error) {
 }
 
 func (r XHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
-
+	zap.S().Debugf("[XHandler]")
 	var marshal []byte
 
 	r.enqueue(marshal, 0)

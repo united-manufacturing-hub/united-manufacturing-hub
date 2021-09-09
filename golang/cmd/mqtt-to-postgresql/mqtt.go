@@ -84,49 +84,69 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 		switch payloadType {
 		case Prefix.State:
+			stateHandler.EnqueueMQTT(customerID, location, assetID, payload)
 		case Prefix.ProcessValue:
+			valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
 		//TODO is still still needed ?
 		case "processvalue":
 			{
 				zap.S().Warnf("Depreciated")
+				valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
 			}
 		case Prefix.ProcessValueString:
-
+			valueStringHandler.EnqueueMQTT(customerID, location, assetID, payload)
 		case Prefix.Count:
-
+			countHandler.EnqueueMQTT(customerID, location, assetID, payload)
 		case Prefix.ScrapCount:
+			scrapCountHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.Recommendation:
+			recommendationDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.AddShift:
+			addShiftHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.AddMaintenanceActivity:
+			maintenanceActivityHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.UniqueProduct:
+			uniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.UniqueProductScrap:
+			scrapUniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.AddProduct:
+			addProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.AddOrder:
+			addOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.StartOrder:
+			startOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.EndOrder:
+			endOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.ProductTag:
+			productTagHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.ProductTagString:
+			productTagStringHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.AddParentToChild:
+			addParentToChildHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.ModifyState:
+			modifyStateHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.DeleteShiftById:
+			deleteShiftByIdHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
+			deleteShiftByAssetIdAndBeginTimestampHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		case Prefix.ModifyProducesPieces:
+			modifyProducedPieceHandler.EnqueueMQTT(customerID, location, assetID, payload)
 
 		default:
 			zap.S().Warnf("Unknown Prefix: %s", payloadType)
