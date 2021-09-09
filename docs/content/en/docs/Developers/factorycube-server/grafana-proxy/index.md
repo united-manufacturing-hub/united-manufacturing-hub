@@ -4,6 +4,10 @@ linktitle: "grafana-proxy"
 description: > Documentation of grafana-proxy
 ---
 
+{{% notice warning %}}
+This microservice is still in development and is not considered stable for production use.
+{{% /notice %}}
+
 This program proxies requests to backend services, if the requesting user is logged into grafana and part of the organization he requests.
 
 ## Getting started

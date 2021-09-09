@@ -4,6 +4,10 @@ linktitle: "factoryinput"
 description: > Documentation of factoryinput
 ---
 
+{{% notice warning %}}
+This microservice is still in development and is not considered stable for production use.
+{{% /notice %}}
+
 This program provides an REST endpoint, to send MQTT messages via HTTP requests. It is typically accessed via [grafana-proxy](../grafana-proxy).
 
 ## Getting Started
