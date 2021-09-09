@@ -11,14 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/beeker1121/goque"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
-
-var globalDBPQ *goque.PriorityQueue
 
 var addOrderHandler AddOrderHandler
 var addParentToChildHandler AddParentToChildHandler
@@ -240,9 +237,89 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	err := CloseQueue(globalDBPQ)
+	err := addOrderHandler.Shutdown()
 	if err != nil {
-		zap.S().Errorf("Error while closing queue gracefully", err)
+		return
+	}
+	err = addParentToChildHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = addProductHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = addShiftHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = countHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = deleteShiftByAssetIdAndBeginTimestampHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = deleteShiftByIdHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = endOrderHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = maintenanceActivityHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = modifyProducedPieceHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = modifyStateHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = productTagHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = recommendationDataHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = scrapCountHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = scrapUniqueProductHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = startOrderHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = productTagStringHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = stateHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = uniqueProductHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = valueDataHandler.Shutdown()
+	if err != nil {
+		return
+	}
+	err = valueStringHandler.Shutdown()
+	if err != nil {
+		return
 	}
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
