@@ -9,7 +9,7 @@ factoryinsight:
     repository: unitedmanufacturinghub/factoryinsight
     pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
-  # tag: 0.3.2 
+  # tag: 0.3.2
   replicas: 2
   user: "factoryinsight"
   # Password will be generated automatically
@@ -26,20 +26,20 @@ factoryinsight:
   pdb:
     enabled: true
     annotations: {}
-    minAvailable: 2 
+    minAvailable: 2
   hpa:
     enabled: true
     minReplicas: 2
-    maxReplicas: 5 
+    maxReplicas: 5
   ingress:
     enabled: false
     publicHost: ""
     publicHostSecretName: ""
   resources:
     limits:
-       cpu: 1000m         
+       cpu: 1000m
     requests:
-       cpu: 200m      
+       cpu: 200m
 
 ### factoryinput ###
 factoryinput:
@@ -70,14 +70,14 @@ mqtttoblob:
 
 ### grafanaproxy ###
 grafanaproxy:
-  enabled: true  
+  enabled: true
   image:
     repository: unitedmanufacturinghub/grafana-proxy
     pullPolicy: IfNotPresent
   replicas: 1
   service:
     annotations: {}
-    type: LoadBalancer 
+    type: LoadBalancer
     port: 2096
     targetPort: 80
     protocol: TCP
@@ -89,11 +89,11 @@ grafanaproxy:
        cpu: 1000m
     requests:
        cpu: 200m
-              
+
 ### mqtt-to-postresql ###
 mqtttopostgresql:
   enabled: true
-  image: 
+  image:
     repository: unitedmanufacturinghub/mqtt-to-postgresql
     pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
@@ -105,7 +105,7 @@ mqtttopostgresql:
     minAvailable: 1
 
 minio-operator:
-    enabled: true
+    enabled: false
     loadBalancerEnabled: true
     service:
         annotations: {}
@@ -245,29 +245,29 @@ timescaledb-single:
   enabled: true
   # This file and its contents are licensed under the Apache License 2.0.
   # Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
-  
+
   replicaCount: 1
-  
+
   # To prevent very long names, we override the name, otherwise it would default to
   # timescaledb-single (the name of the chart)
   nameOverride: timescaledb
-  
+
   # The default Patroni name of the cluster ("scope") is derived from the name of the release,
   # but you can override this behaviour here
   # https://patroni.readthedocs.io/en/latest/SETTINGS.html#global-universal
   clusterName:
-  
+
   # The major PostgreSQL version to use, defaults to the default version of the Docker image
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
   version:
-  
+
   image:
     # Image was built from
     # https://github.com/timescale/timescaledb-docker-ha
     repository: timescaledev/timescaledb-ha
     tag: pg12-ts2.0-latest
-    pullPolicy: IfNotPresent 
-  
+    pullPolicy: IfNotPresent
+
   # These secrets should exist before the Helm is used to deploy this TimescaleDB.
   # You can use generate_kustomization.sh to help in creating these secrets, or have
   # a look at kustomize/example to see how you could install them.
@@ -276,15 +276,15 @@ timescaledb-single:
     # for example PATRONI_SUPERUSER_PASSWORD or PATRONI_REPLICATION_PASSWORD
     # https://patroni.readthedocs.io/en/latest/ENVIRONMENT.html#postgresql
     credentials:  # defaults to RELEASE-credentials
-  
+
     # This secret should be a Secret of type kubernetes.io/tls, containing
     # both a tls.key and a tls.crt
     certificate:  # defaults to RELEASE-certificate
-  
+
     # This secret should contain environment variables that influence pgBackRest,
     # for example, PGBACKREST_REPO1_S3_KEY or PGBACKREST_REPO1_S3_KEY_SECRET
     pgbackrest:  # defaults to RELEASE-pgbackrest
-  
+
   backup:
     enabled: false
     pgBackRest:
@@ -300,7 +300,7 @@ timescaledb-single:
       repo1-cipher-type: "none"
       repo1-s3-region: us-east-2
       repo1-s3-endpoint: s3.amazonaws.com
-  
+
     # Overriding the archive-push/archive-get sections is most useful in
     # very high througput situations. Look at values/high_throuhgput_example.yaml for more details
     pgBackRest:archive-push: {}
@@ -319,7 +319,7 @@ timescaledb-single:
     envFrom:
     # - secretRef:
     #     name: extra-pgbackrest-secrets
-  
+
     # Alternatively, you can expose individual environment variables:
     # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#envvar-v1-core
     # Although not impossible, care should be taken not to include secrets
@@ -332,7 +332,7 @@ timescaledb-single:
     #     secretKeyRef:
     #       name: pgbackrest-dev-secrets
     #       key: repo1-s3-key-secret
-  
+
   # When creating a *new* deployment, the default is to initialize (using initdb) the database.
   # If however, you want to initialize the database using an existing backup, you can do so by
   # configuring this section.
@@ -348,8 +348,8 @@ timescaledb-single:
     # For example, if you need to specify a different restore bucket, you should set
     # PGBACKREST_REPO1_S3_BUCKET: <base64 encoded value of the bucket> in these secrets
     secretName: pgbackrest-bootstrap
-  
-  
+
+
   # Extra custom environment variables.
   # These should be an EnvVar, as this allows you to inject secrets into the environment
   # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#envvar-v1-core
@@ -361,15 +361,15 @@ timescaledb-single:
   #      secretKeyRef:
   #        name: myapplication-passwords
   #        key: standby
-  
+
   # Externally created Kubernetes secrets will be injected into the pods by referencing them here. You
   # can also add more configuration options and secrets this way (see https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables)
   envFrom:
   #  - configMapRef:
   #      name: my-deployment-settings
   #      optional: true
-  
-  
+
+
   # This configuration will be passed on to Patroni directly, there are a few things that are
   # injected/changed, these are:
   #   - archive_command will be set to /bin/true if backup is disabled
@@ -480,11 +480,11 @@ timescaledb-single:
       use_unix_socket: true
     restapi:
       listen: 0.0.0.0:8008
-  
+
   callbacks:
     # If set, this configMap will be used for the Patroni callbacks.
     configMap:  # example-patroni-callbacks
-  
+
   postInit:
     # A list of sources, that contain post init scripts.
     # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#projectedvolumesource-v1-core
@@ -497,7 +497,7 @@ timescaledb-single:
     - secret:
         name: timescale-post-init-pw
         optional: false
-  
+
   loadBalancer:
     # If not enabled, we still expose the primary using a so called Headless Service
     # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
@@ -510,7 +510,7 @@ timescaledb-single:
       # Setting idle-timeout to the maximum allowed value, as in general
       # database connections are long lived
       service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
-  
+
       # service.beta.kubernetes.io/aws-load-balancer-type: nlb            # Use an NLB instead of ELB
       # service.beta.kubernetes.io/aws-load-balancer-internal: 0.0.0.0/0  # Internal Load Balancer
     # Define extra things that should go in the service spec
@@ -518,11 +518,11 @@ timescaledb-single:
     spec:
     # loadBalancerSourceRanges:
     # - "0.0.0.0/0"
-  
+
   replicaLoadBalancer:
     # If not enabled, we still expose the replica's using a so called Headless Service
     # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
-    enabled: false  
+    enabled: false
     port: 5433
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
@@ -531,7 +531,7 @@ timescaledb-single:
     spec:
     # loadBalancerSourceRanges:
     # - "0.0.0.0/0"
-  
+
   readinessProbe:
     enabled: true
     initialDelaySeconds: 5
@@ -539,7 +539,7 @@ timescaledb-single:
     timeoutSeconds: 5
     failureThreshold: 6
     successThreshold: 1
-  
+
   persistentVolumes:
     # For sanity reasons, the actual PGDATA and wal directory will be subdirectories of the Volume mounts,
     # this allows Patroni/a human/an automated operator to move directories during bootstrap, which cannot
@@ -547,7 +547,7 @@ timescaledb-single:
     # https://www.postgresql.org/docs/current/creating-cluster.html#CREATING-CLUSTER-MOUNT-POINTS
     data:
       enabled: true
-      size: 2Gi 
+      size: 2Gi
       ## database data Persistent Volume Storage Class
       ## If defined, storageClassName: <storageClass>
       ## If set to "-", storageClassName: "", which disables dynamic provisioning
@@ -582,7 +582,7 @@ timescaledb-single:
       # example2:
       #   size: 5Gi
       #   storageClass: gp2
-  
+
   # EXPERIMENTAL, please do *not* enable on production environments
   # if enabled, fullWalPrevention will switch the default transaction mode from read write
   # to read only if thresholds are breached.
@@ -596,7 +596,7 @@ timescaledb-single:
       readOnlyFreeMB: 64
       readWriteFreePercent: 8
       readWriteFreeMB: 128
-  
+
   resources: {}
     # If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
@@ -606,7 +606,7 @@ timescaledb-single:
     # requests:
     #   cpu: 100m
     #   memory: 128Mi
-  
+
   sharedMemory:
     # By default Kubernetes only provides 64MB to /dev/shm
     # /dev/shm is only used by PostgreSQL for work_mem for parallel workers,
@@ -621,7 +621,7 @@ timescaledb-single:
     #
     # you may wish to use a mount to Memory, by setting useMount to true
     useMount: false
-  
+
   # timescaledb-tune will be run with the Pod resources requests or - if not set - its limits.
   # This should give a reasonably tuned PostgreSQL instance.
   # Any PostgreSQL parameter that is explicitly set in the Patroni configuration will override
@@ -638,13 +638,13 @@ timescaledb-single:
       # max-conns: 120
       # cpus: 5
       # memory: 4GB
-  
+
   # pgBouncer does connection pooling for PostgreSQL
   # https://www.pgbouncer.org/
   # enabling pgBouncer will run an extra container in every Pod, serving a pgBouncer
   # pass-through instance
   pgBouncer:
-    enabled: false 
+    enabled: false
     port: 6432
     config:
     # DANGER: The below settings are considered to be safe to set, and we recommend
@@ -673,7 +673,7 @@ timescaledb-single:
     #   "username" "hashedpassword"
     #   "username2" "hashedpassword2"
     userListSecretName:
-  
+
   networkPolicy:
     enabled: false
     prometheusApp: prometheus
@@ -687,10 +687,10 @@ timescaledb-single:
     #   ports:
     #   - protocol: TCP
     #       port: 11111
-  
+
   # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
   nodeSelector: {}
-  
+
   # Prometheus exporter for PostgreSQL server metrics.
   # https://github.com/wrouesnel/postgres_exporter
   prometheus:
@@ -725,18 +725,18 @@ timescaledb-single:
     volumeMounts:
     # - name: exporter-config
     #   mountPath: /var/exporter
-  
+
   # For new deployments, we would advise Parallel here, however as that change breaks previous
   # deployments, it is set to OrderedReady here
   podManagementPolicy: OrderedReady
-  
+
   # Annotations that are applied to each pod in the stateful set
   # https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
   podAnnotations: {}
-  
+
   # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
   tolerations: []
-  
+
   # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
   affinityTemplate: |
     podAntiAffinity:
@@ -758,34 +758,34 @@ timescaledb-single:
               release: {{ .Release.Name | quote }}
               cluster-name: {{ template "clusterName" . }}
   affinity: {}
-  
+
   ## Use an alternate scheduler, e.g. "stork".
   ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
   ##
   # schedulerName:
-  
+
   rbac:
     # Specifies whether RBAC resources should be created
     create: true
-  
+
   serviceAccount:
     # Specifies whether a ServiceAccount should be created
     create: true
     # The name of the ServiceAccount to use.
     # If not set and create is true, a name is generated using the fullname template
     name:
-  
+
   # Setting unsafe to true will generate some random credentials. This is meant
   # for development or first evaluation of the Helm Charts. It should *not* be
   # used for anything beyong the evaluation phase.
   unsafe: false
-  
+
   debug:
     # This setting is mainly for during development, debugging or troubleshooting.
     # This command will be executed *before* the main container starts. In the
     # example below, we can mimick a slow restore by sleeping for 5 minutes before starting
     execStartPre:  # sleep 300
-  
+
 ### grafana ###
 grafana:
   enabled: true
@@ -816,7 +816,7 @@ grafana:
 
   ## See `kubectl explain poddisruptionbudget.spec` for more
   ## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
-  podDisruptionBudget: 
+  podDisruptionBudget:
     minAvailable: 1
   #  maxUnavailable: 1
 
@@ -845,7 +845,7 @@ grafana:
 
   image:
     repository: grafana/grafana
-    tag: 8.0.6
+    tag: 8.1.3
     sha: ""
     pullPolicy: IfNotPresent
 
@@ -917,7 +917,7 @@ grafana:
   ## ref: http://kubernetes.io/docs/user-guide/services/
   ##
   service:
-    type: LoadBalancer 
+    type: LoadBalancer
     port: 8080
     targetPort: 3000
       # targetPort: 4181 To be used with a proxy extraContainer
@@ -1012,7 +1012,7 @@ grafana:
   ##
   affinity: {}
 
-  extraInitContainers: 
+  extraInitContainers:
   - args:
     - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/
     command:
@@ -1042,7 +1042,7 @@ grafana:
   #     - name: proxy-web
   #       containerPort: 4181
 
-        
+
   ## Enable persistence using Persistent Volume Claims0
   ## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
   ##
@@ -1160,15 +1160,15 @@ grafana:
     FACTORYINSIGHT_APIKEY:
         secretKeyRef:
           name: factoryinsight-secret
-          key: apiKey 
+          key: apiKey
     FACTORYINSIGHT_CUSTOMERID:
         secretKeyRef:
           name: factoryinsight-secret
-          key: customerID 
+          key: customerID
     FACTORYINSIGHT_PASSWORD:
         secretKeyRef:
           name: factoryinsight-secret
-          key: password 
+          key: password
 
 
   ## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
@@ -1226,7 +1226,7 @@ grafana:
 
   ## Pass the plugins you want installed as a list.
   ##
-  plugins: 
+  plugins:
       - grafana-worldmap-panel
       - grafana-piechart-panel
       - aceiot-svg-panel
@@ -1237,7 +1237,7 @@ grafana:
       - agenty-flowcharting-panel
       - marcusolsson-dynamictext-panel
       - factry-untimely-panel
-      - cloudspout-button-panel 
+      - cloudspout-button-panel
 
   ## Configure grafana datasources
   ## ref: http://docs.grafana.org/administration/provisioning/#datasources
@@ -1559,7 +1559,7 @@ nodered:
     enabled: false
     publicHost: ""
     publicHostSecretName: ""
-  settings: |-  
+  settings: |-
     module.exports = {
         // the tcp port that the Node-RED web server is listening on
         uiPort: process.env.PORT || 1880,
@@ -1916,7 +1916,7 @@ redis:
     enabled: false
     ingressNSMatchLabels: {}
     ingressNSPodMatchLabels: {}
-  #password: changeme 
+  #password: changeme
   existingSecret: redis-secret
   existingSecretPasswordKey: redispassword
   persistence: {}
@@ -2198,7 +2198,7 @@ vernemq:
     name: vernemq-acl
   fullnameOverride: ""
   image:
-    pullPolicy: IfNotPresent 
+    pullPolicy: IfNotPresent
     repository: vernemq/vernemq
     tag: 1.11.0
   ingress:
@@ -2225,7 +2225,7 @@ vernemq:
     create: true
     serviceAccount:
       create: true
-  replicaCount: 1 
+  replicaCount: 1
   resources: {}
   secretMounts:
    - name: vernemq-certificates
@@ -2258,7 +2258,7 @@ vernemq:
       nodePort: 8443
       port: 8443
   serviceMonitor:
-    create: false 
+    create: false
   statefulset:
     annotations: {}
     labels: {}

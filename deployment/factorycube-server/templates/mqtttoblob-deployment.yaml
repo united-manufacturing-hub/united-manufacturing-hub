@@ -1,6 +1,6 @@
 {{- if .Values.mqtttoblob.enabled -}}
 apiVersion: apps/v1
-kind: Deployment 
+kind: Deployment
 metadata:
   name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
   labels:
@@ -10,11 +10,11 @@ metadata:
     {{- toYaml .Values.mqtttoblob.annotations | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ .Values.mqtttoblob.replicas }} 
+  replicas: {{ .Values.mqtttoblob.replicas }}
   selector:
     matchLabels:
       name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
-  strategy:  
+  strategy:
     type: RollingUpdate
   template:
     metadata:
@@ -42,42 +42,42 @@ spec:
           env:
             - name: CERTIFICATE_NAME
               value: NO_CERT
-              
+
             - name: LOGGING_LEVEL
               value: "DEBUG"
-              
+
             - name: BROKER_PORT
               value: "1883"
-              
+
             - name: BROKER_URL
               value: {{ include "factorycube-server.fullname" . }}-vernemq-local-service
-              
+
             - name: BUCKET_NAME
               value: "umh"
-              
+
             - name: TOPIC
               value: "ia/+/+/+/productImage"
-              
+
             - name: MINIO_URL
               value: {{ include "factorycube-server.fullname" . }}-minio-service
-              
+
             - name: MINIO_ACCESS_KEY
-              valueFrom: 
+              valueFrom:
                 secretKeyRef:
                   name: umhminio-secret
-                  key: accessKey   
-              
+                  key: accessKey
+
             - name: MINIO_SECRET_KEY
-              valueFrom: 
+              valueFrom:
                 secretKeyRef:
                   name: umhminio-secret
-                  key: secretKey       
-            
+                  key: secretKey
+
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-          
+
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           # livenessProbe:
           #   httpGet:
