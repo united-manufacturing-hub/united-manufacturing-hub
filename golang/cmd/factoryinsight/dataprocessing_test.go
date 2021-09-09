@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"reflect"
 	"testing"
@@ -545,7 +546,7 @@ func TestProcessStates_Complex_1(t *testing.T) {
 func Test_processStatesOptimized(t *testing.T) {
 	type args struct {
 		parentSpan    opentracing.Span
-		assetID       int
+		assetID       uint32
 		stateArray    []datamodel.StateEntry
 		rawShifts     []datamodel.ShiftEntry
 		countSlice    []datamodel.CountEntry
@@ -637,5 +638,303 @@ func Test_processStatesOptimized(t *testing.T) {
 				t.Errorf("%v", tt.wantProcessedStateArray)
 			}
 		})
+	}
+}
+
+func TestSliceContainsInt(t *testing.T) {
+
+	var slice [][]interface{}
+
+	var row1 []interface{}
+	var row2 []interface{}
+	var row3 []interface{}
+	row1 = append(row1, 1)
+	row1 = append(row1, "test")
+	row1 = append(row1, 45)
+	row2 = append(row2, 2)
+	row2 = append(row2, "testas")
+	row2 = append(row2, 455)
+	row3 = append(row3, 3)
+	row3 = append(row3, "testaser")
+	row3 = append(row3, 545)
+	slice = append(slice, row1)
+	slice = append(slice, row2)
+	slice = append(slice, row3)
+
+	resultContains, resultIndex := SliceContainsInt(slice, 2, 0)
+
+	if !reflect.DeepEqual(resultContains, true) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(resultIndex, 1) {
+		t.Error()
+	}
+
+	resultContains, resultIndex = SliceContainsInt(slice, 4, 0)
+	if !reflect.DeepEqual(resultContains, false) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(resultIndex, 0) {
+		t.Error()
+	}
+
+}
+
+func TestChangeOutputFormat(t *testing.T) {
+
+	var data [][]interface{}
+	var dataExtended [][]interface{}
+	var columnNames []string
+
+	columnNames = []string{"uid", "aid", "Force"}
+	var row1 []interface{}
+	var row2 []interface{}
+	var row3 []interface{}
+	row1 = append(row1, 1)
+	row1 = append(row1, "A102")
+	row1 = append(row1, 45.5)
+	row2 = append(row2, 2)
+	row2 = append(row2, "A103")
+	row2 = append(row2, 455)
+	row3 = append(row3, 3)
+	row3 = append(row3, "A104")
+	row3 = append(row3, 545)
+	data = append(data, row1)
+	data = append(data, row2)
+	data = append(data, row3)
+
+	//Handling if inputColumnName is not new
+	dataOutput, columnNamesOutput, columnIndex := ChangeOutputFormat(data, columnNames, "Force")
+	if !reflect.DeepEqual(dataOutput, data) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnNamesOutput, columnNames) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnIndex, 2) {
+		t.Error()
+	}
+
+	//Handling if inputColumnName is new
+	columnNamesExtended := append(columnNames, "Temperature")
+	row1 = append(row1, nil)
+	row2 = append(row2, nil)
+	row3 = append(row3, nil)
+	dataExtended = append(dataExtended, row1)
+	dataExtended = append(dataExtended, row2)
+	dataExtended = append(dataExtended, row3)
+
+	dataOutput, columnNamesOutput, columnIndex = ChangeOutputFormat(data, columnNames, "Temperature")
+	fmt.Printf("%s\n", columnNamesOutput)
+	fmt.Printf("%s\n", dataOutput)
+	if !reflect.DeepEqual(dataOutput, dataExtended) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnNamesOutput, columnNamesExtended) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(columnIndex, 3) {
+		t.Error()
+	}
+}
+
+func TestLengthenSliceToFitNames(t *testing.T) {
+
+	var sliceTooSmall []interface{}
+	var sliceTooSmallExpectedOutput []interface{}
+	var sliceExact []interface{}
+	var sliceTooLong []interface{}
+	var columnNames []string
+	columnNames = []string{"uid", "aid", "Force"}
+	sliceTooSmall = append(sliceTooSmall, 1)
+	sliceTooSmall = append(sliceTooSmall, "A102")
+	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, 1)
+	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, "A102")
+	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, nil)
+	sliceExact = append(sliceExact, 2)
+	sliceExact = append(sliceExact, "A103")
+	sliceExact = append(sliceExact, 455)
+	sliceTooLong = append(sliceTooLong, 3)
+	sliceTooLong = append(sliceTooLong, "A104")
+	sliceTooLong = append(sliceTooLong, 545)
+	sliceTooLong = append(sliceTooLong, "EntryTooMuch")
+
+	//Handling if input slice too small
+	sliceOutput := LengthenSliceToFitNames(sliceTooSmall, columnNames)
+	if !reflect.DeepEqual(sliceOutput, sliceTooSmallExpectedOutput) {
+		t.Error()
+	}
+	//Handling if input slice correct
+	sliceOutput = LengthenSliceToFitNames(sliceExact, columnNames)
+	if !reflect.DeepEqual(sliceOutput, sliceExact) {
+		t.Error()
+	}
+	//Handling if input slice too large
+	sliceOutput = LengthenSliceToFitNames(sliceTooLong, columnNames)
+	fmt.Printf("%s\n", sliceOutput)
+	if !reflect.DeepEqual(sliceOutput, sliceOutput) {
+		t.Error()
+	}
+}
+
+func TestCreateNewRowInData(t *testing.T) {
+
+	var UID int
+	var AID string
+	var timestampBegin time.Time
+	var timestampEnd sql.NullTime
+	var productID int
+	var isScrap bool
+	var valueName sql.NullString
+	var value sql.NullFloat64
+	var data [][]interface{}
+	var columnNames []string
+
+	UID = 12
+	AID = "A106"
+	timestampBegin = time.Unix(32023904, 0)
+	timestampEnd.Time = time.Unix(32023999, 0)
+	timestampEnd.Valid = true
+	productID = 23438
+	isScrap = false
+	valueName.String = "Force"
+	valueName.Valid = true
+	value.Float64 = 1.38
+	value.Valid = true
+
+	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Torque", "Speed", "Force"}
+	var row1 []interface{}
+	var row2 []interface{}
+
+	row1TimeBegin := time.Unix(32023904, 0)
+	row1TimeEnd := time.Unix(32023898, 0)
+	row2TimeBegin := time.Unix(32024904, 0)
+	row2TimeEnd := time.Unix(32024898, 0)
+
+	row1 = append(row1, 1)
+	row1 = append(row1, "A102")
+	row1 = append(row1, float64(row1TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row1 = append(row1, 10011)
+	row1 = append(row1, false)
+	row1 = append(row1, 45.6)
+	row1 = append(row1, 1.13)
+	row1 = append(row1, 0.023)
+
+	row2 = append(row2, 2)
+	row2 = append(row2, "A103")
+	row2 = append(row2, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row2 = append(row2, 10011)
+	row2 = append(row2, false)
+	row2 = append(row2, 44.6)
+	row2 = append(row2, 1.01)
+	row2 = append(row2, 0.021)
+
+	data = append(data, row1)
+	data = append(data, row2)
+
+	dataOutput := CreateNewRowInData(data, columnNames, 7, UID, AID,
+		timestampBegin, timestampEnd, productID, isScrap, valueName, value)
+	fmt.Printf("%s\n", dataOutput)
+	if !reflect.DeepEqual(len(dataOutput), 3) {
+		t.Error()
+	}
+
+	if !reflect.DeepEqual(dataOutput[2][6], nil) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(dataOutput[2][7], value.Float64) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(dataOutput[2][8], nil) {
+		t.Error()
+	}
+	if !reflect.DeepEqual(len(dataOutput[2]), 9) {
+		t.Error()
+	}
+}
+
+func TestCheckOutputDimensions(t *testing.T) {
+	var data [][]interface{}
+	var columnNames []string
+
+	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Torque", "Speed", "Force"}
+	var row1 []interface{}
+	var row2 []interface{}
+	var rowTooShort []interface{}
+	var rowTooLong []interface{}
+
+	row1TimeBegin := time.Unix(32023904, 0)
+	row1TimeEnd := time.Unix(32023898, 0)
+	row2TimeBegin := time.Unix(32024904, 0)
+	row2TimeEnd := time.Unix(32024898, 0)
+
+	row1 = append(row1, 1)
+	row1 = append(row1, "A102")
+	row1 = append(row1, float64(row1TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row1 = append(row1, 10011)
+	row1 = append(row1, false)
+	row1 = append(row1, 45.6)
+	row1 = append(row1, 1.13)
+	row1 = append(row1, 0.023)
+
+	row2 = append(row2, 2)
+	row2 = append(row2, "A103")
+	row2 = append(row2, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row2 = append(row2, 10011)
+	row2 = append(row2, false)
+	row2 = append(row2, 44.6)
+	row2 = append(row2, 1.01)
+	row2 = append(row2, 0.021)
+
+	rowTooShort = append(rowTooShort, 2)
+	rowTooShort = append(rowTooShort, "A103")
+	rowTooShort = append(rowTooShort, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooShort = append(rowTooShort, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooShort = append(rowTooShort, 10011)
+	rowTooShort = append(rowTooShort, false)
+	rowTooShort = append(rowTooShort, 44.6)
+	rowTooShort = append(rowTooShort, 1.01)
+
+	rowTooLong = append(rowTooLong, 2)
+	rowTooLong = append(rowTooLong, "A103")
+	rowTooLong = append(rowTooLong, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooLong = append(rowTooLong, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooLong = append(rowTooLong, 10011)
+	rowTooLong = append(rowTooLong, false)
+	rowTooLong = append(rowTooLong, 44.6)
+	rowTooLong = append(rowTooLong, 1.01)
+	rowTooLong = append(rowTooLong, 0.021)
+	rowTooLong = append(rowTooLong, "entryTooMuch")
+
+	data = append(data, row1)
+	data = append(data, row2)
+
+	fmt.Printf("%s\n", data)
+
+	//Case: No Error
+	err := CheckOutputDimensions(data, columnNames)
+	if !reflect.DeepEqual(err, nil) {
+		t.Error()
+	}
+
+	//Case: Error because last row too short
+	data = append(data, rowTooShort)
+	err = nil
+	err = CheckOutputDimensions(data, columnNames)
+	if err == nil {
+		t.Error()
+	}
+
+	//Case: Error because last row too long
+	data[2] = rowTooLong
+	fmt.Printf("%s\n", data)
+	err = nil
+	err = CheckOutputDimensions(data, columnNames)
+	if err == nil {
+		t.Error()
 	}
 }

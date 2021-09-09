@@ -5,6 +5,8 @@ description: >
   This docker container automatically detects cameras in the network and makes them accessible via MQTT. The MQTT output is specified in [the MQTT documentation](../../../concepts/mqtt/)
 ---
 
+**This microservice is still in development and is not considered stable for production use.**
+
 ## Getting started
 
 ### Using the Helm chart
@@ -198,3 +200,8 @@ The input is not case sensitive. Please follow the example format below.
 **Possible values:** DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 **Example value:** DEBUG
+
+
+## Credits
+
+Based on the Bachelor Thesis from [Patrick Kunz](../../../publications/plug-and-play-visual-quality-inspection).

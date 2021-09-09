@@ -12,7 +12,7 @@ metadata:
     {{- toYaml .Values.factoryinsight.pdb.annotations | nindent 4 }}
   {{- end }}
 spec:
-  minAvailable: {{ .Values.factoryinsight.pdb.minAvailable }} 
+  minAvailable: {{ .Values.factoryinsight.pdb.minAvailable }}
   selector:
     matchLabels:
      {{- include "factorycube-server.labels.factoryinsight" . | nindent 6 }}

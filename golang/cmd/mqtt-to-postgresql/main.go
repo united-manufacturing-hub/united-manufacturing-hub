@@ -17,10 +17,38 @@ import (
 	"go.uber.org/zap"
 )
 
-func main() {
+var addOrderHandler AddOrderHandler
+var addParentToChildHandler AddParentToChildHandler
+var addProductHandler AddProductHandler
+var addShiftHandler AddShiftHandler
+var countHandler CountHandler
+var deleteShiftByAssetIdAndBeginTimestampHandler DeleteShiftByAssetIdAndBeginTimestampHandler
+var deleteShiftByIdHandler DeleteShiftByIdHandler
+var endOrderHandler EndOrderHandler
+var maintenanceActivityHandler MaintenanceActivityHandler
+var modifyProducedPieceHandler ModifyProducedPieceHandler
+var modifyStateHandler ModifyStateHandler
+var productTagHandler ProductTagHandler
+var recommendationDataHandler RecommendationDataHandler
+var scrapCountHandler ScrapCountHandler
+var scrapUniqueProductHandler ScrapUniqueProductHandler
+var startOrderHandler StartOrderHandler
+var productTagStringHandler ProductTagStringHandler
+var stateHandler StateHandler
+var uniqueProductHandler UniqueProductHandler
+var valueDataHandler ValueDataHandler
+var valueStringHandler ValueStringHandler
+var storedRawMQTTHandler StoredRawMQTTHandler
 
+func main() {
 	// Setup logger and set as global
-	logger, _ := zap.NewDevelopment()
+	var logger *zap.Logger
+	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
+		logger, _ = zap.NewDevelopment()
+	} else {
+
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -49,7 +77,7 @@ func main() {
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
-	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go http.ListenAndServe("0.0.0.0:8086", health)
 
 	dryRun := os.Getenv("DRY_RUN")
@@ -69,17 +97,56 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	pg, err := setupQueue()
-	if err != nil {
-		zap.S().Errorf("Error setting up remote queue", err)
-		return
-	}
-	defer closeQueue(pg)
+	addOrderHandler = *NewAddOrderHandler()
+	addParentToChildHandler = *NewAddParentToChildHandler()
+	addProductHandler = *NewAddProductHandler()
+	addShiftHandler = *NewAddShiftHandler()
+	countHandler = *NewCountHandler()
+	deleteShiftByAssetIdAndBeginTimestampHandler = *NewDeleteShiftByAssetIdAndBeginTimestampHandler()
+	deleteShiftByIdHandler = *NewDeleteShiftByIdHandler()
+	endOrderHandler = *NewEndOrderHandler()
+	maintenanceActivityHandler = *NewMaintenanceActivityHandler()
+	modifyProducedPieceHandler = *NewModifyProducedPieceHandler()
+	modifyStateHandler = *NewModifyStateHandler()
+	productTagHandler = *NewProductTagHandler()
+	recommendationDataHandler = *NewRecommendationDataHandler()
+	scrapCountHandler = *NewScrapCountHandler()
+	scrapUniqueProductHandler = *NewScrapUniqueProductHandler()
+	startOrderHandler = *NewStartOrderHandler()
+	productTagStringHandler = *NewProductTagStringHandler()
+	stateHandler = *NewStateHandler()
+	uniqueProductHandler = *NewUniqueProductHandler()
+	valueDataHandler = *NewValueDataHandler()
+	valueStringHandler = *NewValueStringHandler()
+	storedRawMQTTHandler = *NewStoredRawMQTTHandler()
+
+	addOrderHandler.Setup()
+	addParentToChildHandler.Setup()
+	addProductHandler.Setup()
+	addShiftHandler.Setup()
+	countHandler.Setup()
+	deleteShiftByAssetIdAndBeginTimestampHandler.Setup()
+	deleteShiftByIdHandler.Setup()
+	endOrderHandler.Setup()
+	maintenanceActivityHandler.Setup()
+	modifyProducedPieceHandler.Setup()
+	modifyStateHandler.Setup()
+	productTagHandler.Setup()
+	recommendationDataHandler.Setup()
+	scrapCountHandler.Setup()
+	scrapUniqueProductHandler.Setup()
+	startOrderHandler.Setup()
+	productTagStringHandler.Setup()
+	stateHandler.Setup()
+	uniqueProductHandler.Setup()
+	valueDataHandler.Setup()
+	valueStringHandler.Setup()
+	storedRawMQTTHandler.Setup()
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
 	mqttTopic := os.Getenv("MQTT_TOPIC")
-	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName, pg)
+	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -102,29 +169,126 @@ func main() {
 
 	}()
 
-	// Start queue processing goroutines
-	go reportQueueLength(pg)
-	go storeIntoDatabaseRoutineAddMaintenanceActivity(pg)
-	go storeIntoDatabaseRoutineAddOrder(pg)
-	go storeIntoDatabaseRoutineAddProduct(pg)
-	go storeIntoDatabaseRoutineCount(pg)
-	go storeIntoDatabaseRoutineEndOrder(pg)
-	go storeIntoDatabaseRoutineProcessValue(pg)
-	go storeIntoDatabaseRoutineProcessValueFloat64(pg)
-	go storeIntoDatabaseRoutineRecommendation(pg)
-	go storeIntoDatabaseRoutineScrapCount(pg)
-	go storeIntoDatabaseRoutineShift(pg)
-	go storeIntoDatabaseRoutineStartOrder(pg)
-	go storeIntoDatabaseRoutineState(pg)
-	go storeIntoDatabaseRoutineUniqueProduct(pg)
-	go storeIntoDatabaseRoutineUniqueProductScrap(pg)
 	select {} // block forever
 }
 
-// ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
+// Set to true to stop processDBQueue goroutines
+var shuttingDown = false
+
+// ShutdownApplicationGraceful shuts down the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
+	if shuttingDown {
+		//Already shutting down
+		return
+	}
+	shuttingDown = true
+	zap.S().Debugf(
+		`
+   _____   _               _         _                                                         _   _                  _     _                    _____                                 __           _ 
+  / ____| | |             | |       | |                                /\                     | | (_)                | |   (_)                  / ____|                               / _|         | |
+ | (___   | |__    _   _  | |_    __| |   ___   __      __  _ __      /  \     _ __    _ __   | |  _    ___    __ _  | |_   _    ___    _ __   | |  __   _ __    __ _    ___    ___  | |_   _   _  | |
+  \___ \  | '_ \  | | | | | __|  / _| |  / _ \  \ \ /\ / / | '_ \    / /\ \   | '_ \  | '_ \  | | | |  / __|  / _| | | __| | |  / _ \  | '_ \  | | |_ | | '__|  / _| |  / __|  / _ \ |  _| | | | | | |
+  ____) | | | | | | |_| | | |_  | (_| | | (_) |  \ V  V /  | | | |  / ____ \  | |_) | | |_) | | | | | | (__  | (_| | | |_  | | | (_) | | | | | | |__| | | |    | (_| | | (__  |  __/ | |   | |_| | | |
+ |_____/  |_| |_|  \__,_|  \__|  \__,_|  \___/    \_/\_/   |_| |_| /_/    \_\ | .__/  | .__/  |_| |_|  \___|  \__,_|  \__| |_|  \___/  |_| |_|  \_____| |_|     \__,_|  \___|  \___| |_|    \__,_| |_|
+                                                                              | |     | |                                                                                                             
+                                                                              |_|     |_|
+`)
+
 	zap.S().Infof("Shutting down application")
 	ShutdownMQTT()
+
+	time.Sleep(15 * time.Second) // Wait that all data is processed
+
+	err := addOrderHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = addParentToChildHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = addProductHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = addShiftHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = countHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = deleteShiftByAssetIdAndBeginTimestampHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = deleteShiftByIdHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = endOrderHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = maintenanceActivityHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = modifyProducedPieceHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = modifyStateHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = productTagHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = recommendationDataHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = scrapCountHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = scrapUniqueProductHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = startOrderHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = productTagStringHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = stateHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = uniqueProductHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = valueDataHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+	err = valueStringHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
+
+	time.Sleep(5 * time.Second)
+	err = storedRawMQTTHandler.Shutdown()
+	if err != nil {
+		zap.S().Errorf("Failed to shutdown queue")
+	}
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 

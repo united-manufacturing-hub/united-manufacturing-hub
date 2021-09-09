@@ -40,7 +40,7 @@ app.kubernetes.io/part-of: {{ include "factorycube-server.name" . }}
 {{- end }}
 
 {{/*
-Labels for factoryinsight 
+Labels for factoryinsight
 */}}
 {{- define "factorycube-server.labels.factoryinsight" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinsight
@@ -48,7 +48,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinsight
 {{- end }}
 
 {{/*
-Labels for mqtttopostgresql 
+Labels for mqtttopostgresql
 */}}
 {{- define "factorycube-server.labels.mqtttopostgresql" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqtttopostgresql
@@ -56,7 +56,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqtttopostgres
 {{- end }}
 
 {{/*
-Labels for mqtttoblob 
+Labels for mqtttoblob
 */}}
 {{- define "factorycube-server.labels.mqtttoblob" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqtttoblob
@@ -64,7 +64,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqtttoblob
 {{- end }}
 
 {{/*
-Labels for nodered 
+Labels for nodered
 */}}
 {{- define "factorycube-server.labels.nodered" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-nodered
@@ -72,7 +72,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-nodered
 {{- end }}
 
 {{/*
-Labels for redis 
+Labels for redis
 */}}
 {{- define "factorycube-server.labels.redis" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-redis
@@ -80,7 +80,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-redis
 {{- end }}
 
 {{/*
-Labels for timescaledb 
+Labels for timescaledb
 */}}
 {{- define "factorycube-server.labels.timescaledb" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-timescaledb
@@ -88,7 +88,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-timescaledb
 {{- end }}
 
 {{/*
-Labels for grafanaproxy 
+Labels for grafanaproxy
 */}}
 {{- define "factorycube-server.labels.grafanaproxy" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-grafanaproxy
@@ -97,7 +97,7 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-grafanaproxy
 
 
 {{/*
-Labels for factoryinput 
+Labels for factoryinput
 */}}
 {{- define "factorycube-server.labels.factoryinput" -}}
 app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinput

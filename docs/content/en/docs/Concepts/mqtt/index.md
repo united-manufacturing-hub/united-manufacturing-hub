@@ -88,7 +88,8 @@ In this level the data is already assigned to a machine.
 
 Topic structure: `ia/<customerID>/<location>/<AssetID>/<Measurement>` e.g. `ia/dccaachen/aachen/demonstrator/count`.
 
-An asset can be a machine, plant or line (Explicitly not a single station of an assembly cell).
+An asset can be a step, machine, plant or line. It uniquely identifies the smallest location necessary for modeling the 
+process.
 
 By definition all topic names should be lower case only!
 
@@ -301,6 +302,8 @@ A message is sent here every time a process value has been prepared. Unique nami
 
 `<valueName>` in the JSON is a integer or float representing a process value, e.g. temperature.
 
+**Note: as <valueName> is a integer or float, booleans like "true" or "false" are not possible. Please convert them to integer, e.g., "true" --> 1, "false" --> 0**
+
 #### Example for /processValue
 
 ```json
@@ -326,9 +329,9 @@ This level contains only highly aggregated production data.
 
 Topic: `ia/<customerID>/<location>/<AssetID>/state`
 
-A message is sent here each time the asset changes status. Subsequent changes are not possible. Different statuses can also be process steps, such as "setup", "post-processing", etc. You can find a list of all supported states [here](state.md)
+A message is sent here each time the asset changes status. Subsequent changes are not possible. Different statuses can also be process steps, such as "setup", "post-processing", etc. You can find a list of all supported states [here](/docs/concepts/mqtt/ )
 
-`state` in the JSON is a integer according to [this datamodel](state.md)
+`state` in the JSON is a integer according to [this datamodel](/docs/concepts/mqtt/ )
 
 #### Example for /state
 

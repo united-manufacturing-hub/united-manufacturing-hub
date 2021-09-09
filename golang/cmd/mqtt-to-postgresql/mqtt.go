@@ -4,14 +4,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
-
-	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
+	"io/ioutil"
 
 	"regexp" // pattern matching
 )
@@ -75,52 +73,95 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 }
 
-func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte, pg *goque.PrefixQueue) {
+func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) {
+	//zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	if customerID != "raw" {
+		if payloadType == "" {
+			return
+		}
 
 		switch payloadType {
-		case "state":
-			go ProcessStateData(customerID, location, assetID, payloadType, payload, pg)
-		case "processValue":
-			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
+		case Prefix.State:
+			stateHandler.EnqueueMQTT(customerID, location, assetID, payload)
+		case Prefix.ProcessValue:
+			valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
+		//TODO is still still needed ?
 		case "processvalue":
-			go ProcessProcessValueData(customerID, location, assetID, payloadType, payload, pg)
-		case "count":
-			go ProcessCountData(customerID, location, assetID, payloadType, payload, pg)
-		case "scrapCount":
-			go ProcessScrapCountData(customerID, location, assetID, payloadType, payload, pg)
-		case "recommendation":
-			go ProcessRecommendationData(customerID, location, assetID, payloadType, payload, pg)
-		case "addShift":
-			go ProcessAddShift(customerID, location, assetID, payloadType, payload, pg)
-		case "addMaintenanceActivity":
-			go ProcessAddMaintenanceActivity(customerID, location, assetID, payloadType, payload, pg)
-		case "uniqueProduct":
-			go ProcessUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
-		case "scrapUniqueProduct":
-			go ProcessScrapUniqueProduct(customerID, location, assetID, payloadType, payload, pg)
-		case "addProduct":
-			go ProcessAddProduct(customerID, location, assetID, payloadType, payload, pg)
-		case "addOrder":
-			go ProcessAddOrder(customerID, location, assetID, payloadType, payload, pg)
-		case "startOrder":
-			go ProcessStartOrder(customerID, location, assetID, payloadType, payload, pg)
-		case "endOrder":
-			go ProcessEndOrder(customerID, location, assetID, payloadType, payload, pg)
+			{
+				zap.S().Warnf("Depreciated")
+				valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		case Prefix.ProcessValueString:
+			valueStringHandler.EnqueueMQTT(customerID, location, assetID, payload)
+		case Prefix.Count:
+			countHandler.EnqueueMQTT(customerID, location, assetID, payload)
+		case Prefix.ScrapCount:
+			scrapCountHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.Recommendation:
+			recommendationDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.AddShift:
+			addShiftHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.AddMaintenanceActivity:
+			maintenanceActivityHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.UniqueProduct:
+			uniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.UniqueProductScrap:
+			scrapUniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.AddProduct:
+			addProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.AddOrder:
+			addOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.StartOrder:
+			startOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.EndOrder:
+			endOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.ProductTag:
+			productTagHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.ProductTagString:
+			productTagStringHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.AddParentToChild:
+			addParentToChildHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.ModifyState:
+			modifyStateHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.DeleteShiftById:
+			deleteShiftByIdHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
+			deleteShiftByAssetIdAndBeginTimestampHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		case Prefix.ModifyProducesPieces:
+			modifyProducedPieceHandler.EnqueueMQTT(customerID, location, assetID, payload)
+
+		default:
+			zap.S().Warnf("Unknown Prefix: %s", payloadType)
 		}
+
 	}
+
 }
 
-// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
-func getOnMessageRecieved(pg *goque.PrefixQueue) func(MQTT.Client, MQTT.Message) {
+var rp = regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
 
+// getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is received by a specific topic
+func getOnMessageReceived() func(MQTT.Client, MQTT.Message) {
 	return func(client MQTT.Client, message MQTT.Message) {
-
 		//Check whether topic has the correct structure
-		rp := regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
-
 		res := rp.FindStringSubmatch(message.Topic())
 		if res == nil {
 			return
@@ -134,12 +175,13 @@ func getOnMessageRecieved(pg *goque.PrefixQueue) func(MQTT.Client, MQTT.Message)
 
 		mqttTotal.Inc()
 
-		go processMessage(customerID, location, assetID, payloadType, payload, pg)
+		go processMessage(customerID, location, assetID, payloadType, payload)
 	}
 }
 
 // OnConnect subscribes once the connection is established. Required to re-subscribe when cleansession is True
 func OnConnect(c MQTT.Client) {
+
 	optionsReader := c.OptionsReader()
 	zap.S().Infof("Connected to MQTT broker", optionsReader.ClientID())
 	mqttConnected.Inc()
@@ -147,12 +189,14 @@ func OnConnect(c MQTT.Client) {
 
 // OnConnectionLost outputs warn message
 func OnConnectionLost(c MQTT.Client, err error) {
+
 	optionsReader := c.OptionsReader()
 	zap.S().Warnf("Connection lost", err, optionsReader.ClientID())
 	mqttConnected.Dec()
 }
 
 func checkConnected(c MQTT.Client) healthcheck.Check {
+
 	return func() error {
 		if c.IsConnected() {
 			return nil
@@ -163,11 +207,12 @@ func checkConnected(c MQTT.Client) healthcheck.Check {
 
 // ShutdownMQTT unsubscribes and closes the MQTT connection
 func ShutdownMQTT() {
+
 	mqttClient.Disconnect(1000)
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.PrefixQueue) {
+func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -194,6 +239,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, h
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(OnConnect)
 	opts.SetConnectionLostHandler(OnConnectionLost)
+	opts.SetOrderMatters(false)
 
 	zap.S().Debugf("Broker configured", mqttBrokerURL, certificateName)
 
@@ -204,7 +250,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, h
 	}
 
 	// Subscribe
-	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageRecieved(pg)); token.Wait() && token.Error() != nil {
+	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived()); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 	zap.S().Infof("MQTT subscribed", mqttTopic)

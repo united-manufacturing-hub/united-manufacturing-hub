@@ -10,11 +10,11 @@ metadata:
     {{- toYaml .Values.factoryinsight.annotations | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ .Values.factoryinsight.replicas }} 
+  replicas: {{ .Values.factoryinsight.replicas }}
   selector:
     matchLabels:
      {{- include "factorycube-server.labels.factoryinsight" . | nindent 6 }}
-  strategy:  
+  strategy:
     type: RollingUpdate
   template:
     metadata:
@@ -34,10 +34,10 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-factoryinsight
-          {{- if .Values.factoryinsight.tag }}
-          image: {{ .Values.factoryinsight.image }}:{{ .Values.factoryinsight.tag }}
+          {{- if .Values.factoryinsight.image.tag }}
+          image: {{ .Values.factoryinsight.image.repository }}:{{ .Values.factoryinsight.image.tag }}
           {{- else }}
-          image: {{ .Values.factoryinsight.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.factoryinsight.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
           imagePullPolicy: IfNotPresent
           ports:
@@ -46,7 +46,7 @@ spec:
                 protocol: TCP
           resources:
             limits:
-              cpu: {{ .Values.factoryinsight.resources.limits.cpu }} 
+              cpu: {{ .Values.factoryinsight.resources.limits.cpu }}
             requests:
               cpu: {{ .Values.factoryinsight.resources.requests.cpu }}
           env:
@@ -59,20 +59,20 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: redis-secret 
+                  name: redis-secret
                   key: redispassword
-            
+
             - name: POSTGRES_HOST
               value: {{ .Values.factoryinsight.db_host }}
             - name: POSTGRES_PORT
               value: {{ .Values.factoryinsight.db_port | quote }}
             - name: POSTGRES_DATABASE
-              value: {{ .Values.factoryinsight.db_database }} 
+              value: {{ .Values.factoryinsight.db_database }}
             - name: POSTGRES_USER
               value: {{ .Values.factoryinsight.db_user }}
             - name: POSTGRES_PASSWORD
               value: {{ .Values.factoryinsight.db_password }}
-               
+
               {{ $index := 1 }}
               {{ range $customerName, $password := .Values.customers | default dict }}
             - name: CUSTOMER_NAME_{{ $index }}
@@ -87,11 +87,11 @@ spec:
             - name: FACTORYINSIGHT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: factoryinsight-secret 
+                  name: factoryinsight-secret
                   key: password
             - name: VERSION
               value: "1"
- 
+
           # define a liveness probe that checks every 1 seconds, starting after 30 seconds
           livenessProbe:
             httpGet:
@@ -106,7 +106,7 @@ spec:
               path: /ready
               port: 8086
             periodSeconds: 1
-      
+
       restartPolicy: Always
       terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
 {{- end -}}

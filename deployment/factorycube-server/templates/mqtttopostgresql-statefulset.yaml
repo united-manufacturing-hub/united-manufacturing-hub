@@ -1,6 +1,6 @@
 {{- if .Values.mqtttopostgresql.enabled -}}
 apiVersion: apps/v1
-kind: StatefulSet 
+kind: StatefulSet
 metadata:
   name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
   labels:
@@ -10,7 +10,7 @@ metadata:
     {{- toYaml .Values.mqtttopostgresql.annotations | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ .Values.mqtttopostgresql.replicas }} 
+  replicas: {{ .Values.mqtttopostgresql.replicas }}
   serviceName: mqtt-to-postgresql
   volumeClaimTemplates:
     - metadata:
@@ -20,20 +20,20 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
-        resources: 
+        resources:
          requests:
-            storage: {{ .Values.mqtttopostgresql.storageRequest }} 
+            storage: {{ .Values.mqtttopostgresql.storageRequest }}
   selector:
     matchLabels:
       name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
-  updateStrategy:  
+  updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
         name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
         {{- include "factorycube-server.labels.mqtttopostgresql" . | nindent 8 }}
-      annotations: 
+      annotations:
             prometheus.io/scrape: 'true'
             prometheus.io/port: '2112'
     spec:
@@ -44,59 +44,63 @@ spec:
               matchLabels:
                 name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
             topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 70
       containers:
         - name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql
-          {{- if .Values.mqtttopostgresql.tag }}
-          image: {{ .Values.mqtttopostgresql.image }}:{{ .Values.mqtttopostgresql.tag }}
+          {{- if .Values.mqtttopostgresql.image.tag }}
+          image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Values.mqtttopostgresql.image.tag }}
           {{- else }}
-          image: {{ .Values.mqtttopostgresql.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
           ports:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.mqtttopostgresql.image.pullPolicy}}
           env:
           #
             - name: POSTGRES_HOST
-              value: {{ .Values.factoryinsight.db_host }} 
+              value: {{ .Values.factoryinsight.db_host }}
             - name: POSTGRES_DATABASE
-              value: {{ .Values.factoryinsight.db_database}} 
+              value: {{ .Values.factoryinsight.db_database}}
             - name: POSTGRES_USER
-              value: {{ .Values.factoryinsight.db_user }} 
+              value: {{ .Values.factoryinsight.db_user }}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.factoryinsight.db_password }} 
+              value: {{ .Values.factoryinsight.db_password }}
             - name: POSTGRES_SSLMODE
-              value: {{ .Values.factoryinsight.db_sslmode }} 
+              value: {{ .Values.factoryinsight.db_sslmode }}
 
             - name: CERTIFICATE_NAME
               value: NO_CERT
+
+            - name: LOGGING_LEVEL
+              value: PRODUCTION
 
             - name: BROKER_URL
               value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
 
             - name: REDIS_URI
-              value: {{ .Values.factoryinsight.redis.URI1 }} 
+              value: {{ .Values.factoryinsight.redis.URI1 }}
             - name: REDIS_URI2
-              value: {{ .Values.factoryinsight.redis.URI2 }} 
+              value: {{ .Values.factoryinsight.redis.URI2 }}
             - name: REDIS_URI3
-              value: {{ .Values.factoryinsight.redis.URI3 }} 
+              value: {{ .Values.factoryinsight.redis.URI3 }}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: redis-secret 
+                  name: redis-secret
                   key: redispassword
-            
+
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-          volumeMounts: 
+          volumeMounts:
           - name: {{ include "factorycube-server.fullname" . }}-mqtttopostgresql-data
             mountPath: /data
             # - name: secret-volume
             #   mountPath: /SSL_certs
-          
+
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:

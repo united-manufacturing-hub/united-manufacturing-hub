@@ -80,7 +80,7 @@ function:
 ```json
 {
 "timestamp_ms": 1243204549,
-"aid": 32493855304,
+"AID": "32493855304",
 "name": "QualityClass",
 "value": "Quality2483"
 }
@@ -97,12 +97,15 @@ function:
 }
 ```
 - **uniqueProduct:** To indicate the generation of a new product or a new product state send a MQTT message to `MQTT-to-postgres`
-under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`.
+under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`. The `is_scap` entry in the `uniqueProduct` MQTT 
+  message is always `false`, except we are sure that the part is actually scrap. If we don't know if a product is scrap 
+  or not, the `is_scrap` flag is set to `false`.
+  
   There are two cases of when to send a message under the `uniqueProduct` topic:
   - The exact product doesn't already have a UID (-> This is the case, if it has not been produced at an asset 
   incorporated in the digital shadow). Specify a space holder asset = "storage" in the MQTT message for the 
     `uniqueProduct` topic.
-  - The product was produced at the current asset/step (it is now different from before, e.g. after machining or after 
+  - The product was produced at the current asset (it is now different from before, e.g. after machining or after 
     something was screwed in). The newly produced product is always the "child" of the process. Products it was made 
     out of are called the "parents". 
 ```json
@@ -111,7 +114,6 @@ under the topic: `ia/<customerID>/<location>/<AssetID>/uniqueProduct`.
   "end_timestamp_ms": 1611171016443,
   "product_id": "test123",
   "is_scrap": false,
-  "step_id": "1a",
   "uniqueProductAlternativeID": "12493857-a"
 }
 ```
@@ -225,7 +227,7 @@ change the UID (-> send a new MQTT message to `MQTT-to-postgres` under the `uniq
 #### Example process to show the usage of AID's and UID's in the production:
 {{< imgproc productIDExample Fit "2026x1211" >}}{{< /imgproc >}}
 #### Explanation of the diagram:
-Assembly Station 1:
+**Assembly Station 1:**
 - ProductA and ProductB are combined into ProductC
 - Because ProductA and ProductB have not been "seen" by the digital shadow, they get a new UID and asset = "storage" 
   assigned (placeholder asset for unknown/unspecified origin).
@@ -234,11 +236,76 @@ Assembly Station 1:
   label. Because ProductB doesn't have a physical Label, it gets a generated AID. For ProductC (child) we can now choose 
   either the AID from ProductA or from ProductB. Because "A" is a physical label, it   makes sense to use the AID of 
   ProductA.
+  
+MQTT messages to send at Assembly 1:
+- `uniqueProduct` message for ProductA origin, with asset = storage, under the topic: 
+  `ia/testcustomer/testlocation/storage/uniqueProduct`
+  ```json
+  {
+    "begin_timestamp_ms": 1611171012717,
+    "end_timestamp_ms": 1611171016443,
+    "product_id": "test123",
+    "is_scrap": false,
+    "uniqueProductAlternativeID": "A"
+  }
+  ```
+- `uniqueProduct` message for ProductB origin, with asset = storage, under the topic: 
+  `ia/testcustomer/testlocation/storage/uniqueProduct`
+  ```json
+  {
+    "begin_timestamp_ms": 1611171012717,
+    "end_timestamp_ms": 1611171016443,
+    "product_id": "test124",
+    "is_scrap": false,
+    "uniqueProductAlternativeID": "B"
+  }
+  ```
+- `uniqueProduct` message for ProductC, with asset = Assy1, under the topic: 
+  `ia/testcustomer/testlocation/Assy1/uniqueProduct`
+  ```json
+  {
+    "begin_timestamp_ms": 1611171012717,
+    "end_timestamp_ms": 1611171016443,
+    "product_id": "test125",
+    "is_scrap": false,
+    "uniqueProductAlternativeID": "A"
+  }
+  ```
+- `addParentToChild` message describing the inheritance from ProductA to ProductC, under the topic: 
+  `ia/testcustomer/testlocation/Assy1/addParentToChild`
+  ```json
+  {
+  "timestamp_ms": 124387,
+  "childAID": "A",
+  "parentAID": "A"
+  }
+  ```
+
+- `addParentToChild` message describing the inheritance from ProductB to ProductC, under the topic: 
+  `ia/testcustomer/testlocation/Assy1/addParentToChild`
+  ```json
+  {
+  "timestamp_ms": 124387,
+  "childAID": "A",
+  "parentAID": "B"
+  }
+  ```
+  
+- `productTag` message for e.g. a measured process value like the temperature,under the topic: 
+  `ia/testcustomer/testlocation/Assy1/productTag`
+  ```json
+  {
+  "timestamp_ms": 1243204549,
+  "AID": "A",
+  "name": "temperature",
+  "value": 35.4
+  }
+  ```
 
 Now the ProductC is transported to Assembly Station 2. Because it is a short transport, doesn't add value etc. we do not
 need to produce a new UID after the transport of ProductA.
 
-Assembly Station 2:
+**Assembly Station 2:**
 - ProductC stays the same (in the sense that it is keeping its UID before and after the transport), because of the easy
   transport. 
 - ProductD is new and not produced at assembly station 2, so it gets asset = "storage" assigned
@@ -247,7 +314,7 @@ Assembly Station 2:
   Label on ProductD is not accessible while the AID Label on the ProductC is).
 
 
-Assembly Station 3:
+**Assembly Station 3:**
 - At Assembly Station ProductE comes in and is turned into ProductF
 - ProductF gets a new UID and keeps the AID of ProductE. It now gets the Assy3 assigned as asset.
 
@@ -315,80 +382,71 @@ microservice doing that task. It accepts specific requests, accesses the timesca
 the data in the desired format.
 
 #### Implemented functionality for digital shadow
-The following function returns all uniqueProducts for that specific asset and step_id in a specified time range. One datapoint contains one 
-childUID, all parentUID's and all available alternativeUniqueProductID's. All uniqueProductTags and 
+The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one 
+childUID, AID and all parentAID's regarding the asset. All uniqueProductTags and 
 uniqueProductTagStrings (value and timestamp) for the childUID are returned to the same datapoint.
 
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
-from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format) and for a specific `AssetID` and `step_id`.
+from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format).
 
-Example Format: 
+Example Return with two data points: 
 ```json
-[
-   row
-
-]
-
-  row:
 {
-"ValveHeadAlternativeUniqueID": str<123>,
-"TorqueScrew1": number<5.0>,
-"TorqueScrew2": number<5.0>,
-"TorqueScrew3": number<5.0>,
-"TorqueScrew4": number<5.0>,
-"gasketUID": number<5.0>,
-"childUID": number<5.0>,
-"Timestamp_ValveHeadID": number<5.0>,
-"Timestamp_GasketImageID": number<5.0>
+  "columnNames":
+  [
+    "UID",
+    "AID",
+    "TimestampBegin",
+    "TimestampEnd",
+    "ProductID",
+    "IsScrap",
+    "torque2",
+    "torque1",
+    "torque3",
+    "torque4",
+    "VH_Type123",
+    "Gasket_Type123"
+  ],
+  "datapoints":
+  [
+    [
+      2,
+      "57000458",
+      1629807326485,
+      null,
+      15,
+      false,
+      5.694793469033914,
+      5.500782656464146,
+      5.868141105450906,
+      5.780416969961664,
+      "57000458",
+      "12000459"
+    ],
+    [
+      6,
+      "57000459",
+      1629807443961,
+      null,
+      15,
+      false,
+      5.835010327979067,
+      5.9666619086350945,
+      5.425482064635844,
+      5.6943075975030535,
+      "57000459",
+      "12000460"
+    ]
+  ]
 }
 ```
 
-
-Example Return:
-```json
-[
-  {
-    "ValveHeadAlternativeUniqueID": "123",
-    "TorqueScrew1": 5.2,
-    "TorqueScrew2": 5.0,
-    "TorqueScrew3": 5.0,
-    "TorqueScrew4": 5.0,
-    "gasketUID":5.0,
-    "childUID": 5.0,
-    "Timestamp_ValveHeadID": 5.0,
-    "Timestamp_GasketImageID": 5.0
-  },
-  {
-    "ValveHeadAlternativeUniqueID": "124",
-    "TorqueScrew1" : 5.0,
-    "TorqueScrew2" : 5.0,
-    "TorqueScrew3" : 5.0,
-    "TorqueScrew4" : 5.0,
-    "gasketUID" : 5.0,
-    "childUID" : 5.0,
-    "Timestamp_ValveHeadID": 5.0,
-    "Timestamp_GasketImageID": 5.0
-  },
-  {
-    "ValveHeadAlternativeUniqueID": "125",
-    "TorqueScrew1" : 5.0,
-    "TorqueScrew2" : 5.0,
-    "TorqueScrew3" : 5.0,
-    "TorqueScrew4" : 5.0,
-    "gasketUID" : 5.0,
-    "childUID":  5.0,
-    "Timestamp_ValveHeadID": 5.0,
-    "Timestamp_GasketImageID": 5.0
-  }
-
-]
-```
 #### Implemented logic of factoryinsight to achieve the functionality
-1. Get all productUID's and AID's from `uniqueProductTable` within the specified time and from the specified asset and station.
+1. Get all productUID's and AID's from `uniqueProductTable` within the specified time and from the specified asset.
 2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
 3. Get the AID's for the parentUID's from the `uniqueProductTable`.
 4. Get all key, value pairs from the `productTagTable` and `productTagStringTable` for the in step 1 selected UID's.
-5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values and timestamps.
+5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values.
 
 ### SQL Database to connect to Tableau server
 
@@ -397,10 +455,10 @@ tableau server can't directly connect to the REST API, we need to either use a d
 tableau web data connector. We were advised against the tableau web data connector 
 (general info about tableau webdata connectors: 
 https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm ). Because of that we implemented a 
-sql database. We used MySQL because it is opensource, works well with node-red and with tableau, which makes it the best choice for
-the task. 
+sql database. We used timescaleDB because it is opensource, works well with node-red and with tableau and is fast with 
+timeseries data, which makes it the best choice for the task. 
 According to the structure overview in the beginning of this article we are using node-red to fetch the required data
-from the REST API of `factoryinsight` and push it into the MySQL database. The MySQL database can then be accessed by 
+from the REST API of `factoryinsight` and push it into the timescaleDB. The database can then be accessed by 
 the tableau server.
 
 ## Industry Example
