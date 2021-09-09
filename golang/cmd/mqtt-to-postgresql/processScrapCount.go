@@ -43,7 +43,9 @@ func NewScrapCountHandler() (handler *ScrapCountHandler) {
 func (r ScrapCountHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("ScrapCountHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("ScrapCountHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r ScrapCountHandler) Setup() {

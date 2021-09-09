@@ -50,7 +50,9 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 func (r UniqueProductHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("UniqueProductHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("UniqueProductHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r UniqueProductHandler) Setup() {

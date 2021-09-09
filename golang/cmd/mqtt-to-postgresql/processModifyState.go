@@ -46,7 +46,9 @@ func NewModifyStateHandler() (handler *ModifyStateHandler) {
 func (r ModifyStateHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("ModifyStateHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("ModifyStateHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r ModifyStateHandler) Setup() {

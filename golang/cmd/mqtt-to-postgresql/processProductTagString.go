@@ -48,7 +48,9 @@ func NewProductTagStringHandler() (handler *ProductTagStringHandler) {
 func (r ProductTagStringHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("ProductTagStringHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("ProductTagStringHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r ProductTagStringHandler) Setup() {

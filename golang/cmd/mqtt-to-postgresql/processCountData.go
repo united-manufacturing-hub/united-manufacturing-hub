@@ -45,8 +45,11 @@ func NewCountHandler() (handler *CountHandler) {
 func (r CountHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("CountHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("CountHandler queue length: %d", r.pg.Length())
+		}
 	}
+	zap.S().Debugf("[CountHandler/reportLength] r.shutdown=true")
 }
 func (r CountHandler) Setup() {
 	go r.reportLength()
@@ -72,6 +75,7 @@ func (r CountHandler) process() {
 			r.enqueue(faultyItem.Value, prio)
 		}
 	}
+	zap.S().Debugf("[CountHandler/process] r.shutdown=true")
 }
 
 func (r CountHandler) dequeue() (items []*goque.PriorityItem) {
@@ -94,7 +98,6 @@ func (r CountHandler) dequeue() (items []*goque.PriorityItem) {
 }
 
 func (r CountHandler) enqueue(bytes []byte, priority uint8) {
-	zap.S().Debugf("[CountHandler/enqueue]", bytes, priority, r, r.pg)
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
@@ -109,7 +112,6 @@ func (r CountHandler) Shutdown() (err error) {
 }
 
 func (r CountHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
-	zap.S().Debugf("[CountHandler/EnqueueMQTT]", customerID, location, assetID, payload)
 	var parsedPayload count
 
 	err := json.Unmarshal(payload, &parsedPayload)

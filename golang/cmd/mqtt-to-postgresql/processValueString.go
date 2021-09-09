@@ -40,7 +40,9 @@ func NewValueStringHandler() (handler *ValueStringHandler) {
 func (r ValueStringHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("ValueStringHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("ValueStringHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r ValueStringHandler) Setup() {

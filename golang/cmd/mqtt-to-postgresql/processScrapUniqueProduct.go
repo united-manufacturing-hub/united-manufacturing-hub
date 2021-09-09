@@ -41,7 +41,9 @@ func NewScrapUniqueProductHandler() (handler *ScrapUniqueProductHandler) {
 func (r ScrapUniqueProductHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("ScrapUniqueProductHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("ScrapUniqueProductHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r ScrapUniqueProductHandler) Setup() {

@@ -42,7 +42,9 @@ func NewStartOrderHandler() (handler *StartOrderHandler) {
 func (r StartOrderHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("StartOrderHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("StartOrderHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r StartOrderHandler) Setup() {

@@ -45,7 +45,9 @@ func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 func (r AddParentToChildHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("AddParentToChildHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("AddParentToChildHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r AddParentToChildHandler) Setup() {

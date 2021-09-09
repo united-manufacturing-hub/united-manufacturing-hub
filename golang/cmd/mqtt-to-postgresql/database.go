@@ -100,8 +100,6 @@ func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 		zap.S().Debugf("Got error from callee: %s", errIn)
 		errOut = txn.Rollback()
 		return
-	} else {
-		zap.S().Debugf("No error from callee")
 	}
 
 	if isDryRun {
@@ -116,7 +114,6 @@ func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 
 		}
 	} else {
-		zap.S().Debugf("Attempting to Commit")
 		errOut = txn.Commit()
 		if errOut != nil {
 			if errOut != sql.ErrTxDone {
@@ -125,7 +122,6 @@ func deferCallback(txn *sql.Tx, errIn error) (errOut error) {
 				zap.S().Warnf("Commit failed: %s", errOut)
 			}
 		}
-		zap.S().Debugf("Commited")
 	}
 	return
 }

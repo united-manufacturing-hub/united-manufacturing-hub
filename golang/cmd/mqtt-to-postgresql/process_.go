@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type XHandler struct {
@@ -31,7 +32,9 @@ func NewXHandler() (handler *XHandler) {
 func (r XHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("XHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("XHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r XHandler) Setup() {

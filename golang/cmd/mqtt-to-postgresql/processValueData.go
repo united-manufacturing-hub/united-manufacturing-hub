@@ -55,8 +55,12 @@ func NewValueDataHandler() (handler *ValueDataHandler) {
 func (r ValueDataHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("ValueDataHandler queue length (I32): %d", r.pgI32.Length())
-		zap.S().Debugf("ValueDataHandler queue length (F64): %d", r.pgF64.Length())
+		if r.pgI32.Length() > 0 {
+			zap.S().Debugf("ValueDataHandler queue length (I32): %d", r.pgI32.Length())
+		}
+		if r.pgF64.Length() > 0 {
+			zap.S().Debugf("ValueDataHandler queue length (F64): %d", r.pgF64.Length())
+		}
 	}
 }
 func (r ValueDataHandler) Setup() {

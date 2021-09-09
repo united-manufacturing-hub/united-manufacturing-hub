@@ -43,7 +43,9 @@ func NewAddProductHandler() (handler *AddProductHandler) {
 func (r AddProductHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("AddProductHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("AddProductHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r AddProductHandler) Setup() {

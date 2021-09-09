@@ -42,7 +42,9 @@ func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAs
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("DeleteShiftByAssetIdAndBeginTimestampHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("DeleteShiftByAssetIdAndBeginTimestampHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) Setup() {

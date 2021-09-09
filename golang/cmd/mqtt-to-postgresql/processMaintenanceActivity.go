@@ -46,7 +46,9 @@ func NewMaintenanceActivityHandler() (handler *MaintenanceActivityHandler) {
 func (r MaintenanceActivityHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		zap.S().Debugf("MaintenanceActivityHandler queue length: %d", r.pg.Length())
+		if r.pg.Length() > 0 {
+			zap.S().Debugf("MaintenanceActivityHandler queue length: %d", r.pg.Length())
+		}
 	}
 }
 func (r MaintenanceActivityHandler) Setup() {
