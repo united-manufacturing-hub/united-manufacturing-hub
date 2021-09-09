@@ -161,7 +161,7 @@ func GetAssets(parentSpan opentracing.Span, customerID string, location string) 
 }
 
 // GetComponents retrieves all assets for a given customer
-func GetComponents(parentSpan opentracing.Span, assetID int) (components []string, error error) {
+func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []string, error error) {
 
 	// Jaeger tracing
 	span := opentracing.StartSpan(
@@ -1273,9 +1273,9 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 		var fullRow []interface{}
 		fullRow = append(fullRow, UID)
 		fullRow = append(fullRow, AID)
-		fullRow = append(fullRow, float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+		fullRow = append(fullRow, float64(timestampBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 		if timestampEnd.Valid {
-			fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+			fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 		} else {
 			fullRow = append(fullRow, nil)
 		}
@@ -1519,7 +1519,7 @@ func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, lo
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(parentSpan opentracing.Span, customerID string, location string, assetID string) (DBassetID int, error error) {
+func GetAssetID(parentSpan opentracing.Span, customerID string, location string, assetID string) (DBassetID uint32, error error) {
 	// Jaeger tracing
 	span := opentracing.StartSpan(
 		"GetAssetID",
@@ -1607,7 +1607,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		OR (unProdTab.begin_timestamp_ms < $2 AND unProdTab.end_timestamp_ms > $3) 
 	ORDER BY unProdTab.uniqueProductID ASC;`
 
-
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(span, sqlStatementData, err, false)
@@ -1631,7 +1630,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 
 	defer rowsStrings.Close()
-
 
 	rowsInheritance, err := db.Query(sqlStatementDataInheritance, assetID, from, to)
 	if err == sql.ErrNoRows {
@@ -1676,7 +1674,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
 		}
 
-		if data.Datapoints == nil {		//if no row in data.Datapoints, create new row
+		if data.Datapoints == nil { //if no row in data.Datapoints, create new row
 			data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
 				timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 		} else { //if there are already rows in Data.datapoint
@@ -1691,7 +1689,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 			//data.Datapoints
 			if UID == lastUID && value.Valid && valueName.Valid {
 				data.Datapoints[indexRow][indexColumn] = value.Float64
-			} else if UID == lastUID && (!value.Valid || !valueName.Valid){ //if there are multiple lines with the same UID, each line should have a correct productTag
+			} else if UID == lastUID && (!value.Valid || !valueName.Valid) { //if there are multiple lines with the same UID, each line should have a correct productTag
 				zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
 				return
 			} else if UID != lastUID { //create new row in tempDataPoints
@@ -1726,7 +1724,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		}
 		//Because of the inner join and the not null constraints of productTagString information in the postgresDB, both
 		//valueName and value should be valid
-		if !valueName.Valid || !value.Valid{
+		if !valueName.Valid || !value.Valid {
 			zap.S().Errorf("GetUniqueProductsWithTags: valueName or value for productTagString not valid", UID, timestampBegin)
 			return
 		}
@@ -1748,8 +1746,6 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 		error = err
 		return
 	}
-
-
 
 	// all queried values should always exist here
 	for rowsInheritance.Next() {
@@ -1793,7 +1789,3 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	return
 }
-
-
-
-

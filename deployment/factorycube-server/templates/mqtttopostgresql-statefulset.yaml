@@ -73,6 +73,9 @@ spec:
             - name: CERTIFICATE_NAME
               value: NO_CERT
 
+            - name: LOGGING_LEVEL
+              value: PRODUCTION
+
             - name: BROKER_URL
               value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
 
