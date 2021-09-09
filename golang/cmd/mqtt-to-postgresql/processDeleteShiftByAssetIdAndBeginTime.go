@@ -27,9 +27,10 @@ func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAs
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
-		return
+		ShutdownApplicationGraceful()
+		panic("Failed to setup queue, exiting !")
 	}
-	defer CloseQueue(pg)
+
 	handler = &DeleteShiftByAssetIdAndBeginTimestampHandler{
 		pg:       pg,
 		shutdown: false,
@@ -80,7 +81,7 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) dequeue() (items []*goque.
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) enqueue(bytes []byte, priority uint8) {
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
-		zap.S().Warnf("Failed to enqueue item", bytes)
+		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
 	}
 }

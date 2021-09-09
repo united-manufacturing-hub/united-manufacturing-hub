@@ -97,45 +97,25 @@ func main() {
 	zap.S().Debugf("Setting up queues")
 
 	addOrderHandler = *NewAddOrderHandler()
-
 	addParentToChildHandler = *NewAddParentToChildHandler()
-
 	addProductHandler = *NewAddProductHandler()
-
 	addShiftHandler = *NewAddShiftHandler()
-
 	countHandler = *NewCountHandler()
-
 	deleteShiftByAssetIdAndBeginTimestampHandler = *NewDeleteShiftByAssetIdAndBeginTimestampHandler()
-
 	deleteShiftByIdHandler = *NewDeleteShiftByIdHandler()
-
 	endOrderHandler = *NewEndOrderHandler()
-
 	maintenanceActivityHandler = *NewMaintenanceActivityHandler()
-
 	modifyProducedPieceHandler = *NewModifyProducedPieceHandler()
-
 	modifyStateHandler = *NewModifyStateHandler()
-
 	productTagHandler = *NewProductTagHandler()
-
 	recommendationDataHandler = *NewRecommendationDataHandler()
-
 	scrapCountHandler = *NewScrapCountHandler()
-
 	scrapUniqueProductHandler = *NewScrapUniqueProductHandler()
-
 	startOrderHandler = *NewStartOrderHandler()
-
 	productTagStringHandler = *NewProductTagStringHandler()
-
 	stateHandler = *NewStateHandler()
-
 	uniqueProductHandler = *NewUniqueProductHandler()
-
 	valueDataHandler = *NewValueDataHandler()
-
 	valueStringHandler = *NewValueStringHandler()
 
 	zap.S().Debugf("Setting up MQTT")

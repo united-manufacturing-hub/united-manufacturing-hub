@@ -34,7 +34,6 @@ func NewValueDataHandler() (handler *ValueDataHandler) {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBI32, err)
 		return
 	}
-	defer CloseQueue(pgI32)
 
 	const queuePathDBF64 = "/data/ValueDataF64"
 	var pgF64 *goque.PriorityQueue
@@ -43,7 +42,6 @@ func NewValueDataHandler() (handler *ValueDataHandler) {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBF64, err)
 		return
 	}
-	defer CloseQueue(pgF64)
 
 	handler = &ValueDataHandler{
 		pgF64:    pgF64,
@@ -135,14 +133,14 @@ func (r ValueDataHandler) dequeueI32() (items []*goque.PriorityItem) {
 func (r ValueDataHandler) enqueueI32(bytes []byte, priority uint8) {
 	_, err := r.pgI32.Enqueue(priority, bytes)
 	if err != nil {
-		zap.S().Warnf("Failed to enqueue item", bytes)
+		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
 	}
 }
 func (r ValueDataHandler) enqueueF64(bytes []byte, priority uint8) {
 	_, err := r.pgF64.Enqueue(priority, bytes)
 	if err != nil {
-		zap.S().Warnf("Failed to enqueue item", bytes)
+		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
 	}
 }

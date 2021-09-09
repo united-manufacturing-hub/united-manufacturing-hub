@@ -30,9 +30,10 @@ func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
-		return
+		ShutdownApplicationGraceful()
+		panic("Failed to setup queue, exiting !")
 	}
-	defer CloseQueue(pg)
+
 	handler = &AddParentToChildHandler{
 		pg:       pg,
 		shutdown: false,
@@ -83,7 +84,7 @@ func (r AddParentToChildHandler) dequeue() (items []*goque.PriorityItem) {
 func (r AddParentToChildHandler) enqueue(bytes []byte, priority uint8) {
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
-		zap.S().Warnf("Failed to enqueue item", bytes)
+		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
 	}
 }

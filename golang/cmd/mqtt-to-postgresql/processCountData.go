@@ -30,9 +30,10 @@ func NewCountHandler() (handler *CountHandler) {
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
-		return
+		ShutdownApplicationGraceful()
+		panic("Failed to setup queue, exiting !")
 	}
-	defer CloseQueue(pg)
+
 	handler = &CountHandler{
 		pg:       pg,
 		shutdown: false,
@@ -84,7 +85,7 @@ func (r CountHandler) enqueue(bytes []byte, priority uint8) {
 	zap.S().Debugf("[CountHandler/enqueue]", bytes, priority, r, r.pg)
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
-		zap.S().Warnf("Failed to enqueue item", bytes)
+		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
 	}
 }
