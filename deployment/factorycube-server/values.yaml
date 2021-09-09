@@ -45,6 +45,8 @@ factoryinsight:
 factoryinput:
   user: factoryinput
   enabled: true
+  service:
+    annotations: {}
   image:
     repository: unitedmanufacturinghub/factoryinput
     #tag: latest
