@@ -55,6 +55,9 @@ func (r StartOrderHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
 		items = r.dequeue()
+		if len(items) == 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
 		faultyItems, err := storeItemsIntoDatabaseStartOrder(items)
 		if err != nil {
 			return

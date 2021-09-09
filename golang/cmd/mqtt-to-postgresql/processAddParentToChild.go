@@ -58,6 +58,9 @@ func (r AddParentToChildHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
 		items = r.dequeue()
+		if len(items) == 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
 		faultyItems, err := storeItemsIntoDatabaseAddParentToChild(items)
 		if err != nil {
 			return
