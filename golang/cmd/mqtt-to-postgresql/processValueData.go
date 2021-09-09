@@ -25,23 +25,31 @@ type ValueDataHandler struct {
 	shutdown bool
 }
 
-func (r ValueDataHandler) Setup() (err error) {
+func NewValueDataHandler() (handler *ValueDataHandler) {
 	const queuePathDBI32 = "/data/ValueDataI32"
-	r.pgI32, err = SetupQueue(queuePathDBI32)
+	var err error
+	var pgI32 *goque.PriorityQueue
+	pgI32, err = SetupQueue(queuePathDBI32)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBI32, err)
 		return
 	}
-	defer CloseQueue(r.pgI32)
+	defer CloseQueue(pgI32)
 
 	const queuePathDBF64 = "/data/ValueDataF64"
-	r.pgF64, err = SetupQueue(queuePathDBF64)
+	var pgF64 *goque.PriorityQueue
+	pgF64, err = SetupQueue(queuePathDBF64)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBF64, err)
 		return
 	}
-	defer CloseQueue(r.pgF64)
+	defer CloseQueue(pgF64)
 
+	handler = &ValueDataHandler{
+		pgF64:    pgF64,
+		pgI32:    pgI32,
+		shutdown: false,
+	}
 	return
 }
 

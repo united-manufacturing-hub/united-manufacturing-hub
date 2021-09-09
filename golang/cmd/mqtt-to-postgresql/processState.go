@@ -21,14 +21,20 @@ type StateHandler struct {
 	shutdown bool
 }
 
-func (r StateHandler) Setup() (err error) {
+func NewStateHandler() (handler *StateHandler) {
 	const queuePathDB = "/data/State"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &StateHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

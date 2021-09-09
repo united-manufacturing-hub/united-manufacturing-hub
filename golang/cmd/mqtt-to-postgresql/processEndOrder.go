@@ -20,14 +20,20 @@ type EndOrderHandler struct {
 	shutdown bool
 }
 
-func (r EndOrderHandler) Setup() (err error) {
+func NewEndOrderHandler() (handler *EndOrderHandler) {
 	const queuePathDB = "/data/EndOrder"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &EndOrderHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

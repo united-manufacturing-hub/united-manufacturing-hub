@@ -96,90 +96,47 @@ func main() {
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
 
-	err := addOrderHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = addParentToChildHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = addProductHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = addShiftHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = countHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = deleteShiftByAssetIdAndBeginTimestampHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = deleteShiftByIdHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = endOrderHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = maintenanceActivityHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = modifyProducedPieceHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = modifyStateHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = productTagHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = recommendationDataHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = scrapCountHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = scrapUniqueProductHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = startOrderHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = productTagStringHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = stateHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = uniqueProductHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = valueDataHandler.Setup()
-	if err != nil {
-		return
-	}
-	err = valueStringHandler.Setup()
-	if err != nil {
-		return
-	}
+	addOrderHandler = *NewAddOrderHandler()
+
+	addParentToChildHandler = *NewAddParentToChildHandler()
+
+	addProductHandler = *NewAddProductHandler()
+
+	addShiftHandler = *NewAddShiftHandler()
+
+	countHandler = *NewCountHandler()
+
+	deleteShiftByAssetIdAndBeginTimestampHandler = *NewDeleteShiftByAssetIdAndBeginTimestampHandler()
+
+	deleteShiftByIdHandler = *NewDeleteShiftByIdHandler()
+
+	endOrderHandler = *NewEndOrderHandler()
+
+	maintenanceActivityHandler = *NewMaintenanceActivityHandler()
+
+	modifyProducedPieceHandler = *NewModifyProducedPieceHandler()
+
+	modifyStateHandler = *NewModifyStateHandler()
+
+	productTagHandler = *NewProductTagHandler()
+
+	recommendationDataHandler = *NewRecommendationDataHandler()
+
+	scrapCountHandler = *NewScrapCountHandler()
+
+	scrapUniqueProductHandler = *NewScrapUniqueProductHandler()
+
+	startOrderHandler = *NewStartOrderHandler()
+
+	productTagStringHandler = *NewProductTagStringHandler()
+
+	stateHandler = *NewStateHandler()
+
+	uniqueProductHandler = *NewUniqueProductHandler()
+
+	valueDataHandler = *NewValueDataHandler()
+
+	valueStringHandler = *NewValueStringHandler()
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")

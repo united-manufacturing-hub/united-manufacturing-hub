@@ -29,14 +29,20 @@ type UniqueProductHandler struct {
 	shutdown bool
 }
 
-func (r UniqueProductHandler) Setup() (err error) {
+func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	const queuePathDB = "/data/UniqueProduct"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &UniqueProductHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

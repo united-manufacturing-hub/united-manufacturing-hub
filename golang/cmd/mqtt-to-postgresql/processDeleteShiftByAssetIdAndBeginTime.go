@@ -20,14 +20,20 @@ type DeleteShiftByAssetIdAndBeginTimestampHandler struct {
 	shutdown bool
 }
 
-func (r DeleteShiftByAssetIdAndBeginTimestampHandler) Setup() (err error) {
+func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAssetIdAndBeginTimestampHandler) {
 	const queuePathDB = "/data/DeleteShiftByAssetIdAndBeginTimestamp"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &DeleteShiftByAssetIdAndBeginTimestampHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

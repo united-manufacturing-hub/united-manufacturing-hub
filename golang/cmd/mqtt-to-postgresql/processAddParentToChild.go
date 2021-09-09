@@ -23,14 +23,20 @@ type AddParentToChildHandler struct {
 	shutdown bool
 }
 
-func (r AddParentToChildHandler) Setup() (err error) {
+func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 	const queuePathDB = "/data/AddParentToChild"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &AddParentToChildHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

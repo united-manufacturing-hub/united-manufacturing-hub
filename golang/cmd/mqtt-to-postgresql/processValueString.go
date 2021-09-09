@@ -18,14 +18,20 @@ type ValueStringHandler struct {
 	shutdown bool
 }
 
-func (r ValueStringHandler) Setup() (err error) {
+func NewValueStringHandler() (handler *ValueStringHandler) {
 	const queuePathDB = "/data/ValueString"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &ValueStringHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

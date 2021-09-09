@@ -21,14 +21,20 @@ type ScrapCountHandler struct {
 	shutdown bool
 }
 
-func (r ScrapCountHandler) Setup() (err error) {
+func NewScrapCountHandler() (handler *ScrapCountHandler) {
 	const queuePathDB = "/data/ScrapCount"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &ScrapCountHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 

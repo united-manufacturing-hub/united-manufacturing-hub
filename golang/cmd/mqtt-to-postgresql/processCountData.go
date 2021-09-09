@@ -23,14 +23,20 @@ type CountHandler struct {
 	shutdown bool
 }
 
-func (r CountHandler) Setup() (err error) {
+func NewCountHandler() (handler *CountHandler) {
 	const queuePathDB = "/data/Count"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &CountHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 
@@ -75,6 +81,7 @@ func (r CountHandler) dequeue() (items []*goque.PriorityItem) {
 }
 
 func (r CountHandler) enqueue(bytes []byte, priority uint8) {
+	zap.S().Debugf("[CountHandler/enqueue]", bytes, priority, r, r.pg)
 	_, err := r.pg.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes)
@@ -89,7 +96,7 @@ func (r CountHandler) Shutdown() (err error) {
 }
 
 func (r CountHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
-	zap.S().Debugf("[CountHandler]")
+	zap.S().Debugf("[CountHandler/EnqueueMQTT]", customerID, location, assetID, payload)
 	var parsedPayload count
 
 	err := json.Unmarshal(payload, &parsedPayload)

@@ -10,14 +10,20 @@ type XHandler struct {
 	shutdown bool
 }
 
-func (r XHandler) Setup() (err error) {
+func NewXHandler() (handler *XHandler) {
 	const queuePathDB = "/data/X"
-	r.pg, err = SetupQueue(queuePathDB)
+	var pg *goque.PriorityQueue
+	var err error
+	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		return
 	}
-	defer CloseQueue(r.pg)
+	defer CloseQueue(pg)
+	handler = &XHandler{
+		pg:       pg,
+		shutdown: false,
+	}
 	return
 }
 
