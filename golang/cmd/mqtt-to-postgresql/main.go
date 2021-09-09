@@ -43,7 +43,7 @@ var storedRawMQTTHandler StoredRawMQTTHandler
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
-	if os.Getenv("LOGGING_LEVEL") == "DEBUG" {
+	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
 		logger, _ = zap.NewDevelopment()
 	} else {
 
