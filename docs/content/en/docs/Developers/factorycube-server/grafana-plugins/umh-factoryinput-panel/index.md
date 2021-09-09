@@ -88,9 +88,27 @@ yarn build
 5. Modify any additional options are you like
 6. When you are finished customizing, click on "Apply"
 
+## Example Panel
+{{< imgproc grafana_panel.png Fit "500x300" >}}{{< /imgproc >}}
+
 ## Notes
 1. Clicking the button will immediately send the MQTT message, through our HTTP->MQTT stack. Please don't send queries modifying date you would later need !
 
+## Common pitfalls
+ - Pressing the button just changes the cog to an warning sign 
+   1. Open your network inspector view (Ctrl+Shift+I on Chrome)
+   2. Press the button again
+   3. If no request appears, then you haven't filled out all required fields
+   4. Your request shows:
+      - 403
+         - Make sure the customer field is set to your grafana organization name
+      - 400
+        - Your request was incorrectly formatted
+        - Check that the URL is in the format specified above
+        - Check if your payload contains valid JSON
+          - You can validate your payload [here](https://jsonformatter.curiousconcept.com/)
+        - Check that the Value field matches a valid MQTT command
+   
 
 ## Technical information
 Below you will find a schematic of this flow, through our stack
