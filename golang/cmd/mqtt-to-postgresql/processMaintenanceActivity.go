@@ -126,8 +126,8 @@ func (r MaintenanceActivityHandler) EnqueueMQTT(customerID string, location stri
 
 	DBassetID := GetAssetID(customerID, location, assetID)
 
-	componentID := GetComponentID(DBassetID, parsedPayload.ComponentName)
-	if componentID == 0 {
+	componentID, success := GetComponentID(DBassetID, parsedPayload.ComponentName)
+	if componentID == 0 || !success {
 		zap.S().Errorf("GetComponentID failed")
 		return
 	}

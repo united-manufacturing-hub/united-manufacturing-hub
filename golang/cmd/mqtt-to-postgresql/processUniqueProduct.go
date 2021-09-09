@@ -129,8 +129,8 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 	}
 
 	DBassetID := GetAssetID(customerID, location, assetID)
-	productID, err := GetProductID(DBassetID, parsedPayload.ProductName)
-	if err == sql.ErrNoRows {
+	productID, err, success := GetProductID(DBassetID, parsedPayload.ProductName)
+	if err == sql.ErrNoRows || !success {
 		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)
 		go func() {
 			time.Sleep(1 * time.Second)
