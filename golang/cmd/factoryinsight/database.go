@@ -161,7 +161,7 @@ func GetAssets(parentSpan opentracing.Span, customerID string, location string) 
 }
 
 // GetComponents retrieves all assets for a given customer
-func GetComponents(parentSpan opentracing.Span, assetID int) (components []string, error error) {
+func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []string, error error) {
 
 	// Jaeger tracing
 	span := opentracing.StartSpan(
@@ -1233,10 +1233,10 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 		error = err
 		return
 	}
-	data.ColumnNames = []string{"UID", "Timestamp begin", "Timestamp end", "Product ID", "Is Scrap", "Quality class", "Station ID"}
+	data.ColumnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
 
 	sqlStatement := `
-	SELECT uid, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, quality_class, station_id 
+	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap 
 	FROM uniqueProductTable 
 	WHERE asset_id = $1 
 		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
@@ -1257,29 +1257,31 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 
 	for rows.Next() {
 
-		var UID string
+		var UID int
+		var AID string
 		var timestampBegin time.Time
-		var timestampEnd time.Time
-		var productID string
+		var timestampEnd sql.NullTime
+		var productID int
 		var isScrap bool
-		var qualityClass string
-		var stationID string
 
-		err := rows.Scan(&UID, &timestampBegin, &timestampEnd, &productID, &isScrap, &qualityClass, &stationID)
+		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
 		if err != nil {
 			PQErrorHandling(span, sqlStatement, err, false)
 			error = err
 			return
 		}
-		fullRow := []interface{}{
-			UID,
-			float64(timestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			float64(timestampEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			productID,
-			isScrap,
-			qualityClass,
-			stationID,
+		var fullRow []interface{}
+		fullRow = append(fullRow, UID)
+		fullRow = append(fullRow, AID)
+		fullRow = append(fullRow, float64(timestampBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+		if timestampEnd.Valid {
+			fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+		} else {
+			fullRow = append(fullRow, nil)
 		}
+		fullRow = append(fullRow, productID)
+		fullRow = append(fullRow, isScrap)
+
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rows.Err()
@@ -1289,6 +1291,12 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 		return
 	}
 
+	//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
+	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
+	if err != nil {
+		error = err
+		return
+	}
 	return
 }
 
@@ -1511,7 +1519,7 @@ func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, lo
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(parentSpan opentracing.Span, customerID string, location string, assetID string) (DBassetID int, error error) {
+func GetAssetID(parentSpan opentracing.Span, customerID string, location string, assetID string) (DBassetID uint32, error error) {
 	// Jaeger tracing
 	span := opentracing.StartSpan(
 		"GetAssetID",
@@ -1541,6 +1549,243 @@ func GetAssetID(parentSpan opentracing.Span, customerID string, location string,
 	// Store to cache if not yet existing
 	go internal.StoreAssetIDToCache(customerID, location, assetID, DBassetID)
 	zap.S().Debug("Stored AssetID to cache")
+
+	return
+}
+
+// GetUniqueProductsWithTags gets all unique products with tags and parents for a specific asset in a specific time range
+func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, location string, asset string,
+	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+
+	// Jaeger tracing
+	span := opentracing.StartSpan(
+		"GetUniqueProductsWithTags",
+		opentracing.ChildOf(parentSpan.Context()))
+	defer span.Finish()
+
+	span.SetTag("customerID", customerID)
+	span.SetTag("location", location)
+	span.SetTag("asset", asset)
+	span.SetTag("from", from)
+	span.SetTag("to", to)
+
+	assetID, err := GetAssetID(span, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	//getting all uniqueProducts and if existing all productTags (float)
+	sqlStatementData := `
+	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
+	FROM uniqueProductTable 
+		LEFT JOIN productTagTable ON uniqueProductTable.uniqueProductID = productTagTable.product_uid
+	WHERE asset_id = $1 
+		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
+	ORDER BY uniqueProductID ASC;`
+
+	//getting productTagString (string) data linked to UID's
+	sqlStatementDataStrings := `
+	SELECT uniqueProductID, begin_timestamp_ms, valueName, value
+	FROM uniqueProductTable 
+		INNER JOIN productTagStringTable ON uniqueProductTable.uniqueProductID = productTagStringTable.product_uid
+	WHERE asset_id = $1 
+		AND (begin_timestamp_ms BETWEEN $2 AND $3 OR end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
+	ORDER BY uniqueProductID ASC;`
+
+	//getting inheritance data (product_name and AID of parents at the specified asset)
+	sqlStatementDataInheritance := `
+	SELECT unProdTab.uniqueProductID, unProdTab.begin_timestamp_ms, prodTab.product_name, unProdTabForAID.uniqueProductAlternativeID
+	FROM uniqueProductTable unProdTab
+		INNER JOIN productInheritanceTable prodInher ON unProdTab.uniqueProductID = prodInher.child_uid
+		INNER JOIN uniqueProductTable unProdTabForAID ON prodInher.parent_uid = unProdTabForAID.uniqueProductID
+		INNER JOIN productTable prodTab ON unProdTabForAID.product_id = prodTab.product_id
+	WHERE unProdTab.asset_id = $1 
+		AND (unProdTab.begin_timestamp_ms BETWEEN $2 AND $3 OR unProdTab.end_timestamp_ms BETWEEN $2 AND $3) 
+		OR (unProdTab.begin_timestamp_ms < $2 AND unProdTab.end_timestamp_ms > $3) 
+	ORDER BY unProdTab.uniqueProductID ASC;`
+
+	rows, err := db.Query(sqlStatementData, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementData, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementData, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	rowsStrings, err := db.Query(sqlStatementDataStrings, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		error = err
+		return
+	}
+
+	defer rowsStrings.Close()
+
+	rowsInheritance, err := db.Query(sqlStatementDataInheritance, assetID, from, to)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		error = err
+		return
+	}
+
+	defer rowsInheritance.Close()
+
+	//Defining the base column names
+	data.ColumnNames = []string{"UID", "AID", "timestamp", "timestampEnd", "ProductID", "IsScrap"}
+
+	var indexRow int
+	var indexColumn int
+
+	//Rows can contain valueName and value or not: if not, they contain null
+	for rows.Next() {
+
+		var UID int
+		var AID string
+		var timestampBegin time.Time
+		var timestampEnd sql.NullTime
+		var productID int
+		var isScrap bool
+		var valueName sql.NullString
+		var value sql.NullFloat64
+
+		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementData, err, false)
+			error = err
+			return
+		}
+
+		//if productTag valueName not in data.ColumnNames yet (because the valueName of productTag comes up for the first time
+		//in the current row), add valueName to data.ColumnNames, store index of column for data.DataPoints and extend slice
+		if valueName.Valid {
+			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
+		}
+
+		if data.Datapoints == nil { //if no row in data.Datapoints, create new row
+			data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
+				timestampBegin, timestampEnd, productID, isScrap, valueName, value)
+		} else { //if there are already rows in Data.datapoint
+			indexRow = len(data.Datapoints) - 1
+			lastUID, ok := data.Datapoints[indexRow][0].(int)
+			if ok == false {
+				zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
+				return
+			}
+			//check if the last row of data.Datapoints already has the same UID, as the current row, and if the
+			//productTag information of the current row is valid. If yes: add productTag information of current row to
+			//data.Datapoints
+			if UID == lastUID && value.Valid && valueName.Valid {
+				data.Datapoints[indexRow][indexColumn] = value.Float64
+			} else if UID == lastUID && (!value.Valid || !valueName.Valid) { //if there are multiple lines with the same UID, each line should have a correct productTag
+				zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
+				return
+			} else if UID != lastUID { //create new row in tempDataPoints
+				data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
+					timestampBegin, timestampEnd, productID, isScrap, valueName, value)
+			} else {
+				zap.S().Errorf("GetUniqueProductsWithTags: logic error", UID, timestampBegin)
+				return
+			}
+		}
+
+	}
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatementData, err, false)
+		error = err
+		return
+	}
+
+	// all queried values should always exist here
+	for rowsStrings.Next() {
+		var UID int
+		var timestampBegin time.Time
+		var valueName sql.NullString
+		var value sql.NullString
+
+		err := rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementData, err, false)
+			error = err
+			return
+		}
+		//Because of the inner join and the not null constraints of productTagString information in the postgresDB, both
+		//valueName and value should be valid
+		if !valueName.Valid || !value.Valid {
+			zap.S().Errorf("GetUniqueProductsWithTags: valueName or value for productTagString not valid", UID, timestampBegin)
+			return
+		}
+		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
+		var contains bool //indicates, if the UID is already contained in the data.Datpoints slice or not
+		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
+
+		if contains { //true if UID already in data.Datapoints
+			data.Datapoints[indexRow][indexColumn] = value.String
+		} else { //throw error
+			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
+			return
+		}
+	}
+	err = rowsStrings.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		error = err
+		return
+	}
+
+	// all queried values should always exist here
+	for rowsInheritance.Next() {
+		var UID int
+		var timestampBegin time.Time
+		var productName string
+		var AID string
+
+		err := rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementData, err, false)
+			error = err
+			return
+		}
+
+		//if productName (describing type of product) not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, productName)
+		var contains bool
+		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
+
+		if contains { //true if UID already in data.Datapoints
+			data.Datapoints[indexRow][indexColumn] = AID
+		} else {
+			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
+			return
+		}
+	}
+	err = rowsInheritance.Err()
+	if err != nil {
+		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		error = err
+		return
+	}
+
+	//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
+	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
+	if err != nil {
+		error = err
+		return
+	}
 
 	return
 }

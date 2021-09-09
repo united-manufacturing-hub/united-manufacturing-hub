@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -358,7 +359,7 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 
 // calculatateLowSpeedStates splits up a "Running" state into multiple states either "Running" or "LowSpeed"
 // additionally it caches it results. See also cache.go
-func calculatateLowSpeedStates(parentSpan opentracing.Span, assetID int, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func calculatateLowSpeedStates(parentSpan opentracing.Span, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
@@ -411,7 +412,7 @@ func calculatateLowSpeedStates(parentSpan opentracing.Span, assetID int, countSl
 }
 
 // Note: assetID is only used for caching
-func addLowSpeedStates(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func addLowSpeedStates(parentSpan opentracing.Span, assetID uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	// Jaeger tracing
 	var span opentracing.Span
@@ -798,7 +799,7 @@ func GetOrdersTimeline(parentSpan opentracing.Span, customerID string, location 
 
 }
 
-func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID int, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
+func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
 	// Jaeger tracing
 	var span opentracing.Span
 	if parentSpan != nil { //nil during testing
@@ -992,7 +993,7 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 }
 
 // processStatesOptimized splits up arrays efficiently for better caching
-func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func processStatesOptimized(parentSpan opentracing.Span, assetID uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 	var processedStatesTemp []datamodel.StateEntry
 
 	for current := from; current != to; {
@@ -1048,7 +1049,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID int, stateArray
 // processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent)
 // and calculating new ones (e.g. microstops)
 func processStates(parentSpan opentracing.Span,
-	assetID int,
+	assetID uint32,
 	stateArray []datamodel.StateEntry,
 	rawShifts []datamodel.ShiftEntry,
 	countSlice []datamodel.CountEntry,
@@ -1871,5 +1872,87 @@ func ConvertNewToOldStateEntryArray(stateArray []datamodel.StateEntry) (resultSt
 		resultStateArray = append(resultStateArray, fullRow)
 	}
 
+	return
+}
+
+func SliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
+	for index, a := range slice {
+		numberFromSlice, ok := a[column].(int)
+		if ok == false {
+			zap.S().Errorf("sliceContainsInt: casting numberFromSlice to int error", index)
+		}
+		if numberFromSlice == number {
+			return true, index
+		}
+	}
+	return false, 0
+}
+
+//ChangeOutputFormat tests, if inputColumnName is already in output format and adds name, if not
+func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{},
+	columnNamesOutput []string, columnIndex int) {
+	for i, name := range columnNames {
+		if name == inputColumnName {
+			return data, columnNames, i
+		}
+	}
+	// inputColumnName not previously found in existing columnNames: add to output
+	columnNames = append(columnNames, inputColumnName)
+	for i, slice := range data {
+		slice = LengthenSliceToFitNames(slice, columnNames)
+		data[i] = slice
+	}
+	columnIndex = len(columnNames) - 1
+	return data, columnNames, columnIndex
+}
+
+//LengthenSliceToFitNames receives an interface slice and checks if it is as long as the names slice, if not it adds nil entries.
+func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
+	lengthNames := len(names)
+	if len(slice) == lengthNames {
+		return slice
+	} else if len(slice) < lengthNames {
+		for len(slice) < lengthNames {
+			slice = append(slice, nil)
+		}
+		return slice
+	} else {
+		zap.S().Errorf("lengthenSliceToFitNames: slice too long")
+	}
+	return slice
+}
+
+//CreateNewRowInData adds a Row to data specifically for uniqueProductsWithTags, and fills in nil, where no information is known yet.
+func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn int, UID int, AID string,
+	timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString,
+	value sql.NullFloat64) (dataOut [][]interface{}) {
+	var fullRow []interface{}
+	fullRow = append(fullRow, UID)
+	fullRow = append(fullRow, AID)
+	fullRow = append(fullRow, float64(timestampBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	if timestampEnd.Valid {
+		fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	} else {
+		fullRow = append(fullRow, nil)
+	}
+	fullRow = append(fullRow, productID)
+	fullRow = append(fullRow, isScrap)
+	fullRow = LengthenSliceToFitNames(fullRow, columnNames)
+	if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data
+		fullRow[indexColumn] = value.Float64
+	}
+	dataOut = append(data, fullRow)
+	return
+}
+
+//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
+func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err error) {
+	length := len(columnNames)
+	for _, row := range data {
+		if length != len(row) {
+			err = errors.New("error: data row length not consistent with columnname length")
+			zap.S().Errorf("CheckOutputDimensions: dimensions wrong")
+		}
+	}
 	return
 }
