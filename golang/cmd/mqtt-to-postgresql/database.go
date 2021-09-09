@@ -667,7 +667,7 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 	}()
 
 	//These statements' auto close
-	stmt := txn.Stmt(statement.InsertIntoRecommendationTable)
+	stmt := txn.Stmt(statement.InsertIntoStateTable)
 
 	for _, item := range items {
 		var pt stateQueue
