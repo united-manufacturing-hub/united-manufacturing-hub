@@ -198,3 +198,8 @@ The input is not case sensitive. Please follow the example format below.
 **Possible values:** DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 **Example value:** DEBUG
+
+
+## Credits
+
+Based on the Bachelor Thesis from [Patrick Kunz](../../../publications/plug-and-play-visual-quality-inspection).
