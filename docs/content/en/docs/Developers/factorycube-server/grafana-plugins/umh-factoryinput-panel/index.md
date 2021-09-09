@@ -11,7 +11,7 @@ description: >
 UMH Factoryinput Panel allows to easily execute MQTT messages inside the UMH stack from the Grafana Panel.
 
 ## Requirements
- - URL of your [grafana-auth](grafana-auth-proxy) proxy server
+ - URL of your [grafana-auth](grafana-proxy) proxy server
 
 ## Installation
 

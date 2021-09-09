@@ -15,7 +15,7 @@ spec:
   tls:
   - hosts:
     - {{ .Values.nodered.ingress.publicHost }}
-    secretName: {{ .Values.nodered.ingress.publicHostSecretName }} 
+    secretName: {{ .Values.nodered.ingress.publicHostSecretName }}
   rules:
     - host: {{ .Values.nodered.ingress.publicHost }}
       http:

@@ -15,7 +15,7 @@ spec:
   tls:
   - hosts:
     - {{ .Values.factoryinsight.ingress.publicHost }}
-    secretName: {{ .Values.factoryinsight.ingress.publicHostSecretName }} 
+    secretName: {{ .Values.factoryinsight.ingress.publicHostSecretName }}
   rules:
     - host: {{ .Values.factoryinsight.ingress.publicHost }}
       http:

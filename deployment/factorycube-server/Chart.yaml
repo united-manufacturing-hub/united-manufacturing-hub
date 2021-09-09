@@ -15,7 +15,7 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.5.0 
+version: 0.5.1
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
@@ -27,25 +27,24 @@ home: https://www.united-manufacturing-hub.com
 sources:
   - https://github.com/united-manufacturing-hub/united-manufacturing-hub
 
-dependencies: 
-  - name: redis 
+dependencies:
+  - name: redis
     version: 12.7.3
-    repository: https://charts.bitnami.com/bitnami 
+    repository: https://charts.bitnami.com/bitnami
     condition: redis.enabled
   - name: vernemq
-    version: 1.6.9
+    version: 1.6.7
     repository: https://vernemq.github.io/docker-vernemq
     condition: vernemq.enabled
   - name: grafana
-    version: 6.13.5 
-    repository: https://grafana.github.io/helm-charts 
+    version: 6.13.5
+    repository: https://grafana.github.io/helm-charts
     condition: grafana.enabled
   - name: timescaledb-single
-    version: 0.9.0 
-    repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/ 
+    version: 0.9.0
+    repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
     condition: timescaledb-single.enabled
   - name: minio-operator
     version: 4.1.7
-    namespace: minio-operator
     repository: https://operator.min.io/
     condition: minio-operator.enabled
