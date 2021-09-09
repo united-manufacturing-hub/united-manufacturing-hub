@@ -101,6 +101,7 @@ func (r StateHandler) enqueue(bytes []byte, priority uint8) {
 
 func (r StateHandler) Shutdown() (err error) {
 	r.shutdown = true
+	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)
 	return
 }

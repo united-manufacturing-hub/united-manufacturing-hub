@@ -131,7 +131,7 @@ func newStatementRegistry() *statementRegistry {
 		;`),
 
 		InsertIntoUniqueProductTable: prep(`
-		INSERT INTO uniqueProductTable (asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, uniqueProductAlternativeID) 
+		INSERT INTO uniqueProductTable (asset_id, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, uniqueproductalternativeid) 
 		VALUES ($1, to_timestamp($2 / 1000.0),to_timestamp($3 / 1000.0),$4,$5,$6) 
 		ON CONFLICT DO NOTHING;`),
 

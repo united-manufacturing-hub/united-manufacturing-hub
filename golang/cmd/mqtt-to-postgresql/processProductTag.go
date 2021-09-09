@@ -105,6 +105,7 @@ func (r ProductTagHandler) enqueue(bytes []byte, priority uint8) {
 
 func (r ProductTagHandler) Shutdown() (err error) {
 	r.shutdown = true
+	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)
 	return
 }
