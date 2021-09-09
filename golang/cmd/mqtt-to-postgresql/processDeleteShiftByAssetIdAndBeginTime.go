@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type deleteShiftByAssetIdAndBeginTimestampQueue struct {
@@ -38,6 +39,16 @@ func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAs
 	return
 }
 
+func (r DeleteShiftByAssetIdAndBeginTimestampHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("DeleteShiftByAssetIdAndBeginTimestampHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r DeleteShiftByAssetIdAndBeginTimestampHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

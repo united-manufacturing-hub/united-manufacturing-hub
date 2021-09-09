@@ -39,6 +39,16 @@ func NewAddShiftHandler() (handler *AddShiftHandler) {
 	return
 }
 
+func (r AddShiftHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("AddShiftHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r AddShiftHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r AddShiftHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

@@ -44,6 +44,16 @@ func NewRecommendationDataHandler() (handler *RecommendationDataHandler) {
 	return
 }
 
+func (r RecommendationDataHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("RecommendationDataHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r RecommendationDataHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r RecommendationDataHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

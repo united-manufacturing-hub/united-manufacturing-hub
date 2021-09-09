@@ -36,6 +36,16 @@ func NewValueStringHandler() (handler *ValueStringHandler) {
 	return
 }
 
+func (r ValueStringHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ValueStringHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r ValueStringHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r ValueStringHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

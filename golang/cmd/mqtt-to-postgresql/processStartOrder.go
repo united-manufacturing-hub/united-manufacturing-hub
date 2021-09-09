@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type startOrderQueue struct {
@@ -38,6 +39,16 @@ func NewStartOrderHandler() (handler *StartOrderHandler) {
 	return
 }
 
+func (r StartOrderHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("StartOrderHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r StartOrderHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r StartOrderHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

@@ -38,6 +38,16 @@ func NewEndOrderHandler() (handler *EndOrderHandler) {
 	return
 }
 
+func (r EndOrderHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("EndOrderHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r EndOrderHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r EndOrderHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

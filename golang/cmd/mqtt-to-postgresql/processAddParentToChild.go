@@ -41,6 +41,16 @@ func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 	return
 }
 
+func (r AddParentToChildHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("AddParentToChildHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r AddParentToChildHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r AddParentToChildHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

@@ -44,6 +44,16 @@ func NewAddOrderHandler() (handler *AddOrderHandler) {
 	return
 }
 
+func (r AddOrderHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("AddOrderHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r AddOrderHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r AddOrderHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

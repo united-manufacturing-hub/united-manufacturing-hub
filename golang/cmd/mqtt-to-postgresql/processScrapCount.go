@@ -39,6 +39,16 @@ func NewScrapCountHandler() (handler *ScrapCountHandler) {
 	return
 }
 
+func (r ScrapCountHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ScrapCountHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r ScrapCountHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r ScrapCountHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

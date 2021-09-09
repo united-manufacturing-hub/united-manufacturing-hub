@@ -39,6 +39,16 @@ func NewAddProductHandler() (handler *AddProductHandler) {
 	return
 }
 
+func (r AddProductHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("AddProductHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r AddProductHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r AddProductHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

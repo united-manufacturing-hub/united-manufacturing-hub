@@ -43,6 +43,16 @@ func NewProductTagHandler() (handler *ProductTagHandler) {
 	return
 }
 
+func (r ProductTagHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ProductTagHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r ProductTagHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r ProductTagHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

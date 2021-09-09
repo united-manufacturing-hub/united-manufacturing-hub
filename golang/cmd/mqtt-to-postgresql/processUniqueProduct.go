@@ -47,6 +47,16 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	return
 }
 
+func (r UniqueProductHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("UniqueProductHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r UniqueProductHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r UniqueProductHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
