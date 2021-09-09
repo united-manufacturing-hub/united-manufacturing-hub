@@ -164,6 +164,7 @@ func (r ValueDataHandler) enqueueF64(bytes []byte, priority uint8) {
 }
 
 func (r ValueDataHandler) Shutdown() (err error) {
+	zap.S().Warnf("[ValueDataHandler] shutting down !")
 	r.shutdown = true
 	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pgI32)

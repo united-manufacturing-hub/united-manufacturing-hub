@@ -104,6 +104,7 @@ func (r ScrapCountHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r ScrapCountHandler) Shutdown() (err error) {
+	zap.S().Warnf("[ScrapCountHandler] shutting down !")
 	r.shutdown = true
 	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)

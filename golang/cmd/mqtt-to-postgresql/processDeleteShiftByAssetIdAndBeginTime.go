@@ -103,6 +103,7 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) enqueue(bytes []byte, prio
 }
 
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) Shutdown() (err error) {
+	zap.S().Warnf("[DeleteShiftByAssetIdAndBeginTimestampHandler] shutting down !")
 	r.shutdown = true
 	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)

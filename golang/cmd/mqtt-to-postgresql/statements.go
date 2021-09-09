@@ -73,7 +73,148 @@ type statementRegistry struct {
 }
 
 func (r statementRegistry) Shutdown() (err error) {
+	zap.S().Warnf("[statementRegistry] shutting down !")
 	err = r.InsertIntoRecommendationTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoRecommendationTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.CreateTmpProcessValueTable64.Close()
+	if err != nil {
+		return
+	}
+	err = r.xInsertIntoProcessValueTableFromTmpProcessValueTable64.Close()
+	if err != nil {
+		return
+	}
+	err = r.CreateTmpProcessValueTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.xInsertIntoProcessValueTableFromTmpProcessValueTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.CreateTmpCountTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.xInsertIntoCountTableFromTmpCountTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoStateTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateCountTableScrap.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoUniqueProductTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoProductTagTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoProductTagStringTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoProductInheritanceTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoShiftTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateUniqueProductTableSetIsScrap.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoProductTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoOrderTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateOrderTableSetBeginTimestamp.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateOrderTableSetEndTimestamp.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoMaintenanceActivities.Close()
+	if err != nil {
+		return
+	}
+	err = r.SelectLastStateFromStateTableInRange.Close()
+	if err != nil {
+		return
+	}
+	err = r.DeleteFromStateTableByTimestampRangeAndAssetId.Close()
+	if err != nil {
+		return
+	}
+	err = r.DeleteFromStateTableByTimestamp.Close()
+	if err != nil {
+		return
+	}
+	err = r.DeleteFromShiftTableById.Close()
+	if err != nil {
+		return
+	}
+	err = r.DeleteFromShiftTableByAssetIDAndBeginTimestamp.Close()
+	if err != nil {
+		return
+	}
+	err = r.InsertIntoAssetTable.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateCountTableSetCountAndScrapByAssetId.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateCountTableSetCountByAssetId.Close()
+	if err != nil {
+		return
+	}
+	err = r.UpdateCountTableSetScrapByAssetId.Close()
+	if err != nil {
+		return
+	}
+	err = r.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.Close()
+	if err != nil {
+		return
+	}
+	err = r.SelectProductIdFromProductTableByAssetIdAndProductName.Close()
+	if err != nil {
+		return
+	}
+	err = r.SelectIdFromComponentTableByAssetIdAndComponentName.Close()
+	if err != nil {
+		return
+	}
+	err = r.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.Close()
+	if err != nil {
+		return
+	}
+	err = r.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.Close()
+	if err != nil {
+		return
+	}
+	err = r.CreateTmpProcessValueTableString.Close()
 	if err != nil {
 		return
 	}

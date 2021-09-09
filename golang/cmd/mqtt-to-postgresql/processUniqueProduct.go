@@ -111,6 +111,7 @@ func (r UniqueProductHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r UniqueProductHandler) Shutdown() (err error) {
+	zap.S().Warnf("[UniqueProductHandler] shutting down !")
 	r.shutdown = true
 	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)

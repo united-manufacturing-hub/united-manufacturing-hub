@@ -106,6 +106,7 @@ func (r AddParentToChildHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r AddParentToChildHandler) Shutdown() (err error) {
+	zap.S().Warnf("[AddParentToChildHandler] shutting down !")
 	r.shutdown = true
 	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)

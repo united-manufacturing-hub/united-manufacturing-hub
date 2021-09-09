@@ -103,6 +103,7 @@ func (r EndOrderHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r EndOrderHandler) Shutdown() (err error) {
+	zap.S().Warnf("[EndOrderHandler] shutting down !")
 	r.shutdown = true
 	time.Sleep(1 * time.Second)
 	err = CloseQueue(r.pg)
