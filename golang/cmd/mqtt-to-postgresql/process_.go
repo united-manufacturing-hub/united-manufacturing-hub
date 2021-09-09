@@ -28,6 +28,16 @@ func NewXHandler() (handler *XHandler) {
 	return
 }
 
+func (r XHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("XHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r XHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r XHandler) process() {
 	for !r.shutdown {
 		//TODO

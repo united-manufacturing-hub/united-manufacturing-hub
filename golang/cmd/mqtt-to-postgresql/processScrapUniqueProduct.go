@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type scrapUniqueProductQueue struct {
@@ -37,6 +38,16 @@ func NewScrapUniqueProductHandler() (handler *ScrapUniqueProductHandler) {
 	return
 }
 
+func (r ScrapUniqueProductHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ScrapUniqueProductHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r ScrapUniqueProductHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r ScrapUniqueProductHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

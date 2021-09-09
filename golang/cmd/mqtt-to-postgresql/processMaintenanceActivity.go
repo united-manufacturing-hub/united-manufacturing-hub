@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type addMaintenanceActivityQueue struct {
@@ -42,6 +43,16 @@ func NewMaintenanceActivityHandler() (handler *MaintenanceActivityHandler) {
 	return
 }
 
+func (r MaintenanceActivityHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("MaintenanceActivityHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r MaintenanceActivityHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r MaintenanceActivityHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type processValueQueueI32 struct {
@@ -49,6 +50,19 @@ func NewValueDataHandler() (handler *ValueDataHandler) {
 		shutdown: false,
 	}
 	return
+}
+
+func (r ValueDataHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ValueDataHandler queue length (I32): %d", r.pgI32.Length())
+		zap.S().Debugf("ValueDataHandler queue length (F64): %d", r.pgF64.Length())
+	}
+}
+func (r ValueDataHandler) Setup() {
+	go r.reportLength()
+	go r.processI32()
+	go r.processF64()
 }
 
 func (r ValueDataHandler) processI32() {

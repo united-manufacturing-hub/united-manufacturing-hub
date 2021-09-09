@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type countQueue struct {
@@ -39,6 +40,17 @@ func NewCountHandler() (handler *CountHandler) {
 		shutdown: false,
 	}
 	return
+}
+
+func (r CountHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("CountHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r CountHandler) Setup() {
+	go r.reportLength()
+	go r.process()
 }
 
 func (r CountHandler) process() {

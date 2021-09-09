@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type modifyStateQueue struct {
@@ -42,6 +43,16 @@ func NewModifyStateHandler() (handler *ModifyStateHandler) {
 	return
 }
 
+func (r ModifyStateHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ModifyStateHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r ModifyStateHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r ModifyStateHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {

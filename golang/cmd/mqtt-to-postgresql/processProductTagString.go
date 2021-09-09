@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"time"
 )
 
 type productTagStringQueue struct {
@@ -44,6 +45,16 @@ func NewProductTagStringHandler() (handler *ProductTagStringHandler) {
 	return
 }
 
+func (r ProductTagStringHandler) reportLength() {
+	for !r.shutdown {
+		time.Sleep(10 * time.Second)
+		zap.S().Debugf("ProductTagStringHandler queue length: %d", r.pg.Length())
+	}
+}
+func (r ProductTagStringHandler) Setup() {
+	go r.reportLength()
+	go r.process()
+}
 func (r ProductTagStringHandler) process() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
