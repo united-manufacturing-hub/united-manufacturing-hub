@@ -31,6 +31,7 @@ func NewCountHandler() (handler *CountHandler) {
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
+		zap.S().Errorf("err: %s", err)
 		ShutdownApplicationGraceful()
 		panic("Failed to setup queue, exiting !")
 	}
@@ -66,6 +67,8 @@ func (r CountHandler) process() {
 		}
 		faultyItems, err := storeItemsIntoDatabaseCount(items)
 		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			ShutdownApplicationGraceful()
 			return
 		}
 		// Empty the array, without de-allocating memory

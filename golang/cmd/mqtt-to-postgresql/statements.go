@@ -342,7 +342,7 @@ func newStatementRegistry() *statementRegistry {
 
 		SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId: prep(`SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;`),
 
-		SelectProductExists: prep(`SELECT COUNT(*) as CNT FROM producttable WHERE product_id = 1`),
+		SelectProductExists: prep(`SELECT COUNT(*) as CNT FROM producttable WHERE product_id = $1`),
 	}
 }
 

@@ -75,6 +75,8 @@ func (r ValueDataHandler) processI32() {
 		items = r.dequeueI32()
 		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
 		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			ShutdownApplicationGraceful()
 			return
 		}
 		// Empty the array, without de-allocating memory
@@ -95,6 +97,8 @@ func (r ValueDataHandler) processF64() {
 		items = r.dequeueF64()
 		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
 		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			ShutdownApplicationGraceful()
 			return
 		}
 		// Empty the array, without de-allocating memory

@@ -252,8 +252,10 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
+		zap.S().Debugf("Cache hit for %s", assetID)
 		return
 	}
+	zap.S().Debugf("No Cache hit for %s", assetID)
 
 	txn, err := db.Begin()
 	if err != nil {
@@ -1055,6 +1057,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 
 	txn, err := db.Begin()
 	if err != nil {
+		zap.S().Errorf("Failed to open txn: %s", err)
 		faultyItems = items
 		return
 	}
