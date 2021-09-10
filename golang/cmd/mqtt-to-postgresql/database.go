@@ -238,7 +238,7 @@ func CheckIfProductExists(productId int32) (exists bool) {
 	stmt := txn.Stmt(statement.SelectProductExists)
 	err = stmt.QueryRow(productId).Scan(&cnt)
 	if err != nil {
-		zap.S().Debugf("Failed to scan rows ")
+		zap.S().Debugf("Failed to scan rows ", err)
 		return false
 	}
 
