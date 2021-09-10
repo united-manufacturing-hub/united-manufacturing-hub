@@ -7,6 +7,7 @@ description: "The results of this research provide an overview of the problems b
 
 This publication was made by Aditya Narayan Mishra as a Master Thesis for the "Institut für Textiltechnik der RWTH Aachen University" in cooperation with [Kai Müller (ITA / RWTH Aachen )](https://www.ita.rwth-aachen.de/cms/ITA/Das-Institut/Team/Wissenschaftliche-Mitarbeiter/~edjlj/Mueller-Kai/) and us. 
 
+<!-- markdown-link-check-disable-next-line -->
 {{< imgproc image.png Fit "600x600">}}Source: https://www.lindenfarb.de/en/{{< /imgproc >}}
 
 ## Abstract

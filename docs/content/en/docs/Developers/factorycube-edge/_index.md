@@ -27,7 +27,7 @@ This tool acts as an MQTT bridge to handle bad internet connections. Messages ar
 
 ## nodered
 
-This tool is used to connect PLC and to process data. See also [Getting Started](../../getting-started/connecting-machines-creating-dashboards). Or take a look into the [official documentation](www.nodered.org/docs)
+This tool is used to connect PLC and to process data. See also [Getting Started](/docs/getting-started/connecting-machines-creating-dashboards). Or take a look into the [official documentation](https://www.nodered.org/docs)
 
 ## emqx-edge
 

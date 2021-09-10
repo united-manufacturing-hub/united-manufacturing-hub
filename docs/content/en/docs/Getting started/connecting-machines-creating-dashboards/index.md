@@ -23,7 +23,7 @@ If you haven't worked with node-red yet, [here](https://nodered.org/docs/user-gu
 
 {{< imgproc nodered_general Fit "800x800" >}}{{< /imgproc >}}
 
-Basically, 3 pieces of information must be communicated to the system. For more information feel free to check [this article](../../concepts/mqtt/). These 3 information must be set to the system via the green configuration node-red, so that the data can be assigned exactly to an asset
+Basically, 3 pieces of information must be communicated to the system. For more information feel free to check [this article](/docs/concepts/mqtt/). These 3 information must be set to the system via the green configuration node-red, so that the data can be assigned exactly to an asset
 
 The customer ID to be assigned to the asset: *customerID*
 
@@ -31,7 +31,7 @@ The location where the asset is located: *location*
 
 The name of the asset: *AssetID*
 
-Furthermore, you will find under the general settings, the state logic which determines the machine *state* with the help of the *activity* and *detectedAnomaly* topic. For more information feel free to check [this article.](../../concepts/mqtt/)
+Furthermore, you will find under the general settings, the state logic which determines the machine *state* with the help of the *activity* and *detectedAnomaly* topic. For more information feel free to check [this article.](/docs/concepts/mqtt/)
 
 ### Inputs:
 {{< imgproc nodered_inputs Fit "800x800" >}}{{< /imgproc >}}
@@ -68,7 +68,7 @@ This means that the transmitter with the serial number `2020-0102` has one ifm g
 
 
 ### Extract information and make it available to the **outputs**:
-In order for the data to be processed easily and quickly by the United Manufacturing hub, the input data (OPC/UA, Siemens S7) must be prepared and converted into a standardized data format (MQTT Topic). For a deep explanation of our MQTT data model check [here](../../concepts/mqtt/) and [here](../../concepts/state).
+In order for the data to be processed easily and quickly by the United Manufacturing hub, the input data (OPC/UA, Siemens S7) must be prepared and converted into a standardized data format (MQTT Topic). For a deep explanation of our MQTT data model check [here](/docs/concepts/mqtt/) and [here](/docs/concepts/state).
 
 {{< imgproc nodered_outputs Fit "800x800" >}}{{< /imgproc >}}
 
@@ -78,7 +78,7 @@ The 4 most important data points:
 - The produced quantity: `/count`
 - An interface to communicate any process value to the system (e.g. temperature or energy consumption) - `/processvalue`
 
-Using the information from the topics `/activtiy` and `/detectedAnomaly` the statelogic node calculates the discrete machine state. By first checking if the machine is running or not. If the machine is not running the machine state is set equal to the last `/detectedAnomaly` analogous to [state model](../../concepts/state). The discrete machine state is then made available again via the `/state` topic.
+Using the information from the topics `/activtiy` and `/detectedAnomaly` the statelogic node calculates the discrete machine state. By first checking if the machine is running or not. If the machine is not running the machine state is set equal to the last `/detectedAnomaly` analogous to [state model](/docs/concepts/state). The discrete machine state is then made available again via the `/state` topic.
 
 **Implementation example: You would like to determine the output and machine condition of a filling machine.**
 
@@ -86,9 +86,9 @@ Used Sensors:
 - Lightbarrier for counting the bottles 
 - A button bar via which the machine operator can inform the system that he is on break, for example
 
-1.  Extract via the MQTT in node the information of the light barrier whether a bottle was produced. If a bottle was produced send a message to the output/count topic analog to [MQTT datamodel](../../concepts/mqtt).
-2.  Use the output_to_activity node to use the information "a bottle was produced" to determine the information "the machine is running". E.g. If every X seconds a bottle is produced set the activity equal to true analog to [MQTT datamodel](../../concepts/mqtt/).
-3.  Use the information of the button bar to tell the system why the machine is not running. e.g. Whenever button 3 is pressed send pause to the detectedAnomaly node analog to [MQTT datamodel](../../concepts/mqtt).
+1.  Extract via the MQTT in node the information of the light barrier whether a bottle was produced. If a bottle was produced send a message to the output/count topic analog to [MQTT datamodel](/docs/concepts/mqtt).
+2.  Use the output_to_activity node to use the information "a bottle was produced" to determine the information "the machine is running". E.g. If every X seconds a bottle is produced set the activity equal to true analog to [MQTT datamodel](/docs/concepts/mqtt/).
+3.  Use the information of the button bar to tell the system why the machine is not running. e.g. Whenever button 3 is pressed send pause to the detectedAnomaly node analog to [MQTT datamodel](/docs/concepts/mqtt).
 
 Now the machine status is automatically determined and communicated to the united manufacturing hub for further analysis. Like for example the speed loss.
 
@@ -98,7 +98,7 @@ TODO: #63 add example Flow for data processing
 {{< imgproc nodered_testing Fit "800x800" >}}{{< /imgproc >}}
 With the help of the testing flows you can test your entire system or simply simulate some sample data for visualization.
 
-[See also DCC Aachen example in our showcase.](../../examples/dcc-assembly-analytics)
+[See also DCC Aachen example in our showcase.](/docs/examples/dcc-assembly-analytics)
 
 ## 2. Create dashboards using factorycube-server
 

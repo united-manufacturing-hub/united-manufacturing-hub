@@ -5,7 +5,7 @@ description: >
   Documentation of mqtt-to-postgresql
 ---
 
-mqtt-to-postgresql subscribes to the MQTT broker (in the stack this is [VerneMQ](https://github.com/vernemq/vernemq)), parses incoming messages on the topic "ia/#" and stores them in the postgresql / [timescaleDB database](https://github.com/timescale/timescaledb) (if they are in the correct [datamodel](../../../Concepts/mqtt/))
+mqtt-to-postgresql subscribes to the MQTT broker (in the stack this is [VerneMQ](https://github.com/vernemq/vernemq)), parses incoming messages on the topic "ia/#" and stores them in the postgresql / [timescaleDB database](https://github.com/timescale/timescaledb) (if they are in the correct [datamodel](/docs/concepts/mqtt/))
 
 ## Getting started
 

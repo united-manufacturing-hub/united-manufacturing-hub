@@ -56,5 +56,5 @@ If you are struggling with these steps and have bought a machineconnect from us,
 
 ## Next steps
 
-After doing the physical setup and connecting the PLC you can continue with [part 3 of the getting started guide](../../../getting-started/connecting-machines-creating-dashboards).
+After doing the physical setup and connecting the PLC you can continue with [part 3 of the getting started guide](/docs/getting-started/connecting-machines-creating-dashboards).
 
