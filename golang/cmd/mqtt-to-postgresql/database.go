@@ -227,6 +227,24 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 	return
 }
 
+func CheckIfProductExists(productId int32) (exists bool) {
+	txn, err := db.Begin()
+	if err != nil {
+		return false
+	}
+
+	var cnt int32
+
+	stmt := txn.Stmt(statement.SelectProductExists)
+	err = stmt.QueryRow(productId).Scan(&cnt)
+	if err != nil {
+		zap.S().Debugf("Failed to scan rows ")
+		return false
+	}
+
+	return cnt == 1
+}
+
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 
@@ -759,15 +777,21 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 			continue
 		}
 
-		// Create statement
-		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(int64(pt.EndTimestampMs)), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
-		if err != nil {
-			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
-			err = nil
-			continue
+		if CheckIfProductExists(pt.ProductID) {
+			// Create statement
+			_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(int64(pt.EndTimestampMs)), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
+			if err != nil {
+				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
+				err = nil
+				continue
 
+			}
+		} else {
+			zap.S().Debugf("Product %d does not yet exist", pt.ProductID)
+			faultyItems = append(faultyItems, item)
 		}
+
 	}
 	return
 }
@@ -1086,14 +1110,19 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 			continue
 		}
 
-		// Create statement
-		_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
-		if err != nil {
-			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
-			err = nil
-			continue
+		if CheckIfProductExists(pt.ProductID) {
+			// Create statement
+			_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
+			if err != nil {
+				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
+				err = nil
+				continue
 
+			}
+		} else {
+			zap.S().Debugf("Product %d does not yet exist", pt.ProductID)
+			faultyItems = append(faultyItems, item)
 		}
 	}
 	return

@@ -67,6 +67,7 @@ type statementRegistry struct {
 
 	SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId *sql.Stmt
 	CreateTmpProcessValueTableString                                                     *sql.Stmt
+	SelectProductExists                                                                  *sql.Stmt
 }
 
 func (r statementRegistry) Shutdown() (err error) {
@@ -203,6 +204,10 @@ func (r statementRegistry) Shutdown() (err error) {
 	if err != nil {
 		return
 	}
+	err = r.SelectProductExists.Close()
+	if err != nil {
+		return
+	}
 	return
 }
 
@@ -336,6 +341,8 @@ func newStatementRegistry() *statementRegistry {
 		SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc: prep(`SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;`),
 
 		SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId: prep(`SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;`),
+
+		SelectProductExists: prep(`SELECT COUNT(*) as CNT FROM producttable WHERE product_id = 1`),
 	}
 }
 
