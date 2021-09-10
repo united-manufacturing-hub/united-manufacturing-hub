@@ -67,12 +67,14 @@ func (r AddProductHandler) process() {
 		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
+		zap.S().Debugf("Item [empty] len: %d", len(items))
 		for _, faultyItem := range faultyItems {
 			var prio uint8
 			prio = faultyItem.Priority + 1
 			if faultyItem.Priority >= 255 {
 				prio = 254
 			}
+			zap.S().Debugf("Inserting faultyItem: %d", prio, faultyItems)
 			r.enqueue(faultyItem.Value, prio)
 		}
 	}
