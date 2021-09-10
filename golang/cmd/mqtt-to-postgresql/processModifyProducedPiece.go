@@ -63,7 +63,7 @@ func (r ModifyProducedPieceHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		faultyItems, err := modifyInDatabaseModifyCountAndScrap(items)
@@ -113,7 +113,7 @@ func (r ModifyProducedPieceHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r ModifyProducedPieceHandler) Shutdown() (err error) {
-	zap.S().Warnf("[ModifyProducedPieceHandler] shutting down !")
+	zap.S().Warnf("[ModifyProducedPieceHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

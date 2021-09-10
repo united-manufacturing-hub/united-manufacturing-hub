@@ -57,7 +57,7 @@ func (r XHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r XHandler) Shutdown() (err error) {
-	zap.S().Warnf("[XHandler] shutting down !")
+	zap.S().Warnf("[XHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

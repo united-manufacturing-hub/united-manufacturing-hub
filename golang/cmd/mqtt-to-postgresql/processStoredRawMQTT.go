@@ -65,7 +65,7 @@ func (r StoredRawMQTTHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r StoredRawMQTTHandler) Shutdown() (err error) {
-	zap.S().Warnf("[StoredRawMQTTHandler] shutting down !")
+	zap.S().Warnf("[StoredRawMQTTHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

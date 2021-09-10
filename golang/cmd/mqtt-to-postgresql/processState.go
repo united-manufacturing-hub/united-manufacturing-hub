@@ -58,7 +58,7 @@ func (r StateHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseState(items)
@@ -107,7 +107,7 @@ func (r StateHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r StateHandler) Shutdown() (err error) {
-	zap.S().Warnf("[StateHandler] shutting down !")
+	zap.S().Warnf("[StateHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

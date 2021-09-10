@@ -58,7 +58,7 @@ func (r AddProductHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		zap.S().Debugf("Item len: %d", len(items))
@@ -112,7 +112,7 @@ func (r AddProductHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r AddProductHandler) Shutdown() (err error) {
-	zap.S().Warnf("[AddProductHandler] shutting down !")
+	zap.S().Warnf("[AddProductHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

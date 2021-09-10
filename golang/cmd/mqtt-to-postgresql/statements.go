@@ -71,7 +71,7 @@ type statementRegistry struct {
 }
 
 func (r statementRegistry) Shutdown() (err error) {
-	zap.S().Warnf("[statementRegistry] shutting down !")
+	zap.S().Warnf("[statementRegistry] shutting down!")
 	err = r.InsertIntoRecommendationTable.Close()
 	if err != nil {
 		return
