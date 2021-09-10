@@ -59,7 +59,9 @@ func (r AddProductHandler) process() {
 		if len(items) == 0 {
 			time.Sleep(10 * time.Millisecond)
 		}
+		zap.S().Debugf("Item len: %d", len(items))
 		faultyItems, err := storeItemsIntoDatabaseAddProduct(items)
+		zap.S().Debugf("Faulty item len: %d", len(items))
 		if err != nil {
 			return
 		}

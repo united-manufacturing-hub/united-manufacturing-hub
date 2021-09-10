@@ -299,6 +299,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 		var pt recommendationStruct
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -691,6 +692,7 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 		var pt stateQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -731,6 +733,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 		var pt scrapCountQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -773,6 +776,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 		var pt uniqueProductQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -819,6 +823,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		var pt productTagQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -871,6 +876,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		var pt productTagStringQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -923,6 +929,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		var pt addParentToChildQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -985,6 +992,7 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 		var pt addShiftQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1025,6 +1033,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 		var pt scrapUniqueProductQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1065,6 +1074,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 		var pt addProductQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1106,6 +1116,7 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1151,6 +1162,7 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 		var pt startOrderQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1191,6 +1203,7 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 		var pt endOrderQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1231,6 +1244,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 		var pt addMaintenanceActivityQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1274,6 +1288,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 		var pt modifyStateQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1367,6 +1382,7 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 		var pt deleteShiftByIdQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1407,6 +1423,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 		var pt deleteShiftByAssetIdAndBeginTimestampQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1449,6 +1466,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 		var pt modifyProducesPieceQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
