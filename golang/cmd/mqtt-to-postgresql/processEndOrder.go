@@ -57,6 +57,7 @@ func (r EndOrderHandler) process() {
 		items = r.dequeue()
 		if len(items) == 0 {
 			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseEndOrder(items)
 		if err != nil {

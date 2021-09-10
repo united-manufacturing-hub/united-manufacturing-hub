@@ -63,6 +63,7 @@ func (r RecommendationDataHandler) process() {
 		items = r.dequeue()
 		if len(items) == 0 {
 			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseRecommendation(items)
 		if err != nil {

@@ -62,6 +62,7 @@ func (r AddOrderHandler) process() {
 		items = r.dequeue()
 		if len(items) == 0 {
 			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseAddOrder(items)
 		if err != nil {

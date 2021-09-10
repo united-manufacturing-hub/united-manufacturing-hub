@@ -57,6 +57,7 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) process() {
 		items = r.dequeue()
 		if len(items) == 0 {
 			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 		faultyItems, err := deleteShiftInDatabaseByAssetIdAndTimestamp(items)
 		if err != nil {

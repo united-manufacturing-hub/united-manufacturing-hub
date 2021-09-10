@@ -61,6 +61,7 @@ func (r ModifyStateHandler) process() {
 		items = r.dequeue()
 		if len(items) == 0 {
 			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 		faultyItems, err := modifyStateInDatabase(items)
 		if err != nil {
