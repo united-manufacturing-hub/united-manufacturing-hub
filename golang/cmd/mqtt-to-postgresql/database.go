@@ -227,7 +227,12 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 	return
 }
 
-func CheckIfProductExists(productId int32) (exists bool) {
+func CheckIfProductExists(productId int32, DBassetID uint32) (exists bool) {
+	_, cacheHit := internal.GetProductIDFromCache(productId, DBassetID)
+	if cacheHit {
+		return true
+	}
+
 	txn, err := db.Begin()
 	if err != nil {
 		return false
@@ -239,6 +244,11 @@ func CheckIfProductExists(productId int32) (exists bool) {
 	err = stmt.QueryRow(productId).Scan(&cnt)
 	if err != nil {
 		zap.S().Debugf("Failed to scan rows ", err)
+		return false
+	}
+
+	err = txn.Commit()
+	if err != nil {
 		return false
 	}
 
@@ -262,6 +272,8 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 		return
 	}
 
+	zap.S().Debugf("txn: ", txn, err)
+
 	defer func() {
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
@@ -271,8 +283,10 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}()
 
 	stmt := txn.Stmt(statement.InsertIntoAssetTable)
+	zap.S().Debugf("stmt: ", stmt)
 
 	_, err = stmt.Exec(assetID, location, customerID)
+	zap.S().Debugf("Exec: ", err)
 	if err != nil {
 		PQErrorHandling("INSERT INTO ASSETTABLE", err)
 	}
@@ -783,7 +797,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 			continue
 		}
 
-		if CheckIfProductExists(pt.ProductID) {
+		if CheckIfProductExists(pt.ProductID, pt.DBAssetID) {
 			// Create statement
 			_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(int64(pt.EndTimestampMs)), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
 			if err != nil {
@@ -1124,7 +1138,7 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 			continue
 		}
 
-		if CheckIfProductExists(pt.ProductID) {
+		if CheckIfProductExists(pt.ProductID, pt.DBAssetID) {
 			// Create statement
 			_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
 			if err != nil {
