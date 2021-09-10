@@ -1,8 +1,10 @@
 ---
 title: "grafana-proxy"
 linktitle: "grafana-proxy"
-description: > Documentation of grafana-proxy
+description: Documentation of grafana-proxy
 ---
+
+**This microservice is still in development and is not considered stable for production use.**
 
 ## Getting started
 

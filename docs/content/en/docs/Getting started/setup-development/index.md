@@ -39,8 +39,6 @@ This step is also available via a step-by-step video: **TODO**
 
 #### k3OS
 
-**TODO: REMOVE. PLEASE USE THE FOLLOWING URL INSTEAD OF THE ONE MENTIONED UNTIL EVERYTHING IS MERGED WITH MAIN! https://bit.ly/3DGEsjT**
-
 1. Insert your USB-stick with k3OS into your edge device and boot from it [^boot-usb]
 2. [Install k3OS](/docs/tutorials/install-k3os/). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](/examples/development.yaml)
 
