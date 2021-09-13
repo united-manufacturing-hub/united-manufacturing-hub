@@ -195,19 +195,17 @@ class ContinuousTrigger:
             # Get actual time and subtract the start time from
             #   it to get the time which the current loop needed 
             #   to run the code
-            loop_time = time.time() - timer_start
             logging.debug(f"cycle time: {cycle_time}")
+            loop_time = time.time() - timer_start
             # If the processing time is longer than the cycle 
             #   time throw error
             if loop_time > self.cycle_time:
                 logging.critical(
                     "Environment Error: CYCLE_TIME to short ||| Set cycle time is shorter than the processing time for each image.")
                 logging.error(f"cycle time: {cycle_time} loop took {loop_time}")
-                # print(f"cycle time: {cycle_time} loop took {loop_time}")  # workaround for fucked up logging todo remove
             else:
                 # Sleep for difference of cycle time minus loop 
-                #   time to have a constant cycle time
+                # time to have a constant cycle time
                 delay = self.cycle_time - loop_time
                 logging.debug(f"Delay {delay} s to reach constant cycle time.")
-                # print(f"Delay {delay} s to reach constant cycle time.")  # workaround for fucked up logging todo remove
                 time.sleep(delay)
