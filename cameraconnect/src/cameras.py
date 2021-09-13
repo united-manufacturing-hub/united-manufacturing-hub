@@ -11,6 +11,7 @@ The module provides two classes:
 
 # Import python in-built libraries
 import logging
+import re
 from abc import ABC, abstractmethod
 import time
 import base64
@@ -411,21 +412,23 @@ class GenICam(CamGeneral):
         #   argument
         first = True  # in case one camera is detected multiple times
         self.__remove_duplicate_entry_from_harvester()
+        object_identifier = self.__id_processing(str(mac_address))
         for camera in self.h.device_info_list:
             # read cameras mac address
-            # ATTENTION: only works with BAUMER SDK
-            device_mac_address = str(camera.id_).replace("_", "").replace("devicemodul", "")
+            # ATTENTION: only works with CTI files that deliver the MAC address to harvesters BAUMER SDK
+            camera_identifier = self.__id_processing(camera.id_)
             logging.debug(
-                f"current device_mac_address: {device_mac_address.upper()}, {self.mac_address.upper().replace(':', '')}")
+                f"current device_mac_address: {camera_identifier}, {object_identifier}")
 
             if not first:
-                logging.debug(f"camera {camera} is not first one with target  id")
-                continue
-            if device_mac_address.upper() == self.mac_address.upper().replace(":",
-                                                                              ""):  # fixme id detection system is in need of improvement, fix plz
+                logging.debug(f"camera {camera} with ident: {camera_identifier} is not first one matching the target "
+                              f"id: {self.mac_address}  |"
+                              f" ident: {object_identifier}, skipping")
+                continue  # using continue instead of break to preserve debug output
 
+            if camera_identifier.find(object_identifier) != -1:
                 try:
-                    logging.debug(f"attempting to connect to device {camera.id_}")
+                    logging.debug(f"attempting to connect to device {camera.id_} ident :{camera_identifier}")
                     self.ia = self.h.create_image_acquirer(id_=camera.id_)
                     first = False
                 except Exception as _e:
@@ -433,25 +436,16 @@ class GenICam(CamGeneral):
                         "Camera is not reachable. Most likely another container already occupies the same camera. "
                         f"One camera can only be used by exactly one container at any time. {_e}")
                     sys.exit("Camera not reachable.")
-                logging.debug("Using:" + str(camera))
+                logging.debug(f"Using: {camera} with ident {camera_identifier}")
                 logging.debug(HORIZONTAL_CONSOLE_LINE)
-            else:
-                try:
-                    logging.debug(f"attempting to connect to device {camera.id_}")
-                    self.ia = self.h.create_image_acquirer(id_=camera.id_)
-                    first = False
-                except Exception as _e:
-                    logging.error(
-                        "Camera is not reachable. Most likely another container already occupies the same camera. "
-                        f"One camera can only be used by exactly one container at any time. {_e}")
-                    sys.exit("Camera not reachable.")
-
-                logging.debug("Using:" + str(camera))
 
         if not hasattr(self, "ia"):
             logging.error(
                 "No camera with the specified MAC address available. Please specify MAC address in env file correctly.")
-            sys.exit("Invalid MAC address.")
+            logging.info(f"attempted to connect to cameras: "
+                         f"{[(camera.id_, self.__id_processing(str(camera.id_))) for camera in self.h.device_info_list]}"
+                         f"this object has mac_address {self.mac_address} and ident: {object_identifier}")
+            sys.exit("Unknown or Invalid MAC address.")
         ## Set some default settings
         # This is required because of a bug in the harvesters
         #   module. This should not affect our usage of image
@@ -463,6 +457,24 @@ class GenICam(CamGeneral):
         #   to the target GenTL Producer. Need this so that we
         #   always get the correct actual image.
         self.ia.num_buffers = 3  # test for stemmer imaging todo
+
+    @classmethod
+    def __id_processing(cls, identifier: str) -> str:
+        """
+        helper func to unify pre processing of identifier / mac addresses to ensure compatibility with different CTI
+        Files, this is not exhaustive, so if you find can not use your hardware with these expressions please create an
+        issue on github
+        :params:
+        identifier: str : input string
+        :return:
+        string capitalized with different things removed.
+        """
+        upper_id = identifier.upper()
+        device = re.compile("(DEVICEMODULE?)|(DEV)")  # removes common pre/suffixes
+        no_dev_id = device.sub("", upper_id)
+        spacer_symbols = re.compile("[-.:,;_\s]")  # removes variable spacers used on different cameras
+        no_spacer_symbols = spacer_symbols.sub(no_dev_id)
+        return no_spacer_symbols
 
     def __remove_duplicate_entry_from_harvester(self):
         """
