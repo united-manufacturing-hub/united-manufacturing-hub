@@ -2,7 +2,8 @@
 title: "cameraconnect"
 linkTitle: "cameraconnect"
 description: >
-  This docker container automatically detects cameras in the network and makes them accessible via MQTT. The MQTT output is specified in [the MQTT documentation](../../../concepts/mqtt/)
+  This docker container automatically detects cameras in the network and makes them accessible via MQTT. 
+  The MQTT output is specified in [the MQTT documentation](/docs/content/en/docs/Concepts/mqtt)
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
@@ -11,9 +12,14 @@ description: >
 
 ### Using the Helm chart
 
-By default cameraconnect will be deactivated in factorycube-edge. First, you need to enable it in the factorycube-edge values. Then you need to create a folder on the node in `/home/rancher/genticam_producer` and move your genTL producer files (*.cti) and all required libaries into that folder. Then apply your settings to the Helm chart with `helm upgrade`.
+By default cameraconnect will be deactivated in factorycube-edge. First, 
+you need to enable it in the factorycube-edge values. 
+Then you need to create a folder on the node in `/home/rancher/genticam_producer`
+and move your genTL producer files (*.cti) and all required libaries into that folder. 
+Then apply your settings to the Helm chart with `helm upgrade`.
 
-With Lens you can change the values under the apps/releases tab on the left side. select factorycube-edge and change your config values.
+With Lens you can change the values under the apps/releases tab on the left side. 
+Select factorycube-edge and change your config values.
 
 
 Or overwrite it in the `~/configs/development_values.yaml` file on the cube itself. 
@@ -24,15 +30,18 @@ helm upgrade factorycube-edge united-manufacturing-hub/factorycube-edge \
 --values "/home/rancher/configs/factorycube-edge-development.yaml" \
 --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge
 ````
-Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP (e.g., the IP of your node). Usually you can use the Kubernetes internal DNS. But cameraconnect needs to be in hostMode = true and therefore you need to access it through the external ip. 
+Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP (e.g., the IP of your node). 
+Usually you can use the Kubernetes internal DNS. 
+But cameraconnect needs to be in hostMode = true and therefore you need to access it through the external ip. 
 
 ### cti files
 cti files for you camaeras can not be included for license reasons, to include ti files you must create the folder 
 `/home/rancher/genicam_producer` and place a zip file containing all the files you wish to use there. the script will
-look for all cti files in that directory. Getting CTI files is dependent on the manufacturer, usually you will need to extract them from 
-the installation of the camera manufacturers software, due to licensing issues we can not distribute them with the stack.
+look for all cti files in that directory. Getting CTI files is dependent on the manufacturer, 
+usually you will need to extract them from the installation of the camera manufacturers software, 
+due to licensing issues we can not distribute them with the stack.
 
-###general tips.
+### general tips.
 1. Get cti files for both your development system and the container system (Debian / Ubuntu
    
    set the log level to DEBUG during any kind of hardware or network changes.
@@ -46,33 +55,37 @@ the installation of the camera manufacturers software, due to licensing issues w
 
    
 4. What works in your test environment may or may not work in deployment, I recommend modfying your deployment in lens  
-   to use and creating a custom docker image during testing if you get stuck, (you can use the docker hub container repository for free) 
+   to use and creating a custom docker image during testing if you get stuck, 
+   (you can use the docker hub container repository for free) 
 
 
 5. use an IDE to get more control over your environment where you run your tests (both env variables and python venvs),
    this application was made to be used with docker, and therefore expects tight control over the environment. 
 
 
-6. Docker containers behave slightly different when hosted on Windows or k3os, especially when mounting files like configs 
-   or cti files from the host OS, This can result in very hard to debug errors.
+6. Docker containers behave slightly different when hosted on Windows or k3os, 
+   especially when mounting files like configs or cti files from the host OS, 
+   this can result in very hard to debug errors.
 
 
 ### Development setup
-####docker compose
-Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
+#### docker compose
+Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, 
+so that you can develop.
 
 1. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose
 2. execute `sudo docker-compose -f ./deployment/cameraconnect/docker-compose.yaml up -d --build`
-####IDE
-1. Setup your python venv, with the sme version of python the container is built with, check 
-   [the Dockerfile for details](/deployment/cameraconnect/Dockerfile))
-2. install [requirements](/cameraconnect/requirements.txt)
+#### IDE
+1. Setup your python venv, with the same version of python the container is built with, check 
+   [the Dockerfile for details](/deployment/cameraconnect/Dockerfile)
+2. Install [requirements](/cameraconnect/requirements.txt)
 3. Setup env variables for your execution of the [main program](/cameraconnect/src/main.py) 
    (run config for pycharm or launch settings for vs code)
 4. Run the entire stack with cameraconnect DISABLED in development mode on a system in the same network
 5. Test your hardware from your machine, connecting to the stack as MQTT broker
 6. After it works on your dev device, transfer it to the umh stack by enabling cameraconnect on the stack
-7. 
+7. If you need to do changes to cameraconnect, you can create your own docker image and publish it on dockerhub
+   then you can change the kubernetes deployment to use your image instead of the official one
 
 ## Environment variables
 
@@ -112,7 +125,8 @@ Example value: 2021-0156
 
 ### TRIGGER
 
-**Description:** Defines the option of how the camera is triggered. Either via MQTT or via a continuous time trigger. <br>
+**Description:** Defines the option of how the camera is triggered. <br>
+Either via MQTT or via a continuous time trigger. <br>
 In production the camera should be triggered via MQTT. The continuous time trigger is just convenient for debugging.<br>
 If MQTT is selected, the camera will be triggered by any message which arrives via its subscribed MQTT topic.<br>
 However, if the arriving MQTT message contains a UNIX timestamp in milliseconds with the key "timestamp_ms", <br>
@@ -139,7 +153,8 @@ camera is triggered, even if the UNIX timestamps lies in the past. This could be
 
 ### CYCLE_TIME
 
-**Description:** Only relevant if the trigger is set to "Continuous". Cycle time gives the time period which defines<br> the frequency in which the camera is triggered.
+**Description:** Only relevant if the trigger is set to "Continuous". Cycle time gives the time period which defines<br> 
+the frequency in which the camera is triggered.
 <br>For example: a value of 0.5 would result in a trigger frequency of 2 images per second.
 
 **Type:** float
@@ -150,8 +165,9 @@ camera is triggered, even if the UNIX timestamps lies in the past. This could be
 
 ### CAMERA_INTERFACE
 
-**Description:** Defines which camera interface is used. Currently only cameras of the GenICam standard are supported. <br>
-However, for development of testing you can also use the DummyCam, which simulates a camera and sends a static image via MQTT, <br>when triggered.
+**Description:** Defines which camera interface is used. Currently only cameras of the GenICam standard are supported.
+However, for development of testing you can also use the DummyCam, 
+which simulates a camera and sends a static image via MQTT, <br>when triggered.
 
 **Type:** String
 
@@ -161,7 +177,8 @@ However, for development of testing you can also use the DummyCam, which simulat
 
 ### EXPOSURE_TIME
 
-**Description:** Defines the exposure time for the selected camera. You should adjust this to your local environment to<br> achieve optimal images.
+**Description:** Defines the exposure time for the selected camera. You should adjust this to your 
+local environment to achieve optimal images.
 
 **Type:** int
 
@@ -171,14 +188,16 @@ However, for development of testing you can also use the DummyCam, which simulat
 
 ### EXPOSURE_AUTO
 
-**Description:**  Determines if camera automatically adjusts the exposure time. Your settings will only be executed if <br>
+**Description:**  Determines if camera automatically adjusts the exposure time.
+Your settings will only be executed if
 the camera supports this. You do not have to check if the camera supports this.
 
 **Type:** String
 
 **Possible values:** <br>"Off" -  No automatic adjustment <br>
 "Once" - Adjusted once<br>
-"Continuous" - Continuous adjustment (not recommended, Attention: This could have a big impact on the frame rate of your camera)
+"Continuous" - Continuous adjustment (not recommended, Attention: 
+This could have a big impact on the frame rate of your camera)
 
 **Example value:** Off
 
@@ -195,7 +214,8 @@ images in monochrome pixel formats(use: "Mono8") and RGB/BRG color pixel formats
 
 ### IMAGE_WIDTH
 
-**Description:**  Defines the horizontal width of the images acquired. If the width values surpasses the maximum <br>capability of the camera
+**Description:**  Defines the horizontal width of the images acquired. If the width values surpasses the maximum 
+capability of the camera
 the maximum value is set automatically.
 
 **Type:** int
@@ -206,7 +226,8 @@ the maximum value is set automatically.
 
 ### IMAGE_HEIGHT
 
-**Description:**  Defines the vertical height of the images acquired. If the height value surpasses the maximum <br>capability of the camera
+**Description:**  Defines the vertical height of the images acquired.
+If the height value surpasses the maximum capability of the camera
 the maximum value is set automatically.
 
 **Type:** int
@@ -240,7 +261,8 @@ The input is not case sensitive. Please follow the example format below.
 
 ### LOGGING_LEVEL
 
-**Description:**  Defines which logging level is used. Mostly relevant for developers. Use WARNING or ERROR in production.
+**Description:**  Defines which logging level is used. 
+Mostly relevant for developers. Use WARNING or ERROR in production.
 
 **Type:** String
 
@@ -251,4 +273,5 @@ The input is not case sensitive. Please follow the example format below.
 
 ## Credits
 
-Based on the Bachelor Thesis from [Patrick Kunz](../../../publications/plug-and-play-visual-quality-inspection).
+Based on the Bachelor Thesis from 
+[Patrick Kunz](/docs/content/en/docs/publications/plug-and-play-visual-quality-inspection).
