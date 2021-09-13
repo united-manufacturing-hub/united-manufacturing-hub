@@ -27,14 +27,50 @@ Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP 
 ### cti files
 cti files for you camaeras can not be included for license reasons, to include ti files you must create the folder 
 `/home/rancher/genicam_producer` and place a zip file containing all the files you wish to use there. the script will
-look for all cti files in that directory.
+look for all cti files in that directory. Getting CTI files is dependent on the manufacturer, usually you will need to extract them from 
+the installation of the camera manufacturers software, due to licensing issues we can not distribute them with the stack.
+
+###general tips.
+1. Get cti files for both your development system and the container system (Debian / Ubuntu
+   
+   set the log level to DEBUG during any kind of hardware or network changes.
+   
+
+2. Try  Files from other manufacturers as well, they all behave differently, some support more cameras than others, 
+   and in different ways. "Stemmer Imaging" and "Baumer" files appear to work relatively well with other manufacturers
+   
+
+3. Testing which cti files work with your cameras can be a very tedious process
+
+   
+4. What works in your test environment may or may not work in deployment, I recommend modfying your deployment in lens  
+   to use and creating a custom docker image during testing if you get stuck, (you can use the docker hub container repository for free) 
+
+
+5. use an IDE to get more control over your environment where you run your tests (both env variables and python venvs),
+   this application was made to be used with docker, and therefore expects tight control over the environment. 
+
+
+6. Docker containers behave slightly different when hosted on Windows or k3os, especially when mounting files like configs 
+   or cti files from the host OS, This can result in very hard to debug errors.
+
 
 ### Development setup
-
+####docker compose
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
 1. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose
 2. execute `sudo docker-compose -f ./deployment/cameraconnect/docker-compose.yaml up -d --build`
+####IDE
+1. Setup your python venv, with the sme version of python the container is built with, check 
+   [the Dockerfile for details](/deployment/cameraconnect/Dockerfile))
+2. install [requirements](/cameraconnect/requirements.txt)
+3. Setup env variables for your execution of the [main program](/cameraconnect/src/main.py) 
+   (run config for pycharm or launch settings for vs code)
+4. Run the entire stack with cameraconnect DISABLED in development mode on a system in the same network
+5. Test your hardware from your machine, connecting to the stack as MQTT broker
+6. After it works on your dev device, transfer it to the umh stack by enabling cameraconnect on the stack
+7. 
 
 ## Environment variables
 
