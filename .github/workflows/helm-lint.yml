@@ -1,48 +1,48 @@
-name: Lint and Test Helm Charts
+# name: Lint and Test Helm Charts
 
-on: 
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ main, staging ]
-    paths:
-        - deployment/factorycube-edge/**
-        - deployment/factorycube-server/**
+# on: 
+#   pull_request:
+#     # The branches below must be a subset of the branches above
+#     branches: [ main, staging ]
+#     paths:
+#         - deployment/factorycube-edge/**
+#         - deployment/factorycube-server/**
 
-jobs:
-  lint-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+# jobs:
+#   lint-test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v2
+#         with:
+#           fetch-depth: 0
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v1
-        with:
-          version: v3.4.0
+#       - name: Set up Helm
+#         uses: azure/setup-helm@v1
+#         with:
+#           version: v3.4.0
 
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.7
+#       - uses: actions/setup-python@v2
+#         with:
+#           python-version: 3.7
 
-      - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.1.0
+#       - name: Set up chart-testing
+#         uses: helm/chart-testing-action@v2.1.0
 
-      - name: Run chart-testing (list-changed)
-        id: list-changed
-        run: |
-          changed=$(ct list-changed --target-branch main)
-          if [[ -n "$changed" ]]; then
-            echo "::set-output name=changed::true"
-          fi
+#       - name: Run chart-testing (list-changed)
+#         id: list-changed
+#         run: |
+#           changed=$(ct list-changed --target-branch main --chart-dirs "deployment")
+#           if [[ -n "$changed" ]]; then
+#             echo "::set-output name=changed::true"
+#           fi
 
-      - name: Run chart-testing (lint)
-        run: ct lint
+#       # - name: Run chart-testing (lint)
+#       #   run: ct lint --target-branch main --chart-dirs "deployment" --chart-repos "bitnami=https://charts.bitnami.com/bitnami,vernemq=https://vernemq.github.io/docker-vernemq,grafana=https://grafana.github.io/helm-charts,timescale=https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/,minio=https://operator.min.io/" --validate-yaml false
 
-      - name: Create kind cluster
-        uses: helm/kind-action@v1.2.0
-        if: steps.list-changed.outputs.changed == 'true'
+#       - name: Create kind cluster
+#         uses: helm/kind-action@v1.2.0
+#         if: steps.list-changed.outputs.changed == 'true'
 
-      - name: Run chart-testing (install)
-        run: ct install
+#       - name: Run chart-testing (install)
+#         run: ct install --target-branch main --chart-dirs "deployment" --chart-dirs "deployment" --chart-repos "bitnami=https://charts.bitnami.com/bitnami,vernemq=https://vernemq.github.io/docker-vernemq,grafana=https://grafana.github.io/helm-charts,timescale=https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/,minio=https://operator.min.io/"

@@ -546,7 +546,7 @@ func TestProcessStates_Complex_1(t *testing.T) {
 func Test_processStatesOptimized(t *testing.T) {
 	type args struct {
 		parentSpan    opentracing.Span
-		assetID       int
+		assetID       uint32
 		stateArray    []datamodel.StateEntry
 		rawShifts     []datamodel.ShiftEntry
 		countSlice    []datamodel.CountEntry
@@ -661,7 +661,6 @@ func TestSliceContainsInt(t *testing.T) {
 	slice = append(slice, row2)
 	slice = append(slice, row3)
 
-
 	resultContains, resultIndex := SliceContainsInt(slice, 2, 0)
 
 	if !reflect.DeepEqual(resultContains, true) {
@@ -681,14 +680,13 @@ func TestSliceContainsInt(t *testing.T) {
 
 }
 
-
 func TestChangeOutputFormat(t *testing.T) {
 
 	var data [][]interface{}
 	var dataExtended [][]interface{}
 	var columnNames []string
 
-	columnNames = []string{"uid","aid", "Force"}
+	columnNames = []string{"uid", "aid", "Force"}
 	var row1 []interface{}
 	var row2 []interface{}
 	var row3 []interface{}
@@ -740,8 +738,6 @@ func TestChangeOutputFormat(t *testing.T) {
 	}
 }
 
-
-
 func TestLengthenSliceToFitNames(t *testing.T) {
 
 	var sliceTooSmall []interface{}
@@ -781,8 +777,6 @@ func TestLengthenSliceToFitNames(t *testing.T) {
 	}
 }
 
-
-
 func TestCreateNewRowInData(t *testing.T) {
 
 	var UID int
@@ -795,7 +789,6 @@ func TestCreateNewRowInData(t *testing.T) {
 	var value sql.NullFloat64
 	var data [][]interface{}
 	var columnNames []string
-
 
 	UID = 12
 	AID = "A106"
@@ -816,12 +809,12 @@ func TestCreateNewRowInData(t *testing.T) {
 	row1TimeBegin := time.Unix(32023904, 0)
 	row1TimeEnd := time.Unix(32023898, 0)
 	row2TimeBegin := time.Unix(32024904, 0)
-	row2TimeEnd := 	time.Unix(32024898, 0)
+	row2TimeEnd := time.Unix(32024898, 0)
 
 	row1 = append(row1, 1)
 	row1 = append(row1, "A102")
-	row1 = append(row1, float64(row1TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	row1 = append(row1, float64(row1TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	row1 = append(row1, 10011)
 	row1 = append(row1, false)
 	row1 = append(row1, 45.6)
@@ -830,8 +823,8 @@ func TestCreateNewRowInData(t *testing.T) {
 
 	row2 = append(row2, 2)
 	row2 = append(row2, "A103")
-	row2 = append(row2, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	row2 = append(row2, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	row2 = append(row2, 10011)
 	row2 = append(row2, false)
 	row2 = append(row2, 44.6)
@@ -840,8 +833,6 @@ func TestCreateNewRowInData(t *testing.T) {
 
 	data = append(data, row1)
 	data = append(data, row2)
-
-
 
 	dataOutput := CreateNewRowInData(data, columnNames, 7, UID, AID,
 		timestampBegin, timestampEnd, productID, isScrap, valueName, value)
@@ -864,8 +855,6 @@ func TestCreateNewRowInData(t *testing.T) {
 	}
 }
 
-
-
 func TestCheckOutputDimensions(t *testing.T) {
 	var data [][]interface{}
 	var columnNames []string
@@ -879,12 +868,12 @@ func TestCheckOutputDimensions(t *testing.T) {
 	row1TimeBegin := time.Unix(32023904, 0)
 	row1TimeEnd := time.Unix(32023898, 0)
 	row2TimeBegin := time.Unix(32024904, 0)
-	row2TimeEnd := 	time.Unix(32024898, 0)
+	row2TimeEnd := time.Unix(32024898, 0)
 
 	row1 = append(row1, 1)
 	row1 = append(row1, "A102")
-	row1 = append(row1, float64(row1TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	row1 = append(row1, float64(row1TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row1 = append(row1, float64(row1TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	row1 = append(row1, 10011)
 	row1 = append(row1, false)
 	row1 = append(row1, 45.6)
@@ -893,8 +882,8 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	row2 = append(row2, 2)
 	row2 = append(row2, "A103")
-	row2 = append(row2, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	row2 = append(row2, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	row2 = append(row2, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	row2 = append(row2, 10011)
 	row2 = append(row2, false)
 	row2 = append(row2, 44.6)
@@ -903,8 +892,8 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	rowTooShort = append(rowTooShort, 2)
 	rowTooShort = append(rowTooShort, "A103")
-	rowTooShort = append(rowTooShort, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	rowTooShort = append(rowTooShort, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	rowTooShort = append(rowTooShort, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooShort = append(rowTooShort, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	rowTooShort = append(rowTooShort, 10011)
 	rowTooShort = append(rowTooShort, false)
 	rowTooShort = append(rowTooShort, 44.6)
@@ -912,15 +901,14 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	rowTooLong = append(rowTooLong, 2)
 	rowTooLong = append(rowTooLong, "A103")
-	rowTooLong = append(rowTooLong, float64(row2TimeBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
-	rowTooLong = append(rowTooLong, float64(row2TimeEnd.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))))
+	rowTooLong = append(rowTooLong, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooLong = append(rowTooLong, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	rowTooLong = append(rowTooLong, 10011)
 	rowTooLong = append(rowTooLong, false)
 	rowTooLong = append(rowTooLong, 44.6)
 	rowTooLong = append(rowTooLong, 1.01)
 	rowTooLong = append(rowTooLong, 0.021)
 	rowTooLong = append(rowTooLong, "entryTooMuch")
-
 
 	data = append(data, row1)
 	data = append(data, row2)
