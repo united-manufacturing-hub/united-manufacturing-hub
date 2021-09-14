@@ -85,8 +85,12 @@ so that you can develop.
 5. Test your hardware from your machine, connecting to the stack as MQTT broker
 6. After it works on your dev device, transfer it to the umh stack by enabling cameraconnect on the stack
 7. If you need to do changes to cameraconnect, you can create your own docker image and publish it on dockerhub
-   then you can change the kubernetes deployment to use your image instead of the official one
-
+   then you can change the kubernetes deployment to use your image instead of the official one, please make sure that
+   you do not publish any kind of confidential data on public repositories. 
+   ````shell
+   docker build --tag=<your_name>/cameraconnect:latest deployment/cameraconnect/ && 
+   docker push <your_name>/cameraconnect:latest
+   ````
 ## Environment variables
 
 This chapter explains all used environment variables.
