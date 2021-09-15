@@ -88,7 +88,7 @@ so that you can develop.
    then you can change the kubernetes deployment to use your image instead of the official one, please make sure that
    you do not publish any kind of confidential data on public repositories. 
    ````shell
-   docker build --tag=<your_name>/cameraconnect:latest deployment/cameraconnect/ && 
+   docker build --tag=<your_name>/cameraconnect:latest -f deployment/cameraconnect/Dockerfile . && 
    docker push <your_name>/cameraconnect:latest
    ````
 ## Environment variables
