@@ -76,7 +76,7 @@ This chapter explains all used environment variables.
 **Type:** string
 
 **Possible values:** all DNS names or IP
-
+<!-- markdown-link-check-disable-next-line -->
 **Example value:**  http://jaeger.localhost
 
 ### JAEGER_PORT

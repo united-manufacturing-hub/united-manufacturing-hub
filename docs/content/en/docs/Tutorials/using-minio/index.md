@@ -5,7 +5,7 @@ description: >
   This article explains how you can access MinIO for development and administration purposes
 ---
 
-Please also take a look on our [guide on how to use it in production](../../getting-started/usage-in-production)!
+Please also take a look on our [guide on how to use it in production](/docs/getting-started/usage-in-production)!
 
 ## Default settings / development setup
 

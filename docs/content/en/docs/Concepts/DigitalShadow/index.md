@@ -481,5 +481,5 @@ Possible candidates are:
   write them in the database.
 
 
-[the UMH datamodel]: ../../concepts/mqtt
-[sensorconnect]: ../../developers/factorycube-core/sensorconnect
+[the UMH datamodel]: /docs/concepts/mqtt
+[sensorconnect]: /docs/developers/factorycube-core/sensorconnect
