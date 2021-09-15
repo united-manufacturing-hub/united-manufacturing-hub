@@ -36,6 +36,7 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
+		zap.S().Errorf("err: %s", err)
 		ShutdownApplicationGraceful()
 		panic("Failed to setup queue, exiting !")
 	}
@@ -64,10 +65,13 @@ func (r UniqueProductHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseUniqueProduct(items)
 		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			ShutdownApplicationGraceful()
 			return
 		}
 		// Empty the array, without de-allocating memory
@@ -111,7 +115,7 @@ func (r UniqueProductHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r UniqueProductHandler) Shutdown() (err error) {
-	zap.S().Warnf("[UniqueProductHandler] shutting down !")
+	zap.S().Warnf("[UniqueProductHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

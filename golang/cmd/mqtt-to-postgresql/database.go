@@ -143,7 +143,7 @@ func NewNullInt64(i int64) sql.NullInt64 {
 
 // GetAssetID gets the assetID from the database
 func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32) {
-	zap.S().Debugf("[GetUniqueProductID] customerID: %s, location: %s, assetID: %s", customerID, location, assetID)
+	zap.S().Debugf("[GetAssetID] customerID: %s, location: %s, assetID: %s", customerID, location, assetID)
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -169,7 +169,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 
 // GetProductID gets the productID for a asset and a productName from the database
 func GetProductID(DBassetID uint32, productName string) (productID int32, err error, success bool) {
-	zap.S().Debugf("[GetUniqueProductID] DBassetID: %d, productName: %s", DBassetID, productName)
+	zap.S().Debugf("[GetProductID] DBassetID: %d, productName: %s", DBassetID, productName)
 	success = false
 
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
@@ -186,7 +186,7 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 
 // GetComponentID gets the componentID from the database
 func GetComponentID(assetID uint32, componentName string) (componentID int32, success bool) {
-	zap.S().Debugf("[GetUniqueProductID] assetID: %d, componentName: %s", assetID, componentName)
+	zap.S().Debugf("[GetComponentID] assetID: %d, componentName: %s", assetID, componentName)
 	success = false
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
 	if err == sql.ErrNoRows {
@@ -227,6 +227,34 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 	return
 }
 
+func CheckIfProductExists(productId int32, DBassetID uint32) (exists bool) {
+	_, cacheHit := internal.GetProductIDFromCache(productId, DBassetID)
+	if cacheHit {
+		return true
+	}
+
+	txn, err := db.Begin()
+	if err != nil {
+		return false
+	}
+
+	var cnt int32
+
+	stmt := txn.Stmt(statement.SelectProductExists)
+	err = stmt.QueryRow(productId).Scan(&cnt)
+	if err != nil {
+		zap.S().Debugf("Failed to scan rows ", err)
+		return false
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		return false
+	}
+
+	return cnt == 1
+}
+
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
 func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 
@@ -234,13 +262,17 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
+		zap.S().Debugf("Cache hit for %s", assetID)
 		return
 	}
+	zap.S().Debugf("No Cache hit for %s", assetID)
 
 	txn, err := db.Begin()
 	if err != nil {
 		return
 	}
+
+	zap.S().Debugf("txn: ", txn, err)
 
 	defer func() {
 		errx := CommitOrRollbackOnError(txn, err)
@@ -251,8 +283,10 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	}()
 
 	stmt := txn.Stmt(statement.InsertIntoAssetTable)
+	zap.S().Debugf("stmt: ", stmt)
 
 	_, err = stmt.Exec(assetID, location, customerID)
+	zap.S().Debugf("Exec: ", err)
 	if err != nil {
 		PQErrorHandling("INSERT INTO ASSETTABLE", err)
 	}
@@ -281,6 +315,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 		var pt recommendationStruct
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -673,6 +708,7 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 		var pt stateQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -713,6 +749,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 		var pt scrapCountQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -755,19 +792,26 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 		var pt uniqueProductQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
 
-		// Create statement
-		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(int64(pt.EndTimestampMs)), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
-		if err != nil {
-			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
-			err = nil
-			continue
+		if CheckIfProductExists(pt.ProductID, pt.DBAssetID) {
+			// Create statement
+			_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(int64(pt.EndTimestampMs)), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
+			if err != nil {
+				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
+				err = nil
+				continue
 
+			}
+		} else {
+			zap.S().Debugf("Product %d does not yet exist", pt.ProductID)
+			faultyItems = append(faultyItems, item)
 		}
+
 	}
 	return
 }
@@ -795,6 +839,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		var pt productTagQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -847,6 +892,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		var pt productTagStringQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -899,6 +945,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		var pt addParentToChildQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -961,6 +1008,7 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 		var pt addShiftQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1001,6 +1049,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 		var pt scrapUniqueProductQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1022,6 +1071,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 
 	txn, err := db.Begin()
 	if err != nil {
+		zap.S().Errorf("Failed to open txn: %s", err)
 		faultyItems = items
 		return
 	}
@@ -1041,6 +1091,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 		var pt addProductQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1082,18 +1133,24 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
 
-		// Create statement
-		_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
-		if err != nil {
-			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
-			err = nil
-			continue
+		if CheckIfProductExists(pt.ProductID, pt.DBAssetID) {
+			// Create statement
+			_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
+			if err != nil {
+				faultyItems = append(faultyItems, item)
+				zap.S().Debugf("Got an error before err = nil: %s", err)
+				err = nil
+				continue
 
+			}
+		} else {
+			zap.S().Debugf("Product %d does not yet exist", pt.ProductID)
+			faultyItems = append(faultyItems, item)
 		}
 	}
 	return
@@ -1122,6 +1179,7 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 		var pt startOrderQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1162,6 +1220,7 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 		var pt endOrderQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1202,6 +1261,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 		var pt addMaintenanceActivityQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1245,6 +1305,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 		var pt modifyStateQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1338,6 +1399,7 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 		var pt deleteShiftByIdQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1378,6 +1440,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 		var pt deleteShiftByAssetIdAndBeginTimestampQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
@@ -1420,6 +1483,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 		var pt modifyProducesPieceQueue
 		err = item.ToObjectFromJSON(&pt)
 		if err != nil {
+			err = nil
 			zap.S().Errorf("Failed to unmarshal item", item)
 			continue
 		}
