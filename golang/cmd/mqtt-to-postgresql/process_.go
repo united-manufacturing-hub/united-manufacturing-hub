@@ -18,6 +18,7 @@ func NewXHandler() (handler *XHandler) {
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
+		zap.S().Errorf("err: %s", err)
 		ShutdownApplicationGraceful()
 		panic("Failed to setup queue, exiting !")
 	}
@@ -56,7 +57,7 @@ func (r XHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r XHandler) Shutdown() (err error) {
-	zap.S().Warnf("[XHandler] shutting down !")
+	zap.S().Warnf("[XHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)
