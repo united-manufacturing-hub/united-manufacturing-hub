@@ -7,6 +7,7 @@ Provided classes:
 """
 
 # Import python in-built libraries
+import datetime
 import json
 import sys
 import time
@@ -189,8 +190,16 @@ class ContinuousTrigger:
         while True:
             # Get actual time and save it as start time
             timer_start = time.time()
-
-            self.cam.get_image()
+            while cycle_time > abs(time.time() - timer_start):
+                try:
+                    self.cam.get_image()
+                    break
+                except Exception as _e:
+                    ttw = cycle_time * 0.1
+                    logging.critical(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
+                                     f"with {_e} "
+                                     f", retrying in {ttw} ")
+                    time.sleep(ttw)
 
             # Get actual time and subtract the start time from
             #   it to get the time which the current loop needed 
