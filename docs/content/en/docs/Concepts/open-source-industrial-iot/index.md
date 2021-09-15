@@ -140,4 +140,4 @@ Why should we reinvent the wheel when we can focus our expertise on the areas we
 
 Because, in fact, manufacturing and Industrial IoT is not about developing new software at the drop of a hat. It is more about solving individual problems and challenges. This is done by drawing on a global network of experts who have developed special applications in their respective fields. These applications allow all hardware and software components to be quickly and easily established in the overall architecture through a large number of interfaces.
 
-[^technologies]: For the common technologies see also [Understanding the technologies](../../getting-started/understanding-the-technologies).
+[^technologies]: For the common technologies see also [Understanding the technologies](/docs/getting-started/understanding-the-technologies).
