@@ -40,12 +40,12 @@ You need:
 - an Ethernet cable (provided)
 - a laptop which is not connected to any VPN
 
-For a network overview of the Factorycube, click [here](../networking/)
+For a network overview of the Factorycube, click [here](/docs/tutorials/networking/)
 
 ### Instructions to login
 
 Connect the factorycube with your computer via an ethernet cable using the IO-Link port (not Internettest_ on the factorycube.
-
+<!-- markdown-link-check-disable-next-line -->
 Open the following website on your browser: <http://172.16.x.2> (The X stands for the last number(s) of the serial number. e.g. 2019_0103 -> x=3 or 2019_0111 -> x=11)
 
 Enter your credentials according to the information in the customer area. The username is always “admin”
