@@ -639,3 +639,66 @@ func StoreUniqueProductIDToCache(aid string, DBassetID uint32, uid uint32) {
 		return
 	}
 }
+
+// GetProductIDFromCache gets Product from cache
+func GetProductIDFromCache(productName int32, DBassetID uint32) (DBProductId uint32, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getProductID-%d-%d", productName, DBassetID)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if err == redis.Nil { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("error getting key from redis", key, err)
+		return
+	} else if value == "null" {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		var RawUID int
+		RawUID, err = strconv.Atoi(value)
+		if err != nil {
+			zap.S().Errorf("error converting value to integer", key, err)
+			return
+		}
+
+		var iuid int32
+		iuid, err = safecast.Int32(RawUID)
+		if err != nil {
+			zap.S().Errorf("error converting value to integer", key, err)
+			return
+		}
+
+		DBProductId = uint32(iuid)
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreUniqueProductIDToCache stores uniqueProductID to cache
+func StoreProductIDToCache(productName int32, DBassetID uint32, DBProductId uint32) {
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getProductID-%d-%d", productName, DBassetID)
+
+	if DBProductId == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(int(DBProductId))
+
+	err := rdb.Set(ctx, key, b, dataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed")
+		return
+	}
+}

@@ -504,5 +504,5 @@ Here is a scheme of the timescaleDB structure:
 
 
 
-[sensorconnect]: ../../developers/factorycube-core/sensorconnect
-[cameraconnect]: ../../developers/factorycube-core/cameraconnect
+[sensorconnect]: /docs/developers/factorycube-core/sensorconnect
+[cameraconnect]: /docs/developers/factorycube-core/cameraconnect

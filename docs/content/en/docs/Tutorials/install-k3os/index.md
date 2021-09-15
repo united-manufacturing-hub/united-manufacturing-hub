@@ -54,7 +54,7 @@ Confirm with `y` and press enter.
 
 If the installation fails with not beeing able to fetch the cloud-init file check the URL and the network configuration
 
-If the installation fails with expired or untrusted certificates (`curl: (60) SSL certificate problem: certificate is not yet valid` or similar), [check out this guide](../how-to-fix-invalid-certs-due-to-misconfigured-date/).
+If the installation fails with expired or untrusted certificates (`curl: (60) SSL certificate problem: certificate is not yet valid` or similar), [check out this guide](/docs/tutorials/how-to-fix-invalid-certs-due-to-misconfigured-date/).
 
 The device will then reboot. You might want to remove the USB-stick to prevent booting from the USB-stick again.
 
