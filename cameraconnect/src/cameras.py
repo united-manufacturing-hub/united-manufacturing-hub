@@ -412,7 +412,7 @@ class GenICam(CamGeneral):
         #   argument
         first = True  # in case one camera is detected multiple times
         self.__remove_duplicate_entry_from_harvester()
-        object_identifier = self.__id_processing(str(mac_address))
+        object_identifier = self.__id_processing(str(self.mac_address))
         for camera in self.h.device_info_list:
             # read cameras mac address
             # ATTENTION: only works with CTI files that deliver the MAC address to harvesters BAUMER SDK
@@ -473,7 +473,7 @@ class GenICam(CamGeneral):
         device = re.compile("(DEVICEMODULE?)|(DEV)")  # removes common pre/suffixes
         no_dev_id = device.sub("", upper_id)
         spacer_symbols = re.compile("[-.:,;_\s]")  # removes variable spacers used on different cameras
-        no_spacer_symbols = spacer_symbols.sub(no_dev_id)
+        no_spacer_symbols = spacer_symbols.sub("",no_dev_id)
         return no_spacer_symbols
 
     def __remove_duplicate_entry_from_harvester(self):
