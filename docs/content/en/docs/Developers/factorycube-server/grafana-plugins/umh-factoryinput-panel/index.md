@@ -12,7 +12,7 @@ UMH Factoryinput Panel allows to easily execute MQTT messages inside the UMH sta
 
 ## Requirements
  - A united manufacturing hub stack
- - External IP or URL of the [grafana-proxy](grafana-proxy) server.
+ - External IP or URL of the [grafana-proxy](/docs/developers/factorycube-server/grafana-proxy) server.
    - In most cases it is the same IP as your Grafana dashboard
 
 ## Installation
@@ -118,7 +118,6 @@ Below you will find a schematic of this flow, through our stack
 
 
 ## License
- - UMH-Factoryinput Panel: [AGPL](https://raw.githubusercontent.com/Scarjit/united-manufacturing-hub/194-refactor-grafana-datasource/grafana-plugins/umh-factoryinput-panel/LICENSE) 
  - Original Work: [cloudspout-button-panel](https://github.com/cloudspout/cloudspout-button-panel) (MIT)
  - Icons made by [Pixel perfect](https://www.flaticon.com/authors/pixel-perfect) from [www.flaticon.com](https://www.flaticon.com/)
  - `ButtonPayloadEditor` highly influenced from [gapitio/gapit-htmlgraphics-panel](https://github.com/gapitio/gapit-htmlgraphics-panel).
