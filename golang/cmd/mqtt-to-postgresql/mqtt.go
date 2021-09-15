@@ -74,7 +74,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 }
 
 func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) {
-	//zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
+	zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
 	AddAssetIfNotExisting(assetID, location, customerID)
 
 	if customerID != "raw" {
