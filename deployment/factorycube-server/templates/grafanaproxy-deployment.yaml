@@ -9,19 +9,19 @@ metadata:
   annotations:
     {{- toYaml .Values.grafanaproxy.annotations | nindent 4 }}
   {{- end }}
-spec:     
-  replicas: {{ .Values.grafanaproxy.replicas }} 
+spec:
+  replicas: {{ .Values.grafanaproxy.replicas }}
   selector:
     matchLabels:
      {{- include "factorycube-server.labels.grafanaproxy" . | nindent 6 }}
-  strategy:  
+  strategy:
     type: RollingUpdate
   template:
     metadata:
       name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
       labels:
         {{- include "factorycube-server.labels.grafanaproxy" . | nindent 8 }}
-    spec:  
+    spec:
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -45,37 +45,37 @@ spec:
                 protocol: TCP
           resources:
             limits:
-              cpu: {{ .Values.grafanaproxy.resources.limits.cpu }} 
+              cpu: {{ .Values.grafanaproxy.resources.limits.cpu }}
             requests:
               cpu: {{ .Values.grafanaproxy.resources.requests.cpu }}
-          env:              
+          env:
             - name: FACTORYINPUT_KEY
-              valueFrom: 
+              valueFrom:
                 secretKeyRef:
                   name: factoryinput-secret
-                  key: password 
-                  
+                  key: password
+
             - name: FACTORYINPUT_USER
-              valueFrom: 
+              valueFrom:
                 secretKeyRef:
                   name: factoryinput-secret
                   key: customerID
-              
+
             - name: FACTORYINPUT_BASE_URL
-              valueFrom: 
+              valueFrom:
                 secretKeyRef:
                   name: factoryinput-secret
                   key: baseURL
-              
+
             - name: FACTORYINSIGHT_BASE_URL
-              valueFrom: 
+              valueFrom:
                 secretKeyRef:
                   name: factoryinsight-secret
                   key: baseURL
-              
+
             - name: VERSION
               value: "1"
- 
+
           # define a liveness probe that checks every 1 seconds, starting after 30 seconds
           livenessProbe:
             httpGet:
@@ -90,7 +90,7 @@ spec:
               path: /
               port: 80
             periodSeconds: 1
-      
+
       restartPolicy: Always
       terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
 {{- end -}}

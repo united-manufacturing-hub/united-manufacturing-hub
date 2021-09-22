@@ -302,6 +302,8 @@ A message is sent here every time a process value has been prepared. Unique nami
 
 `<valueName>` in the JSON is a integer or float representing a process value, e.g. temperature.
 
+**Note: as <valueName> is a integer or float, booleans like "true" or "false" are not possible. Please convert them to integer, e.g., "true" --> 1, "false" --> 0**
+
 #### Example for /processValue
 
 ```json
@@ -327,9 +329,9 @@ This level contains only highly aggregated production data.
 
 Topic: `ia/<customerID>/<location>/<AssetID>/state`
 
-A message is sent here each time the asset changes status. Subsequent changes are not possible. Different statuses can also be process steps, such as "setup", "post-processing", etc. You can find a list of all supported states [here](state.md)
+A message is sent here each time the asset changes status. Subsequent changes are not possible. Different statuses can also be process steps, such as "setup", "post-processing", etc. You can find a list of all supported states [here](/docs/concepts/mqtt/ )
 
-`state` in the JSON is a integer according to [this datamodel](state.md)
+`state` in the JSON is a integer according to [this datamodel](/docs/concepts/mqtt/ )
 
 #### Example for /state
 
@@ -502,5 +504,5 @@ Here is a scheme of the timescaleDB structure:
 
 
 
-[sensorconnect]: ../../developers/factorycube-core/sensorconnect
-[cameraconnect]: ../../developers/factorycube-core/cameraconnect
+[sensorconnect]: /docs/developers/factorycube-edge/sensorconnect
+[cameraconnect]: /docs/developers/factorycube-edge/cameraconnect

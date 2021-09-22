@@ -2,8 +2,34 @@ apiVersion: v1
 entries:
   factorycube-edge:
   - apiVersion: v2
+    appVersion: 0.6.0
+    created: "2021-09-09T20:22:05.72396055+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 4c0d4187617d03f4b8a679e95b7fadf2539ae75337150e40954108ff8233b698
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/factorycube-edge-0.6.0.tgz
+    version: 0.6.0
+  - apiVersion: v2
+    appVersion: 0.5.1
+    created: "2021-09-09T20:22:05.720827415+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 71083cbd6956775118510a3dc3a9ce8ea24358d60c35c19095b8205607ae859a
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/factorycube-edge-0.5.1.tgz
+    version: 0.5.1
+  - apiVersion: v2
     appVersion: 0.5.0
-    created: "2021-07-30T17:32:26.542389612+02:00"
+    created: "2021-09-09T20:22:05.718732203+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: a5ac1fb5ca7ec695f5db09e480f5448499028ede75e5a156605cb8b113edf127
     home: https://www.united-manufacturing-hub.com
@@ -16,7 +42,7 @@ entries:
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2021-07-30T17:32:26.540438825+02:00"
+    created: "2021-09-09T20:22:05.71647444+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: ef2fcbee0ad7e9f5f2904c5385261fb9574200c9d45709848c20359020d8d0d4
     home: https://www.united-manufacturing-hub.com
@@ -29,8 +55,76 @@ entries:
     version: 0.4.4
   factorycube-server:
   - apiVersion: v2
+    appVersion: 0.6.0
+    created: "2021-09-09T20:22:05.800370384+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: cdc8c96bbd212b1f1b8a6e222a7347e31bca77bc805ed2b8de10e32e9759430e
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/factorycube-server-0.6.0.tgz
+    version: 0.6.0
+  - apiVersion: v2
+    appVersion: 0.5.1
+    created: "2021-09-09T20:22:05.783001826+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.9
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 119ab2e9830027b589a38ca29522aa065c295499a86af88daab22d80a1064faa
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/factorycube-server-0.5.1.tgz
+    version: 0.5.1
+  - apiVersion: v2
     appVersion: 0.5.0
-    created: "2021-07-30T17:32:26.580544503+02:00"
+    created: "2021-09-09T20:22:05.765599994+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -64,7 +158,7 @@ entries:
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2021-07-30T17:32:26.559521704+02:00"
+    created: "2021-09-09T20:22:05.744786051+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -92,4 +186,4 @@ entries:
     urls:
     - https://repo.umh.app/factorycube-server-0.4.4.tgz
     version: 0.4.4
-generated: "2021-07-30T17:32:26.538133989+02:00"
+generated: "2021-09-09T20:22:05.713452393+02:00"

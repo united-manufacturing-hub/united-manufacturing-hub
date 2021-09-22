@@ -1,9 +1,9 @@
 name: Check Markdown links
 
 on: 
-  push:
-    branches:
-    - master
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ main, staging ]
   schedule:
   # Run everyday at 9:00 AM (See https://pubs.opengroup.org/onlinepubs/9699919799/utilities/crontab.html#tag_20_25_07)
   - cron: "0 9 * * *"
@@ -13,6 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
-    - uses: gaurav-nelson/github-action-markdown-link-check@v1
+    - name: Setup Hugo
+      uses: peaceiris/actions-hugo@v2
       with:
-        folder-path: 'docs'
+        hugo-version: '0.76.5'
+        extended: true
+
+    - name: Build
+      run: |
+          cd docs
+          git submodule update -f --init --recursive && npm install postcss-cli && hugo --gc --minify
+          echo "docs.umh.app" > public/CNAME
+
+    - name: Check
+      uses: ruzickap/action-my-broken-link-checker@v1.0.3
+      with:
+        cmd_params: "--exclude github.com --exclude _print --exclude /images/ --exclude localhost --exclude 172.16 --exclude linkedin --exclude osisoft --buffer-size 8192"
+        url: https://docs.umh.app
+        pages_path: ./docs/public/
