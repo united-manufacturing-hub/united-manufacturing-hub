@@ -26,7 +26,7 @@ jobs:
           echo "docs.umh.app" > public/CNAME
 
     - name: Check
-      uses: ruzickap/action-my-broken-link-checker@v1
+      uses: ruzickap/action-my-broken-link-checker@v1.0.3
       with:
         url: https://docs.umh.app
         pages_path: ./docs/public/
