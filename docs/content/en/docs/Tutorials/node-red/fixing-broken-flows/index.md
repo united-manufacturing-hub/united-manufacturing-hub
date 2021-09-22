@@ -24,6 +24,7 @@ TODO
 2. Select the namespace, where Node-RED is in (factorycube-edge or factorycube-server)
 3. Select the StatefulSet Node-RED. A popup should appear on the right side.
 4. Press the edit button
+{{< imgproc 1.png Fit "1280x500" >}}Press the edit button / pen symbol on top right of the screen{{< /imgproc >}}
 5. Find the line 
 ```yaml
 env:
@@ -36,9 +37,12 @@ env:
     - name: TZ
       value: Berlin/Europe
     - name: NODE_RED_ENABLE_SAFE_MODE
-      value: true
+      value: "true"
 ```
-6. Press Save
-7. Node-RED should now start in safe mode. This means that it will boot, but will not execute any flows.
-8. Do your changes, fix the Nodes 
-9. Do steps 1 - 5, but now set `NODE_RED_ENABLE_SAFE_MODE` to `false`
+6. Check whether it says `"true"` and not `true` (use quotation marks!)
+7. Press Save
+8. Terminate the pod manually if necessary (or if you are impatient)
+9. Node-RED should now start in safe mode. This means that it will boot, but will not execute any flows.
+10. Do your changes, fix the Nodes 
+11. Do steps 1 - 5, but now set `NODE_RED_ENABLE_SAFE_MODE` to `false`
+
