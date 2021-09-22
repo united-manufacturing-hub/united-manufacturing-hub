@@ -13,7 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
-    - uses: gaurav-nelson/github-action-markdown-link-check@v1
-      with:
-        folder-path: 'docs'
-        config-file: '.github/workflows/.mlc_config.json'
+    - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: 'latest'
+
+    - name: Build
+        run: |
+          cd docs
+          git submodule update -f --init --recursive && npm install postcss-cli && hugo --gc --minify
+          echo "docs.umh.app" > public/CNAME
+
+    - name: Check broken links
+        run: |
+          export INPUT_URL="https://docs.umh.app"
+          export INPUT_PAGES_PATH="docs/public"
+          export INPUT_CMD_PARAMS="--verbose --buffer-size=8192 --concurrency=10 --skip-tls-verification"
+          wget -qO- https://raw.githubusercontent.com/ruzickap/action-my-broken-link-checker/v1/entrypoint.sh | bash
