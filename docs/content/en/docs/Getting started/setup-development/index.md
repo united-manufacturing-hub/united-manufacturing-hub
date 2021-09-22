@@ -8,7 +8,7 @@ description: >
 
 There are three options to setup a development environment:
 1. using a seperate device in combination with k3OS and our installation script (preferred). This requires an external device and is a fully automated installation.
-2. using [minikube](https://kubernetes.io/en/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack). This method allows you to install the stack on your device and is semi-automated.
+2. using [minikube](https://kubernetes.io/de/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack). This method allows you to install the stack on your device and is semi-automated.
 3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps). This can be executed either on an external device or on your device.
 
 **The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.**
@@ -29,9 +29,9 @@ Note: this content is also available in a presence workshop with an experienced 
 - a keyboard connected with the edge device
 
 [^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/getting-started/understanding-the-technologies/#flashing-a-operating-system-onto-a-usb-stick)
-[^SSH-client]: See also out guide: [How to connect via SSH](/docs/getting-started/understanding-the-technologies/#connecting-with-ssh)
-[^network-setup]: See also out guide: [How to setup a development network](/docs/getting-started/understanding-the-technologies/#development-network)
-[^versioning]: See also out guide: [What is semantic versioning](/docs/getting-started/understanding-the-technologies/#versioning)
+[^SSH-client]: See also out guide: [How to connect via SSH](/docs/tutorials/general/connect-with-ssh)
+[^network-setup]: See also out guide: [How to setup a development network](/docs/tutorials/general/networking)
+[^versioning]: See also out guide: [What is semantic versioning](/docs/tutorials/general/versioning)
 
 ### Installation
 
@@ -40,7 +40,7 @@ This step is also available via a step-by-step video: **TODO**
 #### k3OS
 
 1. Insert your USB-stick with k3OS into your edge device and boot from it [^boot-usb]
-2. [Install k3OS](/docs/tutorials/install-k3os/). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](/examples/development.yaml)
+2. [Install k3OS](/docs/tutorials/k3os/install-k3os/). When asked for a cloud-init file, enter this URL and confirm: `https://www.umh.app/development.yaml`. If you are paranoid or want to setup devices for production you could copy the file, modify and host it yourself. [Here is the template](/examples/development.yaml)
 
 This process takes around 15 - 20 minutes depending on your internet connection and there will be no further information about the installation status on the output of the device visible (the information on the computer screen).
 
@@ -79,7 +79,7 @@ Enable SSH password authentification in k3OS [^ssh-password-authentication]. Thi
 
 For production environments we recommend using a certificate to authenticate, which is enabled by default. This can be archieved by modifying the cloud-init file and [linking to a public key stored on your GitHub account.](https://gist.github.com/dmangiarelli/1a0ae107aaa5c478c51e#ssh-setup-with-putty)
 
-[^ssh-password-authentication]: See also out guide: [Enabling k3os password authentication](/docs/tutorials/add-username-password-authentification-k3os-ssh/)
+[^ssh-password-authentication]: See also out guide: [Enabling k3os password authentication](/docs/tutorials/k3os/add-username-password-authentification-k3os-ssh/)
 
 #### Step 3: Connect via SSH
 
