@@ -40,7 +40,13 @@ spec:
         args:
         - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi; 
           cd /data;
-          {{ default "" .Values.nodered.pluginInstallLines | nindent 10}}
+          if mkdir DO_NOT_DELETE; then 
+            {{ default "" .Values.nodered.pluginInstallLines | nindent 12}}
+            
+          else 
+            echo "Initial installation already completed. Please use Node-RED UI for further package installations";
+            exit 0; 
+          fi;
         volumeMounts:
         - name: {{ include "factorycube-edge.fullname" . }}-nodered-data
           mountPath: /data
