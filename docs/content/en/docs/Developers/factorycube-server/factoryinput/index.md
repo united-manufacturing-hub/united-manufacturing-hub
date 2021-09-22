@@ -8,8 +8,6 @@ description: Documentation of factoryinput
 
 This program provides an REST endpoint, to send MQTT messages via HTTP requests. It is typically accessed via [grafana-proxy](../grafana-proxy).
 
-A quick tutorial on how to use it can be found in [this guide](../../../Tutorials/use-factoryinput)
-
 ## Environment variables
 
 This chapter explains all used environment variables.
