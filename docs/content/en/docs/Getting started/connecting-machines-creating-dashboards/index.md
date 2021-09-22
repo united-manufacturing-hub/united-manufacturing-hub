@@ -98,7 +98,7 @@ TODO: #63 add example Flow for data processing
 {{< imgproc nodered_testing Fit "800x800" >}}{{< /imgproc >}}
 With the help of the testing flows you can test your entire system or simply simulate some sample data for visualization.
 
-[See also DCC Aachen example in our showcase.](/docs/examples/dcc-assembly-analytics)
+[See also DCC Aachen example in our showcase.](/docs/examples/assembly-analytics)
 
 ## 2. Create dashboards using factorycube-server
 
