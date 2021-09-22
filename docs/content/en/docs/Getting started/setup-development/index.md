@@ -28,7 +28,7 @@ Note: this content is also available in a presence workshop with an experienced 
 - a computer monitor connected with the edge device 
 - a keyboard connected with the edge device
 
-[^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/getting-started/understanding-the-technologies/#flashing-a-operating-system-onto-a-usb-stick)
+[^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/tutorials/general/flashing-operating-system-on-usb)
 [^SSH-client]: See also out guide: [How to connect via SSH](/docs/tutorials/general/connect-with-ssh)
 [^network-setup]: See also out guide: [How to setup a development network](/docs/tutorials/general/networking)
 [^versioning]: See also out guide: [What is semantic versioning](/docs/tutorials/general/versioning)
@@ -44,7 +44,7 @@ This step is also available via a step-by-step video: **TODO**
 
 This process takes around 15 - 20 minutes depending on your internet connection and there will be no further information about the installation status on the output of the device visible (the information on the computer screen).
 
-[^boot-usb]: See also out guide: [How to boot from a USB-stick](/docs/getting-started/understanding-the-technologies/#installing-operating-systems-from-a-usb-stick)
+[^boot-usb]: See also out guide: [How to boot from a USB-stick](/docs/tutorials/general/install-operating-system-from-usb)
 
 #### Getting access to the device
 
