@@ -25,9 +25,10 @@ jobs:
           git submodule update -f --init --recursive && npm install postcss-cli && hugo --gc --minify
           echo "docs.umh.app" > public/CNAME
 
-    - name: Check broken links
-      run: |
-          export INPUT_URL="https://docs.umh.app"
-          export INPUT_PAGES_PATH="docs/public"
-          export INPUT_CMD_PARAMS="--verbose --buffer-size=8192 --concurrency=10 --skip-tls-verification"
-          wget -qO- https://raw.githubusercontent.com/ruzickap/action-my-broken-link-checker/v1/entrypoint.sh | bash
+    - name: Check
+      uses: ruzickap/action-my-broken-link-checker@v1
+      with:
+        url: https://docs.umh.app
+        pages_path: ./docs/public/
+        cmd_params: --buffer-size=8192 --max-connections=10 --color=always --skip-tls-verification --limit-redirections=5 --timeout=20  # muffet parameters
+        run_timeout: 600  # maximum amount of time to run muffet (default is set to 300 seconds)    - name: Check broken links
