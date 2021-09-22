@@ -28,6 +28,6 @@ jobs:
     - name: Check
       uses: ruzickap/action-my-broken-link-checker@v1.0.3
       with:
-        cmd_params: "--exclude github.com"
+        cmd_params: "--exclude github.com --exclude _print"
         url: https://docs.umh.app
         pages_path: ./docs/public/
