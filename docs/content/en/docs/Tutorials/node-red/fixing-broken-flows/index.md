@@ -16,7 +16,13 @@ The solution is to boot Node-RED in safe mode by changing the environment variab
 
 ### After 0.6.1
 
-TODO
+1. Open Lens and connect to the cluster (you should know how to do it if you followed the [Getting Started guide](/docs/getting-started/setup-development/#step-3-connect-via-ssh))
+2. Select the namespace, where Node-RED is in (factorycube-edge or factorycube-server)
+3. Go to Apps --> Releases and select your Releases
+4. Search for `NODE_RED_ENABLE_SAFE_MODE` and change the value from `false` to `true`
+5. Save
+
+Using this method you might encounter an error message on the top right while saving `RELEASE not found` in Lens. We recommend following [this guide to fix the RELEASE not found message while updating a RELEASE in Lens](/docs/tutorials/united-manufacturing-hub/working-with-helm-and-lens)
 
 ### Before 0.6.1
 

@@ -69,6 +69,10 @@ spec:
           subPath: nodered-config 
           readOnly: true  
         env:
+        {{- range $ENV_NAME, $ENV_CONTENT := .Values.nodered.env | default dict }}
+        - name: {{ $ENV_NAME }}
+          value: {{ $ENV_CONTENT | quote }}
+        {{- end }}
         - name: TZ
           value: {{ .Values.nodered.timezone }}
       volumes:
