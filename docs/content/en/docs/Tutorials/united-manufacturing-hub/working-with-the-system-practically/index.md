@@ -85,7 +85,7 @@ The computer should now be connected to the internet.
 {{< imgproc wired.jpg Fit "800x800" >}}{{< /imgproc >}}
 - Click save
 
-The computer should now be connected to the internet. You can now the entire United Manufacturing Hub Edge Stack. For more information, take a look in the [getting started with edge devices](/docs/getting-started/installing-factorycube-core).
+The computer should now be connected to the internet. You can now the entire United Manufacturing Hub Edge Stack. For more information, take a look in the [getting started with edge devices](/docs/getting-started).
 
 ## Outro
 
