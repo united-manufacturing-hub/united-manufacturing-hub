@@ -7,7 +7,7 @@ description: >
 
 **DANGER: NOT RECOMMENDED FOR PRODUCTION! USE DEFAULT BEHAVIOR WITH CERTIFICATES INSTEAD**
 
-By default, k3OS allows SSH connections only using certificates. This is a much safer method than using passwords. However, we realized that most mechanical engineers and programmers are overwhelmed with the creation of a [public key infrastructure](/docs/tutorials/pki/). Therefore, it might make sense to enable password authentication in k3OS for development mode.
+By default, k3OS allows SSH connections only using certificates. This is a much safer method than using passwords. However, we realized that most mechanical engineers and programmers are overwhelmed with the creation of a [public key infrastructure](/docs/tutorials/general/pki/). Therefore, it might make sense to enable password authentication in k3OS for development mode.
 
 ## Prerequisites
 
