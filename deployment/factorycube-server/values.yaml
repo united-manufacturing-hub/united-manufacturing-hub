@@ -1550,9 +1550,14 @@ grafana:
 ### nodered ###
 nodered:
   enabled: false
-  tag: 1.2.9
+  pluginInstallEnabled: true
+  pluginInstallLines: |-
+      npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
+  tag: 2.0.6
   port: 1880
   storageRequest: 1Gi
+  env:
+      NODE_RED_ENABLE_SAFE_MODE: false
   timezone: Berlin/Europe
   serviceType: LoadBalancer
   ingress:
