@@ -30,5 +30,3 @@ jobs:
       with:
         url: https://docs.umh.app
         pages_path: ./docs/public/
-        cmd_params: --buffer-size=8192 --max-connections=10 --color=always --skip-tls-verification --limit-redirections=5 --timeout=20  # muffet parameters
-        run_timeout: 600  # maximum amount of time to run muffet (default is set to 300 seconds)    - name: Check broken links
