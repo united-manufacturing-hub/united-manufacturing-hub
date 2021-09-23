@@ -33,6 +33,7 @@ func NewProductTagHandler() (handler *ProductTagHandler) {
 	pg, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
+		zap.S().Errorf("err: %s", err)
 		ShutdownApplicationGraceful()
 		panic("Failed to setup queue, exiting !")
 	}
@@ -61,11 +62,14 @@ func (r ProductTagHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
 
 		faultyItems, err := storeItemsIntoDatabaseProductTag(items)
 		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			ShutdownApplicationGraceful()
 			return
 		}
 		// Empty the array, without de-allocating memory
@@ -108,7 +112,7 @@ func (r ProductTagHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r ProductTagHandler) Shutdown() (err error) {
-	zap.S().Warnf("[ProductTagHandler] shutting down !")
+	zap.S().Warnf("[ProductTagHandler] shutting down, Queue length: %d", r.pg.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
 	err = CloseQueue(r.pg)

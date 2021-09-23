@@ -40,7 +40,7 @@ You need:
 - an Ethernet cable (provided)
 - a laptop which is not connected to any VPN
 
-For a network overview of the Factorycube, click [here](../networking/)
+For a network overview of the Factorycube, click [here](/docs/tutorials/general/networking/)
 
 ### Instructions to login
 
@@ -85,7 +85,7 @@ The computer should now be connected to the internet.
 {{< imgproc wired.jpg Fit "800x800" >}}{{< /imgproc >}}
 - Click save
 
-The computer should now be connected to the internet. You can now the entire United Manufacturing Hub Edge Stack. For more information, take a look in the [getting started with edge devices](../../getting-started/installing-factorycube-core).
+The computer should now be connected to the internet. You can now the entire United Manufacturing Hub Edge Stack. For more information, take a look in the [getting started with edge devices](/docs/getting-started).
 
 ## Outro
 
