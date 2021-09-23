@@ -2247,11 +2247,13 @@ vernemq:
     labels: {}
     mqtt:
       enabled: true
-      nodePort: 1883
+      # using a different port than 1883 to prevent collisions with factorycube-edge in development setups
+      nodePort: 1884
       port: 1883
     mqtts:
       enabled: true
-      nodePort: 8883
+      # using a different port than 8883 to prevent collisions with factorycube-edge in development setups
+      nodePort: 8884
       port: 8883
     type: LoadBalancer
     ws:
