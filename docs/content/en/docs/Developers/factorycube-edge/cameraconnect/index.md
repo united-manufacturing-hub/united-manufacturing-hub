@@ -278,4 +278,4 @@ Mostly relevant for developers. Use WARNING or ERROR in production.
 ## Credits
 
 Based on the Bachelor Thesis from 
-[Patrick Kunz](/docs/content/en/docs/publications/plug-and-play-visual-quality-inspection).
+[Patrick Kunz](/docs/publications/plug-and-play-visual-quality-inspection).

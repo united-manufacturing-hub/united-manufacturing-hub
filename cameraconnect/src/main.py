@@ -86,7 +86,7 @@ if __name__ == "__main__":
             EXPOSURE_TIME = float(EXPOSURE_TIME)
         except TypeError:
             exposure_default = 15000.0
-            #logging.error(f"exposure not valid setting to default of  {exposure_default}")
+            logging.warning(f"exposure not valid using default of:  {exposure_default}")
             EXPOSURE_TIME = exposure_default
 
     logging.debug("Exposure time: " + str(EXPOSURE_TIME))

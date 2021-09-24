@@ -244,7 +244,7 @@ class ContinuousTrigger(BaseTrigger):
                     break
                 except Exception as _e:
                     ttw = cycle_time * RETRY_DELAY
-                    logging.critical(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
+                    logging.error(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
                                      f"with {_e} "
                                      f", retrying in {ttw} ")
                     self.count_error()

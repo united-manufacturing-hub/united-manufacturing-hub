@@ -421,7 +421,7 @@ class GenICam(CamGeneral):
                 f"current device_mac_address: {camera_identifier}, {object_identifier}")
 
             if not first:
-                logging.debug(f"camera {camera} with ident: {camera_identifier} is not first one matching the target "
+                logging.warning(f"camera {camera} with ident: {camera_identifier} is not first one matching the target "
                               f"id: {self.mac_address}  |"
                               f" ident: {object_identifier}, skipping")
                 continue  # using continue instead of break to preserve debug output
