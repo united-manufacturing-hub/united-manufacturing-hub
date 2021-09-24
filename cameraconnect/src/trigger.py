@@ -20,7 +20,31 @@ ERROR_TOLERANCE = 20  # number of successive errors after which the application 
 RETRY_DELAY = 0.1  # fraction of the cycle time after which to trigger a retry
 
 
-class MqttTrigger:
+class BaseTrigger:
+    """
+    base trigger with shared functionality, like error handling
+    """
+
+    def __init__(self):
+        self.total_errors = 0
+        self.errors_since_last_success = 0
+
+    def count_error(self):
+        """
+        Counts errors occurred in total and since last successful message
+        kills the process if excessive amount of errors occurred
+        """
+
+    self.errors_since_last_success += 1
+    self.total_errors += 1
+    logging.debug(f"error logged with counters total: {self.errors_since_last_success} "
+                  f"successive: {self.total_errors}")
+    if self.errors_since_last_success > ERROR_TOLERANCE:
+        sys.exit(f"error tolerance exceeded with total errors {self.total_errors} "
+                 f"and successive errors{self.errors_since_last_success}")
+
+
+class MqttTrigger(BaseTrigger):
     """
     This class provides an MQTT client instance to receive 
     trigger from the MQTT broker. Each instance is automatically 
@@ -48,7 +72,8 @@ class MqttTrigger:
         A connected instance of MqttTrigger
     """
 
-    def __init__(self, cam, interface, acquisition_delay, mqtt_host, mqtt_port, mqtt_topic) -> None:
+    def __init__(self, cam, interface, acquisition_delay, mqtt_host,
+                 mqtt_port, mqtt_topic, retry_time=0) -> None:
         """
         Connect MQTT client.
 
@@ -59,13 +84,14 @@ class MqttTrigger:
             see class description
         """
 
+        super().__init__()
         self.cam = cam
         self.interface = interface
         self.acquisition_delay = acquisition_delay
         self.mqtt_host = mqtt_host
         self.mqtt_port = mqtt_port
         self.mqtt_topic = mqtt_topic
-
+        self.retry_time = retry_time
         # Connect to the Broker
         self.client = mqtt.Client()
         self.client.connect(self.mqtt_host, self.mqtt_port)
@@ -79,7 +105,7 @@ class MqttTrigger:
         self.client.loop_start()
         # Subscribe to the given mqtt_topic
         self.client.subscribe(self.mqtt_topic)
-        print("Subscribed for input to topic: " + str(self.mqtt_topic))
+        logging.info("Subscribed for input to topic: " + str(self.mqtt_topic))
         # Call the _on_message when message is received from broker
         self.client.on_message = self._on_message
 
@@ -111,7 +137,7 @@ class MqttTrigger:
 
         # Deserialize Json
         message = json.loads(msg.payload)
-        print("Image acquisition trigger received")
+        logging.info("Image acquisition trigger received")
 
         # If no acquisition delay skip the following
         if self.acquisition_delay > 0.0:
@@ -134,10 +160,26 @@ class MqttTrigger:
                 time.sleep(time_to_wait)
             else:
                 logging.error(f"could not wait for image acquisition with delay: {time_to_wait}")
+                self.count_error()
 
         # Get an image
-        print("Get an image.")
-        self.cam.get_image()
+        logging.info("Get an image.")
+        while True:
+            try:
+                self.cam.get_image()
+                break
+            except Exception as _e:
+                self.count_error()
+                if self.retry_time == 0:
+                    logging.error(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
+                                  f"with {_e} "
+                                  f"no retry time configured, aborting")
+                    sys.exit(f"could not gather triggered mage with {_e.with_traceback()}")
+                else:
+                    logging.error(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
+                                  f"with {_e} "
+                                  f", retrying in {ttw} ")
+                    time.sleep(self.rety_time)
 
     def disconnect(self) -> None:
         """
@@ -153,7 +195,7 @@ class MqttTrigger:
         self.client.disconnect()
 
 
-class ContinuousTrigger:
+class ContinuousTrigger(BaseTrigger):
     """
     This class provides a continuous trigger that acquires images
     with a fixed cycle time. All functionalities are provided
@@ -174,19 +216,6 @@ class ContinuousTrigger:
         stay forever.
     """
 
-    def __count_error(self):
-        """
-        Counts errors occurred in total and since last successful message
-        kills the process if excessive amount of errors occurred
-        """
-        self.errors_since_last_success += 1
-        self.total_errors += 1
-        logging.debug(f"error logged with counters total: {self.errors_since_last_success} "
-                      f"successive: {self.total_errors}")
-        if self.errors_since_last_success > ERROR_TOLERANCE:
-            sys.exit(f"error tolerance exceeded with total errors {self.total_errors} "
-                     f"and successive errors{self.errors_since_last_success}")
-
     def __init__(self, cam, interface, cycle_time) -> None:
         """
         While-loop with time measuring to have always the same 
@@ -198,6 +227,8 @@ class ContinuousTrigger:
         Returns:
             see class description
         """
+
+        super().__init__()
         self.cam = cam
         self.interface = interface
         self.cycle_time = cycle_time
@@ -216,7 +247,7 @@ class ContinuousTrigger:
                     logging.critical(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
                                      f"with {_e} "
                                      f", retrying in {ttw} ")
-                    self.__count_error()
+                    self.count_error()
                     time.sleep(ttw)
 
             # Get actual time and subtract the start time from
@@ -231,7 +262,7 @@ class ContinuousTrigger:
                     "Environment Error: CYCLE_TIME to short ||| Set cycle time is "
                     "shorter than the processing time for each image.")
                 logging.error(f"cycle time: {cycle_time} loop took {loop_time}")
-                self.__count_error()
+                self.count_error()
 
             else:
                 # Sleep for difference of cycle time minus loop 
