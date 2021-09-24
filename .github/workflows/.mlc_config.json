@@ -1,8 +1,0 @@
-{
-    "replacementPatterns": [
-        {
-            "pattern": "^/",
-            "replacement": "https://docs.umh.app/"
-        }
-    ]
-}
