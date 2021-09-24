@@ -16,6 +16,9 @@ import logging
 # Import libraries that had been installed with pip install
 import paho.mqtt.client as mqtt
 
+ERROR_TOLERANCE = 20  # number of successive errors after which the application is terminated
+RETRY_DELAY = 0.1  # fraction of the cycle time after which to trigger a retry
+
 
 class MqttTrigger:
     """
@@ -171,6 +174,19 @@ class ContinuousTrigger:
         stay forever.
     """
 
+    def __count_error(self):
+        """
+        Counts errors occurred in total and since last successful message
+        kills the process if excessive amount of errors occurred
+        """
+        self.errors_since_last_success += 1
+        self.total_errors += 1
+        logging.debug(f"error logged with counters total: {self.errors_since_last_success} "
+                      f"successive: {self.total_errors}")
+        if self.errors_since_last_success > ERROR_TOLERANCE:
+            sys.exit(f"error tolerance exceeded with total errors {self.total_errors} "
+                     f"and successive errors{self.errors_since_last_success}")
+
     def __init__(self, cam, interface, cycle_time) -> None:
         """
         While-loop with time measuring to have always the same 
@@ -185,7 +201,8 @@ class ContinuousTrigger:
         self.cam = cam
         self.interface = interface
         self.cycle_time = cycle_time
-
+        self.total_errors = 0
+        self.errors_since_last_success = 0
         # Start the loop to take an image according to cycle time
         while True:
             # Get actual time and save it as start time
@@ -195,10 +212,11 @@ class ContinuousTrigger:
                     self.cam.get_image()
                     break
                 except Exception as _e:
-                    ttw = cycle_time * 0.1
+                    ttw = cycle_time * RETRY_DELAY
                     logging.critical(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
                                      f"with {_e} "
                                      f", retrying in {ttw} ")
+                    self.__count_error()
                     time.sleep(ttw)
 
             # Get actual time and subtract the start time from
@@ -210,11 +228,15 @@ class ContinuousTrigger:
             #   time throw error
             if loop_time > self.cycle_time:
                 logging.critical(
-                    "Environment Error: CYCLE_TIME to short ||| Set cycle time is shorter than the processing time for each image.")
+                    "Environment Error: CYCLE_TIME to short ||| Set cycle time is "
+                    "shorter than the processing time for each image.")
                 logging.error(f"cycle time: {cycle_time} loop took {loop_time}")
+                self.__count_error()
+
             else:
                 # Sleep for difference of cycle time minus loop 
                 # time to have a constant cycle time
                 delay = self.cycle_time - loop_time
+                self.errors_since_last_success = 0
                 logging.debug(f"Delay {delay} s to reach constant cycle time.")
                 time.sleep(delay)
