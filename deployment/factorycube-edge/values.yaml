@@ -116,20 +116,20 @@ cameraconnect:
   enabled: false
   image: unitedmanufacturinghub/cameraconnect
   # tag: development
-  brokerURL: "factorycube-edge-emqxedge-headless" # do not change, points to emqxedge i
+  brokerURL: "your.device.ip.here" # change to actual ip address
   brokerPort: 1883 # do not change
   trigger: "MQTT" # trigger to activate image , supports "MQTT", "Continuous"
   acquisitionDelay: "0.0" # time to wait between trigger received and image acquired
-  cycleTime: "4" # time between images
-  cameraInterface: "GenICam" # camera interface, currenty only uses GenIcam
+  cycleTime: "30" # time between images
+  cameraInterface: "GenICam" # camera interface, currently only uses GenIcam
   imageWidth: "800" # in pixels
   imageHeight: "800" # in pixels
-  imageChannels: "3" # colour chanels, typically 1 or 3 
+  imageChannels: "1" # colour channels, typically 1 or 3
   macAddress: "02-2625A-09849" # mac address of the camera
-  exposureTime: "1000" # exposure time in [TBD]
-  exposureAuto: "Off" # whether to use auto exposeure or not, supports "OFF" and "ON"
-  pixelFormat: "Mono8" # pixel format of the CAMERA, typically one of [TBD]
-  loggingLevel: "INFO" # " LOGGING Level o be used"
+  exposureTime: "1000" # exposure time, consult your camera settings in the camera OEM's software
+  exposureAuto: "Off" # whether to use auto exposure or not, supports "OFF" and "ON"
+  pixelFormat: "Mono8" # pixel format of the CAMERA, typically check your camera OEM's documentation
+  loggingLevel: "INFO" # LOGGING Level to be used, supported levels are DEBUG;INFO;WARNING;ERROR;CRITICAL
 
 ### nodered ###
 
