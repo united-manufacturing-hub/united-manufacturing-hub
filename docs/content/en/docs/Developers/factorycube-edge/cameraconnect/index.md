@@ -12,13 +12,13 @@ description: >
 
 ### Using the Helm chart
 
-By default cameraconnect will be deactivated in factorycube-edge. First, 
+By default, cameraconnect will be deactivated in factorycube-edge. First, 
 you need to enable it in the factorycube-edge values. 
 Then you need to create a folder on the node in `/home/rancher/genticam_producer`
-and move your genTL producer files (*.cti) and all required libaries into that folder. 
+and move your genTL producer files (*.cti) and all required libraries into that folder. 
 Then apply your settings to the Helm chart with `helm upgrade`.
 
-With Lens you can change the values under the apps/releases tab on the left side. 
+With Lens, you can change the values under the apps/releases tab on the left side. 
 Select factorycube-edge and change your config values.
 
 
@@ -31,18 +31,18 @@ helm upgrade factorycube-edge united-manufacturing-hub/factorycube-edge \
 --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge
 ````
 Furthermore, you need to adjust the MQTT_HOST to the externally exposed MQTT IP (e.g., the IP of your node). 
-Usually you can use the Kubernetes internal DNS. 
-But cameraconnect needs to be in hostMode = true and therefore you need to access it through the external ip. 
+Usually you can use the Kubernetes internal DNS,
+but cameraconnect needs to be in hostMode = true and therefore you need to access it through the external ip. 
 
 ### cti files
-cti files for you camaeras can not be included for license reasons, to include ti files you must create the folder 
+cti files for your cameras can not be included for license reasons, to include ti files you must create the folder 
 `/home/rancher/genicam_producer` and place a zip file containing all the files you wish to use there. the script will
 look for all cti files in that directory. Getting CTI files is dependent on the manufacturer, 
 usually you will need to extract them from the installation of the camera manufacturers software, 
 due to licensing issues we can not distribute them with the stack.
 
 ### general tips.
-1. Get cti files for both your development system and the container system (Debian / Ubuntu
+1. Get cti files for both your development system and the container system (Debian / Ubuntu)
    
    set the log level to DEBUG during any kind of hardware or network changes.
    
@@ -54,7 +54,7 @@ due to licensing issues we can not distribute them with the stack.
 3. Testing which cti files work with your cameras can be a very tedious process
 
    
-4. What works in your test environment may or may not work in deployment, I recommend modfying your deployment in lens  
+4. What works in your test environment may or may not work in deployment, I recommend modifying your deployment in lens  
    to use and creating a custom docker image during testing if you get stuck, 
    (you can use the docker hub container repository for free) 
 
@@ -76,7 +76,7 @@ so that you can develop.
 1. Specify the environment variables, e.g. in a .env file in the main folder or directly in the docker-compose
 2. execute `sudo docker-compose -f ./deployment/cameraconnect/docker-compose.yaml up -d --build`
 #### IDE
-1. Setup your python venv, with the same version of python the container is built with, check 
+1. Set up your python venv, with the same version of python the container is built with, check 
    [the Dockerfile for details](/deployment/cameraconnect/Dockerfile)
 2. Install [requirements](/cameraconnect/requirements.txt)
 3. Setup env variables for your execution of the [main program](/cameraconnect/src/main.py) 
@@ -144,7 +144,7 @@ the camera will be triggered at that exact timestamp.
 
 ### ACQUISITION_DELAY
 
-**Description:** Timeconstant in seconds which delays the image acquisition after the camera has been triggered.<br>
+**Description:** Time in seconds which delays the image acquisition after the camera has been triggered.<br>
 This is mostly used, if the camera is triggered with a UNIX timestamp (see variable TRIGGER), to make sure, that the <br>
 camera is triggered, even if the UNIX timestamps lies in the past. This could be caused by network latencies.
 
@@ -169,7 +169,7 @@ the frequency in which the camera is triggered.
 
 ### CAMERA_INTERFACE
 
-**Description:** Defines which camera interface is used. Currently only cameras of the GenICam standard are supported.
+**Description:** Defines which camera interface is used, currently only cameras of the GenICam standard are supported.
 However, for development of testing you can also use the DummyCam, 
 which simulates a camera and sends a static image via MQTT, <br>when triggered.
 
@@ -218,9 +218,8 @@ images in monochrome pixel formats(use: "Mono8") and RGB/BRG color pixel formats
 
 ### IMAGE_WIDTH
 
-**Description:**  Defines the horizontal width of the images acquired. If the width values surpasses the maximum 
-capability of the camera
-the maximum value is set automatically.
+**Description:**  Defines the horizontal width of the images acquired, if the width values surpasses the maximum 
+capability of the camera the maximum value is set automatically.
 
 **Type:** int
 
@@ -230,9 +229,8 @@ the maximum value is set automatically.
 
 ### IMAGE_HEIGHT
 
-**Description:**  Defines the vertical height of the images acquired.
-If the height value surpasses the maximum capability of the camera
-the maximum value is set automatically.
+**Description:**  Defines the vertical height of the images acquired, if the height value surpasses the maximum 
+capability of the camera the maximum value is set automatically.
 
 **Type:** int
 
@@ -255,7 +253,7 @@ array).You do not have to set this value. If None, the best number of channels f
 
 **Description:**  Defines which camera is accessed by the container. One container can use only one camera. <br>
 The MAC address can be found on the backside of the camera.<br>
-The input is not case sensitive. Please follow the example format below.
+The input is not case-sensitive. Please follow the example format below.
 
 **Type:** String
 
