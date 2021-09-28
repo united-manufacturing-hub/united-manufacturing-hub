@@ -1,6 +1,8 @@
 ---
 title: "How to connect with SSH"
 linkTitle: "How to connect with SSH"
+aliases:
+    - /docs/tutorials/connect-with-ssh/
 description: >
   This article explains how to connect with an edge device via SSH
 ---

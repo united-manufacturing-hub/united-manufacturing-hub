@@ -1,6 +1,8 @@
 ---
 title: "How to update the stack / helm chart"
 linkTitle: "How to update the stack / helm chart"
+aliases:
+    - /docs/tutorials/update-helm-chart/
 description: >
   This article explains how to update the helm chart, so that you can apply changes to the configuration of the stack or to install newer versions
 ---

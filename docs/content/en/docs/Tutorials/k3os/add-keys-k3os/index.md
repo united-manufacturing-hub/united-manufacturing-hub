@@ -1,6 +1,8 @@
 ---
 title: "How to add additional SSH keys in k3OS"
 linkTitle: "How to add additional SSH keys in k3OS"
+aliases:
+    - /docs/tutorials/add-keys-k3os/
 description: >
   This article explains how to add an additional SSH key to k3OS, so that multiple people can access the device
 ---

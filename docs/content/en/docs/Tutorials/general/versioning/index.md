@@ -1,6 +1,8 @@
 ---
 title: "Versioning in IT"
 linkTitle: "Versioning in IT"
+aliases:
+    - /docs/tutorials/versioning/
 description: >
   This article explains how version numbers are typically structured in IT.
 ---

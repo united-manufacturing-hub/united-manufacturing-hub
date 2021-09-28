@@ -1,6 +1,8 @@
 ---
 title: "How to fix certificate not yet valid issues"
 linkTitle: "How to fix certificate not yet valid issues"
+aliases:
+    - /docs/tutorials/how-to-fix-invalid-certs-due-to-misconfigured-date/
 description: >
   curl might fail and not download helm as the certificate is not yet valid. This happens especially when you are in a restricted network and the edge device is not able fetch the current date and time via NTP.  
 ---

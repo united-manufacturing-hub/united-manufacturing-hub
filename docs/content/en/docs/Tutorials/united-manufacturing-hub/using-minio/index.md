@@ -1,6 +1,8 @@
 ---
 title: "How to work with MinIO"
 linkTitle: "How to work with MinIO"
+aliases:
+    - /docs/tutorials/using-minio/
 description: >
   This article explains how you can access MinIO for development and administration purposes
 ---

@@ -1,6 +1,8 @@
 ---
 title: "Setting up the documentation"
 linkTitle: "Setting up the documentation"
+aliases:
+    - /docs/tutorials/documentation/
 weight: 1
 description: >
   This document explains how to get started with the documentation locally

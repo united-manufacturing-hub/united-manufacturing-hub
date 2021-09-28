@@ -1,6 +1,8 @@
 ---
 title: "How to install k3OS"
 linkTitle: "How to install k3OS"
+aliases:
+    - /docs/tutorials/install-k3os/
 description: >
   This article explains how to install k3OS on an edge device using the United Manufacturing Hub installation script.
 ---

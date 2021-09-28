@@ -1,6 +1,8 @@
 ---
 title: "How to install an operating system from a USB-stick"
 linkTitle: "How to add additional SSH keys in k3OS"
+aliases:
+    - /docs/tutorials/install-operating-system-from-usb/
 description: >
   This article explains how to install an operating system from a bootable USB-stick.
 ---
