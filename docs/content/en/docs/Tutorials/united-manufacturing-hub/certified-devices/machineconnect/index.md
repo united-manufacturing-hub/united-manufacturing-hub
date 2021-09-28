@@ -2,6 +2,8 @@
 title: "How to use machineconnect"
 linkTitle: "How to use machineconnect"
 weight: 1
+aliases:
+    - /docs/tutorials/certified-devices/machineconnect/
 description: >
   This document explains how to install and use machineconnect
 ---

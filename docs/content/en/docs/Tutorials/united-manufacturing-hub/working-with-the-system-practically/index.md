@@ -2,6 +2,8 @@
 title: "Working with the system practically"
 linkTitle: "Working with the system practically"
 weight: 5
+aliases:
+    - /docs/tutorials/working-with-the-system-practically/
 description: >
   Three step implementation plan for using the factorycube
 ---

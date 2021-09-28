@@ -1,6 +1,8 @@
 ---
 title: "Setting up the PKI infrastructure"
 linkTitle: "Setting up the PKI infrastructure"
+aliases:
+    - /docs/tutorials/pki/
 weight: 2
 description: >
   This document describes how to create and manage the certificates required for MQTT 

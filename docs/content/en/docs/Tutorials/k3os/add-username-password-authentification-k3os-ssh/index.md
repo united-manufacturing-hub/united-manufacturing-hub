@@ -1,6 +1,8 @@
 ---
 title: "How to enable SSH password authentification in k3OS"
 linkTitle: "How to enable SSH password authentification in k3OS"
+aliases:
+    - /docs/tutorials/add-username-password-authentification-k3os-ssh/
 description: >
   This article explains how to enable the classic username / password authentification for SSH in k3os 
 ---

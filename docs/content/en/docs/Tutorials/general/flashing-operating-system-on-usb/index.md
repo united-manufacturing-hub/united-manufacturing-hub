@@ -1,6 +1,8 @@
 ---
 title: "How to flash an operating system onto a USB-stick"
 linkTitle: "How to flash an operating system onto a USB-stick"
+aliases:
+    - /docs/tutorials/flashing-operating-system-on-usb/
 description: >
   There are multiple ways to flash a operating system onto a USB-stick. We will present you the method of using [balenaEtcher](https://www.balena.io/etcher/).
 ---

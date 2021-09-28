@@ -2,6 +2,8 @@
 ---
 title: "Edge networking"
 linkTitle: "Edge networking"
+aliases:
+    - /docs/tutorials/networking/
 weight: 4 
 description: >
   The UMH stack features a sophisticated system to be integrated into any enterprise network. Additionally, it forces multiple barriers against attacks by design. This document should clear up any confusion.
