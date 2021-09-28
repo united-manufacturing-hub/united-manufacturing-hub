@@ -28,15 +28,21 @@ At the beginning of each sprint we take the most important issues and add them t
 
 An epic consists out of multiple issues that are bundled together in a user story. They can can be divided into multiple issues and get's its own MINOR or MAJOR version.
 
-At the beginning of the sprint a draft pull request is created from staging to main to track the overall changes.
-
 #### Processing of the work package
 
-When work on a new work package (issue) is started, a new branch is created from staging with the following name: `issueID-short-description`, e.g. `465-improve-documentation-factorycube`. When the work package is processed and tested, a pull request is created from the branch to staging. A second person reviews the code and automatic tests are performed. If everything is ok the feature is committed to staging using squash & merge. The commit should follow the following naming: `issueID Full issue description`. This closes the issue.
+When work on a new work package (issue) is started, a new branch is created from staging with the following name: 
+
+`issueID-short-description`, e.g. `465-improve-documentation-factorycube`. 
+
+When the work package is processed and tested, a pull request is created from the branch to staging. A second person reviews the code and automatic tests are performed. If everything is ok the feature is committed to staging using squash & merge. 
+
+The commit should follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) logic. 
+
+This closes the issue.
 
 #### Sprint end
 
-After 1.5 weeks the sprint should be finished with all work packages. If not, the remaining ones will be put back into the backlog. The remaining 2 days are used to test the code in the staging environment. If all tests are ok and all open bugs have been fixed, the pull request is approved and staging is merged with main. The next sprint is then discussed.
+After 1.5 weeks the sprint should be finished with all work packages. If not, the remaining ones will be put back into the backlog. The remaining 2 days are used to test the code in the staging environment. If all tests are ok and all open bugs have been fixed, a release branch is created in the format `release/v0.0.0`. Final tests are conducted. For publishing a new version, see also [our guide on how to publish a new release](https://docs.umh.app/docs/developers/publish-new-version/)The next sprint is then discussed.
 
 ### Special features for externals
 
