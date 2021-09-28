@@ -1,0 +1,17 @@
+--- 
+title: "Implementation of Time Series Data based Digital Time Studies for Manual Processes within the Context of a Learning Factory"
+linkTitle: "Implementation of Time Series Data based Digital Time Studies for Manual Processes" 
+description: "This thesis is concerned with combining the subject areas Industry 4.0 and the implementation of manual time studies."
+---
+
+This publication was made by Tobias Tratner ([Xing](https://www.xing.com/profile/Tobias_Tratner), [LinkedIn](https://www.linkedin.com/in/tobias-tratner-759197221/)) as a Master Thesis for the [Graz University of Technology](https://www.tugraz.at/home/) & [Deggendorf Institute of Technology](https://www.th-deg.de/) in cooperation with [Maria Hulla (Institute of Innovation and Industrial Management at TU Graz)](https://www.linkedin.com/in/maria-hulla-86133697/) and us. 
+
+{{< imgproc image.png Fit "600x600">}}Finished setup of the time studies in the LEAD-Factory{{< /imgproc >}}
+
+## Abstract
+
+The steadily advancing globalization significantly shapes today’s business environment for companies. Therefore, companies are increasingly under immense cost pressure and need to improve their production efficiency and product quality to remain competitive. Industry 4.0 applications that result from the advancing digitization offer great potential for long-term cost savings. Implementing time studies for mechanical activities can identify potential for improvement in the production process and enable them to be rectified. This thesis is concerned with combining the subject areas Industry 4.0 and the implementation of manual time studies. For this purpose, a digital time recording of manual activities was implemented in the LEAD Factory, the learning factory of the Institute of Innovation and Industrial Management at Graz University of Technology. Therefore, a mobile sensor kit and an IoT platform, provided by the factorycube of Industrial Analytics, were used. Using sensors, existing data from an RFID system, and an energy monitoring system, all activities on a selected workstation in the LEAD Factory can be documented and analyzed. This automated time recording enables long-term measurements to analyze working times and possible anomalies. The collected data is stored in so-called time- series databases and processed using various methods. The data is displayed on a dashboard using a visualization program. One focus of the work was the design of the data processing architecture with two different time-series data models, as well as the conception and development of methods for data processing in the context of time studies. A relational and a NoSQL database system were used equally. The use of two very different approaches should show the possibilities of both systems and enable an assessment of the two systems. Based on a utility analysis, both approaches are evaluated and compared using selected criteria. Thus, a clear recommendation can be made for one of the two approaches. Making the results of the work available to an open-source community, they can be used as a basis for the implementation of similar applications. In addition, the work shows through a digital time recording the huge potential to improve productivity in case of using existing data in a production environment.
+
+## Content
+
+[Master Thesis Tobias Tratner](/publications/Masterarbeit_Tobias.Tratner_Digitalversion.pdf)
