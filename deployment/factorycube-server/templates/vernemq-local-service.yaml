@@ -11,11 +11,11 @@ spec:
   type: ClusterIP
   ports:
     - port: 8883
-      targetPort: 8883
+      targetPort: {{ .Values.vernemq.service.mqtts.port }}
       protocol: TCP
       name: mqtts
     - port: 1883
-      targetPort: 1883
+      targetPort: {{ .Values.vernemq.service.mqtt.port }}
       protocol: TCP
       name: mqtt
   selector:
