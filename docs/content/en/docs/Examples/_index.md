@@ -60,7 +60,7 @@ See also the [detailed documentation](pharma-packaging).
 
 ### Quality monitoring in a filling line
 
-![quality monitoring](images/dcc-quality-check/picture1.jpg)
+![quality monitoring](/images/dcc-quality-check/picture1.jpg)
 
 TODO: #69 add short description for DCC quality check
 

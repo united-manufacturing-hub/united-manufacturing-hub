@@ -41,7 +41,7 @@ Also updates are almost never installed on a machine PLC resulting in well-known
 Another argument is a pretty practical one: In Industry 4.0 we see more and more devices being installed at the shopfloor and requiring access to the machine data. Our stack will not be the only one accessing and processing data from the production machine. There might be entirely different solutions out there, who need real-time access to the PLC data. Unfortunately, a lot of these devices are proprietary and sometimes even with hidden remote access features (very common in Industrial IoT startups unfortunately...). 
 We created the additional DMZ around each machine to prevent one solution / hostile device at one machine being able to access the entire machine park. There is only one component (usually node-red) communicating with the PLC and sending the data to MQTT. If there is one hostile device somewhere it will have very limited access by default except specified otherwise, as it can get all required data directly from the MQTT data stream.
 
-Our certified device "machineconnect" will have that network setup by default. Our certified device "factorycube" has a little bit different network setup, which you can take a look at [here](../../tutorials/networking).
+Our certified device "machineconnect" will have that network setup by default. Our certified device "factorycube" has a little bit different network setup, which you can take a look at [here](/docs/tutorials/general/networking).
 
 ### Other useful commands
 
