@@ -14,5 +14,8 @@ This tutorial is part of a larger series on [how to integrate the United Manufac
 
 --> In the following chapter we will substitute the VerneMQ broker in the United Manufacturing Hub with Azure IoT Hub.
 
+
+To create scripts via PowerShell or Bash:
+https://docs.microsoft.com/de-de/azure/iot-hub/tutorial-x509-scripts
 [Azure IoT Hub with at least one device created](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal)
 

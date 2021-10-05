@@ -9,17 +9,19 @@ This tutorial is part of a larger series on [how to integrate the United Manufac
 
 ## Tutorial
 
+In this tutorial we are leveraging the fact that Azure IoT Hub is nothing but a MQTT broker with benefits (e.g., device management or REST API). We will therefore create a connection via MQTT.
+
 ### Prerequisites
 
 - Basic knowledge about [IT / OT](/docs/getting-started/understanding-the-technologies/), [Azure](/docs/concepts/integration-with-azure/) and the [difference between symmetric and asymmetric encryption](/docs/tutorials/general/symmetric-asymmetric-encrption/)
 - You should have one instance of IoT Hub running and one device created with asymmetric encryption. You can follow [our tutorial for setting up Azure IoT Hub](/docs/tutorials/azure/setting-up-azure-iot-hub/). 
 - By default Microsoft recommends using symmetric encryption as it is more easier to implement, but they say themselves that asymmetric encryption is more secure. If you are using symmetric encryption (Username / Password authentification, no certificates) there might be some steps that are different for you
 - All information for your Azure IoT Hub device ready: 
-- - Hostname of the Azure IoT Hub: e.g., contoso-test.azure-devices.net
-- - Device ID: e.g., factory3
-- - (symmetric) Username: e.g., contoso-test.azure-devices.net/factory3/?api-version=2018-06-30
-- - (symmetric) Password / SAS Token: e.g., SharedAccessSignature sr=contoso-test......
-- - (asymmetric) Certificate files
+ - Hostname of the Azure IoT Hub: e.g., contoso-test.azure-devices.net
+ - Device ID: e.g., factory3
+ - (symmetric) Username: e.g., contoso-test.azure-devices.net/factory3/?api-version=2018-06-30
+ - (symmetric) Password / SAS Token: e.g., SharedAccessSignature sr=contoso-test......
+ - (asymmetric) Certificate files
 - Furthermore, we recommend having access to Azure IoT Hub and the Device Explorer to verify whether the connection worked.
 
 ### Option 1: using Node-RED 
@@ -36,6 +38,44 @@ This tutorial is part of a larger series on [how to integrate the United Manufac
 Please do not use the official Azure IoT Hub plugin for Node-RED ([node-red-contrib-azure-iot-hub](https://flows.nodered.org/node/node-red-contrib-azure-iot-hub)). Our customers and we found this plugin to be unrealiable and we therefore recommend for using the MQTT out node.
 {{% /alert %}}
 
+We will do this in three steps. You can also [download our example flows.json](/examples/nodered/azure-iot-hub.json), where you just need to change your authentification parameters (certificates or username / password, host, etc.) and you are ready to go.
+
+#### Step 1: Subscribing to all messages
+
+As a first step we take all relevant data out of the MQTT broker and thereby starting a Node-RED flow. Add a MQTT-In node. The MQTT broker details should already been set if you have used our recommended installation method (see also [Getting Started](/docs/getting-started/setup-development/)). 
+
+If not, you can connect on factorycube-edge with the URL: `factorycube-edge-emqxedge-service` under the port 1883.
+
+In the Topic section you can specify what messages from which asset you want to send to Azure IoT Hub using wildcards. If you want to send all messages you can use `ia/#` as a topic. If you just want to send process values of all machines in `plant3` of customer `factoryinsight` you can use:
+
+`ia/factoryinsight/plant3/+/processValue`
+
+You can test the flow by adding a debug node and connecting it the MQTT-In node with it.
+
+#### Step 2: Changing the payload to contain payload and topic
+
+Azure by default does not support the topic structure of the United Manufacturing Hub. As it contains important infortmation, e.g., the asset that the message is about, we will put that into the payload as well.
+
+Add a function node with the following content and connect it to the MQTT-In node that we previously created:
+
+```javascript
+msg.payload = {
+    "topic": msg.topic,
+    "payload": msg.payload
+}
+msg.topic = ""
+
+return msg;
+```
+
+Verify by connecting it with the debug node.
+
+#### Step 3: Sending the data to Azure IoT Hub
+
+We recommend following the steps in the article *[Connecting Node-Red to Azure IoT Hub using MQTT nodes](https://medium.com/@nikhilkinkar/connecting-node-red-to-azure-iot-hub-using-mqtt-nodes-6e9160549348)* from [Nikhil Kinkar](https://www.linkedin.com/in/nikhilkinkar/). He is using symmetric encryption. For asymmetric encryption edit the TLS configuration and upload there your certificates.
+
+Connect it with the previously created function node and test it. If everything went well the messages should now appear in the device explorer in Azure IoT Hub. 
+
 ### Option 2: using mqtt-bridge
 
 **Currently only available for asymmetric encryption. See also [GitHub issue #569 for more information](https://github.com/united-manufacturing-hub/united-manufacturing-hub/issues/569)**
@@ -46,6 +86,10 @@ Advantages:
 Disadvantages:
 - requires slightly more time than option 1
 
+In the setup script or in the Helm chart adjust the following values with the corresponding certificates:
+- mqttBridgeCACert
+- mqttBridgeCert
+- mqttBridgePrivkey
 
 ## What to do now?
 
