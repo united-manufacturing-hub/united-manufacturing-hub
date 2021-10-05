@@ -7,42 +7,34 @@ description: >
 
 This tutorial is part of a larger series on [how to integrate the United Manufacturing Hub into the Azure stack](/docs/concepts/integration-with-azure/).
 
-## What is Azure IoT Hub?
-
---> basically a message broker (like a MQTT broker)
-
---> In the following chapter we will substitute the VerneMQ broker in the United Manufacturing Hub with Azure IoT Hub.
-
 ## Tutorial
 
 ### Prerequisites
 
 - Basic knowledge about [IT / OT](/docs/getting-started/understanding-the-technologies/), [Azure](/docs/concepts/integration-with-azure/) and the [difference between symmetric and asymmetric encryption](/docs/tutorials/general/symmetric-asymmetric-encrption/)
-- You should have one instance of IoT Hub running and one device created with asymmetric encryption. You can follow [our tutorial for setting up Azure IoT Hub](/docs/tutorials/azure/setting-up-azure-iot-hub/). By default Microsoft recommends using symmetric encrpytion as it is more easier to implement, but they say themselves that asymmetric encrption is 
-
-
-- having a valid Azure subscribtion
-- [Azure IoT Hub with at least one device created](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal)
-- for that Azure IoT Hub device at least the following information: 
+- You should have one instance of IoT Hub running and one device created with asymmetric encryption. You can follow [our tutorial for setting up Azure IoT Hub](/docs/tutorials/azure/setting-up-azure-iot-hub/). 
+- By default Microsoft recommends using symmetric encryption as it is more easier to implement, but they say themselves that asymmetric encryption is more secure. If you are using symmetric encryption (Username / Password authentification, no certificates) there might be some steps that are different for you
+- All information for your Azure IoT Hub device ready: 
 - - Hostname of the Azure IoT Hub: e.g., contoso-test.azure-devices.net
 - - Device ID: e.g., factory3
-- - Username: e.g.,
-
-Account with Azure
-SAS
-Token
-Access to verify successful data transmission
-etc.
+- - (symmetric) Username: e.g., contoso-test.azure-devices.net/factory3/?api-version=2018-06-30
+- - (symmetric) Password / SAS Token: e.g., SharedAccessSignature sr=contoso-test......
+- - (asymmetric) Certificate files
+- Furthermore, we recommend having access to Azure IoT Hub and the Device Explorer to verify whether the connection worked.
 
 ### Option 1: using Node-RED 
 
-Advantages: 
+**Advantages:**
 - quick
 - easy
 
-Disadvantages:
+**Disadvantages:**
 - can be unrealiable, e.g., when the user accidentally adds an unstable external plugin, which takes down Node-RED
 - does not buffer data in case of internet outages
+
+{{% alert title="Warning" color="warning" %}}
+Please do not use the official Azure IoT Hub plugin for Node-RED ([node-red-contrib-azure-iot-hub](https://flows.nodered.org/node/node-red-contrib-azure-iot-hub)). Our customers and we found this plugin to be unrealiable and we therefore recommend for using the MQTT out node.
+{{% /alert %}}
 
 ### Option 2: using mqtt-bridge
 
