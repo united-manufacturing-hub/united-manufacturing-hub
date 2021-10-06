@@ -34,14 +34,13 @@ class BaseTrigger:
         Counts errors occurred in total and since last successful message
         kills the process if excessive amount of errors occurred
         """
-
-    self.errors_since_last_success += 1
-    self.total_errors += 1
-    logging.debug(f"error logged with counters total: {self.errors_since_last_success} "
-                  f"successive: {self.total_errors}")
-    if self.errors_since_last_success > ERROR_TOLERANCE:
-        sys.exit(f"error tolerance exceeded with total errors {self.total_errors} "
-                 f"and successive errors{self.errors_since_last_success}")
+        self.errors_since_last_success += 1
+        self.total_errors += 1
+        logging.debug(f"error logged with counters total: {self.errors_since_last_success} "
+                      f"successive: {self.total_errors}")
+        if self.errors_since_last_success > ERROR_TOLERANCE:
+            sys.exit(f"error tolerance exceeded with total errors {self.total_errors} "
+                     f"and successive errors{self.errors_since_last_success}")
 
 
 class MqttTrigger(BaseTrigger):
