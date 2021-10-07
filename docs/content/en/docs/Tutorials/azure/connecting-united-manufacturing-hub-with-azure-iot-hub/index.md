@@ -42,6 +42,8 @@ We will do this in three steps. You can also [download our example flows.json](/
 
 #### Step 1: Subscribing to all messages
 
+{{< imgproc 3.png Fit "800x800" >}}MQTT-In node in Node-RED{{< /imgproc >}}
+
 As a first step we take all relevant data out of the MQTT broker and thereby starting a Node-RED flow. Add a MQTT-In node. The MQTT broker details should already been set if you have used our recommended installation method (see also [Getting Started](/docs/getting-started/setup-development/)). 
 
 If not, you can connect on factorycube-edge with the URL: `factorycube-edge-emqxedge-service` under the port 1883.
@@ -50,13 +52,17 @@ In the Topic section you can specify what messages from which asset you want to 
 
 `ia/factoryinsight/plant3/+/processValue`
 
+{{< imgproc 4.png Fit "800x800" >}}MQTT-In node in Node-RED - detailled view{{< /imgproc >}}
+
 You can test the flow by adding a debug node and connecting it the MQTT-In node with it.
 
 #### Step 2: Changing the payload to contain payload and topic
 
 Azure by default does not support the topic structure of the United Manufacturing Hub. As it contains important infortmation, e.g., the asset that the message is about, we will put that into the payload as well.
 
-Add a function node with the following content and connect it to the MQTT-In node that we previously created:
+{{< imgproc 5.png Fit "800x800" >}}json and function node in Node-RED{{< /imgproc >}}
+
+Add a json node AND a function node with the following content and connect it to the MQTT-In node that we previously created:
 
 ```javascript
 msg.payload = {
@@ -68,19 +74,29 @@ msg.topic = ""
 return msg;
 ```
 
+{{< imgproc 6.png Fit "800x800" >}}Code pasted into Node-RED{{< /imgproc >}}
+
 Verify by connecting it with the debug node.
+
 
 #### Step 3: Sending the data to Azure IoT Hub
 
 We recommend following the steps in the article *[Connecting Node-Red to Azure IoT Hub using MQTT nodes](https://medium.com/@nikhilkinkar/connecting-node-red-to-azure-iot-hub-using-mqtt-nodes-6e9160549348)* from [Nikhil Kinkar](https://www.linkedin.com/in/nikhilkinkar/). He is using symmetric encryption. For asymmetric encryption edit the TLS configuration and upload there your certificates.
+
+{{< imgproc 7.png Fit "800x800" >}}MQTT-out node for connecting Node-RED with Azure IoT{{< /imgproc >}}
 
 You should have the connection parameters (username, host, port, etc.) already available, if not go to [Prerequisites](#prerequisites) 
 
 If necessary: as root CA you need to use the [Baltimore CyberTrust Root](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt.pem)
 
 Do not forget to set the topic as well (see also the tutorial above): 
+{{< imgproc 8.png Fit "800x800" >}}MQTT-out node - topic and server{{< /imgproc >}}
+{{< imgproc 9.png Fit "800x800" >}}MQTT-out node - MQTT broker (1/2){{< /imgproc >}}
+{{< imgproc 10.png Fit "800x800" >}}MQTT-out node - MQTT broker (2/2){{< /imgproc >}}
 
 Connect it with the previously created function node and test it. If everything went well the messages should now appear in the device explorer in Azure IoT Hub. 
+
+{{< imgproc 11.png Fit "800x800" >}}The entire flow{{< /imgproc >}}
 
 #### Option 2: using mqtt-bridge
 
