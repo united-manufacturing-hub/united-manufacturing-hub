@@ -91,7 +91,7 @@ class CamGeneral(ABC):
             - image information:
                 - string containing the image data (image_bytes)
                 - image height, width and channels
-
+        
         Json format:
             {
             'timestamp_ms': timestamp_ms,
@@ -100,7 +100,7 @@ class CamGeneral(ABC):
                     'image_bytes': encoded_image,
                     'image_height': image.shape[0],
                     'image_width': image.shape[1],
-                    'image_channels':image.shape[2]},
+                    'image_channels': image.shape[2] | 1}, 
             }
 
 
@@ -126,6 +126,10 @@ class CamGeneral(ABC):
         im_bytes = im_arr.tobytes()
         encoded_image = base64.b64encode(im_bytes).decode()
         # Preparation of the message that will be published
+        if len(image.shape) == 2:
+            channels = 1
+        else:
+            channels = image.shape[2]
         prepared_message = {
             'timestamp_ms': timestamp_ms,
             'image':
@@ -133,7 +137,7 @@ class CamGeneral(ABC):
                  'image_bytes': encoded_image,
                  'image_height': image.shape[0],
                  'image_width': image.shape[1],
-                 'image_channels': image.shape[2]},
+                 'image_channels': channels},
         }
 
         # Get json formatted string, convert python object into
