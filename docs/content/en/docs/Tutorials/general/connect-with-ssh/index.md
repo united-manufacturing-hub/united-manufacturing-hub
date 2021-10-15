@@ -13,7 +13,7 @@ For Windows we recommend `MobaXTerm`.
 
 Get the **free** Version of MobaXTerm on https://mobaxterm.mobatek.net/download.html
 
-{{< imgproc SSH_windows_1.png FIT "800x500">}}MobaXTerm Session{{< /imgroc>}}
+{{< imgproc SSH_windows_1.png FIT "800x500">}}MobaXTerm Session{{< /imgproc>}}
 
 After starting the program, open a new `session` by selecting "Session" on the top left corner. 
 Click on SSH and type in the field of "Remote Host" your IP-adress. Select "Specify Username" and type `rancher` in the following field.
