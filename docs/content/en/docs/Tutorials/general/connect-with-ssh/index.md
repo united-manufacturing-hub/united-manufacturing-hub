@@ -18,9 +18,9 @@ Get the **free** Version of MobaXTerm on https://mobaxterm.mobatek.net/download.
 After starting the program, open a new `session` by selecting "Session" on the top left corner. 
 Click on SSH and type in the field of "Remote Host" your IP-adress. Select "Specify Username" and type `rancher` in the following field.
 
-{{< imgproc SSH_windows_2.png Fit "800x500" >}}Passwort rancher{{< /imgproc>}}
+{{< imgproc SSH_windows_2.png Fit "800x500" >}}Password{{< /imgproc>}}
 
-Enter the password and press enter. The default password of the auto setup will be `rancher`. There is no need to save the passoword, so just click on `no`
+Enter the password and press enter. The password is `rancher`. There is no need to save the passoword, so just click on `no`
 
 {{< imgproc SSH_windows_3.png Fit "800x500" >}}Successfully logged in via SSH{{< /imgproc>}}
 
