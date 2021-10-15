@@ -140,7 +140,7 @@ IT is the hardware and software to connect thousands of devices in a network and
 
 #### What is important in IT? What is not important?
 
-##### High importance in OT:
+##### High importance in IT:
 
 | Category | Description |
 |---|---|
