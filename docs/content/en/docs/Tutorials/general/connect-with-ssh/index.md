@@ -20,7 +20,7 @@ Click on SSH and type in the field of "Remote Host" your IP-adress. Select "Spec
 
 {{< imgproc SSH_windows_2.png Fit "800x500" >}}Password{{< /imgproc>}}
 
-Enter the password and press enter. The password is `rancher`. There is no need to save the passoword, so just click on `no`
+Enter the password and press enter. The password is `rancher`. There is no need to save the password, so just click on `no`
 
 {{< imgproc SSH_windows_3.png Fit "800x500" >}}Successfully logged in via SSH{{< /imgproc>}}
 
