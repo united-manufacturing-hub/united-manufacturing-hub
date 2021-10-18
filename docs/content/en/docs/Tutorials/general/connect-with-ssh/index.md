@@ -17,7 +17,7 @@ Get the **free** Version of MobaXTerm on https://mobaxterm.mobatek.net/download.
 
 After launching the program, open a new session by clicking on "Session" in the upper left corner.
 
-Enter your IP in the Remote Host field. Select "Specify username". The specific username is `rancher`.
+Enter your IP, e.g. `192.168.1.XXX`, in the Remote Host field. Select "Specify username". The specific username is `rancher`.
 
 {{< imgproc SSH_windows_2.png Fit "800x500" >}}Password{{< /imgproc>}}
 
