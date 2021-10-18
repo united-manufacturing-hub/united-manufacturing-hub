@@ -17,7 +17,7 @@ When connecteing with the United Manufacturing Hub we will substitute the VerneM
 
 ### Prerequisites
 
-- Basic knowledge about [IT / OT](/docs/getting-started/understanding-the-technologies/), [Azure](/docs/concepts/integration-with-azure/) and the [difference between symmetric and asymmetric encryption](/docs/tutorials/general/symmetric-asymmetric-encrption/)
+- Basic knowledge about [IT / OT](/docs/getting-started/understanding-the-technologies/), [Azure](/docs/concepts/integration-with-azure/) and the [difference between symmetric and asymmetric encryption](/docs/tutorials/general/symmetric-asymmetric-encryption/)
 
 #### Step 1: Create the necessary PKI (can be skipped if using symmetric encryption)
 
