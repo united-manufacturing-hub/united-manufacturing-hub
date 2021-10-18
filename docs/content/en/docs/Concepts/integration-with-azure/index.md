@@ -1,8 +1,8 @@
 ---
 title: "Integration into Azure"
-linkTitle: "Integration into Azure""
+linkTitle: "Integration into Azure"
 description: >
-  This article explains how the United Manufacturing Hub can be integrated into Microsoft Azure.
+   This article explains how the United Manufacturing Hub can be integrated into Microsoft Azure.
 ---
 
 This section is currently in development. Published articles so far:
