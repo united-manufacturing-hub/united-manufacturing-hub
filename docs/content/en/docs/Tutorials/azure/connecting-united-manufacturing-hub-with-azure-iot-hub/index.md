@@ -98,7 +98,18 @@ Connect it with the previously created function node and test it. If everything 
 
 {{< imgproc 11.png Fit "800x800" >}}The entire flow{{< /imgproc >}}
 
-#### Option 2: using mqtt-bridge
+
+#### Step 4: check whether the messages appear in Azure IoT Hub using the device explorer
+
+{{< imgproc 1.png Fit "800x800" >}}Finding the iothubowner SAS token in Azure{{< /imgproc >}}
+
+Open the Azure IoT Explorer and connect using your iothubowner SAS token (see image above). If everything went well you should see messages coming up (assuming that there are messages in the local MQTT broker. If not, try to send some debug messages to test the connection).
+
+{{< imgproc 2.png Fit "800x800" >}}Messages arriving in the Azure IoT Hub Explorer{{< /imgproc >}}
+
+For more information about how to use the Azure IoT Explorer, [take a look into the official documentation](https://docs.microsoft.com/en-us/azure/iot-fundamentals/howto-use-iot-explorer)
+
+### Option 2: using mqtt-bridge
 
 **Currently specifying the username, which is required for Azure IoT Hub, is still in development. See also [GitHub issue #569 for more information](https://github.com/united-manufacturing-hub/united-manufacturing-hub/issues/569)**
 
@@ -118,16 +129,6 @@ As mqttBridgeCACert you need to use the [Baltimore CyberTrust Root](https://cace
 Furthermore, please set `username`, `host`, `port`, etc. accordingly
 
 If you do not know where to get the certificates or the connection parameters, please go back to [Prerequisites](#prerequisites) 
-
-### Step 4: check whether the messages appear in Azure IoT Hub using the device explorer
-
-{{< imgproc 1.png Fit "800x800" >}}Finding the iothubowner SAS token in Azure{{< /imgproc >}}
-
-Open the Azure IoT Explorer and connect using your iothubowner SAS token (see image above). If everything went well you should see messages coming up (assuming that there are messages in the local MQTT broker. If not, try to send some debug messages to test the connection).
-
-{{< imgproc 2.png Fit "800x800" >}}Messages arriving in the Azure IoT Hub Explorer{{< /imgproc >}}
-
-For more information about how to use the Azure IoT Explorer, [take a look into the official documentation](https://docs.microsoft.com/en-us/azure/iot-fundamentals/howto-use-iot-explorer)
 
 ## What to do now?
 
