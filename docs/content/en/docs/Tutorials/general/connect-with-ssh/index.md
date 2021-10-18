@@ -21,7 +21,7 @@ Enter your IP, e.g. `192.168.1.XXX`, in the Remote Host field. Select "Specify u
 
 {{< imgproc SSH_windows_2.png Fit "800x500" >}}Password{{< /imgproc>}}
 
-Enter the password and press enter. The password is `rancher`. You do not need to save the password, just click `No`.
+Enter the password and press enter. The default password of the auto setup will be `rancher`. You do not need to save the password, just click `No`.
 
 {{< imgproc SSH_windows_3.png Fit "800x500" >}}Successfully logged in via SSH{{< /imgproc>}}
 
