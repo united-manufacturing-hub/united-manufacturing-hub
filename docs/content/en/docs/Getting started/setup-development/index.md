@@ -103,7 +103,8 @@ Connect with the edge device using the software [Lens] and the Kubernetes creden
 {{< imgproc k3s_secret_5.png Fit "1280x500" >}}Paste from the clipboard{{< /imgproc >}}
 {{< imgproc k3s_secret_6.png Fit "1280x500" >}}{{< /imgproc >}}
 
-Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device. 
+Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device.
+ 
 Also ensure, that you just adjust die IP in between. The Port, which follows after the `:` should be untouched (e.g. https://XXX.X.X.X:**6443** in that case).
 
 {{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
