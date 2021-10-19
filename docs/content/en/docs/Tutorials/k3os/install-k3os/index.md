@@ -39,8 +39,6 @@ At this step you may be asked to select your hard drive. One of the devices `sda
 
 If you don not know what your hard drive is, you will have to play "Russian roulette" and choose a device. If you find out later that you installed the hard drive on the USB stick by mistake, repeat the installation process and use the other device.
 
-Translated with www.DeepL.com/Translator (free version)
-
 After that select `y` when you get asked for a cloud-init file
 
 {{< imgproc 6.png Fit "800x500" >}}Configure system with cloud-init file{{< /imgproc >}}
