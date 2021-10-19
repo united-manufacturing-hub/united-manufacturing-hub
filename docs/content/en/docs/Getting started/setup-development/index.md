@@ -19,7 +19,9 @@ Note: this content is also available in a presence workshop with an experienced 
  
 ### Prerequisites
 
-{{< imgproc prerequisites_k3os.png Fit "1280x500" >}}This installation methods requires some previous setup{{< /imgproc >}}
+{{< imgproc prerequisites_k3os.png Fit "1280x500" >}}{{< /imgproc >}}
+
+This installation methods requires some previous setup:
 
 - an edge device with x86 architecture. We recommend using the [K300 from OnLogic](https://www.onlogic.com/eu-en/k300/)
 - the [latest version of k3OS](https://github.com/rancher/k3os/releases/) [^versioning] installed on a bootable USB-stick [^flash-usb]. 
