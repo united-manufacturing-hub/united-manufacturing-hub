@@ -16,7 +16,7 @@ There are three options to setup a development environment:
 ## Option 1: using a seperate device in combination with k3OS and our installation script
 
 Note: this content is also available in a presence workshop with an experienced facilitator guiding the participants through the installation and answering questions. Contact us for more information!
-
+ 
 ### Prerequisites
 
 {{< imgproc prerequisites_k3os.png Fit "1280x500" >}}This installation methods requires some previous setup{{< /imgproc >}}
@@ -83,7 +83,7 @@ For production environments we recommend using a certificate to authenticate, wh
 
 #### Step 3: Connect via SSH
 
-Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr`. 
+Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr` or (works with out devices) `ifconfig eth0`. 
 
 Username: `rancher`
 Password: `rancher`
@@ -103,7 +103,7 @@ Connect with the edge device using the software [Lens] and the Kubernetes creden
 {{< imgproc k3s_secret_5.png Fit "1280x500" >}}Paste from the clipboard{{< /imgproc >}}
 {{< imgproc k3s_secret_6.png Fit "1280x500" >}}{{< /imgproc >}}
 
-Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device.
+Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device. Also ensure, that you just adjust die IP in between. The Port, which follows after the `:` should be untouched (e.g. https://XXX.X.X.X:**6443** in that case).
 
 {{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
 {{< imgproc k3s_secret_8.png Fit "1280x500" >}}{{< /imgproc >}}
