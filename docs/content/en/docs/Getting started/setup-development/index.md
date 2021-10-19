@@ -83,7 +83,7 @@ For production environments we recommend using a certificate to authenticate, wh
 
 #### Step 3: Connect via SSH
 
-Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr` or (works with out devices) `ifconfig eth0`. 
+Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr` or `ifconfig eth0` (works with out devices). 
 
 Username: `rancher`
 Password: `rancher`
@@ -103,7 +103,8 @@ Connect with the edge device using the software [Lens] and the Kubernetes creden
 {{< imgproc k3s_secret_5.png Fit "1280x500" >}}Paste from the clipboard{{< /imgproc >}}
 {{< imgproc k3s_secret_6.png Fit "1280x500" >}}{{< /imgproc >}}
 
-Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device. Also ensure, that you just adjust die IP in between. The Port, which follows after the `:` should be untouched (e.g. https://XXX.X.X.X:**6443** in that case).
+Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device. 
+Also ensure, that you just adjust die IP in between. The Port, which follows after the `:` should be untouched (e.g. https://XXX.X.X.X:**6443** in that case).
 
 {{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
 {{< imgproc k3s_secret_8.png Fit "1280x500" >}}{{< /imgproc >}}
