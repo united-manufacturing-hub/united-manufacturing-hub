@@ -48,8 +48,6 @@ After that select `y` when you get asked for a cloud-init file
 Now enter the URL of your cloud-init file, e.g. the one mentioned in the [Installation guide](/docs/getting-started/setup-development/#k3os). 
 
 **Attention: The default keyboard of k3Os is American.**
-<p>
-</p>
 So just google the American keyboard and see where you can find the letters and characters used.
 
 Press enter to continue.
