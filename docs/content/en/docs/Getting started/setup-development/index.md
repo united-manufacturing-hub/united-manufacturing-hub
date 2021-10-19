@@ -28,6 +28,8 @@ Note: this content is also available in a presence workshop with an experienced 
 - a computer monitor connected with the edge device 
 - a keyboard connected with the edge device
 
+As shown, the Factorycube is an optional device that combines all the required hardware in a rugged industrial gateway for industrial use.
+
 [^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/tutorials/general/flashing-operating-system-on-usb)
 [^SSH-client]: See also out guide: [How to connect via SSH](/docs/tutorials/general/connect-with-ssh)
 [^network-setup]: See also out guide: [How to setup a development network](/docs/tutorials/general/networking)
@@ -104,7 +106,7 @@ Connect with the edge device using the software [Lens] and the Kubernetes creden
 {{< imgproc k3s_secret_6.png Fit "1280x500" >}}{{< /imgproc >}}
 
 Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device.
- 
+
 Also ensure, that you just adjust die IP in between. The Port, which follows after the `:` should be untouched (e.g. https://XXX.X.X.X:**6443** in that case).
 
 {{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
