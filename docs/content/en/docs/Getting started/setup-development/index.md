@@ -28,8 +28,6 @@ Note: this content is also available in a presence workshop with an experienced 
 - a computer monitor connected with the edge device 
 - a keyboard connected with the edge device
 
-<div class="panel panel-info">
-**Note**
 <div class="panel-body">
 
 As shown, the Factorycube is an optional device that combines all the required hardware in a rugged industrial gateway for industrial use.
