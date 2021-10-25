@@ -37,10 +37,21 @@ func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPasswor
 	dataExpiration = 12 * time.Hour
 }
 
+func IsRedisAvailable() bool {
+	if rdb != nil {
+		err := rdb.Ping(ctx)
+		if err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // AsHash returns a hash for a given interface
 func AsHash(o interface{}) string {
 	h := crc32.NewIEEE() // modified for quicker hashing
-	h.Write([]byte(fmt.Sprintf("%v", o)))
+	// This cannot fail
+	_, _ = h.Write([]byte(fmt.Sprintf("%v", o)))
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

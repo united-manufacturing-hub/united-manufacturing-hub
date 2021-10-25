@@ -145,7 +145,7 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 			}
 		}()
 	} else if err != nil { // never executed
-		PQErrorHandling("GetProductID db.QueryRow()", err)
+		PGErrorHandling("GetProductID db.QueryRow()", err)
 	}
 
 	newObject := uniqueProductQueue{

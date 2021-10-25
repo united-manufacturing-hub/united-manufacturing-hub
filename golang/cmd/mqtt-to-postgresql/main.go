@@ -89,17 +89,39 @@ func main() {
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := 0 // default database
 
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
-
+	// Important: This has to be above REDIS, Postgresql and MQTT
 	zap.S().Debugf("Setting up raw queue")
 	storedRawMQTTHandler = *NewStoredRawMQTTHandler()
-
-	zap.S().Debugf("Setting up database")
 	storedRawMQTTHandler.Setup()
 
+	zap.S().Debugf("Setting up MQTT")
+	podName := os.Getenv("MY_POD_NAME")
+	mqttTopic := os.Getenv("MQTT_TOPIC")
+	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName)
+
+	zap.S().Debugf("Setting up redis")
+	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
+
+	for {
+		if internal.IsRedisAvailable() {
+			break
+		}
+		zap.S().Debugf("Redis not yet available")
+		time.Sleep(1 * time.Second)
+	}
+
+	zap.S().Debugf("Setting up database")
 	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
 	// Setting up queues
 	zap.S().Debugf("Setting up queues")
+
+	for {
+		if IsPostgresSQLAvailable() {
+			break
+		}
+		zap.S().Debugf("Postgres not yet available")
+		time.Sleep(1 * time.Second)
+	}
 
 	addOrderHandler = *NewAddOrderHandler()
 	addParentToChildHandler = *NewAddParentToChildHandler()
@@ -144,11 +166,6 @@ func main() {
 	uniqueProductHandler.Setup()
 	valueDataHandler.Setup()
 	valueStringHandler.Setup()
-
-	zap.S().Debugf("Setting up MQTT")
-	podName := os.Getenv("MY_POD_NAME")
-	mqttTopic := os.Getenv("MQTT_TOPIC")
-	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

@@ -144,7 +144,7 @@ func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID
 		}()
 		return
 	} else if err != nil { // never executed
-		PQErrorHandling("GetProductID db.QueryRow()", err)
+		PGErrorHandling("GetProductID db.QueryRow()", err)
 	}
 
 	newObject := addOrderQueue{

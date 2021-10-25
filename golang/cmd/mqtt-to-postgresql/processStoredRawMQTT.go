@@ -8,8 +8,9 @@ import (
 )
 
 type StoredRawMQTTHandler struct {
-	priorityQueue *goque.PriorityQueue
-	shutdown      bool
+	priorityQueue   *goque.PriorityQueue
+	shutdown        bool
+	finishedOldMqtt bool
 }
 
 // NewStoredRawMQTTHandler is a special handler, for storing raw mqtt messages, that couldn't get process due to a server shutdown
@@ -34,11 +35,13 @@ func NewStoredRawMQTTHandler() (handler *StoredRawMQTTHandler) {
 
 func (r StoredRawMQTTHandler) Setup() {
 	go r.process()
+	go r.reprocess()
 }
 func (r StoredRawMQTTHandler) process() {
 	item, err := r.priorityQueue.Dequeue()
 	if err != nil && err != goque.ErrEmpty {
 		zap.S().Warnf("Error dequing in StoredRawMQTTHandler", err)
+		r.finishedOldMqtt = true
 		return
 	}
 
@@ -49,11 +52,43 @@ func (r StoredRawMQTTHandler) process() {
 			zap.S().Errorf("Stored MQTT message is corrupt !", err, item)
 			continue
 		}
-		processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.Prefix, pt.Payload)
+		err := processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.Prefix, pt.Payload)
+		if err != nil {
+			// Postgres doesn't seem to be working, just try again later
+			time.Sleep(10 * time.Second)
+		}
 		item, err = r.priorityQueue.Dequeue()
 	}
 
 	zap.S().Infof("Finished handling old MQTT messages !")
+	r.finishedOldMqtt = true
+}
+
+func (r StoredRawMQTTHandler) reprocess() {
+	for {
+		item, err := r.priorityQueue.Dequeue()
+		if err != nil {
+			// Sleep if there is any error and just try again later
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		for err != goque.ErrEmpty {
+			var pt mqttMessage
+			errx := item.ToObjectFromJSON(&pt)
+			if errx != nil {
+				zap.S().Errorf("Stored MQTT message is corrupt !", err, item)
+				continue
+			}
+			err := processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.Prefix, pt.Payload)
+			if err != nil {
+				// Postgres doesn't seem to be working, just try again later
+				time.Sleep(10 * time.Second)
+			}
+			item, err = r.priorityQueue.Dequeue()
+		}
+
+	}
 }
 
 func (r StoredRawMQTTHandler) enqueue(bytes []byte, priority uint8) {

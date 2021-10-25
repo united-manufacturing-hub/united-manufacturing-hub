@@ -10,7 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 	"io/ioutil"
-
 	"regexp" // pattern matching
 )
 
@@ -73,9 +72,19 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 }
 
-func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) {
+func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) (err error) {
 	zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
-	AddAssetIfNotExisting(assetID, location, customerID)
+	err = AddAssetIfNotExisting(assetID, location, customerID)
+	if err == nil {
+		// Why go allows returning errors, that are not exported is beyond me
+		if err.Error() == "sql: database is closed" || err.Error() == "driver: bad connection" {
+			zap.S().Debugf("Failed to connect to database, writing to rawmqtthandler")
+			storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, payloadType)
+		}
+
+		zap.S().Warnf("Low level postgres error: ", err)
+		return
+	}
 
 	if customerID != "raw" {
 		if payloadType == "" {
@@ -154,6 +163,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 	}
 
+	return
 }
 
 var rp = regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
@@ -175,7 +185,10 @@ func getOnMessageReceived() func(MQTT.Client, MQTT.Message) {
 
 		mqttTotal.Inc()
 
-		go processMessage(customerID, location, assetID, payloadType, payload)
+		go func() {
+			//This is "fine" here, cause it will re-queue
+			_ = processMessage(customerID, location, assetID, payloadType, payload)
+		}()
 	}
 }
 
