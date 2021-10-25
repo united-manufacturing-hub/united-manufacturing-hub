@@ -91,7 +91,11 @@ func main() {
 
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
+	zap.S().Debugf("Setting up raw queue")
+	storedRawMQTTHandler = *NewStoredRawMQTTHandler()
+
 	zap.S().Debugf("Setting up database")
+	storedRawMQTTHandler.Setup()
 
 	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
 	// Setting up queues
@@ -118,7 +122,6 @@ func main() {
 	uniqueProductHandler = *NewUniqueProductHandler()
 	valueDataHandler = *NewValueDataHandler()
 	valueStringHandler = *NewValueStringHandler()
-	storedRawMQTTHandler = *NewStoredRawMQTTHandler()
 
 	addOrderHandler.Setup()
 	addParentToChildHandler.Setup()
@@ -141,7 +144,6 @@ func main() {
 	uniqueProductHandler.Setup()
 	valueDataHandler.Setup()
 	valueStringHandler.Setup()
-	storedRawMQTTHandler.Setup()
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")

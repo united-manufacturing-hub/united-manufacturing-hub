@@ -22,15 +22,15 @@ type productTag struct {
 	Value       float64 `json:"value"`
 }
 type ProductTagHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 func NewProductTagHandler() (handler *ProductTagHandler) {
 	const queuePathDB = "/data/ProductTag"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -39,8 +39,8 @@ func NewProductTagHandler() (handler *ProductTagHandler) {
 	}
 
 	handler = &ProductTagHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -48,8 +48,8 @@ func NewProductTagHandler() (handler *ProductTagHandler) {
 func (r ProductTagHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pg.Length() > 0 {
-			zap.S().Debugf("ProductTagHandler queue length: %d", r.pg.Length())
+		if r.priorityQueue.Length() > 0 {
+			zap.S().Debugf("ProductTagHandler queue length: %d", r.priorityQueue.Length())
 		}
 	}
 }
@@ -86,15 +86,15 @@ func (r ProductTagHandler) process() {
 }
 
 func (r ProductTagHandler) dequeue() (items []*goque.PriorityItem) {
-	if r.pg.Length() > 0 {
-		item, err := r.pg.Dequeue()
+	if r.priorityQueue.Length() > 0 {
+		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueue.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -104,7 +104,7 @@ func (r ProductTagHandler) dequeue() (items []*goque.PriorityItem) {
 	return
 }
 func (r ProductTagHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -112,10 +112,10 @@ func (r ProductTagHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r ProductTagHandler) Shutdown() (err error) {
-	zap.S().Warnf("[ProductTagHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[ProductTagHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 

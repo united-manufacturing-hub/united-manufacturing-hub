@@ -17,15 +17,15 @@ type deleteShiftByAssetIdAndBeginTimestamp struct {
 }
 
 type DeleteShiftByAssetIdAndBeginTimestampHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAssetIdAndBeginTimestampHandler) {
 	const queuePathDB = "/data/DeleteShiftByAssetIdAndBeginTimestamp"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -34,8 +34,8 @@ func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAs
 	}
 
 	handler = &DeleteShiftByAssetIdAndBeginTimestampHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -43,8 +43,8 @@ func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAs
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pg.Length() > 0 {
-			zap.S().Debugf("DeleteShiftByAssetIdAndBeginTimestampHandler queue length: %d", r.pg.Length())
+		if r.priorityQueue.Length() > 0 {
+			zap.S().Debugf("DeleteShiftByAssetIdAndBeginTimestampHandler queue length: %d", r.priorityQueue.Length())
 		}
 	}
 }
@@ -80,15 +80,15 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) process() {
 }
 
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) dequeue() (items []*goque.PriorityItem) {
-	if r.pg.Length() > 0 {
-		item, err := r.pg.Dequeue()
+	if r.priorityQueue.Length() > 0 {
+		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueue.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -99,7 +99,7 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) dequeue() (items []*goque.
 }
 
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -107,10 +107,10 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) enqueue(bytes []byte, prio
 }
 
 func (r DeleteShiftByAssetIdAndBeginTimestampHandler) Shutdown() (err error) {
-	zap.S().Warnf("[DeleteShiftByAssetIdAndBeginTimestampHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[DeleteShiftByAssetIdAndBeginTimestampHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 

@@ -25,15 +25,15 @@ type uniqueProduct struct {
 }
 
 type UniqueProductHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	const queuePathDB = "/data/UniqueProduct"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -42,8 +42,8 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	}
 
 	handler = &UniqueProductHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -51,8 +51,8 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 func (r UniqueProductHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pg.Length() > 0 {
-			zap.S().Debugf("UniqueProductHandler queue length: %d", r.pg.Length())
+		if r.priorityQueue.Length() > 0 {
+			zap.S().Debugf("UniqueProductHandler queue length: %d", r.priorityQueue.Length())
 		}
 	}
 }
@@ -88,15 +88,15 @@ func (r UniqueProductHandler) process() {
 }
 
 func (r UniqueProductHandler) dequeue() (items []*goque.PriorityItem) {
-	if r.pg.Length() > 0 {
-		item, err := r.pg.Dequeue()
+	if r.priorityQueue.Length() > 0 {
+		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueue.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -107,7 +107,7 @@ func (r UniqueProductHandler) dequeue() (items []*goque.PriorityItem) {
 }
 
 func (r UniqueProductHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -115,10 +115,10 @@ func (r UniqueProductHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r UniqueProductHandler) Shutdown() (err error) {
-	zap.S().Warnf("[UniqueProductHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[UniqueProductHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 

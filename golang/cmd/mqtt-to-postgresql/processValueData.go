@@ -21,33 +21,33 @@ type processValueQueueF64 struct {
 }
 
 type ValueDataHandler struct {
-	pgI32    *goque.PriorityQueue
-	pgF64    *goque.PriorityQueue
-	shutdown bool
+	priorityQueueI32 *goque.PriorityQueue
+	priorityQueueF64 *goque.PriorityQueue
+	shutdown         bool
 }
 
 func NewValueDataHandler() (handler *ValueDataHandler) {
 	const queuePathDBI32 = "/data/ValueDataI32"
 	var err error
-	var pgI32 *goque.PriorityQueue
-	pgI32, err = SetupQueue(queuePathDBI32)
+	var priorityQueueI32 *goque.PriorityQueue
+	priorityQueueI32, err = SetupQueue(queuePathDBI32)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBI32, err)
 		return
 	}
 
 	const queuePathDBF64 = "/data/ValueDataF64"
-	var pgF64 *goque.PriorityQueue
-	pgF64, err = SetupQueue(queuePathDBF64)
+	var priorityQueueF64 *goque.PriorityQueue
+	priorityQueueF64, err = SetupQueue(queuePathDBF64)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDBF64, err)
 		return
 	}
 
 	handler = &ValueDataHandler{
-		pgF64:    pgF64,
-		pgI32:    pgI32,
-		shutdown: false,
+		priorityQueueF64: priorityQueueF64,
+		priorityQueueI32: priorityQueueI32,
+		shutdown:         false,
 	}
 	return
 }
@@ -55,11 +55,11 @@ func NewValueDataHandler() (handler *ValueDataHandler) {
 func (r ValueDataHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pgI32.Length() > 0 {
-			zap.S().Debugf("ValueDataHandler queue length (I32): %d", r.pgI32.Length())
+		if r.priorityQueueI32.Length() > 0 {
+			zap.S().Debugf("ValueDataHandler queue length (I32): %d", r.priorityQueueI32.Length())
 		}
-		if r.pgF64.Length() > 0 {
-			zap.S().Debugf("ValueDataHandler queue length (F64): %d", r.pgF64.Length())
+		if r.priorityQueueF64.Length() > 0 {
+			zap.S().Debugf("ValueDataHandler queue length (F64): %d", r.priorityQueueF64.Length())
 		}
 	}
 }
@@ -115,15 +115,15 @@ func (r ValueDataHandler) processF64() {
 }
 
 func (r ValueDataHandler) dequeueF64() (items []*goque.PriorityItem) {
-	if r.pgF64.Length() > 0 {
-		item, err := r.pgF64.Dequeue()
+	if r.priorityQueueF64.Length() > 0 {
+		item, err := r.priorityQueueF64.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pgF64.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueueF64.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -134,15 +134,15 @@ func (r ValueDataHandler) dequeueF64() (items []*goque.PriorityItem) {
 }
 
 func (r ValueDataHandler) dequeueI32() (items []*goque.PriorityItem) {
-	if r.pgI32.Length() > 0 {
-		item, err := r.pgI32.Dequeue()
+	if r.priorityQueueI32.Length() > 0 {
+		item, err := r.priorityQueueI32.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pgI32.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueueI32.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -153,14 +153,14 @@ func (r ValueDataHandler) dequeueI32() (items []*goque.PriorityItem) {
 }
 
 func (r ValueDataHandler) enqueueI32(bytes []byte, priority uint8) {
-	_, err := r.pgI32.Enqueue(priority, bytes)
+	_, err := r.priorityQueueI32.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
 	}
 }
 func (r ValueDataHandler) enqueueF64(bytes []byte, priority uint8) {
-	_, err := r.pgF64.Enqueue(priority, bytes)
+	_, err := r.priorityQueueF64.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -168,10 +168,10 @@ func (r ValueDataHandler) enqueueF64(bytes []byte, priority uint8) {
 }
 
 func (r ValueDataHandler) Shutdown() (err error) {
-	zap.S().Warnf("[ValueDataHandler] shutting down, Queue length: F64: %d,I32: %d", r.pgF64.Length(), r.pgI32.Length())
+	zap.S().Warnf("[ValueDataHandler] shutting down, Queue length: F64: %d,I32: %d", r.priorityQueueF64.Length(), r.priorityQueueI32.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pgI32)
+	err = CloseQueue(r.priorityQueueI32)
 	return
 }
 

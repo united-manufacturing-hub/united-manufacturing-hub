@@ -8,16 +8,16 @@ import (
 )
 
 type StoredRawMQTTHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 // NewStoredRawMQTTHandler is a special handler, for storing raw mqtt messages, that couldn't get process due to a server shutdown
 func NewStoredRawMQTTHandler() (handler *StoredRawMQTTHandler) {
 	const queuePathDB = "/data/StoredRawMQTT"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -26,8 +26,8 @@ func NewStoredRawMQTTHandler() (handler *StoredRawMQTTHandler) {
 	}
 
 	handler = &StoredRawMQTTHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -36,7 +36,7 @@ func (r StoredRawMQTTHandler) Setup() {
 	go r.process()
 }
 func (r StoredRawMQTTHandler) process() {
-	item, err := r.pg.Dequeue()
+	item, err := r.priorityQueue.Dequeue()
 	if err != nil && err != goque.ErrEmpty {
 		zap.S().Warnf("Error dequing in StoredRawMQTTHandler", err)
 		return
@@ -50,14 +50,14 @@ func (r StoredRawMQTTHandler) process() {
 			continue
 		}
 		processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.Prefix, pt.Payload)
-		item, err = r.pg.Dequeue()
+		item, err = r.priorityQueue.Dequeue()
 	}
 
 	zap.S().Infof("Finished handling old MQTT messages !")
 }
 
 func (r StoredRawMQTTHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Errorf("Failed to enqueue item, loss of data !", bytes, err)
 		return
@@ -65,10 +65,10 @@ func (r StoredRawMQTTHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r StoredRawMQTTHandler) Shutdown() (err error) {
-	zap.S().Warnf("[StoredRawMQTTHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[StoredRawMQTTHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
 	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 

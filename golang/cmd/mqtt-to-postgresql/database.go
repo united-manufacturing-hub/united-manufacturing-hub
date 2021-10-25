@@ -54,10 +54,10 @@ func ShutdownDB() {
 	}
 }
 
-// PQErrorHandlingTransaction logs and handles postgresql errors in transactions
-func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (returnedErr error) {
+// PGErrorHandlingTransaction logs and handles postgresql errors in transactions
+func PGErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (returnedErr error) {
 
-	PQErrorHandling(sqlStatement, err)
+	PGErrorHandling(sqlStatement, err)
 
 	if e := pgerror.UniqueViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: UniqueViolation", err, sqlStatement)
@@ -71,14 +71,14 @@ func PQErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (re
 
 	err2 := txn.Rollback()
 	if err2 != nil {
-		PQErrorHandling("txn.Rollback()", err2)
+		PGErrorHandling("txn.Rollback()", err2)
 	}
 	returnedErr = err
 	return
 }
 
-// PQErrorHandling logs and handles postgresql errors
-func PQErrorHandling(sqlStatement string, err error) {
+// PGErrorHandling logs and handles postgresql errors
+func PGErrorHandling(sqlStatement string, err error) {
 
 	if e := pgerror.UniqueViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: UniqueViolation", err, sqlStatement)
@@ -96,7 +96,7 @@ func PQErrorHandling(sqlStatement string, err error) {
 // Either commits or rolls back the transaction, depending on if the tx was successful
 func CommitOrRollbackOnError(txn *sql.Tx, errIn error) (errOut error) {
 	if txn == nil {
-		PQErrorHandling("Transaction is nil", errIn)
+		PGErrorHandling("Transaction is nil", errIn)
 		return
 	}
 
@@ -111,7 +111,7 @@ func CommitOrRollbackOnError(txn *sql.Tx, errIn error) (errOut error) {
 		errOut = txn.Rollback()
 		if errOut != nil {
 			if errOut != sql.ErrTxDone {
-				PQErrorHandling("txn.Rollback()", errOut)
+				PGErrorHandling("txn.Rollback()", errOut)
 			} else {
 				zap.S().Warnf("%s", errOut)
 			}
@@ -121,7 +121,7 @@ func CommitOrRollbackOnError(txn *sql.Tx, errIn error) (errOut error) {
 		errOut = txn.Commit()
 		if errOut != nil {
 			if errOut != sql.ErrTxDone {
-				PQErrorHandling("txn.Commit()", errOut)
+				PGErrorHandling("txn.Commit()", errOut)
 			} else {
 				zap.S().Warnf("Commit failed: %s", errOut)
 			}
@@ -157,7 +157,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
 	} else if err != nil {
-		PQErrorHandling("GetAssetID db.QueryRow()", err)
+		PGErrorHandling("GetAssetID db.QueryRow()", err)
 	}
 
 	// Store to cache if not yet existing
@@ -177,7 +177,7 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 		zap.S().Errorf("No Results Found DBAssetID: %d, productName: %s", DBassetID, productName)
 		return
 	} else if err != nil {
-		PQErrorHandling("GetProductID db.QueryRow()", err)
+		PGErrorHandling("GetProductID db.QueryRow()", err)
 	}
 	success = true
 
@@ -193,7 +193,7 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
 		return
 	} else if err != nil {
-		PQErrorHandling("GetComponentID() db.QueryRow()", err)
+		PGErrorHandling("GetComponentID() db.QueryRow()", err)
 	}
 	success = true
 	return
@@ -207,7 +207,7 @@ func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error, su
 		zap.S().Errorf("No Results Found aid: %s, DBassetID: %d", aid, DBassetID)
 		return
 	} else if err != nil {
-		PQErrorHandling("GetUniqueProductID db.QueryRow()", err)
+		PGErrorHandling("GetUniqueProductID db.QueryRow()", err)
 	}
 	success = true
 	return
@@ -221,7 +221,7 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 		zap.S().Errorf("No Results Found aid: %s, assetID: %d", aid, assetID)
 		return
 	} else if err != nil {
-		PQErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
+		PGErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
 	}
 	success = true
 	return
@@ -288,7 +288,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) {
 	_, err = stmt.Exec(assetID, location, customerID)
 	zap.S().Debugf("Exec: ", err)
 	if err != nil {
-		PQErrorHandling("INSERT INTO ASSETTABLE", err)
+		PGErrorHandling("INSERT INTO ASSETTABLE", err)
 	}
 }
 
@@ -1328,7 +1328,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 			)
 			err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
 			if err != nil {
-				err = PQErrorHandlingTransaction("rows.Scan()", err, txn)
+				err = PGErrorHandlingTransaction("rows.Scan()", err, txn)
 				if err != nil {
 					return
 				}
@@ -1337,7 +1337,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 
 			err = val.Close()
 			if err != nil {
-				err = PQErrorHandlingTransaction("val.Close()", err, txn)
+				err = PGErrorHandlingTransaction("val.Close()", err, txn)
 				if err != nil {
 					return
 				}
