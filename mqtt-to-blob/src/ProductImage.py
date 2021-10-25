@@ -10,7 +10,6 @@
 #     result = product_image_from_dict(json.loads(json_string))
 # =============================================================================
 
-import json
 from dataclasses import dataclass
 from typing import Any, TypeVar, Type, cast
 
@@ -37,7 +36,7 @@ def to_class(c: Type[T], x: Any) -> dict:
 class Image:
     image_id: str
     image_bytes: str
-    image_heigth: int
+    image_height: int
     image_width: int
     image_channels: int
 
@@ -46,16 +45,16 @@ class Image:
         assert isinstance(obj, dict)
         image_id = from_str(obj.get("image_id"))
         image_bytes = from_str(obj.get("image_bytes"))
-        image_heigth = from_int(obj.get("image_heigth"))
+        image_height = from_int(obj.get("image_height"))
         image_width = from_int(obj.get("image_width"))
         image_channels = from_int(obj.get("image_channels"))
-        return Image(image_id, image_bytes, image_heigth, image_width, image_channels)
+        return Image(image_id, image_bytes, image_height, image_width, image_channels)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["image_id"] = from_str(self.image_id)
         result["image_bytes"] = from_str(self.image_bytes)
-        result["image_heigth"] = from_int(self.image_heigth)
+        result["image_height"] = from_int(self.image_height)
         result["image_width"] = from_int(self.image_width)
         result["image_channels"] = from_int(self.image_channels)
         return result
