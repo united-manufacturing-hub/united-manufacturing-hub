@@ -1,12 +1,14 @@
-# Source: app.quicktype.io
-
+# =============================================================================
+# Generated using -> Source: app.quicktype.io
+# 
 # To use this code, make sure you
-#
+# 
 #     import json
-#
+# 
 # and then, to convert JSON from a string, do
-#
+# 
 #     result = product_image_from_dict(json.loads(json_string))
+# =============================================================================
 
 import json
 from dataclasses import dataclass
