@@ -6,73 +6,70 @@ description: >
   The software of the United Manufacturing Hub is designed as a modular system. Our software serves as a basic building block for connecting and using various hardware and software components quickly and easily. This enables flexible use and thus the possibility to create comprehensive solutions for various challenges in the industry.
 ---
 
-## Architecture
+## High-level architecture
 
-{{< imgproc dataprocessing Fit "1200x1200" >}}{{< /imgproc >}}
+The United Manufacturing Hub consists out of three layers and two packages for installation:
 
-### Edge-device / IoT gateway
+[![Overview](dataprocessing-Overview.drawio.png)](dataprocessing-Overview.drawio.png)
 
-As a central hardware component we use an edge device which is connected to different data sources and to a server. The edge device is an industrial computer on which our software is installed. The customer can either use the United factorycube offered by us or his own IoT gateway. 
+The following sub-chapters will explain the layers and the two packages further. If you want to deep-dive into the actual architecture, you can [scroll further down](#low-level-architecture)
 
-More information about our certified devices can be found on our [website](https://www.united-manufacturing-hub.com)
-
-**Examples:**
-
-- Factorycube
-- Cubi
-
-### Data acquisition
+### Lower level: data acquisition
 
 The data sources connected to the edge device provide the foundation for automatic data collection.  The data sources can be external sensors (e.g. light barriers, vibration sensors), input devices (e.g. button bars), Auto-ID technologies (e.g. barcode scanners), industrial cameras and other data sources such as machine PLCs. The wide range of data sources allows the connection of all machines, either directly via the machine PLC or via simple and fast retrofitting with external sensors.
 
-More information can be found in the technical documentation of the edge helm chart [`factorycube-edge`](../developers/factorycube-edge)
-
 **Examples:**
 
-- sensorconnect
-- barcodereader
+- sensorconnect (to automatically read out IO-Link Master and their connected sensors)
+- cameraconnect (to automatically read out GenICam compatible cameras and push the result into MQTT, in development)
+- barcodereader (to connect USB barcodereader and push data into MQTT)
+- Node-RED (e.g., for propertiary and / or machine specific protocols)
+- PLC4X (in development)
 
-### Data processing
+### Middle layer: data infrastructure
 
-The software installed on the edge device receives the data from the individual data sources. Using various data processing services and "node-red", the imported data is preprocessed and forwarded to the connected server via the MQTT broker.
+This layer is the central part of the United Manufacturing Hub. It provides an infrastructure including data models to fulfull all manufacturing needs for data processing and storage.
 
-More information can be found in the technical documentation of the edge and server helm chart [`factorycube-edge`](../developers/factorycube-edge) [`factorycube-server`](../developers/factorycube-server)
+It starts by making all acquired data accessible in real-time for data processing using either established solutions like Node-RED or your own written software using a microservice approach and MQTT. Therefore, adding new data, processing it or integrating it with other systems on-the-edge is very easy. We recommend to start transforming data into the [central data model](/docs/concepts/mqtt/) at this step.
 
+To send the raw and / or processed data to a central place (cloud or on-premise) we use our self-written [MQTT bridge](/docs/developers/factorycube-edge/mqtt-bridge/). Internet connections or network in general is often unstable in manufacturing environments and therefore one needs to safely buffer messages across internet or electricity downtimes. As existing MQTT bridge solutions were unreliable we developed our own.
 
-**Examples:**
+Once the data arrives at the server it can be further processed using the same methods as on-the-edge (MQTT microservice, Node-RED, etc.). The real-time data can also integrated into MES or ERP systems.
 
-- node-red
+All processed data is then stored into databases using load-balanced microservices with caching. Therefore, one can archieve high-availability and enourmous scalability through the load-balanced microservices. Furthermore, common requests and operations are cached in [redis](https://redis.io/) 
 
-### Data storage
+Relational data (e.g., data about orders and products) as well as time series data in high resolution (e.g., machine data like temperature) can be stored in the TimescaleDB database (difference between InfluxDB and timescaleDB have been described [in detail](/docs/concepts/timescaledb-vs-influxdb/)). Blob data (e.g., camera pictures) will be stored in a blob storage either directly [in Minio](https://min.io/) or using a Minio gateway in a cloud specific storage like [AWS S3](https://docs.min.io/docs/minio-gateway-for-s3.html) or [Microsoft Azure Blob Storage](https://docs.min.io/docs/minio-gateway-for-azure.html).
 
-The data forwarded by the edge device can either be stored on the customer's servers or, in the SaaS version, in the United Cloud hosted by us. Relational data (e.g. data about orders and products) as well as time series data in high resolution (e.g. machine data like temperature) can be stored.
+We do not allow direct access to the databases for performance and security reasons. Instead, we've put an additional, self-written, component in front called [factoryinsight](/docs/developers/factorycube-server/factoryinsight/). factoryinsight provides a REST API to access raw data from the databases as well as processed data in form of KPI's like 'OEE losses' or similar. All requests are load-balanced, cached and executed only on a replica of the database.
 
-More information can be found in the technical documentation of the server helm chart [`factorycube-server`](../developers/factorycube-server)
+To insert data via a REST API we've developed two additional services [grafana-proxy](http://localhost:1313/docs/developers/factorycube-server/grafana-proxy/) and [factoryinput](/docs/developers/factorycube-server/factoryinput/).
 
 **Examples:**
 
 - TimescaleDB 
+- Node-RED
+- factoryinput
+- factoryinsight
+- minio
 
-### Data usage
+### Higher level: visualization 
 
-The stored data is automatically processed and provided to the user via a Grafana dashboard or other computer programs via a Rest interface. For each data request, the user can choose between raw data and various pre-processed data such as OEE, MTBF, etc., so that every user (even without programming knowledge) can quickly and easily compose personally tailored dashboards with the help of modular building blocks.
-
-More information can be found in the technical documentation of the server helm chart [`factorycube-server`](../developers/factorycube-server)
+As a standard dashboarding tool the United Manufacturing Hub uses [Grafana](https://grafana.com/) in combination with self-written plugins, which allow every user (even without programming knowledge) to quickly and easilyy compose personally tailored dashboards with the help of modular building blocks.
 
 **Examples:**
 
 - Grafana
-- factoryinsight
+- [umh-datasource and umh-factoryinput-panel](/docs/developers/factorycube-server/grafana-plugins/)
 
+### The right side: deployment options
 
-## Practical implications
+The entire stack can be deployed using only a configuration file (`values.yaml`) and the corresponding Helm charts factorycube-server and factorycube-edge.
 
-### Edge devices
+This allows to deploy the architecture in hybrid setups, from deploying it on-the-edge IIoT gateways to on-premise servers to the cloud (e.g., Azure AKS)
 
-Typically you have multiple data sources like `sensorconnect` or `barcodereader`, that are containered in a Docker container. They all send their data to the MQTT broker. You can now process the data in node-red by subscribing to the data sources via MQTT, processing the data, and then writing it back.
+## Low-level architecture
 
-### Server
+If you want to go more into detail, here is the detailled architecture:
 
-#### Database access
+[![Software](dataprocessing-Software.drawio.png)](dataprocessing-Software.drawio.png)
 
-The database on the server side should never be accessed directly by a service except `mqtt-to-postgresql` and `factoryinsight`. Instead, these services should be modified to include the required functionalities.
