@@ -1,0 +1,146 @@
+[
+    {
+        "id": "075f6121efaf0f36",
+        "type": "tab",
+        "label": "Azure IoT Hub",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "135070c95bd30c4d",
+        "type": "mqtt out",
+        "z": "075f6121efaf0f36",
+        "name": "",
+        "topic": "devices/device-ling/messages/events/",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "89086b538a91a7a3",
+        "x": 990,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "bac1d632cb663f50",
+        "type": "mqtt in",
+        "z": "075f6121efaf0f36",
+        "name": "",
+        "topic": "ia/#",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "5dff9791.d1b278",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "x": 290,
+        "y": 320,
+        "wires": [
+            [
+                "66b6a88ebfbc6733"
+            ]
+        ]
+    },
+    {
+        "id": "e212192aa4c975c6",
+        "type": "function",
+        "z": "075f6121efaf0f36",
+        "name": "",
+        "func": "msg.payload = {\n    \"topic\": msg.topic,\n    \"payload\": msg.payload\n}\n\nmsg.topic = \"\"\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 600,
+        "y": 320,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "66b6a88ebfbc6733",
+        "type": "json",
+        "z": "075f6121efaf0f36",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 430,
+        "y": 320,
+        "wires": [
+            [
+                "e212192aa4c975c6"
+            ]
+        ]
+    },
+    {
+        "id": "89086b538a91a7a3",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "contoso-test.azure-devices.net",
+        "port": "8883",
+        "tls": "b5ce51ba7df0e8d9",
+        "clientid": "device-ling",
+        "usetls": true,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "devices/device-ling/messages/events/",
+        "birthQos": "0",
+        "birthPayload": "CONNECTED",
+        "birthMsg": {},
+        "closeTopic": "devices/device-ling/messages/events/",
+        "closeQos": "0",
+        "closePayload": "DISCONNECTED",
+        "closeMsg": {},
+        "willTopic": "devices/device-ling/messages/events/",
+        "willQos": "0",
+        "willPayload": "UNEXPECTED DISCONNECTION",
+        "willMsg": {},
+        "sessionExpiry": ""
+    },
+    {
+        "id": "5dff9791.d1b278",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "factorycube-edge-emqxedge-service",
+        "port": "1883",
+        "clientid": "",
+        "usetls": false,
+        "compatmode": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "sessionExpiry": ""
+    },
+    {
+        "id": "b5ce51ba7df0e8d9",
+        "type": "tls-config",
+        "name": "",
+        "cert": "",
+        "key": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": true,
+        "alpnprotocol": ""
+    }
+]
