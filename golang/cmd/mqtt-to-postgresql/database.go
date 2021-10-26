@@ -308,8 +308,13 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) (
 
 func IsRecoverablePostgresErr(err error) bool {
 	// Why go allows returning errors, that are not exported is beyond me
-	zap.S().Debugf("IsRecoverablePostgresErr: ", err, err.Error() == "sql: database is closed" || err.Error() == "driver: bad connection")
-	if err.Error() == "sql: database is closed" || err.Error() == "driver: bad connection" || err.Error() == "connect: connection refused" {
+	errorString := err.Error()
+	recoverable := errorString == "sql: database is closed" ||
+		errorString == "driver: bad connection" ||
+		errorString == "connect: connection refused" ||
+		errorString == "pq: the database system is shutting down"
+	zap.S().Debugf("IsRecoverablePostgresErr: ", err, recoverable)
+	if recoverable {
 		time.Sleep(1 * time.Second)
 		return true
 	}
