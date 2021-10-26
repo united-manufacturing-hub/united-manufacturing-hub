@@ -109,7 +109,9 @@ Connect with the edge device using the software [Lens] and the Kubernetes creden
 
 Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device.
 
-Also make sure that you simply adjust the IP in between. The port that follows the `:` should remain untouched (e.g. https://XXX.X.X.X:**6443** in that case). Hint: If a timing problem occurs, the port is removed.
+Also make sure that you simply adjust the IP in between. The port that follows the `:` should remain untouched (e.g. https://XXX.X.X.X:**6443** in that case).
+
+**Hint:** If you get the message 'certificate not valid' or something similar when connecting, verify that you entered the correct port before proceeding to the troubleshooting section (/docs/tutorials/k3os/how-to-fix-invalid-certs-due-to-misconfigured-date/).
 
 {{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
 {{< imgproc k3s_secret_8.png Fit "1280x500" >}}{{< /imgproc >}}
