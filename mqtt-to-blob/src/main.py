@@ -1,12 +1,10 @@
 from minio import Minio
 import logging
 import paho.mqtt.client as mqtt
-import numpy as np
+import io
 import os
 import base64
 import json
-import cv2
-
 import ProductImage
 
 # Settig up the env variables, see index.md for further explanation
@@ -44,51 +42,37 @@ def on_connect(client, userdata, flags, rc):
 # the message data which is binary data.
 
 
-def on_message(client, userdata, message):
+def on_message(client, userdata, message):      
+    #Get Image from MQTT topic      
     try:
         result = ProductImage.product_image_from_dict(json.loads(message.payload))
     except:
-        logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
+        # logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
+        logging.warning("ProductImage failed to parse JSON payload")
         return
 
     # Get image_id
     uid = result.image.image_id
 
     # Reading out image_bytes and decoding it from base64
-    im_bytes = base64.b64decode(result.image.image_bytes)
-
-    im_arr = np.frombuffer(im_bytes, dtype=np.uint8)
-    img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
-    img_saver = cv2.imwrite(IMAGE_FOLDER+uid+".jpg", img)
-
-    if img_saver:
-        logging.info("saved")
-    else:
-        logging.debug("failed to save image to cache")
-
-    minio_client = Minio(
-        minio_url,
-        access_key=minio_access_key,
-        secret_key=minio_secret
-    )
-
-    found = minio_client.bucket_exists(bucket_name)
-
-    if not found:
-        minio_client.make_bucket(bucket_name)
-    else:
-        logging.info("Bucket already exists")
-
-    minio_client.fput_object(
-        bucket_name, uid + ".jpg", IMAGE_FOLDER + uid + ".jpg"
-    )
+    img_bytes = base64.b64decode(result.image.image_bytes) 
+    
+    # Write file to minio client
+    minio_client.put_object(
+            bucket_name=bucket_name, 
+            object_name=uid + ".jpg", 
+            data=io.BytesIO(img_bytes), 
+            length=-1, 
+            part_size=10*1024*1024,
+            metadata={"timestamp_ms": result.timestamp_ms,
+                      "image_id": result.image.image_id,
+                      "image_height": result.image.image_height,
+                      "image_width": result.image.image_width,
+                      "image_channels": result.image.image_channels
+                      }
+            )
+    
     logging.info("Successfully uploaded")
-
-    if os.path.exists(IMAGE_FOLDER + uid + ".jpg"):
-        os.remove(IMAGE_FOLDER + uid + ".jpg")
-        logging.info("file has been deleted")
-    else:
-        logging.info("The file does not exist")
 
 
 if __name__ == "__main__":
@@ -107,7 +91,28 @@ if __name__ == "__main__":
     logging.debug(f"Broker PORT: {broker_port}")
     logging.debug(f"MINIO URL: {minio_url}")
     logging.debug(f"Bucket NAME: {bucket_name}")
+    
+    # =============================================================================
+    #     Connect to minio     
+    # =============================================================================
+    minio_client = Minio(
+        minio_url,
+        access_key=minio_access_key,
+        secret_key=minio_secret,
+        secure=False #Change to True if Minio is using https
+    )
+    
+    # Connect or create to minio bucket
+    found = minio_client.bucket_exists(bucket_name)
 
+    if not found:
+        minio_client.make_bucket(bucket_name)
+    else:
+        logging.info("Bucket already exists")
+
+    # =============================================================================
+    #     Call MQTT
+    # =============================================================================
     global_client = mqtt.Client()
     global_client.on_connect = on_connect
     global_client.on_message = on_message
