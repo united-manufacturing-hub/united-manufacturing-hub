@@ -25,7 +25,7 @@ Enter `rancher` and press enter to login.
 
 You should now be logged in. 
 
-Pro tip: Execute `lsblk` and identify your hard drive (e.g., by the size). It will prevent playing russian roulette on a later step.
+Pro tip: Execute `lsblk` and identify your hard drive (e.g. by the size). It will prevent playing "Russian Roulette" on a later step.
 
 Now type in `sudo k3os install` to start the installation process.
 
@@ -35,13 +35,18 @@ You are now prompted to select what you want to install. Select `1` and press en
 
 {{< imgproc 5.png Fit "800x500" >}}Install to disk{{< /imgproc >}}
 
-At this step the system might ask you to select your hard drive. One of the devices `sda` or `sdb` will be your hard drive and one the USB-stick you booted from. If you do not know what your hard drive is, you need to play russian roulette and select one device. If you find out later, that you accidently installed it onto the USB-stick, then repeat the installation process and use the other device.
+At this step you may be asked to select your hard drive. One of the devices `sda` or `sdb` will be your hard drive and the other will be the USB stick you booted from. 
+
+If you don not know what your hard drive is, you will have to play "Russian roulette" and choose a device. If you find out later that you installed the hard drive on the USB stick by mistake, repeat the installation process and use the other device.
 
 After that select `y` when you get asked for a cloud-init file
 
 {{< imgproc 6.png Fit "800x500" >}}Configure system with cloud-init file{{< /imgproc >}}
 
-Now enter the URL of your cloud-init file, e.g., the one mentioned in the [Installation guide](/docs/getting-started/setup-development/). 
+Now enter the URL of your cloud-init file, e.g. the one mentioned in the [Installation guide](/docs/getting-started/setup-development/#k3os). 
+
+**Attention: The default keyboard of k3Os is American.**
+So just google the American keyboard and see where you can find the letters and characters used.
 
 Press enter to continue.
 
