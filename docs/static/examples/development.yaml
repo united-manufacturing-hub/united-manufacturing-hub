@@ -107,7 +107,7 @@ write_files:
 
         sleep 20
         echo "Continuing with installation. Installing helm..."
-        export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh
+        export VERIFY_CHECKSUM=false && curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && chmod 700 /home/rancher/get_helm.sh && /home/rancher/get_helm.sh 
         echo "Helm installed!"
         echo "Adding helm repo..."
         helm repo add united-manufacturing-hub https://repo.umh.app/
