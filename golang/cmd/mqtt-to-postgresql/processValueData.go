@@ -78,6 +78,8 @@ func (r ValueDataHandler) processI32() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {
@@ -107,6 +109,8 @@ func (r ValueDataHandler) processF64() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

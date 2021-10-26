@@ -59,6 +59,8 @@ func (r ValueStringHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValueString(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

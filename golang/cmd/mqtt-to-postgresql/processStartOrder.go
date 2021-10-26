@@ -61,6 +61,8 @@ func (r StartOrderHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseStartOrder(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

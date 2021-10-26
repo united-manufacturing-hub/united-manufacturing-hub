@@ -62,6 +62,8 @@ func (r StateHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseState(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

@@ -62,6 +62,8 @@ func (r ScrapCountHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseScrapCount(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

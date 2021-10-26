@@ -61,6 +61,8 @@ func (r EndOrderHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseEndOrder(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

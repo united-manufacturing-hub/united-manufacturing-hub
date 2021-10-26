@@ -67,6 +67,8 @@ func (r ProductTagHandler) process() {
 		}
 
 		faultyItems, err := storeItemsIntoDatabaseProductTag(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

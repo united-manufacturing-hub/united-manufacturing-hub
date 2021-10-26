@@ -63,7 +63,9 @@ func (r AddProductHandler) process() {
 		}
 		zap.S().Debugf("Item len: %d", len(items))
 		faultyItems, err := storeItemsIntoDatabaseAddProduct(items)
-		zap.S().Debugf("Faulty item len: %d", len(items))
+		zap.S().Debugf("storedb err: ", err)
+
+		zap.S().Debugf("Faulty item len: %d", len(faultyItems))
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

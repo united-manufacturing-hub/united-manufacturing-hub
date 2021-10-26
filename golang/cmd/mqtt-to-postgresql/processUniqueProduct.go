@@ -69,6 +69,8 @@ func (r UniqueProductHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseUniqueProduct(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

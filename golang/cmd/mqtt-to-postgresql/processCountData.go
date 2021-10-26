@@ -66,6 +66,8 @@ func (r CountHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseCount(items)
+		zap.S().Debugf("storedb err: ", err)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {

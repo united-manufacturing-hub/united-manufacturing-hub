@@ -92,7 +92,6 @@ func main() {
 	// Important: This has to be above REDIS, Postgresql and MQTT
 	zap.S().Debugf("Setting up raw queue")
 	storedRawMQTTHandler = *NewStoredRawMQTTHandler()
-	storedRawMQTTHandler.Setup()
 
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
@@ -113,7 +112,7 @@ func main() {
 	zap.S().Debugf("Setting up database")
 	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
 	// Setting up queues
-	zap.S().Debugf("Setting up queues")
+	zap.S().Debugf("Set	ting up queues")
 
 	for {
 		if IsPostgresSQLAvailable() {
@@ -122,6 +121,9 @@ func main() {
 		zap.S().Debugf("Postgres not yet available")
 		time.Sleep(1 * time.Second)
 	}
+
+	//Only try to process old messages, once redis and pg are available !
+	storedRawMQTTHandler.Setup()
 
 	addOrderHandler = *NewAddOrderHandler()
 	addParentToChildHandler = *NewAddParentToChildHandler()
