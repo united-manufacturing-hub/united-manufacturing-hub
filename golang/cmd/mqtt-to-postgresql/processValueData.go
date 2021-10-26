@@ -76,8 +76,10 @@ func (r ValueDataHandler) processI32() {
 		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			ShutdownApplicationGraceful()
-			return
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
@@ -91,6 +93,7 @@ func (r ValueDataHandler) processI32() {
 		}
 	}
 }
+
 func (r ValueDataHandler) processF64() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
@@ -98,8 +101,10 @@ func (r ValueDataHandler) processF64() {
 		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			ShutdownApplicationGraceful()
-			return
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]

@@ -62,8 +62,10 @@ func (r ScrapUniqueProductHandler) process() {
 		faultyItems, err := storeItemsIntoDatabaseUniqueProductScrap(items)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			ShutdownApplicationGraceful()
-			return
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
