@@ -39,10 +39,12 @@ func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPasswor
 
 func IsRedisAvailable() bool {
 	if rdb != nil {
-		err := rdb.Ping(ctx)
-		if err == nil {
+		statusCmd := rdb.Ping(ctx)
+
+		if statusCmd != nil && statusCmd.Val() == "PONG" {
 			return true
 		}
+		zap.S().Debugf("Redis Error: ", statusCmd)
 	}
 	return false
 }
