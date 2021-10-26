@@ -117,7 +117,7 @@ func (r ProductTagStringHandler) enqueue(bytes []byte, priority uint8) {
 func (r ProductTagStringHandler) Shutdown() (err error) {
 	zap.S().Warnf("[ProductTagStringHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
-	time.Sleep(5 * time.Second)
+
 	err = CloseQueue(r.priorityQueue)
 	return
 }

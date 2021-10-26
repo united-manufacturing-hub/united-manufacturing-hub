@@ -127,8 +127,6 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	shutdownEnabled = true
 
-	time.Sleep(5 * time.Second)
-
 	zap.S().Infof("Successfull shutdown. Exiting.")
 	os.Exit(0)
 }

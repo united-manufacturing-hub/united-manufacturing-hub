@@ -115,7 +115,7 @@ func (r MaintenanceActivityHandler) enqueue(bytes []byte, priority uint8) {
 func (r MaintenanceActivityHandler) Shutdown() (err error) {
 	zap.S().Warnf("[MaintenanceActivityHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
-	time.Sleep(5 * time.Second)
+
 	err = CloseQueue(r.priorityQueue)
 	return
 }

@@ -303,7 +303,6 @@ func ShutdownApplicationGraceful() {
 		zap.S().Errorf("Failed to shutdown queue")
 	}
 
-	time.Sleep(5 * time.Second)
 	err = storedRawMQTTHandler.Shutdown()
 	if err != nil {
 		zap.S().Errorf("Failed to shutdown queue")

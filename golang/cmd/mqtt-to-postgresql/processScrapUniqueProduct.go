@@ -110,7 +110,7 @@ func (r ScrapUniqueProductHandler) enqueue(bytes []byte, priority uint8) {
 func (r ScrapUniqueProductHandler) Shutdown() (err error) {
 	zap.S().Warnf("[ScrapUniqueProductHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
-	time.Sleep(5 * time.Second)
+
 	err = CloseQueue(r.priorityQueue)
 	return
 }
