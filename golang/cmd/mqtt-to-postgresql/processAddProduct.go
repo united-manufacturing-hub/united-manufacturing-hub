@@ -58,7 +58,7 @@ func (r AddProductHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		zap.S().Debugf("Item len: %d", len(items))

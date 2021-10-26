@@ -364,7 +364,6 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 }
 
 func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
-
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {

@@ -73,6 +73,10 @@ func (r ValueDataHandler) processI32() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
 		items = r.dequeueI32()
+		if len(items) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
@@ -98,6 +102,10 @@ func (r ValueDataHandler) processF64() {
 	var items []*goque.PriorityItem
 	for !r.shutdown {
 		items = r.dequeueF64()
+		if len(items) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)

@@ -66,6 +66,12 @@ func (r StoredRawMQTTHandler) process() {
 
 func (r StoredRawMQTTHandler) reprocess() {
 	for {
+		if r.finishedOldMqtt == false {
+			// Old messages are still in the queue, waiting for them to be processed
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
 		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			// Sleep if there is any error and just try again later

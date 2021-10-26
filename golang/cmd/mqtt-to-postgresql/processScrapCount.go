@@ -58,7 +58,7 @@ func (r ScrapCountHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseScrapCount(items)
