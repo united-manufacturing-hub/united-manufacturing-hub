@@ -1019,7 +1019,6 @@ grafana:
     - /bin/sh
     - -c
     image: busybox
-    pullPolicy: IfNotPresent
     name: init-umh-datasource
     volumeMounts:
     - mountPath: /var/lib/grafana
