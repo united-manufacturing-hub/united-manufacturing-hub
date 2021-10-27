@@ -135,9 +135,10 @@ minio-operator:
             ## volumesPerServer specifies the number of volumes attached per MinIO Tenant Pod / Server.
             volumesPerServer: 4
             ## size specifies the capacity per volume
-            size: 10Gi
+            size: 1Gi
             ## storageClass specifies the storage class name to be used for this pool
-            storageClassName: standard
+            ## local-path only works in k3s / development setups. Change for production setups.
+            storageClassName: ""
             ## Used to specify a toleration for a pod
             tolerations: {}
             ## nodeSelector parameters for MinIO Pods. It specifies a map of key-value pairs. For the pod to be
