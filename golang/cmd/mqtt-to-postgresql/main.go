@@ -123,9 +123,6 @@ func main() {
 		time.Sleep(1 * time.Second)
 	}
 
-	//Only try to process old messages, once redis and pg are available !
-	storedRawMQTTHandler.Setup()
-
 	addOrderHandler = *NewAddOrderHandler()
 	addParentToChildHandler = *NewAddParentToChildHandler()
 	addProductHandler = *NewAddProductHandler()
@@ -169,6 +166,9 @@ func main() {
 	uniqueProductHandler.Setup()
 	valueDataHandler.Setup()
 	valueStringHandler.Setup()
+
+	//Only try to process old messages, once redis and pg are available !
+	storedRawMQTTHandler.Setup()
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

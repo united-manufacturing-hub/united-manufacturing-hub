@@ -10,7 +10,7 @@ import (
 	"github.com/omeid/pgerror"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"net"
+	"strings"
 	"time"
 )
 
@@ -198,7 +198,6 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found DBAssetID: %d, productName: %s", DBassetID, productName)
-
 		return
 	} else if err != nil {
 		if !IsRecoverablePostgresErr(err) {
@@ -347,18 +346,14 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 
 func IsRecoverablePostgresErr(err error) bool {
 
-	if err == err.(*net.OpError) {
-		time.Sleep(1 * time.Second)
-		return true
-	}
-
 	// Why go allows returning errors, that are not exported is beyond me
 	errorString := err.Error()
-	recoverable := errorString == "sql: database is closed" ||
-		errorString == "driver: bad connection" ||
-		errorString == "connect: connection refused" ||
-		errorString == "pq: the database system is shutting down"
-	zap.S().Debugf("IsRecoverablePostgresErr: ", err, recoverable)
+	recoverable := strings.Contains(errorString, "sql: database is closed") ||
+		strings.Contains(errorString, "driver: bad connection") ||
+		strings.Contains(errorString, "connect: connection refused") ||
+		strings.Contains(errorString, "pq: the database system is shutting down") ||
+		strings.Contains(errorString, "connect: no route to host")
+	zap.S().Debugf("IsRecoverablePostgresErr: ", err.Error(), recoverable)
 	if recoverable {
 		time.Sleep(1 * time.Second)
 		return true

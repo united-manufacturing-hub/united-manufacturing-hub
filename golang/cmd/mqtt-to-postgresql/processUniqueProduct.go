@@ -158,6 +158,7 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 				r.EnqueueMQTT(customerID, location, assetID, payload)
 			}
 		}()
+		return
 	} else if err != nil { // never executed
 		PGErrorHandling("GetProductID db.QueryRow()", err)
 	}
