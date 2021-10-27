@@ -10,6 +10,7 @@ import (
 	"github.com/omeid/pgerror"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"runtime/debug"
 	"time"
 )
 
@@ -719,7 +720,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 }
 
 func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
-
+	debug.PrintStack()
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
