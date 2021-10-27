@@ -100,7 +100,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		//TODO is still still needed ?
 		case "processvalue":
 			{
-				zap.S().Warnf("Depreciated")
+				zap.S().Warnf("Deprecated")
 				valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
 			}
 		case Prefix.ProcessValueString:

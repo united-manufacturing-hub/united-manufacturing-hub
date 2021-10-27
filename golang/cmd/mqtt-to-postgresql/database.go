@@ -278,24 +278,24 @@ func CheckIfProductExists(productId int32, DBassetID uint32) (exists bool, err e
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
-	var cnt int32
+	var rowCount int32
 
 	stmt := txn.Stmt(statement.SelectProductExists)
-	err = stmt.QueryRow(productId).Scan(&cnt)
+	err = stmt.QueryRow(productId).Scan(&rowCount)
 	if err != nil {
 		zap.S().Debugf("Failed to scan rows ", err)
-		return false, nil
+		return false, err
 	}
 
 	err = txn.Commit()
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
-	return cnt == 1, nil
+	return rowCount == 1, err
 }
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
@@ -970,7 +970,8 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 		var productExists bool
 		productExists, err = CheckIfProductExists(pt.ProductID, pt.DBAssetID)
 		if err != nil {
-
+			faultyItems = append(faultyItems, item)
+			err = nil
 			return
 		}
 		if productExists {
@@ -1325,6 +1326,11 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 
 		var productExists bool
 		productExists, err = CheckIfProductExists(pt.ProductID, pt.DBAssetID)
+		if err != nil {
+			faultyItems = append(faultyItems, item)
+			err = nil
+			return
+		}
 		if productExists {
 			// Create statement
 			_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
