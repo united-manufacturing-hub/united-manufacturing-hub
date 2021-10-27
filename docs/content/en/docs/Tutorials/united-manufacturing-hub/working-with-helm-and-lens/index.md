@@ -22,7 +22,7 @@ Docker containers are called in Kubernetes lanugage Pods.
 
 There is also other stuff going on in Kubernetes like secret management or ingresses. 
 
-You define the final state ("I want to have one application based on this Docker image with this environment variables ....") and Kubernetes will take care of the rest using its magic.
+You define the final state ("I want to have one application based on this Docker image with this environment variables ....") and Kubernetes will take care of the rest using its magic. This could be seen equal to a `docker-compose.yaml`
 
 The final state is defined using Kubernetes object descriptions.
 
@@ -77,6 +77,8 @@ barcodereader:
   machineID: "barcodereader"
 ```
 
+There is nothing comparable to Helm in the Docker world.
+
 For this to work, one needs to import a so-called Helm chart first. This is nothing else than a Kubernetes object description with some variables.
 
 Example for a Kubernetes object description template (for Helm):
@@ -118,11 +120,13 @@ Therefore, we recommend in production setups to only adjust the values.yaml in t
 
 ## Changing the configuration / updating values.yaml
 
-
+There are two ways to change the `values.yaml`:
 
 ### using Lens GUI
 
 Note: if you encounter the issue "path not found", please go to the [troubleshooting section](#troubleshooting) further down.
+
+For this open Lens, select Apps on the left side and then click on Releases. A Release is a deployed version of a chart. Now you can not only change the values.yaml, but also update the Helm chart to a newer version.
 
 ### using CLI / kubectl in Lens
 
