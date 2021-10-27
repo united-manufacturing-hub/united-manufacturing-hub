@@ -8,10 +8,9 @@ import (
 )
 
 type StoredRawMQTTHandler struct {
-	ProcessPriorityQueue   *goque.PriorityQueue
-	ReProcessPriorityQueue *goque.PriorityQueue
-	shutdown               bool
-	finishedOldMqtt        bool
+	ProcessPriorityQueue *goque.PriorityQueue
+	shutdown             bool
+	finishedOldMqtt      bool
 }
 
 // NewStoredRawMQTTHandler is a special handler, for storing raw mqtt messages, that couldn't get process due to a server shutdown
@@ -27,21 +26,9 @@ func NewStoredRawMQTTHandler() (handler *StoredRawMQTTHandler) {
 		panic("Failed to setup queue, exiting !")
 	}
 
-	const rpqueuePathDB = "/data/RPStoredRawMQTT"
-	var rppriorityQueue *goque.PriorityQueue
-	var rperr error
-	rppriorityQueue, rperr = SetupQueue(rpqueuePathDB)
-	if rperr != nil {
-		zap.S().Errorf("Error setting up remote queue (%s)", rpqueuePathDB, rperr)
-		zap.S().Errorf("err: %s", rperr)
-		ShutdownApplicationGraceful()
-		panic("Failed to setup queue, exiting !")
-	}
-
 	handler = &StoredRawMQTTHandler{
-		ProcessPriorityQueue:   priorityQueue,
-		ReProcessPriorityQueue: rppriorityQueue,
-		shutdown:               false,
+		ProcessPriorityQueue: priorityQueue,
+		shutdown:             false,
 	}
 	return
 }
@@ -123,7 +110,6 @@ func (r StoredRawMQTTHandler) Shutdown() (err error) {
 	r.shutdown = true
 
 	err = CloseQueue(r.ProcessPriorityQueue)
-	err = CloseQueue(r.ReProcessPriorityQueue)
 	return
 }
 
