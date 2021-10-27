@@ -10,6 +10,7 @@ import (
 	"github.com/omeid/pgerror"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"net"
 	"time"
 )
 
@@ -71,11 +72,11 @@ func PGErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (re
 
 	if e := pgerror.UniqueViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: UniqueViolation", err, sqlStatement)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	} else if e := pgerror.CheckViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: CheckViolation", err, sqlStatement)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -86,7 +87,7 @@ func PGErrorHandlingTransaction(sqlStatement string, err error, txn *sql.Tx) (re
 		PGErrorHandling("txn.Rollback()", err2)
 	}
 	returnedErr = err
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -95,11 +96,11 @@ func PGErrorHandling(sqlStatement string, err error) {
 
 	if e := pgerror.UniqueViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: UniqueViolation", err, sqlStatement)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	} else if e := pgerror.CheckViolation(err); e != nil {
 		zap.S().Warnf("PostgreSQL failed: CheckViolation", err, sqlStatement)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -157,14 +158,16 @@ func NewNullInt64(i int64) sql.NullInt64 {
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32) {
+func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32, success bool) {
 	zap.S().Debugf("[GetAssetID] customerID: %s, location: %s, assetID: %s", customerID, location, assetID)
 
+	success = false
 	// Get from cache if possible
 	var cacheHit bool
 	DBassetID, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
 		// zap.S().Debugf("GetAssetID cache hit")
+		success = true
 		return
 	}
 
@@ -172,14 +175,18 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
 	} else if err != nil {
-		PGErrorHandling("GetAssetID db.QueryRow()", err)
+
+		if !IsRecoverablePostgresErr(err) {
+			PGErrorHandling("GetAssetID db.QueryRow()", err)
+		}
+		return
 	}
 
 	// Store to cache if not yet existing
 	go internal.StoreAssetIDToCache(customerID, location, assetID, DBassetID)
 	zap.S().Debugf("Stored AssetID to cache")
 
-	zap.S().Debugf("Pre return: ", err)
+	success = true
 	return
 }
 
@@ -191,14 +198,16 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 	err = statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(DBassetID, productName).Scan(&productID)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found DBAssetID: %d, productName: %s", DBassetID, productName)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	} else if err != nil {
-		PGErrorHandling("GetProductID db.QueryRow()", err)
+		if !IsRecoverablePostgresErr(err) {
+			PGErrorHandling("GetProductID db.QueryRow()", err)
+		}
+		return
 	}
 	success = true
 
-	zap.S().Debugf("Pre return: ", err)
 	return
 }
 
@@ -209,13 +218,16 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	} else if err != nil {
-		PGErrorHandling("GetComponentID() db.QueryRow()", err)
+		if !IsRecoverablePostgresErr(err) {
+			PGErrorHandling("GetComponentID() db.QueryRow()", err)
+		}
+		return
 	}
 	success = true
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -225,13 +237,16 @@ func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error, su
 	err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(aid, DBassetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found aid: %s, DBassetID: %d", aid, DBassetID)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	} else if err != nil {
-		PGErrorHandling("GetUniqueProductID db.QueryRow()", err)
+		if !IsRecoverablePostgresErr(err) {
+			PGErrorHandling("GetUniqueProductID db.QueryRow()", err)
+		}
+		return
 	}
 	success = true
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -241,13 +256,16 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(aid, assetID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found aid: %s, assetID: %d", aid, assetID)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	} else if err != nil {
-		PGErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
+		if !IsRecoverablePostgresErr(err) {
+			PGErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
+		}
+		return
 	}
 	success = true
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -281,14 +299,14 @@ func CheckIfProductExists(productId int32, DBassetID uint32) (exists bool, err e
 }
 
 // AddAssetIfNotExisting adds an asset to the db if it is not existing yet
-func AddAssetIfNotExisting(assetID string, location string, customerID string) (err error) {
+func AddAssetIfNotExisting(assetID string, location string, customerID string, recursionDepth int) (err error) {
 
 	// Get from cache if possible
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
 		zap.S().Debugf("Cache hit for %s", assetID)
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 	zap.S().Debugf("No Cache hit for %s", assetID)
@@ -305,7 +323,6 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) (
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
-			zap.S().Debugf("Pre return: ", err)
 			return
 		}
 	}()
@@ -316,13 +333,25 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string) (
 	_, err = stmt.Exec(assetID, location, customerID)
 	zap.S().Debugf("Exec: ", err)
 	if err != nil {
-		PGErrorHandling("INSERT INTO ASSETTABLE", err)
+		if !IsRecoverablePostgresErr(err) && recursionDepth < 10 {
+			time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+			err = nil
+			err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
+		} else {
+			PGErrorHandling("INSERT INTO ASSETTABLE", err)
+		}
 	}
 
 	return nil
 }
 
 func IsRecoverablePostgresErr(err error) bool {
+
+	if err == err.(*net.OpError) {
+		time.Sleep(1 * time.Second)
+		return true
+	}
+
 	// Why go allows returning errors, that are not exported is beyond me
 	errorString := err.Error()
 	recoverable := errorString == "sql: database is closed" ||
@@ -334,6 +363,12 @@ func IsRecoverablePostgresErr(err error) bool {
 		time.Sleep(1 * time.Second)
 		return true
 	}
+
+	zap.S().Errorf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	zap.S().Errorf("!! RUN INTO NON RECOVERABLE ERROR !!")
+	zap.S().Errorf("%s", err.Error())
+	zap.S().Errorf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
 	return false
 }
 
@@ -343,18 +378,9 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoRecommendationTable)
@@ -373,7 +399,6 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 		_, err = stmt.Exec(pt.TimestampMs, pt.UID, pt.RecommendationType, pt.Enabled, pt.RecommendationValues, pt.RecommendationTextEN, pt.RecommendationTextDE, pt.DiagnoseTextEN, pt.DiagnoseTextDE)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 		} else {
@@ -381,11 +406,11 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseRecommendation)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseRecommendation, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 
 }
@@ -395,7 +420,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -403,7 +428,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}()
@@ -415,7 +440,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
@@ -425,7 +450,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable64", "timestamp", "asset_id", "value", "valuename"))
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
@@ -442,7 +467,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.ValueFloat64, pt.Name)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				zap.S().Debugf("Got an error before err = nil: %s", err)
+
 				err = nil
 				continue
 
@@ -451,7 +476,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
@@ -465,25 +490,25 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 		`)
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -493,7 +518,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -501,7 +526,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}()
@@ -513,7 +538,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
@@ -523,7 +548,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluestringtable", "timestamp", "asset_id", "value", "valuename"))
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
@@ -541,7 +566,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Value, pt.Name)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				zap.S().Debugf("Got an error before err = nil: %s", err)
+
 				err = nil
 				continue
 
@@ -557,7 +582,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
@@ -571,25 +596,25 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 		`)
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -599,7 +624,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -607,7 +632,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}()
@@ -619,7 +644,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
@@ -629,7 +654,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 		stmt, err = txn.Prepare(pq.CopyIn("tmp_processvaluetable", "timestamp", "asset_id", "value", "valuename"))
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 		for _, item := range items {
@@ -645,7 +670,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.ValueInt32, pt.Name)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				zap.S().Debugf("Got an error before err = nil: %s", err)
+
 				err = nil
 				continue
 
@@ -655,7 +680,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
@@ -668,25 +693,25 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 		`)
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -696,7 +721,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -704,7 +729,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}()
@@ -716,7 +741,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
@@ -726,7 +751,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 		stmt, err = txn.Prepare(pq.CopyIn("tmp_counttable", "timestamp", "asset_id", "count", "scrap"))
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
@@ -743,7 +768,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 			_, err = stmt.Exec(timestamp, pt.DBAssetID, pt.Count, pt.Scrap)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				zap.S().Debugf("Got an error before err = nil: %s", err)
+
 				err = nil
 				continue
 
@@ -753,7 +778,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
@@ -767,25 +792,25 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 		`)
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		_, err = stmt.Exec()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 
 		err = stmt.Close()
 		if err != nil {
 			faultyItems = items
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -794,18 +819,9 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoStateTable)
@@ -824,7 +840,6 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.State)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 		} else {
@@ -832,11 +847,11 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseState)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseState, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -846,18 +861,9 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.UpdateCountTableScrap)
@@ -878,7 +884,6 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 		zap.S().Debugf("[POST]\tstoreItemsIntoDatabaseScrapCount")
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -887,19 +892,19 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseScrapCount)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseScrapCount, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
-func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error)) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
+func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error), recursionDepth int) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
 	var errx error
 	if len(faultyItems) > 0 {
 		errx = txn.Rollback()
-		if errx != nil {
+		if errx != nil && !IsRecoverablePostgresErr(errx) {
 			zap.S().Errorf("Failed to rollback tx")
 			return nil, items, errx
 		}
@@ -925,7 +930,13 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 			errx = txn.Commit()
 			if errx != nil {
 				if errx != sql.ErrTxDone {
-					PGErrorHandling("txn.Commit()", errx)
+					if !IsRecoverablePostgresErr(errx) && recursionDepth < 10 {
+						time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+						errx = nil
+						faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
+					} else {
+						PGErrorHandling("txn.Commit()", errx)
+					}
 				} else {
 					zap.S().Warnf("Commit failed: %s", errx)
 				}
@@ -941,18 +952,9 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoUniqueProductTable)
@@ -971,7 +973,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 		var productExists bool
 		productExists, err = CheckIfProductExists(pt.ProductID, pt.DBAssetID)
 		if err != nil {
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 		if productExists {
@@ -979,7 +981,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 			_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimestampMs, NewNullInt64(int64(pt.EndTimestampMs)), pt.ProductID, pt.IsScrap, pt.UniqueProductAlternativeID)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				zap.S().Debugf("Got an error before err = nil: %s", err)
+
 				err = nil
 				continue
 
@@ -992,11 +994,13 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct, 0)
 	if err2 != nil {
+		innerFaultyItems = append(innerFaultyItems, missingItems...)
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
+	faultyItems = append(faultyItems, missingItems...)
 	return faultyItems, err
 
 }
@@ -1007,18 +1011,9 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductTagTable)
@@ -1039,7 +1034,6 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		if err != nil || !success {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found. AID: %s, DBAssetID %d", pt.AID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 		}
@@ -1048,7 +1042,6 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 		} else {
@@ -1056,11 +1049,11 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTag)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTag, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1070,19 +1063,9 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
-
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductTagStringTable)
 	var workingItems []*goque.PriorityItem
@@ -1102,7 +1085,6 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		if err != nil || !success {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found. AID: %s, DBAssetID %d", pt.AID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 		}
@@ -1111,7 +1093,6 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		_, err = stmt.Exec(pt.Name, pt.Value, pt.TimestampMs, uid)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1120,11 +1101,11 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTagString)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTagString, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1134,18 +1115,9 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductInheritanceTable)
@@ -1166,7 +1138,6 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		if err != nil || !success {
 			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found. ChildAID: %s, DBAssetID: %d", pt.ChildAID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1176,7 +1147,6 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		if !success {
 			zap.S().Errorf("Stopped writing addParentToChild in Database, parentUid not found. ChildAID: %s, DBAssetID: %d", pt.ChildAID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 		}
@@ -1185,7 +1155,6 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		_, err = stmt.Exec(parentUid, childUid, pt.TimestampMs)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1194,11 +1163,11 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddParentToChild)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddParentToChild, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1208,18 +1177,9 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoShiftTable)
@@ -1238,7 +1198,6 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1247,11 +1206,11 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseShift)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseShift, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1261,18 +1220,9 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.UpdateUniqueProductTableSetIsScrap)
@@ -1291,7 +1241,6 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 		_, err = stmt.Exec(pt.UID, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1300,11 +1249,11 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProductScrap)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProductScrap, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1315,18 +1264,9 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 	if err != nil {
 		zap.S().Errorf("Failed to open txn: %s", err)
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductTable)
@@ -1345,7 +1285,6 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 		_, err = stmt.Exec(pt.DBAssetID, pt.ProductName, pt.TimePerUnitInSeconds)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1354,11 +1293,11 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddProduct)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddProduct, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1368,18 +1307,9 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoOrderTable)
@@ -1403,7 +1333,7 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 			_, err = stmt.Exec(pt.OrderName, pt.ProductID, pt.TargetUnits, pt.DBAssetID)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				zap.S().Debugf("Got an error before err = nil: %s", err)
+
 				err = nil
 				continue
 			} else {
@@ -1415,11 +1345,13 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddOrder)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct, 0)
 	if err2 != nil {
+		innerFaultyItems = append(innerFaultyItems, missingItems...)
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
+	faultyItems = append(faultyItems, missingItems...)
 	return faultyItems, err
 }
 
@@ -1429,18 +1361,9 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.UpdateOrderTableSetBeginTimestamp)
@@ -1459,7 +1382,6 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1468,11 +1390,11 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseStartOrder)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseStartOrder, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1482,18 +1404,9 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.UpdateOrderTableSetEndTimestamp)
@@ -1512,7 +1425,6 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 		_, err = stmt.Exec(pt.TimestampMs, pt.OrderName, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1521,11 +1433,11 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseEndOrder)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseEndOrder, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1535,18 +1447,9 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoMaintenanceActivities)
@@ -1565,7 +1468,6 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 		_, err = stmt.Exec(pt.ComponentID, pt.Activity, pt.TimestampMs)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1574,11 +1476,11 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddMaintenanceActivity)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddMaintenanceActivity, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1588,7 +1490,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
 
@@ -1596,7 +1498,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 		errx := CommitOrRollbackOnError(txn, err)
 		if errx != nil {
 			err = errx
-			zap.S().Debugf("Pre return: ", err)
+
 			return
 		}
 	}()
@@ -1636,7 +1538,12 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 			if err != nil {
 				err = PGErrorHandlingTransaction("rows.Scan()", err, txn)
 				if err != nil {
-					zap.S().Debugf("Pre return: ", err)
+					errx := txn.Rollback()
+					if errx != nil {
+						if !IsRecoverablePostgresErr(errx) {
+							ShutdownApplicationGraceful()
+						}
+					}
 					return
 				}
 			}
@@ -1646,7 +1553,9 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 			if err != nil {
 				err = PGErrorHandlingTransaction("val.Close()", err, txn)
 				if err != nil {
-					zap.S().Debugf("Pre return: ", err)
+					if !IsRecoverablePostgresErr(err) {
+						ShutdownApplicationGraceful()
+					}
 					return
 				}
 			}
@@ -1681,7 +1590,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 
 		}
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return
 }
 
@@ -1691,18 +1600,9 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.DeleteFromShiftTableById)
@@ -1721,7 +1621,6 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 		_, err = stmt.Exec(pt.ShiftId)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1730,11 +1629,11 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseById)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseById, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1744,18 +1643,9 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmt := txn.Stmt(statement.DeleteFromShiftTableByAssetIDAndBeginTimestamp)
@@ -1774,7 +1664,6 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 		_, err = stmt.Exec(pt.DBAssetID, pt.BeginTimeStampMs)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			zap.S().Debugf("Got an error before err = nil: %s", err)
 			err = nil
 			continue
 
@@ -1783,11 +1672,11 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseByAssetIdAndTimestamp)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseByAssetIdAndTimestamp, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 }
 
@@ -1797,18 +1686,9 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-		zap.S().Debugf("Pre return: ", err)
+
 		return
 	}
-
-	defer func() {
-		errx := CommitOrRollbackOnError(txn, err)
-		if errx != nil {
-			err = errx
-			zap.S().Debugf("Pre return: ", err)
-			return
-		}
-	}()
 
 	//These statements' auto close
 	stmtCS := txn.Stmt(statement.UpdateCountTableSetCountAndScrapByAssetId)
@@ -1835,7 +1715,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 
 				if err != nil {
 					faultyItems = append(faultyItems, item)
-					zap.S().Debugf("Got an error before err = nil: %s", err)
+
 					err = nil
 					continue
 				} else {
@@ -1847,7 +1727,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 
 				if err != nil {
 					faultyItems = append(faultyItems, item)
-					zap.S().Debugf("Got an error before err = nil: %s", err)
+
 					err = nil
 					continue
 				} else {
@@ -1862,7 +1742,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 
 				if err != nil {
 					faultyItems = append(faultyItems, item)
-					zap.S().Debugf("Got an error before err = nil: %s", err)
+
 					err = nil
 					continue
 				} else {
@@ -1875,11 +1755,11 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseState)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, modifyInDatabaseModifyCountAndScrap, 0)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
-	zap.S().Debugf("Pre return: ", err)
+
 	return faultyItems, err
 
 }

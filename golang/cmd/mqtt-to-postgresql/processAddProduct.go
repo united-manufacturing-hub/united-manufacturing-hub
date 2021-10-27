@@ -63,7 +63,6 @@ func (r AddProductHandler) process() {
 		}
 		zap.S().Debugf("Item len: %d", len(items))
 		faultyItems, err := storeItemsIntoDatabaseAddProduct(items)
-		zap.S().Debugf("storedb err: ", err)
 
 		zap.S().Debugf("Faulty item len: %d", len(faultyItems))
 		if err != nil {
@@ -133,7 +132,18 @@ func (r AddProductHandler) EnqueueMQTT(customerID string, location string, asset
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 	newObject := addProductQueue{
 		DBAssetID:            DBassetID,
 		ProductName:          parsedPayload.ProductName,

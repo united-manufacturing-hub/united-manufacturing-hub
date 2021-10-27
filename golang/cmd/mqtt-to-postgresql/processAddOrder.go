@@ -66,15 +66,7 @@ func (r AddOrderHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseAddOrder(items)
-		zap.S().Debugf("storedb err: ", err)
 
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
-				ShutdownApplicationGraceful()
-				return
-			}
-		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -84,6 +76,13 @@ func (r AddOrderHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+		}
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 	}
 }
@@ -133,11 +132,14 @@ func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	var productID int32
+	if success {
+		productID, err, success = GetProductID(DBassetID, parsedPayload.ProductName)
+	}
 
-	productID, err, success := GetProductID(DBassetID, parsedPayload.ProductName)
 	if err == sql.ErrNoRows || !success {
-		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName, parsedPayload.OrderName)
+		zap.S().Errorf("Failed to AddOrder", DBassetID, parsedPayload.ProductName, parsedPayload.OrderName)
 		go func() {
 			if r.shutdown {
 				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)

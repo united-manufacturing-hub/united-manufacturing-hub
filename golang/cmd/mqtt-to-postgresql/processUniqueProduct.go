@@ -69,15 +69,7 @@ func (r UniqueProductHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseUniqueProduct(items)
-		zap.S().Debugf("storedb err: ", err)
 
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
-				ShutdownApplicationGraceful()
-				return
-			}
-		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -87,6 +79,13 @@ func (r UniqueProductHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+		}
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 	}
 }
@@ -136,7 +135,18 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 	productID, err, success := GetProductID(DBassetID, parsedPayload.ProductName)
 	if err == sql.ErrNoRows || !success {
 		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)

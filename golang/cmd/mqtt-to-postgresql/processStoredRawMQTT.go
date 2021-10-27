@@ -8,9 +8,10 @@ import (
 )
 
 type StoredRawMQTTHandler struct {
-	priorityQueue   *goque.PriorityQueue
-	shutdown        bool
-	finishedOldMqtt bool
+	ProcessPriorityQueue   *goque.PriorityQueue
+	ReProcessPriorityQueue *goque.PriorityQueue
+	shutdown               bool
+	finishedOldMqtt        bool
 }
 
 // NewStoredRawMQTTHandler is a special handler, for storing raw mqtt messages, that couldn't get process due to a server shutdown
@@ -26,9 +27,21 @@ func NewStoredRawMQTTHandler() (handler *StoredRawMQTTHandler) {
 		panic("Failed to setup queue, exiting !")
 	}
 
+	const rpqueuePathDB = "/data/RPStoredRawMQTT"
+	var rppriorityQueue *goque.PriorityQueue
+	var rperr error
+	rppriorityQueue, rperr = SetupQueue(rpqueuePathDB)
+	if rperr != nil {
+		zap.S().Errorf("Error setting up remote queue (%s)", rpqueuePathDB, rperr)
+		zap.S().Errorf("err: %s", rperr)
+		ShutdownApplicationGraceful()
+		panic("Failed to setup queue, exiting !")
+	}
+
 	handler = &StoredRawMQTTHandler{
-		priorityQueue: priorityQueue,
-		shutdown:      false,
+		ProcessPriorityQueue:   priorityQueue,
+		ReProcessPriorityQueue: rppriorityQueue,
+		shutdown:               false,
 	}
 	return
 }
@@ -38,7 +51,7 @@ func (r StoredRawMQTTHandler) Setup() {
 	go r.reprocess()
 }
 func (r StoredRawMQTTHandler) process() {
-	item, err := r.priorityQueue.Dequeue()
+	item, err := r.ProcessPriorityQueue.Dequeue()
 	if err != nil && err != goque.ErrEmpty {
 		zap.S().Warnf("Error dequing in StoredRawMQTTHandler", err)
 		r.finishedOldMqtt = true
@@ -57,7 +70,7 @@ func (r StoredRawMQTTHandler) process() {
 			// Postgres doesn't seem to be working, just try again later
 			time.Sleep(10 * time.Second)
 		}
-		item, err = r.priorityQueue.Dequeue()
+		item, err = r.ProcessPriorityQueue.Dequeue()
 	}
 
 	zap.S().Infof("Finished handling old MQTT messages !")
@@ -72,7 +85,7 @@ func (r StoredRawMQTTHandler) reprocess() {
 			continue
 		}
 
-		item, err := r.priorityQueue.Dequeue()
+		item, err := r.ProcessPriorityQueue.Dequeue()
 		if err != nil {
 			// Sleep if there is any error and just try again later
 			time.Sleep(10 * time.Second)
@@ -91,14 +104,14 @@ func (r StoredRawMQTTHandler) reprocess() {
 				// Postgres doesn't seem to be working, just try again later
 				time.Sleep(10 * time.Second)
 			}
-			item, err = r.priorityQueue.Dequeue()
+			item, err = r.ProcessPriorityQueue.Dequeue()
 		}
 
 	}
 }
 
 func (r StoredRawMQTTHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.priorityQueue.Enqueue(priority, bytes)
+	_, err := r.ProcessPriorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Errorf("Failed to enqueue item, loss of data !", bytes, err)
 		return
@@ -106,10 +119,11 @@ func (r StoredRawMQTTHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r StoredRawMQTTHandler) Shutdown() (err error) {
-	zap.S().Warnf("[StoredRawMQTTHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
+	zap.S().Warnf("[StoredRawMQTTHandler] shutting down, Queue length: %d", r.ProcessPriorityQueue.Length())
 	r.shutdown = true
 
-	err = CloseQueue(r.priorityQueue)
+	err = CloseQueue(r.ProcessPriorityQueue)
+	err = CloseQueue(r.ReProcessPriorityQueue)
 	return
 }
 

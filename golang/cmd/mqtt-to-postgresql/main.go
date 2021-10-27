@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -313,6 +314,13 @@ func ShutdownApplicationGraceful() {
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
 	ShutdownDB()
+
+	zap.S().Debugf("===================================")
+	zap.S().Debugf("=========== STACK TRACE ===========")
+	zap.S().Debugf("===================================")
+	debug.PrintStack()
+	zap.S().Debugf("===================================")
+	time.Sleep(15 * time.Second)
 
 	zap.S().Infof("Successfull shutdown. Exiting.")
 

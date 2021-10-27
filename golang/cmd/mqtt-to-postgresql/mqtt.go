@@ -74,8 +74,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 
 func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) (err error) {
 	zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
-	err = AddAssetIfNotExisting(assetID, location, customerID)
-	zap.S().Debugf("AAINE error: ", err)
+	err = AddAssetIfNotExisting(assetID, location, customerID, 0)
 	if err != nil {
 		if IsRecoverablePostgresErr(err) {
 			zap.S().Debugf("Failed to connect to database, writing to rawmqtthandler")

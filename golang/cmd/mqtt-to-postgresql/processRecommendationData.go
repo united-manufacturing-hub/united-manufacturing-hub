@@ -67,15 +67,7 @@ func (r RecommendationDataHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseRecommendation(items)
-		zap.S().Debugf("storedb err: ", err)
 
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
-				ShutdownApplicationGraceful()
-				return
-			}
-		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -85,6 +77,13 @@ func (r RecommendationDataHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+		}
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 	}
 }

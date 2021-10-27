@@ -78,7 +78,6 @@ func (r ValueDataHandler) processI32() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
-		zap.S().Debugf("storedb err: ", err)
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
@@ -109,7 +108,6 @@ func (r ValueDataHandler) processF64() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
-		zap.S().Debugf("storedb err: ", err)
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
@@ -202,7 +200,18 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 
 	// process unknown data structure according to https://blog.golang.org/json
 	m := parsedPayload.(map[string]interface{})

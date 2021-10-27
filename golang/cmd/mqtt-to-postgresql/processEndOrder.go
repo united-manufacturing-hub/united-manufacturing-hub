@@ -61,15 +61,7 @@ func (r EndOrderHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseEndOrder(items)
-		zap.S().Debugf("storedb err: ", err)
 
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
-				ShutdownApplicationGraceful()
-				return
-			}
-		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -79,6 +71,13 @@ func (r EndOrderHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+		}
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 	}
 }
@@ -128,7 +127,18 @@ func (r EndOrderHandler) EnqueueMQTT(customerID string, location string, assetID
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 	newObject := endOrderQueue{
 		TimestampMs: parsedPayload.TimestampMs,
 		OrderName:   parsedPayload.OrderName,

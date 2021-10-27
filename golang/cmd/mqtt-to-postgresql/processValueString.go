@@ -59,15 +59,7 @@ func (r ValueStringHandler) process() {
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValueString(items)
-		zap.S().Debugf("storedb err: ", err)
 
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
-				ShutdownApplicationGraceful()
-				return
-			}
-		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -77,6 +69,13 @@ func (r ValueStringHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+		}
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			if !IsRecoverablePostgresErr(err) {
+				ShutdownApplicationGraceful()
+				return
+			}
 		}
 	}
 }
@@ -126,7 +125,18 @@ func (r ValueStringHandler) EnqueueMQTT(customerID string, location string, asse
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 
 	// process unknown data structure according to https://blog.golang.org/json
 	m := parsedPayload.(map[string]interface{})
