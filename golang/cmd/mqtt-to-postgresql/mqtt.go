@@ -79,6 +79,8 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		if IsRecoverablePostgresErr(err) {
 			zap.S().Debugf("Failed to connect to database, writing to rawmqtthandler")
 			storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, payloadType)
+		} else {
+			ShutdownApplicationGraceful()
 		}
 
 		zap.S().Warnf("Low level postgres error: ", err)

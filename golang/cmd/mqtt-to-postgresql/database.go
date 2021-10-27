@@ -816,7 +816,6 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 	txn, err = db.Begin()
 	if err != nil {
 		faultyItems = items
-
 		return
 	}
 
