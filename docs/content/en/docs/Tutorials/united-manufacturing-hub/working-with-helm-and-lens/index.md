@@ -15,7 +15,16 @@ One might ask.
 
 In this chapter, we want to explain how you can configure the Kubernetes cluster and therefore the United Manufacturing Hub. 
 
-TODO: drawio
+[![Kubernetes and Helm - how to work with them explained for an mechanical engineer](kubernetes-and-helm.png)](kubernetes-and-helm.png)
+
+Informal and not exact explaination (from the right to the left):
+Docker containers are called in Kubernetes lanugage Pods. 
+
+There is also other stuff going on in Kubernetes like secret management or ingresses. 
+
+You define the final state ("I want to have one application based on this Docker image with this environment variables ....") and Kubernetes will take care of the rest using its magic.
+
+The final state is defined using Kubernetes object descriptions.
 
 Example for a Kubernetes object description:
 ```yaml
@@ -40,6 +49,12 @@ spec:
         - containerPort: 80
 ```
 
+You could now create and maintain all of them manually, which is what some companies do.
+
+To do that automatically, you can use Helm.
+
+Helm will take a values.yaml and will automatically create the corresponding Kubernetes object descriptions.
+
 Example for a Helm template values:
 ```yaml
 ### mqttbridge ###
@@ -61,6 +76,8 @@ barcodereader:
   location: "barcodereader"
   machineID: "barcodereader"
 ```
+
+For this to work, one needs to import a so-called Helm chart first. This is nothing else than a Kubernetes object description with some variables.
 
 Example for a Kubernetes object description template (for Helm):
 ```yaml
@@ -90,6 +107,14 @@ spec:
         image: {{ .Values.mqttbridge.image }}:{{ .Chart.AppVersion }}
         {{- end }}
 ```
+
+A Helm chart can either be stored in a folder (e.g., when you clone the [United Manufacturing Hub repository](https://github.com/united-manufacturing-hub/united-manufacturing-hub)) or in a [Helm repository](https://helm.sh/docs/topics/chart_repository/) (which we use in our default installation script).
+
+You might be tempted to just clone the repository and change stuff in the Kubernetes object description template (in the subfolder `templates`). We consider this a bad idea as these changes are now hard to track and to replicate somewhere else. Furthermore, when updating the Helm chart to a newer version of the United Manufacturing Hub these changes will be lost and overwritten.
+
+In Lens you can now change the underlying Kubernetes object descriptions by e.g., clicking on a Deployment and then selecting edit. However, these changes will be reverted once you apply the Helm chart again.
+
+Therefore, we recommend in production setups to only adjust the values.yaml in the Helm chart.
 
 ## Changing the configuration / updating values.yaml
 
