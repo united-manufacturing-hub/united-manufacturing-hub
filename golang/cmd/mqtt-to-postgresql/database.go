@@ -42,6 +42,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	statement = newStatementRegistry()
 }
 
+//IsPostgresSQLAvailable returns if the database is reachable by PING command
 func IsPostgresSQLAvailable() bool {
 	if db != nil {
 		err := db.Ping()
@@ -344,6 +345,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 	return nil
 }
 
+//IsRecoverablePostgresErr checks if the error is recoverable
 func IsRecoverablePostgresErr(err error) bool {
 
 	// Why go allows returning errors, that are not exported is beyond me
@@ -895,6 +897,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 	return faultyItems, err
 }
 
+//CommitWorking commits the transaction if there are no errors with the processable items. Otherwise, it will just try to process the items, that haven't failed.
 func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error), recursionDepth int) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
 	var errx error
 	if len(faultyItems) > 0 {
