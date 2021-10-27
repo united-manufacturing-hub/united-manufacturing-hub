@@ -119,7 +119,7 @@ minio-operator:
           tag: RELEASE.2021-06-17T00-10-46Z
           pullPolicy: IfNotPresent
         ## Customize namespace for tenant deployment
-        namespace: default
+        namespace: factorycube-server
         ## Customize any private registry image pull secret.
         ## currently only one secret registry is supported
         imagePullSecret: {}
