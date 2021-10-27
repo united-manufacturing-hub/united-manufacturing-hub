@@ -1,15 +1,103 @@
 ---
-title: "Working with Helm and Lens"
-linkTitle: "Working with Helm and Lens"
+title: "Working with Kubernetes, Helm and Lens"
+linkTitle: "Working with Kubernetes, Helm and Lens"
 description: >
-    This article explains how to work with Helm and Lens, especially how to update the configuration or how to do software upgrade 
+    This article explains how to work with Kubernetes, Helm and Lens, especially how to enable / disable functionalities, update the configuration or how to do software upgrade 
 ---
+
+## How does Kubernetes and Helm work?
+
+> Where is my Dockerfile?
+
+One might ask.
+
+> Where is my docker-compose.yaml?
+
+In this chapter, we want to explain how you can configure the Kubernetes cluster and therefore the United Manufacturing Hub. 
+
+TODO: drawio
+
+Example for a Kubernetes object description:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 2 # tells deployment to run 2 pods matching the template
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+```
+
+Example for a Helm template values:
+```yaml
+### mqttbridge ###
+
+mqttbridge:
+  enabled: true
+  image: unitedmanufacturinghub/mqtt-bridge
+  storageRequest: 1Gi
+
+### barcodereader ###
+
+barcodereader:
+  enabled: true
+  image: unitedmanufacturinghub/barcodereader
+  customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+  brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
+  brokerPort: 1883  # do not change
+  customerID: "raw"
+  location: "barcodereader"
+  machineID: "barcodereader"
+```
+
+Example for a Kubernetes object description template (for Helm):
+```yaml
+{{- if .Values.mqttbridge.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "factorycube-edge.fullname" . }}-mqttbridge
+  labels:
+    {{- include "factorycube-edge.labels.mqttbridge" . | nindent 4 }}
+spec:
+  serviceName: {{ include "factorycube-edge.fullname" . }}-mqttbridge
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "factorycube-edge.labels.mqttbridge" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "factorycube-edge.labels.mqttbridge" . | nindent 8 }}
+    spec:
+      containers:
+      - name: {{ include "factorycube-edge.fullname" . }}-mqttbridge
+        {{- if .Values.mqttbridge.tag }}
+        image: {{ .Values.mqttbridge.image }}:{{ .Values.mqttbridge.tag }}
+        {{- else }}
+        image: {{ .Values.mqttbridge.image }}:{{ .Chart.AppVersion }}
+        {{- end }}
+```
 
 ## Changing the configuration / updating values.yaml
 
+
+
 ### using Lens GUI
 
-Note: if you encounter the issue "not found", please go to the [troubleshooting section](#troubleshooting) further down.
+Note: if you encounter the issue "path not found", please go to the [troubleshooting section](#troubleshooting) further down.
 
 ### using CLI / kubectl in Lens
 
