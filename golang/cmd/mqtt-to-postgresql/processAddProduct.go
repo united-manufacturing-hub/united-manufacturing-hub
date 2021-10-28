@@ -67,9 +67,9 @@ func (r AddProductHandler) process() {
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
 				ShutdownApplicationGraceful()
-				return
 			}
 		}
 		// Empty the array, without de-allocating memory

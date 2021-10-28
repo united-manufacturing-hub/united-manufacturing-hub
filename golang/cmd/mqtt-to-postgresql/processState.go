@@ -59,7 +59,6 @@ func (r StateHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			zap.S().Debugf("StateHandler queue empty")
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -76,17 +75,14 @@ func (r StateHandler) process() {
 			r.enqueue(faultyItem.Value, prio)
 		}
 
-		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
 				ShutdownApplicationGraceful()
-				return
 			}
 		}
-		if len(faultyItems) > 0 {
-			zap.S().Debugf("StateHandler re-enqueued %i items", len(faultyItems))
-		}
+		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 	}
 }
 

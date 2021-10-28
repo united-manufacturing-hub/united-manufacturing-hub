@@ -81,14 +81,15 @@ func (r UniqueProductHandler) process() {
 			}
 			r.enqueue(faultyItem.Value, prio)
 		}
-		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
+
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
 				ShutdownApplicationGraceful()
-				return
 			}
 		}
+		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 	}
 }
 

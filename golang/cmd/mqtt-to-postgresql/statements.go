@@ -354,9 +354,15 @@ func prep(query string, recursionDepth int) *sql.Stmt {
 	}
 	prepare, err := db.Prepare(query)
 	if err != nil {
-		if IsRecoverablePostgresErr(err) && recursionDepth < 10 {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
+			ShutdownApplicationGraceful()
+		case TryAgain:
 			time.Sleep(time.Duration(10) * time.Second)
 			return prep(query, recursionDepth+1)
+		case DiscardValue:
+			// This should NEVER happen here, but it's safer to shut down, else the statement won't be prepared
+			ShutdownApplicationGraceful()
 		}
 		zap.S().Errorf("Failed to prepare statement: %s", query)
 		panic(err)

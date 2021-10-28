@@ -81,9 +81,9 @@ func (r ValueDataHandler) processI32() {
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
 				ShutdownApplicationGraceful()
-				return
 			}
 		}
 		// Empty the array, without de-allocating memory
@@ -111,9 +111,9 @@ func (r ValueDataHandler) processF64() {
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
-			if !IsRecoverablePostgresErr(err) {
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
 				ShutdownApplicationGraceful()
-				return
 			}
 		}
 		// Empty the array, without de-allocating memory

@@ -11,6 +11,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -178,9 +179,15 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
 	} else if err != nil {
-
-		if !IsRecoverablePostgresErr(err) {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
 			PGErrorHandling("GetAssetID db.QueryRow()", err)
+		case TryAgain:
+			time.Sleep(1 * time.Second)
+			return GetAssetID(customerID, location, assetID)
+		case DiscardValue:
+			return 0, false
+
 		}
 		return
 	}
@@ -203,8 +210,14 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 		zap.S().Errorf("No Results Found DBAssetID: %d, productName: %s", DBassetID, productName)
 		return
 	} else if err != nil {
-		if !IsRecoverablePostgresErr(err) {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
 			PGErrorHandling("GetProductID db.QueryRow()", err)
+		case TryAgain:
+			time.Sleep(1 * time.Second)
+			return GetProductID(DBassetID, productName)
+		case DiscardValue:
+			return
 		}
 		return
 	}
@@ -223,8 +236,14 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 
 		return
 	} else if err != nil {
-		if !IsRecoverablePostgresErr(err) {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
 			PGErrorHandling("GetComponentID() db.QueryRow()", err)
+		case TryAgain:
+			time.Sleep(1 * time.Second)
+			return GetComponentID(assetID, componentName)
+		case DiscardValue:
+			return 0, false
 		}
 		return
 	}
@@ -242,8 +261,14 @@ func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error, su
 
 		return
 	} else if err != nil {
-		if !IsRecoverablePostgresErr(err) {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
 			PGErrorHandling("GetUniqueProductID db.QueryRow()", err)
+		case TryAgain:
+			time.Sleep(1 * time.Second)
+			GetUniqueProductID(aid, DBassetID)
+		case DiscardValue:
+			return 0, err, false
 		}
 		return
 	}
@@ -261,8 +286,13 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 
 		return
 	} else if err != nil {
-		if !IsRecoverablePostgresErr(err) {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
 			PGErrorHandling("GetLatestParentUniqueProductID db.QueryRow()", err)
+		case TryAgain:
+			return GetLatestParentUniqueProductID(aid, assetID)
+		case DiscardValue:
+			return 0, false
 		}
 		return
 	}
@@ -314,12 +344,20 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
-		if !IsRecoverablePostgresErr(err) && recursionDepth < 10 {
-			time.Sleep(time.Duration(10*recursionDepth) * time.Second)
-			err = nil
-			err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
+			ShutdownApplicationGraceful()
+		case TryAgain:
+			if recursionDepth < 10 {
+				time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+				err = nil
+				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
+			} else {
+				return err
+			}
+		case DiscardValue:
+			return err
 		}
-		return err
 	}
 
 	zap.S().Debugf("txn: ", txn, err)
@@ -338,32 +376,54 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 	_, err = stmt.Exec(assetID, location, customerID)
 	zap.S().Debugf("Exec: ", err)
 	if err != nil {
-		if !IsRecoverablePostgresErr(err) && recursionDepth < 10 {
-			time.Sleep(time.Duration(10*recursionDepth) * time.Second)
-			err = nil
-			err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
-		} else {
-			PGErrorHandling("INSERT INTO ASSETTABLE", err)
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case Unrecoverable:
+			ShutdownApplicationGraceful()
+		case TryAgain:
+			if recursionDepth < 10 {
+				time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+				err = nil
+				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
+			} else {
+				return
+			}
+		case DiscardValue:
+			return
 		}
 	}
 
 	return nil
 }
 
-//IsRecoverablePostgresErr checks if the error is recoverable
-func IsRecoverablePostgresErr(err error) bool {
+type RecoveryType int32
+
+const (
+	Unrecoverable RecoveryType = 0
+	TryAgain      RecoveryType = 1
+	DiscardValue  RecoveryType = 2
+)
+
+//GetPostgresErrorRecoveryOptions checks if the error is recoverable
+func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 
 	// Why go allows returning errors, that are not exported is beyond me
 	errorString := err.Error()
-	recoverable := strings.Contains(errorString, "sql: database is closed") ||
+	isRecoverableByRetrying := strings.Contains(errorString, "sql: database is closed") ||
 		strings.Contains(errorString, "driver: bad connection") ||
 		strings.Contains(errorString, "connect: connection refused") ||
 		strings.Contains(errorString, "pq: the database system is shutting down") ||
 		strings.Contains(errorString, "connect: no route to host")
-	zap.S().Debugf("IsRecoverablePostgresErr: ", err.Error(), recoverable)
-	if recoverable {
+	zap.S().Debugf("GetPostgresErrorRecoveryOptions: ", err.Error(), isRecoverableByRetrying)
+	if isRecoverableByRetrying {
 		time.Sleep(1 * time.Second)
-		return true
+		return TryAgain
+	}
+
+	matchedOutOfRange, err := regexp.MatchString(`pq: value "-*\d+" is out of range for type integer`, errorString)
+
+	isRecoverableByDiscarding := matchedOutOfRange
+	if isRecoverableByDiscarding {
+		return DiscardValue
 	}
 
 	zap.S().Errorf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -371,7 +431,7 @@ func IsRecoverablePostgresErr(err error) bool {
 	zap.S().Errorf("%s", err.Error())
 	zap.S().Errorf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
-	return false
+	return Unrecoverable
 }
 
 func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
@@ -939,7 +999,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 	var errx error
 	if len(faultyItems) > 0 {
 		errx = txn.Rollback()
-		if errx != nil && !IsRecoverablePostgresErr(errx) {
+		if errx != nil && GetPostgresErrorRecoveryOptions(errx) == Unrecoverable {
 			zap.S().Errorf("Failed to rollback tx")
 			return nil, items, errx
 		}
@@ -965,13 +1025,20 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 			errx = txn.Commit()
 			if errx != nil {
 				if errx != sql.ErrTxDone {
-					if !IsRecoverablePostgresErr(errx) && recursionDepth < 10 {
-						time.Sleep(time.Duration(10*recursionDepth) * time.Second)
-						errx = nil
-						faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
-					} else {
-						PGErrorHandling("txn.Commit()", errx)
+					switch GetPostgresErrorRecoveryOptions(errx) {
+					case Unrecoverable:
+						ShutdownApplicationGraceful()
+					case TryAgain:
+						if recursionDepth < 10 {
+							time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+							errx = nil
+							faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
+						}
+					case DiscardValue:
+						//This shouldn't happen here !
+						ShutdownApplicationGraceful()
 					}
+
 				} else {
 					zap.S().Warnf("Commit failed: %s", errx)
 				}
@@ -1631,7 +1698,14 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 				if err != nil {
 					errx := txn.Rollback()
 					if errx != nil {
-						if !IsRecoverablePostgresErr(errx) {
+						switch GetPostgresErrorRecoveryOptions(errx) {
+						case Unrecoverable:
+							ShutdownApplicationGraceful()
+						case TryAgain:
+							// If unable to rollback tx return everything as faulty
+							return items, errx
+						case DiscardValue:
+							// This shouldn't be possible here
 							ShutdownApplicationGraceful()
 						}
 					}
@@ -1644,8 +1718,13 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 			if err != nil {
 				err = PGErrorHandlingTransaction("val.Close()", err, txn)
 				if err != nil {
-					if !IsRecoverablePostgresErr(err) {
+					switch GetPostgresErrorRecoveryOptions(err) {
+					case Unrecoverable:
 						ShutdownApplicationGraceful()
+					case TryAgain:
+					// This means that we were able to scan all rows, but the database disappeared before we could close the scanner, which is fine for us
+					case DiscardValue:
+						// This should not occur here
 					}
 					return
 				}
