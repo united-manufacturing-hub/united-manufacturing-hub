@@ -55,7 +55,11 @@ func (r StoredRawMQTTHandler) process() {
 		err := processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.Prefix, pt.Payload)
 		if err != nil {
 			// Postgres doesn't seem to be working, just try again later
-			time.Sleep(10 * time.Second)
+			_, err := r.ProcessPriorityQueue.Enqueue(item.Priority, item.Value)
+			if err != nil {
+				// Failed to re-enqueue
+				ShutdownApplicationGraceful()
+			}
 		}
 		item, err = r.ProcessPriorityQueue.Dequeue()
 	}
@@ -89,6 +93,11 @@ func (r StoredRawMQTTHandler) reprocess() {
 			err := processMessage(pt.CustomerID, pt.Location, pt.AssetID, pt.Prefix, pt.Payload)
 			if err != nil {
 				// Postgres doesn't seem to be working, just try again later
+				_, err := r.ProcessPriorityQueue.Enqueue(item.Priority, item.Value)
+				if err != nil {
+					// Failed to re-enqueue
+					ShutdownApplicationGraceful()
+				}
 				time.Sleep(10 * time.Second)
 			}
 			item, err = r.ProcessPriorityQueue.Dequeue()
