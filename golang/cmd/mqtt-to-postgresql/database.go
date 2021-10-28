@@ -167,7 +167,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 	var cacheHit bool
 	DBassetID, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
-		// zap.S().Debugf("GetAssetID cache hit")
+
 		success = true
 		return
 	}
@@ -305,11 +305,9 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 	var cacheHit bool
 	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
-		zap.S().Debugf("Cache hit for %s", assetID)
 
 		return
 	}
-	zap.S().Debugf("No Cache hit for %s", assetID)
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -370,6 +368,11 @@ func IsRecoverablePostgresErr(err error) bool {
 }
 
 func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseRecommendation len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -413,6 +416,11 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 }
 
 func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseProcessValueFloat64 len: %i", len(items))
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
@@ -510,6 +518,11 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 }
 
 func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseProcessValueString len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -616,6 +629,11 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 }
 
 func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseProcessValue len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -713,6 +731,11 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 }
 
 func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseCount len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -812,6 +835,11 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 }
 
 func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseState len: %i", len(items))
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
@@ -852,6 +880,11 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 }
 
 func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseScrapCount len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -898,6 +931,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 
 //CommitWorking commits the transaction if there are no errors with the processable items. Otherwise, it will just try to process the items, that haven't failed.
 func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error), recursionDepth int) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
+	zap.S().Debugf("CommitWorking len: %i", len(items))
 	var errx error
 	if len(faultyItems) > 0 {
 		errx = txn.Rollback()
@@ -937,6 +971,8 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 				} else {
 					zap.S().Warnf("Commit failed: %s", errx)
 				}
+			} else {
+				zap.S().Debugf("Commited %i items with fnc: ", len(workingItems), fnc)
 			}
 		}
 	}
@@ -944,6 +980,11 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 }
 
 func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseUniqueProduct len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1004,6 +1045,11 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 }
 
 func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseProductTag len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1056,6 +1102,11 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 }
 
 func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseProductTagString len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1108,6 +1159,11 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 }
 
 func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseAddParentToChild len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1170,6 +1226,11 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 }
 
 func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseShift len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1213,6 +1274,11 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 }
 
 func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseUniqueProductScrap len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1256,6 +1322,11 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 }
 
 func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseAddProduct len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1300,6 +1371,11 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 }
 
 func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseAddOrder len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1359,6 +1435,11 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 }
 
 func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseStartOrder len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1402,6 +1483,11 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 }
 
 func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseEndOrder len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1445,6 +1531,11 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 }
 
 func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("storeItemsIntoDatabaseAddMaintenanceActivity len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1488,6 +1579,11 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 }
 
 func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("modifyStateInDatabase len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1598,6 +1694,11 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 }
 
 func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("deleteShiftInDatabaseById len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1641,6 +1742,11 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 }
 
 func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("deleteShiftInDatabaseByAssetIdAndTimestamp len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1684,6 +1790,11 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 }
 
 func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+	if len(items) == 0 {
+		faultyItems = []*goque.PriorityItem{}
+		return
+	}
+	zap.S().Debugf("modifyInDatabaseModifyCountAndScrap len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
