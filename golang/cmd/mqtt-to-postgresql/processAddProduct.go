@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"math"
 	"time"
 )
 
@@ -82,8 +83,8 @@ func (r AddProductHandler) process() {
 			}
 			zap.S().Debugf("Inserting faultyItem: %d", prio, faultyItems)
 			r.enqueue(faultyItem.Value, prio)
-			time.Sleep(time.Duration(100*len(faultyItems)) * time.Millisecond)
 		}
+		time.Sleep(time.Duration(math.Min(float64(100*len(faultyItems)), 1000)) * time.Millisecond)
 	}
 }
 

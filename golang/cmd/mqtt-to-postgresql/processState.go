@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"math"
 	"time"
 )
 
@@ -58,6 +59,7 @@ func (r StateHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
+			zap.S().Debugf("StateHandler queue empty")
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -72,8 +74,9 @@ func (r StateHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
-			time.Sleep(time.Duration(100*len(faultyItems)) * time.Millisecond)
 		}
+
+		time.Sleep(time.Duration(math.Min(float64(100*len(faultyItems)), 1000)) * time.Millisecond)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {
@@ -82,7 +85,7 @@ func (r StateHandler) process() {
 			}
 		}
 		if len(faultyItems) > 0 {
-			zap.S().Debugf("StateHandler re-enqueued %i items", faultyItems)
+			zap.S().Debugf("StateHandler re-enqueued %i items", len(faultyItems))
 		}
 	}
 }

@@ -314,6 +314,11 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
+		if !IsRecoverablePostgresErr(err) && recursionDepth < 10 {
+			time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+			err = nil
+			err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
+		}
 		return err
 	}
 
