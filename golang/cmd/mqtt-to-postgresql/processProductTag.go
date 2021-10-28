@@ -66,7 +66,7 @@ func (r ProductTagHandler) process() {
 			continue
 		}
 
-		faultyItems, err := storeItemsIntoDatabaseProductTag(items)
+		faultyItems, err := storeItemsIntoDatabaseProductTag(items, 0)
 
 		// Empty the array, without de-allocating memory
 		items = items[:0]
@@ -77,6 +77,7 @@ func (r ProductTagHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+			time.Sleep(time.Duration(100*len(faultyItems)) * time.Millisecond)
 		}
 		if err != nil {
 			zap.S().Errorf("err: %s", err)

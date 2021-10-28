@@ -62,7 +62,7 @@ func (r AddProductHandler) process() {
 			continue
 		}
 
-		faultyItems, err := storeItemsIntoDatabaseAddProduct(items)
+		faultyItems, err := storeItemsIntoDatabaseAddProduct(items, 0)
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
@@ -82,6 +82,7 @@ func (r AddProductHandler) process() {
 			}
 			zap.S().Debugf("Inserting faultyItem: %d", prio, faultyItems)
 			r.enqueue(faultyItem.Value, prio)
+			time.Sleep(time.Duration(100*len(faultyItems)) * time.Millisecond)
 		}
 	}
 }

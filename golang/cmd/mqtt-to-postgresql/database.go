@@ -10,6 +10,8 @@ import (
 	"github.com/omeid/pgerror"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -367,12 +369,11 @@ func IsRecoverablePostgresErr(err error) bool {
 	return false
 }
 
-func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseRecommendation len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -406,7 +407,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseRecommendation, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseRecommendation, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -415,12 +416,12 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem) (faultyIt
 
 }
 
-func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseProcessValueFloat64 len: %i", len(items))
+
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
@@ -517,12 +518,11 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 	return
 }
 
-func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseProcessValueString len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -628,12 +628,11 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 	return
 }
 
-func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseProcessValue len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -730,12 +729,11 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 	return
 }
 
-func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseCount(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseCount len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -834,12 +832,12 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 	return
 }
 
-func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseState(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseState len: %i", len(items))
+
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
@@ -871,7 +869,7 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseState, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseState, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -879,12 +877,11 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem) (faultyItems []*go
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseScrapCount len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -908,9 +905,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 		}
 
 		// Create statement
-		zap.S().Debugf("[PRE]\tstoreItemsIntoDatabaseScrapCount")
 		_, err = stmt.Exec(pt.TimestampMs, pt.DBAssetID, pt.Scrap)
-		zap.S().Debugf("[POST]\tstoreItemsIntoDatabaseScrapCount")
 		if err != nil {
 			faultyItems = append(faultyItems, item)
 			err = nil
@@ -921,7 +916,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseScrapCount, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseScrapCount, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -929,9 +924,13 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem) (faultyItems 
 	return faultyItems, err
 }
 
+func GetFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
 //CommitWorking commits the transaction if there are no errors with the processable items. Otherwise, it will just try to process the items, that haven't failed.
-func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error), recursionDepth int) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
-	zap.S().Debugf("CommitWorking len: %i", len(items))
+func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error), recursionDepth int) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
+	zap.S().Debugf("CommitWorking len: %i, faultylen: %i, workingItems: %i, depth: %i for %s", len(items), len(faultyItems), len(workingItems), recursionDepth, GetFunctionName(fnc))
 	var errx error
 	if len(faultyItems) > 0 {
 		errx = txn.Rollback()
@@ -940,7 +939,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 			return nil, items, errx
 		}
 		var innerFaultyItems []*goque.PriorityItem
-		innerFaultyItems, errx = fnc(workingItems)
+		innerFaultyItems, errx = fnc(workingItems, recursionDepth)
 		if errx != nil {
 			faultyItems = append(faultyItems, innerFaultyItems...)
 			return nil, faultyItems, errx
@@ -972,19 +971,18 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 					zap.S().Warnf("Commit failed: %s", errx)
 				}
 			} else {
-				zap.S().Debugf("Commited %i items with fnc: ", len(workingItems), fnc)
+				zap.S().Debugf("Commited %i items with fnc: ", len(workingItems), GetFunctionName(fnc))
 			}
 		}
 	}
 	return faultyItems, nil, nil
 }
 
-func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseUniqueProduct len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1033,7 +1031,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct, recursionDepth)
 	if err2 != nil {
 		innerFaultyItems = append(innerFaultyItems, missingItems...)
 		return innerFaultyItems, err2
@@ -1044,12 +1042,11 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem) (faultyIte
 
 }
 
-func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseProductTag len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1093,7 +1090,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTag, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTag, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1101,12 +1098,11 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem) (faultyItems 
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseProductTagString len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1150,7 +1146,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTagString, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseProductTagString, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1158,12 +1154,11 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem) (faulty
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseAddParentToChild len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1217,7 +1212,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddParentToChild, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddParentToChild, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1225,12 +1220,11 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem) (faulty
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseShift(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseShift len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1265,7 +1259,7 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseShift, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseShift, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1273,12 +1267,11 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem) (faultyItems []*go
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseUniqueProductScrap len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1313,7 +1306,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProductScrap, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProductScrap, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1321,12 +1314,11 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem) (faul
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseAddProduct len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1362,7 +1354,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddProduct, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddProduct, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1370,12 +1362,11 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem) (faultyItems 
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseAddOrder len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1424,7 +1415,7 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseUniqueProduct, recursionDepth)
 	if err2 != nil {
 		innerFaultyItems = append(innerFaultyItems, missingItems...)
 		return innerFaultyItems, err2
@@ -1434,12 +1425,11 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem) (faultyItems []
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseStartOrder len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1474,7 +1464,7 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseStartOrder, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseStartOrder, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1482,12 +1472,11 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem) (faultyItems 
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseEndOrder len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1522,7 +1511,7 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseEndOrder, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseEndOrder, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1530,12 +1519,11 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem) (faultyItems []
 	return faultyItems, err
 }
 
-func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("storeItemsIntoDatabaseAddMaintenanceActivity len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1570,7 +1558,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddMaintenanceActivity, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, storeItemsIntoDatabaseAddMaintenanceActivity, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1578,12 +1566,11 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem) (
 	return faultyItems, err
 }
 
-func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func modifyStateInDatabase(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("modifyStateInDatabase len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1693,12 +1680,11 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 	return
 }
 
-func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func deleteShiftInDatabaseById(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("deleteShiftInDatabaseById len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1733,7 +1719,7 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseById, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseById, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1741,12 +1727,11 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem) (faultyItems []*goqu
 	return faultyItems, err
 }
 
-func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("deleteShiftInDatabaseByAssetIdAndTimestamp len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1781,7 +1766,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 		}
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseByAssetIdAndTimestamp, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, deleteShiftInDatabaseByAssetIdAndTimestamp, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}
@@ -1789,12 +1774,11 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem) (fa
 	return faultyItems, err
 }
 
-func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
+func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
 	}
-	zap.S().Debugf("modifyInDatabaseModifyCountAndScrap len: %i", len(items))
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -1869,7 +1853,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem) (faultyIte
 
 	}
 
-	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, modifyInDatabaseModifyCountAndScrap, 0)
+	faultyItems, innerFaultyItems, err2 := CommitWorking(items, faultyItems, txn, workingItems, modifyInDatabaseModifyCountAndScrap, recursionDepth)
 	if err2 != nil {
 		return innerFaultyItems, err2
 	}

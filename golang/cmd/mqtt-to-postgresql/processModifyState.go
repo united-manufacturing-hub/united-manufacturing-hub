@@ -64,7 +64,7 @@ func (r ModifyStateHandler) process() {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		faultyItems, err := modifyStateInDatabase(items)
+		faultyItems, err := modifyStateInDatabase(items, 0)
 
 		// Empty the array, without de-allocating memory
 		items = items[:0]
@@ -75,6 +75,7 @@ func (r ModifyStateHandler) process() {
 				prio = 254
 			}
 			r.enqueue(faultyItem.Value, prio)
+			time.Sleep(time.Duration(100*len(faultyItems)) * time.Millisecond)
 		}
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
