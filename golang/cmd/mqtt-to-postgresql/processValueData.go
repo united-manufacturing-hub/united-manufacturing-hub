@@ -77,7 +77,7 @@ func (r ValueDataHandler) processI32() {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		faultyItems, err := storeItemsIntoDatabaseProcessValue(items, 0)
+		faultyItems, err := storeItemsIntoDatabaseProcessValue(items)
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
@@ -107,7 +107,7 @@ func (r ValueDataHandler) processF64() {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items, 0)
+		faultyItems, err := storeItemsIntoDatabaseProcessValueFloat64(items)
 
 		if err != nil {
 			zap.S().Errorf("err: %s", err)

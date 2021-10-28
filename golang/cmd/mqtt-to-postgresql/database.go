@@ -421,7 +421,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem, recursion
 
 }
 
-func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
@@ -523,7 +523,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem, recu
 	return
 }
 
-func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
@@ -633,7 +633,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem, recur
 	return
 }
 
-func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
@@ -734,7 +734,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem, recursionDe
 	return
 }
 
-func storeItemsIntoDatabaseCount(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
+func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return
@@ -1571,7 +1571,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem, r
 	return faultyItems, err
 }
 
-func modifyStateInDatabase(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error) {
+func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
 		return

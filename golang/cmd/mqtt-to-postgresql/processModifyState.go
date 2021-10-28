@@ -65,7 +65,7 @@ func (r ModifyStateHandler) process() {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		faultyItems, err := modifyStateInDatabase(items, 0)
+		faultyItems, err := modifyStateInDatabase(items)
 
 		// Empty the array, without de-allocating memory
 		items = items[:0]
@@ -77,7 +77,7 @@ func (r ModifyStateHandler) process() {
 			}
 			r.enqueue(faultyItem.Value, prio)
 		}
-		time.Sleep(time.Duration(math.Min(float64(100*len(faultyItems)), 1000)) * time.Millisecond)
+		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {
