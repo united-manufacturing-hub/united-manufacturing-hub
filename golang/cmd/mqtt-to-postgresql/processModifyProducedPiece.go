@@ -158,6 +158,10 @@ func (r ModifyProducedPieceHandler) EnqueueMQTT(customerID string, location stri
 		Count:     parsedPayload.Count,
 		Scrap:     parsedPayload.Scrap,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type modifyProducesPieceQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

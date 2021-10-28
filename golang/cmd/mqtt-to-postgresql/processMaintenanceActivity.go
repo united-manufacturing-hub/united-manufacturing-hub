@@ -160,6 +160,10 @@ func (r MaintenanceActivityHandler) EnqueueMQTT(customerID string, location stri
 		ComponentID:   componentID,
 		Activity:      parsedPayload.Activity,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type addMaintenanceActivityQueue", newObject)
+		return
+	}
 	marshal, err := json.Marshal(newObject)
 	if err != nil {
 		return

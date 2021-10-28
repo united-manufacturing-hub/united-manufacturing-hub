@@ -39,6 +39,10 @@ func storeMessageIntoQueue(topic string, message []byte, mode string, pq *goque.
 		Topic:   topic,
 		Message: message,
 	}
+	if !ValidateStruct(newElement) {
+		zap.S().Errorf("Failed to validate struct of type queueObject", newObject)
+		return
+	}
 
 	// prefix := mode // TODO: add load balancing and multiple queues
 

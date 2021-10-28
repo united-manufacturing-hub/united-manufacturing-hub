@@ -151,6 +151,10 @@ func (r AddParentToChildHandler) EnqueueMQTT(customerID string, location string,
 		ChildAID:    parsedPayload.ChildAID,
 		ParentAID:   parsedPayload.ParentAID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type addParentToChildQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

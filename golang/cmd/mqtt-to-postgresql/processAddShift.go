@@ -148,6 +148,10 @@ func (r AddShiftHandler) EnqueueMQTT(customerID string, location string, assetID
 		TimestampMsEnd: parsedPayload.TimestampMsEnd,
 		DBAssetID:      DBassetID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type addShiftQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

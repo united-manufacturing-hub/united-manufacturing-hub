@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -43,6 +44,25 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
 	statement = newStatementRegistry()
+}
+
+//ValidatePGInt validates that input is smaller than pg max int
+func ValidatePGInt(input uint32) bool {
+	return input < 2147483647 //https://www.postgresql.org/docs/current/datatype-numeric.html
+}
+
+//ValidateStruct iterates structs fields, checking all Uint32 to be inside the postgres int limit
+func ValidateStruct(vstruct interface{}) bool {
+	v := reflect.ValueOf(vstruct)
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Kind() == reflect.Uint32 {
+			if !ValidatePGInt(uint32(field.Uint())) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 //IsPostgresSQLAvailable returns if the database is reachable by PING command
@@ -122,6 +142,7 @@ func CommitOrRollbackOnError(txn *sql.Tx, errIn error) (errOut error) {
 
 	if errIn != nil {
 		zap.S().Debugf("Got error from callee: %s", errIn)
+		debug.PrintStack()
 		errOut = txn.Rollback()
 		return
 	}
@@ -413,7 +434,6 @@ func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 		strings.Contains(errorString, "connect: connection refused") ||
 		strings.Contains(errorString, "pq: the database system is shutting down") ||
 		strings.Contains(errorString, "connect: no route to host")
-	zap.S().Debugf("GetPostgresErrorRecoveryOptions: ", err.Error(), isRecoverableByRetrying)
 	if isRecoverableByRetrying {
 		time.Sleep(1 * time.Second)
 		return TryAgain

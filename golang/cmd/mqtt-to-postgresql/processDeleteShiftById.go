@@ -146,6 +146,10 @@ func (r DeleteShiftByIdHandler) EnqueueMQTT(customerID string, location string, 
 		DBAssetID: DBassetID,
 		ShiftId:   parsedPayload.ShiftId,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type deleteShiftByIdQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

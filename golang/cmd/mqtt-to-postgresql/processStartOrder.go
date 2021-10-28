@@ -147,6 +147,10 @@ func (r StartOrderHandler) EnqueueMQTT(customerID string, location string, asset
 		OrderName:   parsedPayload.OrderName,
 		DBAssetID:   DBassetID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type startOrderQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

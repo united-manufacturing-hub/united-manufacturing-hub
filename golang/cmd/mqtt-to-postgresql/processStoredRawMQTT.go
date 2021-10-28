@@ -141,6 +141,10 @@ func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, as
 		Payload:    payload,
 		Prefix:     prefix,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type mqttMessage", newObject)
+		return
+	}
 	marshal, err := json.Marshal(newObject)
 	if err != nil {
 		return

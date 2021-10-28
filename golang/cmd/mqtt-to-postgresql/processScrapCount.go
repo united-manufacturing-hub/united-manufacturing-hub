@@ -149,6 +149,10 @@ func (r ScrapCountHandler) EnqueueMQTT(customerID string, location string, asset
 		Scrap:       parsedPayload.Scrap,
 		DBAssetID:   DBassetID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type scrapCountQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

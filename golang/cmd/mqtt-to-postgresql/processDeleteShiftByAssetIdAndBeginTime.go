@@ -146,6 +146,10 @@ func (r DeleteShiftByAssetIdAndBeginTimestampHandler) EnqueueMQTT(customerID str
 		DBAssetID:        DBassetID,
 		BeginTimeStampMs: parsedPayload.BeginTimeStampMs,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type deleteShiftByAssetIdAndBeginTimestampQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

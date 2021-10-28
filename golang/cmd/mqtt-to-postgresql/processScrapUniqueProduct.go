@@ -145,6 +145,10 @@ func (r ScrapUniqueProductHandler) EnqueueMQTT(customerID string, location strin
 		UID:       parsedPayload.UID,
 		DBAssetID: DBassetID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type scrapUniqueProductQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

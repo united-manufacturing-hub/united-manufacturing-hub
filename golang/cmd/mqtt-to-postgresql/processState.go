@@ -145,6 +145,10 @@ func (r StateHandler) EnqueueMQTT(customerID string, location string, assetID st
 		State:       parsedPayload.State,
 		DBAssetID:   DBassetID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type stateQueue", newObject)
+		return
+	}
 	marshal, err := json.Marshal(newObject)
 	if err != nil {
 		return

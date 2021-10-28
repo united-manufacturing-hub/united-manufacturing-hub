@@ -152,6 +152,10 @@ func (r ModifyStateHandler) EnqueueMQTT(customerID string, location string, asse
 		EndTimeStampMs:   parsedPayload.EndTimeStampMs,
 		NewState:         parsedPayload.NewState,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type modifyStateQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

@@ -160,6 +160,10 @@ func (r CountHandler) EnqueueMQTT(customerID string, location string, assetID st
 		Scrap:       parsedPayload.Scrap,
 		DBAssetID:   DBassetID,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type countQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {

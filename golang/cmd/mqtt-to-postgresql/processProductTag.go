@@ -154,6 +154,10 @@ func (r ProductTagHandler) EnqueueMQTT(customerID string, location string, asset
 		Name:        parsedPayload.Name,
 		Value:       parsedPayload.Value,
 	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type productTagQueue", newObject)
+		return
+	}
 
 	marshal, err := json.Marshal(newObject)
 	if err != nil {
