@@ -3,7 +3,7 @@ entries:
   factorycube-edge:
   - apiVersion: v2
     appVersion: 0.6.1
-    created: "2021-09-30T15:16:56.909862226+02:00"
+    created: "2021-10-28T15:27:26.4688002+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 6aa8157e1ab526aa149b786964efbe097f322e2fd627688740fcaf2f90e23008
     home: https://www.umh.app
@@ -12,7 +12,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-edge-0.6.1.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-edge-0.6.1.tgz
     version: 0.6.1
   - apiVersion: v2
     appVersion: 0.6.1-prerelease
@@ -29,7 +29,7 @@ entries:
     version: 0.6.1-prerelease
   - apiVersion: v2
     appVersion: 0.6.0
-    created: "2021-09-30T15:16:56.905386029+02:00"
+    created: "2021-10-28T15:27:26.4513191+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 4c0d4187617d03f4b8a679e95b7fadf2539ae75337150e40954108ff8233b698
     home: https://www.united-manufacturing-hub.com
@@ -38,11 +38,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-edge-0.6.0.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-edge-0.6.0.tgz
     version: 0.6.0
   - apiVersion: v2
     appVersion: 0.5.1
-    created: "2021-09-30T15:16:56.902678913+02:00"
+    created: "2021-10-28T15:27:26.4349791+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 71083cbd6956775118510a3dc3a9ce8ea24358d60c35c19095b8205607ae859a
     home: https://www.united-manufacturing-hub.com
@@ -51,11 +51,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-edge-0.5.1.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-edge-0.5.1.tgz
     version: 0.5.1
   - apiVersion: v2
     appVersion: 0.5.0
-    created: "2021-09-30T15:16:56.900770143+02:00"
+    created: "2021-10-28T15:27:26.4170693+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: a5ac1fb5ca7ec695f5db09e480f5448499028ede75e5a156605cb8b113edf127
     home: https://www.united-manufacturing-hub.com
@@ -64,11 +64,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-edge-0.5.0.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-edge-0.5.0.tgz
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2021-09-30T15:16:56.89889882+02:00"
+    created: "2021-10-28T15:27:26.4011873+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: ef2fcbee0ad7e9f5f2904c5385261fb9574200c9d45709848c20359020d8d0d4
     home: https://www.united-manufacturing-hub.com
@@ -77,12 +77,46 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-edge-0.4.4.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-edge-0.4.4.tgz
     version: 0.4.4
   factorycube-server:
   - apiVersion: v2
+    appVersion: 0.7.0-prerelease
+    created: "2021-10-28T15:27:26.7921491+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 850a048ca54ea64ef9de5e9aa0744389c14253155c3ab6ca6ae9fb47a3390238
+    home: https://www.umh.app
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-server-0.7.0-prerelease.tgz
+    version: 0.7.0-prerelease
+  - apiVersion: v2
     appVersion: 0.6.1
-    created: "2021-09-30T15:16:57.012520195+02:00"
+    created: "2021-10-28T15:27:26.7519477+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -112,7 +146,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-server-0.6.1.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-server-0.6.1.tgz
     version: 0.6.1
   - apiVersion: v2
     appVersion: 0.6.1-prerelease
@@ -150,7 +184,7 @@ entries:
     version: 0.6.1-prerelease
   - apiVersion: v2
     appVersion: 0.6.0
-    created: "2021-09-30T15:16:56.977668129+02:00"
+    created: "2021-10-28T15:27:26.7025002+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -180,11 +214,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-server-0.6.0.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-server-0.6.0.tgz
     version: 0.6.0
   - apiVersion: v2
     appVersion: 0.5.1
-    created: "2021-09-30T15:16:56.960509978+02:00"
+    created: "2021-10-28T15:27:26.6452557+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -214,11 +248,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-server-0.5.1.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-server-0.5.1.tgz
     version: 0.5.1
   - apiVersion: v2
     appVersion: 0.5.0
-    created: "2021-09-30T15:16:56.942362585+02:00"
+    created: "2021-10-28T15:27:26.5893784+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -248,11 +282,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-server-0.5.0.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-server-0.5.0.tgz
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2021-09-30T15:16:56.925201372+02:00"
+    created: "2021-10-28T15:27:26.5224238+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -278,6 +312,6 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/factorycube-server-0.4.4.tgz
+    - https://deploy-preview-611--umh-helm-repo.netlify.app/factorycube-server-0.4.4.tgz
     version: 0.4.4
-generated: "2021-09-30T15:16:56.896765848+02:00"
+generated: "2021-10-28T15:27:26.3880283+02:00"
