@@ -106,7 +106,7 @@ mqtttopostgresql:
 
 minio-operator:
     enabled: false
-    loadBalancerEnabled: true
+    loadBalancerEnabled: false
     service:
         annotations: {}
     ## MinIO Tenant Definition

@@ -22,6 +22,10 @@ spec:
         name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
         {{- include "factorycube-server.labels.mqtttoblob" . | nindent 8 }}
     spec:
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -55,11 +59,14 @@ spec:
             - name: BUCKET_NAME
               value: "umh"
 
+            - name: MINIO_SECURE
+              value: 'True'
+
             - name: TOPIC
               value: "ia/+/+/+/productImage"
 
             - name: MINIO_URL
-              value: {{ include "factorycube-server.fullname" . }}-minio-service
+              value: 'umhminio-hl.factorycube-server.svc.cluster.local:9000'
 
             - name: MINIO_ACCESS_KEY
               valueFrom:
@@ -93,6 +100,10 @@ spec:
           #    port: 8086
           #  periodSeconds: 5
           resources: {}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
       serviceAccountName: ""
       restartPolicy: Always
 {{- end -}}
