@@ -64,7 +64,8 @@ spec:
 
             - name: TOPIC
               value: "ia/+/+/+/productImage"
-
+            - name: SSL_CERT_FILE
+              value: /certs/kubernetes-ca.pem
             - name: MINIO_URL
               value: 'umhminio-hl.factorycube-server.svc.cluster.local:9000'
 
