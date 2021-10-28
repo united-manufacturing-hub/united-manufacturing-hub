@@ -15,48 +15,88 @@ The data model in the MQTT Broker can be divided into four levels. In general, t
 
 If you do not know the idea of MQTT (important keywords: "broker", "subscribe", "publish", "topic"), we recommend reading the [wikipedia article](https://en.wikipedia.org/wiki/MQTT) first.
 
-All MQTT messages consist out of one JSON with atleast two elements in it.
+All MQTT messages consist out of one JSON with at least two elements in it:
 
-1. `timestamp_ms`: the amount of milliseconds since the 1970-01-01 (also called [UNIX timestamp](https://en.wikipedia.org/wiki/Unix_time) in milliseconds)
-2. `<valueName>`: a value
+| Key | Data type/format | Description |
+|----|----|----|
+|`timestamp_ms`| int | the amount of milliseconds since the 1970-01-01 (also called [UNIX timestamp](https://en.wikipedia.org/wiki/Unix_time) in milliseconds)|
+|`<valueName>`| int, str, dict | a value that can be int, str, or even in dict format |
 
-Some messages might deviate from it, but this will be noted explicitly. All topics are to be written in lower case only!
+{{% alert title="Example" color="primary" %}}
+{{< tabpane langEqualsHeader=false >}}
+
+{{< tab header="str" lang=JSON >}}
+{
+    "timestamp_ms": 1588879689394,
+    "valueName": "str"
+}
+{{< /tab >}}
+
+{{< tab header="int" lang=JSON >}}
+{
+    "timestamp_ms": 1588879689394,
+    "valueName": 24
+}
+{{< /tab >}}
+
+{{< tab header="dict" lang=JSON >}}
+{
+    "timestamp_ms": 1588879689394,
+    "valueName": {
+        "key1": "some text",
+        "key2": 12
+    }
+}
+{{< /tab >}}
+
+{{< /tabpane >}}
+{{% /alert %}}
+
+{{< alert title="Note" color="info">}}
+- Some messages might deviate from this format. When this happens it will be noted explicitly. 
+- All topics are to be written in lower case only!
+{{< /alert >}}
+
 
 ## 1st level: Raw data
 
-Here are all raw data, which are not yet contextualized, i.e. assigned to a machine. These are in particular all data from [sensorconnect].
+Data from this level are all raw data, which are not yet contextualized(i.e., assigned to a machine). These are, in particular, all data from [sensorconnect] and [cameraconnect].
 
-### Topic: `ia/raw/`
-
-All raw data coming in via [sensorconnect].
+### Topic: ia/raw/
 
 Topic structure: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
-#### Example for ia/raw/
+All raw data coming in via [sensorconnect].
 
+{{% alert title="Example for ia/raw/" color="primary" %}}
 Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
 This means that the transmitter with the serial number `2020-0102` has one ifm gateway connected to it with the serial number `0000005898845`. This gateway has the sensor `210-156` connected to the first port `X01`.
 
 ```json
 {
-"timestamp_ms": 1588879689394, 
-"distance": 16
+    "timestamp_ms": 1588879689394, 
+    "distance": 16
 }
 ```
+{{% /alert %}}
 
-### Topic: `ia/rawImage/`
-All raw data coming in via [cameraconnect].
+### Topic: ia/rawImage/
 
 Topic structure: `ia/rawImage/<TransmitterID>/<MAC Adress of Camera>`
 
-`image_id:` a unique identifier for every image acquired\
-`image_bytes:` base64 encoded image in JPG format in bytes\
-`image_height:` height of the image in pixel\
-`image_width:` width of the image in pixel\
-`image_channels:` amount of included color channels (Mono: 1, RGB: 3)
+All raw data coming in via [cameraconnect].
 
-#### Example for ia/rawImage/
+
+| key | data type | description |
+|-----|-----|--------------------------|
+|`image_id` | str | a unique identifier for every image acquired (e.g. format:`<MACaddress>_<timestamp_ms>`) |
+|`image_bytes` | str | base64 encoded image in JPG format in bytes |
+|`image_height` | int | height of the image in pixel |
+|`image_width` | int | width of the image in pixel |
+|`image_channels` | int | amount of included color channels (Mono: 1, RGB: 3) |
+
+{{% alert title="Example for ia/rawImage/" color="primary" %}}
 Topic: `ia/rawImage/2020-0102/4646548`
 
 This means that the transmitter with the serial number 2020-0102 has one camera connected to it with the serial number 4646548.
@@ -73,14 +113,16 @@ This means that the transmitter with the serial number 2020-0102 has one camera 
 	}
 }
 ```
+{{% /alert %}}
 
-#### Example for decoding an image and saving it locally with OpenCV
-```
+{{% alert title="Example for decoding an image and saving it locally with OpenCV" color="primary" %}}
+```python
 im_bytes = base64.b64decode(incoming_mqtt_message["image"]["image_bytes"])
 im_arr = np.frombuffer(im_bytes, dtype=np.uint8)  # im_arr is a one-dimensional Numpy array
 img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
 cv2.imwrite(image_path, img)
 ```
+{{% /alert %}}
   
 ## 2nd level: contextualized data
 
@@ -102,8 +144,7 @@ Here a message is sent every time something has been counted. This can be, for e
 `count` in the JSON is an integer.
 `scrap` in the JSON is an integer, which is optional. It means `scrap` pieces of `count` are scrap. If not specified it is 0 (all produced goods are good).
 
-#### Example for /count
-
+{{% alert title="Example for /count" color="primary" %}}
 ```json
 {
     "timestamp_ms": 1588879689394, 
@@ -111,6 +152,7 @@ Here a message is sent every time something has been counted. This can be, for e
 }
 ```
 
+{{% /alert %}}
 ### /scrapCount
 
 Topic: `ia/<customerID>/<location>/<AssetID>/scrapCount`
@@ -120,11 +162,13 @@ A message with `scrap` and `timestamp_ms` is sent. It starts with the count that
 
 {{< imgproc scrapCount Fit "500x300" >}}{{< /imgproc >}}
 
-**Important notes:**
+{{% alert title="Important notes" color="warning"%}}
 
 - You can specify maximum of 24h to be scrapped to avoid accidents
 - (NOT IMPLEMENTED YET) If counts does not equal `scrap`, e.g. the count is 5 but only 2 more need to be scrapped, it will scrap exactly 2. Currently it would ignore these 2. see also #125
 - (NOT IMPLEMENTED YET) If no counts are available for this asset, but uniqueProducts are available, they can also be marked as scrap. //TODO
+
+{{%/alert%}}
 
 `scrap` in the JSON is an integer.
 
@@ -315,11 +359,29 @@ A message is sent here every time a process value has been prepared. Unique nami
 
 ### /productImage
 
-All data coming from `/rawImageClassification` and were published on the server. Same content as `/rawImageClassification`, only with a changed topic.
-
 Topic structure: `ia/<customer>/<location>/<assetID>/productImage`
 
+`/productImage` can be acquired in two ways, either from [`ia/rawImage`](#topic-iarawimage) or `/rawImageClassification`. In the case of `/rawImageClassification`,
+only the Image part is extracted to `/productImage`, while the classification information is stored in the relational database.
 
+`/productImage` has the same data format as [`ia/rawImage`](#topic-iarawimage), only with a changed topic.
+
+{{< imgproc imageProcessing Fit "451x522" >}}{{< /imgproc >}}
+
+#### Example for /productImage
+
+```json
+{
+	"timestamp_ms": 214423040823,
+	"image":  {
+		"image_id": "<SerialNumberCamera>_<timestamp_ms>",
+		"image_bytes": 3495ask484...,
+		"image_heigth": 800,
+		"image_width": 1203,
+		"image_channels": 3
+	}
+}
+```
 
 ## 3rd level: production data
 
