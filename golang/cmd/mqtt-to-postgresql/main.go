@@ -41,10 +41,13 @@ var valueDataHandler ValueDataHandler
 var valueStringHandler ValueStringHandler
 var storedRawMQTTHandler StoredRawMQTTHandler
 
+var DebugMode = false
+
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
 	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
+		DebugMode = true
 		logger, _ = zap.NewDevelopment()
 	} else {
 
@@ -190,6 +193,15 @@ func main() {
 		ShutdownApplicationGraceful()
 
 	}()
+
+	if DebugMode {
+		go func() {
+			for !shuttingDown {
+				zap.S().Debugf("Heartbeat")
+				time.Sleep(60 * time.Second)
+			}
+		}()
+	}
 
 	select {} // block forever
 }

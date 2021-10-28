@@ -61,10 +61,9 @@ func (r AddProductHandler) process() {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		zap.S().Debugf("Item len: %d", len(items))
+
 		faultyItems, err := storeItemsIntoDatabaseAddProduct(items)
 
-		zap.S().Debugf("Faulty item len: %d", len(faultyItems))
 		if err != nil {
 			zap.S().Errorf("err: %s", err)
 			if !IsRecoverablePostgresErr(err) {
@@ -74,7 +73,7 @@ func (r AddProductHandler) process() {
 		}
 		// Empty the array, without de-allocating memory
 		items = items[:0]
-		zap.S().Debugf("Item [empty] len: %d", len(items))
+
 		for _, faultyItem := range faultyItems {
 			var prio uint8
 			prio = faultyItem.Priority + 1
