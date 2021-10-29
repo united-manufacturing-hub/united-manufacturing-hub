@@ -94,41 +94,83 @@ write_files:
   path: /home/rancher/configs/factorycube-edge-development.yaml
 
 - content: |
-    #!/bin/bash
-    LOCKDIR=/home/rancher/DO_NOT_DELETE
+      #!/bin/bash
+      LOCKDIR=/home/rancher/DO_NOT_DELETE
 
-    if [ $UID -eq 0 ]; then
-        exec su "rancher" "$0" -- "$@"
-        exit
-    fi
+      if [ $UID -eq 0 ]; then
+          exec su "rancher" "$0" -- "$@"
+          exit
+      fi
 
-    if mkdir $LOCKDIR; then
-        echo "Initial setup! Waiting 20 seconds for full startup..."
+      if mkdir $LOCKDIR; then
+          echo "Initial setup! Waiting 20 seconds for full startup..."
 
-        sleep 20
-        echo "Continuing with installation. Installing helm..."
-        export VERIFY_CHECKSUM=false && curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && chmod 700 /home/rancher/get_helm.sh && /home/rancher/get_helm.sh 
-        echo "Helm installed!"
-        echo "Adding helm repo..."
-        helm repo add united-manufacturing-hub https://repo.umh.app/
-        echo "Added helm repo!"
-        echo "Creating namespaces factorycube-edge and factorycube-server..."
-        kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server
-        echo "Created namespaces!"
-        echo "Install factorycube-edge..."
-        helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge --devel
-        echo "Installed factorycube-edge!"
-        echo "Install factorycube-server..."
-        helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server --devel
-        echo "Installed factorycube-server!"
+          #sleep 20
+          echo "Continuing with installation. Installing helm..."
+          export VERIFY_CHECKSUM=false
+          if ! curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 ; then
+              echo "Failed to download helm installer, aborting setup"
+              exit
+          fi
 
-        echo "Enabling SSH password authentification..."
-        sudo vim /etc/ssh/sshd_config -c "%s/PasswordAuthentication  no/PasswordAuthentication  yes/g | write | quit" && sudo service sshd restart
-        echo "Enabled SSH password authentification!"
-        echo "Initial setup finished! This might take now awhile..."
-    else
-        echo "Already configured. If you want to reconfigure delete /home/rancher/DO_NOT_DELETE"
-    fi
+          if ! chmod 700 /home/rancher/get_helm.sh ; then
+              echo "Failed to change permission on get_helm.sh, aborting setup"
+              exit
+          fi
+
+          if ! /home/rancher/get_helm.sh ; then
+              echo "Failed to execute get_helm.sh, aborting setup"
+              exit
+          fi
+          echo "Helm installed!"
+
+          echo "Adding helm repo..."
+          if ! helm repo add united-manufacturing-hub https://repo.umh.app/ ; then
+              echo "Failed to add umh repository, aborting setup"
+              exit
+          fi
+          echo "Added helm repo!"
+
+          echo "Creating namespaces factorycube-edge and factorycube-server..."
+          if ! kubectl create namespace factorycube-edge ; then
+              echo "Failed to create kubernetes namespace for factorycube-edge, aborting setup"
+              exit
+          fi
+          if ! kubectl create namespace factorycube-server ; then
+              echo "Failed to create kubernetes namespace for factorycube-server, aborting setup"
+              exit
+          fi
+          echo "Created namespaces!"
+
+          echo "Install factorycube-edge..."
+          if ! helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge --devel ; then
+              echo "Failed to install factorycube-edge using helm, aborting setup"
+              exit
+          fi
+          echo "Installed factorycube-edge!"
+
+          echo "Install factorycube-server..."
+          if ! helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server --devel ; then
+              echo "Failed to install factorycube-server using helm, aborting setup"
+              exit
+          fi
+          echo "Installed factorycube-server!"
+
+          echo "Enabling SSH password authentification..."
+          if ! sudo sed -i 's/PasswordAuthentication  no/PasswordAuthentication  yes/g' /etc/ssh/sshd_config ; then
+              echo "Failed to enable password authentication, aborting setup"
+              exit
+          fi
+          if ! sudo service sshd restart ; then
+              echo "Failed to restart sshd, aborting setup"
+              exit
+          fi
+          echo "Enabled SSH password authentification!"
+          echo "Initial setup finished! This might take now awhile..."
+      else
+          echo "Already configured. If you want to reconfigure delete /home/rancher/DO_NOT_DELETE"
+      fi
+
   path: /home/rancher/initial_setup.sh
 
 run_cmd:
