@@ -433,6 +433,11 @@ emqxedge:
     EMQX_CLUSTER__K8S__ADDRESS_TYPE: "hostname"
     EMQX_CLUSTER__K8S__SUFFIX: "svc.cluster.local"
     EMQX_LOADED_PLUGINS: "emqx_recon,emqx_retainer,emqx_management,emqx_dashboard,emqx_bridge_mqtt"
+    EMQX_MQTT__MAX_PACKET_SIZE: 1048576
+    EMQX_ZONE__EXTERNAL__MAX_MQUEUE_LEN: 10000
+    EMQX_ZONE__EXTERNAL__MAX_PACKET_SIZE: 104857600
+    EMQX_ZONE__INTERNAL__MAX_MQUEUE_LEN: 10000
+    EMQX_ZONE__INTERNAL__MAX_PACKET_SIZE: 104857600
     ## if EMQX_CLUSTER__K8S__ADDRESS_TYPE eq dns
     # EMQX_CLUSTER__K8S__SUFFIX: "pod.cluster.local"
     emqxAclConfig: >
