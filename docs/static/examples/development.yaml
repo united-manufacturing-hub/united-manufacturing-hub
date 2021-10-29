@@ -110,7 +110,7 @@ write_files:
         export VERIFY_CHECKSUM=false && curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && chmod 700 /home/rancher/get_helm.sh && /home/rancher/get_helm.sh 
         echo "Helm installed!"
         echo "Adding helm repo..."
-        helm repo add united-manufacturing-hub https://deploy-preview-611--umh-helm-repo.netlify.app/
+        helm repo add united-manufacturing-hub https://repo.umh.app/
         echo "Added helm repo!"
         echo "Creating namespaces factorycube-edge and factorycube-server..."
         kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server
