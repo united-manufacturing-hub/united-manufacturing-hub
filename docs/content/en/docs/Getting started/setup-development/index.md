@@ -16,10 +16,12 @@ There are three options to setup a development environment:
 ## Option 1: using a seperate device in combination with k3OS and our installation script
 
 Note: this content is also available in a presence workshop with an experienced facilitator guiding the participants through the installation and answering questions. Contact us for more information!
-
+ 
 ### Prerequisites
 
-{{< imgproc prerequisites_k3os.png Fit "1280x500" >}}This installation methods requires some previous setup{{< /imgproc >}}
+{{< imgproc prerequisites_k3os.png Fit "1280x500" >}}{{< /imgproc >}}
+
+This installation method requires some previous settings:
 
 - an edge device with x86 architecture. We recommend using the [K300 from OnLogic](https://www.onlogic.com/eu-en/k300/)
 - the [latest version of k3OS](https://github.com/rancher/k3os/releases/) [^versioning] installed on a bootable USB-stick [^flash-usb]. 
@@ -27,6 +29,8 @@ Note: this content is also available in a presence workshop with an experienced 
 - local LAN (with DHCP) available via atleast two Ethernet cables and access to the internet.[^network-setup].
 - a computer monitor connected with the edge device 
 - a keyboard connected with the edge device
+
+**As shown, the Factorycube is an optional device that combines all the required hardware in a rugged industrial gateway for industrial use.**
 
 [^flash-usb]: See also out guide: [How to flash an operating system on a USB-stick](/docs/tutorials/general/flashing-operating-system-on-usb)
 [^SSH-client]: See also out guide: [How to connect via SSH](/docs/tutorials/general/connect-with-ssh)
@@ -83,7 +87,7 @@ For production environments we recommend using a certificate to authenticate, wh
 
 #### Step 3: Connect via SSH
 
-Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr`. 
+Connect via SSH [^SSH-client] from your laptop with the edge device. The IP address is shown on the computer screen on your edge device (see also step 1). If it is not available anymore, you can view the current IP address using `ip addr` or `ifconfig eth0` (works with out devices). 
 
 Username: `rancher`
 Password: `rancher`
@@ -104,6 +108,10 @@ Connect with the edge device using the software [Lens] and the Kubernetes creden
 {{< imgproc k3s_secret_6.png Fit "1280x500" >}}{{< /imgproc >}}
 
 Ensure that you have adjusted the IP in the Kubernetes credentials with the IP of the edge device.
+
+Also make sure that you simply adjust the IP in between. The port that follows the `:` should remain untouched (e.g. https://XXX.X.X.X:**6443** in that case).
+
+**Hint:** If you get the message 'certificate not valid' or something similar when connecting, verify that you entered the correct port before proceeding to the troubleshooting section (/docs/tutorials/k3os/how-to-fix-invalid-certs-due-to-misconfigured-date/).
 
 {{< imgproc k3s_secret_7.png Fit "1280x500" >}}{{< /imgproc >}}
 {{< imgproc k3s_secret_8.png Fit "1280x500" >}}{{< /imgproc >}}
