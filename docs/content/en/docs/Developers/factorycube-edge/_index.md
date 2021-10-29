@@ -32,3 +32,4 @@ This tool is used to connect PLC and to process data. See also [Getting Started]
 ## emqx-edge
 
 This tool is used as a central MQTT broker. See [emqx-edge documentation](https://docs.emqx.io/en/edge/latest/) for more information.
+The max mqtt message size is 104 MB.
