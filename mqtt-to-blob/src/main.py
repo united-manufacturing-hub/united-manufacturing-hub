@@ -6,6 +6,7 @@ import os
 import base64
 import json
 import ProductImage
+import sys
 
 # Settig up the env variables, see index.md for further explanation
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'DEBUG')
@@ -44,36 +45,38 @@ def on_connect(client, userdata, flags, rc):
 
 
 def on_message(client, userdata, message):      
-    #Get Image from MQTT topic      
+    #Get Image from MQTT topic
+    global result     
     try:
         result = ProductImage.product_image_from_dict(json.loads(message.payload))
     except:
-        # logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
-        logging.warning("ProductImage failed to parse JSON payload")
+        logging.warning("ProductImage failed to parse JSON payload. Please check your MQTT message format")
         return
 
-    # Get image_id
-    uid = result.image.image_id
-
-    # Reading out image_bytes and decoding it from base64
-    img_bytes = base64.b64decode(result.image.image_bytes) 
-    
-    # Write file to minio client
-    minio_client.put_object(
-            bucket_name=bucket_name, 
-            object_name=uid + ".jpg", 
-            data=io.BytesIO(img_bytes), 
-            length=-1, 
-            part_size=10*1024*1024,
-            metadata={"timestamp_ms": result.timestamp_ms,
-                      "image_id": result.image.image_id,
-                      "image_height": result.image.image_height,
-                      "image_width": result.image.image_width,
-                      "image_channels": result.image.image_channels
-                      }
-            )
-    
-    logging.info("Successfully uploaded")
+    try:
+        # Get image_id
+        uid = result.image.image_id
+        # Reading out image_bytes and decoding it from base64
+        img_bytes = base64.b64decode(result.image.image_bytes, validate=True)
+        
+        # Write file to minio client
+        minio_client.put_object(
+                bucket_name=bucket_name, 
+                object_name=uid + ".jpg", 
+                data=io.BytesIO(img_bytes), 
+                length=-1, 
+                part_size=10*1024*1024,
+                metadata={"timestamp_ms": result.timestamp_ms,
+                          "image_id": result.image.image_id,
+                          "image_height": result.image.image_height,
+                          "image_width": result.image.image_width,
+                          "image_channels": result.image.image_channels
+                          }
+                )
+        
+        logging.info("Successfully uploaded")
+    except:
+        logging.warning("Oops! %s occurred. Please check your MQTT topic again", sys.exc_info()[0])
 
 
 if __name__ == "__main__":
