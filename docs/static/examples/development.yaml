@@ -105,7 +105,7 @@ write_files:
       if mkdir $LOCKDIR; then
           echo "Initial setup! Waiting 20 seconds for full startup..."
 
-          #sleep 20
+          sleep 20
           echo "Continuing with installation. Installing helm..."
           export VERIFY_CHECKSUM=false
           if ! curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 ; then
