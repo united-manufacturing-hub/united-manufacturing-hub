@@ -17,6 +17,8 @@ minio_url = os.environ['MINIO_URL']
 minio_access_key = os.environ['MINIO_ACCESS_KEY']
 minio_secret = os.environ['MINIO_SECRET_KEY']
 minio_secure = bool(os.environ['MINIO_SECURE'])
+
+
 bucket_name = os.environ['BUCKET_NAME']
 topic = os.environ['TOPIC']
 

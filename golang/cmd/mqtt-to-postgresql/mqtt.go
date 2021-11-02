@@ -10,7 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 	"io/ioutil"
-
 	"regexp" // pattern matching
 )
 
@@ -73,9 +72,21 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 }
 
-func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) {
+func processMessage(customerID string, location string, assetID string, payloadType string, payload []byte) (err error) {
 	zap.S().Debugf("New MQTT message. Customer: %s | Location: %s | AssetId: %s | payloadType: %s | Payload %s", customerID, location, assetID, payloadType, payload)
-	AddAssetIfNotExisting(assetID, location, customerID)
+	err = AddAssetIfNotExisting(assetID, location, customerID, 0)
+	if err != nil {
+		switch GetPostgresErrorRecoveryOptions(err) { //{
+		case Unrecoverable:
+			ShutdownApplicationGraceful()
+		case TryAgain:
+			storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, payloadType)
+		case DiscardValue:
+			// Discarding value, by doing nothing
+		}
+
+		return
+	}
 
 	if customerID != "raw" {
 		if payloadType == "" {
@@ -90,7 +101,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		//TODO is still still needed ?
 		case "processvalue":
 			{
-				zap.S().Warnf("Depreciated")
+				zap.S().Warnf("Deprecated")
 				valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
 			}
 		case Prefix.ProcessValueString:
@@ -154,6 +165,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 	}
 
+	return
 }
 
 var rp = regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
@@ -175,7 +187,10 @@ func getOnMessageReceived() func(MQTT.Client, MQTT.Message) {
 
 		mqttTotal.Inc()
 
-		go processMessage(customerID, location, assetID, payloadType, payload)
+		go func() {
+			//This is "fine" here, cause it will re-queue
+			_ = processMessage(customerID, location, assetID, payloadType, payload)
+		}()
 	}
 }
 
