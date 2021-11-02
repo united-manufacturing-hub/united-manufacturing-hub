@@ -19,10 +19,6 @@ minio_secure = bool(os.environ['MINIO_SECURE'])
 bucket_name = os.environ['BUCKET_NAME']
 topic = os.environ['TOPIC']
 
-input_var = ""
-
-IMAGE_FOLDER = "./images/"
-
 # Connects to the mqtt client.
 # If you want to be sure that the connection attempt was successful,
 # then see the logs.
@@ -97,7 +93,7 @@ if __name__ == "__main__":
     logging.debug(f"Bucket NAME: {bucket_name}")
     
     # =============================================================================
-    #     Connect to minio     
+    # Connect to minio     
     # =============================================================================
     minio_client = Minio(
         minio_url,
@@ -115,7 +111,7 @@ if __name__ == "__main__":
         logging.info("Bucket already exists")
 
     # =============================================================================
-    #     Call MQTT
+    # Call MQTT
     # =============================================================================
     global_client = mqtt.Client()
     global_client.on_connect = on_connect
