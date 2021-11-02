@@ -70,13 +70,6 @@ spec:
           - name: {{ . }}
           {{- end }}
           {{- end }}
-          resources:
-            limits:
-              cpu: {{ .Values.emqxedge.resources.limits.cpu }}
-              memory: {{ .Values.emqxedge.resources.limits.memory }}
-            requests:
-              cpu: {{ .Values.emqxedge.resources.requests.cpu }}
-              memory: {{ .Values.emqxedge.resources.requests.memory }}
           ports:
           - name: mqtt
             containerPort: {{ .Values.emqxedge.emqxConfig.EMQX_LISTENER__TCP__EXTERNAL | default 1883 }}
