@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 )
 
 var shutdownEnabled bool
@@ -126,8 +125,6 @@ func isShutdownEnabled() healthcheck.Check {
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	shutdownEnabled = true
-
-	time.Sleep(5 * time.Second)
 
 	zap.S().Infof("Successfull shutdown. Exiting.")
 	os.Exit(0)
