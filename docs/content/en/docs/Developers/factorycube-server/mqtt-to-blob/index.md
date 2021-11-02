@@ -2,91 +2,60 @@
 title: "mqtt-to-blob"
 linkTitle: "mqtt-to-blob"
 description: >
-  The following guide describes how to catch data from the MQTT-Broker and push them to the blob storage from MIN.io
+  The following guide describes how to catch data from the MQTT-Broker and push them to the MIN.io blob storage
 ---
-
+{{% pageinfo color="warning" %}}
 **This microservice is still in development and is not considered stable for production use.**
+{{% /pageinfo %}}
 
-## Getting started
+{{< imgproc mqtttoblob Fit "448x61" >}}{{< /imgproc >}}
 
-The following guide describes how to catch data from the MQTT-Broker and push them to the blob storage from MIN.io
-Go to the root folder of the project and execute the following command:
+MQTT-to-Blob has the function of subscribing to MQTT topics and storing the information into a MIN.io blob storage. The current iteration of MQTT-to-Blob can subscribe to [cameraconnect](/docs/developers/factorycube-edge/cameraconnect)'s MQTT topic and send the image data to MIN.io server's bucket.
 
-```bash
-sudo docker-compose -f ./deployment/mqtt-to-blob/docker-compose.yml build && sudo docker-compose -f ./deployment/mqtt-to-blob/docker-compose.yml up 
-```
+The input format of mqtt-to-blob is in accordance with [```/productImage```](/docs/concepts/mqtt/#productimage) JSON format. The information from the JSON is extracted and then stored into an image file in MIN.io with the metadata attached.
+
+Before running the code, the environment variables have to be adjusted for the system. Information regarding the environment variables can be seen in the respective [section](#environment-variables).
+
+## Dependencies
+
+- paho-mqtt==1.6.1
+- numpy==1.21.3
+- minio==7.1.1
 
 ## Environment variables
 
 This chapter explains all used environment variables.
 
-### BROKER_URL
+| Variable | Type | Description | Possible values | Example value |
+|----|----|----|----|----|
+| BROKER_URL | str | Specifies the address to connect to the MQTT-Broker | all DNS names or IP address | 127.0.0.1 |
+| BROKER_PORT| int | Specifies the port for the MQTT-Broker | valid port number | 1883 |
+| TOPIC | str | MQTT Topic name | Published MQTT Topic name | ia/rawImage/# |
+| MINIO_URL | str | Specifies the database DNS name / IP-address for the MIN.io server | all DNS names or IP address with its port number | play.min.io |
+| MINIO_SECURE | bool | Select `True` or `False` to activate HTTPS connection or not | `True` or `False` | `True` |
+| MINIO_ACCESS_KEY | str | Specifies the username for MIN.io server | eligible username | username |
+| MINIO_SECRET_KEY | str | Specifies the password for MIN.io server | password of the user | password |
+| BUCKET_NAME | str | Specifies the Bucket name to store the blob in MIN.io server | Bucket name | Bucket-name |
+| LOGGING_LEVEL | str | Select level for logging messages | `DEBUG` `INFO` `ERROR` `WARNING` `CRITICAL` | `DEBUG` |
 
-**Description:** Specifies the DNS name / IP-address to connect to the MQTT Broker postgresql / timescaleDB 
+{{< alert title="Note" color="info">}}
+- For MINIO_SECURE param, the boolean value has to have capital letter for the first letter
+- When using IP address for MINIO_URL, the port number has to be included (e.g. 0.0.0.0:9000)
+{{< /alert >}}
 
-**Type:** string
+## MQTT Connection Return Code
+| Return Code | Meaning |
+|----|----|
+| 0 | Successful Connection |
+| 1 | Connection refused - incorrect protocol version |
+| 2 | Connection refused - invalid client identifier |
+| 3 | Connection refused - server unavailable |
+| 4 | Connection refused - Bad username or password |
+| 5 | Connection refused - not authorised |
+| 6-255 | Currently unused |
 
-**Possible values:** all DNS names or IP 
+## Future work
 
-**Example value:**  127.0.0.1
-
-### BROKER_PORT
-
-**Description:** Specifies the port for the MQTT-Broker. In most cases it is 1883. 
-
-**Type:** int
-
-**Possible values:** valid port number 
-
-**Example value:** 1883
-
-### MINIO_URL
-
-**Description:** Specifies the database DNS name / IP-address for the MIN.io server. 
-
-**Type:** string
-
-**Possible values:** all DNS names or IP 
-
-**Example value:**  play.min.io
-
-### MINIO_ACCESS_KEY
-
-**Description:** Specifies the key to access the MIN.io Server. Can be seen as the username to login.  
-
-**Type:** string
-
-**Possible values:** an existing / just created user with access to the specified database 
-
-**Example value:**  testuser
-
-### MINIO_SECRET_KEY
-
-**Description:** Specifies the MIN.io Server password that should be used 
-
-**Type:** string
-
-**Possible values:** all
-
-**Example value:**  changeme
-
-### TOPIC
-
-**Description:** Specifies the topic the MQTT will listen to. To subscribe to all topics use '#' instead of the topic. 
-
-**Type:** string
-
-**Possible values:** all
-
-**Example value:**  /test/umh
-
-### BUCKET_NAME
-
-**Description:** Specifies the location in MIN.io where data are stored in MIN.io on the online.
-
-**Type:** string
-
-**Possible values:** all
-
-**Example value:**  testbucket
+- In the future, MQTT-to-Blob should also be able to store different kind of data such as sound and video.
+- Improve DEBUG message feature to check for wrong input format, wrong input data type
 
