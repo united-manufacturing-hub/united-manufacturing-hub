@@ -7,6 +7,7 @@ import base64
 import json
 import ProductImage
 import sys
+import binascii
 
 # Settig up the env variables, see index.md for further explanation
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'DEBUG')
@@ -19,15 +20,35 @@ minio_secure = bool(os.environ['MINIO_SECURE'])
 bucket_name = os.environ['BUCKET_NAME']
 topic = os.environ['TOPIC']
 
+# =============================================================================
+# MQTT Connection Message
+# =============================================================================
 def on_connect(client, userdata, flags, rc):
-    logging.info("Connected With Result Code " + str(rc))
+    if rc==0:
+        logging.info("MQTT connected with code: %s",rc)
+    else:
+        logging.info("MQTT bad connection with code: %s",rc)
+        sys.exit(1)
 
+def on_disconnect(client, userdata, rc):
+    mqtt.Client.connected_flag=False
+    logging.info("MQTT disconnected with code: %s", rc)
+    if rc != 0:
+        logging.warning("Unexpected disconnection to MQTT Broker")
+        sys.exit(1)
+    logging.info("Terminating MQTT-to-Blob")
+    sys.exit(0)
+
+# =============================================================================
+# MQTT Receiving Message
+# =============================================================================
 def on_message(client, userdata, message):      
     #Get Image from MQTT topic
     global result     
     try:
         result = ProductImage.product_image_from_dict(json.loads(message.payload))
     except:
+        # logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
         logging.warning("ProductImage failed to parse JSON payload. Please check your MQTT message format")
         return
 
@@ -53,10 +74,11 @@ def on_message(client, userdata, message):
                 )
         
         logging.info("Successfully uploaded")
+    except binascii.Error:
+        logging.warning("Oops! %s occurred. Please check your image byte in the MQTT topic", sys.exc_info()[0])
     except:
-        logging.warning("Oops! %s occurred. Please check your MQTT topic again", sys.exc_info()[0])
-
-
+        logging.warning("%s occurred", sys.exc_info()[0])
+        
 if __name__ == "__main__":
     if LOGGING_LEVEL == "DEBUG":
         logging.basicConfig(level=logging.DEBUG)
@@ -68,9 +90,10 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.ERROR)
     elif LOGGING_LEVEL == "CRITICAL":
         logging.basicConfig(level=logging.CRITICAL)
-
+    
     logging.debug(f"Broker URL: {broker_url}")
     logging.debug(f"Broker PORT: {broker_port}")
+    logging.debug(f"MQTT TOPIC: {topic}")
     logging.debug(f"MINIO URL: {minio_url}")
     logging.debug(f"Bucket NAME: {bucket_name}")
     
@@ -86,19 +109,28 @@ if __name__ == "__main__":
     
     # Connect or create to minio bucket
     found = minio_client.bucket_exists(bucket_name)
-
+    
     if not found:
         minio_client.make_bucket(bucket_name)
     else:
         logging.info("Bucket already exists")
-
+    
     # =============================================================================
     # Call MQTT
     # =============================================================================
-    global_client = mqtt.Client()
-    global_client.on_connect = on_connect
-    global_client.on_message = on_message
-    global_client.username_pw_set("MQTT_TO_BLOB", password=None)
-    global_client.connect(broker_url, broker_port)
-    global_client.subscribe(topic, qos=0)
-    global_client.loop_forever()
+    mqtt_client = mqtt.Client()
+    mqtt.Client.connected_flag=False 
+    mqtt_client.on_connect = on_connect
+    logging.info("Connecting to broker %s:%s", broker_url, broker_port)
+    
+    try:
+        mqtt_client.connect(broker_url, broker_port)
+    except:
+        logging.warning("Failed to connect to MQTT broker with error %s", sys.exc_info()[0])
+        logging.info("Retrying connection to MQTT broker")
+        
+    mqtt_client.on_message = on_message
+    mqtt_client.username_pw_set("MQTT_TO_BLOB", password=None)
+    mqtt_client.subscribe(topic, qos=0)   
+    mqtt_client.on_disconnect = on_disconnect
+    mqtt_client.loop_forever()
