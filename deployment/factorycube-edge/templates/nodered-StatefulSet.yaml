@@ -65,6 +65,13 @@ spec:
           httpGet:
             path: /nodered
             port: 1880
+        resources:
+          limits:
+            cpu: {{ .Values.nodered.resources.limits.cpu }}
+            memory: {{ .Values.nodered.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.nodered.resources.requests.cpu }}
+            memory: {{ .Values.nodered.resources.requests.memory }}
         securityContext:
           runAsUser: 1000
         volumeMounts:

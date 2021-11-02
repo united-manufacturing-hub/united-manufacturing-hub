@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"math"
 	"time"
 )
 
@@ -20,15 +21,15 @@ type addParentToChild struct {
 	ParentAID   string `json:"parentAID"`
 }
 type AddParentToChildHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 	const queuePathDB = "/data/AddParentToChild"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -37,8 +38,8 @@ func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 	}
 
 	handler = &AddParentToChildHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -46,8 +47,8 @@ func NewAddParentToChildHandler() (handler *AddParentToChildHandler) {
 func (r AddParentToChildHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pg.Length() > 0 {
-			zap.S().Debugf("AddParentToChildHandler queue length: %d", r.pg.Length())
+		if r.priorityQueue.Length() > 0 {
+			zap.S().Debugf("AddParentToChildHandler queue length: %d", r.priorityQueue.Length())
 		}
 	}
 }
@@ -60,15 +61,11 @@ func (r AddParentToChildHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		faultyItems, err := storeItemsIntoDatabaseAddParentToChild(items)
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			ShutdownApplicationGraceful()
-			return
-		}
+		faultyItems, err := storeItemsIntoDatabaseAddParentToChild(items, 0)
+
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -79,19 +76,28 @@ func (r AddParentToChildHandler) process() {
 			}
 			r.enqueue(faultyItem.Value, prio)
 		}
+
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
+				ShutdownApplicationGraceful()
+			}
+		}
+		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 	}
 }
 
 func (r AddParentToChildHandler) dequeue() (items []*goque.PriorityItem) {
-	if r.pg.Length() > 0 {
-		item, err := r.pg.Dequeue()
+	if r.priorityQueue.Length() > 0 {
+		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueue.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -102,7 +108,7 @@ func (r AddParentToChildHandler) dequeue() (items []*goque.PriorityItem) {
 }
 
 func (r AddParentToChildHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -110,10 +116,10 @@ func (r AddParentToChildHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r AddParentToChildHandler) Shutdown() (err error) {
-	zap.S().Warnf("[AddParentToChildHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[AddParentToChildHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
-	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 
@@ -127,12 +133,27 @@ func (r AddParentToChildHandler) EnqueueMQTT(customerID string, location string,
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 	newObject := addParentToChildQueue{
 		DBAssetID:   DBassetID,
 		TimestampMs: parsedPayload.TimestampMs,
 		ChildAID:    parsedPayload.ChildAID,
 		ParentAID:   parsedPayload.ParentAID,
+	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type addParentToChildQueue", newObject)
+		return
 	}
 
 	marshal, err := json.Marshal(newObject)
