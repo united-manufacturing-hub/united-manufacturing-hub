@@ -56,6 +56,5 @@ This chapter explains all used environment variables.
 
 ## Future work
 
-- In the future, MQTT-to-Blob should also be able to store different kind of data such as sound and video.
-- Improve DEBUG message feature to check for wrong input format, wrong input data type
+- In the future, MQTT-to-Blob should also be able to store different kind of data such as sound and video
 
