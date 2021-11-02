@@ -97,80 +97,156 @@ write_files:
       #!/bin/bash
       LOCKDIR=/home/rancher/DO_NOT_DELETE
 
+      # This runs as root
+
+      if [ -d $LOCKDIR ]; then
+          echo "Already configured. If you want to reconfigure delete /home/rancher/DO_NOT_DELETE"
+          exit
+      fi
+
+
+      # Restart as rancher
       if [ $UID -eq 0 ]; then
+          echo "Initial setup! Waiting 20 seconds for full startup..."
+          #sleep 20
+
+
+          ###
+          # Check if NTP server is reachable
+          ###
+
+          # Get both ntp servers from config
+          NTP1=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | grep - | sed 's/  - //g' | sed -n 1p)
+          NTP2=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | grep - | sed 's/  - //g' | sed -n 2p)
+
+          echo "Testing NTP server $NTP1"
+          echo "Testing NTP server $NTP2"
+
+          # Try 10 times to reach either of them
+          i="0"
+          reachable_ntp_server_found=0
+          while [ $i -lt 10 ]
+          do
+              if ! ping -c1 -W1 $NTP1 > /dev/null 2>&1 ; then
+                  echo "$NTP1 not reachable_ntp_server_found !"
+                  sleep 10
+              else
+                  echo "$NTP1 is reachable_ntp_server_found !"
+                  reachable_ntp_server_found=1
+              fi
+
+              if ! ping -c1 -W1 $NTP2 > /dev/null 2>&1 ; then
+                  echo "$NTP2 not reachable_ntp_server_found !"
+                  sleep 10
+              else
+                  echo "$NTP2 is reachable_ntp_server_found !"
+                  reachable_ntp_server_found=1
+              fi
+              if [ $reachable_ntp_server_found -eq 1 ]; then
+                  break
+              fi
+              i=$[$i+1]
+          done
+
+          if [ $reachable_ntp_server_found -eq 0 ]; then
+              echo "No reachable NTP server found, aborting setup"
+              exit
+          fi
+
+
+          echo "Testing DNS lookup of umh.app"
+          i="0"
+          dns_query_successfull=0
+          while [ $i -lt 10 ]
+          do
+              if ! nslookup umh.app  > /dev/null 2>&1 ; then
+                  echo "Failed to lookup umh.app"
+                  sleep 10
+              else
+                  echo "DNS lookup successfull"
+                  dns_query_successfull=1
+                  break
+              fi
+              i=$[$i+1]
+          done
+
+          if [ $dns_query_successfull -eq 0 ]; then
+              echo "Failed to resolve umh.app, aborting setup"
+              exit
+          fi
+
           exec su "rancher" "$0" -- "$@"
           exit
       fi
 
-      if mkdir $LOCKDIR; then
-          echo "Initial setup! Waiting 20 seconds for full startup..."
-
-          sleep 20
-          echo "Continuing with installation. Installing helm..."
-          export VERIFY_CHECKSUM=false
-          if ! curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 ; then
-              echo "Failed to download helm installer, aborting setup"
-              exit
-          fi
-
-          if ! chmod 700 /home/rancher/get_helm.sh ; then
-              echo "Failed to change permission on get_helm.sh, aborting setup"
-              exit
-          fi
-
-          if ! /home/rancher/get_helm.sh ; then
-              echo "Failed to execute get_helm.sh, aborting setup"
-              exit
-          fi
-          echo "Helm installed!"
-
-          echo "Adding helm repo..."
-          if ! helm repo add united-manufacturing-hub https://repo.umh.app/ ; then
-              echo "Failed to add umh repository, aborting setup"
-              exit
-          fi
-          echo "Added helm repo!"
-
-          echo "Creating namespaces factorycube-edge and factorycube-server..."
-          if ! kubectl create namespace factorycube-edge ; then
-              echo "Failed to create kubernetes namespace for factorycube-edge, aborting setup"
-              exit
-          fi
-          if ! kubectl create namespace factorycube-server ; then
-              echo "Failed to create kubernetes namespace for factorycube-server, aborting setup"
-              exit
-          fi
-          echo "Created namespaces!"
-
-          echo "Install factorycube-edge..."
-          if ! helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge --devel ; then
-              echo "Failed to install factorycube-edge using helm, aborting setup"
-              exit
-          fi
-          echo "Installed factorycube-edge!"
-
-          echo "Install factorycube-server..."
-          if ! helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server --devel ; then
-              echo "Failed to install factorycube-server using helm, aborting setup"
-              exit
-          fi
-          echo "Installed factorycube-server!"
-
-          echo "Enabling SSH password authentification..."
-          if ! sudo sed -i 's/PasswordAuthentication  no/PasswordAuthentication  yes/g' /etc/ssh/sshd_config ; then
-              echo "Failed to enable password authentication, aborting setup"
-              exit
-          fi
-          if ! sudo service sshd restart ; then
-              echo "Failed to restart sshd, aborting setup"
-              exit
-          fi
-          echo "Enabled SSH password authentification!"
-          echo "Initial setup finished! This might take now awhile..."
-      else
-          echo "Already configured. If you want to reconfigure delete /home/rancher/DO_NOT_DELETE"
+      # The following code is run as rancher
+      echo "Continuing with installation. Installing helm..."
+      export VERIFY_CHECKSUM=false
+      if ! curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 ; then
+          echo "Failed to download helm installer, aborting setup"
+          exit
       fi
 
+      if ! chmod 700 /home/rancher/get_helm.sh ; then
+          echo "Failed to change permission on get_helm.sh, aborting setup"
+          exit
+      fi
+
+      if ! /home/rancher/get_helm.sh ; then
+          echo "Failed to execute get_helm.sh, aborting setup"
+          exit
+      fi
+      echo "Helm installed!"
+
+      echo "Adding helm repo..."
+      if ! helm repo add united-manufacturing-hub https://repo.umh.app/ ; then
+          echo "Failed to add umh repository, aborting setup"
+          exit
+      fi
+      echo "Added helm repo!"
+
+      echo "Creating namespaces factorycube-edge and factorycube-server..."
+      if ! kubectl create namespace factorycube-edge ; then
+          echo "Failed to create kubernetes namespace for factorycube-edge, aborting setup"
+          exit
+      fi
+      if ! kubectl create namespace factorycube-server ; then
+          echo "Failed to create kubernetes namespace for factorycube-server, aborting setup"
+          exit
+      fi
+      echo "Created namespaces!"
+
+      echo "Install factorycube-edge..."
+      if ! helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge --devel ; then
+          echo "Failed to install factorycube-edge using helm, aborting setup"
+          exit
+      fi
+      echo "Installed factorycube-edge!"
+
+      echo "Install factorycube-server..."
+      if ! helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server --devel ; then
+          echo "Failed to install factorycube-server using helm, aborting setup"
+          exit
+      fi
+      echo "Installed factorycube-server!"
+
+      echo "Enabling SSH password authentification..."
+      if ! sudo sed -i 's/PasswordAuthentication  no/PasswordAuthentication  yes/g' /etc/ssh/sshd_config ; then
+          echo "Failed to enable password authentication, aborting setup"
+          exit
+      fi
+      if ! sudo service sshd restart ; then
+          echo "Failed to restart sshd, aborting setup"
+          exit
+      fi
+      echo "Enabled SSH password authentification!"
+
+      if ! mkdir $LOCKDIR ; then
+          echo "Failed to create $LOCKDIR, setup failed !"
+          exit
+      fi
+
+      echo "Initial setup finished! This might take now awhile..."
   path: /home/rancher/initial_setup.sh
 
 run_cmd:
