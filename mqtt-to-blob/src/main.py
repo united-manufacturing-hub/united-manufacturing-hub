@@ -19,26 +19,8 @@ minio_secure = bool(os.environ['MINIO_SECURE'])
 bucket_name = os.environ['BUCKET_NAME']
 topic = os.environ['TOPIC']
 
-# Connects to the mqtt client.
-# If you want to be sure that the connection attempt was successful,
-# then see the logs.
-# This function will return the return code (rc) 0 if connected successfully.
-# The following values are possible:
-# 0 - Connection successful;
-# 1 - Connection refused – incorrect protocol version;
-# 2 - Connection refused – invalid client identifier;
-# 3 - Connection refused – server unavailable;
-# 4 - Connection refused – bad username or password;
-# 5 - Connection refused – not authorised;
-# 6-255 - Currently unused.
-
-
 def on_connect(client, userdata, flags, rc):
     logging.info("Connected With Result Code " + str(rc))
-
-# Message is an object and the payload property contains
-# the message data which is binary data.
-
 
 def on_message(client, userdata, message):      
     #Get Image from MQTT topic
