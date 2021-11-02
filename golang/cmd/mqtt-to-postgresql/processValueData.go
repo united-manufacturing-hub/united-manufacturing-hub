@@ -126,6 +126,9 @@ func (r ValueDataHandler) processF64() {
 			}
 			r.enqueueF64(faultyItem.Value, prio)
 		}
+		if len(faultyItems) > 0 {
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 }
 
