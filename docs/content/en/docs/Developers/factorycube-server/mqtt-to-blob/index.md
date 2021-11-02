@@ -36,12 +36,23 @@ This chapter explains all used environment variables.
 | MINIO_ACCESS_KEY | str | Specifies the username for MIN.io server | eligible username | username |
 | MINIO_SECRET_KEY | str | Specifies the password for MIN.io server | password of the user | password |
 | BUCKET_NAME | str | Specifies the Bucket name to store the blob in MIN.io server | Bucket name | Bucket-name |
+| LOGGING_LEVEL | str | Select level for logging messages | `DEBUG` `INFO` `ERROR` `WARNING` `CRITICAL` | `DEBUG` |
 
 {{< alert title="Note" color="info">}}
 - For MINIO_SECURE param, the boolean value has to have capital letter for the first letter
 - When using IP address for MINIO_URL, the port number has to be included (e.g. 0.0.0.0:9000)
 {{< /alert >}}
 
+## MQTT Connection Return Code
+| Return Code | Meaning |
+|----|----|
+| 0 | Successful Connection |
+| 1 | Connection refused - incorrect protocol version |
+| 2 | Connection refused - invalid client identifier |
+| 3 | Connection refused - server unavailable |
+| 4 | Connection refused - Bad username or password |
+| 5 | Connection refused - not authorised |
+| 6-255 | Currently unused |
 
 ## Future work
 

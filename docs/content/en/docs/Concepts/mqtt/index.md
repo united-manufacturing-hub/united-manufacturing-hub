@@ -361,15 +361,14 @@ A message is sent here every time a process value has been prepared. Unique nami
 
 Topic structure: `ia/<customer>/<location>/<assetID>/productImage`
 
+`/productImage` has the same data format as [`ia/rawImage`](#topic-iarawimage), only with a changed topic.
+
 `/productImage` can be acquired in two ways, either from [`ia/rawImage`](#topic-iarawimage) or `/rawImageClassification`. In the case of `/rawImageClassification`,
 only the Image part is extracted to `/productImage`, while the classification information is stored in the relational database.
 
-`/productImage` has the same data format as [`ia/rawImage`](#topic-iarawimage), only with a changed topic.
-
 {{< imgproc imageProcessing Fit "451x522" >}}{{< /imgproc >}}
 
-#### Example for /productImage
-
+{{% alert title="Example for /productImage" color="primary" %}}
 ```json
 {
 	"timestamp_ms": 214423040823,
@@ -382,7 +381,7 @@ only the Image part is extracted to `/productImage`, while the classification in
 	}
 }
 ```
-
+{{%/alert%}}
 ## 3rd level: production data
 
 This level contains only highly aggregated production data.
@@ -500,8 +499,9 @@ Shopfloor insights are recommendations for action that require concrete and rapi
 ### /qualityClass
 
 A message is sent here each time a product is classified. Example payload:
-> **qualityClass 0 and 1 are defined by default.
-> {.is-warning}
+
+{{%alert title="**qualityClass 0 and 1 are defined by default" color="warning"%}}
+{{%/alert%}}
 
 | qualityClass | Name | Description | Color under which this "State" is automatically visualized by the traffic light|
 |---------|------|------------------|------------------|
