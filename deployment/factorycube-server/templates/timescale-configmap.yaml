@@ -180,7 +180,7 @@ data:
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
 
     -- #297
-    ALTER TABLE uniqueProductTable ADD COLUMN IF NOT EXISTS uniqueProductAlternativeID TEXT NOT NULL;
+    ALTER TABLE uniqueProductTable ADD COLUMN IF NOT EXISTS uniqueProductAlternativeID TEXT NOT NULL DEFAULT 'beforeMigration';
     ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS quality_class RESTRICT;
     ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS station_id RESTRICT;
     ALTER TABLE uniqueProductTable DROP COLUMN IF EXISTS uid CASCADE;
@@ -191,28 +191,27 @@ data:
     ALTER TABLE uniqueProductTable ADD CONSTRAINT productID_reference FOREIGN KEY (product_id) REFERENCES productTable (product_id);
     ALTER TABLE uniqueProductTable ALTER COLUMN  end_timestamp_ms DROP NOT NULL;
     ALTER TABLE uniqueProductTable ADD CONSTRAINT checkTimestampOrder CHECK ((begin_timestamp_ms < end_timestamp_ms) OR (end_timestamp_ms IS NULL));
-    ALTER TABLE processValueTable ALTER COLUMN value SET NOT NULL;
 
     -------------------- TimescaleDB table for product tags --------------------
     CREATE TABLE IF NOT EXISTS productTagTable
     (
-        timestamp               TIMESTAMPTZ                         NOT NULL,
-        product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
-        valueName               TEXT                                NOT NULL,
-        value                   DOUBLE PRECISION                    NOT NULL,
-        UNIQUE(product_uid, valueName)
+    timestamp               TIMESTAMPTZ                         NOT NULL,
+    product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+    valueName               TEXT                                NOT NULL,
+    value                   DOUBLE PRECISION                    NOT NULL,
+    UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
-     SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
+    SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
 
     -------------------- TimescaleDB table for product tags strings --------------------
     CREATE TABLE IF NOT EXISTS productTagStringTable
     (
-        timestamp               TIMESTAMPTZ                         NOT NULL,
-        product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
-        valueName               TEXT                                NOT NULL,
-        value                   TEXT                                NOT NULL,
-        UNIQUE(product_uid, valueName)
+    timestamp               TIMESTAMPTZ                         NOT NULL,
+    product_uid             SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+    valueName               TEXT                                NOT NULL,
+    value                   TEXT                                NOT NULL,
+    UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
     SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
@@ -220,23 +219,23 @@ data:
     -------------------- TimescaleDB table for product inheritance info --------------------
     CREATE TABLE IF NOT EXISTS productInheritanceTable
     (
-        timestamp               TIMESTAMPTZ                         NOT NULL,
-        parent_uid              SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
-        child_uid               SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
-        UNIQUE(parent_uid, child_uid)
+    timestamp               TIMESTAMPTZ                         NOT NULL,
+    parent_uid              SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+    child_uid               SERIAL                              REFERENCES uniqueProductTable (uniqueProductID),
+    UNIQUE(parent_uid, child_uid)
     );
     -- creating hypertable
-     CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
-     CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
+    CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
+    CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
 
     -------------------- TimescaleDB table for process values string --------------------
     CREATE TABLE IF NOT EXISTS processValueStringTable
     (
-      timestamp               TIMESTAMPTZ                         NOT NULL,
-      asset_id                SERIAL                              REFERENCES assetTable (id),
-      valueName               TEXT                                NOT NULL,
-      value                   TEXT                                NOT NULL,
-      UNIQUE(timestamp, asset_id, valueName)
+    timestamp               TIMESTAMPTZ                         NOT NULL,
+    asset_id                SERIAL                              REFERENCES assetTable (id),
+    valueName               TEXT                                NOT NULL,
+    value                   TEXT                                NOT NULL,
+    UNIQUE(timestamp, asset_id, valueName)
     );
     -- creating hypertable
     SELECT create_hypertable('processValueStringTable', 'timestamp');
@@ -248,55 +247,52 @@ data:
 
     CREATE TABLE IF NOT EXISTS componenttable
     (
-      id                          SERIAL                              PRIMARY KEY ,
-      asset_id                    SERIAL,
-      componentname               varchar(20)                         NOT NULL,
-      CONSTRAINT componenttable_asset_id_componentname_key UNIQUE (asset_id, componentname),
-      CONSTRAINT componenttable_asset_id_fkey FOREIGN KEY (asset_id)
-        REFERENCES public.assettable (id) MATCH SIMPLE
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
-        NOT VALID
+    id                          SERIAL                              PRIMARY KEY ,
+    asset_id                    SERIAL,
+    componentname               varchar(20)                         NOT NULL,
+    CONSTRAINT componenttable_asset_id_componentname_key UNIQUE (asset_id, componentname),
+    CONSTRAINT componenttable_asset_id_fkey FOREIGN KEY (asset_id)
+    REFERENCES public.assettable (id) MATCH SIMPLE
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
     );
 
     -------------------- TimescaleDB table for maintenance activities --------------------
     CREATE TABLE IF NOT EXISTS maintenanceactivities
     (
-      id                        SERIAL                              PRIMARY KEY,
-      component_id              SERIAL,
-      activitytype              integer,
-      "timestamp"               TIMESTAMPTZ                         NOT NULL,
-      CONSTRAINT maintenanceactivities_component_id_activitytype_timestamp_key UNIQUE (component_id, activitytype, "timestamp"),
-      CONSTRAINT maintenanceactivities_component_id_fkey FOREIGN KEY (component_id)
-        REFERENCES componenttable (id) MATCH SIMPLE
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
-        NOT VALID
+    id                        SERIAL                              PRIMARY KEY,
+    component_id              SERIAL,
+    activitytype              integer,
+    "timestamp"               TIMESTAMPTZ                         NOT NULL,
+    CONSTRAINT maintenanceactivities_component_id_activitytype_timestamp_key UNIQUE (component_id, activitytype, "timestamp"),
+    CONSTRAINT maintenanceactivities_component_id_fkey FOREIGN KEY (component_id)
+    REFERENCES componenttable (id) MATCH SIMPLE
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
     );
 
     -------------------- TimescaleDB table for time based maintenance --------------------
     CREATE TABLE IF NOT EXISTS timebasedmaintenance
     (
-      id                          SERIAL                              PRIMARY KEY ,
-      component_id                SERIAL,
-      activitytype integer,
-      intervallinhours integer,
-      CONSTRAINT timebasedmaintenance_component_id_activitytype_key UNIQUE (component_id, activitytype),
-      CONSTRAINT timebasedmaintenance_component_id_fkey FOREIGN KEY (component_id)
-        REFERENCES componenttable (id) MATCH SIMPLE
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
-        NOT VALID
+    id                          SERIAL                              PRIMARY KEY ,
+    component_id                SERIAL,
+    activitytype integer,
+    intervallinhours integer,
+    CONSTRAINT timebasedmaintenance_component_id_activitytype_key UNIQUE (component_id, activitytype),
+    CONSTRAINT timebasedmaintenance_component_id_fkey FOREIGN KEY (component_id)
+    REFERENCES componenttable (id) MATCH SIMPLE
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
     );
 
     -------------------- TimescaleDB table for process values string --------------------
     CREATE TABLE IF NOT EXISTS processValueStringTable
     (
-      timestamp               TIMESTAMPTZ                         NOT NULL,
-      asset_id                SERIAL                              REFERENCES assetTable (id),
-      valueName               TEXT                                NOT NULL,
-      value                   TEXT                                NOT NULL,
-      UNIQUE(timestamp, asset_id, valueName)
+    timestamp               TIMESTAMPTZ                         NOT NULL,
+    asset_id                SERIAL                              REFERENCES assetTable (id),
+    valueName               TEXT                                NOT NULL,
+    value                   TEXT                                NOT NULL,
+    UNIQUE(timestamp, asset_id, valueName)
     );
     -- creating hypertable
     SELECT create_hypertable('processValueStringTable', 'timestamp');
