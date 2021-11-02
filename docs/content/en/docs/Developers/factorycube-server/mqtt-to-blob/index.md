@@ -62,3 +62,4 @@ This chapter explains all used environment variables.
 - Use the `dummy_pic_mqtt_topic.json` in the mqtt-to-blob folder manually inject mqtt topic using mqtt explorer
 {{< /alert >}}
 
+

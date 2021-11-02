@@ -29,6 +29,7 @@ def on_connect(client, userdata, flags, rc):
     if rc==0:
         logging.info("MQTT connected with code: %s",rc)
         mqtt_client.subscribe(topic, qos=0)
+
     else:
         logging.info("MQTT bad connection with code: %s",rc)
         sys.exit(1)
