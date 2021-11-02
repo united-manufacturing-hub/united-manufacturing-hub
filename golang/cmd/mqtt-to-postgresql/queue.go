@@ -29,9 +29,9 @@ func CloseQueue(pq *goque.PriorityQueue) (err error) {
 }
 
 // reportQueueLength prints the current Queue length
-func reportQueueLength(pg *goque.PriorityQueue) {
+func reportQueueLength(priorityQueue *goque.PriorityQueue) {
 	for true {
-		zap.S().Infof("Current elements in queue: %d", pg.Length())
+		zap.S().Infof("Current elements in queue: %d", priorityQueue.Length())
 		time.Sleep(10 * time.Second)
 	}
 }
