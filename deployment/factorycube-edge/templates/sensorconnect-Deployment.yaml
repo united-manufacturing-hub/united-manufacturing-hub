@@ -28,6 +28,13 @@ spec:
           {{- else }}
           image: {{ .Values.sensorconnect.image }}:{{ .Chart.AppVersion }}
           {{- end }}
+        resources:
+          limits:
+            cpu: {{ .Values.sensorconnect.resources.limits.cpu }}
+            memory: {{ .Values.sensorconnect.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.sensorconnect.resources.requests.cpu }}
+            memory: {{ .Values.sensorconnect.resources.requests.memory }}
           env:
             - name: PYTHONUNBUFFERED
               value: "0"

@@ -48,6 +48,13 @@ spec:
               {{- else }}
               image: {{ .Values.cameraconnect.image }}:{{ .Chart.AppVersion }}
               {{- end }}
+              resources:
+                limits:
+                  cpu: {{ .Values.cameraconnect.resources.limits.cpu }}
+                  memory: {{ .Values.cameraconnect.resources.limits.memory }}
+                requests:
+                  cpu: {{ .Values.cameraconnect.resources.requests.cpu }}
+                  memory: {{ .Values.cameraconnect.resources.requests.memory }}
               volumeMounts:
                 - mountPath: /app/assets
                   name: storage
