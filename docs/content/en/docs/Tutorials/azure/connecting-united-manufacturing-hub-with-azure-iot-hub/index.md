@@ -13,7 +13,7 @@ In this tutorial we are leveraging the fact that Azure IoT Hub is nothing but a 
 
 ### Prerequisites
 
-- Basic knowledge about [IT / OT](/docs/getting-started/understanding-the-technologies/), [Azure](/docs/concepts/integration-with-azure/) and the [difference between symmetric and asymmetric encryption](/docs/tutorials/general/symmetric-asymmetric-encrption/)
+- Basic knowledge about [IT / OT](/docs/getting-started/understanding-the-technologies/), [Azure](/docs/concepts/integration-with-azure/) and the [difference between symmetric and asymmetric encryption](/docs/tutorials/general/symmetric-asymmetric-encryption/)
 - You should have one instance of IoT Hub running and one device created with asymmetric encryption. You can follow [our tutorial for setting up Azure IoT Hub](/docs/tutorials/azure/setting-up-azure-iot-hub/). 
 - By default Microsoft recommends using symmetric encryption as it is more easier to implement, but they say themselves that asymmetric encryption is more secure. If you are using symmetric encryption (Username / Password authentification, no certificates) there might be some steps that are different for you
 - All information for your Azure IoT Hub device ready: 
