@@ -128,18 +128,18 @@ write_files:
       while [ $i -lt 10 ]
       do
       if ! ping -c1 -W1 $NTP1 > /dev/null 2>&1 ; then
-      echo "$NTP1 not reachable_ntp_server_found !"
+      echo "$NTP1 not reachable !"
       sleep 10
       else
-      echo "$NTP1 is reachable_ntp_server_found !"
+      echo "$NTP1 is reachable !"
       reachable_ntp_server_found=1
       fi
 
       if ! ping -c1 -W1 $NTP2 > /dev/null 2>&1 ; then
-      echo "$NTP2 not reachable_ntp_server_found !"
+      echo "$NTP2 not reachable !"
       sleep 10
       else
-      echo "$NTP2 is reachable_ntp_server_found !"
+      echo "$NTP2 is reachable !"
       reachable_ntp_server_found=1
       fi
       if [ $reachable_ntp_server_found -eq 1 ]; then
