@@ -122,10 +122,10 @@ write_files:
       echo "Testing NTP server $NTP1"
       echo "Testing NTP server $NTP2"
 
-      # Try 10 times to reach either of them
+      # Try 5 times to reach either of them
       i="0"
       reachable_ntp_server_found=0
-      while [ $i -lt 10 ]
+      while [ $i -lt 5 ]
       do
       if ! ping -c1 -W1 $NTP1 > /dev/null 2>&1 ; then
       echo "$NTP1 not reachable !"
@@ -149,7 +149,10 @@ write_files:
       done
 
       if [ $reachable_ntp_server_found -eq 0 ]; then
-      echo "No reachable NTP server found. This can happen when you either have no connection to the internet or when you are in a limited network that blocks NTP requests (some universities do that). The solution is to connect ot the internet and / or to specify the allowed NTP servers manually in the development.yaml. Fore more information visit docs.umh.app"
+      echo "No reachable NTP server found."
+      echo "This can happen when you either have no connection to the internet or when you are in a limited network"
+      echo "that blocks NTP requests (some universities do that). The solution is to connect ot the internet and / or"
+      echo "to specify the allowed NTP servers manually in the development.yaml. Fore more information visit docs.umh.app"
       fi
 
 
@@ -170,7 +173,10 @@ write_files:
       done
 
       if [ $dns_query_successfull -eq 0 ]; then
-      echo "Failed to resolve umh.app . This can happen when you either have no connection to the internet or when you are in a limited network that blocks DNS requests (some universities do that). The solution is to connect ot the internet and / or to specify the allowed DNS servers manually in the development.yaml. Fore more information visit docs.umh.app"
+      echo "Failed to resolve umh.app."
+      echo "This can happen when you either have no connection to the internet or when you are in a limited network"
+      echo "that blocks DNS requests (some universities do that). The solution is to connect ot the internet and / or"
+      echo "to specify the allowed DNS servers manually in the development.yaml. Fore more information visit docs.umh.app"
       exit
       fi
 
