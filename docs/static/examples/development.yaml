@@ -108,7 +108,7 @@ write_files:
       # Restart as rancher
       if [ $UID -eq 0 ]; then
       echo "Initial setup! Waiting 20 seconds for full startup..."
-      #sleep 20
+      sleep 20
 
 
       ###
@@ -257,6 +257,15 @@ write_files:
       fi
 
       echo "Initial setup finished! This might take now awhile..."
+
+      num1=$(k3s -v | grep -o 'v1.[0-9][0-9]' | sed 's/v//g')
+      num2="1.20"
+
+      if (( $(echo "$num1 < $num2" |bc -l) )); then
+      echo "k3os version outdated !"
+      echo "Installed version:   $num1"
+      echo "Recommended version: $num2"
+      fi
 
   path: /home/rancher/initial_setup.sh
 
