@@ -28,6 +28,8 @@ topic = os.environ['TOPIC']
 def on_connect(client, userdata, flags, rc):
     if rc==0:
         logging.info("MQTT connected with code: %s",rc)
+        mqtt_client.subscribe(topic, qos=0)
+
     else:
         logging.info("MQTT bad connection with code: %s",rc)
         sys.exit(1)
@@ -45,8 +47,7 @@ def on_disconnect(client, userdata, rc):
 # MQTT Receiving Message
 # =============================================================================
 def on_message(client, userdata, message):      
-    #Get Image from MQTT topic
-    global result     
+    #Get Image from MQTT topic  
     try:
         result = ProductImage.product_image_from_dict(json.loads(message.payload))
     except:
@@ -121,7 +122,6 @@ if __name__ == "__main__":
     # Call MQTT
     # =============================================================================
     mqtt_client = mqtt.Client()
-    mqtt.Client.connected_flag=False 
     mqtt_client.on_connect = on_connect
     logging.info("Connecting to broker %s:%s", broker_url, broker_port)
     
@@ -132,7 +132,6 @@ if __name__ == "__main__":
         logging.info("Retrying connection to MQTT broker")
         
     mqtt_client.on_message = on_message
-    mqtt_client.username_pw_set("MQTT_TO_BLOB", password=None)
-    mqtt_client.subscribe(topic, qos=0)   
+    mqtt_client.username_pw_set("MQTT_TO_BLOB", password=None) 
     mqtt_client.on_disconnect = on_disconnect
     mqtt_client.loop_forever()
