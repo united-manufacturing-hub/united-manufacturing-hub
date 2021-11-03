@@ -116,8 +116,8 @@ write_files:
       ###
 
       # Get both ntp servers from config
-      NTP1=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | grep - | sed 's/  - //g' | sed -n 1p)
-      NTP2=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | grep - | sed 's/  - //g' | sed -n 2p)
+      NTP1=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | tail -n2 | grep - | sed 's/  - //g' | sed -n 1p)
+      NTP2=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | tail -n2 | grep - | sed 's/  - //g' | sed -n 2p)
 
       echo "Testing NTP server $NTP1"
       echo "Testing NTP server $NTP2"
