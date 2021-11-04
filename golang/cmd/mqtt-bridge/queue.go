@@ -40,8 +40,6 @@ func storeMessageIntoQueue(topic string, message []byte, mode string, pq *goque.
 		Message: message,
 	}
 
-	// prefix := mode // TODO: add load balancing and multiple queues
-
 	_, err := pq.EnqueueObject(newElement)
 	if err != nil {
 		zap.S().Errorf("Error enqueuing", err)

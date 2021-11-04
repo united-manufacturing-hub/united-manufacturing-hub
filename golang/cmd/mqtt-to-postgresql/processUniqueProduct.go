@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"math"
 	"time"
 )
 
@@ -25,15 +26,15 @@ type uniqueProduct struct {
 }
 
 type UniqueProductHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	const queuePathDB = "/data/UniqueProduct"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -42,8 +43,8 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 	}
 
 	handler = &UniqueProductHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -51,8 +52,8 @@ func NewUniqueProductHandler() (handler *UniqueProductHandler) {
 func (r UniqueProductHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pg.Length() > 0 {
-			zap.S().Debugf("UniqueProductHandler queue length: %d", r.pg.Length())
+		if r.priorityQueue.Length() > 0 {
+			zap.S().Debugf("UniqueProductHandler queue length: %d", r.priorityQueue.Length())
 		}
 	}
 }
@@ -65,15 +66,11 @@ func (r UniqueProductHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		faultyItems, err := storeItemsIntoDatabaseUniqueProduct(items)
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			ShutdownApplicationGraceful()
-			return
-		}
+		faultyItems, err := storeItemsIntoDatabaseUniqueProduct(items, 0)
+
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -84,19 +81,28 @@ func (r UniqueProductHandler) process() {
 			}
 			r.enqueue(faultyItem.Value, prio)
 		}
+
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
+				ShutdownApplicationGraceful()
+			}
+		}
+		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 	}
 }
 
 func (r UniqueProductHandler) dequeue() (items []*goque.PriorityItem) {
-	if r.pg.Length() > 0 {
-		item, err := r.pg.Dequeue()
+	if r.priorityQueue.Length() > 0 {
+		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueue.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -107,7 +113,7 @@ func (r UniqueProductHandler) dequeue() (items []*goque.PriorityItem) {
 }
 
 func (r UniqueProductHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -115,10 +121,10 @@ func (r UniqueProductHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r UniqueProductHandler) Shutdown() (err error) {
-	zap.S().Warnf("[UniqueProductHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[UniqueProductHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
-	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 
@@ -132,7 +138,18 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 	productID, err, success := GetProductID(DBassetID, parsedPayload.ProductName)
 	if err == sql.ErrNoRows || !success {
 		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)
@@ -144,8 +161,9 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 				r.EnqueueMQTT(customerID, location, assetID, payload)
 			}
 		}()
+		return
 	} else if err != nil { // never executed
-		PQErrorHandling("GetProductID db.QueryRow()", err)
+		PGErrorHandling("GetProductID db.QueryRow()", err)
 	}
 
 	newObject := uniqueProductQueue{
@@ -155,6 +173,10 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 		ProductID:                  productID,
 		IsScrap:                    parsedPayload.IsScrap,
 		UniqueProductAlternativeID: parsedPayload.UniqueProductAlternativeID,
+	}
+	if !ValidateStruct(newObject) {
+		zap.S().Errorf("Failed to validate struct of type uniqueProductQueue", newObject)
+		return
 	}
 
 	marshal, err := json.Marshal(newObject)

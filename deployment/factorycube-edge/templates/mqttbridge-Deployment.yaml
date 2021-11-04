@@ -31,6 +31,13 @@ spec:
         - name: {{ include "factorycube-edge.fullname" . }}-mqttbridge-certificates
           mountPath: /SSL_certs/remote
           readOnly: true
+        resources:
+          limits:
+            cpu: {{ .Values.mqttbridge.resources.limits.cpu }}
+            memory: {{ .Values.mqttbridge.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.mqttbridge.resources.requests.cpu }}
+            memory: {{ .Values.mqttbridge.resources.requests.memory }}
         env:
         - name: REMOTE_CERTIFICATE_NAME
           value: {{ .Values.serialNumber }}

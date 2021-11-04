@@ -3,5 +3,39 @@
 Add styles or override variables from the theme here.
 
 */
-$primary: #2D393D;
-$secondary: #DAECF0;
+// $primary: #000000;
+// $secondary: #FFFFFF;
+
+$ci_black: #000000 !default;
+$ci_white: #FFFFFF !default;
+$ci_blue: #47A0B5 !default;
+$ci_yellow: #FFA62B !default;
+$ci_light_grey: #F4F4F4 !default;
+$ci_grey: #AAAAAA !default;
+
+$primary: $ci_black !default;
+$primary-light: $ci_grey !default;
+$secondary: $ci_blue !default;
+$success: #3772FF !default;
+$info: #C0E0DE !default;
+$warning: #ED6A5A !default;
+$danger: #ED6A5A !default;
+$white: $ci_white !default;
+$light: $ci_light_grey !default;
+
+$dark: $ci_black !default;
+$blue: $ci_blue !default;
+$orange: $ci_yellow !default;
+$gray-100: #f8f9fa !default;
+$gray-200: #eee !default;
+$gray-300: #dee2e6 !default;
+$gray-400: #ccc !default;
+$gray-500: #adb5bd !default;
+$gray-600: #797676 !default;
+$gray-700: #495057 !default;
+$gray-800: #333 !default;
+$gray-900: #222 !default;
+$black: $ci_black !default;
+
+$code-color: darken($secondary, 20%) !default;
+$link-color: $blue !default;

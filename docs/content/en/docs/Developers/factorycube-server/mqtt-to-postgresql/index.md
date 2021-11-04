@@ -13,6 +13,11 @@ Here is a quick tutorial on how to start up a basic configuration / a basic dock
 
 docker-compose -f ./deployment/mqtt-to-postgresql/docker-compose-mqtt-to-postgresql-development.yml --env-file ./.env up -d --build
 
+## Message processing flow
+Below diagram shows an abstract flow, of an incoming MQTT message.
+
+[![MQTT-Flow](MQTT-Flow.svg)](MQTT-Flow.svg)
+
 ## Environment variables
 
 This chapter explains all used environment variables.

@@ -24,6 +24,13 @@ spec:
         {{- else }}
         image: {{ .Values.barcodereader.image }}:{{ .Chart.AppVersion }}
         {{- end }}
+        resources:
+          limits:
+            cpu: {{ .Values.barcodereader.resources.limits.cpu }}
+            memory: {{ .Values.barcodereader.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.barcodereader.resources.requests.cpu }}
+            memory: {{ .Values.barcodereader.resources.requests.memory }}
         securityContext:
           privileged: true
         volumeMounts:

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
 	"go.uber.org/zap"
+	"math"
 	"time"
 )
 
@@ -15,15 +16,15 @@ type processValueStringQueue struct {
 }
 
 type ValueStringHandler struct {
-	pg       *goque.PriorityQueue
-	shutdown bool
+	priorityQueue *goque.PriorityQueue
+	shutdown      bool
 }
 
 func NewValueStringHandler() (handler *ValueStringHandler) {
 	const queuePathDB = "/data/ValueString"
-	var pg *goque.PriorityQueue
+	var priorityQueue *goque.PriorityQueue
 	var err error
-	pg, err = SetupQueue(queuePathDB)
+	priorityQueue, err = SetupQueue(queuePathDB)
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue (%s)", queuePathDB, err)
 		zap.S().Errorf("err: %s", err)
@@ -32,8 +33,8 @@ func NewValueStringHandler() (handler *ValueStringHandler) {
 	}
 
 	handler = &ValueStringHandler{
-		pg:       pg,
-		shutdown: false,
+		priorityQueue: priorityQueue,
+		shutdown:      false,
 	}
 	return
 }
@@ -41,8 +42,8 @@ func NewValueStringHandler() (handler *ValueStringHandler) {
 func (r ValueStringHandler) reportLength() {
 	for !r.shutdown {
 		time.Sleep(10 * time.Second)
-		if r.pg.Length() > 0 {
-			zap.S().Debugf("ValueStringHandler queue length: %d", r.pg.Length())
+		if r.priorityQueue.Length() > 0 {
+			zap.S().Debugf("ValueStringHandler queue length: %d", r.priorityQueue.Length())
 		}
 	}
 }
@@ -55,15 +56,11 @@ func (r ValueStringHandler) process() {
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		faultyItems, err := storeItemsIntoDatabaseProcessValueString(items)
-		if err != nil {
-			zap.S().Errorf("err: %s", err)
-			ShutdownApplicationGraceful()
-			return
-		}
+
 		// Empty the array, without de-allocating memory
 		items = items[:0]
 		for _, faultyItem := range faultyItems {
@@ -74,19 +71,28 @@ func (r ValueStringHandler) process() {
 			}
 			r.enqueue(faultyItem.Value, prio)
 		}
+
+		if err != nil {
+			zap.S().Errorf("err: %s", err)
+			switch GetPostgresErrorRecoveryOptions(err) {
+			case Unrecoverable:
+				ShutdownApplicationGraceful()
+			}
+		}
+		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
 	}
 }
 
 func (r ValueStringHandler) dequeue() (items []*goque.PriorityItem) {
-	if r.pg.Length() > 0 {
-		item, err := r.pg.Dequeue()
+	if r.priorityQueue.Length() > 0 {
+		item, err := r.priorityQueue.Dequeue()
 		if err != nil {
 			return
 		}
 		items = append(items, item)
 
 		for true {
-			nextItem, err := r.pg.DequeueByPriority(item.Priority)
+			nextItem, err := r.priorityQueue.DequeueByPriority(item.Priority)
 			if err != nil {
 				break
 			}
@@ -97,7 +103,7 @@ func (r ValueStringHandler) dequeue() (items []*goque.PriorityItem) {
 }
 
 func (r ValueStringHandler) enqueue(bytes []byte, priority uint8) {
-	_, err := r.pg.Enqueue(priority, bytes)
+	_, err := r.priorityQueue.Enqueue(priority, bytes)
 	if err != nil {
 		zap.S().Warnf("Failed to enqueue item", bytes, err)
 		return
@@ -105,10 +111,10 @@ func (r ValueStringHandler) enqueue(bytes []byte, priority uint8) {
 }
 
 func (r ValueStringHandler) Shutdown() (err error) {
-	zap.S().Warnf("[ValueStringHandler] shutting down, Queue length: %d", r.pg.Length())
+	zap.S().Warnf("[ValueStringHandler] shutting down, Queue length: %d", r.priorityQueue.Length())
 	r.shutdown = true
-	time.Sleep(5 * time.Second)
-	err = CloseQueue(r.pg)
+
+	err = CloseQueue(r.priorityQueue)
 	return
 }
 
@@ -122,7 +128,18 @@ func (r ValueStringHandler) EnqueueMQTT(customerID string, location string, asse
 		return
 	}
 
-	DBassetID := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID)
+	if !success {
+		go func() {
+			if r.shutdown {
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+			} else {
+				time.Sleep(1 * time.Second)
+				r.EnqueueMQTT(customerID, location, assetID, payload)
+			}
+		}()
+		return
+	}
 
 	// process unknown data structure according to https://blog.golang.org/json
 	m := parsedPayload.(map[string]interface{})

@@ -1,13 +1,13 @@
 from minio import Minio
 import logging
 import paho.mqtt.client as mqtt
-import numpy as np
+import io
 import os
 import base64
 import json
-import cv2
-
 import ProductImage
+import sys
+import binascii
 
 # Settig up the env variables, see index.md for further explanation
 LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'DEBUG')
@@ -16,81 +16,72 @@ broker_port = int(os.environ['BROKER_PORT'])
 minio_url = os.environ['MINIO_URL']
 minio_access_key = os.environ['MINIO_ACCESS_KEY']
 minio_secret = os.environ['MINIO_SECRET_KEY']
+minio_secure = bool(os.environ['MINIO_SECURE'])
+
+
 bucket_name = os.environ['BUCKET_NAME']
 topic = os.environ['TOPIC']
 
-input_var = ""
-
-IMAGE_FOLDER = "./images/"
-
-# Connects to the mqtt client.
-# If you want to be sure that the connection attempt was successful,
-# then see the logs.
-# This function will return the return code (rc) 0 if connected successfully.
-# The following values are possible:
-# 0 - Connection successful;
-# 1 - Connection refused – incorrect protocol version;
-# 2 - Connection refused – invalid client identifier;
-# 3 - Connection refused – server unavailable;
-# 4 - Connection refused – bad username or password;
-# 5 - Connection refused – not authorised;
-# 6-255 - Currently unused.
-
-
+# =============================================================================
+# MQTT Connection Message
+# =============================================================================
 def on_connect(client, userdata, flags, rc):
-    logging.info("Connected With Result Code " + str(rc))
+    if rc==0:
+        logging.info("MQTT connected with code: %s",rc)
+        mqtt_client.subscribe(topic, qos=0)
 
-# Message is an object and the payload property contains
-# the message data which is binary data.
+    else:
+        logging.info("MQTT bad connection with code: %s",rc)
+        sys.exit(1)
 
+def on_disconnect(client, userdata, rc):
+    mqtt.Client.connected_flag=False
+    logging.info("MQTT disconnected with code: %s", rc)
+    if rc != 0:
+        logging.warning("Unexpected disconnection to MQTT Broker")
+        sys.exit(1)
+    logging.info("Terminating MQTT-to-Blob")
+    sys.exit(0)
 
-def on_message(client, userdata, message):
+# =============================================================================
+# MQTT Receiving Message
+# =============================================================================
+def on_message(client, userdata, message):      
+    #Get Image from MQTT topic  
     try:
         result = ProductImage.product_image_from_dict(json.loads(message.payload))
     except:
-        logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
+        # logging.warn("ProductImage failed to parse JSON payload: " + str(message.payload))
+        logging.warning("ProductImage failed to parse JSON payload. Please check your MQTT message format")
         return
 
-    # Get image_id
-    uid = result.image.image_id
-
-    # Reading out image_bytes and decoding it from base64
-    im_bytes = base64.b64decode(result.image.image_bytes)
-
-    im_arr = np.frombuffer(im_bytes, dtype=np.uint8)
-    img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
-    img_saver = cv2.imwrite(IMAGE_FOLDER+uid+".jpg", img)
-
-    if img_saver:
-        logging.info("saved")
-    else:
-        logging.debug("failed to save image to cache")
-
-    minio_client = Minio(
-        minio_url,
-        access_key=minio_access_key,
-        secret_key=minio_secret
-    )
-
-    found = minio_client.bucket_exists(bucket_name)
-
-    if not found:
-        minio_client.make_bucket(bucket_name)
-    else:
-        logging.info("Bucket already exists")
-
-    minio_client.fput_object(
-        bucket_name, uid + ".jpg", IMAGE_FOLDER + uid + ".jpg"
-    )
-    logging.info("Successfully uploaded")
-
-    if os.path.exists(IMAGE_FOLDER + uid + ".jpg"):
-        os.remove(IMAGE_FOLDER + uid + ".jpg")
-        logging.info("file has been deleted")
-    else:
-        logging.info("The file does not exist")
-
-
+    try:
+        # Get image_id
+        uid = result.image.image_id
+        # Reading out image_bytes and decoding it from base64
+        img_bytes = base64.b64decode(result.image.image_bytes, validate=True)
+        
+        # Write file to minio client
+        minio_client.put_object(
+                bucket_name=bucket_name, 
+                object_name=uid + ".jpg", 
+                data=io.BytesIO(img_bytes), 
+                length=-1, 
+                part_size=10*1024*1024,
+                metadata={"timestamp_ms": result.timestamp_ms,
+                          "image_id": result.image.image_id,
+                          "image_height": result.image.image_height,
+                          "image_width": result.image.image_width,
+                          "image_channels": result.image.image_channels
+                          }
+                )
+        
+        logging.info("Successfully uploaded")
+    except binascii.Error:
+        logging.warning("Oops! %s occurred. Please check your image byte in the MQTT topic", sys.exc_info()[0])
+    except:
+        logging.warning("%s occurred", sys.exc_info()[0])
+        
 if __name__ == "__main__":
     if LOGGING_LEVEL == "DEBUG":
         logging.basicConfig(level=logging.DEBUG)
@@ -102,16 +93,45 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.ERROR)
     elif LOGGING_LEVEL == "CRITICAL":
         logging.basicConfig(level=logging.CRITICAL)
-
+    
     logging.debug(f"Broker URL: {broker_url}")
     logging.debug(f"Broker PORT: {broker_port}")
+    logging.debug(f"MQTT TOPIC: {topic}")
     logging.debug(f"MINIO URL: {minio_url}")
     logging.debug(f"Bucket NAME: {bucket_name}")
-
-    global_client = mqtt.Client()
-    global_client.on_connect = on_connect
-    global_client.on_message = on_message
-    global_client.username_pw_set("MQTT_TO_BLOB", password=None)
-    global_client.connect(broker_url, broker_port)
-    global_client.subscribe(topic, qos=0)
-    global_client.loop_forever()
+    
+    # =============================================================================
+    # Connect to minio     
+    # =============================================================================
+    minio_client = Minio(
+        minio_url,
+        access_key=minio_access_key,
+        secret_key=minio_secret,
+        secure=minio_secure #Change to True if Minio is using https
+    )
+    
+    # Connect or create to minio bucket
+    found = minio_client.bucket_exists(bucket_name)
+    
+    if not found:
+        minio_client.make_bucket(bucket_name)
+    else:
+        logging.info("Bucket already exists")
+    
+    # =============================================================================
+    # Call MQTT
+    # =============================================================================
+    mqtt_client = mqtt.Client()
+    mqtt_client.on_connect = on_connect
+    logging.info("Connecting to broker %s:%s", broker_url, broker_port)
+    
+    try:
+        mqtt_client.connect(broker_url, broker_port)
+    except:
+        logging.warning("Failed to connect to MQTT broker with error %s", sys.exc_info()[0])
+        logging.info("Retrying connection to MQTT broker")
+        
+    mqtt_client.on_message = on_message
+    mqtt_client.username_pw_set("MQTT_TO_BLOB", password=None) 
+    mqtt_client.on_disconnect = on_disconnect
+    mqtt_client.loop_forever()
