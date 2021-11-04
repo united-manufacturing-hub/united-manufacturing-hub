@@ -108,7 +108,7 @@ write_files:
       # Restart as rancher
       if [ $UID -eq 0 ]; then
       echo "Initial setup! Waiting 20 seconds for full startup..."
-      #sleep 20
+      sleep 20
 
 
       ###
@@ -116,30 +116,30 @@ write_files:
       ###
 
       # Get both ntp servers from config
-      NTP1=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | grep - | sed 's/  - //g' | sed -n 1p)
-      NTP2=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | grep - | sed 's/  - //g' | sed -n 2p)
+      NTP1=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | tail -n2 | grep - | sed 's/  - //g' | sed -n 1p)
+      NTP2=$(cat /k3os/system/config.yaml | grep ntp_servers -A2 | tail -n2 | grep - | sed 's/  - //g' | sed -n 2p)
 
       echo "Testing NTP server $NTP1"
       echo "Testing NTP server $NTP2"
 
-      # Try 10 times to reach either of them
+      # Try 5 times to reach either of them
       i="0"
       reachable_ntp_server_found=0
-      while [ $i -lt 10 ]
+      while [ $i -lt 5 ]
       do
       if ! ping -c1 -W1 $NTP1 > /dev/null 2>&1 ; then
-      echo "$NTP1 not reachable_ntp_server_found !"
+      echo "$NTP1 not reachable !"
       sleep 10
       else
-      echo "$NTP1 is reachable_ntp_server_found !"
+      echo "$NTP1 is reachable !"
       reachable_ntp_server_found=1
       fi
 
       if ! ping -c1 -W1 $NTP2 > /dev/null 2>&1 ; then
-      echo "$NTP2 not reachable_ntp_server_found !"
+      echo "$NTP2 not reachable !"
       sleep 10
       else
-      echo "$NTP2 is reachable_ntp_server_found !"
+      echo "$NTP2 is reachable !"
       reachable_ntp_server_found=1
       fi
       if [ $reachable_ntp_server_found -eq 1 ]; then
@@ -149,7 +149,10 @@ write_files:
       done
 
       if [ $reachable_ntp_server_found -eq 0 ]; then
-      echo "No reachable NTP server found. This can happen when you either have no connection to the internet or when you are in a limited network that blocks NTP requests (some universities do that). The solution is to connect ot the internet and / or to specify the allowed NTP servers manually in the development.yaml. Fore more information visit docs.umh.app"
+      echo "No reachable NTP server found."
+      echo "This can happen when you either have no connection to the internet or when you are in a limited network"
+      echo "that blocks NTP requests (some universities do that). The solution is to connect ot the internet and / or"
+      echo "to specify the allowed NTP servers manually in the development.yaml. Fore more information visit docs.umh.app"
       fi
 
 
@@ -170,7 +173,10 @@ write_files:
       done
 
       if [ $dns_query_successfull -eq 0 ]; then
-      echo "Failed to resolve umh.app . This can happen when you either have no connection to the internet or when you are in a limited network that blocks DNS requests (some universities do that). The solution is to connect ot the internet and / or to specify the allowed DNS servers manually in the development.yaml. Fore more information visit docs.umh.app"
+      echo "Failed to resolve umh.app."
+      echo "This can happen when you either have no connection to the internet or when you are in a limited network"
+      echo "that blocks DNS requests (some universities do that). The solution is to connect ot the internet and / or"
+      echo "to specify the allowed DNS servers manually in the development.yaml. Fore more information visit docs.umh.app"
       exit
       fi
 
@@ -251,6 +257,15 @@ write_files:
       fi
 
       echo "Initial setup finished! This might take now awhile..."
+
+      num1=$(k3s -v | grep -o 'v1.[0-9][0-9]' | sed 's/v//g')
+      num2="1.20"
+
+      if (( $(echo "$num1 < $num2" |bc -l) )); then
+      echo "k3os version outdated !"
+      echo "Installed version:   $num1"
+      echo "Recommended version: $num2"
+      fi
 
   path: /home/rancher/initial_setup.sh
 

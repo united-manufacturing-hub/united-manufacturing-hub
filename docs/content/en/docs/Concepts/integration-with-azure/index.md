@@ -7,4 +7,4 @@ description: >
 
 This section is currently in development. Published articles so far:
 - [How to setup Azure IoT Hub](/docs/tutorials/azure/setting-up-azure-iot-hub/)
-- [Connecting the United Manufacturing Hub with Azure IoT Hub](/docs/tutorials/azure/connecting-united-manufacturing-hub/)
+- [Connecting the United Manufacturing Hub with Azure IoT Hub](/docs/tutorials/azure/connecting-united-manufacturing-hub-with-azure-iot-hub/)

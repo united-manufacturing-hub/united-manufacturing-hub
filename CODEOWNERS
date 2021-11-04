@@ -1,3 +1,29 @@
 # Codeowners file. See also https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-on-github/about-code-owners
 
+# By default, Jeremy is Codeowner for everything
 *       @JeremyTheocharis
+
+# Furthermore, Jeremy is responsible for the documentation and Kubernetes / Helm 
+/docs/       @JeremyTheocharis
+/deployment/ @JeremyTheocharis
+
+# Ferdinand is responsible for the Go code
+/golang/ @Scarjit
+
+# Python code is shared between Ferdinand and Jeremy
+/mqtt-to-blob/ @JeremyTheocharis @Scarjit
+/barcodereader/ @JeremyTheocharis @Scarjit
+/cameraconnect/ @JeremyTheocharis @Scarjit
+/python-sdk/ @JeremyTheocharis @Scarjit
+/sensorconnect/ @JeremyTheocharis @Scarjit
+
+# Remaining files are owned by Jeremy
+AUTHORS @JeremyTheocharis
+CODEOWNERS @JeremyTheocharis
+CODE_OF_CONDUCT.md @JeremyTheocharis
+CONTRIBUTING.md @JeremyTheocharis
+CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md @JeremyTheocharis
+CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md @JeremyTheocharis
+LICENSE @JeremyTheocharis
+README.md @JeremyTheocharis
+SECURITY.md @JeremyTheocharis

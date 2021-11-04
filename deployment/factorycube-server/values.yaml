@@ -58,8 +58,8 @@ factoryinput:
 
 ### mqtt-to-blob ###
 mqtttoblob:
-  # not enabeld by default
-  enabled: true
+  # not enabled by default
+  enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
     pullPolicy: Always
