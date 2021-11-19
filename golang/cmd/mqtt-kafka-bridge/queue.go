@@ -43,8 +43,6 @@ func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 		zap.S().Errorf("Error enqueuing", err)
 		return
 	}
-
-	zap.S().Debugf("Queue lenght after insert: %d", pq.Length())
 }
 
 func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error) {

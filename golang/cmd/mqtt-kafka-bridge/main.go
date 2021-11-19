@@ -14,7 +14,9 @@ import (
 )
 
 var mqttClient MQTT.Client
-var kafkaClient *kafka.Producer
+var kafkaProducerClient *kafka.Producer
+var kafkaAdminClient *kafka.AdminClient
+var kafkaConsumerClient *kafka.Consumer
 var mqttIncomingQueue *goque.Queue
 var mqttOutGoingQueue *goque.Queue
 
@@ -58,7 +60,7 @@ func main() {
 	mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
-	kafkaClient = setupKafka(KafkaBoostrapServer)
+	kafkaProducerClient, kafkaAdminClient, kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
 
 	zap.S().Debugf("Start Queue processors")
 	go processIncomingMessages()
@@ -94,8 +96,17 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 	mqttClient.Disconnect(1000)
-	kafkaClient.Flush(1000)
-	kafkaClient.Close()
+
+	if kafkaProducerClient != nil {
+		kafkaProducerClient.Flush(1000)
+		kafkaProducerClient.Close()
+	}
+	if kafkaAdminClient != nil {
+		kafkaAdminClient.Close()
+	}
+	if kafkaConsumerClient != nil {
+		kafkaConsumerClient.Close()
+	}
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
