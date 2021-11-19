@@ -16,7 +16,10 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/mqtt-kafka-bridge
+# Add build requirements for librdkafka
+RUN apk add build-base
+
+RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/mqtt-kafka-bridge
 
 FROM scratch
 COPY --from=builder /build /app/
