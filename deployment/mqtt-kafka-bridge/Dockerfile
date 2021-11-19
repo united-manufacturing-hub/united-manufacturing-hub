@@ -1,6 +1,8 @@
 FROM golang:alpine as builder
 
 RUN mkdir /build
+# Add build requirements for librdkafka
+RUN apk add build-base
 
 # Get dependencies
 WORKDIR /build
@@ -15,9 +17,6 @@ ADD ./golang/pkg /build/pkg
 # ADD ./golang/test/mqtt-kafka-bridge /build/test
 
 WORKDIR /build
-
-# Add build requirements for librdkafka
-RUN apk add build-base
 
 RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/mqtt-kafka-bridge
 
