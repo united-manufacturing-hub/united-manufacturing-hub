@@ -370,7 +370,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 			ShutdownApplicationGraceful()
 		case TryAgain:
 			if recursionDepth < 10 {
-				time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+				time.Sleep(time.Duration(10*recursionDepth) * time.Millisecond)
 				err = nil
 				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
 			} else {
@@ -402,7 +402,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 			ShutdownApplicationGraceful()
 		case TryAgain:
 			if recursionDepth < 10 {
-				time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+				time.Sleep(time.Duration(10*recursionDepth) * time.Millisecond)
 				err = nil
 				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
 			} else {
@@ -1050,7 +1050,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 						ShutdownApplicationGraceful()
 					case TryAgain:
 						if recursionDepth < 10 {
-							time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+							time.Sleep(time.Duration(10*recursionDepth) * time.Millisecond)
 							errx = nil
 							faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
 						}
