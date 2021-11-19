@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"io/ioutil"
 
 	"github.com/beeker1121/goque"
@@ -58,8 +59,12 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 	return func(client MQTT.Client, message MQTT.Message) {
 		topic := message.Topic()
 		payload := message.Payload()
-		zap.S().Infof("onMessageReceived", topic, payload)
-		go storeMessageIntoQueue(topic, payload, pg)
+		if json.Valid(payload) {
+			zap.S().Infof("onMessageReceived", topic, payload)
+			go storeMessageIntoQueue(topic, payload, pg)
+		} else {
+			zap.S().Warnf("onMessageReceived [INVALID] ", topic, payload)
+		}
 	}
 }
 

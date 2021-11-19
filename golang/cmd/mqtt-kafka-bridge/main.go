@@ -1,18 +1,22 @@
 package main
 
 import (
+	"github.com/beeker1121/goque"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
 
 var mqttClient MQTT.Client
 var kafkaClient *kafka.Producer
+var mqttIncomingQueue *goque.Queue
+var mqttOutGoingQueue *goque.Queue
 
 var buildtime string
 
@@ -36,14 +40,14 @@ func main() {
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 
 	zap.S().Debugf("Setting up Queues")
-	mqttIncomingQueue, err := setupQueue("incoming")
+	mqttIncomingQueue, err = setupQueue("incoming")
 	if err != nil {
 		zap.S().Errorf("Error setting up incoming queue", err)
 		return
 	}
 	defer closeQueue(mqttIncomingQueue)
 
-	mqttOutGoingQueue, err := setupQueue("outgoing")
+	mqttOutGoingQueue, err = setupQueue("outgoing")
 	if err != nil {
 		zap.S().Errorf("Error setting up outgoing queue", err)
 		return
@@ -55,6 +59,9 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	kafkaClient = setupKafka(KafkaBoostrapServer)
+
+	zap.S().Debugf("Start Queue processors")
+	go processIncomingMessages()
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -80,10 +87,12 @@ func main() {
 	select {} // block forever
 }
 
+var ShuttingDown bool
+
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
-
+	ShuttingDown = true
 	mqttClient.Disconnect(1000)
 	kafkaClient.Flush(1000)
 	kafkaClient.Close()
@@ -95,4 +104,17 @@ func ShutdownApplicationGraceful() {
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
+}
+
+func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
+	if strings.Contains(MqttTopicName, ".") {
+		zap.S().Errorf("Illegal MQTT Topic name received: %s", MqttTopicName)
+	}
+	return strings.ReplaceAll(MqttTopicName, "/", ".")
+}
+func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
+	if strings.Contains(KafkaTopicName, ".") {
+		zap.S().Errorf("Illegal Kafka Topic name received: %s", KafkaTopicName)
+	}
+	return strings.ReplaceAll(KafkaTopicName, ".", "/")
 }
