@@ -79,7 +79,7 @@ func (r StoredRawMQTTHandler) reprocess() {
 		item, err := r.ProcessPriorityQueue.Dequeue()
 		if err != nil {
 			// Sleep if there is any error and just try again later
-			time.Sleep(10 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -98,7 +98,7 @@ func (r StoredRawMQTTHandler) reprocess() {
 					// Failed to re-enqueue
 					ShutdownApplicationGraceful()
 				}
-				time.Sleep(10 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 			item, err = r.ProcessPriorityQueue.Dequeue()
 		}
