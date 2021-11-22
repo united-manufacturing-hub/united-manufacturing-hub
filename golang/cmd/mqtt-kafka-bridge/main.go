@@ -40,6 +40,7 @@ func main() {
 	}
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
 
 	zap.S().Debugf("Setting up Queues")
 	mqttIncomingQueue, err = setupQueue("incoming")
@@ -64,6 +65,7 @@ func main() {
 
 	zap.S().Debugf("Start Queue processors")
 	go processIncomingMessages()
+	go kafkaToQueue(KafkaTopic)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -124,7 +126,7 @@ func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
 	return strings.ReplaceAll(MqttTopicName, "/", ".")
 }
 func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
-	if strings.Contains(KafkaTopicName, ".") {
+	if strings.Contains(KafkaTopicName, "/") {
 		zap.S().Errorf("Illegal Kafka Topic name received: %s", KafkaTopicName)
 	}
 	return strings.ReplaceAll(KafkaTopicName, ".", "/")

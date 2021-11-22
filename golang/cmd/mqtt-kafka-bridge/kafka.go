@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"
 	"time"
@@ -11,6 +12,7 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 	configMap := kafka.ConfigMap{
 		"bootstrap.servers": boostrapServer,
 		"security.protocol": "plaintext",
+		"group.id":          "mqtt-kafka-bridge",
 	}
 	producer, err := kafka.NewProducer(&configMap)
 
@@ -23,13 +25,10 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		panic(err)
 	}
 
-	/*
-		consumer, err = kafka.NewConsumer(&configMap)
-		if err != nil {
-			panic(err)
-		}
-
-	*/
+	consumer, err = kafka.NewConsumer(&configMap)
+	if err != nil {
+		panic(err)
+	}
 
 	go func() {
 		for e := range producer.Events() {
@@ -166,6 +165,37 @@ func processIncomingMessages() {
 			zap.S().Errorf("Failed to send Kafka message: %s", err)
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
 			continue
+		}
+	}
+}
+
+func kafkaToQueue(topic string) {
+	err := kafkaConsumerClient.Subscribe(topic, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	for !ShuttingDown {
+		msg, err := kafkaConsumerClient.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		if err != nil {
+			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+				continue
+			} else {
+				zap.S().Errorf("Failed to read kafka message: %s", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+		}
+
+		payload := msg.Value
+		if json.Valid(payload) {
+			kafkaTopic := msg.TopicPartition.Topic
+			mqttTopic := KafkaTopicToMqtt(*kafkaTopic)
+
+			go storeMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
+			zap.S().Infof("kafkaToQueue", topic, payload)
+		} else {
+			zap.S().Infof("kafkaToQueue [INVALID] ", topic, payload)
 		}
 	}
 }
