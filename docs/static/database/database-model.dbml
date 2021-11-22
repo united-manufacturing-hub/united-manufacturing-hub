@@ -1,0 +1,185 @@
+Table Asset {
+  Id int [PK, increment]
+  LocationId int [not null,ref: < Location.Id]
+  Name text [not null]
+  
+  indexes {
+    (Name, LocationId) [unique]
+  }
+}
+
+Table AssetConfiguration{
+  Id int [PK, increment]
+  MicrostopDurationInSeconds bigint [not null]
+  IgnoreMicrostopUnderThisDurationInSeconds bigint [not null]
+  MinimumRunningTimeInSeconds bigint [not null]
+  ThresholdForNoShiftsConsideredBreakInSecond bigint [not null]
+  LowSpeedThresholdInPcsPerHour bigint [not null]
+  LanguageCode bigint [not null]
+  AvailabiltyLossStatesId int [not null, ref: < AvalibilityLossStates.AssetConfigurationId]
+  PerformanceLossStatesId int [not null, ref: < PerformanceLossStates.AssetConfigurationId]
+  AssetId int [not null, ref: < Asset.Id]
+}
+
+Table AvailabiltyLossState{
+  Id int [PK, increment]
+  Value bigint [not null]
+  Name text [not null]
+}
+
+Table PerformanceLossState{
+  Id int [PK, increment]
+  Value bigint [not null]
+  Name text [not null]
+}
+
+Table AvalibilityLossStates {
+    AssetConfigurationId int [not null]
+    AvalabilityLossStateId int [not null, ref: > AvailabiltyLossState.Id]
+
+    indexes {
+        (AssetConfigurationId, AvalabilityLossStateId) [PK]
+    }
+}
+
+Table PerformanceLossStates {
+    AssetConfigurationId int [not null]
+    PerformanceLossStateId int [not null, ref: > PerformanceLossState.Id]
+
+    indexes {
+        (AssetConfigurationId, PerformanceLossStateId) [PK]
+    }
+}
+
+Table Location{
+  Id int [PK, increment]
+  Name text [not null, unique]
+}
+
+// SELECT create_hypertable('Count', 'Timestamp');
+// CREATE INDEX ON Count (AssetId, Timestamp DESC);
+Table Count {
+  Id int [PK, increment]
+  AssetId int [not null, ref: < Asset.Id]
+  Count bigint [not null]
+  Timestamp timestamp [not null]
+  indexes {
+    (AssetId, Timestamp) [unique]
+  }
+}
+
+// SELECT create_hypertable('State', 'Timestamp');
+// CREATE INDEX ON State (AssetId, Timestamp DESC);
+Table State {
+  Id int [PK, increment]
+  AssetId int [not null, ref: < Asset.Id]
+  State bigint [not null]
+  Timestamp timestamp [not null]
+  indexes {
+    (AssetId, Timestamp) [unique]
+  }
+}
+
+
+Table ProcessValueType {
+  Id int [PK, increment]
+  Name text [not null]
+  AssetId int [not null, ref: < Asset.Id]
+}
+
+Table ProcessValue {
+  Id int [PK, increment]
+  Value double  // Should this allow any data ?
+  Timestamp timestamp [not null]
+  ValueTypeId int [not null, ref: < ProcessValueType.Id]
+}
+
+
+// CHECK (BeginTimestamp < EndTimestamp)
+// EXCLUDE USING gist (AssetId WITH =, tstzrange(BeginTimestamp, EndTimestamp) WITH &&)
+Table Shift {
+  Id int [PK, increment]
+  ShiftTypeId int [not null, ref: < ShiftType.Id]
+  BeginTimestamp timestamp [not null]
+  EndTimestamp timestamp // Allows null values, since it is not always known, when a shift ends
+  AssetId int [not null, ref: < Asset.Id]
+  
+  indexes{
+    (BeginTimestamp, AssetId) [unique]
+  }
+}
+
+Table ShiftType {
+  Id in [PK, increment]
+  Name text [not null]
+}
+
+
+// CHECK (BeginTimestamp < EndTimestamp)
+// CHECK (TargetUnits > 0)
+// EXCLUDE USING gist (AssetId WITH =, tstzrange(BeginTimestamp, EndTimestamp) WITH &&) WHERE (BeginTimestamp IS NOT NULL AND EndTimestamp IS NOT NULL)
+Table Order {
+  Id in [PK, increment]
+  Name text [not null]
+  BeginTimestamp timestamp [not null]
+  EndTimestamp timestamp // Allows null values, since it is not always known, when an order ends
+  TargetUnits bigint [not null]
+  AssetId int [not null, ref: < Asset.Id]
+  
+  indexes{
+    (AssetId, Id) [unique]
+  }
+}
+
+
+Table AssetProduct {
+  Id in [PK, increment]
+  ProductTypeNameId int [not null, ref: < ProductTypeName.Id]
+  AssetId int [not null, ref: < Asset.Id]
+  TimePerUnitInSeconds double [not null]
+}
+
+Table ProductTypeName{
+  Id in [PK, increment]
+  Name text [not null]
+}
+
+// TODO: Which of these keys should be not null
+Table RecommendationTable{
+  Id in [PK, increment]
+  Timestamp timestamp [not null]
+  Type bigint [not null]
+  Enabled boolean [not null]
+  Values text
+  DiagnoseTextDE text
+  DiagnoseTextEN text
+  TextDE text
+  TextEN text
+}
+
+
+// TODO
+Table Product {
+  Id in [PK, increment]
+  Value text [not null]
+  AssetId int [not null, ref: < Asset.Id]
+  ProductionBegin timestamp [not null]
+  ProductionEnd timestamp [not null]
+  IsScrap boolean
+  StepId int //Missing ref
+}
+
+// Migrate to double hypertable
+Table ChildGroup {
+  ParentId int [not null, ref: < Product.Id]
+  ChildId int [not null, ref: < Product.Id]
+  indexes{
+    (ParentId, ChildId) [unique]
+    (ParentId)
+    (ChildId)
+  }
+}
+
+
+//TBD: Asset Group, Process Group
+
