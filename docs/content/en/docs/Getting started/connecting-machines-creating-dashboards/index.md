@@ -86,7 +86,7 @@ Using the information from the `/activtiy` and `/detectedAnomaly` topics, the st
 
 Used Sensors:
 - Lightbarrier for counting the bottles 
-- A button bar via which the machine operator can inform the system that he is on break, for example
+- A button bar that the machine operator can use to tell the system that he is taking a break, for example
 
 1.  Extract the information of the light barrier via the MQTT in node whether a bottle was produced. If a bottle was produced, send a message to the output/count topic analog to [MQTT datamodel](/docs/concepts/mqtt).
 2.  Use the output_to_activity node to determine the information "the machine is running" from the information "a bottle was produced". For example, if a bottle is produced every X seconds, set the activity to true analogous to the [MQTT datamodel](/docs/concepts/mqtt/).
