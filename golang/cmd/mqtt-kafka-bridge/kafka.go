@@ -192,7 +192,7 @@ func kafkaToQueue(topic string) {
 			kafkaTopic := msg.TopicPartition.Topic
 			mqttTopic := KafkaTopicToMqtt(*kafkaTopic)
 
-			go storeMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
+			go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
 			zap.S().Infof("kafkaToQueue", topic, payload)
 		} else {
 			zap.S().Infof("kafkaToQueue [INVALID] ", topic, payload)

@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io/ioutil"
+	"time"
 
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
@@ -61,7 +62,7 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 		payload := message.Payload()
 		if json.Valid(payload) {
 			zap.S().Infof("onMessageReceived", topic, payload)
-			go storeMessageIntoQueue(topic, payload, pg)
+			go storeNewMessageIntoQueue(topic, payload, pg)
 		} else {
 			zap.S().Warnf("onMessageReceived [INVALID] ", topic, payload)
 		}
@@ -112,4 +113,48 @@ func setupMQTT(clientID string, mqttBrokerURL string, subMQTTTopic string, SSLEn
 	}
 
 	return
+}
+
+func processOutgoingMessages() {
+	var err error
+
+	for !ShuttingDown {
+		if mqttOutGoingQueue.Length() == 0 {
+			//Skip if empty
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+
+		var mqttData queueObject
+		mqttData, err = retrieveMessageFromQueue(mqttOutGoingQueue)
+		if err != nil {
+			return
+		}
+		if err != nil {
+			zap.S().Errorf("Failed to dequeue message: %s", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		token := mqttClient.Publish(mqttData.Topic, 2, false, mqttData.Message)
+
+		var sendMQTT = false
+		for i := 0; i < 10; i++ {
+			sendMQTT = token.WaitTimeout(10 * time.Second)
+			if sendMQTT {
+				break
+			}
+		}
+
+		// Failed to send MQTT message (or 10x timeout)
+		err = token.Error()
+		if err != nil || !sendMQTT {
+			zap.S().Warnf("Failed to send MQTT message", err, sendMQTT)
+			// Try to re-enqueue the message
+			storeMessageIntoQueue(mqttData.Topic, mqttData.Message, mqttOutGoingQueue)
+			// After an error, just wait a bit
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
+	}
 }

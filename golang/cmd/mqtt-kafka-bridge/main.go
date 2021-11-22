@@ -4,6 +4,7 @@ import (
 	"github.com/beeker1121/goque"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
@@ -42,6 +43,17 @@ func main() {
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
 
+	// Redis cache
+	redisURI := os.Getenv("REDIS_URI")
+	redisURI2 := os.Getenv("REDIS_URI2")
+	redisURI3 := os.Getenv("REDIS_URI3")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	dryRun := os.Getenv("DRY_RUN")
+
+	redisDB := 0 // default database
+	zap.S().Debugf("Setting up redis")
+	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
+
 	zap.S().Debugf("Setting up Queues")
 	mqttIncomingQueue, err = setupQueue("incoming")
 	if err != nil {
@@ -65,6 +77,7 @@ func main() {
 
 	zap.S().Debugf("Start Queue processors")
 	go processIncomingMessages()
+	go processOutgoingMessages()
 	go kafkaToQueue(KafkaTopic)
 
 	// Allow graceful shutdown

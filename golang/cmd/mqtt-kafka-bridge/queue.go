@@ -33,6 +33,14 @@ func closeQueue(pq *goque.Queue) (err error) {
 	return
 }
 
+func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
+	// Prevents recursion
+	if !CheckIfNewMessageOrStore(message) {
+		return
+	}
+	storeMessageIntoQueue(topic, message, pq)
+}
+
 func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	newElement := queueObject{
 		Topic:   topic,
