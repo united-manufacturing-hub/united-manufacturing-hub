@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.Language.Lang }}">
+<head>
+    <meta http-equiv="Refresh" content="0; url='{{ .Params.redirect }}'" />
+</head>
+<body>
+{{ partial "header.html" }}
+<p>Please click this [link]({{ .Params.redirect }}) if you are not redirected.</p>
+{{ partial "footer.html" }}
+</body>
+</html>
