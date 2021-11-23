@@ -32,11 +32,11 @@ Let's have fun and deep dive in!
 
 Let's start with the simpler method of both approaches: symmetric encryption. In cryptography, the field of encryption, methods are always explained using Alice, Bob, and Mallory. All of them (there are way more, see also the [Wikipedia article on Alice and Bob](https://en.wikipedia.org/wiki/Alice_and_Bob)) are fictional characters. Alice usually initiates the communication and wants to send a message to Bob without any third party like Mallory being able to read it.
 
-{{< figure src="./alice-bob-mallory.png" title="Alice, Bob, and Mallory">}}
+{{< figure src="./alice-bob-mallory.png" caption="Alice, Bob, and Mallory">}}
 
 In IoT, Alice could be a Raspberry Pi with a temperature sensor that is trying to send a message to Bob, who is a service running in the cloud. In Industrial IoT, Alice could be A PLC and Bob an Industrial IoT platform.
 
-{{< figure src="./alice-bob-mallory-practically.png" title="Alice, Bob, and Mallory practically">}}
+{{< figure src="./alice-bob-mallory-practically.png" caption="Alice, Bob, and Mallory practically">}}
 
 Before Alice and Bob can communicate with each other using a symmetric encryption they need to do two things first:
 
@@ -49,7 +49,7 @@ before their first messages, Alice and Bob need to align to use this cipher and 
 
 When Alice wants to send a message to Bob, Alice needs to encrypt the plaintext using the cipher and the secret. For Caesar’s cipher, it works by shifting the alphabet x characters to the right (and x is the chosen number from above, the **secret**). 
 
-{{< figure src="./caesar.png" title="Caesar’s cipher">}}
+{{< figure src="./caesar.png" caption="Caesar’s cipher">}}
 
 For example, a right shift of 3 is resulting in the replacement of the letter A with D. Alice then sends the encrypted message to Bob. Bob then reverts the encryption by shifting the alphabet x characters back to the left, so a D gets converted back into an A. Now Bob can read the plaintext.
 
@@ -67,7 +67,7 @@ Brute-forcing can also be improved by not checking everything randomly, but by e
 
 So how do you then create good passwords? Several years ago the best practice was to use smaller randomly generated passwords, which should change frequently. But humans are humans and most of them will just add a ! or 1 at the end of the password. So nowadays the recommendation is to go for lengthy and still easy rememberable passwords. `if2s&sd5` is more insecure and way harder to remember than `AlexanderIs25YearsOldAndLikesToHaveHisDeskClean`.
 
-{{< figure src="https://imgs.xkcd.com/comics/password_strength.png" title="Obligatory xkcd #936">}}
+{{< figure src="https://imgs.xkcd.com/comics/password_strength.png" caption="Obligatory xkcd #936">}}
 
 But the approach itself, the symmetric encryption with a secret / password, has two fundamental flaws:
 
