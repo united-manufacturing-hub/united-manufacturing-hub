@@ -79,6 +79,7 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 	r := bytes.NewReader(imgBytes)
 	var upinfo minio.UploadInfo
 	var err error
+	start := time.Now()
 	upinfo, err = minioClient.PutObject(ctx, bucketName, uid, r, -1, minio.PutObjectOptions{})
 
 	if err != nil {
@@ -93,6 +94,7 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 		return
 	}
 
-	zap.S().Debugf("Commited to blob storage")
+	elapsed := time.Since(start)
+	zap.S().Debugf("Commited to blob storage in %s", elapsed)
 	zap.S().Debugf("%s/%s", upinfo.Bucket, upinfo.Key)
 }
