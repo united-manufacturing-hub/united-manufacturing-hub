@@ -1,4 +1,3 @@
 ---
-type: "redirect"
-redirect: "/docs"
+redirectURL: /docs
 ---
