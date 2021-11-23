@@ -36,10 +36,6 @@ func processKafkaQueue(topic string, bucketName string) {
 		panic(err)
 	}
 
-	blobStoreExecutionTime := 10 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), blobStoreExecutionTime)
-	defer cancel()
-
 	for !ShuttingDown {
 		if minioClient.IsOffline() {
 			zap.S().Warnf("Minio is down")
@@ -52,7 +48,7 @@ func processKafkaQueue(topic string, bucketName string) {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
 			} else {
-				zap.S().Errorf("Failed to read kafka message: %s", err)
+				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -73,33 +69,30 @@ func processKafkaQueue(topic string, bucketName string) {
 			zap.S().Warnf("Image decoding failed: %s", err)
 		}
 
-		r := bytes.NewReader(imgBytes)
-		_, err = minioClient.PutObject(ctx, bucketName, uid, r, -1, minio.PutObjectOptions{})
-
-		select {
-		case <-time.After(blobStoreExecutionTime):
-			{
-				zap.S().Warnf("Failed to put item into blob-storage: %s", err)
-				kafkaProducerClient.Produce(&kafka.Message{
-					TopicPartition: kafka.TopicPartition{
-						Topic:     msg.TopicPartition.Topic,
-						Partition: kafka.PartitionAny,
-					},
-					Value: msg.Value,
-				}, nil)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-		case <-ctx.Done():
-			{
-				if ctx.Err() != nil && err != context.DeadlineExceeded {
-					zap.S().Warnf("Error writing to blob storage: %s", ctx.Err())
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				zap.S().Infof("Commited to blob storage")
-			}
-
-		}
+		go pushToMinio(imgBytes, uid, bucketName, msg)
 	}
+}
+
+func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Message) {
+	ctx := context.Background()
+
+	r := bytes.NewReader(imgBytes)
+	var upinfo minio.UploadInfo
+	var err error
+	upinfo, err = minioClient.PutObject(ctx, bucketName, uid, r, -1, minio.PutObjectOptions{})
+
+	if err != nil {
+		zap.S().Warnf("Failed to put item into blob-storage: %s", err)
+		kafkaProducerClient.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     msg.TopicPartition.Topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value: msg.Value,
+		}, nil)
+		return
+	}
+
+	zap.S().Debugf("Commited to blob storage")
+	zap.S().Debugf("%s/%s", upinfo.Bucket, upinfo.Key)
 }
