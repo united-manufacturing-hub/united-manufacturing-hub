@@ -21,7 +21,7 @@ In IoT or Industrial IoT it is important as well:
 
 - How to ensure that the data send to the cloud from my microcontroller or PLC [^PLC] is not read or modified?
 - How to push updates onto my PLCs or IoT devices and prevent that someone else modifies or pushes their own updates?
-- What are these certificates that are required for a [connection to Azure IoT Hub](docs/tutorials/azure/connecting-united-manufacturing-hub-with-azure-iot-hub/), an MQTT broker [^MQTT], or any other API?
+- What are these certificates that are required for a [connection to Azure IoT Hub](/docs/tutorials/azure/connecting-united-manufacturing-hub-with-azure-iot-hub/), an MQTT broker [^MQTT], or any other API?
 
 Let's have fun and deep dive in!
 
@@ -32,11 +32,11 @@ Let's have fun and deep dive in!
 
 Let's start with the simpler method of both approaches: symmetric encryption. In cryptography, the field of encryption, methods are always explained using Alice, Bob, and Mallory. All of them (there are way more, see also the [Wikipedia article on Alice and Bob](https://en.wikipedia.org/wiki/Alice_and_Bob)) are fictional characters. Alice usually initiates the communication and wants to send a message to Bob without any third party like Mallory being able to read it.
 
-{{< figure src="./alice-bob-mallory.png" caption="Alice, Bob, and Mallory">}}
+{{< imgproc alice-bob-mallory.png Fit "800x800" >}}Alice, Bob, and Mallory{{< /imgproc >}}
 
 In IoT, Alice could be a Raspberry Pi with a temperature sensor that is trying to send a message to Bob, who is a service running in the cloud. In Industrial IoT, Alice could be A PLC and Bob an Industrial IoT platform.
 
-{{< figure src="./alice-bob-mallory-practically.png" caption="Alice, Bob, and Mallory practically">}}
+{{< imgproc alice-bob-mallory-practically Fit "800x800" >}}Alice, Bob, and Mallory practically{{< /imgproc >}}
 
 Before Alice and Bob can communicate with each other using a symmetric encryption they need to do two things first:
 
@@ -49,7 +49,7 @@ before their first messages, Alice and Bob need to align to use this cipher and 
 
 When Alice wants to send a message to Bob, Alice needs to encrypt the plaintext using the cipher and the secret. For Caesar’s cipher, it works by shifting the alphabet x characters to the right (and x is the chosen number from above, the **secret**). 
 
-{{< figure src="./caesar.png" caption="Caesar’s cipher">}}
+{{< imgproc caesar Fit "800x800" >}}Caesar’s cipher{{< /imgproc >}}
 
 For example, a right shift of 3 is resulting in the replacement of the letter A with D. Alice then sends the encrypted message to Bob. Bob then reverts the encryption by shifting the alphabet x characters back to the left, so a D gets converted back into an A. Now Bob can read the plaintext.
 
@@ -67,7 +67,7 @@ Brute-forcing can also be improved by not checking everything randomly, but by e
 
 So how do you then create good passwords? Several years ago the best practice was to use smaller randomly generated passwords, which should change frequently. But humans are humans and most of them will just add a ! or 1 at the end of the password. So nowadays the recommendation is to go for lengthy and still easy rememberable passwords. `if2s&sd5` is more insecure and way harder to remember than `AlexanderIs25YearsOldAndLikesToHaveHisDeskClean`.
 
-{{< figure src="https://imgs.xkcd.com/comics/password_strength.png" caption="Obligatory xkcd #936">}}
+{{< imgproc password_strength Fit "800x800" >}}Obligatory xkcd: https://xkcd.com/936/{{< /imgproc >}}
 
 But the approach itself, the symmetric encryption with a secret / password, has two fundamental flaws:
 
@@ -118,7 +118,7 @@ But how can Alice ensure that the Public Key is actually from Bob and not from M
 
 A CA is basically just a public-key pair that acts as a trusted instance. It can prove that a public key actually belongs to the person, computer, or website it claims to belong to. It does that by encrypting the public key of Bob with the CA's private key (= Signing). These CA's are mostly preinstalled on your operating system and help you in identifying whether your bank login information is actually send to the bank and not to someone else.
 
-In some instances, it might make sense to create your own Public Key Infrastructure (PKI). [You can find a guide on how to do that for example for MQTT brokers in our documentation](docs/tutorials/general/pki/)
+In some instances, it might make sense to create your own Public Key Infrastructure (PKI). [You can find a guide on how to do that for example for MQTT brokers in our documentation](/docs/tutorials/general/pki/)
 
 ## How it works in IoT 
 
@@ -128,15 +128,11 @@ The main reason for combining both technologies is computing speed. As a comprom
 
 ### HTTPS
 
-You are using these technologies already every day when you are visiting HTTPS websites like the one you are currently on (starts with https://). If you are sending it via HTTP, everyone on the internet can read your messages (see screenshot [^ethical-network]).
+You are using these technologies already every day when you are visiting HTTPS websites like the one you are currently on (starts with https://). If you are sending it via HTTP, everyone on the internet can read your messages (see screenshot).
 
-![Source: Ibrahim Thiyeb, DOI: 10.5815/ijcnis.2018.07.02](Wireshark-Filtering-Showing-Clear-Text-of-user-Name-and-Password.png)
+{{< imgproc Wireshark-Filtering Fit "800x800" >}}Source: Ibrahim Ali Ibrahim Diyeb, Anwar Saif, Nagi Ali Al-Shaibany,"Ethical Network Surveillance using  Packet Sniffing  Tools:  A Comparative  Study",  International Journal  of  Computer Network  and  Information Security(IJCNIS), Vol.10, No.7, pp.12-22, 2018.DOI: 10.5815/ijcnis.2018.07.02 (https://www.researchgate.net/publication/326419957_Ethical_Network_Surveillance_using_Packet_Sniffing_Tools_A_Comparative_Study){{< /imgproc >}}
 
-[^ethical-network]:  Ibrahim Ali Ibrahim Diyeb, Anwar Saif, Nagi Ali Al-Shaibany,"Ethical Network Surveillance using  Packet Sniffing  Tools:  A Comparative  Study",  International Journal  of  Computer Network  and  Information Security(IJCNIS), Vol.10, No.7, pp.12-22, 2018.DOI: 10.5815/ijcnis.2018.07.02 (https://www.researchgate.net/publication/326419957_Ethical_Network_Surveillance_using_Packet_Sniffing_Tools_A_Comparative_Study)
-
-You can verify in your browser by clicking on the security tab. In the attached screenshot we can see for examples while visiting our site that you are using TLS 1.3 in combination with X25519 (asymmetric encryption based on elliptic curves) and AES-128-GCM (symmetric encryption).
-
-![Security overview over our website docs.umh.app at 2021-10-18. Exact algorithms might change based on your browser](https-docs-umh-app.png)
+{{< imgproc https-docs-umh-app.png Fit "800x800">}}Security overview over our website docs.umh.app at 2021-10-18. Exact algorithms might change based on your browser{{< /imgproc >}}
 
 ### Example: MQTT and CA's
 
@@ -171,9 +167,9 @@ Each certificate will be opened in [xca](https://hohnstaedt.de/xca/), which is a
 
 After importing the above certificates xca will look like this:
 
-![XCA certificates](./xca-after-import.png)
+{{< imgproc xca-after-import Fit "800x800" >}}xca certificate section, after importing the above certificates{{< /imgproc >}}
 
-![XCA private keys](./xca-after-import-private.png)
+{{< imgproc xca-after-import-private Fit "800x800" >}}xca private key section, after importing the above certificates{{< /imgproc >}}
 
 #### ca.crt / "Easy-RSA CA"
 
@@ -181,12 +177,12 @@ This is the public-key of the root certificate (also known as root CA). We see t
 
 When opening it in an editor, it will look like gibberish:
 
-![CA.crt in raw format](./ca-raw.png)
+{{< imgproc ca-raw Fit "800x800" >}}ca.crt in raw format{{< /imgproc >}}
 
 After importing it to xca and clicking on it we can see all its details:
 
-![ca.crt](./ca1.png)
-![ca.crt 2](./ca2.png)
+{{< imgproc ca1 Fit "800x800" >}}ca.crt in xca{{< /imgproc >}}
+{{< imgproc ca2 Fit "800x800" >}}ca.crt in xca - extensions{{< /imgproc >}}
 
 This includes:
 
@@ -201,8 +197,9 @@ In the overview panel in xca we see after importing the other certificates, that
 
 This is the public-key of the MQTT server key-pair and you can view the same information as in the certificate above with some exceptions:
 
-![server 1](./server1.png)
-![server 2](./server2.png)
+{{< imgproc server1 Fit "800x800" >}}factorycube-server-vernemq.crt in xca{{< /imgproc >}}
+
+{{< imgproc server2 Fit "800x800" >}}factorycube-server-vernemq.crt in xca - extensions{{< /imgproc >}}
 
 1. It is signed by Easy-RSA CA (see Signature)
 2. It is not a CA and can only sign (but cannot sign other certificates, see `X509v3 Key Usage`)
@@ -212,13 +209,13 @@ This is the public-key of the MQTT server key-pair and you can view the same inf
 
 This is a client key and is only allowed to be used as a client (see `X509v3 Extended Key Usage`).
 
-![client](./client.png)
+{{< imgproc client Fit "800x800" >}}TESTING.crt in xca - extensions{{< /imgproc >}}
 
 #### TESTING.key / "TESTING"
 
 This is the private key for the certificate above.
 
-![private key](./private-key.png)
+{{< imgproc client Fit "800x800" >}}TESTING.key in xca{{< /imgproc >}}
 
 ## Outlook
 
