@@ -14,7 +14,7 @@ func setupKafka(boostrapServer string) (consumer *kafka.Consumer, producer *kafk
 	configMap := kafka.ConfigMap{
 		"bootstrap.servers": boostrapServer,
 		"security.protocol": "plaintext",
-		"group.id":          "mqtt-kafka-bridge",
+		"group.id":          "kafka-to-blob",
 	}
 
 	var err error
@@ -36,11 +36,18 @@ func processKafkaQueue(topic string, bucketName string) {
 		panic(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	blobStoreExecutionTime := 10 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), blobStoreExecutionTime)
 	defer cancel()
 
 	for !ShuttingDown {
-		msg, err := kafkaConsumerClient.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		if minioClient.IsOffline() {
+			zap.S().Warnf("Minio is down")
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		var msg *kafka.Message
+		msg, err = kafkaConsumerClient.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
@@ -51,14 +58,16 @@ func processKafkaQueue(topic string, bucketName string) {
 			}
 		}
 
-		rawImage, err := UnmarshalRawImage(msg.Value)
+		var rawImage RawImage
+		rawImage, err = UnmarshalRawImage(msg.Value)
 		if err != nil {
 			zap.S().Warnf("Invalid rawImage: %s", err)
 			continue
 		}
 
 		uid := rawImage.ImageID
-		imgBytes, err := base64.StdEncoding.DecodeString(rawImage.ImageBytes)
+		var imgBytes []byte
+		imgBytes, err = base64.StdEncoding.DecodeString(rawImage.ImageBytes)
 
 		if err != nil {
 			zap.S().Warnf("Image decoding failed: %s", err)
@@ -66,17 +75,31 @@ func processKafkaQueue(topic string, bucketName string) {
 
 		r := bytes.NewReader(imgBytes)
 		_, err = minioClient.PutObject(ctx, bucketName, uid, r, -1, minio.PutObjectOptions{})
-		if err != nil {
-			zap.S().Warnf("Failed to put item into blob-storage: %s", err)
-			kafkaProducerClient.Produce(&kafka.Message{
-				TopicPartition: kafka.TopicPartition{
-					Topic:     msg.TopicPartition.Topic,
-					Partition: kafka.PartitionAny,
-				},
-				Value: msg.Value,
-			}, nil)
-			time.Sleep(1 * time.Second)
-			continue
+
+		select {
+		case <-time.After(blobStoreExecutionTime):
+			{
+				zap.S().Warnf("Failed to put item into blob-storage: %s", err)
+				kafkaProducerClient.Produce(&kafka.Message{
+					TopicPartition: kafka.TopicPartition{
+						Topic:     msg.TopicPartition.Topic,
+						Partition: kafka.PartitionAny,
+					},
+					Value: msg.Value,
+				}, nil)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+		case <-ctx.Done():
+			{
+				if ctx.Err() != nil && err != context.DeadlineExceeded {
+					zap.S().Warnf("Error writing to blob storage: %s", ctx.Err())
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				zap.S().Infof("Commited to blob storage")
+			}
+
 		}
 	}
 }

@@ -44,6 +44,7 @@ func main() {
 
 	zap.S().Debugf("Start Queue processors")
 	go processKafkaQueue(KafkaTopic, MinioBucketName)
+	go reconnectMinio()
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

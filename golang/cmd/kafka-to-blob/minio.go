@@ -6,6 +6,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
+	"time"
 )
 
 func setupMinio(MinioUrl string, MinioAccessKey string, MinioSecretKey string, MinioSecure bool, MinioBucketName string) (mioClient *minio.Client) {
@@ -28,4 +29,13 @@ func setupMinio(MinioUrl string, MinioAccessKey string, MinioSecretKey string, M
 		panic(fmt.Sprintf("Bucket '%s' does not exist", MinioBucketName))
 	}
 	return
+}
+
+func reconnectMinio() {
+	healthCheck, err := minioClient.HealthCheck(10 * time.Second)
+	if err != nil {
+		zap.S().Warnf("Minio went down")
+	}
+	defer healthCheck()
+
 }
