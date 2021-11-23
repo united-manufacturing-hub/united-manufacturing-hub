@@ -13,7 +13,7 @@ description: >
 
 To extract and pre-process the data from different data sources we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications.
 
-If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a good documentation from Node-RED!
+If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a good documentation.
 
 {{< imgproc nodered Fit "800x800" >}}{{< /imgproc >}}
 
@@ -23,13 +23,13 @@ If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-gu
 
 {{< imgproc nodered_general Fit "800x800" >}}{{< /imgproc >}}
 
-Basically, 3 pieces of information must be communicated to the system. For more information feel free to check [this article](/docs/concepts/mqtt/). 
+Basically, 3 pieces of information need to be sent to the system. For more information feel free to check [this article](/docs/concepts/mqtt/). 
 
-The customer ID to be assigned to the asset: *customerID*
+- The customer ID to be assigned to the asset: *customerID*
 
-The location where the asset is located: *location*
+- The location where the asset is located: *location*
 
-The name of the asset: *AssetID*
+- The name of the asset: *AssetID*
 
 These 3 information must be set to the system via the green configuration Node-RED, so that the data can be assigned exactly to an asset.
 
