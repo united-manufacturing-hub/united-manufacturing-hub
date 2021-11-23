@@ -1,6 +1,6 @@
-<head>
-    <meta http-equiv="refresh" content="0; url=/docs" />
-</head>
+{{ define "html" }}
+{{ with .GetPage "/docs" }}{{.Render}}{{end}}
+{{ end }}
 <!--
 +++
 title = "Documentation of the United Manufacturing Hub"
