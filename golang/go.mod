@@ -17,6 +17,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rung/go-safecast v1.0.1
+	github.com/sbinet/go-gnuplot v0.0.0-20130514120836-9167d8eb1ac4
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.29.1+incompatible
 	go.uber.org/zap v1.19.1
