@@ -39,3 +39,7 @@ func GetBackoffTime(retries int64, slotTime time.Duration, maximum time.Duration
 	}
 	return backoff
 }
+
+func SleepBackedOff(retries int64, slotTime time.Duration, maximum time.Duration) {
+	time.Sleep(GetBackoffTime(retries, slotTime, maximum))
+}
