@@ -32,11 +32,11 @@ Let's have fun and deep dive in!
 
 Let's start with the simpler method of both approaches: symmetric encryption. In cryptography, the field of encryption, methods are always explained using Alice, Bob, and Mallory. All of them (there are way more, see also the [Wikipedia article on Alice and Bob](https://en.wikipedia.org/wiki/Alice_and_Bob)) are fictional characters. Alice usually initiates the communication and wants to send a message to Bob without any third party like Mallory being able to read it.
 
-![Alice, Bob, and Mallory](alice-bob-mallory.png)
+{{< figure src="./alice-bob-mallory.png" title="Alice, Bob, and Mallory">}}
 
 In IoT, Alice could be a Raspberry Pi with a temperature sensor that is trying to send a message to Bob, who is a service running in the cloud. In Industrial IoT, Alice could be A PLC and Bob an Industrial IoT platform.
 
-![Alice, Bob, and Mallory practically](alice-bob-mallory-practically.png)
+{{< figure src="./alice-bob-mallory-practically.png" title="Alice, Bob, and Mallory practically">}}
 
 Before Alice and Bob can communicate with each other using a symmetric encryption they need to do two things first:
 
@@ -49,7 +49,7 @@ before their first messages, Alice and Bob need to align to use this cipher and 
 
 When Alice wants to send a message to Bob, Alice needs to encrypt the plaintext using the cipher and the secret. For Caesar’s cipher, it works by shifting the alphabet x characters to the right (and x is the chosen number from above, the **secret**). 
 
-![Caesar’s cipher](caesar.png)
+{{< figure src="./caesar.png" title="Caesar’s cipher">}}
 
 For example, a right shift of 3 is resulting in the replacement of the letter A with D. Alice then sends the encrypted message to Bob. Bob then reverts the encryption by shifting the alphabet x characters back to the left, so a D gets converted back into an A. Now Bob can read the plaintext.
 
@@ -67,7 +67,7 @@ Brute-forcing can also be improved by not checking everything randomly, but by e
 
 So how do you then create good passwords? Several years ago the best practice was to use smaller randomly generated passwords, which should change frequently. But humans are humans and most of them will just add a ! or 1 at the end of the password. So nowadays the recommendation is to go for lengthy and still easy rememberable passwords. `if2s&sd5` is more insecure and way harder to remember than `AlexanderIs25YearsOldAndLikesToHaveHisDeskClean`.
 
-![Obligatory xkcd #936](https://imgs.xkcd.com/comics/password_strength.png)
+{{< figure src="https://imgs.xkcd.com/comics/password_strength.png" title="Obligatory xkcd #936">}}
 
 But the approach itself, the symmetric encryption with a secret / password, has two fundamental flaws:
 
@@ -122,14 +122,9 @@ In some instances, it might make sense to create your own Public Key Infrastruct
 
 ## How it works in IoT 
 
-Practically, symmetric and asymmetric encryptions are used in parallel and combined with more advanced security topics like for example Diffie-Hellmann-Key-Exchange or Hashing.
-
-{{< youtube NmM9HA2MQGI >}}
-
-{{< youtube b4b8ktEV4Bg >}}
+Practically, symmetric and asymmetric encryptions are used in parallel and combined with more advanced security topics like for example Diffie-Hellmann-Key-Exchange or Hashing. For more information on these advanced topics we can recommend to watch the YouTube videos from Computerphile ([Diffie-Hellmann-Key-Exchange](https://www.youtube.com/watch?v=NmM9HA2MQGI) and [Hashing](https://www.youtube.com/watch?v=b4b8ktEV4Bg))
 
 The main reason for combining both technologies is computing speed. As a compromise, often a secret is generated and then shared between both parties using a (slow) asymmetric encryption. All the remaining messages are then encrypted using (fast) symmetric encryptions.
-
 
 ### HTTPS
 
@@ -174,9 +169,7 @@ Let's deep dive into 4 different certificates, to understand the structure of a 
 
 Each certificate will be opened in [xca](https://hohnstaedt.de/xca/), which is a graphical tool for creating and managing a PKI.
 
-![XCA](./xca.png)
-
-After importing the above certificates it will look like this:
+After importing the above certificates xca will look like this:
 
 ![XCA certificates](./xca-after-import.png)
 
