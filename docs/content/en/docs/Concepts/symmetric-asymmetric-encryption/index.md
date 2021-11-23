@@ -2,7 +2,7 @@
 title: "An introduction into certificates and secure communication in IoT for normal people"
 linkTitle: "Public-Key-Infrastructure"
 aliases:
-    - /docs/tutorials/symmetric-asymmetric-encryption
+    - /docs/tutorials/general/symmetric-asymmetric-encryption
 description: >
   This article explains the two fundamental approaches to encrypting your messages with your IoT devices, from passwords (symmetric) to certificates (asymmetric).
 ---
