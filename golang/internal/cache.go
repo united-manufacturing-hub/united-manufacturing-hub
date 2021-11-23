@@ -727,6 +727,7 @@ func GetTiered(key string) (cached bool, value interface{}) {
 	//Check if in memCache
 	value, cached = memCache.Get(key)
 	if cached {
+		zap.S().Infof("Found in memcache")
 		return
 	}
 
@@ -734,9 +735,11 @@ func GetTiered(key string) (cached bool, value interface{}) {
 	//Check if in redis
 	value, err = rdb.Get(ctx, key).Bytes()
 	if err != nil {
+		zap.S().Infof("Not found in redis")
 		return false, nil
 	}
 	cached = true
+	zap.S().Infof("Found in redis")
 
 	//Write back to memCache
 	memCache.SetDefault(key, value)
