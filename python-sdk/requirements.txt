@@ -1,4 +1,0 @@
-setuptools
-wheel
-paho-mqtt
-pandas
