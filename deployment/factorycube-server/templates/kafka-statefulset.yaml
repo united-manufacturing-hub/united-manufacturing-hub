@@ -1,0 +1,49 @@
+{{- if .Values.kafka.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "factorycube-server.fullname" . }}-kafka
+  labels:
+     {{- include "factorycube-server.labels.kafka" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.kafka.replicas }}
+  serviceName: kafkaql
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ include "factorycube-server.fullname" . }}-kafka-data
+        finalizers:
+          - kubernetes.io/pvc-protection
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+         requests:
+            storage: {{ .Values.kafka.storageRequest }}
+  selector:
+    matchLabels:
+      name: {{ include "factorycube-server.fullname" . }}-kafka
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{ include "factorycube-server.fullname" . }}-kafka
+        {{- include "factorycube-server.labels.kafka" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 180
+      containers:
+        - name: {{ include "factorycube-server.fullname" . }}-kafka
+          {{- if .Values.kafka.image.tag }}
+          image: {{ .Values.kafka.image.repository }}:{{ .Values.kafka.image.tag }}
+          {{- else }}
+          image: {{ .Values.kafka.image.repository }}:{{ .Chart.AppVersion }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.kafka.image.pullPolicy}}
+          volumeMounts:
+          - name: {{ include "factorycube-server.fullname" . }}-kafka-data
+            mountPath: /bitnami/kafka
+          resources: {}
+      serviceAccountName: ""
+      restartPolicy: Always
+{{- end -}}
+
