@@ -48,3 +48,7 @@ dependencies:
     version: 4.1.7
     repository: https://operator.min.io/
     condition: minio-operator.enabled
+  - name: kafka
+    version: 14.4.1
+    repository: https://charts.bitnami.com/bitnami
+    condition: kafka.enabled
