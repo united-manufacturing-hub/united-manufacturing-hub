@@ -2295,9 +2295,8 @@ vernemq:
 mqttkafkabridge:
   enabled: true
   image:
-    repository: scarjit/mqtt-kafka-bridge
+    repository: unitedmanufacturinghub/mqtt-kafka-bridge
     pullPolicy: Always
-    tag: testing
   replicas: 1
   pdb:
     enabled: true
