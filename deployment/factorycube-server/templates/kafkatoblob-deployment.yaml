@@ -48,7 +48,7 @@ spec:
               value: {{ include "factorycube-server.fullname" . }}-kafka-local-service:1883
 
             - name: KAFKA_LISTEN_TOPIC
-              value: "^ia\..+\.rawImage"
+              value: "^ia\\..+\\.rawImage"
 
             - name: BUCKET_NAME
               value: "umh"
