@@ -2295,9 +2295,8 @@ vernemq:
 kafkatoblob:
   enabled: true
   image:
-    repository: scarjit/kafka-to-blob
-    pullPolicy: Always
-    tag: testing
+    repository: unitedmanufacturinghub/kafka-to-blob
+    pullPolicy: IfNotPresent
   replicas: 1
   pdb:
     enabled: true
