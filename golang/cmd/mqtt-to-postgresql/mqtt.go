@@ -80,7 +80,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		case Unrecoverable:
 			ShutdownApplicationGraceful()
 		case TryAgain:
-			storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, payloadType)
+			storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, payloadType, 0)
 		case DiscardValue:
 			// Discarding value, by doing nothing
 		}
@@ -95,69 +95,69 @@ func processMessage(customerID string, location string, assetID string, payloadT
 
 		switch payloadType {
 		case Prefix.State:
-			stateHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			stateHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 		case Prefix.ProcessValue:
-			valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 		//TODO is still still needed ?
 		case "processvalue":
 			{
 				zap.S().Warnf("Deprecated")
-				valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
+				valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 			}
 		case Prefix.ProcessValueString:
-			valueStringHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			valueStringHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 		case Prefix.Count:
-			countHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			countHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 		case Prefix.ScrapCount:
-			scrapCountHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			scrapCountHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.Recommendation:
-			recommendationDataHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			recommendationDataHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.AddShift:
-			addShiftHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			addShiftHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.AddMaintenanceActivity:
-			maintenanceActivityHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			maintenanceActivityHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.UniqueProduct:
-			uniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			uniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.UniqueProductScrap:
-			scrapUniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			scrapUniqueProductHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.AddProduct:
-			addProductHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			addProductHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.AddOrder:
-			addOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			addOrderHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.StartOrder:
-			startOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			startOrderHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.EndOrder:
-			endOrderHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			endOrderHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.ProductTag:
-			productTagHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			productTagHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.ProductTagString:
-			productTagStringHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			productTagStringHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.AddParentToChild:
-			addParentToChildHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			addParentToChildHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.ModifyState:
-			modifyStateHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			modifyStateHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.DeleteShiftById:
-			deleteShiftByIdHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			deleteShiftByIdHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-			deleteShiftByAssetIdAndBeginTimestampHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			deleteShiftByAssetIdAndBeginTimestampHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		case Prefix.ModifyProducesPieces:
-			modifyProducedPieceHandler.EnqueueMQTT(customerID, location, assetID, payload)
+			modifyProducedPieceHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		default:
 			zap.S().Warnf("Unknown Prefix: %s", payloadType)

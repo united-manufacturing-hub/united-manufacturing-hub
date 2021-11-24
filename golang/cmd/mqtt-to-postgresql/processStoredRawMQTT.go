@@ -130,7 +130,7 @@ type mqttMessage struct {
 	Prefix     string
 }
 
-func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, prefix string) {
+func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, prefix string, recursionDepth int64) {
 	zap.S().Debugf("[StoredRawMQTTHandler]")
 	var marshal []byte
 
