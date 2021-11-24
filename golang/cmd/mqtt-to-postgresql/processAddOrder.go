@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/beeker1121/goque"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"math"
 	"time"
 )
 
@@ -60,6 +60,7 @@ func (r AddOrderHandler) Setup() {
 }
 func (r AddOrderHandler) process() {
 	var items []*goque.PriorityItem
+	loopsWithError := int64(0)
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
@@ -86,7 +87,14 @@ func (r AddOrderHandler) process() {
 				ShutdownApplicationGraceful()
 			}
 		}
-		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
+
+		if err != nil || len(faultyItems) > 0 {
+			loopsWithError += 1
+		} else {
+			loopsWithError = 0
+		}
+
+		internal.SleepBackedOff(loopsWithError, 10000*time.Nanosecond, 1000*time.Millisecond)
 	}
 }
 
@@ -125,7 +133,7 @@ func (r AddOrderHandler) Shutdown() (err error) {
 	return
 }
 
-func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte) {
+func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, recursionDepth int64) {
 	zap.S().Debugf("[AddOrderHandler]")
 	var parsedPayload addOrder
 
@@ -135,20 +143,20 @@ func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID
 		return
 	}
 
-	DBassetID, success := GetAssetID(customerID, location, assetID)
+	DBassetID, success := GetAssetID(customerID, location, assetID, 0)
 	var productID int32
 	if success {
-		productID, err, success = GetProductID(DBassetID, parsedPayload.ProductName)
+		productID, err, success = GetProductID(DBassetID, parsedPayload.ProductName, 0)
 	}
 
 	if err == sql.ErrNoRows || !success {
 		zap.S().Errorf("Failed to AddOrder", DBassetID, parsedPayload.ProductName, parsedPayload.OrderName)
 		go func() {
 			if r.shutdown {
-				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder)
+				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder, recursionDepth+1)
 			} else {
-				time.Sleep(1 * time.Second)
-				r.EnqueueMQTT(customerID, location, assetID, payload)
+				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
+				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)
 			}
 		}()
 		return

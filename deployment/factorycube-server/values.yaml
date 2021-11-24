@@ -2301,3 +2301,39 @@ mqttkafkabridge:
   pdb:
     enabled: true
     minAvailable: 1
+    
+##### CONFIG FOR APACHE KAFKA #####
+kafka:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnami/kafka
+    tag: 2.8.1-debian-10-r31
+    pullPolicy: IfNotPresent
+    pullSecrets: [ ]
+    debug: false
+  replicas: 1
+  storageRequest: 1Gi
+  service:
+    type: ClusterIP
+    port: 9092
+    internalPort: 9093
+    externalPort: 9094
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    mountPath: /bitnami/kafka
+  logPersistence:
+    enabled: false
+  provisioning:
+    enabled: false
+    numPartitions: 1
+    replicationFactor: 1
+  zookeeper:
+    enabled: true
+    auth:
+      enabled: false
+  externalZookeeper:
+    servers: [ ]
