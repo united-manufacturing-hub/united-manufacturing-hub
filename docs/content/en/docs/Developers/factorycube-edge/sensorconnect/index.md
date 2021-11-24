@@ -50,7 +50,7 @@ Example value: 2021-0156
 
 ### IP_RANGE
 
-**Description:** The IP range to search for ifm gateways
+**Description:** The IP range to search for ifm gateways. You can specify the IP-Range by accessing the stack via Lens and changing under apps --> releases the configuration under sensorconnect.iprange
 
 **Type:** string
 
@@ -64,9 +64,9 @@ Example value: 2021-0156
 Sensorconnect is based on IO-Link. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce.
 Those contain information, e.g. necessary to correctly interpret data from the devices. They are in XML-format. Sensorconnect will try to download relevant IODD files automatically after installation from the IODDfinder (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
 
-Sensorconnect will scan for ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range.
+Sensorconnect will scan all 10 seconds for new ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range ("http://"+url, `payload`, timeout=0.1). It stores the ip-Adresses, with the productcodes (*the types of the devices*) and the individual serialnumbers.
 
-**Scanning with following payload:**
+**Scanning with following `payload`:**
 ```JSON
 {
   "code":"request",
@@ -80,7 +80,7 @@ Sensorconnect will scan for ifm gateways (used to connect the IO-Link devices to
 }
 ```
 
-After all gateways are detected (ip-Adresses, with the productcode (*the type of the device*) and the individual serialnumber), all port modes of the connected gateways are requested. Depending on the productcode, we can determine the total number of ports on the gateway and iterate through them. 
+All port modes of the connected gateways are requested every 10 seconds. Depending on the productcode, we can determine the total number of ports on the gateway and iterate through them. 
 **Requesting port modes with following payload:**
 ```JSON
 {
@@ -100,8 +100,7 @@ If the mode == 1: port_mode = "DI" (Digital Input)
 If the mode == 2: port_mode = "DO" (Digital output)
 If the mode == 3: port_mode = "IO_Link"
 
-Now the values are getting requested.
-
+All values of accessible ports are requested as fast as possible (ifm gateways are by far the bottleneck in comparison to the networking).
 **Requesting values with following payload:**
 ```JSON
 {
@@ -114,7 +113,7 @@ Now the values are getting requested.
       "/iolinkmaster/port[1]/iolinkdevice/pdin",
       "/iolinkmaster/port[1]/iolinkdevice/vendorid",
       "/iolinkmaster/port[1]/pin2in",
-      "/iolinkmaster/port[<i>]/iolinkdevice/deviceid",//looping through all ports on gateway, add new lines in datatosend for all ports
+      "/iolinkmaster/port[<i>]/iolinkdevice/deviceid",//looping through all connected ports on gateway
       "/iolinkmaster/port[<i>]/iolinkdevice/pdin",
       "/iolinkmaster/port[<i>]/iolinkdevice/vendorid",
       "/iolinkmaster/port[<i>]/pin2in"
