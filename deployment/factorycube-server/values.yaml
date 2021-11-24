@@ -2297,6 +2297,13 @@ mqttkafkabridge:
   image:
     repository: unitedmanufacturinghub/mqtt-kafka-bridge
     pullPolicy: Always
+    
+### kafka-to-blob ###
+kafkatoblob:
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/kafka-to-blob
+    pullPolicy: IfNotPresent
   replicas: 1
   pdb:
     enabled: true
