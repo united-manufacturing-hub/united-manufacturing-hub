@@ -1,5 +1,7 @@
 package main
 
+// This package displays all Kafka messages, useful for debugging the stack
+
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"

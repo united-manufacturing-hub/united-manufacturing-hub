@@ -36,7 +36,7 @@ func closeQueue(pq *goque.Queue) (err error) {
 func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	// Prevents recursion
 	if !CheckIfNewMessageOrStore(message) {
-		zap.S().Infof("Message is old !")
+		zap.S().Debugf("Message is old !")
 		return
 	}
 	storeMessageIntoQueue(topic, message, pq)
@@ -53,12 +53,12 @@ func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 		zap.S().Errorf("Error enqueuing", err)
 		return
 	}
-	zap.S().Infof("Stored message in queue", pq)
+	zap.S().Debugf("Stored message in queue", pq)
 }
 
 func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error) {
 	if pq.Length() == 0 {
-		zap.S().Infof("pq.Length == 0")
+		zap.S().Debugf("pq.Length == 0")
 		return
 	}
 	var item *goque.Item
