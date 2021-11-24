@@ -2297,6 +2297,9 @@ mqttkafkabridge:
   image:
     repository: unitedmanufacturinghub/mqtt-kafka-bridge
     pullPolicy: Always
+  pdb:
+    enabled: true
+    minAvailable: 1
     
 ### kafka-to-blob ###
 kafkatoblob:
