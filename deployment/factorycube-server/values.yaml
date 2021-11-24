@@ -2290,3 +2290,15 @@ vernemq:
     updateStrategy: RollingUpdate
   tolerations: []
 
+
+### mqtt-kafka-bridge ###
+mqttkafkabridge:
+  enabled: true
+  image:
+    repository: scarjit/mqtt-kafka-bridge
+    pullPolicy: Always
+    tag: testing
+  replicas: 1
+  pdb:
+    enabled: true
+    minAvailable: 1
