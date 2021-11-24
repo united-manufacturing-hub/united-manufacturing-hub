@@ -9,9 +9,9 @@ description: >
 
 ## 1. Extract data using factorycube-edge
 
-**The basic approach for data processing on the local hardware is to extract data from various data sources (OPC/UA, MQTT, Rest), extract the important information, and then make it available to the United Manufacturing Hub via a predefined interface (MQTT). For this data processing on the local hardware we use Node-RED.**
+**The basic approach for data processing on the local hardware is to extract data from various data sources (OPC/UA, MQTT, Rest), extract the important information, and then make it available to the United Manufacturing Hub via a predefined interface (MQTT).**
 
-To extract and pre-process the data from different data sources we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications.
+**To extract and pre-process the data from different data sources we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications.**
 
 If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a good documentation.
 
