@@ -61,6 +61,8 @@ Example value: 2021-0156
 ## Underlying Functionality
 *We are right now rewriting sensorconnect &rarr; the following paragraph might not be fully implemented yet!*
 
+{{< imgproc sensorconnectOverviewImage Fit "2026x1211" >}}{{< /imgproc >}}
+
 Sensorconnect is based on IO-Link. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce.
 Those contain information, e.g. necessary to correctly interpret data from the devices. They are in XML-format. Sensorconnect will try to download relevant IODD files automatically after installation from the IODDfinder (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
 
@@ -101,7 +103,7 @@ If the mode == 2: port_mode = "DO" (Digital output)
 If the mode == 3: port_mode = "IO_Link"
 
 All values of accessible ports are requested as fast as possible (ifm gateways are by far the bottleneck in comparison to the networking).
-**Requesting values with following payload:**
+**Requesting IO_Link port values with following payload:**
 ```JSON
 {
   "code":"request",
@@ -121,9 +123,11 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
   }
 }
 ```
+*TODO: Add request for DI an DO ports!!!*
+
 
 Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
 
-Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker.
+Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker. The format from sensorconnect is described in detail and with examples in the Datamodel website. 
 
 
