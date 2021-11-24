@@ -1,0 +1,15 @@
+{{- if .Values.kafkatoblob.enabled -}}
+{{- if .Values.kafkatoblob.pdb.enabled -}}
+
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "factorycube-server.fullname" . }}-kafkatoblob-pdb
+spec:
+  minAvailable: {{ .Values.kafkatoblob.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      name: {{ include "factorycube-server.fullname" . }}-kafkatoblob
+
+{{- end -}}
+{{- end -}}
