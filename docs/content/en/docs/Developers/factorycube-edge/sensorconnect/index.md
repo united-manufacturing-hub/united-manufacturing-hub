@@ -128,6 +128,4 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
 
 Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
 
-Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker. The format from sensorconnect is described in detail and with examples in the Datamodel website. 
-
-
+Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker. The format from sensorconnect is described in detail and with examples on the [UMH-Datamodel website](/docs/concepts/mqtt/).
