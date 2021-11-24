@@ -57,3 +57,30 @@ Example value: 2021-0156
 **Possible values:** All subnets in [CIDR notation](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)
 
 **Example value:** 172.16.0.0/24
+
+## Underlying Functionality
+*We are right now rewriting sensorconnect, the following paragraph might not be fully implemented yet*
+Sensorconnect is based on IO-Link. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce.
+Those contain information, e.g. necessary to correctly interpret data from the devices. They are in XML-format. Sensorconnect will try to download relevant IODD files automatically after installation from the IODDfinder (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
+
+Sensorconnect will scan for ifm gateways (used to connect the IO-Link devices to) and request the current modes from their REST-API's. 
+```.js
+{
+  "code":"request",
+  "cid":-1,
+  "adr":"/getdatamulti",
+  "data":{
+    "datatosend":[
+      "/iolinkmaster/port[1]/mode",
+      "/iolinkmaster/port<n>/mode" //going through all ports on gateway
+      ]
+    }
+}
+```
+
+
+Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
+
+Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker.
+
+
