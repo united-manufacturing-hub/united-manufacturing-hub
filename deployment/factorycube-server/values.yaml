@@ -2321,6 +2321,7 @@ kafka:
     debug: false
   replicas: 1
   storageRequest: 1Gi
+  allowPlaintextListener: true
   service:
     type: ClusterIP
     port: 9092
@@ -2344,3 +2345,4 @@ kafka:
       enabled: false
   externalZookeeper:
     servers: [ ]
+
