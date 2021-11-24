@@ -59,12 +59,30 @@ Example value: 2021-0156
 **Example value:** 172.16.0.0/24
 
 ## Underlying Functionality
-*We are right now rewriting sensorconnect, the following paragraph might not be fully implemented yet*
+*We are right now rewriting sensorconnect &rarr; the following paragraph might not be fully implemented yet!*
+
 Sensorconnect is based on IO-Link. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce.
 Those contain information, e.g. necessary to correctly interpret data from the devices. They are in XML-format. Sensorconnect will try to download relevant IODD files automatically after installation from the IODDfinder (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
 
-Sensorconnect will scan for ifm gateways (used to connect the IO-Link devices to) and request the current modes from their REST-API's. 
-```.js
+Sensorconnect will scan for ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range.
+
+**Scanning with following payload:**
+```JSON
+{
+  "code":"request",
+  "cid":-1,
+  "adr":"/getdatamulti",
+  "data":{
+    "datatosend":[
+      "/deviceinfo/serialnumber/","/deviceinfo/productcode/"
+      ]
+    }
+}
+```
+
+After all gateways are detected (ip-Adresses, with the productcode (*the type of the device*) and the individual serialnumber), all port modes of the connected gateways are requested. Depending on the productcode, we can determine the total number of ports on the gateway and iterate through them. 
+**Requesting port modes with following payload:**
+```JSON
 {
   "code":"request",
   "cid":-1,
@@ -72,12 +90,38 @@ Sensorconnect will scan for ifm gateways (used to connect the IO-Link devices to
   "data":{
     "datatosend":[
       "/iolinkmaster/port[1]/mode",
-      "/iolinkmaster/port<n>/mode" //going through all ports on gateway
+      "/iolinkmaster/port<i>/mode" //looping through all ports on gateway
       ]
     }
 }
 ```
 
+If the mode == 1: port_mode = "DI" (Digital Input)
+If the mode == 2: port_mode = "DO" (Digital output)
+If the mode == 3: port_mode = "IO_Link"
+
+Now the values are getting requested.
+
+**Requesting values with following payload:**
+```JSON
+{
+  "code":"request",
+  "cid":-1,
+  "adr":"/getdatamulti",
+  "data":{
+    "datatosend":[
+      "/iolinkmaster/port[1]/iolinkdevice/deviceid",
+      "/iolinkmaster/port[1]/iolinkdevice/pdin",
+      "/iolinkmaster/port[1]/iolinkdevice/vendorid",
+      "/iolinkmaster/port[1]/pin2in",
+      "/iolinkmaster/port[<i>]/iolinkdevice/deviceid",//looping through all ports on gateway, add new lines in datatosend for all ports
+      "/iolinkmaster/port[<i>]/iolinkdevice/pdin",
+      "/iolinkmaster/port[<i>]/iolinkdevice/vendorid",
+      "/iolinkmaster/port[<i>]/pin2in"
+      ]
+  }
+}
+```
 
 Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
 
