@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-kafka
+  name: {{ include "factorycube-server.fullname" . }}-statefulset-kafka
   labels:
      {{- include "factorycube-server.labels.kafka" . | nindent 4 }}
 spec:
