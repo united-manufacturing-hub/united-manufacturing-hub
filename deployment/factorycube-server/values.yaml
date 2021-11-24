@@ -2290,3 +2290,15 @@ vernemq:
     updateStrategy: RollingUpdate
   tolerations: []
 
+
+### kafka-to-blob ###
+kafkatoblob:
+  enabled: true
+  image:
+    repository: scarjit/kafka-to-blob
+    pullPolicy: Always
+    tag: testing
+  replicas: 1
+  pdb:
+    enabled: true
+    minAvailable: 1
