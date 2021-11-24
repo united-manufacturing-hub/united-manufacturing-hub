@@ -2291,6 +2291,13 @@ vernemq:
   tolerations: []
 
 
+### mqtt-kafka-bridge ###
+mqttkafkabridge:
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/mqtt-kafka-bridge
+    pullPolicy: Always
+    
 ### kafka-to-blob ###
 kafkatoblob:
   enabled: true
