@@ -1,4 +1,12 @@
+"""
+This file provides logging related utilities
+"""
+
+
 class Colors:
+    """
+    This class provides escape codes for colored terminal output
+    """
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -11,6 +19,10 @@ class Colors:
 
 
 class Log:
+    """
+    This class provides colored stdout logging
+    """
+
     @staticmethod
     def log(text: str, color: str):
         print(f"{color}{text}{Colors.ENDC}")

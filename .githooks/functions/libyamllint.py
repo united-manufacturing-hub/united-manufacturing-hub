@@ -1,3 +1,6 @@
+"""
+This file provides yaml linting and lint reporting
+"""
 import json
 import re
 from pathlib import Path
@@ -13,6 +16,9 @@ from .log import Log
 
 
 class LibYamlLint(LibInterface):
+    """
+    This class executes yamllint on changed files and reports its findings
+    """
     config: YamlLintConfig
     yaml_files: list
     allowed_lints: list[str]
@@ -21,10 +27,16 @@ class LibYamlLint(LibInterface):
     lints: dict
 
     def __init__(self):
+        """
+        Initializes config parameters and gets changed files
+        """
         self.config = YamlLintConfig('extends: default')
         self.lintstr_regex = re.compile(r"\([\w|-]+\)$")
         self.lints = dict()
 
+        # Check if current branch has upstream
+        # If so, only include changed yaml files
+        # If not check all yaml files
         if Git.has_upstream():
             self.yaml_files = []
             changes = Git.get_committed_changes()
@@ -34,12 +46,17 @@ class LibYamlLint(LibInterface):
         else:
             self.yaml_files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
 
+        # Loads config to allow some lint rules
         with open(f"{Git.get_repository_root()}/.githooks/config.json") as cfg_file:
             cfg = json.load(cfg_file)
             self.allowed_lints = cfg["yamllint"]["allow"]
             self.warn_lints = cfg["yamllint"]["warn"]
 
     def get_lint_type_from_str(self, lintstr: str) -> str:
+        """
+        :param lintstr: Output lint from yamllint
+        :return: lint rule (https://yamllint.readthedocs.io/en/stable/rules.html)
+        """
         _type = self.lintstr_regex.findall(lintstr)
         if len(_type) != 1:
             Log.warn(f"Failed to find lint type for '{lintstr}'")
@@ -47,6 +64,11 @@ class LibYamlLint(LibInterface):
         return _type
 
     def check(self):
+        """
+        Applies yamllint to all yaml files that should be checked
+        and parses the output into an dict easier handling
+        :return:
+        """
         ly = len(self.yaml_files)
         if ly == 0:
             Log.info("No yaml files to check")
@@ -79,6 +101,10 @@ class LibYamlLint(LibInterface):
         pb.finish()
 
     def report(self) -> int:
+        """
+        Prints results of lint checking in an formatted way.
+        :return: number of errors found
+        """
         if len(self.yaml_files) == 0:
             return 0
         errors = 0
@@ -118,5 +144,9 @@ class LibYamlLint(LibInterface):
         return errors
 
     def run(self):
+        """
+        Runs check & report
+        :return: reports return value
+        """
         self.check()
         return self.report()

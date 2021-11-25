@@ -1,3 +1,6 @@
+"""
+This file provides helm linting and lint reporting
+"""
 import subprocess
 from pathlib import Path
 
@@ -12,8 +15,17 @@ class LibHelmLint(LibInterface):
     lints: dict
 
     def __init__(self):
+        """
+        This class executes helm lint on changed files and reports its findings
+        """
+        """
+        Initializes config parameters and gets changed files
+        """
         self.chart_files = []
 
+        # Check if current branch has upstream
+        # If so, only include changed Charts
+        # If not check all Charts
         if Git.has_upstream():
             self.chart_files = []
             changes = Git.get_committed_changes()
@@ -27,6 +39,11 @@ class LibHelmLint(LibInterface):
         self.lints = dict()
 
     def check(self):
+        """
+        Applies helm lint to all Chart.yaml files that should be checked
+        and parses the output into an dict easier handling
+        :return:
+        """
         ly = len(self.chart_files)
         if ly == 0:
             Log.info("No helm charts to check")
@@ -57,6 +74,10 @@ class LibHelmLint(LibInterface):
         pb.finish()
 
     def report(self) -> int:
+        """
+        Prints results of lint checking in an formatted way.
+        :return: number of errors found
+        """
         if len(self.chart_files) == 0:
             return 0
         errors = 0
@@ -92,5 +113,9 @@ class LibHelmLint(LibInterface):
         return errors
 
     def run(self):
+        """
+        Runs check & report
+        :return: reports return value
+        """
         self.check()
         return self.report()
