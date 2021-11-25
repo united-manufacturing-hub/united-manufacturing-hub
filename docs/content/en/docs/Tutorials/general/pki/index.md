@@ -11,6 +11,7 @@ description: >
 ## Prerequisites
 
 - Installed easy-rsa (https://github.com/OpenVPN/easy-rsa)
+- basic knowledge about public key infrastructure. [We recommend reading our article first](/docs/Concepts/symmetric-asymmetric-encryption)
 
 This tutorial is assuming zou are using ubuntu and have installed easy-rsa using `sudo apt-get install easyrsa`
 
