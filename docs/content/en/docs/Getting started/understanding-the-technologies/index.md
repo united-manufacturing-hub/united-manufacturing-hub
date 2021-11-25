@@ -10,7 +10,7 @@ The materials presented below are usually teached in a 2-3 h workshop session on
 
 ## Introduction into IT / OT
 
-The goal of this chapter is to create a common ground on IT / IT technologies and review best-practices for using IIoT technologies. The target group are people coming from IT, OT and engineering.
+The goal of this chapter is to create a common ground on IT / OT technologies and review best-practices for using IIoT technologies. The target group are people coming from IT, OT and engineering.
 
 ### Introduction
 
@@ -22,7 +22,7 @@ The goal of this chapter is to create a common ground on IT / IT technologies an
 
 #### OT connects own set of various technologies to create highly reliable and stable machines
 
-OT is the hardware and software to manage, monitor and control industrial operations. It tasks range from monitoring critical assets to controlling robots on the shopfloor. It basically keeps machines and factories running and producing the required product.
+OT is the hardware and software to manage, monitor and control industrial operations. Its tasks range from monitoring critical assets to controlling robots on the shopfloor. It basically keeps machines and factories running and producing the required product.
 
 ##### Typical responsibilities:
 - Monitoring processes to ensure best product quality
@@ -81,7 +81,7 @@ OT is the hardware and software to manage, monitor and control industrial operat
 
 #### Fundamentals 1: Programmable Logic Controller (PLC)
 
-The Programmable Logic Controller (PLC) is the heart of every modern machine, which stores and runs the program. It is an PC with industrial standards and does not require monitor, keyboard or other devices to function properly. It collects sensor data and calculates complex algorithms to control actuators.
+The Programmable Logic Controller (PLC) is the heart of every modern machine, which stores and runs the program. It is a PC with industrial standards and does not require a monitor, keyboard or other devices to function properly. It collects sensor data and calculates complex algorithms to control actuators.
 
 ##### Background:
 - Very old machines use only relays (electric switches) to control actuators and sensors
@@ -109,7 +109,7 @@ The Programmable Logic Controller (PLC) is the heart of every modern machine, wh
 
 #### IT connects millions of devices and manages their data flows
 
-IT is the hardware and software to connect thousands of devices in a network and manage their exchange of information. The purpose is to enable data storage and its usage for business and operations. Task range from connecting simple telephones to managing complex global networks.
+IT is the hardware and software to connect thousands of devices in a network and manage their exchange of information. The purpose is to enable data storage and its usage for business and operations. Tasks range from connecting simple telephones to managing complex global networks.
 
 ##### Typical responsibilities:
 - Setting up phones, PCs, printers and other office hardware

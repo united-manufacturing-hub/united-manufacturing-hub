@@ -131,7 +131,7 @@ For this open Lens, select Apps on the left side and then click on Releases. A R
 ### using CLI / kubectl in Lens
 
 To override single entries in values.yaml you can use the `--set` command, for example like this:
-`helm update factorycube-edge . --namespace factorycube-edge --set nodered.env.NODE_RED_ENABLE_SAFE_MODE=true`
+`helm upgrade factorycube-edge . --namespace factorycube-edge --set nodered.env.NODE_RED_ENABLE_SAFE_MODE=true`
 
 ## Troubleshooting
 
