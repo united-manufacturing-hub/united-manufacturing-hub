@@ -38,9 +38,6 @@ spec:
           {{- else }}
           image: {{ .Values.kafka.image.repository }}:{{ .Chart.AppVersion }}
           {{- end }}
-          env:
-            - name: ALLOW_PLAINTEXT_LISTENER
-              value:  {{ .Values.kafka.allowPlaintextListener }}
           imagePullPolicy: {{ .Values.kafka.image.pullPolicy}}
           volumeMounts:
           - name: {{ include "factorycube-server.fullname" . }}-kafka-data
