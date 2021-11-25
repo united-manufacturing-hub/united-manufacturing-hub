@@ -97,11 +97,11 @@ class LibHelmLint(LibInterface):
         for path, lint in self.lints.items():
             Log.info(f"{path}")
             for lint_message in lint["error"]:
-                Log.fail(f"\t\t{lint_message}")
+                Log.fail(f"\t{lint_message}")
                 errors += 1
 
             for lint_message in lint["warn"]:
-                Log.warn(f"\t\t{lint_message}")
+                Log.warn(f"\t{lint_message}")
                 warnings += 1
 
         print()
