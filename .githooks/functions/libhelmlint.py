@@ -31,11 +31,12 @@ class LibHelmLint(LibInterface):
             self.chart_files = []
             changes = Git.get_committed_changes()
             for change in changes:
-                path = f"{Git.get_repository_root()}/{change}"
-                if not os.path.isfile(path):
-                    Log.warn(f"Skipping non-existing file {path}")
-                else:
-                    self.chart_files.append(path)
+                if change.endswith("Chart.yaml"):
+                    path = f"{Git.get_repository_root()}/{change}"
+                    if not os.path.isfile(path):
+                        Log.warn(f"Skipping non-existing file {path}")
+                    else:
+                        self.chart_files.append(path)
         else:
             files = [str(path).replace("Chart.yaml", "") for path in
                      list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
