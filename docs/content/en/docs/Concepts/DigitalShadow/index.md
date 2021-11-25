@@ -5,31 +5,31 @@ description: >
   A system of features allowing tracking and tracing of individual parts through the production process. 
 ---
 
-*Digital shadow is still in development and not yet deployable.*
 ## Introduction
 
 **Goal:**
-In order to gain detailed insight in the production process and into the produced products we needed a system of 
-features to acquire and access information gained by scanners, sensors etc. This allows better quality assurance 
-and enables production improvement.
+In order to gain detailed insight in the production process and into the produced products we needed a system of features to acquire and access information gained by scanners, sensors etc. This allows better quality assurance and enables production improvement.
 
 **Solution:**
-We send MQTT messages containing a timestamp with a single value like a scanned ID, a measured value etc. from our edge
-devices to the MQTT broker and contextualize them with microservices. The gained data is pushed into a database by the 
-`MQTT-to-postgres` microservice. After that `factoryinsight` provides an interface for formatted data providing maximal 
-usability of BI-Tools like tableau. The data is made available to a Tableau-server via a MySQL Database.
+We've expanded the United Manufacturing Hub so that the end-user only needs to do two things:
+
+1. Connect data sources with MQTT, for example by leveraging [barcodereader](/docs/developers/factorycube-edge/barcodereader/) and [sensorconnect](/docs/developers/factorycube-edge/sensorconnect/)
+2. Process this raw data with Node-RED and send MQTT messages according to the [UMH specification](/docs/concepts/mqtt/)
+3. Access the processed data either in a BI tool or using Grafana
+
+To allow this to happen the backend has been modified to support multiple new MQTT messages types in [mqtt-to-postgresql](/docs/developers/factorycube-server/mqtt-to-postgresql/) and to provide more endpoints to fetch Digital Shadow related data from the database [factoryinsight](/docs/developers/factorycube-server/factoryinsight/).
 
 ## Overall Concept
-{{< imgproc digitalShadowConcept Fit "9063x2130" >}}{{< /imgproc >}}
-This is the overview of the digital shadow concept.
+
+![Concepts of digital shadow in the United Manufacturing Hub](digitalShadowConcept.png)
+
+This is the overview of the digital shadow concept. It follows the general design principles of the United Manufacturing Hub by sending all raw sensor data first to a MQTT broker and then continiously processing it.
 
 The following chapters are going through the concept from left to right (from the inputs of the digital shadow to the outputs).
 
-### Data Input
+### Data sources
 
-Data can be sent as JSON in a MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of 
-[the UMH datamodel] for the topics and messages, but the implementation is client specific and can be modeled for the 
-individual problem. The relevant input data for digital shadow is on Level 1 and Level 2.
+Data can be sent as JSON in a MQTT message to the central MQTT broker. UMH recommends to stick to the data definition of [the UMH datamodel] for the topics and messages, but the implementation is client specific and can be modeled for the individual problem. The relevant input data for digital shadow is on Level 1 and Level 2.
 
 #### Example 1, raw, Level 1 data:
 Topic: `ia/rawBarcode/2020-0102/210-156`\
@@ -51,15 +51,13 @@ Topic structure: `ia/<customerID>/<location>/<AssetID>/processValue`
 ```
 
 
-### Contextualization + Messages for MQTT-to-postgres
-Now the information is available at the mqtt-broker and because of that to all subscribed services. But we still need to
-contextualize the information, meaning: we want to link gained data to specific products, because right now we only have
-asset specific values with timestamps. We are using two different kinds of product ID's for that: AID's and UID's 
-([identifiers](#identifiers) are later explained in detail).
+### Contextualization
 
-First microservices should be used (stateless if possible) to convert messages under a `raw` topic into messages under 
-`processValue` or `processValueString`. This typically only requires resending the message under the appropriate topic or 
-breaking messages with multiple values apart into single ones.
+Now the information is available at the MQTT broker because of that to all subscribed services. In the next step this raw data is contextualized, which means to link it to specific products. We are using two different kinds of product ID's for that: AID's and UID's ([identifiers](#identifiers) are later explained in detail).
+
+To do that we recommend writing microservices. You can do that either in Node-RED (our recommendation) or in a programming language of your chosing. These microservices convert messages under a `raw` topic into messages under  `processValue` or `processValueString`. 
+
+This typically only requires resending the message under the appropriate topic or breaking messages with multiple values apart into single ones.
 
 There are four specific kinds of messages regarding the digital shadow which need to be sent to the the `MQTT-to-postgres`
 function:
@@ -331,8 +329,7 @@ newly generated UID and with the default supply asset `storage`.
 - The batch AID only changes when new batch AID is scanned.
 
 ### MQTT-to-postgres
-The `MQTT-to-postgres` microservice now uses the MQTT messages it gets from the broker and writes the information in the
-database. The microservice is not use-case specific, so the user just needs to send it the correct MQTT messages.
+The `MQTT-to-postgres` microservice now uses the MQTT messages it gets from the broker and writes the information in the database. The microservice is not use-case specific, so the user just needs to send it the correct MQTT messages.
 
 `MQTT-to-postgres` now needs to generate UID's and save the information in the database, because the database uses UID's
 to store and link all the generated data efficiently. Remember that the incoming MQTT messages are contextualized with AID's.
@@ -346,7 +343,7 @@ We can divide the task of `MQTT-to-postgres` in three (regarding the digital sha
 - Use **productTag and productTagString** topic MQTT messages. The AID and the AssetId is used to look for the uniqueProduct 
   the messages belong to. The value information is then stored with the UID in the TimescaleDB 
   1. Look in TimescaleDB, `uniqueProductTable` for the uniqueProduct with the same Asset and AID from the `productTag` 
-     massage (the child)
+     message (the child)
   2. Get the UID when found from the child (that is why it is important to send the `uniqueProduct` message before sending
      `productTag`/`productTagString`).
   3. Write value information without AID, instead with the found UID in the uniqueProductTable
@@ -376,15 +373,14 @@ Four tables are especially relevant:
   inheritance information of each individual part. One entry describes one edge of the inheritance graph.
 
 The new relevant tables are dotted, the `uniqueProductTable` changes are bold in the timescaleDB structure visualization. 
+
 ### Factoryinsight + Rest API
-To make the relevant data from digital shadow available we need to provide new REST API's. `Factoryinsight` is the
-microservice doing that task. It accepts specific requests, accesses the timescale database and returns 
-the data in the desired format.
+
+To make the relevant data from digital shadow available we need to provide new REST API's. `Factoryinsight` is the microservice doing that task. It accepts specific requests, accesses the timescale database and returns the data in the desired format.
 
 #### Implemented functionality for digital shadow
-The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one 
-childUID, AID and all parentAID's regarding the asset. All uniqueProductTags and 
-uniqueProductTagStrings (value and timestamp) for the childUID are returned to the same datapoint.
+
+The following function returns all uniqueProducts for that specific asset in a specified time range. One datapoint contains one childUID, AID and all parentAID's regarding the asset. All uniqueProductTags and  uniqueProductTagStrings (value and timestamp) for the childUID are returned to the same datapoint.
 
 `get /{customer}/{location}/{asset}/uniqueProductsWithTags`
 from `<timestamp1>` to `<timestamp2>` (in RFC 3999 Format).
@@ -446,20 +442,15 @@ Example Return with two data points:
 2. Get all parentUID's from the `productInheritanceTable` for each of the selected UID's.
 3. Get the AID's for the parentUID's from the `uniqueProductTable`.
 4. Get all key, value pairs from the `productTagTable` and `productTagStringTable` for the in step 1 selected UID's.
-5. Return all parent AID's, the child UID and AID, all the productTag and all the productTagString values.
+5. Return all parent AID's under the column name of the corresponding parent productID's. Return the child AID and UID. Return the productTag and productTagString values under the column name of the corresponding valueNames.
 
 ### SQL Database to connect to Tableau server
 
-For the digital shadow functionality we need to give the tableau server access to the data. Because the 
-tableau server can't directly connect to the REST API, we need to either use a database in between, or a 
-tableau web data connector. We were advised against the tableau web data connector 
-(general info about tableau webdata connectors: 
-https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm ). Because of that we implemented a 
-sql database. We used timescaleDB because it is opensource, works well with node-red and with tableau and is fast with 
-timeseries data, which makes it the best choice for the task. 
-According to the structure overview in the beginning of this article we are using node-red to fetch the required data
-from the REST API of `factoryinsight` and push it into the timescaleDB. The database can then be accessed by 
-the tableau server.
+*This is currently not included in the stack*
+
+For the digital shadow functionality we need to give the tableau server access to the data. Because the tableau server can't directly connect to the REST API, we need to either use a database in between, or a tableau web data connector. We were advised against the tableau web data connector (general info about tableau webdata connectors: https://help.tableau.com/current/pro/desktop/en-us/examples_web_data_connector.htm ). 
+
+Because of that we implemented a SQL database in combination with Node-RED. Node-RED requests data from the REST API in regular intervals and pushes it into the SQL database. From there on we can access the data with the Tableau server.
 
 ## Industry Example
 To test the digital shadow functionality and display its advantages we implemented the solution in a model factory.
