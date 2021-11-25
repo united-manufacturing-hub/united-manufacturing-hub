@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from functions.log import Log
-from functions.git import Git
 
 try:
     import yamllint
@@ -14,15 +13,12 @@ import functions.libhelmlint as libhelmlint
 import functions.libyamllint as libyamllint
 
 if __name__ == '__main__':
-    # failed = False
-    # if libyamllint.LibYamlLint().run() != 0:
-    #     failed = True
-    #
-    # if libhelmlint.LibHelmLint().run() != 0:
-    #     failed = True
-    #
-    # if failed:
-    #     exit(1)
+    failed = False
+    if libyamllint.LibYamlLint().run() != 0:
+        failed = True
 
-    git = Git()
-    print(git.has_upstream())
+    if libhelmlint.LibHelmLint().run() != 0:
+        failed = True
+
+    if failed:
+        exit(1)

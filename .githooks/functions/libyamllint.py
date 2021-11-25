@@ -14,7 +14,7 @@ from .log import Log
 
 class LibYamlLint(LibInterface):
     config: YamlLintConfig
-    yaml_files: list[Path]
+    yaml_files: list
     allowed_lints: list[str]
     warn_lints: list[str]
     lintstr_regex: re.Pattern
@@ -22,9 +22,17 @@ class LibYamlLint(LibInterface):
 
     def __init__(self):
         self.config = YamlLintConfig('extends: default')
-        self.yaml_files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
         self.lintstr_regex = re.compile(r"\([\w|-]+\)$")
         self.lints = dict()
+
+        if Git.has_upstream():
+            self.yaml_files = []
+            changes = Git.get_committed_changes()
+            for change in changes:
+                if change.endswith(".yaml"):
+                    self.yaml_files.append(f"{Git.get_repository_root()}{change}")
+        else:
+            self.yaml_files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
 
         with open(f"{Git.get_repository_root()}/.githooks/config.json") as cfg_file:
             cfg = json.load(cfg_file)
@@ -39,8 +47,11 @@ class LibYamlLint(LibInterface):
         return _type
 
     def check(self):
-        Log.info("Checking yaml files")
         ly = len(self.yaml_files)
+        if ly == 0:
+            Log.info("No yaml files to check")
+            return
+        Log.info(f"Checking {ly} yaml files")
 
         pb = Progressbar(ly)
 
@@ -68,6 +79,8 @@ class LibYamlLint(LibInterface):
         pb.finish()
 
     def report(self) -> int:
+        if len(self.yaml_files) == 0:
+            return 0
         errors = 0
         warnings = 0
         for path, lint in self.lints.items():

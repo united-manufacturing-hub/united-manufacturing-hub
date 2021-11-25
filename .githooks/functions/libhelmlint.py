@@ -12,18 +12,33 @@ class LibHelmLint(LibInterface):
     lints: dict
 
     def __init__(self):
-        self.chart_files = [str(path).replace("Chart.yaml", "") for path in
-                            list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
+        self.chart_files = []
+
+        if Git.has_upstream():
+            self.chart_files = []
+            changes = Git.get_committed_changes()
+            for change in changes:
+                if change.endswith("Chart.yaml"):
+                    self.chart_files.append(f"{Git.get_repository_root()}{change}")
+        else:
+            self.chart_files = [str(path).replace("Chart.yaml", "") for path in
+                                list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
+
         self.lints = dict()
 
     def check(self):
         ly = len(self.chart_files)
+        if ly == 0:
+            Log.info("No helm charts to check")
+            return
+
+        Log.info(f"Checking {ly} chart files")
+
         pb = Progressbar(ly)
         for path in self.chart_files:
             self.lints[path] = dict()
             self.lints[path]["warn"] = []
             self.lints[path]["error"] = []
-            lines = []
             try:
                 output = subprocess.check_output(
                     ['helm', 'lint', path], stderr=subprocess.STDOUT, shell=True,
@@ -42,6 +57,8 @@ class LibHelmLint(LibInterface):
         pb.finish()
 
     def report(self) -> int:
+        if len(self.chart_files) == 0:
+            return 0
         errors = 0
         warnings = 0
         for path, lint in self.lints.items():
