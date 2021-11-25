@@ -1,0 +1,13 @@
+{
+  "yamllint": {
+    "allow": [
+
+    ],
+    "warn": [
+      "line-length",
+      "comments",
+      "empty-lines",
+      "trailing-spaces"
+    ]
+  }
+}
