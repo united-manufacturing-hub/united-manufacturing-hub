@@ -78,7 +78,7 @@ section = ["HTML", "print"]
 [params]
 copyright = "UMH Systems GmbH"
 privacy_policy = "https://www.umh.app/data-security"
-
+favicon = "favicon.png"
 # First one is picked as the Twitter card image if not set on page.
 # images = ["images/project-illustration.png"]
 
