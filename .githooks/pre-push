@@ -1,29 +1,28 @@
 #!/usr/bin/env python
 from functions.log import Log
+from functions.git import Git
 
-import functions.libhelmlint as libhelmlint
-
-skip_yamllint = False
 try:
     import yamllint
 except ImportError:
     Log.warn("Failed to import yamllint")
     Log.warn("Open https://github.com/adrienverge/yamllint to find out how to install with your package manager")
     Log.warn("Or use 'pip install --user yamllint'")
-    skip_yamllint = True
+    exit(1)
 
-if not skip_yamllint:
-    import functions.libyamllint as libyamllint
-
+import functions.libhelmlint as libhelmlint
+import functions.libyamllint as libyamllint
 
 if __name__ == '__main__':
-    failed = False
-    if not skip_yamllint:
-        if libyamllint.LibYamlLint().run() != 0:
-            failed = True
+    # failed = False
+    # if libyamllint.LibYamlLint().run() != 0:
+    #     failed = True
+    #
+    # if libhelmlint.LibHelmLint().run() != 0:
+    #     failed = True
+    #
+    # if failed:
+    #     exit(1)
 
-    if libhelmlint.LibHelmLint().run() != 0:
-        failed = True
-
-    if failed:
-        exit(1)
+    git = Git()
+    print(git.has_upstream())

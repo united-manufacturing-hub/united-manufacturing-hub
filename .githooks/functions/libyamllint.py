@@ -5,11 +5,11 @@ from pathlib import Path
 from yamllint import linter
 from yamllint.config import YamlLintConfig
 
-from .helper import Helper
+from .git import Git
 from .helper import Progressbar
+from .ilib import LibInterface
 from .log import Colors
 from .log import Log
-from .ilib import LibInterface
 
 
 class LibYamlLint(LibInterface):
@@ -22,11 +22,11 @@ class LibYamlLint(LibInterface):
 
     def __init__(self):
         self.config = YamlLintConfig('extends: default')
-        self.yaml_files = list(Path(Helper.get_repository_root()).rglob('*.yaml'))
+        self.yaml_files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
         self.lintstr_regex = re.compile(r"\([\w|-]+\)$")
         self.lints = dict()
 
-        with open(f"{Helper.get_repository_root()}/.githooks/config.json") as cfg_file:
+        with open(f"{Git.get_repository_root()}/.githooks/config.json") as cfg_file:
             cfg = json.load(cfg_file)
             self.allowed_lints = cfg["yamllint"]["allow"]
             self.warn_lints = cfg["yamllint"]["warn"]

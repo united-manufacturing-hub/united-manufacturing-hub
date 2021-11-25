@@ -1,4 +1,3 @@
-import subprocess
 import sys
 
 
@@ -25,11 +24,6 @@ class Helper:
             return True
         except UnicodeEncodeError:
             return False
-
-    @staticmethod
-    @memoize
-    def get_repository_root():
-        return subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).decode("UTF-8").strip()
 
 
 class Progressbar:

@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from .helper import Helper
+from .git import Git
 from .helper import Progressbar
 from .log import Colors
 from .log import Log
@@ -13,7 +13,7 @@ class LibHelmLint(LibInterface):
 
     def __init__(self):
         self.chart_files = [str(path).replace("Chart.yaml", "") for path in
-                            list(Path(Helper.get_repository_root()).rglob('Chart.yaml'))]
+                            list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
         self.lints = dict()
 
     def check(self):
