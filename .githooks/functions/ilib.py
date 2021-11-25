@@ -1,0 +1,12 @@
+class LibInterface:
+    # Run executes check and returns report
+    @classmethod
+    def run(cls): raise NotImplementedError
+
+    # Execute checks
+    @classmethod
+    def check(cls): raise NotImplementedError
+
+    # Reports errors and warnings and returns number of errors
+    @classmethod
+    def report(cls): raise NotImplementedError
