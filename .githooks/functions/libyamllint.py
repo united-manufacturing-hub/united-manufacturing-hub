@@ -55,6 +55,7 @@ class LibYamlLint(LibInterface):
                     Log.warn(f"Skipping non-existing file {path}")
                 else:
                     self.yaml_files.append(path)
+        self.yaml_files = list(dict.fromkeys(self.yaml_files))
 
         # Loads config to allow some lint rules
         with open(f"{Git.get_repository_root()}/.githooks/config.json") as cfg_file:

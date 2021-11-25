@@ -46,6 +46,8 @@ class LibHelmLint(LibInterface):
                 else:
                     self.chart_files.append(path.replace("Chart.yaml", ""))
 
+        self.chart_files = list(dict.fromkeys(self.chart_files))
+
         self.lints = dict()
 
     def check(self):

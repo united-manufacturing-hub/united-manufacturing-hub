@@ -60,7 +60,8 @@ class Git:
         current_branch = Git.get_current_branch()
         changes_str = subprocess.check_output(
             ['git', 'log', '--name-only', '--pretty=format:', f"origin/{current_branch}..HEAD"]).decode("UTF-8").strip()
-        return changes_str.splitlines()
+
+        return list(dict.fromkeys(changes_str.splitlines()))
 
     @staticmethod
     @memoize
