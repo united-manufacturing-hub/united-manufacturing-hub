@@ -31,7 +31,7 @@ class LibHelmLint(LibInterface):
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith("Chart.yaml"):
-                    self.chart_files.append(f"{Git.get_repository_root()}{change}")
+                    self.chart_files.append(f"{Git.get_repository_root()}/{change}")
         else:
             self.chart_files = [str(path).replace("Chart.yaml", "") for path in
                                 list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]

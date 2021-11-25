@@ -42,7 +42,7 @@ class LibYamlLint(LibInterface):
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith(".yaml"):
-                    self.yaml_files.append(f"{Git.get_repository_root()}{change}")
+                    self.yaml_files.append(f"{Git.get_repository_root()}/{change}")
         else:
             self.yaml_files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
 
