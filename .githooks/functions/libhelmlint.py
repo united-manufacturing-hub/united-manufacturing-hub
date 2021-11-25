@@ -36,15 +36,15 @@ class LibHelmLint(LibInterface):
                     if not os.path.isfile(path):
                         Log.warn(f"Skipping non-existing file {path}")
                     else:
-                        self.chart_files.append(path)
+                        self.chart_files.append(path.replace("Chart.yaml",""))
         else:
-            files = [str(path).replace("Chart.yaml", "") for path in
+            files = [str(path) for path in
                      list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
             for path in files:
                 if not os.path.isfile(path):
                     Log.warn(f"Skipping non-existing file {path}")
                 else:
-                    self.chart_files.append(path)
+                    self.chart_files.append(path.replace("Chart.yaml", ""))
 
         self.lints = dict()
 
