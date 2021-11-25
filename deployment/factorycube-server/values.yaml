@@ -2321,7 +2321,7 @@ kafka:
     debug: false
   replicas: 1
   storageRequest: 1Gi
-  allowPlaintextListener: true
+  allowPlaintextListener: yes
   service:
     type: ClusterIP
     port: 9092
