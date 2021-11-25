@@ -2,6 +2,7 @@
 This file provides yaml linting and lint reporting
 """
 import json
+import os.path
 import re
 from pathlib import Path
 
@@ -42,9 +43,18 @@ class LibYamlLint(LibInterface):
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith(".yaml"):
-                    self.yaml_files.append(f"{Git.get_repository_root()}/{change}")
+                    path = f"{Git.get_repository_root()}/{change}"
+                    if not os.path.isfile(path):
+                        Log.warn(f"Skipping non-existing file {path}")
+                    else:
+                        self.yaml_files.append(path)
         else:
-            self.yaml_files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
+            files = list(Path(Git.get_repository_root()).rglob('*.yaml'))
+            for path in files:
+                if not os.path.isfile(path):
+                    Log.warn(f"Skipping non-existing file {path}")
+                else:
+                    self.yaml_files.append(path)
 
         # Loads config to allow some lint rules
         with open(f"{Git.get_repository_root()}/.githooks/config.json") as cfg_file:

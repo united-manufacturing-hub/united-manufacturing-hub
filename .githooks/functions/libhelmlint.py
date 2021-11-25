@@ -1,6 +1,7 @@
 """
 This file provides helm linting and lint reporting
 """
+import os
 import subprocess
 from pathlib import Path
 
@@ -30,11 +31,19 @@ class LibHelmLint(LibInterface):
             self.chart_files = []
             changes = Git.get_committed_changes()
             for change in changes:
-                if change.endswith("Chart.yaml"):
-                    self.chart_files.append(f"{Git.get_repository_root()}/{change}")
+                path = f"{Git.get_repository_root()}/{change}"
+                if not os.path.isfile(path):
+                    Log.warn(f"Skipping non-existing file {path}")
+                else:
+                    self.chart_files.append(path)
         else:
-            self.chart_files = [str(path).replace("Chart.yaml", "") for path in
-                                list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
+            files = [str(path).replace("Chart.yaml", "") for path in
+                     list(Path(Git.get_repository_root()).rglob('Chart.yaml'))]
+            for path in files:
+                if not os.path.isfile(path):
+                    Log.warn(f"Skipping non-existing file {path}")
+                else:
+                    self.chart_files.append(path)
 
         self.lints = dict()
 
