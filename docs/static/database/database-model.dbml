@@ -236,7 +236,7 @@ Table StationGroup {
 Table RecommendationInstanceTable{
   Id int [PK, increment]
   StationId int [not null, ref: < Station.Id]
-  RecommendationTemplateId int [not null, ref: < RecommendationTemplate.Id]
+  RecommendationTemplateId int [not null, ref: > RecommendationTemplate.Id]
   Timestamp timestamp [not null]
 }
 
