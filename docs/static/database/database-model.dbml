@@ -1,24 +1,29 @@
-Table Asset {
+Table StationStep {
   Id int [PK, increment]
-  LocationId int [not null,ref: < Location.Id]
   Name text [not null]
-  
+  CreationTime timestamp [not null]
+}
+
+Table StationStepSequence{
+  Id int [PK, increment]
+  StationId int [not null, ref: < Station.Id]
+  StationStepId int [not null, ref: - StationStep.Id]
+  SequenceNumber int [not null]
+
   indexes {
-    (Name, LocationId) [unique]
+      (StationId, StationStepId, SequenceNumber) [unique]
   }
 }
 
-Table AssetConfiguration{
+Table StationConfiguration{
   Id int [PK, increment]
+  StationStepId int [not null, ref: < StationStep.Id]
   MicrostopDurationInSeconds bigint [not null]
   IgnoreMicrostopUnderThisDurationInSeconds bigint [not null]
   MinimumRunningTimeInSeconds bigint [not null]
   ThresholdForNoShiftsConsideredBreakInSecond bigint [not null]
   LowSpeedThresholdInPcsPerHour bigint [not null]
-  LanguageCode bigint [not null]
-  AvailabiltyLossStatesId int [not null, ref: < AvalibilityLossStates.AssetConfigurationId]
-  PerformanceLossStatesId int [not null, ref: < PerformanceLossStates.AssetConfigurationId]
-  AssetId int [not null, ref: < Asset.Id]
+  LanguageCode varcharacter(10) [not null] //TODO: lang code len
 }
 
 Table AvailabiltyLossState{
@@ -34,20 +39,20 @@ Table PerformanceLossState{
 }
 
 Table AvalibilityLossStates {
-    AssetConfigurationId int [not null]
+    StationConfigurationId int [not null, ref: > StationConfiguration.Id]
     AvalabilityLossStateId int [not null, ref: > AvailabiltyLossState.Id]
 
     indexes {
-        (AssetConfigurationId, AvalabilityLossStateId) [PK]
+        (StationConfigurationId, AvalabilityLossStateId) [PK]
     }
 }
 
 Table PerformanceLossStates {
-    AssetConfigurationId int [not null]
+    StationConfigurationId int [not null, ref: > StationConfiguration.Id]
     PerformanceLossStateId int [not null, ref: > PerformanceLossState.Id]
 
     indexes {
-        (AssetConfigurationId, PerformanceLossStateId) [PK]
+        (StationConfigurationId, PerformanceLossStateId) [PK]
     }
 }
 
@@ -57,116 +62,108 @@ Table Location{
 }
 
 // SELECT create_hypertable('Count', 'Timestamp');
-// CREATE INDEX ON Count (AssetId, Timestamp DESC);
+// CREATE INDEX ON Count (StationStep, Timestamp DESC);
 Table Count {
   Id int [PK, increment]
-  AssetId int [not null, ref: < Asset.Id]
+  StationStepId int [not null, ref: < StationStep.Id]
   Count bigint [not null]
   Timestamp timestamp [not null]
   indexes {
-    (AssetId, Timestamp) [unique]
+    (StationStepId, Timestamp) [unique]
   }
 }
 
 // SELECT create_hypertable('State', 'Timestamp');
-// CREATE INDEX ON State (AssetId, Timestamp DESC);
+// CREATE INDEX ON State (StationStep, Timestamp DESC);
 Table State {
   Id int [PK, increment]
-  AssetId int [not null, ref: < Asset.Id]
+  StationStepId int [not null, ref: < StationStep.Id]
   State bigint [not null]
   Timestamp timestamp [not null]
   indexes {
-    (AssetId, Timestamp) [unique]
+    (StationStepId, Timestamp) [unique]
   }
 }
 
 
 Table ProcessValueType {
   Id int [PK, increment]
+  StationStepId int [not null, ref: < StationStep.Id]
   Name text [not null]
-  AssetId int [not null, ref: < Asset.Id]
 }
 
 Table ProcessValue {
   Id int [PK, increment]
-  Value double  // Should this allow any data ?
+  ValueTypeId int [not null, ref: > ProcessValueType.Id]
+  Value double [not null]
   Timestamp timestamp [not null]
-  ValueTypeId int [not null, ref: < ProcessValueType.Id]
+}
+
+Table ProcessValueError {
+  Id int [PK, increment]
+  ValueTypeId int [not null, ref: > ProcessValueType.Id]
+  Error text [not null]
+  Timestamp timestamp [not null]
 }
 
 
 // CHECK (BeginTimestamp < EndTimestamp)
-// EXCLUDE USING gist (AssetId WITH =, tstzrange(BeginTimestamp, EndTimestamp) WITH &&)
+// EXCLUDE USING gist (StationId WITH =, tstzrange(BeginTimestamp, EndTimestamp) WITH &&)
 Table Shift {
   Id int [PK, increment]
   ShiftTypeId int [not null, ref: < ShiftType.Id]
+  StationId int [not null, ref: < Station.Id]
   BeginTimestamp timestamp [not null]
   EndTimestamp timestamp // Allows null values, since it is not always known, when a shift ends
-  AssetId int [not null, ref: < Asset.Id]
-  
+
   indexes{
-    (BeginTimestamp, AssetId) [unique]
+    (BeginTimestamp, StationId) [unique]
   }
 }
 
 Table ShiftType {
-  Id in [PK, increment]
+  Id int [PK, increment]
   Name text [not null]
 }
 
 
 // CHECK (BeginTimestamp < EndTimestamp)
 // CHECK (TargetUnits > 0)
-// EXCLUDE USING gist (AssetId WITH =, tstzrange(BeginTimestamp, EndTimestamp) WITH &&) WHERE (BeginTimestamp IS NOT NULL AND EndTimestamp IS NOT NULL)
+// EXCLUDE USING gist (StationId WITH =, tstzrange(BeginTimestamp, EndTimestamp) WITH &&) WHERE (BeginTimestamp IS NOT NULL AND EndTimestamp IS NOT NULL)
 Table Order {
-  Id in [PK, increment]
+  Id int [PK, increment]
+  StationId int [not null, ref: < Station.Id]
   Name text [not null]
   BeginTimestamp timestamp [not null]
   EndTimestamp timestamp // Allows null values, since it is not always known, when an order ends
   TargetUnits bigint [not null]
-  AssetId int [not null, ref: < Asset.Id]
-  
+
   indexes{
-    (AssetId, Id) [unique]
+    (StationId, Id) [unique]
   }
 }
 
 
-Table AssetProduct {
-  Id in [PK, increment]
+Table StationProduct {
+  Id int [PK, increment]
+  StationId int [not null, ref: < Station.Id]
   ProductTypeNameId int [not null, ref: < ProductTypeName.Id]
-  AssetId int [not null, ref: < Asset.Id]
   TimePerUnitInSeconds double [not null]
 }
 
 Table ProductTypeName{
-  Id in [PK, increment]
+  Id int [PK, increment]
   Name text [not null]
 }
 
-// TODO: Which of these keys should be not null
-Table RecommendationTable{
-  Id in [PK, increment]
-  Timestamp timestamp [not null]
-  Type bigint [not null]
-  Enabled boolean [not null]
-  Values text
-  DiagnoseTextDE text
-  DiagnoseTextEN text
-  TextDE text
-  TextEN text
-}
-
-
-// TODO
 Table Product {
-  Id in [PK, increment]
+  Id int [PK, increment]
+  StationStepId int [not null, ref: < StationStep.Id]
+  StationProductId int [not null, ref: < StationProduct.Id]
   Value text [not null]
-  AssetId int [not null, ref: < Asset.Id]
   ProductionBegin timestamp [not null]
   ProductionEnd timestamp [not null]
-  IsScrap boolean
-  StepId int //Missing ref
+  IsScrap boolean [not null]
 }
 
 // Migrate to double hypertable
@@ -180,6 +177,80 @@ Table ChildGroup {
   }
 }
 
+Table Station{
+  Id int [PK, increment]
+  StationGroupId int [not null, ref: < StationGroup.Id]
+  LocationId int [not null,ref: < Location.Id]
+  Name text [not null]
+  CreationTime timestamp [not null]
+  indexes {
+    (Name, LocationId) [unique]
+  }
+}
 
-//TBD: Asset Group, Process Group
+
+Table StationStepRelations {
+    StationId int [not null, ref: > Station.Id]
+    StationStepId int [not null, ref: > StationStep.Id]
+
+    indexes {
+        (StationId, StationStepId) [PK]
+    }
+}
+
+Table Process{
+  Id int [PK, increment]
+  Name text [not null]
+  CreationTime timestamp [not null]
+}
+
+Table ProcessGroupRelations {
+    ProcessId int [not null, ref: > Process.Id]
+    StationStepId int [not null, ref: > StationStep.Id]
+
+    indexes {
+        (ProcessId, StationStepId) [PK]
+    }
+}
+
+Table StationGroup {
+  Id int [PK, increment]
+  Name text [not null]
+  CreationTime timestamp [not null]
+}
+
+
+Table RecommendationInstanceTable{
+  Id int [PK, increment]
+  StationId int [not null, ref: < Station.Id]
+  RecommendationTemplateId int [not null, ref: < RecommendationTemplate.Id]
+  Timestamp timestamp [not null]
+}
+
+
+
+// TODO: Which of these keys should be not null
+Table RecommendationTemplate{
+  Id int [PK, increment]
+  Timestamp timestamp [not null]
+  Type bigint [not null]
+  Enabled boolean [not null]
+  Values text
+  DiagnoseTextDE text
+  DiagnoseTextEN text
+  TextDE text
+  TextEN text
+}
+// TODO maybe add table for translations
+
+
+Table StationRecommendationRelations {
+    StationId int [not null, ref: > Station.Id]
+    RecommendationTemplateId int [not null, ref: > RecommendationTemplate.Id]
+
+    indexes {
+        (RecommendationTemplateId, StationId) [PK]
+    }
+}
+
 
