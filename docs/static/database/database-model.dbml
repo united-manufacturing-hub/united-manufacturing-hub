@@ -156,18 +156,31 @@ Table ProductTypeName{
   Name text [not null]
 }
 
+// CHECK: ProductFailureId can only be set if ProductStatus::Undefined
 Table Product {
   Id int [PK, increment]
   StationStepId int [not null, ref: < StationStep.Id]
   StationProductId int [not null, ref: < StationProduct.Id]
   Value text [not null]
   ProductionBegin timestamp [not null]
-  ProductionEnd timestamp [not null]
-  IsScrap boolean [not null]
+  ProductionEnd timestamp
+  Status ProductStatus [not null]
+  ProductFailureId int [ref: < ProductFailure.Id]
+}
+
+enum ProductStatus{
+  NoScrap         // Tested -> Good || No testing needed
+  Scrap           // Tested -> Bad
+  Undefined       // Status not known
+}
+
+Table ProductFailure{
+  Id int [PK, increment]
+  Value text [not null]
 }
 
 // Migrate to double hypertable
-Table ChildGroup {
+Table ProductInheritance {
   ParentId int [not null, ref: < Product.Id]
   ChildId int [not null, ref: < Product.Id]
   indexes{
@@ -252,5 +265,31 @@ Table StationRecommendationRelations {
         (RecommendationTemplateId, StationId) [PK]
     }
 }
+
+Table ProductTagDouble{
+  Id int [PK, increment]
+  Timestamp timestamp [not null]
+  ProductId int [not null, ref: > Product.Id]
+  ValueName text [not null]
+  Value double [not null]
+}
+
+
+Table ProductTagString{
+  Id int [PK, increment]
+  Timestamp timestamp [not null]
+  ProductId int [not null, ref: > Product.Id]
+  ValueName text [not null]
+  Value string [not null]
+}
+
+
+
+
+
+
+
+
+
 
 
