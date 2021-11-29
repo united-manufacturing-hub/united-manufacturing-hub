@@ -18,7 +18,7 @@ We've expanded the United Manufacturing Hub so that the end-user only needs to d
 2. Process this raw data with Node-RED and send MQTT messages according to the [UMH specification](/docs/concepts/mqtt/)
 3. Access the processed data either in a BI tool or using Grafana
 
-To allow this to happen the backend has been modified to support multiple new MQTT messages types in [mqtt-to-postgresql](/docs/developers/factorycube-server/mqtt-to-postgresql/) and to provide more endpoints to fetch Digital Shadow related data from the database [factoryinsight](/docs/developers/factorycube-server/factoryinsight/).
+To allow this to happen the backend has been modified to support multiple new MQTT message types in [mqtt-to-postgresql](/docs/developers/factorycube-server/mqtt-to-postgresql/) and to provide more endpoints to fetch Digital Shadow related data from the database [factoryinsight](/docs/developers/factorycube-server/factoryinsight/).
 
 ## Dataflow
 
@@ -26,7 +26,7 @@ To allow this to happen the backend has been modified to support multiple new MQ
 
 *(right click on the image and open it for a better resolution)*
 
-This is the overview of the digital shadow concept. It follows the general design principles of the United Manufacturing Hub by sending all raw sensor data first to a MQTT broker and then continuously processing it.
+This is the overview of the digital shadow concept. It follows the general design principles of the United Manufacturing Hub by sending all raw sensor data first to an MQTT broker and then continuously processing it.
 
 The following chapters are going through the concept from left to right (from the inputs of the digital shadow to the outputs).
 
@@ -62,7 +62,7 @@ The raw data from the data sources needs to be converted to four different MQTT 
 - [addParentToChild](/docs/concepts/mqtt/#addparenttochild)
 - [uniqueProduct](/docs/concepts/mqtt/#uniqueproduct)
 
-To do that we recommend writing microservices. You can do that either in Node-RED (our recommendation) or in a programming language of your chosing. These microservices convert messages under a `raw` topic into messages under  [processValue] or [processValueString]. 
+To do that we recommend writing microservices. You can do that either in Node-RED (our recommendation) or in a programming language of your choice. These microservices convert messages under a `raw` topic into messages under  [processValue] or [processValueString]. 
 
 This typically only requires resending the message under the appropriate topic or breaking messages with multiple values apart into single ones.
 

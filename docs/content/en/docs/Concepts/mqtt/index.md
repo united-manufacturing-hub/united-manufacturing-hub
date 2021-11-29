@@ -631,7 +631,7 @@ There are various different IDs that you can find in the MQTT messages. This sec
 |-----|-----|--------------------------|
 | [`product_id`](/docs/concepts/mqtt/#explanation-of-ids) | int | The type of product that should be produced in an order for a specific asset. Can be used to retrieve the target speed. |
 | [`order_id`](/docs/concepts/mqtt/#explanation-of-ids) | int | Order ID, which provides the type of product (see [`product_id`](/docs/concepts/mqtt/#explanation-of-ids)) and the amount of pieces that should be produced. |
-| [`uniqeProductAlternativeID`](/docs/concepts/mqtt/#explanation-of-ids) | int | In short: AID. Used to describe a single product of the type [`product_id`](/docs/concepts/mqtt/#explanation-of-ids) in the order [`order_id`](/docs/concepts/mqtt/#explanation-of-ids). This is the ID that might be written on a physical on the product and is usually the relevant ID for engineers and for production planning. It usually stays the same. |
+| [`uniqeProductAlternativeID`](/docs/concepts/mqtt/#explanation-of-ids) | int | In short: AID. Used to describe a single product of the type [`product_id`](/docs/concepts/mqtt/#explanation-of-ids) in the order [`order_id`](/docs/concepts/mqtt/#explanation-of-ids). This is the ID that might be written on the product (e.g., with a physical label, lasered, etc.) and is usually the relevant ID for engineers and for production planning. It usually stays the same. |
 | `UID` | int | Short for unique product ID. Compared to the AID the UID changes whenever a product changes its state. Therefore, a product will change its UID everytime it is placed on a new asset. It is used mainly on the database side to lookup a specific product in a specific state. |
 
 These IDs are linked together in the database.
