@@ -539,12 +539,6 @@ Shopfloor insights are recommendations for action that require concrete and rapi
 ```
 {{%/alert%}}
 
-## TimescaleDB structure
-
-Here is a scheme of the timescaleDB structure:
-{{< imgproc timescaleDB Fit "1792x950" >}}{{< /imgproc >}}
-
-
 
 [sensorconnect]: /docs/developers/factorycube-edge/sensorconnect
 [cameraconnect]: /docs/developers/factorycube-edge/cameraconnect
