@@ -14,11 +14,18 @@
 
 The Open-Source toolkit to build your own reliable and secure Industrial IoT platform.
 
-It puts established IT and OT technologies and techniques over fancy or self-built solutions to achieve reliability, maintainability, and scalability. Furthermore, it fulfills all your security needs by allowing you to inspect and control each component to ensure confidentiality, integrity, and availability.
+It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
 
-You can use it as a standalone end-to-end Industrial IoT platform to securely connect your machines and calculate and visualize important production KPIs like Overall Equipment Effectiveness (OEE) and Pareto charts.
+You can use it 
+1. as a standalone end-to-end Industrial IoT platform to securely connect your machines with the cloud or 
+2. as a toolkit and integrate its components fully into your IT/OT infrastructure to close potential gaps.
 
-Or you can use it as a toolkit and integrate its components fully into your IT/OT infrastructure to close potential gaps. As it uses open standards like Kubernetes, Docker, MQTT, OPC/UA, and relational databases it integrates very well into almost all landscapes - from Cloud over hybrid to on-premise (see also our guides in integrating it with [AWS](https://docs.umh.app/docs/getting-started/usage-in-production/#example-deployment-on-aws-eks) or [Azure](https://docs.umh.app/docs/concepts/integration-with-azure/)).
+### Key benefits
+
+- **Applicable** by including manufacturing specific business logics and applications (e.g., OEE analysis or Digital Shadow)
+- **Reliable and Maintainable** through the usage of established IT and OT technologies
+- **Scalable** across factories and clouds through a microservice approach and Kubernetes
+- **Secure** by allowing to inspect and control each component to ensure confidentiality, integrity, and availability
 
 ![Demo](docs/content/en/docs/dashboard.gif)
 
