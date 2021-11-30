@@ -27,8 +27,8 @@ class LibHelmLint(LibInterface):
         # Check if current branch has upstream
         # If so, only include changed Charts
         # If not check all Charts
+        self.chart_files = []
         if Git.has_upstream():
-            self.chart_files = []
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith("Chart.yaml"):
