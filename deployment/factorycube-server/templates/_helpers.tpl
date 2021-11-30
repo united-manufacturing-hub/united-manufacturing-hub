@@ -104,11 +104,18 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinput
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
 
+{{/*
+Labels for kafkatoblob
+*/}}
+{{- define "factorycube-server.labels.kafkatoblob" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-kafkatoblob
+{{ include "factorycube-server.labels.common" . }}
+{{- end }}
 
 {{/*
-Labels for kafka
+Labels for mqttkafkabridge
 */}}
-{{- define "factorycube-server.labels.kafka" -}}
-app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-kafka
+{{- define "factorycube-server.labels.mqttkafkabridge" -}}
+app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-mqttkafkabridge
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
