@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
+	"github.com/heptiolabs/healthcheck"
 	"io/ioutil"
 	"time"
 
@@ -81,38 +83,62 @@ func onConnectionLost(c MQTT.Client, err error) {
 	zap.S().Warnf("Connection lost", err, optionsReader.ClientID())
 }
 
-// setupMQTT setups MQTT and connect to the broker
-func setupMQTT(clientID string, mqttBrokerURL string, subMQTTTopic string, SSLEnabled bool, pg *goque.Queue) (MQTTClient MQTT.Client) {
+// SetupMQTT setups MQTT and connect to the broker
+func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.Queue) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	if certificateName == "NO_CERT" {
+		opts.SetClientID(podName)
+		opts.SetUsername("MQTT_KAFKA_BRIDGE")
 
-	if SSLEnabled {
-		tlsconfig := newTLSConfig(clientID)
-		opts.SetClientID(clientID).SetTLSConfig(tlsconfig)
+		if mqttTopic == "" {
+			mqttTopic = "$share/MQTT_KAFKA_BRIDGE/ia/#"
+		}
+
+		zap.S().Infof("Running in Kubernetes mode", podName, mqttTopic)
+
 	} else {
-		opts.SetClientID(clientID)
-	}
+		tlsconfig := newTLSConfig(certificateName)
+		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
 
+		if mqttTopic == "" {
+			mqttTopic = "ia/#"
+		}
+
+		zap.S().Infof("Running in normal mode", mqttTopic, certificateName)
+	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
+	opts.SetOrderMatters(false)
 
-	zap.S().Infof("MQTT connection configured", clientID, mqttBrokerURL, subMQTTTopic, SSLEnabled)
+	zap.S().Debugf("Broker configured", mqttBrokerURL, certificateName)
 
 	// Start the connection
-	MQTTClient = MQTT.NewClient(opts)
-	if token := MQTTClient.Connect(); token.Wait() && token.Error() != nil {
+	mqttClient = MQTT.NewClient(opts)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 
-	zap.S().Infof("MQTT subscribed", subMQTTTopic)
-	// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-	if token := MQTTClient.Subscribe(subMQTTTopic+"/#", 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
+	// Subscribe
+	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
+	zap.S().Infof("MQTT subscribed", mqttTopic)
 
-	return
+	// Implement a custom check with a 50 millisecond timeout.
+	health.AddReadinessCheck("mqtt-check", checkConnected(mqttClient))
+}
+
+func checkConnected(c MQTT.Client) healthcheck.Check {
+
+	return func() error {
+		if c.IsConnected() {
+			return nil
+		}
+		return fmt.Errorf("not connected")
+	}
 }
 
 func processOutgoingMessages() {
