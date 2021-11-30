@@ -14,5 +14,8 @@ dependencies:
 - name: minio-operator
   repository: https://operator.min.io/
   version: 4.1.7
-digest: sha256:6ce0bd7a3005387b071e154f2e224a8f9a1f3dc2b7740ad21da9032036c22a05
-generated: "2021-09-01T20:20:16.940747162+02:00"
+- name: kafka
+  repository: https://charts.bitnami.com/bitnami
+  version: 14.4.1
+digest: sha256:819d46a8b2062252500feb47b8554be43aa64dc40dd9e53935ce1c1e9bc09c06
+generated: "2021-11-24T11:50:51.2721237+01:00"

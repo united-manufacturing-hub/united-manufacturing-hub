@@ -54,7 +54,7 @@ spec:
               value: "ia"
 
             - name: KAFKA_BOOSTRAP_SERVER
-              value: {{ include "factorycube-server.fullname" . }}-kafka-local-service:1883
+              value: {{ include "factorycube-server.fullname" . }}-kafka:9092
 
             - name: KAFKA_LISTEN_TOPIC
               value: "^ia.+"
