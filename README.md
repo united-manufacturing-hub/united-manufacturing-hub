@@ -6,7 +6,7 @@
 ![Docker Pulls](https://img.shields.io/docker/pulls/unitedmanufacturinghub/factoryinsight)
 ![Website](https://img.shields.io/website?up_message=online&url=https%3A%2F%2Fwww.united-manufacturing-hub.com)
 
-<img src="docs/static/images/Otto.svg" height="150">
+<!-- <img src="docs/static/images/Otto.svg" height="150"> -->
 
 ## About The Project
 
