@@ -8,13 +8,11 @@
 
 <!-- <img src="docs/static/images/Otto.svg" height="150"> -->
 
-## About The Project
-
 The Open-Source toolkit to build your own reliable and secure Industrial IoT platform. It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
 
 You can use it 
-1. as a standalone end-to-end Industrial IoT platform to securely connect your machines with the cloud or 
-2. as a toolkit and integrate its components fully into your IT/OT infrastructure to close potential gaps.
+1. as a **standalone end-to-end Industrial IoT platform** to securely connect your machines with the cloud or 
+2. as a **toolkit** and integrate its components fully into your IT/OT infrastructure to close potential gaps.
 
 ### Key benefits
 
