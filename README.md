@@ -12,9 +12,7 @@
 
 ## About The Project
 
-The Open-Source toolkit to build your own reliable and secure Industrial IoT platform.
-
-It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
+The Open-Source toolkit to build your own reliable and secure Industrial IoT platform. It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
 
 You can use it 
 1. as a standalone end-to-end Industrial IoT platform to securely connect your machines with the cloud or 
@@ -33,8 +31,6 @@ You can use it
 
 Check out our [Documentation] and [Website] for guides about the United Manufacturing Hub and its architecture, [customer implementations](https://docs.umh.app/docs/examples/) and [articles about Industrial IoT](https://docs.umh.app/docs/concepts/). 
 
-----
-
 ## Citations
 
 - Niemeyer, C. & Gehrke, Inga & Müller, Kai & Küsters, Dennis & Gries, Thomas. (2020). Getting Small Medium Enterprises started on Industry 4.0 using retrofitting solutions. Procedia Manufacturing. 45. 208-214. 10.1016/j.promfg.2020.04.096. 
@@ -45,16 +41,6 @@ Check out our [Documentation] and [Website] for guides about the United Manufact
 
 See also [publications](https://docs.umh.app/docs/publications/) for more material!
 
-<!-- ROADMAP -->
-## Roadmap
-
-See the [open issues](https://github.com/united-manufacturing-hub/united-manufacturing-hub/issues) for a list of proposed features (and known issues).
-
-<!-- CONTRIBUTING -->
-## Contributing
-
-Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information.
-
 <!-- LICENSE -->
 ## License
 
@@ -64,11 +50,6 @@ All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See 
 ## Contact
 
 [UMH Systems GmbH](https://www.umh.app)
-
-<!-- ACKNOWLEDGEMENTS -->
-## Acknowledgements
-
-- [Digital Capability Center Aachen](https://www.mckinsey.com/business-functions/operations/how-we-help-clients/capability-center-network/our-centers/aachen)
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
