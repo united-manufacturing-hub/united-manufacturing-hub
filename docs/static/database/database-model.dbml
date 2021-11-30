@@ -302,7 +302,11 @@ Table ProductTagString{
   Note: 'This table models a tag of type string for a unique product'
 }
 
-
+Table MigrationVersion{
+  Current int [not null, note: 'Has the latest successful migration version']
+  LastMigrationTimestamp timestamp [not null, note: 'Timestamp of the latest successful migration']
+  Note: 'This table stores the id of the latest migration'
+}
 
 
 

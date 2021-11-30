@@ -60,6 +60,14 @@ This table holds physical locations of Stations
 | `Name` | text | Name of Location
 
 
+### MigrationVersion
+This table stores the id of the latest migration
+| key | data type/format | description |
+|-----|-----|--------------------------|
+| `Current` | int | Has the latest successful migration version 
+| `LastMigrationTimestamp` | timestamp | Timestamp of MigrationVersion creation
+
+
 ### Order
 This table holds an order for a station
 
@@ -420,6 +428,5 @@ Example: Loading, Processing Step 1, Processing Step 2, Unloading
 | keys | type |
 |-----|-----|
 | `StationId`, `StationStepId`, `SequenceNumber` | [Unique](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-UNIQUE-CONSTRAINTS)
-
 
 

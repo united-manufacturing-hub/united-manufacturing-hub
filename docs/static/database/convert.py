@@ -1,9 +1,8 @@
 import collections
-import os
+from pathlib import Path
 
 import pydbml.classes
 from pydbml import PyDBML
-from pathlib import Path
 
 
 def table_to_markdown(dbml_table: pydbml.classes.Table):
@@ -81,8 +80,8 @@ def enum_to_markdown(dbml_enum: pydbml.classes.Enum):
 
 
 pre_text = """---
-title: "The UMH datamodel / Postgres"
-linkTitle: "The UMH datamodel / Postgres"
+title: "Postgres"
+linkTitle: "Postgres"
 weight: 2
 description: >
     The following model documents our internal postgres tables
