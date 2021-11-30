@@ -104,15 +104,6 @@ app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-factoryinput
 {{ include "factorycube-server.labels.common" . }}
 {{- end }}
 
-
-{{/*
-Labels for kafka
-*/}}
-{{- define "factorycube-server.labels.kafka" -}}
-app.kubernetes.io/name: {{ include "factorycube-server.name" . }}-kafka
-{{ include "factorycube-server.labels.common" . }}
-{{- end }}
-
 {{/*
 Labels for kafkatoblob
 */}}
