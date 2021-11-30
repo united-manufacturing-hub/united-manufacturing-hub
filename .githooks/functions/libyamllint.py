@@ -38,8 +38,8 @@ class LibYamlLint(LibInterface):
         # Check if current branch has upstream
         # If so, only include changed yaml files
         # If not check all yaml files
+        self.yaml_files = []
         if Git.has_upstream():
-            self.yaml_files = []
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith(".yaml"):
