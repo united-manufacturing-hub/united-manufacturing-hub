@@ -8,8 +8,6 @@
 
 <img src="docs/static/images/Otto.svg" height="150">
 
-----
-
 ## About The Project
 
 The Open-Source toolkit to build your own reliable and secure Industrial IoT platform. It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
@@ -25,11 +23,14 @@ You can use it
 - **Scalable** across factories and clouds through a microservice approach and Kubernetes
 - **Secure** by allowing to inspect and control each component to ensure confidentiality, integrity, and availability
 
+### Dashboard demo
+
 ![Demo](docs/content/en/docs/dashboard.gif)
 
 ## Get started
 
-Check out our [Documentation] and [Website] for guides about the United Manufacturing Hub and its architecture, [customer implementations](https://docs.umh.app/docs/examples/) and [articles about Industrial IoT](https://docs.umh.app/docs/concepts/). 
+- [Go to our documentation](https://docs.umh.app/docs/) to learn about installation, maintaining, the architecture and the topic IIoT in general
+- [Go to our website](https://www.umh.app) for commercial support and implementation
 
 ## Citations
 
@@ -50,8 +51,3 @@ All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See 
 ## Contact
 
 [UMH Systems GmbH](https://www.umh.app)
-
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[Website]: https://www.umh.app
-[Documentation]: https://docs.umh.app/docs/ 
