@@ -20,13 +20,7 @@ The basic approach for data processing on the local hardware is to extract data 
 
 If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a detailed documentation.
 
-{{< imgproc nodered Fit "800x800" >}}{{< /imgproc >}}
-
-[Here you can download the flow](/examples/nodered/standard_flow.json)
-
 ### General Configuration
-
-{{< imgproc nodered_general Fit "800x800" >}}{{< /imgproc >}}
 
 Basically, 3 pieces of information need to be sent to the system. For more information feel free to check [this article](/docs/concepts/mqtt/). 
 
@@ -76,7 +70,6 @@ This means that an ifm gateway with serial number `0000005898845` is connected t
 }
 ```
 
-
 ### Extract information and make it available to the **outputs**:
 In order for the data to be processed easily and quickly by the United Manufacturing hub, the input data (OPC/UA, Siemens S7) must be prepared and converted into a standardized data format (MQTT Topic). A detailed explanation of our MQTT data model can be found [here](/docs/concepts/mqtt/) and [here](/docs/concepts/state).
 
@@ -103,10 +96,6 @@ Used Sensors:
 Now the machine status is automatically determined and communicated to the united manufacturing hub for further analysis. Like for example the loss of speed.
 
 TODO: #63 add example Flow for data processing
-### Testing:
-
-{{< imgproc nodered_testing Fit "800x800" >}}{{< /imgproc >}}
-Using the test flows, you can test your entire system or simply simulate some sample data for visualization.
 
 [See also DCC Aachen example in our showcase.](/docs/examples/assembly-analytics)
 
