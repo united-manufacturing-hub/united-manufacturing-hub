@@ -4,11 +4,12 @@ import (
 	"github.com/beeker1121/goque"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -34,11 +35,7 @@ func main() {
 	MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
 	MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
 	MQTTTopic := os.Getenv("MQTT_TOPIC")
-	MQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("MQTT_BROKER_SSL_ENABLED"))
-	if err != nil {
-		zap.S().Errorf("Error parsing bool from environment variable", err)
-		return
-	}
+	podName := os.Getenv("MY_POD_NAME")
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
@@ -55,6 +52,7 @@ func main() {
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Setting up Queues")
+	var err error
 	mqttIncomingQueue, err = setupQueue("incoming")
 	if err != nil {
 		zap.S().Errorf("Error setting up incoming queue", err)
@@ -69,8 +67,16 @@ func main() {
 	}
 	defer closeQueue(mqttOutGoingQueue)
 
+	// Prometheus
+	zap.S().Debugf("Setting up healthcheck")
+
+	health := healthcheck.NewHandler()
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
+	go http.ListenAndServe("0.0.0.0:8086", health)
+
 	zap.S().Debugf("Setting up MQTT")
-	mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
+	//mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
+	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
 	kafkaProducerClient, kafkaAdminClient, kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
