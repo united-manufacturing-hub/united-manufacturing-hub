@@ -47,8 +47,8 @@ spec:
             - name: MQTT_BROKER_URL
               value: {{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
 
-            - name: MQTT_BROKER_SSL_ENABLED
-              value: "0"
+            - name: MQTT_CERTIFICATE_NAME
+              value: "NO_NAME"
 
             - name: MQTT_TOPIC
               value: "ia/#"
