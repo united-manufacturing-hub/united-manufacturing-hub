@@ -17,6 +17,10 @@ data:
      topic read ia/#
      topic read $share/MQTT_TO_POSTGRESQL/ia/#
 
+     user MQTT_TO_KAFKA
+     topic read ia/#
+     topic read $share/MQTT_TO_KAFKA/ia/#
+
      user FACTORYINPUT
      topic write ia/#
      topic write $share/FACTORYINPUT/ia/#
