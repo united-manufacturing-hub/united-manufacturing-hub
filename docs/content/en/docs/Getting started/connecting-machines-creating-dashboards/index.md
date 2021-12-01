@@ -7,13 +7,18 @@ description: >
   This section explains how the United Manufacturing Hub is used practically 
 ---
 
+## Video: From sensor to dashboard
+
+TODO
+#455
+
 ## 1. Extract data using factorycube-edge
 
 The basic approach for data processing on the local hardware is to extract data from various data sources (OPC/UA, MQTT, Rest), extract the important information, and then make it available to the United Manufacturing Hub via a predefined interface (MQTT).
 
 **To extract and pre-process the data from different data sources we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications.**
 
-If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a good documentation.
+If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a detailed documentation.
 
 {{< imgproc nodered Fit "800x800" >}}{{< /imgproc >}}
 
@@ -39,6 +44,9 @@ Furthermore, under the general settings you will find the state logic that deter
 {{< imgproc nodered_inputs Fit "800x800" >}}{{< /imgproc >}}
 
 **With the help of the inputs you can tap different data sources. Like for example:**
+
+TODO: What data sources?
+
 - OPC/UA ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-opcua))
 - Siemens S7 ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-s7))
 - TCP/IP ([documentation for this node](https://flows.nodered.org/flow/bed6f676d088670d7e1bc298943338b5))
@@ -48,7 +56,7 @@ Furthermore, under the general settings you will find the state logic that deter
 
 **Interaction with sensorconnect (Plug and Play connection of IO-Link Senosors):**
 
-With the help of Sensorconnect, various sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](http://www.steves-internet-guide.com/mqtt-works/).
+With the help of sensorconnect, various sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](http://www.steves-internet-guide.com/mqtt-works/).
 
 To get a quick and easy overview of the available MQTT messages and topics, we recommend using the [MQTT Explorer](http://mqtt-explorer.com/). If you don't want to install aadditional software, you can use the MQTT-In node to subscribe to all available topics by subscribing to  `#` and then directing the messages of the MQTT-In nodes into a debugging node. You can then view the messages in the Node-RED debugging window and get information about the topic and the available data points.
 
