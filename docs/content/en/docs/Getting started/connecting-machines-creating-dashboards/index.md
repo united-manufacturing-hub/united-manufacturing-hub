@@ -12,13 +12,13 @@ description: >
 TODO
 #455
 
-## 1. "Extract data using factorycube-edge" or "Preparing/ extracting the data for Node-RED" or smth
+## 1. Extracting the data for Node-RED using factorycube-edge
 
 **Node-RED**
 
 The basic approach for data processing on the local hardware is to **extract data** from various data sources (OPC/UA, MQTT, Rest), extract the important information, and then make it available to the United Manufacturing Hub via a predefined interface (MQTT).
 
-To extract and pre-process the data from different data sources we use the open source software **Node-RED**. Node-RED is a low-code programming for event-driven applications. What Node-RED is used for and what you can do with it, you can read [here](https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/). For a deeper documentation check [this article](https://nodered.org/docs/user-guide/)
+To extract and pre-process the data from different data sources we use the open source software **Node-RED**. Node-RED is a low-code programming for event-driven applications. Why we use Node-RED and what you can do with it in general, you can read [here](https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/). For a deeper documentation check [this article](https://nodered.org/docs/user-guide/)
 
 ### General Configuration
 
@@ -73,6 +73,8 @@ This means that an ifm gateway with serial number `0000005898845` is connected t
 
 ### Extract information and make it available to the **outputs**:
 In order for the data to be processed easily and quickly by the United Manufacturing hub, the input data (OPC/UA, Siemens S7) must be prepared and converted into a standardized data format (MQTT Topic). A detailed explanation of our MQTT data model can be found [here](/docs/concepts/mqtt/) and [here](/docs/concepts/state).
+
+### Outputs:
 
 The 4 most important data points:
 - Information whether the machine is running or not: `/activity`
