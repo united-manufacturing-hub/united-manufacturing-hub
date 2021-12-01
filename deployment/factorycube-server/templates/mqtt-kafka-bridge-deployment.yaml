@@ -51,7 +51,7 @@ spec:
               value: "0"
 
             - name: MQTT_TOPIC
-              value: "ia"
+              value: "ia/#"
 
             - name: KAFKA_BOOSTRAP_SERVER
               value: {{ include "factorycube-server.fullname" . }}-kafka:9092
