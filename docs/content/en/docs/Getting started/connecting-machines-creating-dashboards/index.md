@@ -12,17 +12,17 @@ description: >
 TODO
 #455
 
-## 1. Extract data using factorycube-edge
+## 1. "Extract data using factorycube-edge" or "Preparing/ extracting the data for Node-RED" or smth
 
-The basic approach for data processing on the local hardware is to extract data from various data sources (OPC/UA, MQTT, Rest), extract the important information, and then make it available to the United Manufacturing Hub via a predefined interface (MQTT).
+**Node-RED**
 
-**To extract and pre-process the data from different data sources we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications.**
+The basic approach for data processing on the local hardware is to **extract data** from various data sources (OPC/UA, MQTT, Rest), extract the important information, and then make it available to the United Manufacturing Hub via a predefined interface (MQTT).
 
-If you haven't worked with Node-RED yet, [here](https://nodered.org/docs/user-guide/) is a detailed documentation.
+To extract and pre-process the data from different data sources we use the open source software **Node-RED**. Node-RED is a low-code programming for event-driven applications. What Node-RED is used for and what you can do with it, you can read [here](https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/). For a deeper documentation check [this article](https://nodered.org/docs/user-guide/)
 
 ### General Configuration
 
-Basically, 3 pieces of information need to be sent to the system. For more information feel free to check [this article](/docs/concepts/mqtt/). 
+To create a node red flow, there are essentially 3 pieces of information that need to be sent to the system. For more information feel free to check [this article](/docs/concepts/mqtt/). 
 
 - The customer ID to be assigned to the asset: *customerID*
 
@@ -35,7 +35,6 @@ These 3 information must be set to the system via the green configuration Node-R
 Furthermore, under the general settings you will find the state logic that determines the *state* of the machine using the *activity* and *detectedAnomaly* topic. For more information feel free to check [this article.](/docs/concepts/mqtt/)
 
 ### Inputs:
-{{< imgproc nodered_inputs Fit "800x800" >}}{{< /imgproc >}}
 
 **With the help of the inputs you can tap different data sources. Like for example:**
 
@@ -47,6 +46,8 @@ TODO: What data sources?
 - Rest API  ([documentation for this node](https://cookbook.nodered.org/http/create-an-http-endpoint))
 - Modbus  ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-modbus))
 - MQTT ([documentation for this node](https://cookbook.nodered.org/mqtt/))
+
+{{< imgproc nodered_inputs Fit "800x800" >}}{{< /imgproc >}}
 
 **Interaction with sensorconnect (Plug and Play connection of IO-Link Senosors):**
 
@@ -73,13 +74,13 @@ This means that an ifm gateway with serial number `0000005898845` is connected t
 ### Extract information and make it available to the **outputs**:
 In order for the data to be processed easily and quickly by the United Manufacturing hub, the input data (OPC/UA, Siemens S7) must be prepared and converted into a standardized data format (MQTT Topic). A detailed explanation of our MQTT data model can be found [here](/docs/concepts/mqtt/) and [here](/docs/concepts/state).
 
-{{< imgproc nodered_outputs Fit "800x800" >}}{{< /imgproc >}}
-
 The 4 most important data points:
 - Information whether the machine is running or not: `/activity`
 - Information about anomalies or concrete reasons for a machine standstill: `/detectedAnomaly`
 - The produced quantity: `/count`
 - An interface to communicate any process value to the system (e.g. temperature or energy consumption) - `/processvalue`
+
+{{< imgproc nodered_outputs Fit "800x800" >}}{{< /imgproc >}}
 
 Using the information from the `/activtiy` and `/detectedAnomaly` topics, the statelogic node calculates the discrete machine state. It first checks if the machine is running or not. If the machine is not running, the machine state is set equal to the last `/detectedAnomaly`, analogous to [state model](/docs/concepts/state). The discrete machine state is then made available again via the `/state` topic.
 
