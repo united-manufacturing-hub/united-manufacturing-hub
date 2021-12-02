@@ -16,7 +16,7 @@ TODO
 
 UMH Hub has a wide range of ports and connectors. 
 
-TODO: Image of logos of data sources
+{{< imgproc logos_data_sources Fit "800x800" >}}{{< /imgproc >}}
 
 These are e.g. 
 
