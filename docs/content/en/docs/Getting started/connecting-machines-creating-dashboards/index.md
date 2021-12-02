@@ -80,7 +80,7 @@ The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumbe
 
 To get a quick and easy overview of the available MQTT messages and topics we recommend the MQTT Explorer. If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
-#### Example for ia/raw/
+Example for ia/raw/
 
 Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
