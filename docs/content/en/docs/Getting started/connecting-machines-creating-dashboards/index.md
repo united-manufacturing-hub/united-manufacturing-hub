@@ -18,7 +18,7 @@ UMH Hub has a wide range of ports and connectors.
 
 {{< imgproc logos_data_sources Fit "800x800" >}}{{< /imgproc >}}
 
-These are e.g. 
+These are:
 
 - OPC/UA ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-opcua))
 - Siemens S7 ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-s7))
@@ -33,13 +33,47 @@ Using these data points and our data model, the data can then be converted into 
 
 ## 2. Node-RED
 
-TODO: Introduce why Node-RED is the standard (reference to https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/).
+To extract and preprocess the data from different data sources, we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications. 
 
-- Explain Node-RED on the basis of exemplary cases
-1st example: Retrofit with the help of external sensor technology (Sensorconnect incl. adaptation of IP range, MQTT)
-2nd example: connection to interface (OPC/UA).
-- Integrate "general configuration" into examples
-- Just use MQTT outputs
+Originally, Node-RED comes from the area of smart home and programming implementations, but is also used in manufacturing more frequently. For more information feel free to check [this article](https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/).
+
+In the following, the procedure for creating a Node-RED flow is described in detail using **two examples**. The first example is about a cutting machine which will be retrofitted by external sensor technology. The second example deals with the connection of already existing sensors from with our system in order to visualize the acquired data.
+
+### 1st example
+
+The focus of this chapter is to provide sensor data via sensorconnect to our system. With the help of Sensorconnect, different sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
+
+The very first step is to make the connected sensors visible to our system. Based on an IP address, which is assigned to each sensor (or gateway?), the sensor can be integrated into our system. Only then is it possible to read out sensor values. The adaptation of the IP range is required.
+
+TODO: ADAPTION OF IP-RANGE
+
+In Node-RED basically three pieces of information must be communicated to the system.
+
+- The customer ID to be assigned to the asset: *customerID*
+
+- The location where the asset is located: *location*
+
+- The name of the asset: *AssetID*
+
+In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled and so a MQTT input is possible.
+
+Topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
+
+To get a quick and easy overview of the available MQTT messages and topics we recommend the MQTT Explorer. If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
+
+#### Example for ia/raw/
+
+Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
+
+This means that an ifm gateway with serial number `0000005898845` is connected to the transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
+
+The **second node (JSON)** is a generic container of elements inside a JSON stream. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert between two formats.
+
+TODO: Following nodes...
+
+### 2nd example
+
+This chapter describes how to connect already existing sensors/ integrate an already existing interface (OPC/UA) with our system.
 
 ## 3. Create dashboards using factorycube-server
 
