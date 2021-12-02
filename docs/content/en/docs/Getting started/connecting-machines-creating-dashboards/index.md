@@ -43,7 +43,7 @@ In the following, the procedure for creating a Node-RED flow is described in det
 
 The focus of this chapter is to provide sensor data via sensorconnect to our system. With the help of Sensorconnect, different sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
-The very first step is to make the connected sensors visible to our system. Based on an IP address, which is assigned to each sensor (or gateway?), the sensor can be integrated into our system. Only then is it possible to read out sensor values. The adaptation of the IP range is required.
+But the very first step is to make the connected sensors visible to our system. Based on an IP address, which is assigned to each sensor (or gateway?), the sensor can be integrated into our system. Only then is it possible to read out sensor values. The adaptation of the IP range is required.
 
 TODO: ADAPTION OF IP-RANGE
 
@@ -67,7 +67,7 @@ Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
 This means that an ifm gateway with serial number `0000005898845` is connected to the transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
 
-The **second node (JSON)** is a generic container of elements inside a JSON stream. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert between two formats.
+The **second node (JSON)** is a generic container of elements inside a JSON stream is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert between two formats.
 
 TODO: Following nodes...
 
