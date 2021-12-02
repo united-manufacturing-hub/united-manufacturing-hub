@@ -39,7 +39,7 @@ Originally, Node-RED comes from the area of smart home and programming implement
 
 In the following, the procedure for creating a Node-RED flow is described in detail using **two examples**. The first example is about a cutting machine which will be retrofitted by external sensor technology. The second example deals with the connection of already existing sensors from with our system in order to visualize the acquired data.
 
-### 1st example
+### 1st example: Connecting external sensor technology
 
 The focus of this chapter is to provide sensor data via sensorconnect to our system. With the help of Sensorconnect, different sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
@@ -55,9 +55,9 @@ In Node-RED basically three pieces of information must be communicated to the sy
 
 - The name of the asset: *AssetID*
 
-In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled and so a MQTT input is possible.
+In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled to get a MQTT input.
 
-Topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
+The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
 To get a quick and easy overview of the available MQTT messages and topics we recommend the MQTT Explorer. If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
@@ -71,10 +71,10 @@ The **second node (JSON)** is a generic container of elements inside a JSON stre
 
 TODO: Following nodes...
 
-### 2nd example
+### 2nd example: Integration of existing sensors
 
 This chapter describes how to connect already existing sensors/ integrate an already existing interface (OPC/UA) with our system.
 
-## 3. Create dashboards using factorycube-server
+## 3. Create dashboards with Grafana
 
 TODO
