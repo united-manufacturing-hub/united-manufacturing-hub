@@ -41,25 +41,26 @@ In the following, the procedure for creating a Node-RED flow is described in det
 
 ### 1st example: Connecting external sensor technology
 
-You would like to determine the output and machine condition of a ...machine.
+You would like to determine the output and machine condition of a cutting machine.
 
 Used Sensors:
-- 
-- 
+
+- Light Barrier
+- Button Bar
 
 With the help of Sensorconnect, different sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
-1. Connect Sensors
+*1. Connect Sensors*
 
-...
+TODO: Picture or illustration of how to connect sensors
 
-2. Make the connected sensors visible to our system. 
+*2. Make the connected sensors visible to our system*
 
 Based on an IP address, which is assigned to each sensor (or gateway?), the sensor can be integrated into our system. Only then is it possible to read out sensor values. The adaptation of the IP range is required.
 
 TODO: ADAPTION OF IP-RANGE
 
-3. Creating a flow
+*3. Creating a flow*
 
 In Node-RED basically three pieces of information must be communicated to the system.
 
@@ -69,7 +70,9 @@ In Node-RED basically three pieces of information must be communicated to the sy
 
 - The name of the asset: *AssetID*
 
-3.1 First node
+*3.1 First node: MQTT-IN*
+
+TODO: PICTURE
 
 In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled to get a MQTT input.
 
@@ -83,9 +86,15 @@ Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
 This means that an ifm gateway with serial number `0000005898845` is connected to the transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
 
-3.2 Second node
+*3.2 Second node: JSON*
+
+TODO: PICTURE
 
 The **second node (JSON)** is a generic container of elements inside a JSON stream is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert between two formats.
+
+TODO: INFORMATION IN JSON
+
+*3.3 Theird node: Function*
 
 TODO: Following nodes...
 
