@@ -48,7 +48,7 @@ Used Sensors:
 - Light Barrier
 - Button Bar
 
-With the help of Sensorconnect, different sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
+With the help of Sensorconnect, sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
 *1. Connect Sensors*
 
@@ -73,6 +73,7 @@ In Node-RED basically three pieces of information must be communicated to the sy
 *3.1 First node: MQTT-IN*
 
 TODO: PICTURE
+TODO: Introduce the first node briefly, then explain it in detail (topic etc.)
 
 In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled to get a MQTT input.
 
@@ -80,11 +81,9 @@ The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumbe
 
 To get a quick and easy overview of the available MQTT messages and topics we recommend the MQTT Explorer. If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
-Example for ia/raw/
+An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
-Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
-
-This means that an ifm gateway with serial number `0000005898845` is connected to the transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
+This means that an IFM gateway with serial number `0000005898845` is connected to a transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
 
 *3.2 Second node: JSON*
 
