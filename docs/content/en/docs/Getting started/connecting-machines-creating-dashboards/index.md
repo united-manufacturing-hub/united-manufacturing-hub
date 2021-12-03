@@ -62,6 +62,12 @@ TODO: ADAPTION OF IP-RANGE
 
 *3. Creating a flow*
 
+TODO: INTRO
+
+*3.1 First node: MQTT-IN*
+
+TODO: PICTURE
+
 In Node-RED basically three pieces of information must be communicated to the system.
 
 - The customer ID to be assigned to the asset: *customerID*
@@ -70,28 +76,19 @@ In Node-RED basically three pieces of information must be communicated to the sy
 
 - The name of the asset: *AssetID*
 
-*3.1 First node: MQTT-IN*
-
-TODO: PICTURE
-TODO: Introduce the first node briefly, then explain it in detail (topic etc.)
-
 In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled to get a MQTT input.
 
 The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
 To get a quick and easy overview of the available MQTT messages and topics we recommend the MQTT Explorer. If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
-An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`
-
-This means that an IFM gateway with serial number `0000005898845` is connected to a transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
+An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`. This means that an IFM gateway with serial number `0000005898845` is connected to a transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
 
 *3.2 Second node: JSON*
 
 TODO: PICTURE
 
-The **second node (JSON)** is a generic container of elements inside a JSON stream is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert between two formats.
-
-TODO: INFORMATION IN JSON
+The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
 
 *3.3 Theird node: Function*
 
