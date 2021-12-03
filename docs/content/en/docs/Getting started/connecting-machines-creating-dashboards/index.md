@@ -14,11 +14,11 @@ TODO
 
 ## 1. Introduction
 
-UMH Hub has a wide range of ports and connectors. 
+The United Manufacturing Hub has a wide variety of connectors and therefore offers maximum connectivity to different machines and systems.
 
 {{< imgproc logos_data_sources Fit "800x800" >}}{{< /imgproc >}}
 
-These are:
+Here are a few selected examples:
 
 - OPC/UA ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-opcua))
 - Siemens S7 ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-s7))
@@ -31,13 +31,16 @@ Via Node-RED, these data sources can be read out easily or, in the case of IO-Li
 
 Using these data points and our data model, the data can then be converted into a standardized data model. This is done independently of machine type and manufacturer and can be made usable for various data services, e.g. Grafana.
 
-## 2. Node-RED
+## 2. Extracting and preparing data with the help of Node-RED
 
 To extract and preprocess the data from different data sources, we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications. 
 
 Originally, Node-RED comes from the area of smart home and programming implementations, but is also used in manufacturing more frequently. For more information feel free to check [this article](https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/).
 
-In the following, the procedure for creating a Node-RED flow is described in detail using **two examples**. The first example is about a cutting machine which will be retrofitted by external sensor technology. The second example deals with the connection of already existing sensors from with our system in order to visualize the acquired data.
+In the following, the procedure for creating a Node-RED flow is described in detail using **two examples**. 
+
+1. Retrofit a cutting machine with the help of external sensors
+2. Using OPC/UA to read a warping machine data directly from the PLC
 
 ### 1st example: Connecting external sensor technology
 
@@ -56,11 +59,11 @@ TODO: Picture or illustration of how to connect sensors
 
 *2. Make the connected sensors visible to our system*
 
-Based on an IP address, which is assigned to each sensor (or gateway?), the sensor can be integrated into our system. Only then is it possible to read out sensor values. The adaptation of the IP range is required.
+The gateways to which sensors are connected are found by our microservice in the local network. For this purpose, the IP address range must be communicated to the microservice so that it can search for the gateway in the correct network and read out the sensors via it.
 
 TODO: ADAPTION OF IP-RANGE
 
-*3. Creating a flow*
+*3. Creating a Node-RED flow*
 
 TODO: INTRO
 
@@ -68,13 +71,13 @@ TODO: INTRO
 
 TODO: PICTURE
 
-In Node-RED basically three pieces of information must be communicated to the system.
+In order to contextualise the resulting data points with the help of the United Manufacturing Hub, 3 identifiers are necessary:
 
-- The customer ID to be assigned to the asset: *customerID*
+- The customer ID to be assigned to the asset: *customerID* (Default value for the development setup "factoryinsight"
 
-- The location where the asset is located: *location*
+- The location where the asset is located: *location* (Can be chosen freely)
 
-- The name of the asset: *AssetID*
+- The name of the asset: *AssetID* (Can be chosen freely)
 
 In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled to get a MQTT input.
 
