@@ -83,8 +83,7 @@ func GetMetaData() (metadata *kafka.Metadata, err error) {
 }
 
 //goland:noinspection GoVetLostCancel
-func CreateTopicIfNotExists(mqttTopicName string) (err error) {
-	kafkaTopicName := MqttTopicToKafka(mqttTopicName)
+func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	exists, err := TopicExists(kafkaTopicName)
 	if err != nil {
 		return err
@@ -146,13 +145,13 @@ func processIncomingMessages() {
 		}
 
 		//Setup Topic if not exist
-		err = CreateTopicIfNotExists(object.Topic)
+		kafkaTopicName := MqttTopicToKafka(object.Topic)
+		err = CreateTopicIfNotExists(kafkaTopicName)
 		if err != nil {
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
 			continue
 		}
 
-		kafkaTopicName := MqttTopicToKafka(object.Topic)
 		zap.S().Debugf("Sending with Topic: %s", kafkaTopicName)
 		err = kafkaProducerClient.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
