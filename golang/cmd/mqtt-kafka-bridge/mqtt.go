@@ -66,7 +66,7 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 			zap.S().Infof("onMessageReceived", topic, payload)
 			go storeNewMessageIntoQueue(topic, payload, pg)
 		} else {
-			zap.S().Warnf("onMessageReceived [INVALID] ", topic, payload)
+			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
 		}
 	}
 }
