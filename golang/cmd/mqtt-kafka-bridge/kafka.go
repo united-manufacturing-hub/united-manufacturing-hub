@@ -195,7 +195,7 @@ func kafkaToQueue(topic string) {
 			go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
 			zap.S().Debugf("kafkaToQueue", topic, payload)
 		} else {
-			zap.S().Warnf("kafkaToQueue [INVALID] ", topic, payload)
+			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
 		}
 	}
 }
