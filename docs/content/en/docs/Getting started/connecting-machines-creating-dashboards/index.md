@@ -93,7 +93,7 @@ An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
 *3.2 Second node: JSON*
 
-TODO: PICTURE
+{{< imgproc logos_data_sources json "800x800" >}}{{< /imgproc >}}
 
 The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
 
@@ -102,6 +102,8 @@ Now we will take a look at the three different sensors individually.
 #### Button Bar
 
 *3.3 Theird node: Function*
+
+{{< imgproc logos_data_sources function "800x800" >}}{{< /imgproc >}}
 
 In the **third node "function"** a timestamp is generated at the time of pressing a button. The timestamp is stored in the form of a string. This makes it possible, for example, to specify machine states and display them in a timeline.
 
@@ -115,6 +117,8 @@ return msg;
 
 *3.4 Fourth node: Filter*
 
+{{< imgproc logos_data_sources filter "800x800" >}}{{< /imgproc >}}
+
 The **filter** is mainly for clarity and blocks the values of a sensor until the value is changed. A change of the property is not necessary.
 
 *3.5 Fifth node: Switch*
@@ -124,6 +128,8 @@ The **switch** is used to distinguish between the different inputs for the follo
 With the button bar, these are the individual buttons. You can see which name is assigned to a single button by the number that appears in the debug window when you press a button.  For our example these are the numbers "0108", "0104", 0120" and "0101".
 
 *3.6 Sixth node: Function*
+
+{{< imgproc logos_data_sources function "800x800" >}}{{< /imgproc >}}
 
 The switch node is followed by a separate **function** for each button. In our example different states are transmitted. States can be e.g. pause, maintenance, emptying etc. and are defined via numbers. The different states can be found [here](https://docs.umh.app/docs/concepts/state/).
 
@@ -146,6 +152,8 @@ return msg;
 To reach further machine states, only the adaptation of the state number is necessary
 
 *3.7 Seventh node: MQTT-Out*
+
+{{< imgproc logos_data_sources mqtt_out "800x800" >}}{{< /imgproc >}}
 
 To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
 
