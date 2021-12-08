@@ -123,6 +123,8 @@ The **filter** is mainly for clarity and blocks the values of a sensor until the
 
 *3.5 Fifth node: Switch*
 
+{{< imgproc logos_data_sources switch "800x800" >}}{{< /imgproc >}}
+
 The **switch** is used to distinguish between the different inputs for the following flow and only lets through the values that come through the previously defined input. 
 
 With the button bar, these are the individual buttons. You can see which name is assigned to a single button by the number that appears in the debug window when you press a button.  For our example these are the numbers "0108", "0104", 0120" and "0101".
