@@ -103,8 +103,6 @@ Now we will take a look at the three different sensors individually.
 
 *3.3 Theird node: Function*
 
-On the button bar are 4 buttons, which can have different functions.
-
 In the **third node "function"** a timestamp is generated at the time of pressing a button. The timestamp is stored in the form of a string. This makes it possible, for example, to specify machine states and display them in a timeline.
 
 The code for this node looks like this:
