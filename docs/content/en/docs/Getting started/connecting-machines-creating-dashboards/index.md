@@ -123,7 +123,7 @@ The **filter** is mainly for clarity and blocks the values of a sensor until the
 
 *3.5 Fifth node: Switch*
 
-{{< imgproc switch Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc switch Fit "400x400" >}}{{< /imgproc >}}
 
 The **switch** is used to distinguish between the different inputs for the following flow and only lets through the values that come through the previously defined input. 
 
