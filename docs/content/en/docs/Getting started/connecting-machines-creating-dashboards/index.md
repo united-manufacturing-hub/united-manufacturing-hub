@@ -65,9 +65,13 @@ TODO: ADAPTION OF IP-RANGE
 
 *3. Creating a Node-RED flow*
 
-TODO: INTRO
+With Node-Red, it is possible to quickly develop applications and prepare untreated sensor data so that Grafana, for example, can use it. For this purpose, so-called nodes are drawn onto a surface and wired together to create sequences. 
 
-*3.1 First node: MQTT-IN*
+In the following, the creation of such Node-RED flows is demonstrated using the example sensors button bar, light barrier and inductive sensor. 
+
+The first two nodes are the same for all connected sensors. Only after that we will distinguish between the different sensors.
+
+*3.1 First node: MQTT-In*
 
 TODO: PICTURE
 
@@ -93,9 +97,55 @@ TODO: PICTURE
 
 The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
 
+Now we will take a look at the three different sensors individually.
+
+#### Button Bar
+
 *3.3 Theird node: Function*
 
-TODO: Following nodes...
+On the button bar are 4 buttons, which can have different functions.
+
+In the **third node "function"** a timestamp is generated at the time of pressing a button. The timestamp is stored in the form of a string. This makes it possible, for example, to specify machine states and display them in a timeline.
+
+The code for this node looks like this:
+
+msg.timestamp=msg.payload.timestamp_ms
+msg.payload=msg.payload.value_string;
+return msg; 
+
+*3.4 Fourth node: Filter*
+
+The **filter** is mainly for clarity and blocks the values of a sensor until the value is changed. A change of the property is not necessary.
+
+*3.5 Fifth node: Switch*
+
+The **switch** is used to distinguish between the different inputs for the following flow and only lets through the values that come through the previously defined input. 
+
+With the button bar, these are the individual buttons. You can see which name is assigned to a single button by the number that appears in the debug window when you press a button.  For our example these are the numbers "0108", "0104", 0120" and "0101".
+
+*3.6 Sixth node: Function*
+
+The switch node is followed by a separate **function** for each button. In our example different states are transmitted. States can be e.g. pause, maintenance, emptying etc. and are defined via numbers. The different states can be found [here](https://docs.umh.app/docs/concepts/state/).
+
+For example, the code for the function looks like this:
+
+msg.payload=
+{
+    "timestamp_ms": msg.timestamp, 
+    "state": 120000
+}
+msg.topic = "ia/factoryinsight/bla/blabla/state"
+return msg;
+
+To reach further machine states, only the adaptation of the state number is necessary
+
+*3.7 Seventh node: MQTT-Out*
+
+To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
+
+#### Light Barrier
+
+#### Inductive Sensor
 
 ### 2nd example: Integration of existing sensors
 
