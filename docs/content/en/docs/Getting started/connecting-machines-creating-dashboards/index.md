@@ -132,7 +132,7 @@ msg.payload=
     "timestamp_ms": msg.timestamp, 
     "state": 120000
 }
-msg.topic = "ia/factoryinsight/bla/blabla/state"
+msg.topic = "ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>"
 return msg;
 
 To reach further machine states, only the adaptation of the state number is necessary
