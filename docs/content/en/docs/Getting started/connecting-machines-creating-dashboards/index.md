@@ -73,7 +73,7 @@ The first two nodes are the same for all connected sensors. Only after that we w
 
 *3.1 First node: MQTT-In*
 
-{{< imgproc mqtt_in Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc mqtt_in Fit "150x800" >}}{{< /imgproc >}}
 
 In order to contextualise the resulting data points with the help of the United Manufacturing Hub, 3 identifiers are necessary:
 
@@ -93,7 +93,7 @@ An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
 *3.2 Second node: JSON*
 
-{{< imgproc json Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc json Fit "150x800" >}}{{< /imgproc >}}
 
 The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
 
@@ -103,7 +103,7 @@ Now we will take a look at the three different sensors individually.
 
 *3.3 Theird node: Function*
 
-{{< imgproc function Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc function Fit "150x800" >}}{{< /imgproc >}}
 
 In the **third node "function"** a timestamp is generated at the time of pressing a button. The timestamp is stored in the form of a string. This makes it possible, for example, to specify machine states and display them in a timeline.
 
@@ -117,13 +117,13 @@ return msg;
 
 *3.4 Fourth node: Filter*
 
-{{< imgproc filter Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc filter Fit "150x800" >}}{{< /imgproc >}}
 
 The **filter** is mainly for clarity and blocks the values of a sensor until the value is changed. A change of the property is not necessary.
 
 *3.5 Fifth node: Switch*
 
-{{< imgproc switch Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc switch Fit "150x800" >}}{{< /imgproc >}}
 
 The **switch** is used to distinguish between the different inputs for the following flow and only lets through the values that come through the previously defined input. 
 
@@ -131,7 +131,7 @@ With the button bar, these are the individual buttons. You can see which name is
 
 *3.6 Sixth node: Function*
 
-{{< imgproc function Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc function Fit "150x800" >}}{{< /imgproc >}}
 
 The switch node is followed by a separate **function** for each button. In our example different states are transmitted. States can be e.g. pause, maintenance, emptying etc. and are defined via numbers. The different states can be found [here](https://docs.umh.app/docs/concepts/state/).
 
@@ -155,7 +155,7 @@ To reach further machine states, only the adaptation of the state number is nece
 
 *3.7 Seventh node: MQTT-Out*
 
-{{< imgproc mqtt_out Fit "150x150" >}}{{< /imgproc >}}
+{{< imgproc mqtt_out Fit "150x800" >}}{{< /imgproc >}}
 
 To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
 
