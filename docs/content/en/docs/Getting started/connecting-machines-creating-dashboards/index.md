@@ -73,7 +73,7 @@ The first two nodes are the same for all connected sensors. Only after that we w
 
 *3.1 First node: MQTT-In*
 
-TODO: PICTURE
+{{< imgproc logos_data_sources mqtt_in "800x800" >}}{{< /imgproc >}}
 
 In order to contextualise the resulting data points with the help of the United Manufacturing Hub, 3 identifiers are necessary:
 
