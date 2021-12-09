@@ -46,14 +46,15 @@ In the following, the procedure for creating a Node-RED flow is described in det
 
 You would like to determine the output and machine condition of a cutting machine.
 
-Used Sensors:
+Used sensors:
 
-- Light Barrier
-- Button Bar
+- Light barrier
+- Button bar
+- Inductive sensor
 
 With the help of Sensorconnect, sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
-*1. Connect Sensors*
+*1. Connect sensors*
 
 TODO: Picture or illustration of how to connect sensors
 
@@ -103,7 +104,7 @@ Now we will take a look at the three different sensors individually.
 
 TODO
 
-#### Button Bar
+#### Button bar
 
 *3.3 Theird node: Function*
 
@@ -165,7 +166,7 @@ The complete Node-RED flow then looks like this:
 
 {{< imgproc nodered_flow_button_bar Fit "1200x1200" >}}{{< /imgproc >}}
 
-#### Inductive Sensor
+#### Inductive sensor
 
 TODO
 
