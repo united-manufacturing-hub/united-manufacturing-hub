@@ -137,8 +137,6 @@ The switch node is followed by a separate **function** for each button. In our e
 
 For example, the code for the function looks like this:
 
-{
-  
 msg.payload=
 {
 
@@ -150,8 +148,6 @@ msg.payload=
 msg.topic = "ia/raw/transmitterID/gatewaySerialNumber/portNumber/IOLinkSensorID"
 
 return msg;
-
-}
 
 To reach further machine states, only the adaptation of the state number is necessary
 
