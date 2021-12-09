@@ -42,7 +42,7 @@ In the following, the procedure for creating a Node-RED flow is described in det
 1. Retrofit a cutting machine with the help of external sensors
 2. Using OPC/UA to read a warping machine data directly from the PLC
 
-### 1st example: Connecting external sensor technology
+### 1st example: Retrofitting with external sensors
 
 You would like to determine the output and machine condition of a cutting machine.
 
@@ -87,7 +87,7 @@ In the topic of our **first node (MQTT IN)** all these three information are bun
 
 The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
-To get a quick and easy overview of the available MQTT messages and topics we recommend the MQTT Explorer. If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
+To get a quick and easy overview of the available MQTT messages and topics we recommend the [MQTT Explorer](http://mqtt-explorer.com/). . If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
 An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`. This means that an IFM gateway with serial number `0000005898845` is connected to a transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
 
@@ -98,6 +98,10 @@ An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`
 The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
 
 Now we will take a look at the three different sensors individually.
+
+#### Light barrier
+
+TODO
 
 #### Button Bar
 
@@ -161,15 +165,11 @@ The complete Node-RED flow then looks like this:
 
 {{< imgproc nodered_flow_button_bar Fit "1200x1200" >}}{{< /imgproc >}}
 
-#### Light Barrier
-
-TODO
-
 #### Inductive Sensor
 
 TODO
 
-### 2nd example: Integration of existing sensors
+### 2nd example: Extraction of data points via a predefined interface (In our example: OPC-UA)
 
 This chapter describes how to connect already existing sensors/ integrate an already existing interface (OPC/UA) with our system.
 
