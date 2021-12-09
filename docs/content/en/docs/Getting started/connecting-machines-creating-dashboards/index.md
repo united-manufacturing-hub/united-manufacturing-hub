@@ -159,7 +159,7 @@ To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
 
 The complete Node-RED flow then looks like this:
 
-{{< imgproc nodered_flow_button_bar Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc nodered_flow_button_bar Fit "1200x1200" >}}{{< /imgproc >}}
 
 #### Light Barrier
 
