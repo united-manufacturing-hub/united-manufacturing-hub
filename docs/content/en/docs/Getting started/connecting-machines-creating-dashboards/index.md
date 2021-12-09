@@ -83,7 +83,7 @@ In order to contextualise the resulting data points with the help of the United 
 
 - The name of the asset: *AssetID* (Can be chosen freely)
 
-In the topic of our **first node (MQTT IN)** (PICTURE) all these three information are bundled to get a MQTT input.
+In the topic of our **first node (MQTT IN)** all these three information are bundled to get a MQTT input.
 
 The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
@@ -156,6 +156,10 @@ To reach further machine states, only the adaptation of the state number is nece
 {{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
 
 To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
+
+The complete Node-RED flow then looks like this:
+
+{{< imgproc nodered_flow_button_bar Fit "800x800" >}}{{< /imgproc >}}
 
 #### Light Barrier
 
