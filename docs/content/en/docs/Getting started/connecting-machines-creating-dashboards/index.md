@@ -16,7 +16,7 @@ TODO
 
 The United Manufacturing Hub has a wide variety of connectors and therefore offers maximum connectivity to different machines and systems.
 
-{{< imgproc logos_data_sources Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc logos_doc Fit "800x800" >}}{{< /imgproc >}}
 
 Here are a few selected examples:
 
