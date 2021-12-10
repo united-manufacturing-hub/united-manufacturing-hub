@@ -114,11 +114,11 @@ In the **third node "function"** a timestamp is generated at the time of pressin
 
 The code for this node looks like this:
 
-`msg.timestamp=msg.payload.timestamp_ms`
+msg.timestamp=msg.payload.timestamp_ms
 
-`msg.payload=msg.payload.value_string;`
+msg.payload=msg.payload.value_string;
 
-`return msg;`
+return msg;
 
 *3.4 Fourth node: Filter*
 
@@ -142,19 +142,19 @@ The switch node is followed by a separate **function** for each button. In our e
 
 For example, the code for the function looks like this:
 
-`msg.payload=`
+msg.payload=
 
-`{`
+{
 
-`"timestamp_ms": msg.timestamp,`
+"timestamp_ms": msg.timestamp,
 
-`"state": 120000`
+"state": 120000
 
-`}`
+}
 
-`msg.topic = "ia/raw/transmitterID/gatewaySerialNumber/portNumber/IOLinkSensorID"`
+msg.topic = "ia/raw/transmitterID/gatewaySerialNumber/portNumber/IOLinkSensorID"
 
-`return msg;`
+return msg;
 
 To reach further machine states, only the adaptation of the state number is necessary
 
