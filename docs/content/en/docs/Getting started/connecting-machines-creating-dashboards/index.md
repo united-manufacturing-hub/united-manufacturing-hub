@@ -78,7 +78,7 @@ For all connected sensors, the first two nodes are the same. Only after the seco
 
 In order to contextualise the resulting data points with the help of the United Manufacturing Hub, three identifiers are necessary:
 
-- The customer ID to be assigned to the asset: *customerID* (Default value for the development setup "factoryinsight"
+- The customer ID to be assigned to the asset: *customerID* (Default value for the development setup "factoryinsight")
 
 - The location where the asset is located: *location* (Can be chosen freely)
 
@@ -174,7 +174,7 @@ TODO
 
 ### 2nd example: Extraction of data points via a predefined interface (In our example: OPC-UA)
 
-This chapter describes how to connect already existing sensors/ integrate an already existing interface (OPC/UA) with our system.
+This chapter describes how to connect already existing sensors or integrate an already existing interface (OPC/UA) with our system.
 
 ## 3. Create dashboards with Grafana
 
