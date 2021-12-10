@@ -90,7 +90,7 @@ The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumbe
 
 To get a quick and easy overview of the available MQTT messages and topics we recommend the [MQTT Explorer](http://mqtt-explorer.com/). . If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
-An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`. This means that an IFM gateway with serial number `0000005898845` is connected to a transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
+An example for an ia/raw/ topic is: `ia/raw/2020-0102/0000005898845/X01/210-156`. This means that an IO-Link gateway with serial number `0000005898845` is connected to a transmitter with serial number `2020-0102`. This gateway has connected the sensor `210-156` to the first port `X01`.
 
 *3.2 Second node: JSON*
 
@@ -102,7 +102,9 @@ Now we will take a look at the three different sensors individually.
 
 #### Light barrier
 
-TODO
+With the light barrier it is possible, for example, to record the number of pieces produced. Also, with a more complicated logic, machine states can be detected directly with a light barrier. For the sake of simplicity, this is not explored and applied in our example.
+
+*3.3 Theird node: Count*
 
 #### Button bar
 
