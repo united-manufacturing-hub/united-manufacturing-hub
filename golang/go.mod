@@ -8,7 +8,7 @@ require (
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.7.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5
-	github.com/gin-contrib/zap v0.0.1
+	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/golang/snappy v0.0.3 // indirect
