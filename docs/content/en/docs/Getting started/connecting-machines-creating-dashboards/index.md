@@ -18,7 +18,7 @@ The United Manufacturing Hub has a wide variety of connectors and therefore offe
 
 {{< imgproc logos_doc Fit "800x800" >}}{{< /imgproc >}}
 
-Here are a few selected examples:
+Here are a few selected examples of data inputs:
 
 - OPC/UA ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-opcua))
 - Siemens S7 ([documentation for this node](https://flows.nodered.org/node/node-red-contrib-s7))
@@ -44,17 +44,17 @@ In the following, the procedure for creating a Node-RED flow is described in det
 
 ### 1st example: Retrofitting with external sensors
 
-You would like to determine the output and machine condition of a cutting machine.
+In this example we will determine the output and the machine condition of a cutting machine.
 
-Used sensors:
+These sensors are used for this purpose:
 
 - Light barrier
 - Button bar
 - Inductive sensor
 
-With the help of Sensorconnect, sensors can be connected quickly and easily via an IFM gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
-
 *1. Connect sensors*
+
+With the help of Sensorconnect, sensors can be connected quickly and easily via an IO-Link gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
 TODO: Picture or illustration of how to connect sensors
 
@@ -68,15 +68,15 @@ TODO: ADAPTION OF IP-RANGE
 
 With Node-Red, it is possible to quickly develop applications and prepare untreated sensor data so that Grafana, for example, can use it. For this purpose, so-called nodes are drawn onto a surface and wired together to create sequences. 
 
-In the following, the creation of such Node-RED flows is demonstrated using the example sensors button bar, light barrier and inductive sensor. 
+In the following, the creation of such Node-RED flows is demonstrated using the example sensors light barrier, button bar and inductive sensor. 
 
-The first two nodes are the same for all connected sensors. Only after that we will distinguish between the different sensors.
+For all connected sensors, the first two nodes are the same. Only after the second node we will distinguish between the different sensors.
 
 *3.1 First node: MQTT-In*
 
 {{< imgproc mqtt_in Fit "800x150" >}}{{< /imgproc >}}
 
-In order to contextualise the resulting data points with the help of the United Manufacturing Hub, 3 identifiers are necessary:
+In order to contextualise the resulting data points with the help of the United Manufacturing Hub, three identifiers are necessary:
 
 - The customer ID to be assigned to the asset: *customerID* (Default value for the development setup "factoryinsight"
 
@@ -114,11 +114,11 @@ In the **third node "function"** a timestamp is generated at the time of pressin
 
 The code for this node looks like this:
 
-msg.timestamp=msg.payload.timestamp_ms
+`msg.timestamp=msg.payload.timestamp_ms`
 
-msg.payload=msg.payload.value_string;
+`msg.payload=msg.payload.value_string;`
 
-return msg; 
+`return msg;`
 
 *3.4 Fourth node: Filter*
 
@@ -142,17 +142,19 @@ The switch node is followed by a separate **function** for each button. In our e
 
 For example, the code for the function looks like this:
 
-msg.payload=
-{
+`msg.payload=`
 
-    "timestamp_ms": msg.timestamp,
+`{`
 
-    "state": 120000
+`"timestamp_ms": msg.timestamp,`
 
-}
-msg.topic = "ia/raw/transmitterID/gatewaySerialNumber/portNumber/IOLinkSensorID"
+`"state": 120000`
 
-return msg;
+`}`
+
+`msg.topic = "ia/raw/transmitterID/gatewaySerialNumber/portNumber/IOLinkSensorID"`
+
+`return msg;`
 
 To reach further machine states, only the adaptation of the state number is necessary
 
