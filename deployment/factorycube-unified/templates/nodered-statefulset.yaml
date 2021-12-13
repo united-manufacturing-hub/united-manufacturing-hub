@@ -3,26 +3,26 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-nodered
+  name: {{ include "factorycube-unified.fullname" . }}-nodered
   labels:
-    {{- include "factorycube-server.labels.nodered" . | nindent 4 }}
+    {{- include "factorycube-unified.labels.nodered" . | nindent 4 }}
 spec:
-  serviceName: {{ include "factorycube-server.fullname" . }}-nodered
+  serviceName: {{ include "factorycube-unified.fullname" . }}-nodered
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-server.labels.nodered" . | nindent 6 }}
+      {{- include "factorycube-unified.labels.nodered" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "factorycube-server.labels.nodered" . | nindent 8 }}
+        {{- include "factorycube-unified.labels.nodered" . | nindent 8 }}
     spec:
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
       containers:
-      - name: {{ include "factorycube-server.fullname" . }}-nodered
+      - name: {{ include "factorycube-unified.fullname" . }}-nodered
         image: nodered/node-red:{{ .Values.nodered.tag }}
         ports:
         - containerPort: 1880
@@ -38,9 +38,9 @@ spec:
         securityContext:
           runAsUser: 1000
         volumeMounts:
-        - name: {{ include "factorycube-server.fullname" . }}-nodered-data
+        - name: {{ include "factorycube-unified.fullname" . }}-nodered-data
           mountPath: /data
-        - name: {{ include "factorycube-server.fullname" . }}-nodered-config
+        - name: {{ include "factorycube-unified.fullname" . }}-nodered-config
           mountPath: /data/settings.js
           subPath: nodered-config
           readOnly: true
@@ -52,11 +52,11 @@ spec:
         - name: TZ
           value: {{ .Values.nodered.timezone }}
       volumes:
-      - name: {{ include "factorycube-server.fullname" . }}-nodered-data
+      - name: {{ include "factorycube-unified.fullname" . }}-nodered-data
         persistentVolumeClaim:
-          claimName: {{ include "factorycube-server.fullname" . }}-nodered-claim
-      - name: {{ include "factorycube-server.fullname" . }}-nodered-config
+          claimName: {{ include "factorycube-unified.fullname" . }}-nodered-claim
+      - name: {{ include "factorycube-unified.fullname" . }}-nodered-config
         configMap:
-          name: {{ include "factorycube-server.fullname" . }}-nodered-config
+          name: {{ include "factorycube-unified.fullname" . }}-nodered-config
 
 {{- end }}

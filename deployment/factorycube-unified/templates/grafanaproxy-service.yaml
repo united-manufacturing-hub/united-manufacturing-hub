@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-grafanaproxy-service
+  name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy-service
   labels:
-     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 4 }}
   {{- if .Values.grafanaproxy.service.annotations }}
   annotations:
     {{- toYaml .Values.grafanaproxy.service.annotations | nindent 4 }}
@@ -17,6 +17,6 @@ spec:
       protocol: {{ .Values.grafanaproxy.service.protocol }}
       name: {{ .Values.grafanaproxy.service.name }}
   selector:
-     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 4 }}
 
 {{- end -}}

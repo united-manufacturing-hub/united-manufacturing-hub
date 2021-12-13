@@ -2,9 +2,9 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-factoryinput
+  name: {{ include "factorycube-unified.fullname" . }}-factoryinput
   labels:
-  {{- include "factorycube-server.labels.factoryinput" . | nindent 4 }}
+  {{- include "factorycube-unified.labels.factoryinput" . | nindent 4 }}
   {{- if .Values.factoryinput.annotations }}
   annotations:
   {{- toYaml .Values.factoryinput.annotations | nindent 4 }}
@@ -14,7 +14,7 @@ spec:
   serviceName: factoryinput
   volumeClaimTemplates:
     - metadata:
-        name: {{ include "factorycube-server.fullname" . }}-factoryinput-data
+        name: {{ include "factorycube-unified.fullname" . }}-factoryinput-data
         finalizers:
           - kubernetes.io/pvc-protection
       spec:
@@ -25,25 +25,25 @@ spec:
             storage: {{ .Values.factoryinput.storageRequest }}
   selector:
     matchLabels:
-      name: {{ include "factorycube-server.fullname" . }}-factoryinput
+      name: {{ include "factorycube-unified.fullname" . }}-factoryinput
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{ include "factorycube-server.fullname" . }}-factoryinput
-      {{- include "factorycube-server.labels.factoryinput" . | nindent 8 }}
+        name: {{ include "factorycube-unified.fullname" . }}-factoryinput
+      {{- include "factorycube-unified.labels.factoryinput" . | nindent 8 }}
     spec:
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
-                  name: {{ include "factorycube-server.fullname" . }}-factoryinput
+                  name: {{ include "factorycube-unified.fullname" . }}-factoryinput
               topologyKey: "kubernetes.io/hostname"
       terminationGracePeriodSeconds: 70
       containers:
-        - name: {{ include "factorycube-server.fullname" . }}-factoryinput
+        - name: {{ include "factorycube-unified.fullname" . }}-factoryinput
           {{- if .Values.factoryinput.image.tag }}
           image: {{ .Values.factoryinput.image.repository }}:{{ .Values.factoryinput.image.tag }}
           {{- else }}
@@ -62,7 +62,7 @@ spec:
               value: PRODUCTION
 
             - name: BROKER_URL
-              value: tcp://{{ include "factorycube-server.fullname" . }}-vernemq-local-service:1883
+              value: tcp://{{ include "factorycube-unified.fullname" . }}-vernemq-local-service:1883
 
             - name: MY_POD_NAME
               valueFrom:
@@ -94,7 +94,7 @@ spec:
             {{ end }}
 
           volumeMounts:
-            - name: {{ include "factorycube-server.fullname" . }}-factoryinput-data
+            - name: {{ include "factorycube-unified.fullname" . }}-factoryinput-data
               mountPath: /data
               # - name: secret-volume
               #   mountPath: /SSL_certs

@@ -2,9 +2,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+  name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob
   labels:
-     {{- include "factorycube-server.labels.mqtttoblob" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.mqtttoblob" . | nindent 4 }}
   {{- if .Values.mqtttoblob.annotations }}
   annotations:
     {{- toYaml .Values.mqtttoblob.annotations | nindent 4 }}
@@ -13,14 +13,14 @@ spec:
   replicas: {{ .Values.mqtttoblob.replicas }}
   selector:
     matchLabels:
-      name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+      name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
-        {{- include "factorycube-server.labels.mqtttoblob" . | nindent 8 }}
+        name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob
+        {{- include "factorycube-unified.labels.mqtttoblob" . | nindent 8 }}
     spec:
       volumes:
         - name: kubernetes-ca
@@ -33,10 +33,10 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+                    name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+        - name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob
           {{- if .Values.mqtttoblob.image.tag }}
           image: {{ .Values.mqtttoblob.image.repository }}:{{ .Values.mqtttoblob.image.tag }}
           {{- else }}
@@ -54,7 +54,7 @@ spec:
               value: "1883"
 
             - name: BROKER_URL
-              value: {{ include "factorycube-server.fullname" . }}-vernemq-local-service
+              value: {{ include "factorycube-unified.fullname" . }}-vernemq-local-service
 
             - name: BUCKET_NAME
               value: "umh"
@@ -67,7 +67,7 @@ spec:
             - name: SSL_CERT_FILE
               value: /certs/kubernetes-ca.pem
             - name: MINIO_URL
-              value: 'umhminio-hl.factorycube-server.svc.cluster.local:9000'
+              value: 'umhminio-hl.factorycube-unified.svc.cluster.local:9000'
 
             - name: MINIO_ACCESS_KEY
               valueFrom:

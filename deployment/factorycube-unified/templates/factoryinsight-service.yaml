@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-factoryinsight-service
+  name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-service
   labels:
-     {{- include "factorycube-server.labels.factoryinsight" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4 }}
   {{- if .Values.factoryinsight.service.annotations }}
   annotations:
     {{- toYaml .Values.factoryinsight.service.annotations | nindent 4 }}
@@ -17,6 +17,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-     {{- include "factorycube-server.labels.factoryinsight" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4 }}
 
 {{- end -}}

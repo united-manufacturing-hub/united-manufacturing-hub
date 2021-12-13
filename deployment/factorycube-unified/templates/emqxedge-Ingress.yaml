@@ -6,9 +6,9 @@ apiVersion: extensions/v1beta1
 {{- end }}
 kind: Ingress
 metadata:
-  name: {{ include "factorycube-edge.fullname" . }}-emqxedge-dashboard
+  name: {{ include "factorycube-unified.fullname" . }}-emqxedge-dashboard
   labels:
-    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-unified.labels.emqxedge" . | nindent 4 }}
   {{- if .Values.emqxedge.ingress.dashboard.annotations }}
   annotations:
     {{- toYaml .Values.emqxedge.ingress.dashboard.annotations | nindent 4 }}
@@ -21,7 +21,7 @@ spec:
       paths:
       - path: /
         backend:
-          serviceName: {{ include "factorycube-edge.fullname" . }}-emqxedge
+          serviceName: {{ include "factorycube-unified.fullname" . }}-emqxedge
           servicePort: {{ $.Values.emqxedge.service.dashboard }}
   {{- end -}}
   {{- if .Values.emqxedge.ingress.dashboard.tls }}
@@ -38,9 +38,9 @@ apiVersion: extensions/v1beta1
 {{- end }}
 kind: Ingress
 metadata:
-  name: {{ include "factorycube-edge.fullname" . }}-emqxedge-mgmt
+  name: {{ include "factorycube-unified.fullname" . }}-emqxedge-mgmt
   labels:
-    {{- include "factorycube-edge.labels.emqxedge" . | nindent 4 }}
+    {{- include "factorycube-unified.labels.emqxedge" . | nindent 4 }}
   {{- if .Values.emqxedge.ingress.mgmt.annotations }}
   annotations:
     {{- toYaml .Values.emqxedge.ingress.mgmt.annotations | nindent 4 }}
@@ -53,7 +53,7 @@ spec:
       paths:
       - path: /
         backend:
-          serviceName: {{ include "factorycube-edge.fullname" . }}-emqxedge
+          serviceName: {{ include "factorycube-unified.fullname" . }}-emqxedge
           servicePort: {{ $.Values.emqxedge.service.mgmt }}
   {{- end -}}
   {{- if .Values.emqxedge.ingress.mgmt.tls }}

@@ -3,11 +3,11 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-nodered-claim
+  name: {{ include "factorycube-unified.fullname" . }}-nodered-claim
   finalizers:
     - kubernetes.io/pvc-protection
   labels:
-    {{- include "factorycube-server.labels.nodered" . | nindent 4 }}
+    {{- include "factorycube-unified.labels.nodered" . | nindent 4 }}
 spec:
   accessModes:
   - ReadWriteOnce

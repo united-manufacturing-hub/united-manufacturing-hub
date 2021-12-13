@@ -4,12 +4,12 @@
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-mqtttoblob-pdb
+  name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob-pdb
 spec:
   minAvailable: {{ .Values.mqtttoblob.pdb.minAvailable }}
   selector:
     matchLabels:
-      name: {{ include "factorycube-server.fullname" . }}-mqtttoblob
+      name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob
 
 {{- end -}}
 {{- end -}}

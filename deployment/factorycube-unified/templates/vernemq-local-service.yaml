@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-vernemq-local-service
+  name: {{ include "factorycube-unified.fullname" . }}-vernemq-local-service
   labels:
     app.kubernetes.io/name: vernemq
-    app.kubernetes.io/instance: {{ include "factorycube-server.fullname" . }}
+    app.kubernetes.io/instance: {{ include "factorycube-unified.fullname" . }}
     app.kubernetes.io/managed-by: helm
 spec:
   type: ClusterIP
@@ -20,5 +20,5 @@ spec:
       name: mqtt
   selector:
       app.kubernetes.io/name: vernemq
-      app.kubernetes.io/instance: {{ include "factorycube-server.fullname" . }}
+      app.kubernetes.io/instance: {{ include "factorycube-unified.fullname" . }}
   {{- end -}}

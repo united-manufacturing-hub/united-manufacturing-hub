@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-minio-service
+  name: {{ include "factorycube-unified.fullname" . }}-minio-service
   labels:
       v1.min.io/tenant: {{ printf (index .Values "minio-operator" "tenants" 0).name }}
   {{- if (index .Values "minio-operator").service.annotations }}

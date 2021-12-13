@@ -4,9 +4,9 @@
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-nodered-ingress
+  name: {{ include "factorycube-unified.fullname" . }}-nodered-ingress
   labels:
-     {{- include "factorycube-server.labels.nodered" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.nodered" . | nindent 4 }}
   {{- if .Values.nodered.ingress.annotations }}
   annotations:
     {{- toYaml .Values.nodered.ingress.annotations | nindent 4 }}
@@ -22,7 +22,7 @@ spec:
         paths:
           - path: /nodered
             backend:
-              serviceName: {{ include "factorycube-server.fullname" . }}-nodered-service
+              serviceName: {{ include "factorycube-unified.fullname" . }}-nodered-service
               servicePort: 1880
 {{- end -}}
 {{- end -}}

@@ -2,9 +2,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+  name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
   labels:
-     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 4 }}
   {{- if .Values.grafanaproxy.annotations }}
   annotations:
     {{- toYaml .Values.grafanaproxy.annotations | nindent 4 }}
@@ -13,14 +13,14 @@ spec:
   replicas: {{ .Values.grafanaproxy.replicas }}
   selector:
     matchLabels:
-     {{- include "factorycube-server.labels.grafanaproxy" . | nindent 6 }}
+     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 6 }}
   strategy:
     type: RollingUpdate
   template:
     metadata:
-      name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+      name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
       labels:
-        {{- include "factorycube-server.labels.grafanaproxy" . | nindent 8 }}
+        {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 8 }}
     spec:
       affinity:
         podAntiAffinity:
@@ -29,10 +29,10 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+                    name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{ include "factorycube-server.fullname" . }}-grafanaproxy
+        - name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
           {{- if .Values.grafanaproxy.image.tag }}
           image: {{ .Values.grafanaproxy.image.repository }}:{{ .Values.grafanaproxy.image.tag }}
           {{- else }}

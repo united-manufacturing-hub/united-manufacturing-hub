@@ -165,9 +165,9 @@ app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-vernemq
 {{/*
 Labels for emqxedge
 */}}
-{{- define "factorycube-edge.labels.emqxedge" -}}
-app.kubernetes.io/name: {{ include "factorycube-edge.name" . }}-emqxedge
-{{ include "factorycube-edge.labels.common" . }}
+{{- define "factorycube-unified.labels.emqxedge" -}}
+app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-emqxedge
+{{ include "factorycube-unified.labels.common" . }}
 {{- end }}
 
 
