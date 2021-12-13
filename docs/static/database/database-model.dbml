@@ -171,7 +171,7 @@ Table ProductTypeName{
 Table Product {
   Id int [PK, increment]
   StationStepId int [not null, ref: < StationStep.Id]
-  StationProductId int [not null, ref: < StationStepProduct.Id]
+  StationStepProductId int [not null, ref: < StationStepProduct.Id]
   AlternativeId int [not null, note: 'TODO: What does this value exactly represent ?']
   ProductionBegin timestamp [not null, note: 'UNIX timestamp of production begin']
   ProductionEnd timestamp [note: 'UNIX timestamp of production end']
