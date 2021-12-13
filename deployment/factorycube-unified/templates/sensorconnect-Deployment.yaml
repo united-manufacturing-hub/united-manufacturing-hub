@@ -1,0 +1,53 @@
+{{- if .Values.sensorconnect.enabled -}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "factorycube-edge.fullname" . }}-sensorconnect
+  labels:
+    {{- include "factorycube-edge.labels.sensorconnect" . | nindent 4 }}
+    app.kubernetes.io/component: "sensorconnect"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "factorycube-edge.labels.sensorconnect" . | nindent 6 }}
+      app.kubernetes.io/component: "sensorconnect"
+  strategy:  
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "factorycube-edge.labels.sensorconnect" . | nindent 8 }}
+        app.kubernetes.io/component: "sensorconnect"
+    spec:
+      containers:
+        - name: {{ include "factorycube-edge.fullname" . }}-sensorconnect
+          {{- if .Values.sensorconnect.tag -}}
+          image: {{ .Values.sensorconnect.image }}:{{ .Values.sensorconnect.tag }}
+          {{- else }}
+          image: {{ .Values.sensorconnect.image }}:{{ .Chart.AppVersion }}
+          {{- end }}
+          resources:
+            limits:
+              cpu: {{ .Values.sensorconnect.resources.limits.cpu }}
+              memory: {{ .Values.sensorconnect.resources.limits.memory }}
+            requests:
+              cpu: {{ .Values.sensorconnect.resources.requests.cpu }}
+              memory: {{ .Values.sensorconnect.resources.requests.memory }}
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "0"
+            - name: TRANSMITTERID
+              value: {{ .Values.serialNumber | quote }}
+            - name: BROKER_URL
+              value: {{ .Values.sensorconnect.brokerURL | quote }}
+            - name: BROKER_PORT
+              value: {{ .Values.sensorconnect.brokerPort | quote }}
+            - name: IP_RANGE
+              value: {{ .Values.sensorconnect.iprange | quote }}
+
+      serviceAccountName: {{ include "factorycube-edge.serviceAccountName" . }}
+      restartPolicy: Always
+
+{{- end }}

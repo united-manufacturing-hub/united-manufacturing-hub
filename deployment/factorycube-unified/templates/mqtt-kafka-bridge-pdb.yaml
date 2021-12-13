@@ -1,0 +1,15 @@
+{{- if .Values.mqttkafkabridge.enabled -}}
+{{- if .Values.mqttkafkabridge.pdb.enabled -}}
+
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "factorycube-server.fullname" . }}-mqttkafkabridge-pdb
+spec:
+  minAvailable: {{ .Values.mqttkafkabridge.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      name: {{ include "factorycube-server.fullname" . }}-mqttkafkabridge
+
+{{- end -}}
+{{- end -}}
