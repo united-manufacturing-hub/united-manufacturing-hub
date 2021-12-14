@@ -60,9 +60,17 @@ TODO: Picture or illustration of how to connect sensors
 
 *2. Make the connected sensors visible to our system*
 
-The gateways to which sensors are connected are found by our microservice in the local network. For this purpose, the IP address range must be communicated to the microservice so that it can search for the gateway in the correct network and read out the sensors via it.
+The gateways to which sensors are connected are found by our microservice in the local network. For this purpose, the IP-range must be communicated to the microservice so that it can search for the gateway in the correct network and read out the sensors via it.
 
-TODO: ADAPTION OF IP-RANGE
+To do this, Lens is used. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Workloads" in the left bar, then on "Deployments" and then on "Edit" in the upper right corner.
+
+{{< imgproc ip_range_lens_1 Fit "800x800" >}}{{< /imgproc >}}
+
+Next, press the key combination `ctrl+F` and search for "IP_RANGE" in the code. In the container "factory-cube-edge" you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
+
+{{< imgproc ip_range_lens_2 Fit "800x800" >}}{{< /imgproc >}}
+
+Now the microservice can search for the gateway in the correct network to read the sensors.
 
 *3. Creating a Node-RED flow*
 
