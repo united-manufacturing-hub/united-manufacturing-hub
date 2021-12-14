@@ -4,6 +4,37 @@ serialNumber: "development"  # usually the hostname
 mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"  # e.g. mqtt.app.industrial-analytics.net:8883
 mqttBridgeTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
 
+# Easy configuration
+services:
+  mqttbridge:
+    enabled: true
+  barcodereader:
+    enabled: true
+  sensorconnect:
+    enabled: true
+  caameraconnect:
+    enabled: true
+  nodered:
+    enabled: true
+  emqxedge:
+    enabled: true
+  factoryinsight:
+    enabled: true
+  factoryinput:
+    enabled: true
+  mqtttoblob:
+    enabled: true
+  grafanaproxy:
+    enabled: true
+  mqtttopostgresql:
+    enabled: true
+  miniooperator:
+    enabled: true
+  timescaledbsingle:
+    enabled: true
+  grafana:
+    enabled: true
+
 # Certficiates for MQTT Bridge
 mqttBridgeCACert: |
     -----BEGIN CERTIFICATE-----
@@ -84,7 +115,6 @@ serviceAccount:
 
 ### mqttbridge ###
 mqttbridge:
-  enabled: false
   image: unitedmanufacturinghub/mqtt-bridge
   storageRequest: 1Gi
   resources:
@@ -97,7 +127,6 @@ mqttbridge:
 
 ### barcodereader ###
 barcodereader:
-  enabled: false
   image: unitedmanufacturinghub/barcodereader
   customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
@@ -115,7 +144,6 @@ barcodereader:
 
 ### sensorconnect ###
 sensorconnect:
-  enabled: false
   image: unitedmanufacturinghub/sensorconnect
   iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
@@ -130,7 +158,6 @@ sensorconnect:
 
 ### cameraconnect ###
 cameraconnect:
-  enabled: false
   image: unitedmanufacturinghub/cameraconnect
   # tag: development
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
@@ -157,7 +184,6 @@ cameraconnect:
 
 ### nodered ###
 nodered:
-  enabled: false
   pluginInstallEnabled: true
   pluginInstallLines: |-
       npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
@@ -552,7 +578,6 @@ emqxedge:
 
 ### factoryinsight ###
 factoryinsight:
-  enabled: false
   image:
     repository: unitedmanufacturinghub/factoryinsight
     pullPolicy: IfNotPresent
@@ -592,7 +617,6 @@ factoryinsight:
 ### factoryinput ###
 factoryinput:
   user: factoryinsight
-  enabled: false
   service:
     annotations: {}
   image:
@@ -607,7 +631,6 @@ factoryinput:
 ### mqtt-to-blob ###
 mqtttoblob:
   # not enabled by default
-  enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
     pullPolicy: Always
@@ -618,7 +641,6 @@ mqtttoblob:
 
 ### grafanaproxy ###
 grafanaproxy:
-  enabled: false
   image:
     repository: unitedmanufacturinghub/grafana-proxy
     pullPolicy: IfNotPresent
@@ -640,7 +662,6 @@ grafanaproxy:
 
 ### mqtt-to-postresql ###
 mqtttopostgresql:
-  enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-postgresql
     pullPolicy: IfNotPresent
@@ -654,7 +675,6 @@ mqtttopostgresql:
 
 ### minio-operator ###
 minio-operator:
-  enabled: false
   loadBalancerEnabled: false
   service:
     annotations: {}
@@ -792,7 +812,6 @@ minio-operator:
 
 ### timescaleDB ###
 timescaledb-single:
-  enabled: false
   # This file and its contents are licensed under the Apache License 2.0.
   # Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 
@@ -1338,7 +1357,6 @@ timescaledb-single:
 
 ### grafana ###
 grafana:
-  enabled: false
 
   rbac:
     create: true

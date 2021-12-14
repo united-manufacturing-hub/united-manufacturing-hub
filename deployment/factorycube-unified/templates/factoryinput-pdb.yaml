@@ -1,4 +1,4 @@
-{{- if .Values.factoryinput.enabled -}}
+{{- if .Values.services.factoryinput.enabled -}}
 {{- if .Values.factoryinput.pdb.enabled -}}
 
 apiVersion: policy/v1beta1

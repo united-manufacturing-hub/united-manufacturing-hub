@@ -1,4 +1,4 @@
-{{- if .Values.factoryinput.enabled -}}
+{{- if .Values.services.factoryinput.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:

@@ -1,4 +1,4 @@
-{{- if .Values.mqtttopostgresql.enabled -}}
+{{- if .Values.services.mqtttopostgresql.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

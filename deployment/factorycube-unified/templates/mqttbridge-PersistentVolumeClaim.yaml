@@ -1,5 +1,5 @@
 
-{{- if .Values.mqttbridge.enabled -}}
+{{- if .Values.services.mqttbridge.enabled -}}
 
 kind: PersistentVolumeClaim
 apiVersion: v1

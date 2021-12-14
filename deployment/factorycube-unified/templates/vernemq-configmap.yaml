@@ -1,4 +1,4 @@
-{{- if .Values.vernemq.enabled -}}
+{{- if .Values.services.vernemq.enabled -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

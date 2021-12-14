@@ -1,4 +1,4 @@
-{{- if .Values.factoryinsight.enabled -}}
+{{- if .Values.services.factoryinsight.enabled -}}
 {{- if .Values.factoryinsight.hpa.enabled -}}
 
 apiVersion: autoscaling/v2beta2

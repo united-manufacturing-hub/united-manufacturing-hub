@@ -1,3 +1,4 @@
+{{- if .Values.services.emqxedge.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -118,3 +119,5 @@ spec:
     targetPort: ekka
   selector:
     {{- include "factorycube-unified.labels.emqxedge" . | nindent 4 }}
+
+{{- end -}}

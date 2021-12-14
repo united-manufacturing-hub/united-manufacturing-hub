@@ -1,4 +1,4 @@
-{{- if .Values.grafanaproxy.enabled -}}
+{{- if .Values.services.grafanaproxy.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

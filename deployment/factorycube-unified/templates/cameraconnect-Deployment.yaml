@@ -1,4 +1,4 @@
-{{- if .Values.cameraconnect.enabled -}}
+{{- if .Values.services.cameraconnect.enabled -}}
 
 apiVersion: apps/v1
 kind: Deployment

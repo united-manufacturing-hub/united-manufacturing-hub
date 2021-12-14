@@ -1,4 +1,4 @@
-{{- if .Values.mqttkafkabridge.enabled -}}
+{{- if .Values.services.mqttkafkabridge.enabled -}}
 {{- if .Values.mqttkafkabridge.pdb.enabled -}}
 
 apiVersion: policy/v1beta1
