@@ -62,11 +62,15 @@ TODO: Picture or illustration of how to connect sensors
 
 The gateways to which sensors are connected are found by our microservice in the local network. For this purpose, the IP-range must be communicated to the microservice so that it can search for the gateway in the correct network and read out the sensors via it.
 
-To do this, Lens is used. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Workloads" in the left bar, then on "Deployments" and then on "Edit" in the upper right corner.
+To do this, there are two options. 
+
+1. Option: Change the IP-range in the [development.yaml](https://www.umh.app/development.yaml) file, that you download. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
+
+2. Option: Lens. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Apps" in the left bar, then on "Releases" and then on "Edit" via right click.
 
 {{< imgproc ip_range_lens_1 Fit "800x800" >}}{{< /imgproc >}}
 
-Next, press the key combination `ctrl+F` and search for "IP_RANGE" in the code. In the container "factory-cube-edge" you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
+Next, press the key combination `ctrl+F` and search for "iprange" in the code. There you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
 
 {{< imgproc ip_range_lens_2 Fit "800x800" >}}{{< /imgproc >}}
 
