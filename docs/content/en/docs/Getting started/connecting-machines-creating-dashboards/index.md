@@ -302,6 +302,8 @@ After clicking on **Add an empty panel** you should see the following settings:
 
 {{< imgproc grafana_2 Fit "1200x1200" >}}{{< /imgproc >}}
 
+Now you can add different panels to your dashboard.
+
 1. Light Barrier
 
 For the light barrier the "state" panel is used.
