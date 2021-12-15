@@ -335,3 +335,5 @@ The query parameters from the topic of the second function in the Node-RED flow 
 Now the dashboard should look like this. In the upper right corner you can set the time span in which the data should be displayed and how often the dashboard should be refreshed.
 
 {{< imgproc grafana_3 Fit "1200x1200" >}}{{< /imgproc >}}
+
+Now go grab a coffee and relax.
