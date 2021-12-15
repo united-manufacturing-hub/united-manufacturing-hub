@@ -328,10 +328,10 @@ The query parameters from the topic of the second function in the Node-RED flow 
 
 For the capacitive sensor the "Graph (old)" panel is used.
 
-{{< imgproc grafana_3 Fit "1200x1200" >}}{{< /imgproc >}}
+{{< imgproc grafana_capacitive_sensor_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
 The query parameters from the topic of the second function in the Node-RED flow must be selected in "location" and "asset". The "value" must be **process_process_value** as specified in the payload message.
 
 Now the dashboard should look like this. In the upper right corner you can set the time span in which the data should be displayed and how often the dashboard should be refreshed.
 
-
+{{< imgproc grafana_3 Fit "1200x1200" >}}{{< /imgproc >}}
