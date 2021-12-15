@@ -110,7 +110,7 @@ An example for an ia/raw/ topic is: `ia/raw/development/000200410332/X02/310-372
 
 The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
 
-Now we will take a look at the three different sensors individually.
+**Now we will take a look at the three different sensors individually.**
 
 #### Light barrier
 
@@ -249,7 +249,7 @@ return msg;
 
 {{< imgproc function_inductive_sensor Fit "800x150" >}}{{< /imgproc >}}
 
-In our example, the **function** ensures that when the value of the inductive sensor is changed, the message "Window open" is output. To do this, we need a function with the following code:
+In our example, the following **function** ensures that when the value of the inductive sensor is changed, the message "Window open" is output. To do this, we need a function with the following code:
 
 ```js
 msg.payload = {
