@@ -120,8 +120,7 @@ With the light barrier it is possible, for example, to record the number of piec
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
-In the **third node "Function"** a timestamp is generated for each distance value. The timestamp is stored in the form of a string. This makes it possible, for example, to read out the time at which a item was produced.
-The code for this node looks like this:
+The **third node "Function"** formats the incoming data from MQTT-IN by extracting information from the json (timestamp and relevant data point) and arranging it in a usable way for Node-RED (parsing). The code for this node looks like this:
 
 ```js
 msg.timestamp=msg.payload.timestamp_ms
@@ -148,7 +147,7 @@ msg.payload = {
   "timestamp_ms": Date.now(),
   "count": 1
 }
-msg.topic = "ia/"+env.get("factoryinsight")+"/"+env.get("dccaachen")+"/"+env.get("docs")+"/count"
+msg.topic = "ia/factoryinsight/dccaachen/docs/count"
 return msg;
 ```
 
@@ -164,17 +163,13 @@ The complete Node-RED flow then looks like this:
 
 #### Button bar
 
-```js
-For full functionality shifts must be added analog to our data model.
-```
+**For full functionality shifts must be added analog to our data model.**
 
 *3.3 Theird node: Function*
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
-In the **third node "function"** a timestamp is generated at the time of pressing a button. The timestamp is stored in the form of a string. This makes it possible, for example, to specify machine states and display them in a timeline.
-
-The code for this node looks like this:
+The following **function** formats the incoming data from MQTT-IN by extracting information from the json (timestamp and relevant data point) and arranging it in a usable way for Node-RED (parsing).The code for this node looks like this:
 
 ```js
 msg.timestamp=msg.payload.timestamp_ms
@@ -228,19 +223,19 @@ The complete Node-RED flow then looks like this:
 
 {{< imgproc nodered_flow_button_bar Fit "1200x1200" >}}{{< /imgproc >}}
 
-#### Inductive sensor
+#### Capacitive sensor
 
 *3.3 Theird node: Function*
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
-In the **third node "Function"** a timestamp is generated for each inductive value. The timestamp is stored in the form of a string. This makes it possible, for example, to read out the time at which a item was produced.
+In the **third node "Function"** a timestamp is generated for each capacitive value. The timestamp is stored in the form of a string. This makes it possible, for example, to read out the time at which a item was produced.
 The code for this node looks like this:
 
 ```js
 msg.timestamp=msg.payload.timestamp_ms
 
-msg.payload=msg.payload.value_string;
+msg.payload=msg.payload["Process value"]
 
 return msg;
 ```
@@ -249,16 +244,18 @@ return msg;
 
 {{< imgproc function_inductive_sensor Fit "800x150" >}}{{< /imgproc >}}
 
-In our example, the following **function** ensures that when the value of the inductive sensor is changed, the message "Window open" is output. To do this, we need a function with the following code:
+In our example, the following **function** formats the incoming data from MQTT-IN by extracting information from the json (timestamp and relevant data point) and arranging it in a usable way for Node-RED (parsing). To do this, we need a function with the following code:
 
 ```js
 msg.payload = {
     "timestamp_ms": msg.timestamp, 
-    "Window open": msg.payload
+    "process_value": msg.payload
 }
-msg.topic = "ia/"+env.get("factoryinsight")+"/"+env.get("dccaachen")+"/"+env.get("docs")+"/processValue"
+msg.topic = "ia/factoryinsight/dccaachen/docs/processValue"
 return msg;
 ```
+
+The Process value can be chosen freely.
 
 *3.5 Fifth node: MQTT-Out*
 
@@ -278,6 +275,16 @@ This chapter describes how to connect already existing sensors or integrate an a
 
 **To create a personalized dashboard at Grafana, first make sure that all preparations have been made as described in [Installation](https://docs.umh.app/docs/getting-started/setup-development/).**
 
-So the first step is to open Grafana by opening the following URL in your browser: http://<IP>:8080 (e.g. http://192.168.1.131:8080). You can log in with the username admin and the password from your clipboard.
+So the first step is to open Grafana by opening the following URL in your browser: `http://<IP>:8080` (e.g. `http://192.168.1.2:8080`). You can log in with the username `admin` and the password from your clipboard.
 
+Next, create a new dashboard by clicking on the **+** on the left side.
 
+{{< imgproc grafana_1 Fit "800x800" >}}{{< /imgproc >}}
+
+After clicking on **Add an empty panel** you should see the following settings:
+
+{{< imgproc grafana_2 Fit "800x800" >}}{{< /imgproc >}}
+
+1. Light Barrier
+
+For the Light Barrier
