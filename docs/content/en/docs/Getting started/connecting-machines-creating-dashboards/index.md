@@ -90,7 +90,7 @@ As an important step in advance, a shift should be communicated to the system. I
 
 To do this, we need the small Node-RED flow as shown:
 
-{{< imgproc node_red_flow_addshift Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc nodered_flow_addshift Fit "800x800" >}}{{< /imgproc >}}
 
 The following code is written in the function:
 
