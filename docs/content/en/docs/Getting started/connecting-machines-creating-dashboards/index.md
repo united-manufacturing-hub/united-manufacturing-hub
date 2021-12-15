@@ -68,11 +68,11 @@ To do this, there are two options.
 
 2. Option: Lens. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Apps" in the left bar, then on "Releases and open "factorycube-edge" by clicking on it.
 
-{{< imgproc ip_range_lens_1 Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc ip_range_lens_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
 Next, click into the code and press the key combination `ctrl+F` to search for "iprange". There you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
 
-{{< imgproc ip_range_lens_2 Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc ip_range_lens_2 Fit "1200x1200" >}}{{< /imgproc >}}
 
 Now the microservice can search for the gateway in the correct network to read the sensors.
 
@@ -164,7 +164,10 @@ The complete Node-RED flow then looks like this:
 
 #### Button bar
 
+```js
 **Disclaimer**: For full functionality shifts must be added analog to our data model.
+```
+
 
 *3.3 Theird node: Function*
 
