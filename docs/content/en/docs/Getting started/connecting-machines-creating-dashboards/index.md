@@ -82,7 +82,7 @@ With Node-Red, it is possible to quickly develop applications and prepare untrea
 
 In the following, the creation of such Node-RED flows is demonstrated using the example sensors light barrier, button bar and inductive sensor. 
 
-For all connected sensors, the first two nodes are the same. Only after the second node we will distinguish between the different sensors.
+**For all connected sensors, the first two nodes are the same. Only after the second node we will distinguish between the different sensors.**
 
 *3.1 First node: MQTT-In*
 
@@ -164,6 +164,8 @@ The complete Node-RED flow then looks like this:
 
 #### Button bar
 
+**Disclaimer**: For full functionality shifts must be added analog to our data model.
+
 *3.3 Theird node: Function*
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
@@ -226,7 +228,45 @@ The complete Node-RED flow then looks like this:
 
 #### Inductive sensor
 
-TODO
+*3.3 Theird node: Function*
+
+{{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
+
+In the **third node "Function"** a timestamp is generated for each inductive value. The timestamp is stored in the form of a string. This makes it possible, for example, to read out the time at which a item was produced.
+The code for this node looks like this:
+
+```js
+msg.timestamp=msg.payload.timestamp_ms
+
+msg.payload=msg.payload.value_string;
+
+return msg;
+```
+
+*3.4 Fourth node: Function*
+
+{{< imgproc function_inductive_sensor Fit "800x150" >}}{{< /imgproc >}}
+
+In our example, the **function** ensures that when the value of the inductive sensor is changed, the message "Window open" is output. To do this, we need a function with the following code:
+
+```js
+msg.payload = {
+    "timestamp_ms": msg.timestamp, 
+    "Window open": msg.payload
+}
+msg.topic = "ia/"+env.get("factoryinsight")+"/"+env.get("dccaachen")+"/"+env.get("docs")+"/processValue"
+return msg;
+```
+
+*3.5 Fifth node: MQTT-Out*
+
+{{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
+
+To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
+
+The complete Node-RED flow then looks like this:
+
+{{< imgproc nodered_flow_inductive_sensor Fit "1200x1200" >}}{{< /imgproc >}}
 
 ### 2nd example: Extraction of data points via a predefined interface (In our example: OPC-UA)
 
