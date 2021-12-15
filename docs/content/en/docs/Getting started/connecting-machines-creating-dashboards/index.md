@@ -86,9 +86,9 @@ In the following, the creation of such Node-RED flows is demonstrated using the 
 
 *3.0 Inject shifts to the system*
 
-As an important step in advance, a shift should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time.
+As an important step in advance, a shift should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time. In Node-RED the time is displayed in milliseconds since epoch. The values can be generated [here](https://currentmillis.com/).
 
-To do this, we need the: small Node-RED flow as shown:
+To do this, we need the small Node-RED flow as shown:
 
 {{< imgproc node_red_addshift Fit "800x800" >}}{{< /imgproc >}}
 
