@@ -84,6 +84,25 @@ In the following, the creation of such Node-RED flows is demonstrated using the 
 
 **For all connected sensors, the first two nodes are the same. Only after the second node we will distinguish between the different sensors.**
 
+*3.0 Inject shifts to the system*
+
+As an important step in advance, a shift should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time.
+
+To do this, we need the: small Node-RED flow as shown:
+
+{{< imgproc node_red_addshift Fit "800x800" >}}{{< /imgproc >}}
+
+The following code is written in the function:
+
+```js
+msg.payload = {
+  "timestamp_ms": 1639522810000, // 2021-12-14 00:00
+  "timestamp_ms_end": 1639609200000 // 2021-12-15 00:00
+}
+msg.topic = "ia/factoryinsight/dccaachen/docs/addShift"
+return msg;
+```
+
 *3.1 First node: MQTT-In*
 
 {{< imgproc mqtt_in Fit "800x150" >}}{{< /imgproc >}}
@@ -162,8 +181,6 @@ The complete Node-RED flow then looks like this:
 {{< imgproc nodered_flow_light_barrier Fit "1200x1200" >}}{{< /imgproc >}}
 
 #### Button bar
-
-**For full functionality shifts must be added analog to our data model.**
 
 *3.3 Theird node: Function*
 
@@ -279,12 +296,40 @@ So the first step is to open Grafana by opening the following URL in your browse
 
 Next, create a new dashboard by clicking on the **+** on the left side.
 
-{{< imgproc grafana_1 Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc grafana_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
 After clicking on **Add an empty panel** you should see the following settings:
 
-{{< imgproc grafana_2 Fit "800x800" >}}{{< /imgproc >}}
+{{< imgproc grafana_2 Fit "1200x1200" >}}{{< /imgproc >}}
 
 1. Light Barrier
 
-For the Light Barrier
+For the light barrier the "state" panel is used.
+
+{{< imgproc grafana_light_barrier_1 Fit "800x800" >}}{{< /imgproc >}}
+
+First of all, in "location" and "asset" labels are selected from the topic of the second function in the Node-RED flow. The "Value" needs to be **count**.
+
+To get the total amount of produced parts a deeper insight into the panel settings is required. Go to "Value-Options" on the right side and change the entries of "Calculation" and "Fields" as shown below.
+
+{{< imgproc grafana_light_barrier_2 Fit "1200x1200" >}}{{< /imgproc >}}
+
+2. Button Bar
+
+For the button bar the "Discrete" panel is used.
+
+{{< imgproc grafana_button_bar_1 Fit "800x800" >}}{{< /imgproc >}}
+
+The query parameters from the topic of the second function in the Node-RED flow must be selected in "location" and "asset". The "value" must be **state**.
+
+3. Capacitive Sensor
+
+For the capacitive sensor the "Graph (old)" panel is used.
+
+{{< imgproc grafana_3 Fit "1200x1200" >}}{{< /imgproc >}}
+
+The query parameters from the topic of the second function in the Node-RED flow must be selected in "location" and "asset". The "value" must be **process_process_value** as specified in the payload message.
+
+Now the dashboard should look like this. In the upper right corner you can set the time span in which the data should be displayed and how often the dashboard should be refreshed.
+
+
