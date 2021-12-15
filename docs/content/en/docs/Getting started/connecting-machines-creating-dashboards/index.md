@@ -116,7 +116,51 @@ Now we will take a look at the three different sensors individually.
 
 With the light barrier it is possible, for example, to record the number of pieces produced. Also, with a more complicated logic, machine states can be detected directly with a light barrier. For the sake of simplicity, this is not explored and applied in our example.
 
-*3.3 Theird node: Count*
+*3.3 Theird node: Function*
+
+{{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
+
+In the **third node "Function"** a timestamp is generated for each distance value. The timestamp is stored in the form of a string. This makes it possible, for example, to read out the time at which a item was produced.
+The code for this node looks like this:
+
+```js
+msg.timestamp=msg.payload.timestamp_ms
+
+msg.payload=msg.payload.value_string;
+
+return msg;
+```
+
+*3.4 Fourth node: Trigger*
+
+{{< imgproc trigger Fit "800x150" >}}{{< /imgproc >}}
+
+The **trigger** allows us, in this example in the case of the light barrier, to sort out distances that are irrelevant for our evaluation, i.e. greater than 15 cm. To do this, you just need to enter a 15 in the "Threshold" field.
+
+*3.5 Fifth node: Function*
+
+{{< imgproc function_light_barrier Fit "800x150" >}}{{< /imgproc >}}
+
+In our example we want to count the number of produced parts. As a trolley on a rail is responsible for the transport into a container after the production of the part and moves towards the light barrier, the number of produced parts shall be increased by one as soon as the distance between the trolley and the light barrier is smaller than 15. To do this, we need a function with the following code:
+
+```js
+msg.payload = {
+  "timestamp_ms": Date.now(),
+  "count": 1
+}
+msg.topic = "ia/"+env.get("factoryinsight")+"/"+env.get("dccaachen")+"/"+env.get("docs")+"/count"
+return msg;
+```
+
+*3.7 Seventh node: MQTT-Out*
+
+{{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
+
+To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
+
+The complete Node-RED flow then looks like this:
+
+{{< imgproc nodered_flow_light_barrier Fit "1200x1200" >}}{{< /imgproc >}}
 
 #### Button bar
 
@@ -152,16 +196,16 @@ With the button bar, these are the individual buttons. You can see which name is
 
 *3.6 Sixth node: Function*
 
-{{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
+{{< imgproc function_button_bar Fit "800x150" >}}{{< /imgproc >}}
 
-The switch node is followed by a separate **function** for each button. In our example different states are transmitted. States can be e.g. pause, maintenance, emptying etc. and are defined via numbers. The different states can be found [here](https://docs.umh.app/docs/concepts/state/).
+The switch node is followed by a separate **function** for each button. In our example different states are transmitted. States can be e.g. active, unknow pause, material change, process etc. and are defined via numbers. The different states can be found [here](https://docs.umh.app/docs/concepts/state/).
 
 For example, the code for the function looks like this:
 
 ```js
 msg.payload = {
   "timestamp_ms": msg.timestamp,
-  "state": 120000
+  "state": 10000
 }
 
 msg.topic = "ia/raw/transmitterID/gatewaySerialNumber/portNumber/IOLinkSensorID"
