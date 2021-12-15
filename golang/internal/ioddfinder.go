@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// GetIoddFile downloads a ioddfiles from ioddfinder and returns a list of valid files for the request (This can be multiple, if the vendor has multiple languages or versions published)
 func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	var body []byte
 	body, err = getUrl(fmt.Sprintf("https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=%d", deviceId))
@@ -70,12 +71,14 @@ func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	return
 }
 
+// IoDDFile is a helper structure with the name, file and additional context of the iodd file
 type IoDDFile struct {
 	Name    string
 	File    []byte
 	Context Content
 }
 
+// readZipFile gets the content of a zip file
 func readZipFile(zf *zip.File) ([]byte, error) {
 	f, err := zf.Open()
 	if err != nil {
@@ -85,6 +88,7 @@ func readZipFile(zf *zip.File) ([]byte, error) {
 	return ioutil.ReadAll(f)
 }
 
+// getUrl executes a GET request to an url and returns the body as bytes
 func getUrl(url string) (body []byte, err error) {
 	var resp *http.Response
 	resp, err = http.Get(url)
