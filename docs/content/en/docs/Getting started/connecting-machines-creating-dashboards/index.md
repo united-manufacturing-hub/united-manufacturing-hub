@@ -276,4 +276,8 @@ This chapter describes how to connect already existing sensors or integrate an a
 
 ## 3. Create dashboards with Grafana
 
-TODO
+**To create a personalized dashboard at Grafana, first make sure that all preparations have been made as described in [Installation](https://docs.umh.app/docs/getting-started/setup-development/).**
+
+So the first step is to open Grafana by opening the following URL in your browser: http://<IP>:8080 (e.g. http://192.168.1.131:8080). You can log in with the username admin and the password from your clipboard.
+
+
