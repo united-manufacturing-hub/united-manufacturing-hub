@@ -84,7 +84,10 @@ In the following, the creation of such Node-RED flows is demonstrated using the 
 
 **For all connected sensors, the first two nodes are the same. Only after the second node we will distinguish between the different sensors.**
 
+**To create a personalized Node-RED flow, first make sure that all preparations have been made as described in [Installation](https://docs.umh.app/docs/getting-started/setup-development/).**
+
 *3.0 Inject shifts to the system*
+
 
 As an important step in advance, a shift should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time. In Node-RED the time is displayed in milliseconds since epoch. The values can be generated [here](https://currentmillis.com/).
 
