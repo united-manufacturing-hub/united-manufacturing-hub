@@ -9,12 +9,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // GetIoddFile downloads a ioddfiles from ioddfinder and returns a list of valid files for the request (This can be multiple, if the vendor has multiple languages or versions published)
 func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	var body []byte
-	body, err = getUrl(fmt.Sprintf("https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=%d", deviceId))
+	body, err = getUrlWithRetry(fmt.Sprintf("https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=%d", deviceId))
 	if err != nil {
 		return
 	}
@@ -42,7 +43,7 @@ func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	for _, id := range validIds {
 		ioddId := ioddfinder.Content[id].IoddID
 		var ioddzip []byte
-		ioddzip, err = getUrl(fmt.Sprintf("https://ioddfinder.io-link.com/api/vendors/%d/iodds/%d/files/zip/rated", vendorId, ioddId))
+		ioddzip, err = getUrlWithRetry(fmt.Sprintf("https://ioddfinder.io-link.com/api/vendors/%d/iodds/%d/files/zip/rated", vendorId, ioddId))
 		if err != nil {
 			return
 		}
@@ -88,11 +89,36 @@ func readZipFile(zf *zip.File) ([]byte, error) {
 	return ioutil.ReadAll(f)
 }
 
+func getUrlWithRetry(url string) (body []byte, err error) {
+	var status int
+	status = 1
+	for i := 0; i < 10; i++ {
+		body, err, status = getUrl(url)
+		if err != nil {
+			return
+		}
+		if status == 200 {
+			return
+		}
+		time.Sleep(GetBackoffTime(int64(i), 10*time.Second, 60*time.Second))
+	}
+	err = errors.New("failed to retrieve url after 10 tries")
+	return
+}
+
+var globalSleepTimer = 0
+
 // getUrl executes a GET request to an url and returns the body as bytes
-func getUrl(url string) (body []byte, err error) {
+func getUrl(url string) (body []byte, err error, status int) {
+	time.Sleep(GetBackoffTime(int64(globalSleepTimer), 10*time.Millisecond, 1*time.Second))
+	globalSleepTimer += 1
 	var resp *http.Response
 	resp, err = http.Get(url)
 	defer resp.Body.Close()
+	status = resp.StatusCode
+	if status != 200 {
+		return
+	}
 	if err != nil {
 		return
 	}

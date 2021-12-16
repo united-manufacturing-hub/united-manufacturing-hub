@@ -17,6 +17,11 @@ func TestGetIoddFile(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	// ifm electronic gmbh | DTI410
+	err = AssertIoddFileGetter(310, 967, 140)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
