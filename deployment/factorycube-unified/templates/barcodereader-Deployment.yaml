@@ -42,9 +42,8 @@ spec:
         - name: MQTT_CLIENT_ID 
           value: {{ .Values.serialNumber }}-barcodereader
         - name: BROKER_URL
-          value: {{ .Values.barcodereader.brokerURL }}
-        - name: BROKER_PORT
-          value: {{ .Values.barcodereader.brokerPort | quote }}
+          value: {{ .Values.mqttBridgeURL }}
+        - name: BROKER_PORT #TODO: remove this !
         - name: CUSTOMER_ID 
           value: {{ .Values.AAAconfig.barcodereader.customerID }}
         - name: LOCATION 

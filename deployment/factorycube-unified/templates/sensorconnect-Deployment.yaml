@@ -41,9 +41,8 @@ spec:
             - name: TRANSMITTERID
               value: {{ .Values.serialNumber | quote }}
             - name: BROKER_URL
-              value: {{ .Values.sensorconnect.brokerURL | quote }}
-            - name: BROKER_PORT
-              value: {{ .Values.sensorconnect.brokerPort | quote }}
+              value: {{ .Values.mqttBridgeURL }}
+            - name: BROKER_PORT #TODO: remove this !
             - name: IP_RANGE
               value: {{ .Values.AAAconfig.sensorconnect.iprange | quote }}
 

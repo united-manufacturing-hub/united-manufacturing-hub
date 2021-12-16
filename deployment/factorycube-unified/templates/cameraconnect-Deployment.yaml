@@ -61,10 +61,9 @@ spec:
               env:
                 - name: CUBE_TRANSMITTERID
                   value: {{ .Values.serialNumber | quote }}
-                - name: MQTT_HOST
-                  value: {{ .Values.cameraconnect.brokerURL | quote }}
-                - name: MQTT_PORT
-                  value: {{ .Values.cameraconnect.brokerPort | quote }}
+                - name: BROKER_URL
+                  value: {{ .Values.mqttBridgeURL }}
+                - name: BROKER_PORT #TODO: remove this !
                 - name: TRIGGER 
                   value: {{ .Values.AAAconfig.cameraconnect.trigger | quote }}
                 - name: ACQUISITION_DELAY 
