@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 )
@@ -103,14 +106,33 @@ func GetIoDevice(vendorId int64, deviceId int) (ioDevice IoDevice, err error) {
 	return
 }
 
-/*
 // Stores a filemap on harddrive
 func CacheFilemap(ioddFilemapKey IoddFilemapKey, filemap []internal.IoDDFile) {
+	//use gob !!!
+
+	file, err := os.Create(fmt.Sprintf("%d-%d.txt", ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId)) // create/truncate the file
+	if err != nil {
+		panic(err)
+	} // panic if error
+	defer file.Close() // make sure it gets closed after
+
+	fmt.Fprintf(file, filemap)
 
 }
 
 // Trys to retrieve Filemap from harddrive
-func GetFilemapFromCache(ioddFilemapKey IoddFilemapKey) (filemap, filemapNotOnHarddrive, error) {
+func GetFilemapFromCache(ioddFilemapKey IoddFilemapKey) ([]internal.IoDDFile, bool, error) {
 
+	var filemap []internal.IoDDFile
+	//Read File
+	absolutePath, _ := filepath.Abs(fmt.Sprintf("../sensorconnect/%d-%d.txt", ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId))
+	filemapByte, err := ioutil.ReadFile(absolutePath)
+
+	filemap = filemapByte
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println(filemap)
+	}
+
+	return
 }
-*/
