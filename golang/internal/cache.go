@@ -733,6 +733,10 @@ func GetTiered(key string) (cached bool, value interface{}) {
 
 	var err error
 	//Check if in redis
+	d := time.Now().Add(memoryDataExpiration)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
+
 	value, err = rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		zap.S().Infof("Not found in redis")
