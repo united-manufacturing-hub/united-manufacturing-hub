@@ -80,7 +80,8 @@ func onConnect(c MQTT.Client) {
 // onConnectionLost outputs warn message
 func onConnectionLost(c MQTT.Client, err error) {
 	optionsReader := c.OptionsReader()
-	zap.S().Warnf("Connection lost", err, optionsReader.ClientID())
+	zap.S().Warnf("Connection lost, restarting", err, optionsReader.ClientID())
+	ShutdownApplicationGraceful()
 }
 
 // SetupMQTT setups MQTT and connect to the broker
@@ -144,7 +145,7 @@ func checkConnected(c MQTT.Client) healthcheck.Check {
 func processOutgoingMessages() {
 	var err error
 
-	for !ShuttingDown {
+	for !ShuttingDown && mqttClient.IsConnected() {
 		if mqttOutGoingQueue.Length() == 0 {
 			//Skip if empty
 			time.Sleep(10 * time.Millisecond)
