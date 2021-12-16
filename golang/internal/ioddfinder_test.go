@@ -8,7 +8,6 @@ import (
 
 func TestGetIoddFile(t *testing.T) {
 	//Siemens AG | SIRIUS ACT Electronic Module 4DI/4DQ for IO-Link
-
 	err := AssertIoddFileGetter(42, 278531, 2)
 	if err != nil {
 		t.Error(err)
