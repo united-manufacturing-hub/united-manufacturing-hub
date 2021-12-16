@@ -4,6 +4,29 @@ serialNumber: "development"  # usually the hostname
 mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"  # e.g. mqtt.app.industrial-analytics.net:8883
 mqttBridgeTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
 
+AAAconfig:
+  barcodereader:
+    customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+    customerID: "raw"
+    location: "barcodereader"
+    machineID: "barcodereader"
+  sensorconnect:
+    iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
+  cameraconnect:
+    trigger: "MQTT"
+    acquisitionDelay: "0.0"
+    cycleTime: "4"
+    cameraInterface: "GenICam"
+    imageWidth: "800"
+    imageHeight: "800"
+    imageChannels: "3"
+    macAddress: "02-2625A-09849"
+    exposureTime: "1000"
+    exposureAuto: "Off"
+    pixelFormat: "Mono8"
+  factoryinsight:
+    db_password: "changeme"
+
 # Easy configuration
 services:
   mqttbridge:
@@ -12,7 +35,7 @@ services:
     enabled: true
   sensorconnect:
     enabled: true
-  caameraconnect:
+  cameraconnect:
     enabled: true
   nodered:
     enabled: true
@@ -128,12 +151,8 @@ mqttbridge:
 ### barcodereader ###
 barcodereader:
   image: unitedmanufacturinghub/barcodereader
-  customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
   brokerPort: 1883  # do not change
-  customerID: "raw"
-  location: "barcodereader"
-  machineID: "barcodereader"
   resources:
     requests:
       cpu: "2m"
@@ -145,7 +164,6 @@ barcodereader:
 ### sensorconnect ###
 sensorconnect:
   image: unitedmanufacturinghub/sensorconnect
-  iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
   brokerPort: 1883  # do not change
   resources:
@@ -162,17 +180,6 @@ cameraconnect:
   # tag: development
   brokerURL: "factorycube-edge-emqxedge-headless"  # do not change, points to emqxedge i
   brokerPort: 1883  # do not change
-  trigger: "MQTT"
-  acquisitionDelay: "0.0"
-  cycleTime: "4"
-  cameraInterface: "GenICam"
-  imageWidth: "800"
-  imageHeight: "800"
-  imageChannels: "3"
-  macAddress: "02-2625A-09849"
-  exposureTime: "1000"
-  exposureAuto: "Off"
-  pixelFormat: "Mono8"
   loggingLevel: "INFO"
   resources:
     requests:
@@ -447,7 +454,6 @@ nodered:
 
 ### emqxedge ###
 emqxedge:
-
   ## It is recommended to have odd number of nodes in a cluster, otherwise the emqx cluster cannot be automatically healed in case of net-split.
   replicaCount: 1
   image:
@@ -589,7 +595,6 @@ factoryinsight:
   db_host: "factorycube-server"
   db_database: "factoryinsight"
   db_user: "factoryinsight"
-  db_password: "changeme"
   redis:
     URI1: factorycube-server-redis-node-0.factorycube-server-redis-headless:26379
     URI2: factorycube-server-redis-node-1.factorycube-server-redis-headless:26379

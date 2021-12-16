@@ -66,27 +66,27 @@ spec:
                 - name: MQTT_PORT
                   value: {{ .Values.cameraconnect.brokerPort | quote }}
                 - name: TRIGGER 
-                  value: {{ .Values.cameraconnect.trigger | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.trigger | quote }}
                 - name: ACQUISITION_DELAY 
-                  value: {{ .Values.cameraconnect.acquisitionDelay | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.acquisitionDelay | quote }}
                 - name: CYCLE_TIME 
-                  value: {{ .Values.cameraconnect.cycleTime | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.cycleTime | quote }}
                 - name: CAMERA_INTERFACE 
-                  value: {{ .Values.cameraconnect.cameraInterface | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.cameraInterface | quote }}
                 - name: IMAGE_WIDTH 
-                  value: {{ .Values.cameraconnect.imageWidth | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.imageWidth | quote }}
                 - name: IMAGE_HEIGHT 
-                  value: {{ .Values.cameraconnect.imageHeight | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.imageHeight | quote }}
                 - name: IMAGE_CHANNELS 
-                  value: {{ .Values.cameraconnect.imageChannels | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.imageChannels | quote }}
                 - name: MAC_ADDRESS 
-                  value: {{ .Values.cameraconnect.macAddress | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.macAddress | quote }}
                 - name: EXPOSURE_TIME 
-                  value: {{ .Values.cameraconnect.exposureTime | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.exposureTime | quote }}
                 - name: EXPOSURE_AUTO
-                  value: {{ .Values.cameraconnect.exposureAuto | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.exposureAuto | quote }}
                 - name: PIXEL_FORMAT
-                  value: {{ .Values.cameraconnect.pixelFormat | quote }}
+                  value: {{ .Values.AAAconfig.cameraconnect.pixelFormat | quote }}
                 - name: LOGGING_LEVEL 
                   value: {{ .Values.cameraconnect.loggingLevel | quote }}
                 - name: DEFAULT_GENTL_PRODUCER_PATH 

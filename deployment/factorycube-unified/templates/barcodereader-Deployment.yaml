@@ -34,11 +34,11 @@ spec:
         securityContext:
           privileged: true
         volumeMounts:
-        - name: dev
+        - name: devs
           mountPath: /dev/ 
         env:
         - name: CUSTOM_USB_NAME 
-          value: {{ .Values.barcodereader.customUSBName }}
+          value: {{ .Values.AAAconfig.barcodereader.customUSBName }}
         - name: MQTT_CLIENT_ID 
           value: {{ .Values.serialNumber }}-barcodereader
         - name: BROKER_URL
@@ -46,11 +46,11 @@ spec:
         - name: BROKER_PORT
           value: {{ .Values.barcodereader.brokerPort | quote }}
         - name: CUSTOMER_ID 
-          value: {{ .Values.barcodereader.customerID }}
+          value: {{ .Values.AAAconfig.barcodereader.customerID }}
         - name: LOCATION 
-          value: {{ .Values.barcodereader.location }}
+          value: {{ .Values.AAAconfig.barcodereader.location }}
         - name: MACHINE_ID 
-          value: {{ .Values.barcodereader.machineID }}
+          value: {{ .Values.AAAconfig.barcodereader.machineID }}
       
       volumes:
       - name: dev

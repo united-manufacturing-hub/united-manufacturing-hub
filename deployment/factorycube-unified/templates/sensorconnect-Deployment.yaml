@@ -45,7 +45,7 @@ spec:
             - name: BROKER_PORT
               value: {{ .Values.sensorconnect.brokerPort | quote }}
             - name: IP_RANGE
-              value: {{ .Values.sensorconnect.iprange | quote }}
+              value: {{ .Values.AAAconfig.sensorconnect.iprange | quote }}
 
       serviceAccountName: {{ include "factorycube-unified.serviceAccountName" . }}
       restartPolicy: Always

@@ -71,7 +71,7 @@ spec:
             - name: POSTGRES_USER
               value: {{ .Values.factoryinsight.db_user }}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.factoryinsight.db_password }}
+              value: {{ .Values.AAAconfig.factoryinsight.db_password }}
 
               {{ $index := 1 }}
               {{ range $customerName, $password := .Values.customers | default dict }}
