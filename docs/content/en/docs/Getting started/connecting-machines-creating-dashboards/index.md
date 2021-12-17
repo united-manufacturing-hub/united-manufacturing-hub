@@ -7,12 +7,12 @@ description: >
   This section explains how the United Manufacturing Hub is used practically 
 ---
 
-## 0. Video: From sensor to dashboard
+## Video: From sensor to dashboard
 
 TODO
 #455
 
-## 1. Introduction
+## Introduction
 
 The United Manufacturing Hub has a wide variety of connectors and therefore offers maximum connectivity to different machines and systems.
 
@@ -31,20 +31,20 @@ Via Node-RED, these data sources can be read out easily or, in the case of IO-Li
 
 Using these data points and our data model, the data can then be converted into a standardized data model. This is done independently of machine type and manufacturer and can be made usable for various data services, e.g. Grafana.
 
-## 2. Extracting and preparing data with the help of Node-RED
+## Extracting and preparing data with the help of Node-RED
 
 To extract and preprocess the data from different data sources, we use the open source software Node-RED. Node-RED is a low-code programming for event-driven applications. 
 
 Originally, Node-RED comes from the area of smart home and programming implementations, but is also used in manufacturing more frequently. For more information feel free to check [this article](https://docs.umh.app/docs/concepts/node-red-in-industrial-iot/).
 
-In the following, the procedure for creating a Node-RED flow is described in detail using **two examples**. 
+In the following, the procedure for creating a Node-RED flow is described in detail using **two examples**:
 
-1. Retrofit a cutting machine with the help of external sensors
-2. Using OPC/UA to read a warping machine data directly from the PLC
+1. Retrofitting a cutting machine with the help of external sensors;
+2. Using OPC/UA to read a warping machine data directly from the PLC.
 
 ### 1st example: Retrofitting with external sensors
 
-In this example we will determine the output and the machine condition of a cutting machine.
+In this example we will determine the output and the machine condition of a cutting machine step-by-step.
 
 These sensors are used for this purpose:
 
@@ -52,21 +52,21 @@ These sensors are used for this purpose:
 - Button bar
 - Inductive sensor
 
-*1. Connect sensors*
+*1st step: Connect sensors*
 
-With the help of Sensorconnect, sensors can be connected quickly and easily via an IO-Link gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
+With the help of [sensorconnect](https://docs.umh.app/docs/developers/factorycube-edge/sensorconnect/), sensors can be connected quickly and easily via an IO-Link gateway. The sensor values are automatically extracted from the software stack and made available via [MQTT](https://docs.umh.app/docs/concepts/mqtt/). 
 
-TODO: Picture or illustration of how to connect sensors
+TODO: Picture or illustration of setup
 
-*2. Make the connected sensors visible to our system*
+*2nd step: Make the connected sensors visible to our system*
 
-The gateways to which sensors are connected are found by our microservice in the local network. For this purpose, the IP-range must be communicated to the microservice so that it can search for the gateway in the correct network and read out the sensors via it.
+The gateways to which sensors are connected are found by our microservice in the local network. For this purpose, the *IP-range* must be communicated to the microservice so that it can search for the gateway in the correct network and read out the sensors via it.
 
 To do this, there are two options. 
 
-1. Option: Change the IP-range in the [development.yaml](https://www.umh.app/development.yaml) file, that you download. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
+- Option 1: Change the IP-range in the [development.yaml](https://www.umh.app/development.yaml) file, that you download. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
 
-2. Option: Lens. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Apps" in the left bar, then on "Releases and open "factorycube-edge" by clicking on it.
+- Option 2: Lens. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Apps" in the left bar, then on "Releases and open "factorycube-edge" by clicking on it.
 
 {{< imgproc ip_range_lens_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
@@ -76,9 +76,9 @@ Next, click into the code and press the key combination `ctrl+F` to search for "
 
 Now the microservice can search for the gateway in the correct network to read the sensors.
 
-*3. Creating a Node-RED flow*
+*3rd step: Creating a Node-RED flow*
 
-With Node-Red, it is possible to quickly develop applications and prepare untreated sensor data so that Grafana, for example, can use it. For this purpose, so-called nodes are drawn onto a surface and wired together to create sequences. 
+With Node-RED, it is possible to quickly develop applications and prepare untreated sensor data so that Grafana, for example, can use it. For this purpose, so-called *nodes* are drawn onto a surface and wired together to create sequences. 
 
 In the following, the creation of such Node-RED flows is demonstrated using the example sensors light barrier, button bar and inductive sensor. 
 
@@ -86,10 +86,9 @@ In the following, the creation of such Node-RED flows is demonstrated using the 
 
 **To create a personalized Node-RED flow, first make sure that all preparations have been made as described in [Installation](https://docs.umh.app/docs/getting-started/setup-development/).**
 
-*3.0 Inject shifts to the system*
+*Inject shifts to the system*
 
-
-As an important step in advance, a shift should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time. In Node-RED the time is displayed in milliseconds since epoch. The values can be generated [here](https://currentmillis.com/).
+As an important step in advance, a <shift> should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time. In Node-RED the time is displayed in milliseconds since epoch. The values can be generated [here](https://currentmillis.com/).
 
 To do this, we need the small Node-RED flow as shown:
 
@@ -106,7 +105,7 @@ msg.topic = "ia/factoryinsight/dccaachen/docs/addShift"
 return msg;
 ```
 
-*3.1 First node: MQTT-In*
+*First node: MQTT-In*
 
 {{< imgproc mqtt_in Fit "800x150" >}}{{< /imgproc >}}
 
@@ -126,7 +125,7 @@ To get a quick and easy overview of the available MQTT messages and topics we re
 
 An example for an ia/raw/ topic is: `ia/raw/development/000200410332/X02/310-372`. This means that an IO-Link gateway with serial number `000200410332` has connected the sensor `310-372` to the first port `X02`.
 
-*3.2 Second node: JSON*
+*Second node: JSON*
 
 {{< imgproc json Fit "800x150" >}}{{< /imgproc >}}
 
@@ -134,11 +133,11 @@ The **second node (JSON)** is a generic container of elements inside a JSON stre
 
 **Now we will take a look at the three different sensors individually.**
 
-#### Light barrier
+### Light barrier
 
-With the light barrier it is possible, for example, to record the number of pieces produced. Also, with a more complicated logic, machine states can be detected directly with a light barrier. For the sake of simplicity, this is not explored and applied in our example.
+With the <light barrier> it is possible, for example, to record the number of pieces produced. Also, with a more complicated logic, machine states can be detected directly with a light barrier. For the sake of simplicity, this is not explored and applied in our example.
 
-*3.3 Theird node: Function*
+*Theird node: Function*
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
@@ -152,13 +151,13 @@ msg.payload=msg.payload.value_string;
 return msg;
 ```
 
-*3.4 Fourth node: Trigger*
+*Fourth node: Trigger*
 
 {{< imgproc trigger Fit "800x150" >}}{{< /imgproc >}}
 
 The **trigger** allows us, in this example in the case of the light barrier, to sort out distances that are irrelevant for our evaluation, i.e. greater than 15 cm. To do this, you just need to enter a 15 in the "Threshold" field.
 
-*3.5 Fifth node: Function*
+*Fifth node: Function*
 
 {{< imgproc function_light_barrier Fit "800x150" >}}{{< /imgproc >}}
 
@@ -173,7 +172,7 @@ msg.topic = "ia/factoryinsight/dccaachen/docs/count"
 return msg;
 ```
 
-*3.7 Seventh node: MQTT-Out*
+*Sixth node: MQTT-Out*
 
 {{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
 
@@ -183,9 +182,9 @@ The complete Node-RED flow then looks like this:
 
 {{< imgproc nodered_flow_light_barrier Fit "1200x1200" >}}{{< /imgproc >}}
 
-#### Button bar
+### Button bar
 
-*3.3 Theird node: Function*
+*Theird node: Function*
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
@@ -199,13 +198,13 @@ msg.payload=msg.payload.value_string;
 return msg;
 ```
 
-*3.4 Fourth node: Filter*
+*Fourth node: Filter*
 
 {{< imgproc filter Fit "800x150" >}}{{< /imgproc >}}
 
 The **filter** is mainly for clarity and blocks the values of a sensor until the value is changed. A change of the property is not necessary.
 
-*3.5 Fifth node: Switch*
+*Fifth node: Switch*
 
 {{< imgproc switch Fit "800x150" >}}{{< /imgproc >}}
 
@@ -213,7 +212,7 @@ The **switch** is used to distinguish between the different inputs for the follo
 
 With the button bar, these are the individual buttons. You can see which name is assigned to a single button by the number that appears in the debug window when you press a button.  For our example these are the numbers "0108", "0104", 0120" and "0101".
 
-*3.6 Sixth node: Function*
+*Sixth node: Function*
 
 {{< imgproc function_button_bar Fit "800x150" >}}{{< /imgproc >}}
 
@@ -233,7 +232,7 @@ return msg;
 
 To reach further machine states, only the adaptation of the state number is necessary
 
-*3.7 Seventh node: MQTT-Out*
+*Seventh node: MQTT-Out*
 
 {{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
 
@@ -243,9 +242,9 @@ The complete Node-RED flow then looks like this:
 
 {{< imgproc nodered_flow_button_bar Fit "1200x1200" >}}{{< /imgproc >}}
 
-#### Capacitive sensor
+### Capacitive sensor
 
-*3.3 Theird node: Function*
+*Theird node: Function*
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
@@ -260,7 +259,7 @@ msg.payload=msg.payload["Process value"]
 return msg;
 ```
 
-*3.4 Fourth node: Function*
+*Fourth node: Function*
 
 {{< imgproc function_inductive_sensor Fit "800x150" >}}{{< /imgproc >}}
 
@@ -277,7 +276,7 @@ return msg;
 
 The Process value can be chosen freely.
 
-*3.5 Fifth node: MQTT-Out*
+*Fifth node: MQTT-Out*
 
 {{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
 
@@ -291,7 +290,7 @@ The complete Node-RED flow then looks like this:
 
 This chapter describes how to connect already existing sensors or integrate an already existing interface (OPC/UA) with our system.
 
-## 3. Create dashboards with Grafana
+## Create dashboards with Grafana
 
 **To create a personalized dashboard at Grafana, first make sure that all preparations have been made as described in [Installation](https://docs.umh.app/docs/getting-started/setup-development/).**
 
@@ -307,9 +306,9 @@ After clicking on **Add an empty panel** you should see the following settings:
 
 Now you can add different panels to your dashboard.
 
-1. Light Barrier
+### Light Barrier
 
-For the light barrier the "state" panel is used.
+For the light barrier the *state* panel is used.
 
 {{< imgproc grafana_light_barrier_1 Fit "800x800" >}}{{< /imgproc >}}
 
@@ -319,17 +318,17 @@ To get the total amount of produced parts a deeper insight into the panel settin
 
 {{< imgproc grafana_light_barrier_2 Fit "1200x1200" >}}{{< /imgproc >}}
 
-2. Button Bar
+### Button Bar
 
-For the button bar the "Discrete" panel is used.
+For the button bar the *Discrete* panel is used.
 
 {{< imgproc grafana_button_bar_1 Fit "800x800" >}}{{< /imgproc >}}
 
 The query parameters from the topic of the second function in the Node-RED flow must be selected in "location" and "asset". The "value" must be **state**.
 
-3. Capacitive Sensor
+### Capacitive Sensor
 
-For the capacitive sensor the "Graph (old)" panel is used.
+For the capacitive sensor the *Graph (old)* panel is used.
 
 {{< imgproc grafana_capacitive_sensor_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
