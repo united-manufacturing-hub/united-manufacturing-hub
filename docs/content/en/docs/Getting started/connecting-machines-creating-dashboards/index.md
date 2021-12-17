@@ -70,7 +70,7 @@ To do this, there are two options.
 
 {{< imgproc ip_range_lens_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
-Next, click into the code and press the key combination `ctrl+F` to search for "iprange". There you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
+Next, click into the code and press the key combination `ctrl+F` to search for "iprange". There you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24`. With the 24 the IP range is specified.
 
 {{< imgproc ip_range_lens_2 Fit "1200x1200" >}}{{< /imgproc >}}
 
@@ -121,7 +121,7 @@ In the topic of our **first node (MQTT IN)** all these three information are bun
 
 The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
-To get a quick and easy overview of the available MQTT messages and topics we recommend the [MQTT Explorer](http://mqtt-explorer.com/). . If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
+To get a quick and easy overview of the available MQTT messages and topics we recommend the [MQTT Explorer](http://mqtt-explorer.com/). If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
 
 An example for an ia/raw/ topic is: `ia/raw/development/000200410332/X02/310-372`. This means that an IO-Link gateway with serial number `000200410332` has connected the sensor `310-372` to the first port `X02`.
 
