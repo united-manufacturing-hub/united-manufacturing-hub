@@ -21,7 +21,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/uber/jaeger-client-go v2.29.1+incompatible
+	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/zeebo/xxh3 v1.0.1
 	go.uber.org/zap v1.19.1
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
