@@ -1,4 +1,4 @@
-{{- if .Values.services.emqxedge.enabled -}}
+{{- if .Values.AAAservices.emqxedge.enabled -}}
 
 {{- if .Values.emqxedge.ingress.dashboard.enabled -}}
 {{- if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}

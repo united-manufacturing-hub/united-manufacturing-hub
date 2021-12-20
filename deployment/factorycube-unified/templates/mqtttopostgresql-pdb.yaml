@@ -1,4 +1,4 @@
-{{- if .Values.services.mqtttopostgresql.enabled -}}
+{{- if .Values.AAAservices.mqtttopostgresql.enabled -}}
 {{- if .Values.mqtttopostgresql.pdb.enabled -}}
 
 apiVersion: policy/v1beta1

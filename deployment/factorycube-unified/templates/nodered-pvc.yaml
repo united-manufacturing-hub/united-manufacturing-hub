@@ -1,4 +1,4 @@
-{{- if .Values.services.nodered.enabled -}}
+{{- if .Values.AAAservices.nodered.enabled -}}
 
 kind: PersistentVolumeClaim
 apiVersion: v1

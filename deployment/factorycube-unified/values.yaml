@@ -1,8 +1,8 @@
 # Please adjust the following lines
 
-serialNumber: "development"  # usually the hostname
-mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"  # e.g. mqtt.app.industrial-analytics.net:8883
-mqttBridgeTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+AAAserialNumber: "development"  # usually the hostname
+AAAmqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"  # e.g. mqtt.app.industrial-analytics.net:8883
+AAAmqttBridgeTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
 
 AAAconfig:
   barcodereader:
@@ -28,7 +28,7 @@ AAAconfig:
     db_password: "changeme"
 
 # Easy configuration
-services:
+AAAservices:
   mqttbridge:
     enabled: true
   barcodereader:
@@ -59,7 +59,7 @@ services:
     enabled: true
 
 # Certficiates for MQTT Bridge
-mqttBridgeCACert: |
+AAAmqttBridgeCACert: |
     -----BEGIN CERTIFICATE-----
     MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
     BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
@@ -80,7 +80,7 @@ mqttBridgeCACert: |
     VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
     zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
     -----END CERTIFICATE-----
-mqttBridgeCert: |
+AAAmqttBridgeCert: |
     -----BEGIN CERTIFICATE-----
     MIIDVTCCAj2gAwIBAgIQD9BkaD7SQzUuHzt+0P4dRTANBgkqhkiG9w0BAQsFADAW
     MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMyNDZaFw0yNDAzMjEx
@@ -101,7 +101,7 @@ mqttBridgeCert: |
     0DRN+Jm6sggWvJitRPNWtxC2UE/DVWqtBGXPBvwFjQrJHpnqb9lpzVhxoWxY2AI4
     61eCOb6s6MslCkER6H9jlBhIxWpEPTNgdjth6uRA48FpAqze26Sj8L4=
     -----END CERTIFICATE-----
-mqttBridgePrivkey: |
+AAAmqttBridgePrivkey: |
     -----BEGIN PRIVATE KEY-----
     MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDjPFLHojAiGFwv
     6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM2Ta9f/nOosHTcJzy/nkpvfwz44rD

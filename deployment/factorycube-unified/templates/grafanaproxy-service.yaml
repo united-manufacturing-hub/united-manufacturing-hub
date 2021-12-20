@@ -1,4 +1,4 @@
-{{- if .Values.services.grafanaproxy.enabled -}}
+{{- if .Values.AAAservices.grafanaproxy.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:

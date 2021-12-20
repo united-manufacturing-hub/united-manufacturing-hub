@@ -1,4 +1,4 @@
-{{- if .Values.services.kafkatoblob.enabled -}}
+{{- if .Values.AAAservices.kafkatoblob.enabled -}}
 {{- if .Values.kafkatoblob.pdb.enabled -}}
 
 apiVersion: policy/v1beta1

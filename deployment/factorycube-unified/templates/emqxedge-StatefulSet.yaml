@@ -1,4 +1,4 @@
-{{- if .Values.services.emqxedge.enabled -}}
+{{- if .Values.AAAservices.emqxedge.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -91,9 +91,9 @@ spec:
                 name: {{ include "factorycube-unified.fullname" . }}-emqxedge-env
           env:
           - name: EMQX_NAME
-            value: {{ .Values.serialNumber }}
+            value: {{ .Values.AAAserialNumber }}
           - name: EMQX_CLUSTER__K8S__APP_NAME
-            value: {{ .Values.serialNumber }}
+            value: {{ .Values.AAAserialNumber }}
           - name: EMQX_CLUSTER__DISCOVERY
             value: k8s 
           - name: EMQX_CLUSTER__K8S__SERVICE_NAME

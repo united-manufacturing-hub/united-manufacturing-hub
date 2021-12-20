@@ -1,4 +1,4 @@
-{{- if .Values.services.emqxedge.enabled -}}
+{{- if .Values.AAAservices.emqxedge.enabled -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

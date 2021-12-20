@@ -1,4 +1,4 @@
-{{- if .Values.services.miniooperator.enabled -}}
+{{- if .Values.AAAservices.miniooperator.enabled -}}
 
 
 apiVersion: v1

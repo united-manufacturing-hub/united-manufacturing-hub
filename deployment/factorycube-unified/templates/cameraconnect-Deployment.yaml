@@ -1,4 +1,4 @@
-{{- if .Values.services.cameraconnect.enabled -}}
+{{- if .Values.AAAservices.cameraconnect.enabled -}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -60,9 +60,9 @@ spec:
                   name: storage
               env:
                 - name: CUBE_TRANSMITTERID
-                  value: {{ .Values.serialNumber | quote }}
+                  value: {{ .Values.AAAserialNumber | quote }}
                 - name: BROKER_URL
-                  value: {{ .Values.mqttBridgeURL }}
+                  value: {{ .Values.AAAmqttBridgeURL }}
                 - name: BROKER_PORT #TODO: remove this !
                 - name: TRIGGER 
                   value: {{ .Values.AAAconfig.cameraconnect.trigger | quote }}

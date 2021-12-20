@@ -1,4 +1,4 @@
-{{- if .Values.services.factoryinsight.enabled -}}
+{{- if .Values.AAAservices.factoryinsight.enabled -}}
 {{- if .Values.factoryinsight.pdb.enabled -}}
 
 apiVersion: policy/v1beta1

@@ -1,4 +1,4 @@
-{{- if .Values.services.timescaledbsingle.enabled -}}
+{{- if .Values.AAAservices.timescaledbsingle.enabled -}}
 
 apiVersion: v1
 kind: ConfigMap

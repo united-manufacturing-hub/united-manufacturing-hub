@@ -1,4 +1,4 @@
-{{- if .Values.services.nodered.enabled -}}
+{{- if .Values.AAAservices.nodered.enabled -}}
 
 apiVersion: v1
 kind: Service

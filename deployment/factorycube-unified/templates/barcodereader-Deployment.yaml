@@ -1,4 +1,4 @@
-{{- if .Values.services.barcodereader.enabled -}}
+{{- if .Values.AAAservices.barcodereader.enabled -}}
 
 apiVersion: apps/v1
 kind: StatefulSet
@@ -40,9 +40,9 @@ spec:
         - name: CUSTOM_USB_NAME 
           value: {{ .Values.AAAconfig.barcodereader.customUSBName }}
         - name: MQTT_CLIENT_ID 
-          value: {{ .Values.serialNumber }}-barcodereader
+          value: {{ .Values.AAAserialNumber }}-barcodereader
         - name: BROKER_URL
-          value: {{ .Values.mqttBridgeURL }}
+          value: {{ .Values.AAAmqttBridgeURL }}
         - name: BROKER_PORT #TODO: remove this !
         - name: CUSTOMER_ID 
           value: {{ .Values.AAAconfig.barcodereader.customerID }}

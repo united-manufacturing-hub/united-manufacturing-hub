@@ -1,4 +1,4 @@
-{{- if .Values.services.factoryinput.enabled -}}
+{{- if .Values.AAAservices.factoryinput.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
