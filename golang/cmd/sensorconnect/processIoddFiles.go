@@ -107,7 +107,7 @@ func GetIoDevice(vendorId int64, deviceId int) (ioDevice IoDevice, err error) {
 }
 
 // Stores a filemap on harddrive
-func CacheFilemap(ioddFilemapKey IoddFilemapKey, filemap []internal.IoDDFile) {
+func CacheFilemap(ioddFilemapKey IoddFilemapKey, filemap []byte) {
 	//use gob !!!
 
 	file, err := os.Create(fmt.Sprintf("%d-%d.txt", ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId)) // create/truncate the file
@@ -115,9 +115,15 @@ func CacheFilemap(ioddFilemapKey IoddFilemapKey, filemap []internal.IoDDFile) {
 		panic(err)
 	} // panic if error
 	defer file.Close() // make sure it gets closed after
-
 	fmt.Fprintf(file, filemap)
 
+	//copied from https://stackoverflow.com/questions/32687985/convert-back-byte-array-into-file-using-golang
+	permissions := 0644 // or whatever you need
+	byteArray := []byte("to be written to a file\n")
+	err := ioutil.WriteFile("file.txt", byteArray, permissions)
+	if err != nil {
+		// handle error
+	}
 }
 
 // Trys to retrieve Filemap from harddrive
