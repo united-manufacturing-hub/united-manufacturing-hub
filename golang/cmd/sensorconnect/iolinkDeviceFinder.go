@@ -10,7 +10,31 @@ import (
 )
 
 
-func discoverDevices(deviceMap [key]device, ipRange string)(returnDeviceMap [key]device){
+// Structs for parsing response to discover all IO-Link Master Devices
+type DiscoverResponseFromDevice struct{
+	cid int `xml:"ProcessData,attr"`
+	data Data `xml:"data"`
+}
+
+type Data struct {
+	_deviceinfo_serialnumber_  StringDataPoint `xml:"/deviceinfo/serialnumber/"`//in xml with / instead of _
+	_deviceinfo_productcode_ StringDataPoint `xml:"/deviceinfo/productcode/"`//in xml with / instead of _
+}
+
+type StringDataPoint struct {
+	code int `xml:"code,attr"`
+	data string `xml:"data,attr"`
+}
+
+
+// Struct for relevant information of already discovered devices
+type DiscoveredDeviceInformation struct{
+	productCode string
+	serialNumber string
+	url string
+}
+
+func discoverDevices(discoveredDevices []DiscoveredDeviceInformation, ipRange string)(discoveredDevices []DiscoveredDeviceInformation){
 	// Payload to send to the gateways
     payload := `{
         "code":"request",
@@ -46,17 +70,31 @@ func discoverDevices(deviceMap [key]device, ipRange string)(returnDeviceMap [key
 
 		// converto ip to url
 		url := "http://" + ip.String()
-		//check url addresse with post request
-		resp, err := http.PostForm(url, payload)
+		//check url address with post request
+		resp, err := http.PostForm(url, payload) //Todo: how to set the timeout = 0.1?
 		if err != nil {
 			fmt.Print(err)
 			log.Fatal(err)
 		}
-		var response map[string]interface{}
+		unmarshaledAnswer := DiscoverResponseFromDevice{}
 
-		json.NewDecoder(response.Body).Decode(&response)
-	
-		fmt.Println(response["form"])
+		// Unmarshal file with Unmarshal
+		err := xml.Unmarshal(resp, &unmarshaledAnswer)
+		if err != nil {
+			panic(err) //Todo change to zap stuff
+		}
+
+		discoveredDeviceInformation := DiscoveredDeviceInformation{}
+		// Insert relevant gained data into DiscoveredDeviceInformation and store in slice
+		discoveredDeviceInformation.productCode = unmarshaledAnswer.data._deviceinfo_productcode_.data
+		discoveredDeviceInformation.serialNumber = unmarshaledAnswer.data._deviceinfo_serialnumber_.data
+		discoveredDeviceInformation.url = url.String()
+		
+		discoveredDevices = append(discoveredDevices, DiscoveredDeviceInformation)
+		return payload, err
+
+
+
 	}
 
 
