@@ -10,6 +10,15 @@ import (
 	"net"
 	"net/http"
 )
+test := {
+	"code":"request",
+	"cid":23,
+	"adr":"/getdatamulti",
+	"data":{
+		"datatosend":[
+			"/deviceinfo/serialnumber/","/deviceinfo/productcode/"]
+	}
+}
 
 // Structs for parsing response to discover all IO-Link Master Devices
 type DiscoverResponseFromDevice struct {
@@ -86,8 +95,8 @@ func discoverDevices(discoveredDevices []DiscoveredDeviceInformation, ipRange st
 		fmt.Println("URL:>", url)
 
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-		req.Header.Set("X-Custom-Header", "myvalue")
-		req.Header.Set("Content-Type", "application/json")
+		// necessary?: req.Header.Set("X-Custom-Header", "myvalue")
+		// necessary?: req.Header.Set("Content-Type", "application/json")
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
