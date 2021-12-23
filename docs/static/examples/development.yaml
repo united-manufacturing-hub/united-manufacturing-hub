@@ -107,8 +107,8 @@ write_files:
 
       # Restart as rancher
       if [ $UID -eq 0 ]; then
-      echo "Initial setup! Waiting 20 seconds for full startup..."
-      sleep 20
+      echo "Initial setup! Waiting 60 seconds for full startup..."
+      sleep 60
 
 
       ###
