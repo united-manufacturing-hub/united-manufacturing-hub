@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -20,9 +21,12 @@ func SaveIoddFile(vendorId int64, deviceId int) (err error) {
 		return err
 	}
 
-	path := "./IoddFiles/ " + filemap[0].Name
+	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
+	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
+	absoluteFilePath := absoluteDirectoryPath + "\\" + filemap[0].Name
+	fmt.Println("Saving file to path: " + absoluteFilePath)
 	// check for existing file with same name
-	if _, err := os.Stat(path); err == nil {
+	if _, err := os.Stat(absoluteFilePath); err == nil {
 		// file already exists -> don't exchange
 		err = errors.New("found file already exists: Filename from ioddfinder website found in local IoddFiles folder")
 		return err
@@ -32,7 +36,7 @@ func SaveIoddFile(vendorId int64, deviceId int) (err error) {
 	//ToDo
 
 	// save iodd file
-	err = ioutil.WriteFile(path, filemap[0].File, 0755)
+	err = ioutil.WriteFile(absoluteFilePath, filemap[0].File, 0644)
 	if err != nil {
 		fmt.Printf("Unable to write file: %v", err)
 		return err
