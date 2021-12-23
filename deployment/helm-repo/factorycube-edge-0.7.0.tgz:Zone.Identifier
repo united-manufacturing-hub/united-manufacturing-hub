@@ -1,4 +1,0 @@
-[ZoneTransfer]
-ZoneId=3
-ReferrerUrl=https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/deployment/helm-repo/factorycube-edge-0.7.0.tgz
-HostUrl=https://raw.githubusercontent.com/united-manufacturing-hub/united-manufacturing-hub/main/deployment/helm-repo/factorycube-edge-0.7.0.tgz
