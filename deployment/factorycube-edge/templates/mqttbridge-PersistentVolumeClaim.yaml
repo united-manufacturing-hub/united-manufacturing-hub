@@ -9,6 +9,7 @@ metadata:
     "helm.sh/resource-policy": keep
   labels:
     {{- include "factorycube-edge.labels.mqttbridge" . | nindent 4 }}
+    volume.alpha.kubernetes.io/storage-class: default
 spec:
   accessModes:
   - ReadWriteOnce
