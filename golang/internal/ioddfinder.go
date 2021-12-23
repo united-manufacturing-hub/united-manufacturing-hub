@@ -8,9 +8,37 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
+
+func SaveIoddFile(vendorId int64, deviceId int) (err error) {
+	// download iodd file
+	filemap, err := GetIoddFile(vendorId, deviceId)
+	if err != nil {
+		return err
+	}
+
+	path := "./IoddFiles/ " + filemap[0].Name
+	// check for existing file with same name
+	if _, err := os.Stat(path); err == nil {
+		// file already exists -> don't exchange
+		err = errors.New("found file already exists: Filename from ioddfinder website found in local IoddFiles folder")
+		return err
+	}
+
+	//check for existing vendorId and deviceId combination
+	//ToDo
+
+	// save iodd file
+	err = ioutil.WriteFile(path, filemap[0].File, 0755)
+	if err != nil {
+		fmt.Printf("Unable to write file: %v", err)
+		return err
+	}
+	return
+}
 
 // GetIoddFile downloads a ioddfiles from ioddfinder and returns a list of valid files for the request (This can be multiple, if the vendor has multiple languages or versions published)
 func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
