@@ -23,6 +23,6 @@ require (
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/zeebo/xxh3 v1.0.1
-	go.uber.org/zap v1.19.1
+	go.uber.org/zap v1.20.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 )
