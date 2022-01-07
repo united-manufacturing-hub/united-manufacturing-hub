@@ -15,13 +15,19 @@ except ImportError:
 
 import functions.libhelmlint as libhelmlint
 import functions.libyamllint as libyamllint
+import functions.libdockerlint as libdockerlint
 
 if __name__ == '__main__':
     failed = False
     if libyamllint.LibYamlLint().run() != 0:
-        failed = True
+        # failed = True
+        pass
 
     if libhelmlint.LibHelmLint().run() != 0:
+        failed = True
+        pass
+
+    if libdockerlint.LibDockerLint().run() != 0:
         failed = True
 
     if failed:
