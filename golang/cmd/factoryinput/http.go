@@ -91,10 +91,12 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 }
 
 func handleInternalServerError(c *gin.Context, err error) {
-	_, span := tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-	defer span.End()
-
-	traceID := span.SpanContext().SpanID().String()
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	zap.S().Errorw("Internal server error",
 		"error", err,
@@ -106,10 +108,12 @@ func handleInternalServerError(c *gin.Context, err error) {
 
 func handleInvalidInputError(c *gin.Context, err error) {
 
-	_, span := tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-	defer span.End()
-
-	traceID := span.SpanContext().SpanID().String()
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	zap.S().Errorw("Invalid input error",
 		"error", err,
@@ -121,8 +125,10 @@ func handleInvalidInputError(c *gin.Context, err error) {
 
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
-	_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
+		defer span.End()
+	}
 
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer && user != "jeremy" {
@@ -154,8 +160,10 @@ type MQTTData struct {
 }
 
 func postMQTTHandler(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "postMQTTHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "postMQTTHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	jsonBytes, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {

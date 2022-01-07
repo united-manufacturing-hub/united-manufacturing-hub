@@ -271,8 +271,10 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 
 func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, stateArray []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "addNoShiftsToStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "addNoShiftsToStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	processedShifts := cleanRawShiftData(rawShifts, from, to, configuration)
 	processedShifts = addNoShiftsBetweenShifts(processedShifts, configuration)

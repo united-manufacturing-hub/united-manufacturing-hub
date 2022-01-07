@@ -85,10 +85,15 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 }
 
 func handleInternalServerError(c *gin.Context, err error) {
-	_, span := tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-	defer span.End()
 
-	traceID := span.SpanContext().SpanID().String()
+	var span oteltrace.Span
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
+
+	traceID = span.SpanContext().SpanID().String()
 
 	zap.S().Errorw("Internal server error",
 		"error", err,
@@ -99,10 +104,15 @@ func handleInternalServerError(c *gin.Context, err error) {
 }
 
 func handleInvalidInputError(c *gin.Context, err error) {
-	_, span := tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-	defer span.End()
 
-	traceID := span.SpanContext().SpanID().String()
+	var span oteltrace.Span
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
+
+	traceID = span.SpanContext().SpanID().String()
 
 	zap.S().Errorw("Invalid input error",
 		"error", err,
@@ -114,8 +124,11 @@ func handleInvalidInputError(c *gin.Context, err error) {
 
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
-	_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
+		defer span.End()
+	}
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer && user != "jeremy" {
 		c.AbortWithStatus(http.StatusUnauthorized)
@@ -133,8 +146,11 @@ type getLocationsRequest struct {
 
 func getLocationsHandler(c *gin.Context) {
 	// OpenTelemetry tracing
-	_, span := tracer.Start(c.Request.Context(), "getLocationsHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getLocationsHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getLocationsRequest getLocationsRequest
 	var err error
@@ -170,8 +186,11 @@ type getAssetsRequest struct {
 }
 
 func getAssetsHandler(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "getAssetsHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getAssetsHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getAssetsRequest getAssetsRequest
 	var err error
@@ -208,8 +227,11 @@ type getValuesRequest struct {
 }
 
 func getValuesHandler(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "getValuesHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getValuesHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getValuesRequest getValuesRequest
 
@@ -282,8 +304,11 @@ type getDataRequest struct {
 }
 
 func getDataHandler(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "getDataHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getDataHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getDataRequest getDataRequest
 	var err error
@@ -372,8 +397,12 @@ type getStatesRequest struct {
 // processStatesRequest is responsible for fetching all required data and calculating states over time.
 // The result is usually visualized in "DiscretePanel" in Grafana.
 func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processStatesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processStatesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -395,12 +424,14 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 	keepStatesInteger := getStatesRequest.KeepStatesInteger
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
-	span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -487,8 +518,12 @@ type getAggregatedStatesRequest struct {
 // If the aggregationType is 0 it will aggregate over the entire time span.
 // If the aggregationType is not 0 it will aggregate over various categories, e.g. day or hour
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processAggregatedStatesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAggregatedStatesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -513,14 +548,16 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	includeRunning := getAggregatedStatesRequest.IncludeRunning
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
-	span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
-	span.SetAttributes(attribute.Int("aggregationType", aggregationType))
-	span.SetAttributes(attribute.Bool("includeRunning", *includeRunning))
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+		span.SetAttributes(attribute.Int("aggregationType", aggregationType))
+		span.SetAttributes(attribute.Bool("includeRunning", *includeRunning))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -666,8 +703,12 @@ type getAvailabilityRequest struct {
 }
 
 func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processAvailabilityRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAvailabilityRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -688,11 +729,14 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getAvailabilityRequest.To
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -765,8 +809,12 @@ type getPerformanceRequest struct {
 }
 
 func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processPerformanceRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processPerformanceRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -787,11 +835,14 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getPerformanceRequest.To
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -865,8 +916,12 @@ type getQualityRequest struct {
 }
 
 func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processQualityRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processQualityRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -887,12 +942,14 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getQualityRequest.To
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 	// ### fetch necessary data from database ###
 
 	// customer configuration
@@ -932,8 +989,12 @@ type getOEERequest struct {
 }
 
 func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processOEERequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processOEERequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -954,11 +1015,14 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getOEERequest.To
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -1066,8 +1130,12 @@ type getStateHistogramRequest struct {
 }
 
 func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processStateHistogramRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processStateHistogramRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1090,14 +1158,16 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	keepStatesInteger := getStateHistogramRequest.KeepStatesInteger
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
-	span.SetAttributes(attribute.Bool("includeRunning", includeRunning))
-	span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Bool("includeRunning", includeRunning))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	}
 	// ### fetch necessary data from database ###
 
 	assetID, err := GetAssetID(c, customer, location, asset)
@@ -1210,8 +1280,11 @@ type getUniqueProductsWithTagsRequest struct {
 }
 
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processCurrentStateRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processCurrentStateRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getCurrentStateRequest getCurrentStateRequest
 	var err error
@@ -1233,8 +1306,11 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processCountsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processCountsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getCountsRequest getCountsRequest
 	var err error
@@ -1257,8 +1333,11 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processRecommendationRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processRecommendationRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Fetching from the database
 	recommendations, err := GetRecommendations(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
@@ -1270,8 +1349,11 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 }
 
 func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processShiftsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processShiftsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getShiftsRequest getShiftsRequest
 	var err error
@@ -1292,8 +1374,11 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processProcessValueRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processProcessValueRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getProcessValueRequest getProcessValueRequest
 	var err error
@@ -1318,8 +1403,11 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processTimeRangeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processTimeRangeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Fetching from the database
 	timeRange, err := GetDataTimeRangeForAsset(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
@@ -1331,8 +1419,11 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processUpcomingMaintenanceActivitiesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processUpcomingMaintenanceActivitiesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1375,8 +1466,11 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 }
 
 func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processOrderTableRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processOrderTableRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getOrderRequest getOrderRequest
 	var err error
@@ -1442,8 +1536,11 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processOrderTimelineRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processOrderTimelineRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getOrderRequest getOrderRequest
 	var err error
@@ -1467,8 +1564,11 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 }
 
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processMaintenanceActivitiesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processMaintenanceActivitiesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Fetching from the database
 	data, err := GetMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
@@ -1481,8 +1581,11 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 }
 
 func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processUniqueProductsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processUniqueProductsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getUniqueProductsRequest getUniqueProductsRequest
 	var err error
@@ -1505,8 +1608,11 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 }
 
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processMaintenanceComponentsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processMaintenanceComponentsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Fetching from the database
 	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
@@ -1525,8 +1631,11 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 }
 
 func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processProductionSpeedRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processProductionSpeedRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getProductionSpeedRequest getProductionSpeedRequest
 	var err error
@@ -1548,8 +1657,11 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 }
 
 func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processQualityRateRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processQualityRateRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getQualityRateRequest getQualityRateRequest
 	var err error
@@ -1571,8 +1683,11 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processFactoryLocationsRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processFactoryLocationsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processFactoryLocationsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"Location", "Metric", "Geohash"}
@@ -1591,8 +1706,12 @@ type getAverageCleaningTimeRequest struct {
 }
 
 func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processAverageCleaningTimeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAverageCleaningTimeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1613,11 +1732,13 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 	to := getAverageCleaningTimeRequest.To
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -1726,8 +1847,12 @@ type getAverageChangeoverTimeRequest struct {
 }
 
 func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processAverageChangeoverTimeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAverageChangeoverTimeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1748,11 +1873,14 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	to := getAverageChangeoverTimeRequest.To
 
 	// ### jaeger addon ###
-	span.SetAttributes(attribute.String("customer", customer))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
@@ -1850,8 +1978,11 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 }
 
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
-	_, span := tracer.Start(c.Request.Context(), "processUniqueProductsWithTagsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processUniqueProductsWithTagsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var getUniqueProductsWithTagsRequest getUniqueProductsWithTagsRequest
 	var err error

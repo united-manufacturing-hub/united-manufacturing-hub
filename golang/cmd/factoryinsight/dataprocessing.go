@@ -29,8 +29,10 @@ type ChannelResult struct {
 
 // ConvertStateToString converts a state in integer format to a human readable string
 func ConvertStateToString(c *gin.Context, state int, languageCode int, configuration datamodel.CustomerConfiguration) (stateString string) {
-	_, span := tracer.Start(c.Request.Context(), "ConvertStateToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "ConvertStateToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	languageCode = configuration.LanguageCode
 
@@ -41,19 +43,23 @@ func ConvertStateToString(c *gin.Context, state int, languageCode int, configura
 
 // BusinessLogicErrorHandling logs and handles errors during the business logic
 func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error, isCritical bool) {
-	_, span := tracer.Start(c.Request.Context(), "BusinessLogicErrorHandling", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("error", err.Error()))
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "BusinessLogicErrorHandling", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 
-	traceID := span.SpanContext().SpanID().String()
+		span.SetAttributes(attribute.String("error", err.Error()))
+
+		traceID = span.SpanContext().SpanID().String()
+
+	}
 
 	zap.S().Errorw("Error in business logic. ",
 		"operation name", operationName,
 		"error", err,
 		"traceID", traceID,
 	)
-
 	if isCritical {
 		ShutdownApplicationGraceful()
 	}
@@ -61,8 +67,10 @@ func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error,
 
 // ConvertActivityToString converts a maintenance activity in integer format to a human readable string
 func ConvertActivityToString(c *gin.Context, activity int, configuration datamodel.CustomerConfiguration) (activityString string) {
-	_, span := tracer.Start(c.Request.Context(), "ConvertActivityToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "ConvertActivityToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	languageCode := configuration.LanguageCode
 
 	if languageCode == 0 {
@@ -90,8 +98,10 @@ func ConvertActivityToString(c *gin.Context, activity int, configuration datamod
 
 // calculateDurations returns an array with the duration between the states.
 func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, returnChannel chan ChannelResult) {
-	_, span := tracer.Start(c.Request.Context(), "calculateDurations", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "calculateDurations", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Prepare ChannelResult
 	var durations []float64
@@ -132,8 +142,10 @@ func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEnt
 
 func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, returnChannel chan ChannelResult) {
 
-	_, span := tracer.Start(c.Request.Context(), "transformToStateArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "transformToStateArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Prepare ChannelResult
 	var stateArray []int
@@ -153,8 +165,10 @@ func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.State
 
 func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArray []int, state int, returnChannel chan ChannelResult) {
 
-	_, span := tracer.Start(c.Request.Context(), "getTotalDurationForState", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getTotalDurationForState", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Prepare ChannelResult
 	var totalDuration float64
 	var err error
@@ -185,8 +199,10 @@ func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArra
 
 func addUnknownMicrostops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "addUnknownMicrostops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "addUnknownMicrostops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -356,8 +372,10 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 // additionally it caches it results. See also cache.go
 func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "calculatateLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "calculatateLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
 	if cacheHit {
@@ -411,8 +429,10 @@ func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []data
 // Note: assetID is only used for caching
 func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "addLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "addLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// actual function start
 	// TODO: neglecting all other states with additional information, e.g. 10556
@@ -465,8 +485,10 @@ func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.St
 
 func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "specifySmallNoShiftsAsBreaks", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "specifySmallNoShiftsAsBreaks", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -504,8 +526,10 @@ func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEn
 
 func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "removeSmallRunningStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "removeSmallRunningStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -544,8 +568,10 @@ func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry,
 
 func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "removeSmallStopStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "removeSmallStopStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -584,8 +610,10 @@ func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, co
 
 func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "combineAdjacentStops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "combineAdjacentStops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -628,8 +656,10 @@ func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, con
 
 func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "specifyUnknownStopsWithFollowingStopReason", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "specifyUnknownStopsWithFollowingStopReason", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -725,14 +755,17 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from time.Time, 
 // GetOrdersTimeline gets all orders for a specific asset in a timerange for a timeline
 func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "GetOrdersTimeline", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetOrdersTimeline", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+
+	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
@@ -759,8 +792,10 @@ func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset
 
 func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
 
-	_, span := tracer.Start(c.Request.Context(), "calculateOrderInformation", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "calculateOrderInformation", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	data.ColumnNames = []string{
 		"Order ID",
@@ -948,8 +983,10 @@ func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, 
 // processStatesOptimized splits up arrays efficiently for better caching
 func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
-	_, span := tracer.Start(c.Request.Context(), "processStatesOptimized", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processStatesOptimized", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var processedStatesTemp []datamodel.StateEntry
 
@@ -1019,8 +1056,11 @@ func processStates(c *gin.Context,
 	err error,
 ) {
 
-	_, span := tracer.Start(c.Request.Context(), "processStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
 
@@ -1029,7 +1069,9 @@ func processStates(c *gin.Context,
 	processedStateArray, cacheHit = internal.GetProcessStatesFromCache(key)
 	if cacheHit {
 		//zap.S().Debugf("processStates CacheHit")
-		span.SetAttributes(attribute.Bool("CacheHit", true))
+		if span != nil {
+			span.SetAttributes(attribute.Bool("CacheHit", true))
+		}
 		return
 	}
 
@@ -1129,8 +1171,10 @@ func debugCheckForUnorderedStates(states []datamodel.StateEntry) {
 
 func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, includeRunning bool) (paretos []datamodel.ParetoEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "getParetoArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getParetoArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	totalDurationChannel := make(chan ChannelResult)
 
 	uniqueStateArray := internal.UniqueInt(stateArray)
@@ -1180,8 +1224,10 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 // CalculateStopParetos calculates the paretos for a given []datamodel.StateEntry
 func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculateStopParetos", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateStopParetos", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
@@ -1232,8 +1278,10 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 // CalculateStateHistogram calculates the histogram for a given []datamodel.StateEntry
 func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculateStateHistogram", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateStateHistogram", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	var stateOccurances [datamodel.MaxState]int //All are initialized with 0
 
@@ -1270,8 +1318,10 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
 func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculateAvailability", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateAvailability", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
@@ -1325,8 +1375,10 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
 func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1381,8 +1433,10 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
 func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Loop through all datapoints and calculate good pieces and scrap
 	var total float64 = 0
@@ -1440,8 +1494,10 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 // CalculateOEE calculates the OEE
 func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculateOEE", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateOEE", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1500,8 +1556,10 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
 func CalculateAverageStateTime(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "CalculateAverageStateTime", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateAverageStateTime", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	key := fmt.Sprintf("CalculateAverageStateTime-%s-%s-%s-%s-%d", internal.AsHash(temporaryDatapoints), from, to, internal.AsHash(configuration), targetState)
 	if mutex.TryLock(key) { // is is already running?
@@ -1683,8 +1741,10 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 // automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
 func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "automaticallyIdentifyChangeovers", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-	defer span.End()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "automaticallyIdentifyChangeovers", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {

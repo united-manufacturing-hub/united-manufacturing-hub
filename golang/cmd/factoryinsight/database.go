@@ -44,14 +44,19 @@ func ShutdownDB() {
 
 // PQErrorHandling logs and handles postgresql errors
 func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical bool) {
-	_, span := tracer.Start(c.Request.Context(), "PQErrorHandling", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-	defer span.End()
+	var span oteltrace.Span
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "PQErrorHandling", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
 
-	span.SetAttributes(attribute.String("DBStatement", sqlStatement))
-	span.SetAttributes(attribute.String("DBType", "sql"))
-	span.SetAttributes(attribute.String("error", err.Error()))
-
-	traceID := span.SpanContext().SpanID().String()
+	if span != nil {
+		span.SetAttributes(attribute.String("DBStatement", sqlStatement))
+		span.SetAttributes(attribute.String("DBType", "sql"))
+		span.SetAttributes(attribute.String("error", err.Error()))
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	if e := pgerror.ConnectionException(err); e != nil {
 		zap.S().Errorw("PostgreSQL failed: ConnectionException",
@@ -74,8 +79,11 @@ func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical 
 // GetLocations retrieves all locations for a given customer
 func GetLocations(c *gin.Context, customerID string) (locations []string, error error) {
 	// OpenTelemetry tracing
-	_, span := tracer.Start(c.Request.Context(), "GetLocations", oteltrace.WithAttributes(attribute.String("customerID", customerID)))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetLocations", oteltrace.WithAttributes(attribute.String("customerID", customerID)))
+		defer span.End()
+	}
 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
@@ -113,11 +121,17 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 
 // GetAssets retrieves all assets for a given customer
 func GetAssets(c *gin.Context, customerID string, location string) (assets []string, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetAssets", oteltrace.WithAttributes(attribute.String("customerID", customerID), attribute.String("location", location)))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetAssets", oteltrace.WithAttributes(attribute.String("customerID", customerID), attribute.String("location", location)))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+	}
 
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
@@ -155,10 +169,16 @@ func GetAssets(c *gin.Context, customerID string, location string) (assets []str
 
 // GetComponents retrieves all assets for a given customer
 func GetComponents(c *gin.Context, assetID uint32) (components []string, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetComponents", oteltrace.WithAttributes(attribute.Int("assetID", int(assetID))))
-	defer span.End()
 
-	span.SetAttributes(attribute.Int("assetID", int(assetID)))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetComponents", oteltrace.WithAttributes(attribute.Int("assetID", int(assetID))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.Int("assetID", int(assetID)))
+	}
 
 	sqlStatement := `SELECT distinct(componentname) FROM componentTable WHERE asset_id=$1;`
 
@@ -196,15 +216,20 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 
 // GetStatesRaw gets all states for a specific asset in a timerange. It returns an array of datamodel.StateEntry
 func GetStatesRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetStatesRaw")
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetStatesRaw")
+		defer span.End()
+	}
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
@@ -302,15 +327,20 @@ func GetStatesRaw(c *gin.Context, customerID string, location string, asset stri
 
 // GetShiftsRaw gets all shifts for a specific asset in a timerange in a raw format
 func GetShiftsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetShiftsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetShiftsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
@@ -440,15 +470,20 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 
 // GetShifts gets all shifts for a specific asset in a timerange
 func GetShifts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetShifts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetShifts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "shiftName"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
@@ -485,15 +520,21 @@ func GetShifts(c *gin.Context, customerID string, location string, asset string,
 
 // GetProcessValue gets all data for specific valueName and for a specific asset in a timerange
 func GetProcessValue(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetProcessValue", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
-	span.SetAttributes(attribute.String("valueName", valueName))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetProcessValue", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.String("valueName", valueName))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -545,13 +586,19 @@ func GetProcessValue(c *gin.Context, customerID string, location string, asset s
 
 // GetCurrentState gets the latest state of an asset
 func GetCurrentState(c *gin.Context, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetCurrentState", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetCurrentState", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -601,12 +648,18 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
 func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetDataTimeRangeForAsset", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetDataTimeRangeForAsset", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -651,8 +704,11 @@ func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string
 
 // GetCountsRaw gets all states for a specific asset in a timerange
 func GetCountsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.CountEntry, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetCountsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetCountsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -721,8 +777,11 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 
 // GetCounts gets all states for a specific asset in a timerange
 func GetCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	JSONColumnName2 := customerID + "-" + location + "-" + asset + "-" + "scrap"
@@ -748,8 +807,11 @@ func GetCounts(c *gin.Context, customerID string, location string, asset string,
 
 // GetTotalCounts gets the sum of produced units for a specific asset in a timerange
 func GetTotalCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetTotalCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetTotalCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
@@ -776,15 +838,21 @@ func GetTotalCounts(c *gin.Context, customerID string, location string, asset st
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetProductionSpeed", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
-	span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetProductionSpeed", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -865,15 +933,21 @@ func GetProductionSpeed(c *gin.Context, customerID string, location string, asse
 
 // GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
 func GetQualityRate(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetQualityRate", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
-	span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetQualityRate", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -957,8 +1031,11 @@ func GetQualityRate(c *gin.Context, customerID string, location string, asset st
 
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
 func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetCustomerConfiguration", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetCustomerConfiguration", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -1027,12 +1104,18 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 
 // GetRecommendations gets all current recommendations for a specific asset
 func GetRecommendations(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetRecommendations", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetRecommendations", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
 	data.ColumnNames = []string{"timestamp", "recommendationType", "recommendationValues", "recommendationTextEN", "recommendationTextDE", "diagnoseTextEN", "diagnoseTextDE"}
 
@@ -1089,12 +1172,18 @@ func GetRecommendations(c *gin.Context, customerID string, location string, asse
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
 func GetMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1149,14 +1238,20 @@ func GetMaintenanceActivities(c *gin.Context, customerID string, location string
 
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
 func GetUniqueProducts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetUniqueProducts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetUniqueProducts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1232,12 +1327,18 @@ func GetUniqueProducts(c *gin.Context, customerID string, location string, asset
 
 // GetUpcomingTimeBasedMaintenanceActivities returns UpcomingTimeBasedMaintenanceActivities array for an asset
 func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetUpcomingTimeBasedMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetUpcomingTimeBasedMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1315,14 +1416,20 @@ func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string
 
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
 func GetOrdersRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersRaw, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetOrdersRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetOrdersRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1389,12 +1496,18 @@ func GetOrdersRaw(c *gin.Context, customerID string, location string, asset stri
 
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
 func GetDistinctProcessValues(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetDistinctProcessValues", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetDistinctProcessValues", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1440,8 +1553,11 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
 
 // GetAssetID gets the assetID from the database
 func GetAssetID(c *gin.Context, customerID string, location string, assetID string) (DBassetID uint32, error error) {
-	_, span := tracer.Start(c.Request.Context(), "GetAssetID", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetAssetID", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -1474,14 +1590,19 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 func GetUniqueProductsWithTags(c *gin.Context, customerID string, location string, asset string,
 	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	_, span := tracer.Start(c.Request.Context(), "GetUniqueProductsWithTags", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-	defer span.End()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetUniqueProductsWithTags", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetAttributes(attribute.String("customerID", customerID))
-	span.SetAttributes(attribute.String("location", location))
-	span.SetAttributes(attribute.String("asset", asset))
-	span.SetAttributes(attribute.String("from", from.String()))
-	span.SetAttributes(attribute.String("to", to.String()))
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
