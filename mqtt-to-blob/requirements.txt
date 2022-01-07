@@ -1,4 +1,4 @@
 paho-mqtt==1.6.1
-numpy==1.21.5
+numpy==1.22.0
 minio==7.1.2
 
