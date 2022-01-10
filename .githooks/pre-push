@@ -3,19 +3,14 @@
 This pre-push hooks check for validity of yaml and Chart.yaml files
 It requires yamllint and helm to be installed
 """
-from functions.log import Log
 
-try:
-    import yamllint
-except ImportError:
-    Log.warn("Failed to import yamllint")
-    Log.warn("Open https://github.com/adrienverge/yamllint to find out how to install with your package manager")
-    Log.warn("Or use 'pip install --user yamllint'")
-    exit(1)
+import functions.helper as helper
+helper.check_requirements()
 
 import functions.libhelmlint as libhelmlint
 import functions.libyamllint as libyamllint
 import functions.libdockerlint as libdockerlint
+import functions.libgovet as libgovet
 
 if __name__ == '__main__':
     failed = False
@@ -28,6 +23,9 @@ if __name__ == '__main__':
         pass
 
     if libdockerlint.LibDockerLint().run() != 0:
+        failed = True
+
+    if libgovet.LibGoVet().run() != 0:
         failed = True
 
     if failed:
