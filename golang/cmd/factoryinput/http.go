@@ -87,7 +87,7 @@ func handleInternalServerError(parentSpan opentracing.Span, c *gin.Context, err 
 	traceID, _ := internal.ExtractTraceID(parentSpan)
 
 	zap.S().Errorw("Internal server error",
-		"error", err,
+		"error", internal.SanitizeString(err.Error()),
 		"trace id", traceID,
 	)
 
@@ -112,8 +112,8 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer && user != "jeremy" {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, customer)
-		return fmt.Errorf("User %s unauthorized to access %s", user, customer)
+		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		return fmt.Errorf("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil
 }
@@ -154,7 +154,7 @@ func postMQTTHandler(c *gin.Context) {
 	}
 
 	jsonData := string(jsonBytes)
-	zap.S().Warnf("jsonData: %s", jsonData)
+	zap.S().Warnf("jsonData: %s", internal.SanitizeString(jsonData))
 
 	if !IsJSON(jsonData) {
 		handleInvalidInputError(span, c, errors.New("Input is not valid JSON"))
