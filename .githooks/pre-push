@@ -11,6 +11,7 @@ import functions.libhelmlint as libhelmlint
 import functions.libyamllint as libyamllint
 import functions.libdockerlint as libdockerlint
 import functions.libgovet as libgovet
+import functions.libstaticcheck as libstaticcheck
 
 if __name__ == '__main__':
     failed = False
@@ -21,6 +22,9 @@ if __name__ == '__main__':
     if libhelmlint.LibHelmLint().run() != 0:
         failed = True
         pass
+
+    if libstaticcheck.LibStaticCheck().run() != 0:
+        failed = True
 
     if libdockerlint.LibDockerLint().run() != 0:
         failed = True

@@ -1,6 +1,8 @@
 """
 Provides useful helper functions
 """
+import subprocess
+
 import sys
 import shutil
 from functions.log import Log
@@ -11,10 +13,21 @@ def check_installed_exe(name: str):
         Log.fail(f"{name} is not installed or not in path")
         exit(1)
 
+
 def install_if_missing(name: str, installation_command: [str]):
     if shutil.which(name) is None:
         Log.warn(f"{name} is not installed, attempting to install")
+        p = subprocess.Popen(installation_command, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, err = p.communicate()
+        rc = p.returncode
 
+        if rc != 0:
+            Log.fail(f"Failed to install {name}")
+            Log.fail(f"stdout: {output}")
+            Log.fail(f"stderr: {err}")
+            exit(1)
+        Log.info(f"{name} installed successfully")
 
 def check_requirements():
     Log.info("Checking test requirements")
@@ -28,7 +41,8 @@ def check_requirements():
 
     check_installed_exe("docker")
     check_installed_exe("go")
-    check_installed_exe("staticcheck")
+    install_if_missing("staticcheck", ["go", "install", "honnef.co/go/tools/cmd/staticcheck@latest"])
+
 
 def memoize(function):
     """
