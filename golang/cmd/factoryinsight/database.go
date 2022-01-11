@@ -25,7 +25,7 @@ var mutex *mapmutex.Mutex
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int) {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=disable", PQHost, PQPort, PQUser, PQPassword, PWDBName)
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require", PQHost, PQPort, PQUser, PQPassword, PWDBName)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
