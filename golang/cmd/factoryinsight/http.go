@@ -18,7 +18,7 @@ import (
 
 // SetupRestAPI initializes the REST API and starts listening
 func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaegerPort string) {
-	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.DebugMode)
 	router := gin.New()
 
 	// Add a ginzap middleware, which:
@@ -250,6 +250,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "orderTable")
 	values = append(values, "orderTimeline")
 	values = append(values, "uniqueProductsWithTags")
+	values = append(values, "accumulatedProducts")
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -356,6 +357,8 @@ func getDataHandler(c *gin.Context) {
 		processOrderTimelineRequest(c, getDataRequest)
 	case "uniqueProductsWithTags":
 		processUniqueProductsWithTagsRequest(c, getDataRequest)
+	case "accumulatedProducts":
+		processAccumulatedProducts(c, getDataRequest)
 	default:
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
@@ -2023,7 +2026,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	c.JSON(http.StatusOK, data)
 }
 
-
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Jaeger tracing
@@ -2044,7 +2046,6 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 		return
 	}
 
-
 	// Fetching from the database
 	uniqueProductsWithTags, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsWithTagsRequest.From, getUniqueProductsWithTagsRequest.To)
 	if err != nil {
@@ -2052,4 +2053,37 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 		return
 	}
 	c.JSON(http.StatusOK, uniqueProductsWithTags)
+}
+
+type getProcessAccumulatedProducts struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
+func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
+	// Jaeger tracing
+	var span opentracing.Span
+	if cspan, ok := c.Get("tracing-context"); ok {
+		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
+	} else {
+		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
+	}
+	defer span.Finish()
+
+	var getProcessAccumulatedProducts getProcessAccumulatedProducts
+	var err error
+
+	err = c.BindQuery(&getProcessAccumulatedProducts)
+	if err != nil {
+		handleInvalidInputError(span, c, err)
+		return
+	}
+
+	accumulatedProducts, err := GetAccumulatedProducts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessAccumulatedProducts.From, getProcessAccumulatedProducts.To)
+	if err != nil {
+		handleInternalServerError(span, c, err)
+		return
+	}
+	c.JSON(http.StatusOK, accumulatedProducts)
+
 }

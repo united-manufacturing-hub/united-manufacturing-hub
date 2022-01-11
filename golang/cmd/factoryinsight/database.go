@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -24,7 +25,7 @@ var mutex *mapmutex.Mutex
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int) {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require", PQHost, PQPort, PQUser, PQPassword, PWDBName)
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=disable", PQHost, PQPort, PQUser, PQPassword, PWDBName)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
@@ -1788,4 +1789,364 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 
 	return
+}
+
+// GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
+func GetAccumulatedProducts(parentSpan opentracing.Span, customerID string, location string, asset string,
+	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+
+	// Jaeger tracing
+	span := opentracing.StartSpan(
+		"GetAccumulatedProducts",
+		opentracing.ChildOf(parentSpan.Context()))
+	defer span.Finish()
+
+	span.SetTag("customerID", customerID)
+	span.SetTag("location", location)
+	span.SetTag("asset", asset)
+	span.SetTag("from", from)
+	span.SetTag("to", to)
+
+	assetID, err := GetAssetID(span, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	sqlStatementGetOutsider := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE
+      ot.asset_id = $1
+  AND
+      ot.begin_timestamp IS NOT NULL
+AND (
+
+                ot.begin_timestamp <= $2
+            AND
+                ot.end_timestamp IS NULL
+        OR
+                ot.end_timestamp >= $2
+    )
+ORDER BY begin_timestamp ASC
+LIMIT 1;
+`
+	sqlStatementGetInsiders := `
+
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE ot.asset_id = $1
+AND (
+          ot.begin_timestamp >= $2
+          AND
+          ot.begin_timestamp <= $3
+          )
+AND ot.order_id != $4
+ORDER BY begin_timestamp ASC
+;
+`
+	sqlStatementGetInsidersNoOutsider := `
+
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE ot.asset_id = $1
+AND (
+          ot.begin_timestamp >= $2
+          AND
+          ot.begin_timestamp <= $3
+          )
+ORDER BY begin_timestamp ASC
+;
+`
+
+	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
+	err = row.Err()
+	if err == sql.ErrNoRows {
+		//We don't care if there is no outside order
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementGetOutsider, err, false)
+		error = err
+		return
+	}
+
+	type Order struct {
+		OID            int
+		PID            int
+		timestampBegin time.Time
+		timestampEnd   sql.NullTime
+		targetUnits    int
+		AID            int
+	}
+
+	var OuterOrder Order
+
+	var OidOuter int
+	var PidOuter int
+	var timestampbeginOuter time.Time
+	var timestampendOuter sql.NullTime
+	var targetunitsOuter int
+	var AidOuter int
+	foundOutsider := true
+
+	err = row.Scan(&OidOuter, &PidOuter, &timestampbeginOuter, &timestampendOuter, &targetunitsOuter, &AidOuter)
+
+	OuterOrder = Order{
+		OID:            OidOuter,
+		PID:            PidOuter,
+		timestampBegin: timestampbeginOuter,
+		timestampEnd:   timestampendOuter,
+		targetUnits:    targetunitsOuter,
+		AID:            AidOuter,
+	}
+
+	if err == sql.ErrNoRows {
+		foundOutsider = false
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementGetOutsider, err, false)
+		error = err
+		return
+	}
+
+	var rows *sql.Rows
+	if foundOutsider {
+		zap.S().Debugf("Found outsider: ", OuterOrder)
+		rows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
+	} else {
+		rows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
+	}
+
+	if err == sql.ErrNoRows {
+		// It is valid to have no internal rows !
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementGetInsidersNoOutsider, err, false)
+		error = err
+		return
+	}
+
+	var insideOrders []Order
+
+	foundInsider := false
+	for rows.Next() {
+
+		var OID int
+		var PID int
+		var timestampBegin time.Time
+		var timestampEnd sql.NullTime
+		var targetUnits int
+		var AID int
+		err := rows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
+		if err != nil {
+			PQErrorHandling(span, sqlStatementGetInsidersNoOutsider, err, false)
+			error = err
+			return
+		}
+		foundInsider = true
+		zap.S().Debugf("Found insider: %d, %d, %s, %s, %d, %d", OID, PID, timestampBegin, timestampEnd, targetUnits, AID)
+		insideOrders = append(insideOrders, Order{
+			OID,
+			PID,
+			timestampBegin,
+			timestampEnd,
+			targetUnits,
+			AID,
+		})
+	}
+
+	if !foundInsider && !foundOutsider {
+		// No data to display
+		data = datamodel.DataResponseAny{
+			ColumnNames: make([]string, 0),
+			Datapoints:  make([][]interface{}, 0),
+		}
+		return
+	}
+
+	var observationStart time.Time
+	var observationEnd time.Time
+
+	// If value before observation window, use it's begin timestamp
+	// Else iter all inside rows and select the lowest timestamp
+	if foundOutsider {
+		zap.S().Debugf("Set observation start to OuterOrder begin ts: %s", OuterOrder.timestampBegin.String())
+		observationStart = OuterOrder.timestampBegin
+	} else {
+		observationStart = time.Unix(1<<63-1, 0)
+		for _, rowdatum := range insideOrders {
+			if rowdatum.timestampBegin.Before(observationStart) {
+				observationStart = rowdatum.timestampBegin
+			}
+		}
+	}
+
+	observationEnd = time.Unix(0, 0)
+	// If value inside observation window, iterate them and select the greatest time.
+	// If order has no end, assume unix max time
+	if foundInsider {
+		for _, rowdatum := range insideOrders {
+			if rowdatum.timestampEnd.Valid {
+				if rowdatum.timestampEnd.Time.After(observationEnd) {
+					observationEnd = rowdatum.timestampBegin
+				}
+			} else {
+				observationEnd = time.Unix(1<<63-1, 0)
+			}
+		}
+	}
+	// Check if our starting order has the largest end time
+	// Also assign unix max time, if there is still no valid value
+	if OuterOrder.timestampEnd.Valid {
+		if OuterOrder.timestampEnd.Time.After(observationEnd) {
+			observationEnd = OuterOrder.timestampEnd.Time
+		}
+	} else if observationEnd.Equal(time.Unix(0, 0)) {
+		observationEnd = time.Unix(1<<63-1, 0)
+	}
+
+	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= $2 AND timestamp <= $3 ORDER BY timestamp ASC;`
+
+	countRows, err := db.Query(sqlStatementGetCounts, assetID, observationStart, observationEnd)
+
+	defer countRows.Close()
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlStatementGetCounts, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlStatementGetCounts, err, false)
+		error = err
+		return
+	}
+
+	var countData []struct {
+		timestamp time.Time
+		count     int
+		scrap     int
+	}
+
+	for countRows.Next() {
+		var timestamp time.Time
+		var count int
+		var scrap int
+		err := countRows.Scan(&timestamp, &count, &scrap)
+
+		if err != nil {
+			PQErrorHandling(span, sqlStatementGetCounts, err, false)
+			error = err
+			return
+		}
+
+		countData = append(countData, struct {
+			timestamp time.Time
+			count     int
+			scrap     int
+		}{timestamp: timestamp, count: count, scrap: scrap})
+	}
+
+	zap.S().Debugf("Observation start: %s", observationStart.String())
+	zap.S().Debugf("Observation end: %s", observationEnd.String())
+
+	zap.S().Debugf("Orders: %d", len(countData))
+
+	productionBeforeCount := 0
+	scrapBeforeCount := 0
+	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
+
+	var datapoints datamodel.DataResponseAny
+	datapoints.ColumnNames = []string{
+		"targetProduct",
+		"actualProduct",
+		"actualScrap",
+		"timestamp",
+	}
+	datapoints.Datapoints = make([][]interface{}, len(countData))
+
+	for i, cdatum := range countData {
+		// Get orders before count ts
+		var ordersBefore []Order
+		if OuterOrder.timestampEnd.Valid && OuterOrder.timestampEnd.Time.Before(cdatum.timestamp) {
+			ordersBefore = append(ordersBefore, OuterOrder)
+		}
+		for _, rowdatum := range insideOrders {
+			if rowdatum.timestampEnd.Valid && rowdatum.timestampEnd.Time.Before(cdatum.timestamp) {
+				ordersBefore = append(ordersBefore, rowdatum)
+			}
+		}
+
+		accumulatedTargetBefore := 0
+		for _, order := range ordersBefore {
+			accumulatedTargetBefore += order.targetUnits
+		}
+
+		// Get current orders
+		var currentOrders []Order
+
+		if OuterOrder.timestampEnd.Valid && AfterOrEqual(OuterOrder.timestampEnd.Time, cdatum.timestamp) && BeforeOrEqual(OuterOrder.timestampBegin, cdatum.timestamp) {
+			currentOrders = append(currentOrders, OuterOrder)
+		}
+		for _, rowdatum := range insideOrders {
+			if (rowdatum.timestampEnd.Valid && AfterOrEqual(rowdatum.timestampEnd.Time, cdatum.timestamp) || !rowdatum.timestampEnd.Valid) && BeforeOrEqual(rowdatum.timestampBegin, cdatum.timestamp) {
+				currentOrders = append(currentOrders, rowdatum)
+			}
+		}
+
+		var expectedProduced int
+		for _, currentOrder := range currentOrders {
+			runningSince := cdatum.timestamp.Sub(currentOrder.timestampBegin)
+
+			cacheKey := fmt.Sprintf("GetAccumulatedProducts-AID%d-PID%d", currentOrder.AID, currentOrder.PID)
+			var timePerUnitInSeconds int
+			var cached bool
+			var tempInter interface{}
+			cached, tempInter = internal.GetTiered(cacheKey)
+			if !cached {
+				err := db.QueryRow(sqlGetProductsPerSec, currentOrder.PID, currentOrder.AID).Scan(&timePerUnitInSeconds)
+				if err == sql.ErrNoRows {
+					PQErrorHandling(span, sqlGetProductsPerSec, err, false)
+					error = errors.New("Product does not exist")
+					return
+				} else if err != nil {
+					PQErrorHandling(span, sqlGetProductsPerSec, err, false)
+					error = err
+					return
+				}
+				internal.SetTieredShortTerm(cacheKey, timePerUnitInSeconds)
+			} else {
+				timePerUnitInSeconds = tempInter.(int)
+			}
+
+			expectedProduced += int(math.Floor(runningSince.Seconds() / float64(timePerUnitInSeconds)))
+		}
+
+		targetProduct := expectedProduced + accumulatedTargetBefore
+		actualProduct := cdatum.count + productionBeforeCount
+		actualScrap := cdatum.scrap + scrapBeforeCount
+
+		zap.S().Debugf("====================%d======================", i)
+		zap.S().Debugf("Count %s", cdatum.timestamp.String())
+		zap.S().Debugf("Orders before %d", len(ordersBefore))
+		zap.S().Debugf("Current orders %d", len(currentOrders))
+		zap.S().Debugf("Target before %d", accumulatedTargetBefore)
+		zap.S().Debugf("Production before %d", productionBeforeCount)
+		zap.S().Debugf("Scrap before %d", scrapBeforeCount)
+		zap.S().Debugf("Expected produced %d", expectedProduced)
+		zap.S().Debugf("Target Product %d", targetProduct)
+		zap.S().Debugf("Actual Product %d", actualProduct)
+		zap.S().Debugf("Actual Scrap %d", actualScrap)
+
+		datapoints.Datapoints[i] = make([]interface{}, 4)
+		datapoints.Datapoints[i][0] = targetProduct
+		datapoints.Datapoints[i][1] = actualProduct
+		datapoints.Datapoints[i][2] = actualScrap
+		datapoints.Datapoints[i][3] = cdatum.timestamp.Unix()
+
+		productionBeforeCount += cdatum.count
+		scrapBeforeCount += cdatum.scrap
+	}
+
+	return datapoints, nil
+}
+
+func BeforeOrEqual(t time.Time, u time.Time) bool {
+	return t.Before(u) || t.Equal(u)
+}
+
+func AfterOrEqual(t time.Time, u time.Time) bool {
+	return t.After(u) || t.Equal(u)
 }

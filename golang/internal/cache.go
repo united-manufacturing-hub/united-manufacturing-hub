@@ -724,6 +724,9 @@ func StoreProductIDToCache(productName int32, DBassetID uint32, DBProductId uint
 
 // GetTiered Attempts to get key from memory cache, if fails it falls back to redis
 func GetTiered(key string) (cached bool, value interface{}) {
+	if memCache == nil && rdb == nil {
+		return false, 0
+	}
 	//Check if in memCache
 	value, cached = memCache.Get(key)
 	if cached {
@@ -752,6 +755,9 @@ func GetTiered(key string) (cached bool, value interface{}) {
 
 // SetTiered sets memcache and redis with expiration
 func SetTiered(key string, value interface{}, redisExpiration time.Duration) {
+	if memCache == nil && rdb == nil {
+		return
+	}
 	memCache.SetDefault(key, value)
 	rdb.Set(ctx, key, value, redisExpiration)
 }
