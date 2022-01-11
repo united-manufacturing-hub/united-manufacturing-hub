@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -2091,7 +2092,7 @@ ORDER BY begin_timestamp ASC
 			runningSince := cdatum.timestamp.Sub(currentOrder.timestampBegin)
 
 			cacheKey := fmt.Sprintf("GetAccumulatedProducts-AID%d-PID%d", currentOrder.AID, currentOrder.PID)
-			var timePerUnitInSeconds int
+			var timePerUnitInSeconds int64
 			var cached bool
 			var tempInter interface{}
 			cached, tempInter = internal.GetTiered(cacheKey)
@@ -2106,9 +2107,9 @@ ORDER BY begin_timestamp ASC
 					error = err
 					return
 				}
-				internal.SetTieredShortTerm(cacheKey, timePerUnitInSeconds)
+				internal.SetTieredShortTerm(cacheKey, fmt.Sprintf("%d", timePerUnitInSeconds))
 			} else {
-				timePerUnitInSeconds = tempInter.(int)
+				timePerUnitInSeconds, err = strconv.ParseInt(tempInter.(string), 10, 64)
 			}
 
 			expectedProduced += int(math.Floor(runningSince.Seconds() / float64(timePerUnitInSeconds)))

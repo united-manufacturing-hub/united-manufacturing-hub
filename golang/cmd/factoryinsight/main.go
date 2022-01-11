@@ -31,12 +31,15 @@ import (
 
 var shutdownEnabled bool
 
+var buildtime string
+
 func main() {
 
 	// Setup logger and set as global
 	logger, _ := zap.NewDevelopment()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
 
 	PQHost := "db"
 	// Read environment variables
