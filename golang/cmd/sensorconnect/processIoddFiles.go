@@ -100,7 +100,7 @@ func UnmarshalIoddFile(ioddFile []byte) (IoDevice, error) {
 	return payload, err
 }
 
-//
+// Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
 func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, ioddIoDeviceMap map[IoddFilemapKey]IoDevice) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
 	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
 	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
@@ -126,23 +126,20 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, ioddIoDeviceMap map[IoddFilem
 		// Unmarshal
 		ioDevice := IoDevice{}
 		ioDevice, err = UnmarshalIoddFile(dat)
-		// check if vendorId/deviceId combination already in ioDevice map
+		// create ioddFilemapKey of unmarshaled file
 		var ioddFilemapKey IoddFilemapKey
 		ioddFilemapKey.DeviceId = ioDevice.ProfileBody.DeviceIdentity.DeviceId
 		ioddFilemapKey.VendorId = ioDevice.ProfileBody.DeviceIdentity.VendorId
-		// Check if IoDevice already in ioddIoDeviceMap
+		// Check if IoDevice for created ioddfilemapKey already exists in ioddIoDeviceMap
 		if _, ok := ioddIoDeviceMap[ioddFilemapKey]; ok {
 			// IoDevice is already in ioddIoDeviceMap
 			// -> replace depending on date (newest version should be used)
 			if earlier, _ := currentDateEarlierThenOldDate(ioDevice.DocumentInfo.ReleaseDate, ioddIoDeviceMap[ioddFilemapKey].DocumentInfo.ReleaseDate); earlier {
 				ioddIoDeviceMap[ioddFilemapKey] = ioDevice
 			}
-			return ioddIoDeviceMap
 		}
-
 	}
-	return ioddIoDeviceMap
-	// if already in io device map: use newest version
+	return ioddIoDeviceMap, currentFileInfoSlice, err
 }
 
 func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[IoddFilemapKey]IoDevice) (err error) {
