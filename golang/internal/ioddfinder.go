@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (err error) {
@@ -24,11 +26,11 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 	// build path for downloaded file
 	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
 	if err != nil {
-		fmt.Printf("Unable to find absoluteDirectoryPath: %v", err)
+		zap.S().Errorf("Unable to find absoluteDirectoryPath: %v", err)
 		return err
 	}
 	absoluteFilePath := absoluteDirectoryPath + "\\" + filemap[0].Name
-	fmt.Println("Saving file to path: " + absoluteFilePath)
+	zap.S().Debugf("Saving file to path: " + absoluteFilePath)
 
 	// check for existing file with same name
 	if _, err := os.Stat(absoluteFilePath); err == nil {
@@ -40,7 +42,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 	// save iodd file
 	err = ioutil.WriteFile(absoluteFilePath, filemap[0].File, 0644)
 	if err != nil {
-		fmt.Printf("Unable to write file: %v", err)
+		zap.S().Errorf("Unable to write file: %v", err)
 		return err
 	}
 	return

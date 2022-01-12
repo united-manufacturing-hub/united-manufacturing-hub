@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 )
 
 // Parsing of Iodd File content
@@ -127,13 +127,11 @@ func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice
 	currentNames := getNamesOfFileInfo(currentFileInfoSlice)
 	oldNames := getNamesOfFileInfo(oldFileInfoSlice)
 
-	fmt.Printf("The current files are %v and the old files are %v", currentNames, oldNames)
 	for _, name := range currentNames {
 		if contains(oldNames, name) {
-			fmt.Printf("File %v already in map.", name)
 			continue
 		}
-		fmt.Printf("File %v not already in map.", name)
+		zap.S().Debugf("File %v not already in map.", name)
 		// if the oldFileInfoSlice doesn't contain a file with this name the file is new
 		// create path to file
 		absoluteFilePath := absoluteDirectoryPath + "\\" + name
