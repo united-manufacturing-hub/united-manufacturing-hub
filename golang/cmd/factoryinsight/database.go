@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -2058,6 +2057,8 @@ ORDER BY begin_timestamp ASC
 	}
 	datapoints.Datapoints = make([][]interface{}, len(countData))
 
+	m := make(map[string]int)
+
 	for i, cdatum := range countData {
 		// Get orders before count ts
 		var ordersBefore []Order
@@ -2092,11 +2093,11 @@ ORDER BY begin_timestamp ASC
 			runningSince := cdatum.timestamp.Sub(currentOrder.timestampBegin)
 
 			cacheKey := fmt.Sprintf("GetAccumulatedProducts-AID%d-PID%d", currentOrder.AID, currentOrder.PID)
-			var timePerUnitInSeconds int64
-			var cached bool
-			var tempInter interface{}
-			cached, tempInter = internal.GetTiered(cacheKey)
-			if !cached {
+			var timePerUnitInSeconds int
+
+			timePerUnitInSeconds, ok := m[cacheKey]
+
+			if !ok {
 				err := db.QueryRow(sqlGetProductsPerSec, currentOrder.PID, currentOrder.AID).Scan(&timePerUnitInSeconds)
 				if err == sql.ErrNoRows {
 					PQErrorHandling(span, sqlGetProductsPerSec, err, false)
@@ -2107,9 +2108,7 @@ ORDER BY begin_timestamp ASC
 					error = err
 					return
 				}
-				internal.SetTieredShortTerm(cacheKey, fmt.Sprintf("%d", timePerUnitInSeconds))
-			} else {
-				timePerUnitInSeconds, err = strconv.ParseInt(tempInter.(string), 10, 64)
+				m[cacheKey] = timePerUnitInSeconds
 			}
 
 			expectedProduced += int(math.Floor(runningSince.Seconds() / float64(timePerUnitInSeconds)))
@@ -2151,3 +2150,5 @@ func BeforeOrEqual(t time.Time, u time.Time) bool {
 func AfterOrEqual(t time.Time, u time.Time) bool {
 	return t.After(u) || t.Equal(u)
 }
+
+// Pls build docker
