@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func SaveIoddFile(vendorId int64, deviceId int) (err error) {
+func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (err error) {
 	// download iodd file
 	filemap, err := GetIoddFile(vendorId, deviceId)
 	if err != nil {
@@ -22,8 +22,11 @@ func SaveIoddFile(vendorId int64, deviceId int) (err error) {
 	}
 
 	// build path for downloaded file
-	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
-	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
+	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
+	if err != nil {
+		fmt.Printf("Unable to find absoluteDirectoryPath: %v", err)
+		return err
+	}
 	absoluteFilePath := absoluteDirectoryPath + "\\" + filemap[0].Name
 	fmt.Println("Saving file to path: " + absoluteFilePath)
 

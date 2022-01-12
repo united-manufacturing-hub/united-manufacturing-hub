@@ -142,19 +142,19 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, ioddIoDeviceMap map[IoddFilem
 	return ioddIoDeviceMap, currentFileInfoSlice, err
 }
 
-func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[IoddFilemapKey]IoDevice) (err error) {
+func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, relativeDirectoryPath string) error {
+	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
 	if _, ok := ioddIoDeviceMap[ioddFilemapKey]; ok {
-		err := errors.New("request to save Iodd File invalid: entry for ioddFilemapKey already exists")
+		err = errors.New("request to save Iodd File invalid: entry for ioddFilemapKey already exists")
 		return err
 	}
-
 	// Execute download and saving of iodd file
-	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId)
+	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
 	if err != nil {
 		return err
 	}
-	return
+	return err
 }
 
 // Checks if slice contains entry

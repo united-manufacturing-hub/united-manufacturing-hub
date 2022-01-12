@@ -62,10 +62,11 @@ func TestSaveIoddFile(t *testing.T) {
 	// Remove file after test again
 	relativeFilePath := "../cmd/sensorconnect/IoddFiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.0.1.xml"
 	absoluteFilePath, _ := filepath.Abs(relativeFilePath)
+	fmt.Println(absoluteFilePath)
 	err = os.Remove(absoluteFilePath)
 	if err != nil {
 		fmt.Println("file not deleted")
 		t.Error(err)
 	}
-
+	t.Error(err)
 }

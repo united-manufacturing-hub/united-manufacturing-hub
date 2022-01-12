@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/http"
 )
-test := {
+
+/*
+testRequest := {
 	"code":"request",
 	"cid":23,
 	"adr":"/getdatamulti",
@@ -19,7 +21,7 @@ test := {
 			"/deviceinfo/serialnumber/","/deviceinfo/productcode/"]
 	}
 }
-
+*/
 // Structs for parsing response to discover all IO-Link Master Devices
 type DiscoverResponseFromDevice struct {
 	cid  int  `xml:"ProcessData,attr"`

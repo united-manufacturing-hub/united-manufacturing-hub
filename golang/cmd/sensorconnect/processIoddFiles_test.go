@@ -2,9 +2,35 @@ package main
 
 import (
 	"fmt"
-	"reflect" //for reading out type of variable
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+func TestRequestSaveIoddFile(t *testing.T) {
+	var ioddFilemapKey IoddFilemapKey
+	ioddFilemapKey.DeviceId = 278531
+	ioddFilemapKey.VendorId = 42
+	var emptyIoDeviceMap map[IoddFilemapKey]IoDevice
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	err := RequestSaveIoddFile(ioddFilemapKey, emptyIoDeviceMap, relativeDirectoryPath)
+	if err != nil {
+		t.Error(err)
+	}
+	// Remove file after test again
+	relativeFilePath := "../sensorconnect/IoddFiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.0.1.xml"
+	absoluteFilePath, _ := filepath.Abs(relativeFilePath)
+	err = os.Remove(absoluteFilePath)
+	if err != nil {
+		fmt.Println("file not deleted")
+		t.Error(err)
+	}
+}
+
+/*
+func TestReadIoddFiles(t *testing.T) {
+
+}
 
 func TestUnmarshalIoddFile_ifm(t *testing.T) {
 	// Download and Unmarshal IODD file
@@ -414,3 +440,4 @@ func TestDownloadAndUnmarshal(t *testing.T) {
 		t.Error()
 	}
 }
+*/
