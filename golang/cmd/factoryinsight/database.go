@@ -2152,7 +2152,7 @@ func BeforeOrEqual(t time.Time, u time.Time) bool {
 	return t.Before(u) || t.Equal(u)
 }
 
-// BeforeOrEqual returns if t is after or equal to u
+// AfterOrEqual returns if t is after or equal to u
 func AfterOrEqual(t time.Time, u time.Time) bool {
 	return t.After(u) || t.Equal(u)
 }
