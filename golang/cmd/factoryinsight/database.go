@@ -1858,11 +1858,12 @@ ORDER BY begin_timestamp ASC
 ;
 `
 
+	// Get order outside observation window
 	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
 	err = row.Err()
 	if err == sql.ErrNoRows {
 		zap.S().Debugf("No outsider rows")
-		//We don't care if there is no outside order
+		//We don't care if there is no outside order, in this case we will just select all insider orders
 	} else if err != nil {
 		PQErrorHandling(span, sqlStatementGetOutsider, err, false)
 		error = err
@@ -1909,9 +1910,11 @@ ORDER BY begin_timestamp ASC
 
 	var rows *sql.Rows
 	if foundOutsider {
+		// Get insiders without the outsider order
 		zap.S().Debugf("Query with outsider: ", OuterOrder)
 		rows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
 	} else {
+		// Get insiders
 		zap.S().Debugf("Query without outsider: ", OuterOrder)
 		rows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
 	}
@@ -1955,7 +1958,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	if !foundInsider && !foundOutsider {
-		// No data to display
+		// No data to display, abort
 		data = datamodel.DataResponseAny{
 			ColumnNames: make([]string, 0),
 			Datapoints:  make([][]interface{}, 0),
@@ -2044,12 +2047,7 @@ ORDER BY begin_timestamp ASC
 			scrap     int
 		}{timestamp: timestamp, count: count, scrap: scrap})
 	}
-	/*
-		zap.S().Debugf("Observation start: %s", observationStart.String())
-		zap.S().Debugf("Observation end: %s", observationEnd.String())
 
-		zap.S().Debugf("Orders: %d", len(countData))
-	*/
 	productionBeforeCount := 0
 	scrapBeforeCount := 0
 	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
@@ -2149,10 +2147,12 @@ ORDER BY begin_timestamp ASC
 	return datapoints, nil
 }
 
+// BeforeOrEqual returns if t is before or equal to u
 func BeforeOrEqual(t time.Time, u time.Time) bool {
 	return t.Before(u) || t.Equal(u)
 }
 
+// BeforeOrEqual returns if t is after or equal to u
 func AfterOrEqual(t time.Time, u time.Time) bool {
 	return t.After(u) || t.Equal(u)
 }
