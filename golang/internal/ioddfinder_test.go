@@ -69,5 +69,4 @@ func TestSaveIoddFile(t *testing.T) {
 		fmt.Println("file not deleted")
 		t.Error(err)
 	}
-	t.Error(err)
 }
