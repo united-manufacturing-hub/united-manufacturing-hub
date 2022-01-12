@@ -32,6 +32,14 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 		fmt.Println(ok)
 		t.Error(err) // entry does not exist
 	}
+	// check if fileInfoSlice is correctly changed
+	name := getNamesOfFileInfo(fileInfoSlice)
+	if !reflect.DeepEqual(name[0], "Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.0.1.xml") {
+		t.Error()
+	}
+	if len(name) != 1 {
+		t.Error()
+	}
 }
 
 func TestRequestSaveIoddFile(t *testing.T) {
@@ -88,7 +96,7 @@ func removeFilesFromDirectory(relativeDirectoryPath string) {
 	os.MkdirAll(absoluteDirectoryPath, 0755)
 }
 
-func TestUnmarshalIoddFile_ifm(t *testing.T) {
+func TestUnmarshalIoddFiles(t *testing.T) {
 	// first remove all files from specified path
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	removeFilesFromDirectory(relativeDirectoryPath)

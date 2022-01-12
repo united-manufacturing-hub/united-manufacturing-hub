@@ -90,6 +90,8 @@ type IoddFilemapKey struct {
 	DeviceId int
 }
 
+// uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
+// Then updates map by checking for new files, unmarhaling them und importing into map
 func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, fileInfoSlice []os.FileInfo) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
 	err := RequestSaveIoddFile(ioddFilemapKey, ioddIoDeviceMap, relativeDirectoryPath)
 	if err != nil {
@@ -164,6 +166,7 @@ func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice
 	return ioddIoDeviceMap, currentFileInfoSlice, err
 }
 
+// will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
 func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, relativeDirectoryPath string) error {
 	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
