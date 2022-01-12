@@ -35,8 +35,14 @@ var buildtime string
 
 func main() {
 
+	debugEnabled := os.Getenv("DEBUG_ENABLED")
 	// Setup logger and set as global
-	logger, _ := zap.NewDevelopment()
+	var logger *zap.Logger
+	if debugEnabled == "True" || debugEnabled == "true" {
+		logger, _ = zap.NewDevelopment()
+	} else {
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
@@ -93,7 +99,6 @@ func main() {
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := 0 // default database
 
-	debugEnabled := os.Getenv("DEBUG_ENABLED")
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, debugEnabled)
 
 	zap.S().Debugf("Cache initialized..", redisURI)
