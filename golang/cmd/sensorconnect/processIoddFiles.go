@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -101,31 +102,38 @@ func UnmarshalIoddFile(ioddFile []byte) (IoDevice, error) {
 }
 
 // Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
-func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, ioddIoDeviceMap map[IoddFilemapKey]IoDevice) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
-	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
+func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
 	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
 	// check for new iodd files
 	currentFileInfoSlice, err := ioutil.ReadDir(absoluteDirectoryPath)
 	if err != nil {
-		panic(err)
+		err = errors.New("reading of currentFileInfoSlice from specified directory failed")
+		return ioddIoDeviceMap, oldFileInfoSlice, err
 	}
 	currentNames := getNamesOfFileInfo(currentFileInfoSlice)
 	oldNames := getNamesOfFileInfo(oldFileInfoSlice)
+
+	fmt.Printf("The current files are %v and the old files are %v", currentNames, oldNames)
 	for _, name := range currentNames {
 		if contains(oldNames, name) {
+			fmt.Printf("File %v already in map.", name)
 			continue
 		}
+		fmt.Printf("File %v not already in map.", name)
 		// if the oldFileInfoSlice doesn't contain a file with this name the file is new
 		// create path to file
 		absoluteFilePath := absoluteDirectoryPath + "\\" + name
 		// read file
 		dat, err := ioutil.ReadFile(absoluteFilePath)
 		if err != nil {
-			panic(err)
+			return ioddIoDeviceMap, oldFileInfoSlice, err
 		}
 		// Unmarshal
 		ioDevice := IoDevice{}
 		ioDevice, err = UnmarshalIoddFile(dat)
+		if err != nil {
+			return ioddIoDeviceMap, oldFileInfoSlice, err
+		}
 		// create ioddFilemapKey of unmarshaled file
 		var ioddFilemapKey IoddFilemapKey
 		ioddFilemapKey.DeviceId = ioDevice.ProfileBody.DeviceIdentity.DeviceId
@@ -137,7 +145,9 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, ioddIoDeviceMap map[IoddFilem
 			if earlier, _ := currentDateEarlierThenOldDate(ioDevice.DocumentInfo.ReleaseDate, ioddIoDeviceMap[ioddFilemapKey].DocumentInfo.ReleaseDate); earlier {
 				ioddIoDeviceMap[ioddFilemapKey] = ioDevice
 			}
+			continue
 		}
+		ioddIoDeviceMap[ioddFilemapKey] = ioDevice
 	}
 	return ioddIoDeviceMap, currentFileInfoSlice, err
 }

@@ -13,25 +13,55 @@ func TestRequestSaveIoddFile(t *testing.T) {
 	ioddFilemapKey.VendorId = 42
 	var emptyIoDeviceMap map[IoddFilemapKey]IoDevice
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	// first remove all files from specified path
+	removeFilesFromDirectory(relativeDirectoryPath)
 	err := RequestSaveIoddFile(ioddFilemapKey, emptyIoDeviceMap, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
 	// Remove file after test again
-	relativeFilePath := "../sensorconnect/IoddFiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.0.1.xml"
-	absoluteFilePath, _ := filepath.Abs(relativeFilePath)
-	err = os.Remove(absoluteFilePath)
+	removeFilesFromDirectory(relativeDirectoryPath)
+}
+
+func TestReadIoddFiles(t *testing.T) {
+	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
+	var fileInfoSlice []os.FileInfo
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	// first remove all files from specified path
+	removeFilesFromDirectory(relativeDirectoryPath)
+	var err error
+	ioDeviceMap, fileInfoSlice, err = ReadIoddFiles(ioDeviceMap, fileInfoSlice, relativeDirectoryPath)
+	// no changes in directory -> no new new files read
 	if err != nil {
-		fmt.Println("file not deleted")
 		t.Error(err)
 	}
+
+	var ioddFilemapKey IoddFilemapKey
+	ioddFilemapKey.DeviceId = 278531
+	ioddFilemapKey.VendorId = 42
+	err = RequestSaveIoddFile(ioddFilemapKey, ioDeviceMap, relativeDirectoryPath)
+	if err != nil {
+		t.Error(err)
+	}
+	ioDeviceMap, _, err = ReadIoddFiles(ioDeviceMap, fileInfoSlice, relativeDirectoryPath)
+	fmt.Println(ioDeviceMap)
+	// check if new entry exits for filemap Key
+	if val, ok := ioDeviceMap[ioddFilemapKey]; !ok {
+		fmt.Println(val)
+		fmt.Println(ok)
+		t.Error(err) // entry does not exist
+	}
+	// Remove file after test again
+	removeFilesFromDirectory(relativeDirectoryPath)
+}
+
+func removeFilesFromDirectory(relativeDirectoryPath string) {
+	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
+	os.RemoveAll(absoluteDirectoryPath)
+	os.MkdirAll(absoluteDirectoryPath, 0755)
 }
 
 /*
-func TestReadIoddFiles(t *testing.T) {
-
-}
-
 func TestUnmarshalIoddFile_ifm(t *testing.T) {
 	// Download and Unmarshal IODD file
 	ioDevice, err := GetIoDevice(310, 698)
