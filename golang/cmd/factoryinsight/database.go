@@ -1813,6 +1813,8 @@ func GetAccumulatedProducts(parentSpan opentracing.Span, customerID string, loca
 		return
 	}
 
+	zap.S().Debugf("Request ts: %d -> %d", from.UnixMilli(), to.UnixMilli())
+
 	sqlStatementGetOutsider := `
 SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
 WHERE
@@ -1859,6 +1861,7 @@ ORDER BY begin_timestamp ASC
 	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
 	err = row.Err()
 	if err == sql.ErrNoRows {
+		zap.S().Debugf("No outsider rows")
 		//We don't care if there is no outside order
 	} else if err != nil {
 		PQErrorHandling(span, sqlStatementGetOutsider, err, false)
@@ -1906,14 +1909,16 @@ ORDER BY begin_timestamp ASC
 
 	var rows *sql.Rows
 	if foundOutsider {
-		zap.S().Debugf("Found outsider: ", OuterOrder)
+		zap.S().Debugf("Query with outsider: ", OuterOrder)
 		rows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
 	} else {
+		zap.S().Debugf("Query without outsider: ", OuterOrder)
 		rows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
 	}
 
 	if err == sql.ErrNoRows {
 		// It is valid to have no internal rows !
+		zap.S().Debugf("No internal rows")
 	} else if err != nil {
 		PQErrorHandling(span, sqlStatementGetInsidersNoOutsider, err, false)
 		error = err
@@ -1964,7 +1969,6 @@ ORDER BY begin_timestamp ASC
 	// If value before observation window, use it's begin timestamp
 	// Else iter all inside rows and select the lowest timestamp
 	if foundOutsider {
-		zap.S().Debugf("Set observation start to OuterOrder begin ts: %s", OuterOrder.timestampBegin.String())
 		observationStart = OuterOrder.timestampBegin
 	} else {
 		observationStart = time.Unix(1<<63-1, 0)
@@ -1982,7 +1986,7 @@ ORDER BY begin_timestamp ASC
 		for _, rowdatum := range insideOrders {
 			if rowdatum.timestampEnd.Valid {
 				if rowdatum.timestampEnd.Time.After(observationEnd) {
-					observationEnd = rowdatum.timestampBegin
+					observationEnd = rowdatum.timestampEnd.Time
 				}
 			} else {
 				observationEnd = time.Unix(1<<63-1, 0)
@@ -1998,6 +2002,8 @@ ORDER BY begin_timestamp ASC
 	} else if observationEnd.Equal(time.Unix(0, 0)) {
 		observationEnd = time.Unix(1<<63-1, 0)
 	}
+	zap.S().Debugf("Set observation start to: %s", observationStart)
+	zap.S().Debugf("Set observation end to: %s", observationEnd)
 
 	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= $2 AND timestamp <= $3 ORDER BY timestamp ASC;`
 
@@ -2038,12 +2044,12 @@ ORDER BY begin_timestamp ASC
 			scrap     int
 		}{timestamp: timestamp, count: count, scrap: scrap})
 	}
+	/*
+		zap.S().Debugf("Observation start: %s", observationStart.String())
+		zap.S().Debugf("Observation end: %s", observationEnd.String())
 
-	zap.S().Debugf("Observation start: %s", observationStart.String())
-	zap.S().Debugf("Observation end: %s", observationEnd.String())
-
-	zap.S().Debugf("Orders: %d", len(countData))
-
+		zap.S().Debugf("Orders: %d", len(countData))
+	*/
 	productionBeforeCount := 0
 	scrapBeforeCount := 0
 	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
@@ -2134,7 +2140,7 @@ ORDER BY begin_timestamp ASC
 		datapoints.Datapoints[i][0] = targetProduct
 		datapoints.Datapoints[i][1] = actualProduct
 		datapoints.Datapoints[i][2] = actualScrap
-		datapoints.Datapoints[i][3] = cdatum.timestamp.Unix()
+		datapoints.Datapoints[i][3] = cdatum.timestamp.UnixMilli()
 
 		productionBeforeCount += cdatum.count
 		scrapBeforeCount += cdatum.scrap
@@ -2150,5 +2156,3 @@ func BeforeOrEqual(t time.Time, u time.Time) bool {
 func AfterOrEqual(t time.Time, u time.Time) bool {
 	return t.After(u) || t.Equal(u)
 }
-
-// Pls build docker
