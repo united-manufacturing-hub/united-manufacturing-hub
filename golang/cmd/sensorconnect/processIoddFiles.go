@@ -90,6 +90,18 @@ type IoddFilemapKey struct {
 	DeviceId int
 }
 
+func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, fileInfoSlice []os.FileInfo) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
+	err := RequestSaveIoddFile(ioddFilemapKey, ioddIoDeviceMap, relativeDirectoryPath)
+	if err != nil {
+		return ioddIoDeviceMap, fileInfoSlice, err
+	}
+	ioddIoDeviceMap, fileInfoSlice, err = ReadIoddFiles(ioddIoDeviceMap, fileInfoSlice, relativeDirectoryPath)
+	if err != nil {
+		return ioddIoDeviceMap, fileInfoSlice, err
+	}
+	return ioddIoDeviceMap, fileInfoSlice, err
+}
+
 func UnmarshalIoddFile(ioddFile []byte) (IoDevice, error) {
 	payload := IoDevice{}
 

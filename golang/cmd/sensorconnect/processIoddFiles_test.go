@@ -4,14 +4,41 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
+	// first remove all files from specified path
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	removeFilesFromDirectory(relativeDirectoryPath)
+
+	//Declare Variables
+	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
+	var fileInfoSlice []os.FileInfo
+	var ioddFilemapKey IoddFilemapKey
+	ioddFilemapKey.DeviceId = 278531
+	ioddFilemapKey.VendorId = 42
+	var err error
+
+	// execute function and check for errors
+	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+	// check if new entry exits for filemap Key
+	if val, ok := ioDeviceMap[ioddFilemapKey]; !ok {
+		fmt.Println(val)
+		fmt.Println(ok)
+		t.Error(err) // entry does not exist
+	}
+}
 
 func TestRequestSaveIoddFile(t *testing.T) {
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
-	var emptyIoDeviceMap map[IoddFilemapKey]IoDevice
+	emptyIoDeviceMap := make(map[IoddFilemapKey]IoDevice)
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
 	removeFilesFromDirectory(relativeDirectoryPath)
@@ -61,13 +88,57 @@ func removeFilesFromDirectory(relativeDirectoryPath string) {
 	os.MkdirAll(absoluteDirectoryPath, 0755)
 }
 
-/*
 func TestUnmarshalIoddFile_ifm(t *testing.T) {
-	// Download and Unmarshal IODD file
-	ioDevice, err := GetIoDevice(310, 698)
+	// first remove all files from specified path
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	removeFilesFromDirectory(relativeDirectoryPath)
+
+	//Declare Variables
+	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
+	var fileInfoSlice []os.FileInfo
+
+	var ioddFilemapKey_IFM IoddFilemapKey
+	ioddFilemapKey_IFM.DeviceId = 698
+	ioddFilemapKey_IFM.VendorId = 310
+
+	var ioddFilemapKey_rexroth IoddFilemapKey
+	ioddFilemapKey_rexroth.DeviceId = 2228227
+	ioddFilemapKey_rexroth.VendorId = 287
+
+	var ioddFilemapKey_siemens IoddFilemapKey
+	ioddFilemapKey_siemens.DeviceId = 278531
+	ioddFilemapKey_siemens.VendorId = 42
+
+	var ioddFilemapKey_IFMiodd IoddFilemapKey
+	ioddFilemapKey_IFMiodd.DeviceId = 967
+	ioddFilemapKey_IFMiodd.VendorId = 310
+	var err error
+
+	// execute function and check for errors
+	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
+	// execute function and check for errors
+	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// execute function and check for errors
+	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// execute function and check for errors
+	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Set io Device to ifm
+	ioDevice := ioDeviceMap[ioddFilemapKey_IFM]
 
 	//DeviceId: should give out 698
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 698) {
@@ -158,14 +229,9 @@ func TestUnmarshalIoddFile_ifm(t *testing.T) {
 	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.ReccordItem), 4) {
 		t.Error()
 	}
-}
 
-func TestUnmarshalIoddFile_rexroth(t *testing.T) {
-	// Download and Unmarshal IODD file
-	ioDevice, err := GetIoDevice(287, 2228227)
-	if err != nil {
-		t.Error(err)
-	}
+	// Set io Device to rexroth
+	ioDevice = ioDeviceMap[ioddFilemapKey_rexroth]
 
 	//DeviceId: should give out 2228227
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 2228227) {
@@ -256,14 +322,9 @@ func TestUnmarshalIoddFile_rexroth(t *testing.T) {
 	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.ReccordItem), 3) {
 		t.Error()
 	}
-}
 
-func TestUnmarshalIoddFile_siemens(t *testing.T) {
-	// Download and Unmarshal IODD file
-	ioDevice, err := GetIoDevice(42, 278531)
-	if err != nil {
-		t.Error(err)
-	}
+	// Set io Device to siemens
+	ioDevice = ioDeviceMap[ioddFilemapKey_siemens]
 
 	//DeviceId: should give out 278531
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 278531) {
@@ -355,16 +416,9 @@ func TestUnmarshalIoddFile_siemens(t *testing.T) {
 	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.ReccordItem), 16) {
 		t.Error()
 	}
-}
 
-func TestUnmarshalIoddFile_ifmRfid(t *testing.T) {
-	// Download and Unmarshal IODD file
-	ioDevice, err := GetIoDevice(310, 967)
-	fmt.Println(ioDevice)
-	if err != nil {
-		fmt.Println(err)
-		t.Error(err)
-	}
+	// Set io Device to rexroth
+	ioDevice = ioDeviceMap[ioddFilemapKey_IFMiodd]
 
 	//DeviceId: should give out 967
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 967) {
@@ -456,18 +510,3 @@ func TestUnmarshalIoddFile_ifmRfid(t *testing.T) {
 		t.Error()
 	}
 }
-
-func TestDownloadAndUnmarshal(t *testing.T) {
-	ioDevice, err := GetIoDevice(42, 278531)
-	if err != nil {
-		t.Error(err)
-	}
-	fmt.Println(ioDevice)
-
-	//DeviceId: should give out 967
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 278531) {
-		fmt.Println(ioDevice.ProfileBody.DeviceIdentity.DeviceId)
-		t.Error()
-	}
-}
-*/
