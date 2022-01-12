@@ -1875,7 +1875,7 @@ ORDER BY begin_timestamp ASC
 		PID            int
 		timestampBegin time.Time
 		timestampEnd   sql.NullTime
-		targetUnits    int
+		targetUnits    sql.NullInt32
 		AID            int
 	}
 
@@ -1885,7 +1885,7 @@ ORDER BY begin_timestamp ASC
 	var PidOuter int
 	var timestampbeginOuter time.Time
 	var timestampendOuter sql.NullTime
-	var targetunitsOuter int
+	var targetunitsOuter sql.NullInt32
 	var AidOuter int
 	foundOutsider := true
 
@@ -1937,7 +1937,7 @@ ORDER BY begin_timestamp ASC
 		var PID int
 		var timestampBegin time.Time
 		var timestampEnd sql.NullTime
-		var targetUnits int
+		var targetUnits sql.NullInt32
 		var AID int
 		err := rows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
 		if err != nil {
@@ -1974,7 +1974,7 @@ ORDER BY begin_timestamp ASC
 	if foundOutsider {
 		observationStart = OuterOrder.timestampBegin
 	} else {
-		observationStart = time.Unix(1<<63-1, 0)
+		observationStart = time.Unix(1<<32-1, 0)
 		for _, rowdatum := range insideOrders {
 			if rowdatum.timestampBegin.Before(observationStart) {
 				observationStart = rowdatum.timestampBegin
@@ -1992,7 +1992,7 @@ ORDER BY begin_timestamp ASC
 					observationEnd = rowdatum.timestampEnd.Time
 				}
 			} else {
-				observationEnd = time.Unix(1<<63-1, 0)
+				observationEnd = time.Unix(1<<32-1, 0)
 			}
 		}
 	}
@@ -2003,7 +2003,7 @@ ORDER BY begin_timestamp ASC
 			observationEnd = OuterOrder.timestampEnd.Time
 		}
 	} else if observationEnd.Equal(time.Unix(0, 0)) {
-		observationEnd = time.Unix(1<<63-1, 0)
+		observationEnd = time.Unix(1<<32-1, 0)
 	}
 	zap.S().Debugf("Set observation start to: %s", observationStart)
 	zap.S().Debugf("Set observation end to: %s", observationEnd)
@@ -2023,11 +2023,10 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
-	var countData []struct {
-		timestamp time.Time
-		count     int
-		scrap     int
-	}
+	countMap := make(map[int64]struct {
+		count int
+		scrap int
+	})
 
 	for countRows.Next() {
 		var timestamp time.Time
@@ -2041,16 +2040,13 @@ ORDER BY begin_timestamp ASC
 			return
 		}
 
-		countData = append(countData, struct {
-			timestamp time.Time
-			count     int
-			scrap     int
-		}{timestamp: timestamp, count: count, scrap: scrap})
+		countMap[timestamp.UnixMilli()] = struct {
+			count int
+			scrap int
+		}{count: count, scrap: scrap}
 	}
 
-	productionBeforeCount := 0
-	scrapBeforeCount := 0
-	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
+	//sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
 
 	var datapoints datamodel.DataResponseAny
 	datapoints.ColumnNames = []string{
@@ -2059,89 +2055,38 @@ ORDER BY begin_timestamp ASC
 		"actualScrap",
 		"timestamp",
 	}
-	datapoints.Datapoints = make([][]interface{}, len(countData))
+	//Pre-allocate memory for datapoints
+	datapoints.Datapoints = make([][]interface{}, (observationStart.UnixMilli()-observationEnd.UnixMilli())/1000+1)
 
-	m := make(map[string]int)
+	//Scale stepping based on observation range
+	observationHours := observationEnd.Sub(observationStart).Hours()
+	observationDays := int64(math.Mod(observationHours, 24))
+	stepping := int64(10000) // 10 sec resolution
+	if observationHours > 24 {
+		stepping *= observationDays
+	}
 
-	for i, cdatum := range countData {
-		// Get orders before count ts
-		var ordersBefore []Order
-		if OuterOrder.timestampEnd.Valid && OuterOrder.timestampEnd.Time.Before(cdatum.timestamp) {
-			ordersBefore = append(ordersBefore, OuterOrder)
+	zap.S().Debugf("Stepping %d (%d -> %d)", stepping, observationHours, observationDays)
+
+	// Create datapoint every steppint
+	sqlGetRunningOrder := `SELECT product_id, target_units, begin_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < $2 AND end_timestamp >= $3`
+	for i := observationStart.UnixMilli(); i < observationEnd.UnixMilli(); i += stepping {
+		steppingEnd := i + stepping
+
+		var productId int
+		var targetUnits int
+		var beginTimeStamp time.Time
+		err := db.QueryRow(sqlGetRunningOrder, assetID, i, steppingEnd).Scan(&productId, &targetUnits, &beginTimeStamp)
+		if err == sql.ErrNoRows {
+			continue
+		} else if err != nil {
+			PQErrorHandling(span, sqlStatementGetCounts, err, false)
+			error = err
+			return
 		}
-		for _, rowdatum := range insideOrders {
-			if rowdatum.timestampEnd.Valid && rowdatum.timestampEnd.Time.Before(cdatum.timestamp) {
-				ordersBefore = append(ordersBefore, rowdatum)
-			}
-		}
+		timeSinceStart := i - beginTimeStamp.UnixMilli()
 
-		accumulatedTargetBefore := 0
-		for _, order := range ordersBefore {
-			accumulatedTargetBefore += order.targetUnits
-		}
-
-		// Get current orders
-		var currentOrders []Order
-
-		if OuterOrder.timestampEnd.Valid && AfterOrEqual(OuterOrder.timestampEnd.Time, cdatum.timestamp) && BeforeOrEqual(OuterOrder.timestampBegin, cdatum.timestamp) {
-			currentOrders = append(currentOrders, OuterOrder)
-		}
-		for _, rowdatum := range insideOrders {
-			if (rowdatum.timestampEnd.Valid && AfterOrEqual(rowdatum.timestampEnd.Time, cdatum.timestamp) || !rowdatum.timestampEnd.Valid) && BeforeOrEqual(rowdatum.timestampBegin, cdatum.timestamp) {
-				currentOrders = append(currentOrders, rowdatum)
-			}
-		}
-
-		var expectedProduced int
-		for _, currentOrder := range currentOrders {
-			runningSince := cdatum.timestamp.Sub(currentOrder.timestampBegin)
-
-			cacheKey := fmt.Sprintf("GetAccumulatedProducts-AID%d-PID%d", currentOrder.AID, currentOrder.PID)
-			var timePerUnitInSeconds int
-
-			timePerUnitInSeconds, ok := m[cacheKey]
-
-			if !ok {
-				err := db.QueryRow(sqlGetProductsPerSec, currentOrder.PID, currentOrder.AID).Scan(&timePerUnitInSeconds)
-				if err == sql.ErrNoRows {
-					PQErrorHandling(span, sqlGetProductsPerSec, err, false)
-					error = errors.New("Product does not exist")
-					return
-				} else if err != nil {
-					PQErrorHandling(span, sqlGetProductsPerSec, err, false)
-					error = err
-					return
-				}
-				m[cacheKey] = timePerUnitInSeconds
-			}
-
-			expectedProduced += int(math.Floor(runningSince.Seconds() / float64(timePerUnitInSeconds)))
-		}
-
-		targetProduct := expectedProduced + accumulatedTargetBefore
-		actualProduct := cdatum.count + productionBeforeCount
-		actualScrap := cdatum.scrap + scrapBeforeCount
-
-		zap.S().Debugf("====================%d======================", i)
-		zap.S().Debugf("Count %s", cdatum.timestamp.String())
-		zap.S().Debugf("Orders before %d", len(ordersBefore))
-		zap.S().Debugf("Current orders %d", len(currentOrders))
-		zap.S().Debugf("Target before %d", accumulatedTargetBefore)
-		zap.S().Debugf("Production before %d", productionBeforeCount)
-		zap.S().Debugf("Scrap before %d", scrapBeforeCount)
-		zap.S().Debugf("Expected produced %d", expectedProduced)
-		zap.S().Debugf("Target Product %d", targetProduct)
-		zap.S().Debugf("Actual Product %d", actualProduct)
-		zap.S().Debugf("Actual Scrap %d", actualScrap)
-
-		datapoints.Datapoints[i] = make([]interface{}, 4)
-		datapoints.Datapoints[i][0] = targetProduct
-		datapoints.Datapoints[i][1] = actualProduct
-		datapoints.Datapoints[i][2] = actualScrap
-		datapoints.Datapoints[i][3] = cdatum.timestamp.UnixMilli()
-
-		productionBeforeCount += cdatum.count
-		scrapBeforeCount += cdatum.scrap
+		zap.S().Debugf("Current Order at %d", i, productId, targetUnits, timeSinceStart)
 	}
 
 	return datapoints, nil

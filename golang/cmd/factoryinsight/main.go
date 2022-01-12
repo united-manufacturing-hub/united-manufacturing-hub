@@ -34,15 +34,18 @@ var shutdownEnabled bool
 var buildtime string
 
 func main() {
-
 	debugEnabled := os.Getenv("DEBUG_ENABLED")
-	// Setup logger and set as global
-	var logger *zap.Logger
-	if debugEnabled == "True" || debugEnabled == "true" {
-		logger, _ = zap.NewDevelopment()
-	} else {
-		logger, _ = zap.NewProduction()
-	}
+	/*
+		// Setup logger and set as global
+		var logger *zap.Logger
+		if debugEnabled == "True" || debugEnabled == "true" {
+			logger, _ = zap.NewDevelopment()
+		} else {
+			logger, _ = zap.NewProduction()
+		}
+
+	*/
+	logger, _ := zap.NewDevelopment()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
