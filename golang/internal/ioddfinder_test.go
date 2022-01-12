@@ -47,14 +47,15 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 }
 
 func TestSaveIoddFile(t *testing.T) {
+	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
 	// test if writing iodd file works
-	err := SaveIoddFile(42, 278531)
+	err := SaveIoddFile(42, 278531, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// test if existing file is detected and corresponding error is thrown
-	err = SaveIoddFile(42, 278531)
+	err = SaveIoddFile(42, 278531, relativeDirectoryPath)
 	if err == nil {
 		t.Error(err)
 	}
