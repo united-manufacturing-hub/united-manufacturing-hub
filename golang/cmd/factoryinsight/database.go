@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -1974,7 +1973,7 @@ ORDER BY begin_timestamp ASC
 	if foundOutsider {
 		observationStart = OuterOrder.timestampBegin
 	} else {
-		observationStart = time.Unix(1<<32-1, 0)
+		observationStart = time.Unix(1<<16-1, 0)
 		for _, rowdatum := range insideOrders {
 			if rowdatum.timestampBegin.Before(observationStart) {
 				observationStart = rowdatum.timestampBegin
@@ -1992,7 +1991,7 @@ ORDER BY begin_timestamp ASC
 					observationEnd = rowdatum.timestampEnd.Time
 				}
 			} else {
-				observationEnd = time.Unix(1<<32-1, 0)
+				observationEnd = time.Unix(1<<16-1, 0)
 			}
 		}
 	}
@@ -2003,14 +2002,14 @@ ORDER BY begin_timestamp ASC
 			observationEnd = OuterOrder.timestampEnd.Time
 		}
 	} else if observationEnd.Equal(time.Unix(0, 0)) {
-		observationEnd = time.Unix(1<<32-1, 0)
+		observationEnd = time.Unix(1<<16-1, 0)
 	}
 	zap.S().Debugf("Set observation start to: %s", observationStart)
 	zap.S().Debugf("Set observation end to: %s", observationEnd)
 
-	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= $2 AND timestamp <= $3 ORDER BY timestamp ASC;`
+	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp <= to_timestamp($3::double precision) ORDER BY timestamp ASC;`
 
-	countRows, err := db.Query(sqlStatementGetCounts, assetID, observationStart, observationEnd)
+	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(observationStart.UnixMilli())/1000, float64(observationEnd.UnixMilli())/1000)
 
 	defer countRows.Close()
 
@@ -2046,8 +2045,6 @@ ORDER BY begin_timestamp ASC
 		}{count: count, scrap: scrap}
 	}
 
-	//sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
-
 	var datapoints datamodel.DataResponseAny
 	datapoints.ColumnNames = []string{
 		"targetProduct",
@@ -2055,28 +2052,36 @@ ORDER BY begin_timestamp ASC
 		"actualScrap",
 		"timestamp",
 	}
-	//Pre-allocate memory for datapoints
-	datapoints.Datapoints = make([][]interface{}, (observationStart.UnixMilli()-observationEnd.UnixMilli())/1000+1)
 
 	//Scale stepping based on observation range
 	observationHours := observationEnd.Sub(observationStart).Hours()
-	observationDays := int64(math.Mod(observationHours, 24))
+	observationDays := int64(observationHours / 24)
 	stepping := int64(10000) // 10 sec resolution
 	if observationHours > 24 {
 		stepping *= observationDays
 	}
 
-	zap.S().Debugf("Stepping %d (%d -> %d)", stepping, observationHours, observationDays)
+	//Pre-allocate memory for datapoints
+	dplen := (observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping
+	zap.S().Debugf("Allocation for %d datapoints", dplen)
+	datapoints.Datapoints = make([][]interface{}, dplen)
+
+	zap.S().Debugf("Stepping %d (%f -> %d)", stepping, observationHours, observationDays)
+
+	productCache := make(map[int]int)
+	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
 
 	// Create datapoint every steppint
-	sqlGetRunningOrder := `SELECT product_id, target_units, begin_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < $2 AND end_timestamp >= $3`
+	sqlGetRunningOrder := `SELECT order_id, product_id, target_units, begin_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision)`
+	dataPointIndex := 0
 	for i := observationStart.UnixMilli(); i < observationEnd.UnixMilli(); i += stepping {
 		steppingEnd := i + stepping
 
+		var orderID int
 		var productId int
 		var targetUnits int
 		var beginTimeStamp time.Time
-		err := db.QueryRow(sqlGetRunningOrder, assetID, i, steppingEnd).Scan(&productId, &targetUnits, &beginTimeStamp)
+		err := db.QueryRow(sqlGetRunningOrder, assetID, float64(i)/1000, float64(steppingEnd)/1000).Scan(&orderID, &productId, &targetUnits, &beginTimeStamp)
 		if err == sql.ErrNoRows {
 			continue
 		} else if err != nil {
@@ -2084,9 +2089,40 @@ ORDER BY begin_timestamp ASC
 			error = err
 			return
 		}
-		timeSinceStart := i - beginTimeStamp.UnixMilli()
+		timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
 
-		zap.S().Debugf("Current Order at %d", i, productId, targetUnits, timeSinceStart)
+		timePerProductUnitInSec, ok := productCache[productId]
+		if !ok {
+			err := db.QueryRow(sqlGetProductsPerSec, productId, assetID).Scan(&timePerProductUnitInSec)
+			if err == sql.ErrNoRows {
+				// Product doesn't exist
+				PQErrorHandling(span, sqlStatementGetCounts, err, false)
+				error = err
+				return
+			} else if err != nil {
+				PQErrorHandling(span, sqlStatementGetCounts, err, false)
+				error = err
+				return
+			}
+			productCache[productId] = timePerProductUnitInSec
+		}
+
+		expectedProducedFromCurrentOrder := timeSinceStartInMilliSec / int64(timePerProductUnitInSec*1000)
+
+		zap.S().Debugf(" ===== %d ====", i)
+		zap.S().Debugf("OrderId %d", orderID)
+		zap.S().Debugf("ProductId %d", productId)
+		zap.S().Debugf("TargetUnits %d", targetUnits)
+		zap.S().Debugf("TimeSinceStartInMillisec %d", timeSinceStartInMilliSec)
+		zap.S().Debugf("ExpectedProducedFromCurrentOrder %d", expectedProducedFromCurrentOrder)
+
+		datapoints.Datapoints[dataPointIndex] = make([]interface{}, 4)
+		datapoints.Datapoints[dataPointIndex][0] = expectedProducedFromCurrentOrder
+		datapoints.Datapoints[dataPointIndex][1] = 0
+		datapoints.Datapoints[dataPointIndex][2] = 0
+		datapoints.Datapoints[dataPointIndex][3] = i
+
+		dataPointIndex += 1
 	}
 
 	return datapoints, nil
