@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"gonum.org/v1/gonum/stat"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -1989,9 +1990,13 @@ ORDER BY begin_timestamp ASC
 			if rowdatum.timestampEnd.Valid {
 				if rowdatum.timestampEnd.Time.After(observationEnd) {
 					observationEnd = rowdatum.timestampEnd.Time
+					zap.S().Debugf("[1992] Set observationEnd %s", observationEnd.String())
 				}
 			} else {
-				observationEnd = time.Unix(1<<16-1, 0)
+				if time.Unix(1<<16-1, 0).After(observationEnd) {
+					observationEnd = time.Unix(1<<16-1, 0)
+					zap.S().Debugf("[1996] Set observationEnd %s", observationEnd.String())
+				}
 			}
 		}
 	}
@@ -2000,9 +2005,11 @@ ORDER BY begin_timestamp ASC
 	if OuterOrder.timestampEnd.Valid {
 		if OuterOrder.timestampEnd.Time.After(observationEnd) {
 			observationEnd = OuterOrder.timestampEnd.Time
+			zap.S().Debugf("[2005] Set observationEnd %s", observationEnd.String())
 		}
 	} else if observationEnd.Equal(time.Unix(0, 0)) {
 		observationEnd = time.Unix(1<<16-1, 0)
+		zap.S().Debugf("[2009] Set observationEnd %s", observationEnd.String())
 	}
 	zap.S().Debugf("Set observation start to: %s", observationStart)
 	zap.S().Debugf("Set observation end to: %s", observationEnd)
@@ -2047,16 +2054,29 @@ ORDER BY begin_timestamp ASC
 
 	var datapoints datamodel.DataResponseAny
 	datapoints.ColumnNames = []string{
-		"targetProduct",
-		"actualProduct",
-		"actualScrap",
+		"Target Output",
+		"Actual Output",
+		"Actual Scrap",
 		"timestamp",
+		"Internal Order ID",
+		"Ordered Units",
+		"Predicted Output",
+		"Predicted Scrap",
+		"Predicted Target",
+		"Target Output after Order End",
+		"Actual Output after Order End",
+		"Actual Scrap after Order End",
+		"Actual Good Output",
+		"actualGoodProducesAfterEnd",
+		"Predicted Good Output",
 	}
+
+	colLen := len(datapoints.ColumnNames)
 
 	//Scale stepping based on observation range
 	observationHours := observationEnd.Sub(observationStart).Hours()
 	observationDays := int64(observationHours / 24)
-	stepping := int64(10000) // 10 sec resolution
+	stepping := int64(600000) // 60 sec resolution
 	if observationHours > 24 {
 		stepping *= observationDays
 	}
@@ -2064,7 +2084,7 @@ ORDER BY begin_timestamp ASC
 	//Pre-allocate memory for datapoints
 	dplen := (observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping
 	zap.S().Debugf("Allocation for %d datapoints", dplen)
-	datapoints.Datapoints = make([][]interface{}, dplen)
+	tmpDatapoints := make([][]interface{}, dplen)
 
 	zap.S().Debugf("Stepping %d (%f -> %d)", stepping, observationHours, observationDays)
 
@@ -2073,54 +2093,296 @@ ORDER BY begin_timestamp ASC
 
 	// Create datapoint every steppint
 	sqlGetRunningOrder := `SELECT order_id, product_id, target_units, begin_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision)`
+	sqlGetLastCountEntries := `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp < to_timestamp($3::double precision)`
 	dataPointIndex := 0
+
+	cts := 0
+	scp := 0
+
+	lastOrderID := 0
+	lastOrderOverhead := int64(0)
+	allOrderOverheads := int64(0)
+	lastDPCT := int64(0)
+
+	regressionDataP := internal.Xy{
+		X: make([]float64, dplen+1),
+		Y: make([]float64, dplen+1),
+	}
+
+	regressionDataS := internal.Xy{
+		X: make([]float64, dplen+1),
+		Y: make([]float64, dplen+1),
+	}
+
+	regressionDataT := internal.Xy{
+		X: make([]float64, dplen+1),
+		Y: make([]float64, dplen+1),
+	}
+
 	for i := observationStart.UnixMilli(); i < observationEnd.UnixMilli(); i += stepping {
 		steppingEnd := i + stepping
 
-		var orderID int
-		var productId int
-		var targetUnits int
-		var beginTimeStamp time.Time
-		err := db.QueryRow(sqlGetRunningOrder, assetID, float64(i)/1000, float64(steppingEnd)/1000).Scan(&orderID, &productId, &targetUnits, &beginTimeStamp)
+		//Get counts in observation window
+		rows, err := db.Query(sqlGetLastCountEntries, assetID, float64(i)/1000, float64(steppingEnd)/1000)
 		if err == sql.ErrNoRows {
-			continue
+			// No new data is fine
 		} else if err != nil {
 			PQErrorHandling(span, sqlStatementGetCounts, err, false)
 			error = err
 			return
 		}
-		timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
 
-		timePerProductUnitInSec, ok := productCache[productId]
-		if !ok {
-			err := db.QueryRow(sqlGetProductsPerSec, productId, assetID).Scan(&timePerProductUnitInSec)
+		counts := make([]struct {
+			timestamp time.Time
+			count     int
+			scrap     int
+		}, 0)
+
+		for rows.Next() {
+			var timestamp time.Time
+			var count int
+			var scrap int
+			err := rows.Scan(&timestamp, &count, &scrap)
 			if err == sql.ErrNoRows {
-				// Product doesn't exist
-				PQErrorHandling(span, sqlStatementGetCounts, err, false)
-				error = err
-				return
+				// No new data is fine
 			} else if err != nil {
 				PQErrorHandling(span, sqlStatementGetCounts, err, false)
 				error = err
 				return
 			}
-			productCache[productId] = timePerProductUnitInSec
+			counts = append(counts, struct {
+				timestamp time.Time
+				count     int
+				scrap     int
+			}{timestamp: timestamp, count: count, scrap: scrap})
 		}
 
-		expectedProducedFromCurrentOrder := timeSinceStartInMilliSec / int64(timePerProductUnitInSec*1000)
+		var orderID int
+		var productId int
+		var targetUnits int
+		var beginTimeStamp time.Time
+		runningOrder := true
+		err = db.QueryRow(sqlGetRunningOrder, assetID, float64(i)/1000, float64(steppingEnd)/1000).Scan(&orderID, &productId, &targetUnits, &beginTimeStamp)
+		if err == sql.ErrNoRows {
+			runningOrder = false
+		} else if err != nil {
+			PQErrorHandling(span, sqlStatementGetCounts, err, false)
+			error = err
+			return
+		}
 
-		zap.S().Debugf(" ===== %d ====", i)
-		zap.S().Debugf("OrderId %d", orderID)
-		zap.S().Debugf("ProductId %d", productId)
-		zap.S().Debugf("TargetUnits %d", targetUnits)
-		zap.S().Debugf("TimeSinceStartInMillisec %d", timeSinceStartInMilliSec)
-		zap.S().Debugf("ExpectedProducedFromCurrentOrder %d", expectedProducedFromCurrentOrder)
+		expectedProducedFromCurrentOrder := int64(0)
 
-		datapoints.Datapoints[dataPointIndex] = make([]interface{}, 4)
-		datapoints.Datapoints[dataPointIndex][0] = expectedProducedFromCurrentOrder
-		datapoints.Datapoints[dataPointIndex][1] = 0
-		datapoints.Datapoints[dataPointIndex][2] = 0
-		datapoints.Datapoints[dataPointIndex][3] = i
+		if runningOrder {
+			timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
+
+			timePerProductUnitInSec, ok := productCache[productId]
+			if !ok {
+				err := db.QueryRow(sqlGetProductsPerSec, productId, assetID).Scan(&timePerProductUnitInSec)
+				if err == sql.ErrNoRows {
+					// Product doesn't exist
+					PQErrorHandling(span, sqlStatementGetCounts, err, false)
+					error = err
+					return
+				} else if err != nil {
+					PQErrorHandling(span, sqlStatementGetCounts, err, false)
+					error = err
+					return
+				}
+				productCache[productId] = timePerProductUnitInSec
+			}
+
+			expectedProducedFromCurrentOrder = timeSinceStartInMilliSec / int64(timePerProductUnitInSec*1000)
+		}
+
+		for _, count := range counts {
+			cts += count.count
+			scp += count.scrap
+		}
+
+		/*
+			"Target Output",
+			"Actual Output",
+			"Actual Scrap",
+			"timestamp",
+			"Internal Order ID",
+			"Ordered Units",
+			"Predicted Output",
+			"Predicted Scrap",
+			"Predicted Target",
+			"Target Output after Order End",
+			"Actual Output after Order End",
+			"Actual Scrap after Order End",
+			"Actual Good Output",
+			"actualGoodProducesAfterEnd",
+			"Predicted Good Output",
+		*/
+		tmpDatapoints[dataPointIndex] = make([]interface{}, colLen)
+		//Should fix rounding errors
+		expT := int64(0)
+		if expectedProducedFromCurrentOrder+allOrderOverheads < lastDPCT {
+			expT = lastDPCT
+		} else {
+			expT = expectedProducedFromCurrentOrder + allOrderOverheads
+		}
+		tmpDatapoints[dataPointIndex][0] = expT
+		tmpDatapoints[dataPointIndex][1] = cts
+		tmpDatapoints[dataPointIndex][2] = scp
+		tmpDatapoints[dataPointIndex][3] = i
+		tmpDatapoints[dataPointIndex][4] = orderID
+		tmpDatapoints[dataPointIndex][5] = targetUnits
+		tmpDatapoints[dataPointIndex][6] = nil
+		tmpDatapoints[dataPointIndex][7] = nil
+		tmpDatapoints[dataPointIndex][8] = nil
+		tmpDatapoints[dataPointIndex][9] = nil
+		tmpDatapoints[dataPointIndex][10] = nil
+		tmpDatapoints[dataPointIndex][11] = nil
+		tmpDatapoints[dataPointIndex][12] = cts - scp
+		tmpDatapoints[dataPointIndex][13] = nil
+		tmpDatapoints[dataPointIndex][14] = nil
+
+		if lastOrderID != orderID {
+			allOrderOverheads += lastOrderOverhead
+		}
+
+		dataPointIndex += 1
+		lastOrderID = orderID
+		lastOrderOverhead = expectedProducedFromCurrentOrder
+		lastDPCT = expectedProducedFromCurrentOrder + allOrderOverheads
+
+		regressionDataP.X[dataPointIndex] = float64(dataPointIndex)
+		regressionDataP.Y[dataPointIndex] = float64(cts)
+
+		regressionDataS.X[dataPointIndex] = float64(dataPointIndex)
+		regressionDataS.Y[dataPointIndex] = float64(scp)
+
+		regressionDataT.X[dataPointIndex] = float64(dataPointIndex)
+		regressionDataT.Y[dataPointIndex] = float64(expT)
+	}
+
+	datapoints.Datapoints = make([][]interface{}, 0, dplen)
+
+	for _, item := range tmpDatapoints {
+		if item != nil {
+			datapoints.Datapoints = append(datapoints.Datapoints, item)
+		}
+	}
+
+	if AfterOrEqual(observationEnd, to) {
+		zap.S().Debugf("%s is AfterOrEqualTo %s", observationEnd, to)
+		// No need to predict if observationEnd is after to
+		return datapoints, nil
+	}
+
+	// Begin predictions
+
+	timeTillEnd := to.Sub(observationEnd)
+	zap.S().Debugf("timeTillEnd: %s", timeTillEnd.String())
+
+	betaP, alphaP := stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
+	betaS, alphaS := stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
+	betaT, alphaT := stat.LinearRegression(regressionDataT.X, regressionDataT.Y, nil, false)
+
+	firstPValue := alphaP*float64(dataPointIndex) + betaP
+	offsetP := float64(cts) - firstPValue
+
+	firstSValue := alphaS*float64(dataPointIndex) + betaS
+	offsetS := float64(scp) - firstSValue
+
+	firstTValue := alphaT*float64(dataPointIndex) + betaT
+	offsetT := float64(lastDPCT) - firstTValue
+
+	pcts := 0
+	pscp := 0
+	//21:50
+	//22:00
+	for i := observationEnd.UnixMilli(); i < to.UnixMilli(); i += stepping {
+		pValue := alphaP*float64(dataPointIndex) + betaP
+		sValue := alphaS*float64(dataPointIndex) + betaS
+		tValue := alphaT*float64(dataPointIndex) + betaT
+
+		steppingEnd := i + stepping
+		//Get counts outside observation window
+		rows, err := db.Query(sqlGetLastCountEntries, assetID, float64(i)/1000, float64(steppingEnd)/1000)
+		if err == sql.ErrNoRows {
+			// No new data is fine
+		} else if err != nil {
+			PQErrorHandling(span, sqlStatementGetCounts, err, false)
+			error = err
+			return
+		}
+
+		counts := make([]struct {
+			timestamp time.Time
+			count     int
+			scrap     int
+		}, 0)
+
+		for rows.Next() {
+			var timestamp time.Time
+			var count int
+			var scrap int
+			err := rows.Scan(&timestamp, &count, &scrap)
+			if err == sql.ErrNoRows {
+				// No new data is fine
+			} else if err != nil {
+				PQErrorHandling(span, sqlStatementGetCounts, err, false)
+				error = err
+				return
+			}
+			counts = append(counts, struct {
+				timestamp time.Time
+				count     int
+				scrap     int
+			}{timestamp: timestamp, count: count, scrap: scrap})
+		}
+
+		/*
+			"Target Output",
+			"Actual Output",
+			"Actual Scrap",
+			"timestamp",
+			"Internal Order ID",
+			"Ordered Units",
+			"Predicted Output",
+			"Predicted Scrap",
+			"Predicted Target",
+			"Target Output after Order End",
+			"Actual Output after Order End",
+			"Actual Scrap after Order End",
+			"Actual Good Output",
+			"actualGoodProducesAfterEnd",
+			"Predicted Good Output",
+		*/
+
+		for _, count := range counts {
+			cts += count.count
+			scp += count.scrap
+			pcts += count.count
+			pscp += count.scrap
+		}
+
+		sVO := sValue + offsetS
+		pVO := pValue + offsetP
+
+		v := make([]interface{}, colLen)
+		v[0] = nil
+		v[1] = nil
+		v[2] = nil
+		v[3] = i
+		v[4] = nil
+		v[5] = nil
+		v[6] = pVO
+		v[7] = sVO
+		v[8] = tValue + offsetT
+		v[9] = lastDPCT
+		v[10] = cts
+		v[11] = scp
+		v[12] = nil
+		v[13] = cts - scp
+		v[14] = pVO - sVO
+
+		datapoints.Datapoints = append(datapoints.Datapoints, v)
 
 		dataPointIndex += 1
 	}

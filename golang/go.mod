@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/Bose/go-gin-opentracing v1.0.5
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
+	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/eclipse/paho.mqtt.golang v1.3.5
@@ -20,9 +21,11 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rung/go-safecast v1.0.1
+	github.com/sajari/regression v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/zeebo/xxh3 v1.0.1
 	go.uber.org/zap v1.20.0
+	gonum.org/v1/gonum v0.9.3 // indirect
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 )
