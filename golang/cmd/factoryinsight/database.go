@@ -1958,60 +1958,78 @@ ORDER BY begin_timestamp ASC
 		})
 	}
 
-	if !foundInsider && !foundOutsider {
-		// No data to display, abort
-		data = datamodel.DataResponseAny{
-			ColumnNames: make([]string, 0),
-			Datapoints:  make([][]interface{}, 0),
-		}
-		return
+	var datapoints datamodel.DataResponseAny
+	datapoints.ColumnNames = []string{
+		"Target Output",
+		"Actual Output",
+		"Actual Scrap",
+		"timestamp",
+		"Internal Order ID",
+		"Ordered Units",
+		"Predicted Output",
+		"Predicted Scrap",
+		"Predicted Target",
+		"Target Output after Order End",
+		"Actual Output after Order End",
+		"Actual Scrap after Order End",
+		"Actual Good Output",
+		"Actual Good Output after Order End",
+		"Predicted Good Output",
 	}
 
 	var observationStart time.Time
 	var observationEnd time.Time
 
-	// If value before observation window, use it's begin timestamp
-	// Else iter all inside rows and select the lowest timestamp
-	if foundOutsider {
-		observationStart = OuterOrder.timestampBegin
+	if !foundInsider && !foundOutsider {
+		zap.S().Debugf("No insiders or outsiders !")
+		observationStart = from
+		observationEnd = to
 	} else {
-		observationStart = time.Unix(1<<16-1, 0)
-		for _, rowdatum := range insideOrders {
-			if rowdatum.timestampBegin.Before(observationStart) {
-				observationStart = rowdatum.timestampBegin
+
+		// If value before observation window, use it's begin timestamp
+		// Else iter all inside rows and select the lowest timestamp
+		if foundOutsider {
+			observationStart = OuterOrder.timestampBegin
+		} else {
+			observationStart = time.Unix(1<<16-1, 0)
+			for _, rowdatum := range insideOrders {
+				if rowdatum.timestampBegin.Before(observationStart) {
+					observationStart = rowdatum.timestampBegin
+				}
 			}
+		}
+
+		observationEnd = time.Unix(0, 0)
+		// If value inside observation window, iterate them and select the greatest time.
+		// If order has no end, assume unix max time
+		if foundInsider {
+			for _, rowdatum := range insideOrders {
+				if rowdatum.timestampEnd.Valid {
+					if rowdatum.timestampEnd.Time.After(observationEnd) {
+						observationEnd = rowdatum.timestampEnd.Time
+						zap.S().Debugf("[1992] Set observationEnd %s", observationEnd.String())
+					}
+				} else {
+					if time.Unix(1<<16-1, 0).After(observationEnd) {
+						observationEnd = time.Unix(1<<16-1, 0)
+						zap.S().Debugf("[1996] Set observationEnd %s", observationEnd.String())
+					}
+				}
+			}
+		}
+		// Check if our starting order has the largest end time
+		// Also assign unix max time, if there is still no valid value
+		if OuterOrder.timestampEnd.Valid {
+			if OuterOrder.timestampEnd.Time.After(observationEnd) {
+				observationEnd = OuterOrder.timestampEnd.Time
+				zap.S().Debugf("[2005] Set observationEnd %s", observationEnd.String())
+			}
+		} else if observationEnd.Equal(time.Unix(0, 0)) {
+			observationEnd = time.Unix(1<<16-1, 0)
+			zap.S().Debugf("[2009] Set observationEnd %s", observationEnd.String())
 		}
 	}
 
-	observationEnd = time.Unix(0, 0)
-	// If value inside observation window, iterate them and select the greatest time.
-	// If order has no end, assume unix max time
-	if foundInsider {
-		for _, rowdatum := range insideOrders {
-			if rowdatum.timestampEnd.Valid {
-				if rowdatum.timestampEnd.Time.After(observationEnd) {
-					observationEnd = rowdatum.timestampEnd.Time
-					zap.S().Debugf("[1992] Set observationEnd %s", observationEnd.String())
-				}
-			} else {
-				if time.Unix(1<<16-1, 0).After(observationEnd) {
-					observationEnd = time.Unix(1<<16-1, 0)
-					zap.S().Debugf("[1996] Set observationEnd %s", observationEnd.String())
-				}
-			}
-		}
-	}
-	// Check if our starting order has the largest end time
-	// Also assign unix max time, if there is still no valid value
-	if OuterOrder.timestampEnd.Valid {
-		if OuterOrder.timestampEnd.Time.After(observationEnd) {
-			observationEnd = OuterOrder.timestampEnd.Time
-			zap.S().Debugf("[2005] Set observationEnd %s", observationEnd.String())
-		}
-	} else if observationEnd.Equal(time.Unix(0, 0)) {
-		observationEnd = time.Unix(1<<16-1, 0)
-		zap.S().Debugf("[2009] Set observationEnd %s", observationEnd.String())
-	}
 	zap.S().Debugf("Set observation start to: %s", observationStart)
 	zap.S().Debugf("Set observation end to: %s", observationEnd)
 
@@ -2118,25 +2136,6 @@ ORDER BY begin_timestamp ASC
 			beginTimeStamp: beginTimeStamp,
 			endTimeStamp:   endTimeStamp,
 		})
-	}
-
-	var datapoints datamodel.DataResponseAny
-	datapoints.ColumnNames = []string{
-		"Target Output",
-		"Actual Output",
-		"Actual Scrap",
-		"timestamp",
-		"Internal Order ID",
-		"Ordered Units",
-		"Predicted Output",
-		"Predicted Scrap",
-		"Predicted Target",
-		"Target Output after Order End",
-		"Actual Output after Order End",
-		"Actual Scrap after Order End",
-		"Actual Good Output",
-		"Actual Good Output after Order End",
-		"Predicted Good Output",
 	}
 
 	colLen := len(datapoints.ColumnNames)
