@@ -2016,7 +2016,21 @@ ORDER BY begin_timestamp ASC
 
 	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp <= to_timestamp($3::double precision) ORDER BY timestamp ASC;`
 
-	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(observationStart.UnixMilli())/1000, float64(observationEnd.UnixMilli())/1000)
+	type CountStruct struct {
+		timestamp time.Time
+		count     int
+		scrap     int
+	}
+
+	countQueryBegin := observationStart.UnixMilli()
+	countQueryEnd := int64(0)
+	if to.After(observationEnd) {
+		countQueryEnd = to.UnixMilli()
+	} else {
+		countQueryEnd = observationEnd.UnixMilli()
+	}
+
+	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(countQueryBegin)/1000, float64(countQueryEnd)/1000)
 
 	defer countRows.Close()
 
@@ -2029,10 +2043,7 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
-	countMap := make(map[int64]struct {
-		count int
-		scrap int
-	})
+	countMap := make([]CountStruct, 0)
 
 	for countRows.Next() {
 		var timestamp time.Time
@@ -2046,10 +2057,7 @@ ORDER BY begin_timestamp ASC
 			return
 		}
 
-		countMap[timestamp.UnixMilli()] = struct {
-			count int
-			scrap int
-		}{count: count, scrap: scrap}
+		countMap = append(countMap, CountStruct{timestamp: timestamp, count: count, scrap: scrap})
 	}
 
 	var datapoints datamodel.DataResponseAny
@@ -2067,7 +2075,7 @@ ORDER BY begin_timestamp ASC
 		"Actual Output after Order End",
 		"Actual Scrap after Order End",
 		"Actual Good Output",
-		"actualGoodProducesAfterEnd",
+		"Actual Good Output after Order End",
 		"Predicted Good Output",
 	}
 
@@ -2076,7 +2084,7 @@ ORDER BY begin_timestamp ASC
 	//Scale stepping based on observation range
 	observationHours := observationEnd.Sub(observationStart).Hours()
 	observationDays := int64(observationHours / 24)
-	stepping := int64(600000) // 60 sec resolution
+	stepping := int64(60000) // 60 sec resolution
 	if observationHours > 24 {
 		stepping *= observationDays
 	}
@@ -2093,7 +2101,7 @@ ORDER BY begin_timestamp ASC
 
 	// Create datapoint every steppint
 	sqlGetRunningOrder := `SELECT order_id, product_id, target_units, begin_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision)`
-	sqlGetLastCountEntries := `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp < to_timestamp($3::double precision)`
+	//sqlGetLastCountEntries := `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp < to_timestamp($3::double precision)`
 	dataPointIndex := 0
 
 	cts := 0
@@ -2119,42 +2127,17 @@ ORDER BY begin_timestamp ASC
 		Y: make([]float64, dplen+1),
 	}
 
+	var step1ObservationEnd int64
 	for i := observationStart.UnixMilli(); i < observationEnd.UnixMilli(); i += stepping {
 		steppingEnd := i + stepping
+		step1ObservationEnd = i
 
-		//Get counts in observation window
-		rows, err := db.Query(sqlGetLastCountEntries, assetID, float64(i)/1000, float64(steppingEnd)/1000)
-		if err == sql.ErrNoRows {
-			// No new data is fine
-		} else if err != nil {
-			PQErrorHandling(span, sqlStatementGetCounts, err, false)
-			error = err
-			return
-		}
+		counts := make([]CountStruct, 0)
 
-		counts := make([]struct {
-			timestamp time.Time
-			count     int
-			scrap     int
-		}, 0)
-
-		for rows.Next() {
-			var timestamp time.Time
-			var count int
-			var scrap int
-			err := rows.Scan(&timestamp, &count, &scrap)
-			if err == sql.ErrNoRows {
-				// No new data is fine
-			} else if err != nil {
-				PQErrorHandling(span, sqlStatementGetCounts, err, false)
-				error = err
-				return
+		for _, count := range countMap {
+			if count.timestamp.UnixMilli() >= i && count.timestamp.UnixMilli() < steppingEnd {
+				counts = append(counts, CountStruct{timestamp: count.timestamp, count: count.count, scrap: count.scrap})
 			}
-			counts = append(counts, struct {
-				timestamp time.Time
-				count     int
-				scrap     int
-			}{timestamp: timestamp, count: count, scrap: scrap})
 		}
 
 		var orderID int
@@ -2178,6 +2161,7 @@ ORDER BY begin_timestamp ASC
 
 			timePerProductUnitInSec, ok := productCache[productId]
 			if !ok {
+				zap.S().Debugf("Product %d not cached", productId)
 				err := db.QueryRow(sqlGetProductsPerSec, productId, assetID).Scan(&timePerProductUnitInSec)
 				if err == sql.ErrNoRows {
 					// Product doesn't exist
@@ -2200,23 +2184,6 @@ ORDER BY begin_timestamp ASC
 			scp += count.scrap
 		}
 
-		/*
-			"Target Output",
-			"Actual Output",
-			"Actual Scrap",
-			"timestamp",
-			"Internal Order ID",
-			"Ordered Units",
-			"Predicted Output",
-			"Predicted Scrap",
-			"Predicted Target",
-			"Target Output after Order End",
-			"Actual Output after Order End",
-			"Actual Scrap after Order End",
-			"Actual Good Output",
-			"actualGoodProducesAfterEnd",
-			"Predicted Good Output",
-		*/
 		tmpDatapoints[dataPointIndex] = make([]interface{}, colLen)
 		//Should fix rounding errors
 		expT := int64(0)
@@ -2275,13 +2242,12 @@ ORDER BY begin_timestamp ASC
 	}
 
 	// Begin predictions
-
-	timeTillEnd := to.Sub(observationEnd)
-	zap.S().Debugf("timeTillEnd: %s", timeTillEnd.String())
-
+	dataPointIndex += 1
+	zap.S().Debugf("Before regression")
 	betaP, alphaP := stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
 	betaS, alphaS := stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
 	betaT, alphaT := stat.LinearRegression(regressionDataT.X, regressionDataT.Y, nil, false)
+	zap.S().Debugf("After regression")
 
 	firstPValue := alphaP*float64(dataPointIndex) + betaP
 	offsetP := float64(cts) - firstPValue
@@ -2296,64 +2262,21 @@ ORDER BY begin_timestamp ASC
 	pscp := 0
 	//21:50
 	//22:00
-	for i := observationEnd.UnixMilli(); i < to.UnixMilli(); i += stepping {
+
+	for i := step1ObservationEnd; i < to.UnixMilli(); i += stepping {
 		pValue := alphaP*float64(dataPointIndex) + betaP
 		sValue := alphaS*float64(dataPointIndex) + betaS
 		tValue := alphaT*float64(dataPointIndex) + betaT
 
 		steppingEnd := i + stepping
-		//Get counts outside observation window
-		rows, err := db.Query(sqlGetLastCountEntries, assetID, float64(i)/1000, float64(steppingEnd)/1000)
-		if err == sql.ErrNoRows {
-			// No new data is fine
-		} else if err != nil {
-			PQErrorHandling(span, sqlStatementGetCounts, err, false)
-			error = err
-			return
-		}
 
-		counts := make([]struct {
-			timestamp time.Time
-			count     int
-			scrap     int
-		}, 0)
+		counts := make([]CountStruct, 0)
 
-		for rows.Next() {
-			var timestamp time.Time
-			var count int
-			var scrap int
-			err := rows.Scan(&timestamp, &count, &scrap)
-			if err == sql.ErrNoRows {
-				// No new data is fine
-			} else if err != nil {
-				PQErrorHandling(span, sqlStatementGetCounts, err, false)
-				error = err
-				return
+		for _, count := range countMap {
+			if count.timestamp.UnixMilli() >= i && count.timestamp.UnixMilli() < steppingEnd {
+				counts = append(counts, CountStruct{timestamp: count.timestamp, count: count.count, scrap: count.scrap})
 			}
-			counts = append(counts, struct {
-				timestamp time.Time
-				count     int
-				scrap     int
-			}{timestamp: timestamp, count: count, scrap: scrap})
 		}
-
-		/*
-			"Target Output",
-			"Actual Output",
-			"Actual Scrap",
-			"timestamp",
-			"Internal Order ID",
-			"Ordered Units",
-			"Predicted Output",
-			"Predicted Scrap",
-			"Predicted Target",
-			"Target Output after Order End",
-			"Actual Output after Order End",
-			"Actual Scrap after Order End",
-			"Actual Good Output",
-			"actualGoodProducesAfterEnd",
-			"Predicted Good Output",
-		*/
 
 		for _, count := range counts {
 			cts += count.count
