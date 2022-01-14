@@ -2151,14 +2151,14 @@ ORDER BY begin_timestamp ASC
 	}
 
 	//Pre-allocate memory for datapoints
-	dplen := ((observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping) * 2
+	dplen := ((observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping) * 3
 	dplen = int64(math.Max(float64(dplen), 10))
 	zap.S().Debugf("Allocation for %d datapoints", dplen)
 	tmpDatapoints := make([][]interface{}, dplen)
 
 	zap.S().Debugf("Stepping %d (%f -> %d)", stepping, observationHours, observationDays)
 
-	productCache := make(map[int]int)
+	productCache := make(map[int]float64)
 	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
 
 	// Create datapoint every steppint
@@ -2279,14 +2279,15 @@ ORDER BY begin_timestamp ASC
 		lastOrderOverhead = expectedProducedFromCurrentOrder
 		lastDPCT = expectedProducedFromCurrentOrder + allOrderOverheads
 
-		regressionDataP.X[dataPointIndex] = float64(dataPointIndex)
-		regressionDataP.Y[dataPointIndex] = float64(cts)
+		regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
+		regressionDataP.Y = append(regressionDataP.Y, float64(cts))
 
-		regressionDataS.X[dataPointIndex] = float64(dataPointIndex)
-		regressionDataS.Y[dataPointIndex] = float64(scp)
+		regressionDataS.X = append(regressionDataS.X, float64(dataPointIndex))
+		regressionDataS.Y = append(regressionDataS.Y, float64(scp))
 
-		regressionDataT.X[dataPointIndex] = float64(dataPointIndex)
-		regressionDataT.Y[dataPointIndex] = float64(expT)
+		regressionDataT.X = append(regressionDataT.X, float64(dataPointIndex))
+		regressionDataT.Y = append(regressionDataT.Y, float64(expT))
+
 	}
 
 	datapoints.Datapoints = make([][]interface{}, 0, dplen)
@@ -2341,11 +2342,11 @@ ORDER BY begin_timestamp ASC
 				pcts += count.count
 				pscp += count.scrap
 
-				regressionDataP.X[dataPointIndex] = float64(dataPointIndex)
-				regressionDataP.Y[dataPointIndex] = float64(cts)
+				regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
+				regressionDataP.Y = append(regressionDataP.X, float64(cts))
 
-				regressionDataS.X[dataPointIndex] = float64(dataPointIndex)
-				regressionDataS.Y[dataPointIndex] = float64(scp)
+				regressionDataS.X = append(regressionDataS.X, float64(dataPointIndex))
+				regressionDataS.Y = append(regressionDataS.X, float64(scp))
 
 				betaP, alphaP = stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
 				betaS, alphaS = stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
