@@ -2149,9 +2149,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	//Pre-allocate memory for datapoints
-	dplen := (observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping
-	dplen += (to.UnixMilli() - observationEnd.UnixMilli()) / stepping
-	dplen += 10 // Fix rounding errors
+	dplen := ((observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping) * 2
 	zap.S().Debugf("Allocation for %d datapoints", dplen)
 	tmpDatapoints := make([][]interface{}, dplen)
 
