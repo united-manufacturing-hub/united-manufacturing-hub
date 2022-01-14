@@ -2141,7 +2141,9 @@ ORDER BY begin_timestamp ASC
 	colLen := len(datapoints.ColumnNames)
 
 	//Scale stepping based on observation range
-	observationHours := observationEnd.Sub(observationStart).Hours()
+	//steps := 10000
+
+	observationHours := to.Sub(observationStart).Hours()
 	observationDays := int64(observationHours / 24)
 	stepping := int64(60000) // 60 sec resolution
 	if observationHours > 24 {
@@ -2301,6 +2303,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	// Begin predictions
+	zap.S().Debugf("Before predictions. dataPointIndex: %d", dataPointIndex)
 	dataPointIndex += 1
 	betaP, alphaP := stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
 	betaS, alphaS := stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
@@ -2370,6 +2373,7 @@ ORDER BY begin_timestamp ASC
 		dataPointIndex += 1
 	}
 
+	zap.S().Debugf("After predictions dataPointIndex: %d", dataPointIndex)
 	return datapoints, nil
 }
 
