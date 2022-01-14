@@ -2014,6 +2014,7 @@ ORDER BY begin_timestamp ASC
 	zap.S().Debugf("Set observation start to: %s", observationStart)
 	zap.S().Debugf("Set observation end to: %s", observationEnd)
 
+	//Get all counts
 	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp <= to_timestamp($3::double precision) ORDER BY timestamp ASC;`
 
 	type CountStruct struct {
@@ -2060,6 +2061,64 @@ ORDER BY begin_timestamp ASC
 		countMap = append(countMap, CountStruct{timestamp: timestamp, count: count, scrap: scrap})
 	}
 
+	//Get all orders
+
+	sqlGetRunningOrder := `SELECT order_id, product_id, target_units, begin_timestamp, end_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision) OR end_timestamp = NULL`
+
+	type OrderStruct struct {
+		orderID        int
+		productId      int
+		targetUnits    int
+		beginTimeStamp time.Time
+		endTimeStamp   sql.NullTime
+	}
+
+	orderQueryBegin := observationStart.UnixMilli()
+	orderQueryEnd := int64(0)
+	if to.After(observationEnd) {
+		orderQueryEnd = to.UnixMilli()
+	} else {
+		orderQueryEnd = observationEnd.UnixMilli()
+	}
+
+	orderRows, err := db.Query(sqlGetRunningOrder, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
+
+	defer orderRows.Close()
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(span, sqlGetRunningOrder, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(span, sqlGetRunningOrder, err, false)
+		error = err
+		return
+	}
+
+	orderMap := make([]OrderStruct, 0)
+
+	for orderRows.Next() {
+		var orderID int
+		var productId int
+		var targetUnits int
+		var beginTimeStamp time.Time
+		var endTimeStamp sql.NullTime
+		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
+
+		if err != nil {
+			PQErrorHandling(span, sqlGetRunningOrder, err, false)
+			error = err
+			return
+		}
+
+		orderMap = append(orderMap, OrderStruct{
+			orderID:        orderID,
+			productId:      productId,
+			targetUnits:    targetUnits,
+			beginTimeStamp: beginTimeStamp,
+			endTimeStamp:   endTimeStamp,
+		})
+	}
+
 	var datapoints datamodel.DataResponseAny
 	datapoints.ColumnNames = []string{
 		"Target Output",
@@ -2100,8 +2159,6 @@ ORDER BY begin_timestamp ASC
 	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
 
 	// Create datapoint every steppint
-	sqlGetRunningOrder := `SELECT order_id, product_id, target_units, begin_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision)`
-	//sqlGetLastCountEntries := `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp < to_timestamp($3::double precision)`
 	dataPointIndex := 0
 
 	cts := 0
@@ -2144,14 +2201,16 @@ ORDER BY begin_timestamp ASC
 		var productId int
 		var targetUnits int
 		var beginTimeStamp time.Time
-		runningOrder := true
-		err = db.QueryRow(sqlGetRunningOrder, assetID, float64(i)/1000, float64(steppingEnd)/1000).Scan(&orderID, &productId, &targetUnits, &beginTimeStamp)
-		if err == sql.ErrNoRows {
-			runningOrder = false
-		} else if err != nil {
-			PQErrorHandling(span, sqlStatementGetCounts, err, false)
-			error = err
-			return
+		runningOrder := false
+
+		for _, order := range orderMap {
+			if order.beginTimeStamp.UnixMilli() < i && ((order.endTimeStamp.Valid && order.endTimeStamp.Time.UnixMilli() >= steppingEnd) || !order.endTimeStamp.Valid) {
+				orderID = order.orderID
+				productId = order.productId
+				targetUnits = order.targetUnits
+				beginTimeStamp = order.beginTimeStamp
+				runningOrder = true
+			}
 		}
 
 		expectedProducedFromCurrentOrder := int64(0)
