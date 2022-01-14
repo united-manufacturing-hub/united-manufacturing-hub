@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"gonum.org/v1/gonum/stat"
+	"math"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -2152,6 +2153,7 @@ ORDER BY begin_timestamp ASC
 
 	//Pre-allocate memory for datapoints
 	dplen := ((observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping) * 2
+	dplen = int64(math.Max(float64(dplen), 10))
 	zap.S().Debugf("Allocation for %d datapoints", dplen)
 	tmpDatapoints := make([][]interface{}, dplen)
 
