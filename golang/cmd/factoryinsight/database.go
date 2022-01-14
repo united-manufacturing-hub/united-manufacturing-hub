@@ -2304,6 +2304,9 @@ ORDER BY begin_timestamp ASC
 	}
 
 	// Begin predictions
+	if dataPointIndex == 0 {
+		return datapoints, nil
+	}
 	zap.S().Debugf("Before predictions. dataPointIndex: %d", dataPointIndex)
 	dataPointIndex += 1
 	betaP, alphaP := stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
