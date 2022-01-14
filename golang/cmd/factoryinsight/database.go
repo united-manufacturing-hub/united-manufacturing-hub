@@ -2150,6 +2150,8 @@ ORDER BY begin_timestamp ASC
 
 	//Pre-allocate memory for datapoints
 	dplen := (observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping
+	dplen += (to.UnixMilli() - observationEnd.UnixMilli()) / stepping
+	dplen += 10 // Fix rounding errors
 	zap.S().Debugf("Allocation for %d datapoints", dplen)
 	tmpDatapoints := make([][]interface{}, dplen)
 
@@ -2302,11 +2304,9 @@ ORDER BY begin_timestamp ASC
 
 	// Begin predictions
 	dataPointIndex += 1
-	zap.S().Debugf("Before regression")
 	betaP, alphaP := stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
 	betaS, alphaS := stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
 	betaT, alphaT := stat.LinearRegression(regressionDataT.X, regressionDataT.Y, nil, false)
-	zap.S().Debugf("After regression")
 
 	firstPValue := alphaP*float64(dataPointIndex) + betaP
 	offsetP := float64(cts) - firstPValue
@@ -2329,19 +2329,22 @@ ORDER BY begin_timestamp ASC
 
 		steppingEnd := i + stepping
 
-		counts := make([]CountStruct, 0)
-
 		for _, count := range countMap {
 			if count.timestamp.UnixMilli() >= i && count.timestamp.UnixMilli() < steppingEnd {
-				counts = append(counts, CountStruct{timestamp: count.timestamp, count: count.count, scrap: count.scrap})
-			}
-		}
+				cts += count.count
+				scp += count.scrap
+				pcts += count.count
+				pscp += count.scrap
 
-		for _, count := range counts {
-			cts += count.count
-			scp += count.scrap
-			pcts += count.count
-			pscp += count.scrap
+				regressionDataP.X[dataPointIndex] = float64(dataPointIndex)
+				regressionDataP.Y[dataPointIndex] = float64(cts)
+
+				regressionDataS.X[dataPointIndex] = float64(dataPointIndex)
+				regressionDataS.Y[dataPointIndex] = float64(scp)
+
+				betaP, alphaP = stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
+				betaS, alphaS = stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
+			}
 		}
 
 		sVO := sValue + offsetS
