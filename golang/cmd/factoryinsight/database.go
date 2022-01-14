@@ -2025,9 +2025,13 @@ ORDER BY begin_timestamp ASC
 				zap.S().Debugf("[2005] Set observationEnd %s", observationEnd.String())
 			}
 		} else if observationEnd.Equal(time.Unix(0, 0)) {
-			observationEnd = time.Unix(1<<16-1, 0)
+			observationEnd = to
 			zap.S().Debugf("[2009] Set observationEnd %s", observationEnd.String())
 		}
+	}
+
+	if observationStart.After(observationEnd) {
+		zap.S().Warnf("observationStart > observationEnd: %s > %s", observationStart.String(), observationEnd.String())
 	}
 
 	zap.S().Debugf("Set observation start to: %s", observationStart)
