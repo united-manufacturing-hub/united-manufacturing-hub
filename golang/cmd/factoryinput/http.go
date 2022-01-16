@@ -110,7 +110,7 @@ func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err er
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	user := c.MustGet(gin.AuthUserKey)
-	if user != customer && user != "jeremy" {
+	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		zap.S().Infof("User %s unauthorized to access %s", user, customer)
 		return fmt.Errorf("User %s unauthorized to access %s", user, customer)
