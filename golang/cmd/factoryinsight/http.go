@@ -97,7 +97,7 @@ func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err er
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	user := c.MustGet(gin.AuthUserKey)
-	if user != customer && user != "jeremy" {
+	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		zap.S().Infof("User %s unauthorized to access %s", user, customer)
 		return fmt.Errorf("User %s unauthorized to access %s", user, customer)
@@ -2023,7 +2023,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	c.JSON(http.StatusOK, data)
 }
 
-
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Jaeger tracing
@@ -2043,7 +2042,6 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 		handleInvalidInputError(span, c, err)
 		return
 	}
-
 
 	// Fetching from the database
 	uniqueProductsWithTags, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsWithTagsRequest.From, getUniqueProductsWithTagsRequest.To)
