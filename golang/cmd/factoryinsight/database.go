@@ -1816,6 +1816,7 @@ func GetAccumulatedProducts(parentSpan opentracing.Span, customerID string, loca
 
 	zap.S().Debugf("Request ts: %d -> %d", from.UnixMilli(), to.UnixMilli())
 
+	// Selects orders outside observation range
 	sqlStatementGetOutsider := `
 SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
 WHERE
@@ -1833,6 +1834,7 @@ AND (
 ORDER BY begin_timestamp ASC
 LIMIT 1;
 `
+	// Select orders inside observation range
 	sqlStatementGetInsiders := `
 
 SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
@@ -1846,6 +1848,7 @@ AND ot.order_id != $4
 ORDER BY begin_timestamp ASC
 ;
 `
+	// Select orders inside observation range, if there are no outsiders
 	sqlStatementGetInsidersNoOutsider := `
 
 SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
@@ -1871,6 +1874,7 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
+	// Holds an order, retrieved from our DB
 	type Order struct {
 		OID            int
 		PID            int
@@ -1880,6 +1884,7 @@ ORDER BY begin_timestamp ASC
 		AID            int
 	}
 
+	// Order that has started before observation time
 	var OuterOrder Order
 
 	var OidOuter int
@@ -1909,15 +1914,15 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
-	var rows *sql.Rows
+	var insideOrderRows *sql.Rows
 	if foundOutsider {
 		// Get insiders without the outsider order
 		zap.S().Debugf("Query with outsider: ", OuterOrder)
-		rows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
+		insideOrderRows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
 	} else {
 		// Get insiders
 		zap.S().Debugf("Query without outsider: ", OuterOrder)
-		rows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
+		insideOrderRows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
 	}
 
 	if err == sql.ErrNoRows {
@@ -1929,10 +1934,11 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
+	// List of all inside orders
 	var insideOrders []Order
 
 	foundInsider := false
-	for rows.Next() {
+	for insideOrderRows.Next() {
 
 		var OID int
 		var PID int
@@ -1940,7 +1946,7 @@ ORDER BY begin_timestamp ASC
 		var timestampEnd sql.NullTime
 		var targetUnits sql.NullInt32
 		var AID int
-		err := rows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
+		err := insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
 		if err != nil {
 			PQErrorHandling(span, sqlStatementGetInsidersNoOutsider, err, false)
 			error = err
@@ -2084,9 +2090,8 @@ ORDER BY begin_timestamp ASC
 		countMap = append(countMap, CountStruct{timestamp: timestamp, count: count, scrap: scrap})
 	}
 
-	//Get all orders
-
-	sqlGetRunningOrder := `SELECT order_id, product_id, target_units, begin_timestamp, end_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision) OR end_timestamp = NULL`
+	//Get all orders in timeframe
+	sqlGetRunningOrders := `SELECT order_id, product_id, target_units, begin_timestamp, end_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision) OR end_timestamp = NULL`
 
 	type OrderStruct struct {
 		orderID        int
@@ -2104,15 +2109,15 @@ ORDER BY begin_timestamp ASC
 		orderQueryEnd = observationEnd.UnixMilli()
 	}
 
-	orderRows, err := db.Query(sqlGetRunningOrder, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
+	orderRows, err := db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
 
 	defer orderRows.Close()
 
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlGetRunningOrder, err, false)
+		PQErrorHandling(span, sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlGetRunningOrder, err, false)
+		PQErrorHandling(span, sqlGetRunningOrders, err, false)
 		error = err
 		return
 	}
@@ -2128,7 +2133,7 @@ ORDER BY begin_timestamp ASC
 		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
 
 		if err != nil {
-			PQErrorHandling(span, sqlGetRunningOrder, err, false)
+			PQErrorHandling(span, sqlGetRunningOrders, err, false)
 			error = err
 			return
 		}
@@ -2145,7 +2150,6 @@ ORDER BY begin_timestamp ASC
 	colLen := len(datapoints.ColumnNames)
 
 	//Scale stepping based on observation range
-
 	observationHours := to.Sub(observationStart).Hours()
 	observationDays := int64(observationHours / 24)
 	stepping := int64(60000) // 60 sec resolution
@@ -2173,24 +2177,28 @@ ORDER BY begin_timestamp ASC
 	lastOrderID := 0
 	lastOrderOverhead := int64(0)
 	allOrderOverheads := int64(0)
-	lastDPCT := int64(0)
+	lastDataPointTargetOverhead := int64(0)
 
+	// Regression data for products
 	regressionDataP := internal.Xy{
 		X: make([]float64, dplen+1),
 		Y: make([]float64, dplen+1),
 	}
 
+	// Regression data for scraps
 	regressionDataS := internal.Xy{
 		X: make([]float64, dplen+1),
 		Y: make([]float64, dplen+1),
 	}
 
+	// Regression data for targets
 	regressionDataT := internal.Xy{
 		X: make([]float64, dplen+1),
 		Y: make([]float64, dplen+1),
 	}
 
 	var step1ObservationEnd int64
+	// Step through our observation timeframe
 	for i := observationStart.UnixMilli(); i < observationEnd.UnixMilli(); i += stepping {
 		steppingEnd := i + stepping
 		step1ObservationEnd = i
@@ -2252,25 +2260,40 @@ ORDER BY begin_timestamp ASC
 		tmpDatapoints[dataPointIndex] = make([]interface{}, colLen)
 		//Should fix rounding errors
 		expT := int64(0)
-		if expectedProducedFromCurrentOrder+allOrderOverheads < lastDPCT {
-			expT = lastDPCT
+		if expectedProducedFromCurrentOrder+allOrderOverheads < lastDataPointTargetOverhead {
+			expT = lastDataPointTargetOverhead
 		} else {
 			expT = expectedProducedFromCurrentOrder + allOrderOverheads
 		}
+		// Target Output
 		tmpDatapoints[dataPointIndex][0] = expT
+		// Actual Output
 		tmpDatapoints[dataPointIndex][1] = cts
+		// Actual Scrap
 		tmpDatapoints[dataPointIndex][2] = scp
+		// timestamp
 		tmpDatapoints[dataPointIndex][3] = i
+		// Internal Order ID
 		tmpDatapoints[dataPointIndex][4] = orderID
+		// Ordered Units
 		tmpDatapoints[dataPointIndex][5] = targetUnits
+		// Predicted Output
 		tmpDatapoints[dataPointIndex][6] = nil
+		// Predicted Scrap
 		tmpDatapoints[dataPointIndex][7] = nil
+		// Predicted Target
 		tmpDatapoints[dataPointIndex][8] = nil
+		// Target Output after Order End
 		tmpDatapoints[dataPointIndex][9] = nil
+		// Actual Output after Order End
 		tmpDatapoints[dataPointIndex][10] = nil
+		// Actual Scrap after Order End
 		tmpDatapoints[dataPointIndex][11] = nil
+		// Actual Good Output
 		tmpDatapoints[dataPointIndex][12] = cts - scp
+		// Actual Good Output after Order End
 		tmpDatapoints[dataPointIndex][13] = nil
+		// Predicted Good Output
 		tmpDatapoints[dataPointIndex][14] = nil
 
 		if lastOrderID != orderID {
@@ -2280,8 +2303,9 @@ ORDER BY begin_timestamp ASC
 		dataPointIndex += 1
 		lastOrderID = orderID
 		lastOrderOverhead = expectedProducedFromCurrentOrder
-		lastDPCT = expectedProducedFromCurrentOrder + allOrderOverheads
+		lastDataPointTargetOverhead = expectedProducedFromCurrentOrder + allOrderOverheads
 
+		// Add current count, scrap & target to regression list
 		regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
 		regressionDataP.Y = append(regressionDataP.Y, float64(cts))
 
@@ -2295,6 +2319,7 @@ ORDER BY begin_timestamp ASC
 
 	datapoints.Datapoints = make([][]interface{}, 0, dplen)
 
+	// Make sure that there are no nil entries in our datapoints
 	for _, item := range tmpDatapoints {
 		if item != nil {
 			datapoints.Datapoints = append(datapoints.Datapoints, item)
@@ -2308,7 +2333,8 @@ ORDER BY begin_timestamp ASC
 	}
 
 	// Begin predictions
-	if dataPointIndex == 0 {
+	// If there is no data to predict from, just abort
+	if dataPointIndex <= 3 {
 		return datapoints, nil
 	}
 	zap.S().Debugf("Before predictions. dataPointIndex: %d", dataPointIndex)
@@ -2324,12 +2350,7 @@ ORDER BY begin_timestamp ASC
 	offsetS := float64(scp) - firstSValue
 
 	firstTValue := alphaT*float64(dataPointIndex) + betaT
-	offsetT := float64(lastDPCT) - firstTValue
-
-	pcts := 0
-	pscp := 0
-	//21:50
-	//22:00
+	offsetT := float64(lastDataPointTargetOverhead) - firstTValue
 
 	for i := step1ObservationEnd + 1; i < to.UnixMilli(); i += stepping {
 		steppingEnd := i + stepping
@@ -2342,8 +2363,6 @@ ORDER BY begin_timestamp ASC
 				zap.S().Debugf("Found count in timerange %d <= %d < %d (cnt: %d)", i, count.timestamp.UnixMilli(), steppingEnd, count.count)
 				cts += count.count
 				scp += count.scrap
-				pcts += count.count
-				pscp += count.scrap
 
 				regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
 				regressionDataP.Y = append(regressionDataP.Y, float64(cts))
@@ -2353,6 +2372,7 @@ ORDER BY begin_timestamp ASC
 
 				betaP, alphaP = stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
 				betaS, alphaS = stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
+
 			}
 		}
 
@@ -2383,7 +2403,7 @@ ORDER BY begin_timestamp ASC
 		// Predicted Target
 		v[8] = tValue + offsetT
 		// Target Output after Order End
-		v[9] = lastDPCT
+		v[9] = lastDataPointTargetOverhead
 		// Actual Output after Order End
 		v[10] = cts
 		// Actual Scrap after Order End
