@@ -115,7 +115,7 @@ func handleInvalidInputError(c *gin.Context, err error) {
 	traceID = span.SpanContext().SpanID().String()
 
 	zap.S().Errorw("Invalid input error",
-		"error", err,
+		"error", internal.SanitizeString(err.Error()),
 		"trace id", traceID,
 	)
 
@@ -132,8 +132,8 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, customer)
-		return fmt.Errorf("User %s unauthorized to access %s", user, customer)
+		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		return fmt.Errorf("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil
 }
