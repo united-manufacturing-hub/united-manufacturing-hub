@@ -890,6 +890,70 @@ components:
               - - 1606236217103
                 - 0
 
+    accumulated_products:
+      properties:
+        columnNames:
+          type: array
+          items:
+            type: string
+          description: the column names
+          example:
+            - "Target Output"
+            - "Actual Output"
+            - "Actual Scrap"
+            - "timestamp"
+            - "Internal Order ID"
+            - "Ordered Units"
+            - "Predicted Output"
+            - "Predicted Scrap"
+            - "Predicted Target"
+            - "Target Output after Order End"
+            - "Actual Output after Order End"
+            - "Actual Scrap after Order End"
+            - "Actual Good Output"
+            - "Actual Good Output after Order End"
+            - "Predicted Good Output"
+        datapoints:
+          type: array
+          items:
+            type: array
+            items:
+              anyOf:
+                - type: integer
+                - type: number
+          description: the returned data
+          example:
+            - - 0,
+              - 6
+              - 0
+              - 1642175963022
+              - 0
+              - 0
+              - null
+              - null
+              - null
+              - null
+              - null
+              - null
+              - 6
+              - null
+              - null
+            - - 8
+              - 14
+              - 0
+              - 1642175973022
+              - 13
+              - 50
+              - null
+              - null
+              - null
+              - null
+              - null
+              - null
+              - 14
+              - null
+              - null
+
     asset_unique_products_with_tags:
         properties:
           columnNames:
@@ -1557,6 +1621,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/asset_unique_products_with_tags"
+
+  /{customer}/{location}/{asset}/accumulatedProducts:
+    get:
+      operationId: get_accumulated_products
+      parameters:
+        - $ref: '#/components/parameters/customer'
+        - $ref: '#/components/parameters/location'
+        - $ref: '#/components/parameters/asset'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: This function returns all products and scraps, that where produced by the specified asset, in addition it also returns the target amount (based on running orders) and predicts future production, scrap and target.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/accumulated_products"
 
   /{customer}/productTag:
     get:
