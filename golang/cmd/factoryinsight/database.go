@@ -2145,7 +2145,6 @@ ORDER BY begin_timestamp ASC
 	colLen := len(datapoints.ColumnNames)
 
 	//Scale stepping based on observation range
-	//steps := 10000
 
 	observationHours := to.Sub(observationStart).Hours()
 	observationDays := int64(observationHours / 24)
@@ -2332,49 +2331,68 @@ ORDER BY begin_timestamp ASC
 	//21:50
 	//22:00
 
-	for i := step1ObservationEnd; i < to.UnixMilli(); i += stepping {
-		pValue := alphaP*float64(dataPointIndex) + betaP
-		sValue := alphaS*float64(dataPointIndex) + betaS
-		tValue := alphaT*float64(dataPointIndex) + betaT
-
+	for i := step1ObservationEnd + 1; i < to.UnixMilli(); i += stepping {
 		steppingEnd := i + stepping
+		zap.S().Debugf("Prediction Step %d", i)
+		zap.S().Debugf("Stepping %d", stepping)
+		zap.S().Debugf("SteppingEnd %d", steppingEnd)
 
 		for _, count := range countMap {
 			if count.timestamp.UnixMilli() >= i && count.timestamp.UnixMilli() < steppingEnd {
+				zap.S().Debugf("Found count in timerange %d <= %d < %d (cnt: %d)", i, count.timestamp.UnixMilli(), steppingEnd, count.count)
 				cts += count.count
 				scp += count.scrap
 				pcts += count.count
 				pscp += count.scrap
 
 				regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
-				regressionDataP.Y = append(regressionDataP.X, float64(cts))
+				regressionDataP.Y = append(regressionDataP.Y, float64(cts))
 
 				regressionDataS.X = append(regressionDataS.X, float64(dataPointIndex))
-				regressionDataS.Y = append(regressionDataS.X, float64(scp))
+				regressionDataS.Y = append(regressionDataS.Y, float64(scp))
 
 				betaP, alphaP = stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
 				betaS, alphaS = stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
 			}
 		}
 
+		pValue := alphaP*float64(dataPointIndex) + betaP
+		sValue := alphaS*float64(dataPointIndex) + betaS
+		tValue := alphaT*float64(dataPointIndex) + betaT
+
 		sVO := sValue + offsetS
 		pVO := pValue + offsetP
 
 		v := make([]interface{}, colLen)
+		// Target Output
 		v[0] = nil
+		// Actual Output
 		v[1] = nil
+		// Actual Scrap
 		v[2] = nil
+		// timestamp
 		v[3] = i
+		// Internal Order ID
 		v[4] = nil
+		// Ordered Units
 		v[5] = nil
+		// Predicted Output
 		v[6] = pVO
+		// Predicted Scrap
 		v[7] = sVO
+		// Predicted Target
 		v[8] = tValue + offsetT
+		// Target Output after Order End
 		v[9] = lastDPCT
+		// Actual Output after Order End
 		v[10] = cts
+		// Actual Scrap after Order End
 		v[11] = scp
+		// Actual Good Output
 		v[12] = nil
+		// Actual Good Output after Order End
 		v[13] = cts - scp
+		// Predicted Good Output
 		v[14] = pVO - sVO
 
 		datapoints.Datapoints = append(datapoints.Datapoints, v)
