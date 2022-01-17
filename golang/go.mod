@@ -4,7 +4,6 @@ go 1.15
 
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
-	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/confluentinc/confluent-kafka-go v1.8.2
@@ -21,7 +20,6 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rung/go-safecast v1.0.1
-	github.com/sajari/regression v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.23.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
@@ -32,6 +30,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.3.0
 	go.opentelemetry.io/otel/trace v1.3.0
 	go.uber.org/zap v1.20.0
-	gonum.org/v1/gonum v0.9.3 // indirect
+	gonum.org/v1/gonum v0.9.3
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 )

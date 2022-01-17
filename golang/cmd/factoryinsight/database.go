@@ -1839,22 +1839,25 @@ type OrderStruct struct {
 }
 
 // GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
-func GetAccumulatedProducts(parentSpan opentracing.Span, customerID string, location string, asset string,
+func GetAccumulatedProducts(c *gin.Context, customerID string, location string, asset string,
 	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetAccumulatedProducts",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetAccumulatedProducts",
+			oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1915,7 +1918,7 @@ ORDER BY begin_timestamp ASC
 		zap.S().Debugf("No outsider rows")
 		//We don't care if there is no outside order, in this case we will just select all insider orders
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementGetOutsider, err, false)
+		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
 		error = err
 		return
 	}
@@ -1955,7 +1958,7 @@ ORDER BY begin_timestamp ASC
 	if err == sql.ErrNoRows {
 		foundOutsider = false
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementGetOutsider, err, false)
+		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
 		error = err
 		return
 	}
@@ -1975,7 +1978,7 @@ ORDER BY begin_timestamp ASC
 		// It is valid to have no internal rows !
 		zap.S().Debugf("No internal rows")
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementGetInsidersNoOutsider, err, false)
+		PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
 		error = err
 		return
 	}
@@ -1994,7 +1997,7 @@ ORDER BY begin_timestamp ASC
 		var AID int
 		err := insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
 		if err != nil {
-			PQErrorHandling(span, sqlStatementGetInsidersNoOutsider, err, false)
+			PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
 			error = err
 			return
 		}
@@ -2086,10 +2089,10 @@ ORDER BY begin_timestamp ASC
 	defer countRows.Close()
 
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatementGetCounts, err, false)
+		PQErrorHandling(c, sqlStatementGetCounts, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementGetCounts, err, false)
+		PQErrorHandling(c, sqlStatementGetCounts, err, false)
 		error = err
 		return
 	}
@@ -2103,7 +2106,7 @@ ORDER BY begin_timestamp ASC
 		err := countRows.Scan(&timestamp, &count, &scrap)
 
 		if err != nil {
-			PQErrorHandling(span, sqlStatementGetCounts, err, false)
+			PQErrorHandling(c, sqlStatementGetCounts, err, false)
 			error = err
 			return
 		}
@@ -2127,10 +2130,10 @@ ORDER BY begin_timestamp ASC
 	defer orderRows.Close()
 
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlGetRunningOrders, err, false)
+		PQErrorHandling(c, sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlGetRunningOrders, err, false)
+		PQErrorHandling(c, sqlGetRunningOrders, err, false)
 		error = err
 		return
 	}
@@ -2146,7 +2149,7 @@ ORDER BY begin_timestamp ASC
 		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
 
 		if err != nil {
-			PQErrorHandling(span, sqlGetRunningOrders, err, false)
+			PQErrorHandling(c, sqlGetRunningOrders, err, false)
 			error = err
 			return
 		}
@@ -2187,7 +2190,7 @@ ORDER BY begin_timestamp ASC
 		countMap,
 		orderMap,
 		assetID,
-		span,
+		c,
 		sqlStatementGetCounts,
 	)
 	return data, err

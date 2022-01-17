@@ -4,10 +4,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"gonum.org/v1/gonum/stat"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
 	oteltrace "go.opentelemetry.io/otel/trace"
+	"gonum.org/v1/gonum/stat"
 	"log"
 	"math"
 	"sort"
@@ -1922,7 +1922,7 @@ func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err erro
 	return
 }
 
-func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.Time, observationStart time.Time, observationEnd time.Time, countMap []CountStruct, orderMap []OrderStruct, assetID uint32, span opentracing.Span, sqlStatementGetCounts string) (data datamodel.DataResponseAny, error error) {
+func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.Time, observationStart time.Time, observationEnd time.Time, countMap []CountStruct, orderMap []OrderStruct, assetID uint32, c *gin.Context, sqlStatementGetCounts string) (data datamodel.DataResponseAny, error error) {
 
 	// Move below to dataprocessing
 	colLen := len(datapoints.ColumnNames)
@@ -2016,11 +2016,11 @@ func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.
 				err := db.QueryRow(sqlGetProductsPerSec, productId, assetID).Scan(&timePerProductUnitInSec)
 				if err == sql.ErrNoRows {
 					// Product doesn't exist
-					PQErrorHandling(span, sqlStatementGetCounts, err, false)
+					PQErrorHandling(c, sqlStatementGetCounts, err, false)
 					error = err
 					return
 				} else if err != nil {
-					PQErrorHandling(span, sqlStatementGetCounts, err, false)
+					PQErrorHandling(c, sqlStatementGetCounts, err, false)
 					error = err
 					return
 				}

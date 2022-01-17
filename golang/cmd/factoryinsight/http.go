@@ -2011,30 +2011,25 @@ type getProcessAccumulatedProducts struct {
 }
 
 func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processAccumulatedProducts", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getProcessAccumulatedProducts getProcessAccumulatedProducts
 	var err error
 
 	err = c.BindQuery(&getProcessAccumulatedProducts)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
-	accumulatedProducts, err := GetAccumulatedProducts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessAccumulatedProducts.From, getProcessAccumulatedProducts.To)
+	accumulatedProducts, err := GetAccumulatedProducts(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessAccumulatedProducts.From, getProcessAccumulatedProducts.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, accumulatedProducts)
 
 }
-=======
