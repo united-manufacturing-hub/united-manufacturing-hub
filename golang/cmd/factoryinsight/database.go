@@ -1838,6 +1838,11 @@ type OrderStruct struct {
 	endTimeStamp   sql.NullTime
 }
 
+type ProductStruct struct {
+	productId               int
+	timePerProductUnitInSec float64
+}
+
 // GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
 func GetAccumulatedProducts(c *gin.Context, customerID string, location string, asset string,
 	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
@@ -2163,36 +2168,38 @@ ORDER BY begin_timestamp ASC
 		})
 	}
 
-	var datapoints datamodel.DataResponseAny
-	datapoints.ColumnNames = []string{
-		"Target Output",
-		"Actual Output",
-		"Actual Scrap",
-		"timestamp",
-		"Internal Order ID",
-		"Ordered Units",
-		"Predicted Output",
-		"Predicted Scrap",
-		"Predicted Target",
-		"Target Output after Order End",
-		"Actual Output after Order End",
-		"Actual Scrap after Order End",
-		"Actual Good Output",
-		"Actual Good Output after Order End",
-		"Predicted Good Output",
+	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
+
+	productRows, err := db.Query(sqlGetProductsPerSec, assetID)
+
+	defer productRows.Close()
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+		error = err
+		return
+	}
+	productMap := make(map[int]ProductStruct, 0)
+
+	for productRows.Next() {
+		var productId int
+		var timePerUnitInSec float64
+		err := productRows.Scan(&productId, &timePerUnitInSec)
+
+		if err != nil {
+			PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+			error = err
+			return
+		}
+
+		productMap[productId] = ProductStruct{productId: productId, timePerProductUnitInSec: timePerUnitInSec}
 	}
 
-	data, err = CalculateAccumulatedProducts(
-		datapoints,
-		to,
-		observationStart,
-		observationEnd,
-		countMap,
-		orderMap,
-		assetID,
-		c,
-		sqlStatementGetCounts,
-	)
+	zap.S().Debugf("AssetID: %d", assetID)
+	data, err = CalculateAccumulatedProducts(c, to, observationStart, observationEnd, countMap, orderMap, productMap)
 	return data, err
 }
 

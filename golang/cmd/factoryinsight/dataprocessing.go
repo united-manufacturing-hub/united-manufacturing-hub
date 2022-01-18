@@ -1922,8 +1922,41 @@ func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err erro
 	return
 }
 
-func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.Time, observationStart time.Time, observationEnd time.Time, countMap []CountStruct, orderMap []OrderStruct, assetID uint32, c *gin.Context, sqlStatementGetCounts string) (data datamodel.DataResponseAny, error error) {
+func CalculateAccumulatedProducts(c *gin.Context, to time.Time, observationStart time.Time, observationEnd time.Time, countMap []CountStruct, orderMap []OrderStruct, productCache map[int]ProductStruct) (data datamodel.DataResponseAny, error error) {
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "CalculateAccumulatedProducts",
+			oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
+	if span != nil {
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.String("observationStart", observationStart.String()))
+		span.SetAttributes(attribute.String("observationEnd", observationEnd.String()))
+		span.SetAttributes(attribute.String("countMap", fmt.Sprint(countMap)))
+		span.SetAttributes(attribute.String("orderMap", fmt.Sprint(orderMap)))
+		span.SetAttributes(attribute.String("productCache", fmt.Sprint(productCache)))
+	}
+
+	var datapoints datamodel.DataResponseAny
+	datapoints.ColumnNames = []string{
+		"Target Output",
+		"Actual Output",
+		"Actual Scrap",
+		"timestamp",
+		"Internal Order ID",
+		"Ordered Units",
+		"Predicted Output",
+		"Predicted Scrap",
+		"Predicted Target",
+		"Target Output after Order End",
+		"Actual Output after Order End",
+		"Actual Scrap after Order End",
+		"Actual Good Output",
+		"Actual Good Output after Order End",
+		"Predicted Good Output",
+	}
 	// Move below to dataprocessing
 	colLen := len(datapoints.ColumnNames)
 
@@ -1942,9 +1975,6 @@ func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.
 	tmpDatapoints := make([][]interface{}, dplen)
 
 	zap.S().Debugf("Stepping %d (%f -> %d)", stepping, observationHours, observationDays)
-
-	productCache := make(map[int]float64)
-	sqlGetProductsPerSec := `SELECT time_per_unit_in_seconds FROM producttable WHERE product_id = $1 AND asset_id = $2`
 
 	// Create datapoint every steppint
 	dataPointIndex := 0
@@ -1995,7 +2025,10 @@ func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.
 		var beginTimeStamp time.Time
 		runningOrder := false
 
+		insideOrders := make([]OrderStruct, 0)
+
 		for _, order := range orderMap {
+			zap.S().Debugf("if %d < %d && ((%b && %d >= %d) || !%b)", order.beginTimeStamp.UnixMilli(), i, order.endTimeStamp.Valid, order.endTimeStamp.Time.UnixMilli(), steppingEnd, order.endTimeStamp.Valid)
 			if order.beginTimeStamp.UnixMilli() < i && ((order.endTimeStamp.Valid && order.endTimeStamp.Time.UnixMilli() >= steppingEnd) || !order.endTimeStamp.Valid) {
 				orderID = order.orderID
 				productId = order.productId
@@ -2003,31 +2036,42 @@ func CalculateAccumulatedProducts(datapoints datamodel.DataResponseAny, to time.
 				beginTimeStamp = order.beginTimeStamp
 				runningOrder = true
 			}
+
+			if order.beginTimeStamp.UnixMilli() >= i && order.endTimeStamp.Valid && order.endTimeStamp.Time.UnixMilli() < steppingEnd {
+				zap.S().Debugf("Found inside order ! (%d)", order.orderID)
+				insideOrders = append(insideOrders, OrderStruct{
+					orderID:        order.orderID,
+					productId:      order.productId,
+					targetUnits:    order.targetUnits,
+					beginTimeStamp: order.beginTimeStamp,
+					endTimeStamp:   order.endTimeStamp,
+				})
+			}
 		}
 
 		expectedProducedFromCurrentOrder := int64(0)
 
 		if runningOrder {
 			timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
-
-			timePerProductUnitInSec, ok := productCache[productId]
+			product, ok := productCache[productId]
 			if !ok {
-				zap.S().Debugf("Product %d not cached", productId)
-				err := db.QueryRow(sqlGetProductsPerSec, productId, assetID).Scan(&timePerProductUnitInSec)
-				if err == sql.ErrNoRows {
-					// Product doesn't exist
-					PQErrorHandling(c, sqlStatementGetCounts, err, false)
-					error = err
-					return
-				} else if err != nil {
-					PQErrorHandling(c, sqlStatementGetCounts, err, false)
-					error = err
-					return
-				}
-				productCache[productId] = timePerProductUnitInSec
+				panic(fmt.Sprintf("Product %d not found", productId))
 			}
 
-			expectedProducedFromCurrentOrder = timeSinceStartInMilliSec / int64(timePerProductUnitInSec*1000)
+			expectedProducedFromCurrentOrder = timeSinceStartInMilliSec / int64(product.timePerProductUnitInSec*1000)
+		} else {
+			zap.S().Debugf("No running order")
+		}
+
+		// Orders inside step
+		for _, insideOrder := range insideOrders {
+			timeSinceStartInMilliSec := i - insideOrder.beginTimeStamp.UnixMilli()
+			product, ok := productCache[insideOrder.productId]
+			if !ok {
+				panic(fmt.Sprintf("Product %d not found", productId))
+			}
+
+			expectedProducedFromCurrentOrder += timeSinceStartInMilliSec / int64(product.timePerProductUnitInSec*1000)
 		}
 
 		for _, count := range counts {
