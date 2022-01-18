@@ -49,108 +49,121 @@ These sensors are used for this purpose:
 
 TODO: Picture or illustration of setup
 
-As a first step you should mount the sensors on the production machine in the regions of your interest. The sensors are then connected to an IO-Link gateway, e.g., the [ifm AL1350]()
+As a first step you should mount the sensors on the production machine in the regions of your interest. The sensors are then connected to an IO-Link gateway, e.g., the [ifm AL1350](https://www.ifm.com/us/en/product/AL1350)
 
 The IO-Link gateway is then connected to the network, so that the installation of the United Manufacturing Hub has access to it. As soon as it is physically connected and recieves an IP address it will be automatically detected by [sensorconnect](https://docs.umh.app/docs/developers/factorycube-edge/sensorconnect/) and the raw data will be pushed into the central MQTT broker.
 
 The IO-Link gateways, to which sensors are connected, are found by the microservice sensorconnect using a network scan. For this purpose, sensorconnect must be configured with the correcy IP-range, so that it can search for the gateway in the correct network and read out the sensors via it.
 
+The IP-range needs to be entered in the [CIDR notation](https://www.ionos.com/digitalguide/server/know-how/cidr-classless-inter-domain-routing/). `192.168.1.0/24` means all IP addresses from 192.168.1.1 to 192.168.1.254. To prevent accidently scanning whole IP-ranges it is set to scan localhost by default.
+
 To do this, there are two options. 
 
-- Option 1: Change the IP-range in the [development.yaml](https://www.umh.app/development.yaml) file, that you download. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
+- Option 1: Change the IP-range in the [development.yaml (k3OS cloud-init)](https://www.umh.app/development.yaml) file, that you download. In our example the IP of our Factorycube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24.`
 
 - Option 2: Lens. In Lens you need to open your already set up cluster for your edge device. Then, as you can see in the picture, click on "Apps" in the left bar, then on "Releases and open "factorycube-edge" by clicking on it.
 
 {{< imgproc ip_range_lens_1 Fit "1200x1200" >}}{{< /imgproc >}}
 
-Next, click into the code and press the key combination `ctrl+F` to search for "iprange". There you have to change the value of the IP-range as shown. In our example the IP of our factory-cube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24`. With the 24 the IP range is specified.
+Next, click into the code and press the key combination `ctrl+F` to search for "iprange". There you have to change the value of the IP-range as shown. In our example the IP of our Factorycube is `192.168.1.131`. Accordingly we change the IP-range to `192.168.1.0/24`.
 
 {{< imgproc ip_range_lens_2 Fit "1200x1200" >}}{{< /imgproc >}}
 
 Now the microservice can search for the gateway in the correct network to read the sensors.
 
-*3rd step: Creating a Node-RED flow*
+As the endresult, we have now all sensor data available in the MQTT broker.
 
-With Node-RED, it is possible to quickly develop applications and prepare untreated sensor data so that Grafana, for example, can use it. For this purpose, so-called *nodes* are drawn onto a surface and wired together to create sequences. 
+To get a quick and easy overview of the available MQTT messages and topics we recommend the [MQTT Explorer](http://mqtt-explorer.com/). If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to `#` and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
+More information on using Node-RED will come further down.
 
-In the following, the creation of such Node-RED flows is demonstrated using the example sensors light barrier, button bar and inductive sensor. 
+#### Step 2: Processing the data by creating a Node-RED flow
 
-**For all connected sensors, the first two nodes are the same. Only after the second node we will distinguish between the different sensors.**
+As the next step, we need to process the raw sensor data and add supporting information (e.g., new shifts). 
 
-**To create a personalized Node-RED flow, first make sure that all preparations have been made as described in [Installation](https://docs.umh.app/docs/getting-started/setup-development/).**
+Theoretically, you can do it in any programming language by connecting to the MQTT broker, processing the data and returning the results according to the [datamodel](/docs/concepts/mqtt). However, we recommend to do that with Node-RED.
 
-*Inject shifts to the system*
+With Node-RED, it is possible to quickly develop applications, add new data and convert raw sensor data so that for example it can be shown in a Grafana dashboard. For this purpose, so-called *nodes* are drawn onto a surface and wired together to create sequences. For more information, take a look at the original [Node-RED tutorial](https://nodered.org/docs/tutorials/first-flow)
 
-As an important step in advance, a <shift> should be communicated to the system. In this way, a distinction can be made between planned and unplanned production time. In Node-RED the time is displayed in milliseconds since epoch. The values can be generated [here](https://currentmillis.com/).
+In the following, the creation of such Node-RED flows is demonstrated:
+1. Adding new planned operator shifts 
+2. Recording the number of produced pieces with a light barrier, 
+3. Changing the machine state using buttons on a button bar 
+4. Measuring the distance of an object using an inductive sensor. 
 
-To do this, we need the small Node-RED flow as shown:
+##### Example 1: adding new planed operator shifts
+
+A shift is defined as the planned production time and is therefore important for the OEE calculation. If no shifts have been added, it is automatically assumed that the machine is not planned to run. Therefore, all stops will be automatically considered "No shift" or "Operator break" until a shift is added.
 
 {{< imgproc nodered_flow_addshift Fit "800x800" >}}{{< /imgproc >}}
 
-The following code is written in the function:
+A shift can be added by sending a `/addShift` MQTT message as specified in the [datamodel](/docs/concepts/mqtt). In Node-RED this results in a flow consisting out of at least three nodes:
+
+1. Inject node
+2. Function node (in the picture called "add Shift")
+3. MQTT node
+
+The inject node can be used unmodified. 
+
+The function node has the following code, in which the MQTT message payload and topic according to the [datamodel](/docs/concepts/mqtt) are prepared:
 
 ```js
 msg.payload = {
-  "timestamp_ms": 1639522810000, // 2021-12-14 00:00
-  "timestamp_ms_end": 1639609200000 // 2021-12-15 00:00
+  "timestamp_ms": 1639522810000,
+  "timestamp_ms_end": 1639609200000
 }
 msg.topic = "ia/factoryinsight/dccaachen/docs/addShift"
 return msg;
 ```
 
-*First node: MQTT-In*
+The MQTT node needs to be configured to connect with the MQTT broker (if nothing has been changed from the default United Manufacturing Hub installation, it will be selected automatically).
+
+Now you can deploy the flow and by clicking on the inject node you will generate the MQTT message. A shift will be added for the customer `factoryinsight` (default value), the asset location `dccaachen` and the asset name `docs` (see also topic structure).
+
+The shift will start at 2021-12-14 at 00:00 and will end at 2021-12-15 00:00 (depending on your timezone). You can get that information by translating the UNIX timestamp in millis (e.g., `1639609200000`) to a human readable format using for example https://currentmillis.com/
+
+##### Example 2: recording the number of produced pieces 
+
+Now we will process sensor data instead of sending new data as before.
+
+With the light barrier it is possible, for example, to record the number of pieces produced. Also, with a more complicated logic, machine states can be detected directly with a light barrier. For the sake of simplicity, this is not explored and applied in our example.
+
+The first two nodes in this example will be the same for all other remaining examples as well.
+
+###### **First node: MQTT-in**
 
 {{< imgproc mqtt_in Fit "800x150" >}}{{< /imgproc >}}
 
-In order to contextualise the resulting data points with the help of the United Manufacturing Hub, three identifiers are necessary:
-
-- The customer ID to be assigned to the asset: *customerID* (Default value for the development setup "factoryinsight")
-
-- The location where the asset is located: *location* (Can be chosen freely)
-
-- The name of the asset: *AssetID* (Can be chosen freely)
-
-In the topic of our **first node (MQTT IN)** all these three information are bundled to get a MQTT input.
-
-The topic structure is: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
-
-To get a quick and easy overview of the available MQTT messages and topics we recommend the [MQTT Explorer](http://mqtt-explorer.com/). If you don’t want to install any extra software you can use the MQTT-In node to subscribe to all available topics by subscribing to # and then direct the messages of the MQTT in nodes into a debugging node. You can then display the messages in the nodered debugging window and get information about the topic and available data points.
+The topic structure is (see also the datamodel): `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
 
 An example for an ia/raw/ topic is: `ia/raw/development/000200410332/X02/310-372`. This means that an IO-Link gateway with serial number `000200410332` has connected the sensor `310-372` to the first port `X02`.
 
-*Second node: JSON*
+Now all messages coming in (around 20 messages per second by default for one sensor) will start a Node-RED message flow.
+
+###### **Second node: JSON**
 
 {{< imgproc json.png Fit "800x150" >}}{{< /imgproc >}}
 
-The **second node (JSON)** is a generic container of elements inside a JSON stream (or how to describe it briefly) and is called JSON. It can contain fundamental types (integers, booleans, floating point numbers, strings) and complex types (arrays and objects) and is used to convert data between two formats.
+The payload of all incoming messages will be in the JSON format, so we need to interpret this by using the JSON node.
 
-**Now we will take a look at the three different sensors individually.**
-
-#### Light barrier
-
-With the <light barrier> it is possible, for example, to record the number of pieces produced. Also, with a more complicated logic, machine states can be detected directly with a light barrier. For the sake of simplicity, this is not explored and applied in our example.
-
-*Theird node: Function*
+###### **Third node: function**
 
 {{< imgproc function Fit "800x150" >}}{{< /imgproc >}}
 
-The **third node "Function"** formats the incoming data from MQTT-IN by extracting information from the json (timestamp and relevant data point) and arranging it in a usable way for Node-RED (parsing). The code for this node looks like this:
+The **third node "function"** formats the incoming data by extracting information from the json (timestamp and relevant data point) and arranging it in a usable way for Node-RED (parsing). The code for this node looks like this:
 
 ```js
 msg.timestamp=msg.payload.timestamp_ms
-
 msg.payload=msg.payload.value_string;
-
 return msg;
 ```
 
-*Fourth node: Trigger*
+###### **Fourth node: trigger**
 
 {{< imgproc trigger Fit "800x150" >}}{{< /imgproc >}}
 
-The **trigger** allows us, in this example in the case of the light barrier, to sort out distances that are irrelevant for our evaluation, i.e. greater than 15 cm. To do this, you just need to enter a 15 in the "Threshold" field.
+The trigger allows us, in this example in the case of the light barrier, to sort out distances that are irrelevant for our evaluation, i.e. greater than 15 cm. To do this, you just need to enter a 15 in the "Threshold" field.
 
-*Fifth node: Function*
+###### **Fifth node: trigger**
 
 {{< imgproc function_light_barrier Fit "800x150" >}}{{< /imgproc >}}
 
@@ -158,18 +171,18 @@ In our example we want to count the number of produced parts. As a trolley on a 
 
 ```js
 msg.payload = {
-  "timestamp_ms": Date.now(),
+  "timestamp_ms": msg.timestamp,
   "count": 1
 }
 msg.topic = "ia/factoryinsight/dccaachen/docs/count"
 return msg;
 ```
 
-*Sixth node: MQTT-Out*
+###### **Sixth node: MQTT-out**
 
 {{< imgproc mqtt_out Fit "800x150" >}}{{< /imgproc >}}
 
-To publish messages to a pre-configured topic, the **MQTT-Out** node is used.
+To publish messages to a pre-configured topic, the **MQTT-out** node is used.
 
 The complete Node-RED flow then looks like this:
 
