@@ -1,12 +1,45 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"strconv"
+
+	"go.uber.org/zap"
 )
 
 type SensorDataInformation struct {
 	Cid        int                    `json:"cid"`
 	SensorData map[string]interface{} `json:"data"`
+}
+
+// GetSensorDataMap returns a map of one IO-Link-Master with the port number as key and the port mode as value
+func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map[string]interface{}, error) {
+	numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
+	modeRequestBody := createSensorDataRequestBody(numberOfPorts)
+	respBody, err := downloadSensorData(currentDeviceInformation.Url, modeRequestBody)
+	if err != nil {
+		zap.S().Errorf("download of response from url %s failed.", currentDeviceInformation.Url)
+		return nil, err
+	}
+	sensorDataMap, err := unmarshalSensorData(respBody)
+	return sensorDataMap, err
+}
+
+// unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
+func unmarshalSensorData(dataRaw []byte) (map[string]interface{}, error) {
+	dataUnmarshaled := SensorDataInformation{}
+	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
+		return nil, err
+	}
+	sensorDataMap := make(map[string]interface{}) //key: portNumber, value: portMode
+	for key, element := range dataUnmarshaled.SensorData {
+		// create map with key e.g. "/iolinkmaster/port[1]/mode" and retuned data genecically in interface{}
+		sensorDataMap[key] = element
+	}
+	return sensorDataMap, nil
 }
 
 // createSensorDataRequestBody creates the POST request body for ifm gateways. The body is made to simultaneously request sensordata of the ports 1 - numberOfPorts.
@@ -44,4 +77,32 @@ func createSensorDataRequestBody(numberOfPorts int) []byte {
 	}
 }`)...)
 	return payload
+}
+
+// downloadSensorData sends a POST request to the given url with the given payload. It returns the body and an error in case of problems.
+func downloadSensorData(url string, payload []byte) (body []byte, err error) {
+	// Create Request
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		zap.S().Warnf("Failed to create post request for url: %s", url)
+		return
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		zap.S().Debugf("Client at %s did not respond.", url)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		zap.S().Debugf("Responsstatus not 200 but instead: %s", resp.StatusCode)
+		return
+	}
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
+		return
+	}
+	return
 }
