@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-func TestUnmarshalModeInformation(t *testing.T) {
-
-}
 func TestCreateModeRequestBody(t *testing.T) {
 	testOutputThreePorts := createModeRequestBody(3)
 	fmt.Println(string(testOutputThreePorts[:]))
@@ -26,12 +23,12 @@ func TestFindNumberOfPorts(t *testing.T) {
 		t.Error("Incorrect number of Ports for default returned.")
 	}
 }
-func TestGetModeStatusStruct(t *testing.T) { // only works with functioning test device on correct ip
+func TestGetPortModeMap(t *testing.T) { // only works with functioning test device on correct ip
 	var deviceInfo DiscoveredDeviceInformation
 	deviceInfo.ProductCode = "AL1350"
 	deviceInfo.Url = "http://192.168.10.17/"
-	sensorData, err := GetModeStatusStruct(deviceInfo)
-	fmt.Println(sensorData) //"%+v",
+	sensorData, err := GetPortModeMap(deviceInfo)
+	fmt.Printf("PortModeMap: %d", sensorData) //"%+v",
 	if err != nil {
 		t.Error("Problem with GetModeStatusStruct")
 	}
