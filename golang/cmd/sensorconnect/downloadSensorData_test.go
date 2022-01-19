@@ -23,7 +23,9 @@ func TestFindNumberOfPorts(t *testing.T) {
 		t.Error("Incorrect number of Ports for default returned.")
 	}
 }
-func TestGetPortModeMap(t *testing.T) { // only works with functioning test device on correct ip
+
+// only works with functioning test device on correct ip: http://192.168.10.17
+func TestGetPortModeMap(t *testing.T) {
 	var deviceInfo DiscoveredDeviceInformation
 	deviceInfo.ProductCode = "AL1350"
 	deviceInfo.Url = "http://192.168.10.17/"
