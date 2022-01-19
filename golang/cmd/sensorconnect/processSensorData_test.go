@@ -8,7 +8,7 @@ import (
 func TestProcessSensorData(t *testing.T) {
 	timestamp_ms := processSensorData()
 	fmt.Println(timestamp_ms)
-	if timestamp_ms != nil {
+	if timestamp_ms > 10 {
 		t.Error("err")
 	}
 }
