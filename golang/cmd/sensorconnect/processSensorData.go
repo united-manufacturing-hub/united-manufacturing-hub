@@ -16,9 +16,7 @@ func processSensorData(sensorDataMap map[string]interface{}, currentDeviceInform
 			// get value from sensorDataMap
 			portNumberString := strconv.Itoa(portNumber)
 			key := "/iolinkmaster/port[" + portNumberString + "]/pin2in"
-			valuePin2In := sensorDataMap[key]
-			elementPin2InMap := valuePin2In.(map[string]interface{})
-			dataPin2In := elementPin2InMap["data"].([]byte)
+			dataPin2In := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
 			// Payload to send to the gateways
 			var payload = []byte(`{
@@ -42,14 +40,19 @@ func processSensorData(sensorDataMap map[string]interface{}, currentDeviceInform
 		case 3: // IO-Link
 			// check connection status
 			portNumberString := strconv.Itoa(portNumber)
-			key := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
-			valuePdin := sensorDataMap[key]
-			elementPdinMap := valuePdin.(map[string]interface{})
-			connectionCode := elementPdinMap["code"].(int)
+			keyPdin := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
+			connectionCode := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
 			if connectionCode != 200 {
 				zap.S().Errorf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
 				continue
 			}
+
+			// get Deviceid
+			keyDeviceid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/deviceid"
+			keyVendorid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/vendorid"
+			deviceId := extractByteArrayFromSensorDataMap(keyDeviceid, "data", sensorDataMap)
+			vendorId := extractByteArrayFromSensorDataMap(keyVendorid, "data", sensorDataMap)
+			rawSensorOutput := extractByteArrayFromSensorDataMap(keyPdin, "data", sensorDataMap)
 
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
@@ -61,4 +64,18 @@ func getUnixTimestampMs() (timestampMs int) {
 	t := time.Now()
 	timestampMs = int(t.UnixNano() / 1000000)
 	return
+}
+
+func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int {
+	element := sensorDataMap[key]
+	elementMap := element.(map[string]interface{})
+	returnValue := int(elementMap[tag].(float64))
+	return returnValue
+}
+
+func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) []byte {
+	element := sensorDataMap[key]
+	elementMap := element.(map[string]interface{})
+	returnValue := elementMap[tag].([]byte)
+	return returnValue
 }
