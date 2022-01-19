@@ -26,11 +26,32 @@ func TestFindNumberOfPorts(t *testing.T) {
 		t.Error("Incorrect number of Ports for default returned.")
 	}
 }
-func TestGetModeStatusStruct(t *testing.T) {
+func TestGetModeStatusStruct(t *testing.T) { // only works with functioning test device on correct ip
 	var deviceInfo DiscoveredDeviceInformation
 	deviceInfo.ProductCode = "AL1350"
 	deviceInfo.Url = "http://192.168.10.17/"
-	sensorData := GetModeStatusStruct(deviceInfo)
+	sensorData, err := GetModeStatusStruct(deviceInfo)
 	fmt.Println(sensorData) //"%+v",
-	t.Error("Incorrect number of Ports for default returned.")
+	if err != nil {
+		t.Error("Problem with GetModeStatusStruct")
+	}
+}
+
+func TestExtractIntFromString(t *testing.T) {
+	testString := "/iolinkmaster/port[23]/mode"
+	answerInt, err := extractIntFromString(testString)
+	if answerInt != 23 {
+		t.Errorf("wrong number extracted: %v", answerInt)
+	}
+	if err != nil {
+		t.Errorf("error detected %v", err)
+	}
+	testProblemString := "/234iolinkmaster/port[23]/mode"
+	answerProblemInt, err := extractIntFromString(testProblemString)
+	if answerProblemInt != -1 {
+		t.Errorf("wrong number extracted: %v", answerInt)
+	}
+	if err == nil {
+		t.Errorf("no error detected")
+	}
 }

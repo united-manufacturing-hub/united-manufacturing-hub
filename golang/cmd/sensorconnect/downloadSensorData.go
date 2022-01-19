@@ -3,10 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"reflect"
+	"regexp"
 	"strconv"
 
 	"go.uber.org/zap"
@@ -17,23 +18,27 @@ type ModeInformation struct {
 	ModeData map[string]interface{} `json:"data"`
 }
 
-func unmarshalModeInformation(dataRaw []byte) []int {
+func unmarshalModeInformation(dataRaw []byte) (map[int]int, error) {
 	dataUnmarshaled := ModeInformation{}
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
-		panic(err)
+		return nil, err
 	}
-
-	var modeSlice []int
-	for _, element := range dataUnmarshaled.ModeData {
-		//portNumber
+	modeMap := make(map[int]int) //key: portNumber, value: portMode
+	for key, element := range dataUnmarshaled.ModeData {
+		// extract port number from key e.g. "/iolinkmaster/port[1]/mode" --> 1
+		portNumber, err := extractIntFromString(key)
+		if err != nil {
+			continue
+		}
 		elementMap := element.(map[string]interface{})
-		fmt.Println(reflect.TypeOf(int(elementMap["data"])))
-		//modeSlice[portNumber] = elementMap["data"].(int)
+		portMode := int(elementMap["data"].(float64))
+		fmt.Println(portMode)
+		modeMap[portNumber] = portMode
 	}
-	return modeSlice
+	return modeMap, nil
 }
 
-func GetModeStatusStruct(currentDeviceInformation DiscoveredDeviceInformation) []int {
+func GetModeStatusStruct(currentDeviceInformation DiscoveredDeviceInformation) (map[int]int, error) {
 
 	numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
 	modeRequestBody := createModeRequestBody(numberOfPorts)
@@ -41,10 +46,11 @@ func GetModeStatusStruct(currentDeviceInformation DiscoveredDeviceInformation) [
 	fmt.Println(respBody)
 	if err != nil {
 		zap.S().Errorf("download of response from url %s failed.", currentDeviceInformation.Url)
+		return nil, err
 	}
-	unmarshaledModeSlice := unmarshalModeInformation(respBody)
+	modeMap, err := unmarshalModeInformation(respBody)
 	//fmt.Println(unmarshaledModeSlice)
-	return unmarshaledModeSlice
+	return modeMap, err
 }
 
 // findNumberOfPorts returns the number of ports a given Io-Link-Master has regarding to its Product Code
@@ -105,4 +111,21 @@ func downloadModeStatus(url string, payload []byte) (body []byte, err error) {
 		return
 	}
 	return
+}
+
+func extractIntFromString(input string) (int, error) {
+	re := regexp.MustCompile("[0-9]+")
+	outputSlice := re.FindAllString(input, -1)
+	if len(outputSlice) != 1 {
+		err := errors.New("extractinfFromStringFailed")
+		zap.S().Errorf("not exactly one integer found %s, %s", len(outputSlice), err)
+		return -1, err
+	}
+	outputNumber, err := strconv.Atoi(outputSlice[0])
+	if err != nil {
+		err := errors.New("extractinfFromStringFailed")
+		zap.S().Errorf("not exactly one integer found %s, %s", len(outputSlice), err)
+		return -1, err
+	}
+	return outputNumber, nil
 }
