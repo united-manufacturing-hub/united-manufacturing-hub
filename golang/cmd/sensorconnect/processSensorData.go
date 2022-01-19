@@ -3,6 +3,8 @@ package main
 import (
 	"strconv"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 func processSensorData(sensorDataMap map[string]interface{}, currentDeviceInformation DiscoveredDeviceInformation, portModeMap map[int]int) {
@@ -35,7 +37,19 @@ func processSensorData(sensorDataMap map[string]interface{}, currentDeviceInform
 			payload = append(payload, []byte(`}`)...)
 
 		case 2: // digital output
+			// Todo
+			continue
 		case 3: // IO-Link
+			// check connection status
+			portNumberString := strconv.Itoa(portNumber)
+			key := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
+			valuePdin := sensorDataMap[key]
+			elementPdinMap := valuePdin.(map[string]interface{})
+			connectionCode := elementPdinMap["code"].(int)
+			if connectionCode != 200 {
+				zap.S().Errorf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
+				continue
+			}
 
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
