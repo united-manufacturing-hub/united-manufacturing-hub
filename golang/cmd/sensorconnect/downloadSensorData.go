@@ -1,9 +1,11 @@
 package main
 
+import "strconv"
+
 func DownloadSensorData(currentDeviceInformation DiscoveredDeviceInformation) {
 
 	//Number of ports
-	numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
+	//numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
 }
 
 // findNumberOfPorts returns the number of ports a given Io-Link-Master has regarding to its Product Code
@@ -16,20 +18,25 @@ func findNumberOfPorts(ProductCode string) int {
 	}
 }
 
-func createRequestBodyForPort(numberOfPorts int) []byte {
+func createRequestBody(numberOfPorts int) []byte {
 	// Payload to send to the gateways
 	var payload = []byte(`{
-		"code":"request",
-		"cid":23,
-		"adr":"/getdatamulti",
-		"data":{
-			"datatosend":[
-				"/iolinkmaster/port[1]/mode"]`)
+	"code":"request",
+	"cid":23,
+	"adr":"/getdatamulti",
+	"data":{
+		"datatosend":[
+			"/iolinkmaster/port[1]/mode"`)
 	for i := 2; i <= numberOfPorts; i++ {
-		payload = append(payload, []byte(`,"/iolinkmaster/port[`)...)
-		payload = append(payload, byte(numberOfPorts))
+		currentPort := []byte(strconv.Itoa(i))
+		payload = append(payload, []byte(`,
+			"/iolinkmaster/port[`)...)
+		payload = append(payload, currentPort...)
 		payload = append(payload, []byte(`]/mode"`)...)
 	}
-	payload = append(payload, []byte(`]}}`)...)
+	payload = append(payload, []byte(`
+		]
+	}
+}`)...)
 	return payload
 }
