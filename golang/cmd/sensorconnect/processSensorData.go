@@ -1,13 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 )
 
-func processSensorData(sensorDataMap map[string]interface{}, currentDeviceInformation DiscoveredDeviceInformation, portModeMap map[int]int) {
+func processSensorData(sensorDataMap map[string]interface{},
+	currentDeviceInformation DiscoveredDeviceInformation,
+	portModeMap map[int]int,
+	ioddIoDeviceMap map[IoddFilemapKey]IoDevice,
+	updateIoddIoDeviceMapChannel chan IoddFilemapKey) (err error) {
 	timestampMs := getUnixTimestampMs()
 	for portNumber, portMode := range portModeMap {
 		//mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
@@ -50,10 +55,22 @@ func processSensorData(sensorDataMap map[string]interface{}, currentDeviceInform
 			// get Deviceid
 			keyDeviceid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/deviceid"
 			keyVendorid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/vendorid"
-			deviceId := extractByteArrayFromSensorDataMap(keyDeviceid, "data", sensorDataMap)
-			vendorId := extractByteArrayFromSensorDataMap(keyVendorid, "data", sensorDataMap)
+			deviceId := extractIntFromSensorDataMap(keyDeviceid, "data", sensorDataMap)
+			vendorId := extractInt64FromSensorDataMap(keyVendorid, "data", sensorDataMap)
 			rawSensorOutput := extractByteArrayFromSensorDataMap(keyPdin, "data", sensorDataMap)
+			rawSensorOutputLength := len(rawSensorOutput)
 
+			//create IoddFilemapKey
+			var ioddFilemapKey IoddFilemapKey
+			ioddFilemapKey.DeviceId = deviceId
+			ioddFilemapKey.VendorId = vendorId
+
+			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
+			if _, ok := ioddIoDeviceMap[ioddFilemapKey]; !ok {
+				updateIoddIoDeviceMapChannel <- ioddFilemapKey // send iodd filemap Key into update channel
+				continue                                       // drop data to avoid locking
+			}
+			numberOfBits := rawSensorOutputLength * 4
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}
@@ -73,9 +90,21 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 	return returnValue
 }
 
+func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int64 {
+	element := sensorDataMap[key]
+	elementMap := element.(map[string]interface{})
+	returnValue := int64(elementMap[tag].(float64))
+	return returnValue
+}
+
 func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) []byte {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
 	returnValue := elementMap[tag].([]byte)
 	return returnValue
+}
+
+func zeroPadding(input string, length int) (output string) {
+	output = fmt.Sprintf("%0*v", length, input)
+	return
 }
