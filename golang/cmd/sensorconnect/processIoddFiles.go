@@ -84,6 +84,8 @@ type SimpleDatatype struct {
 	FixedLength int    `xml:"fixedLength,attr"`
 }
 
+// Todo add datatyperef if not simple datatype
+
 //Further Datastructures
 type IoddFilemapKey struct {
 	VendorId int64
