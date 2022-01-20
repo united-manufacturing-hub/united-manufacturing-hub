@@ -24,7 +24,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			key := "/iolinkmaster/port[" + portNumberString + "]/pin2in"
 			dataPin2In := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
-			// Payload to send to the gateways
+			// Payload to send
 			var payload = []byte(`{
 				"serial_number":`)
 			payload = append(payload, []byte(currentDeviceInformation.SerialNumber)...)
@@ -39,7 +39,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			"value":`)...)
 			payload = append(payload, dataPin2In...)
 			payload = append(payload, []byte(`}`)...)
-
+			fmt.Println(payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -71,11 +71,46 @@ func processSensorData(sensorDataMap map[string]interface{},
 				updateIoddIoDeviceMapChannel <- ioddFilemapKey // send iodd filemap Key into update channel
 				continue                                       // drop data to avoid locking
 			}
-			numberOfBits := rawSensorOutputLength * 4
+
+			//prepare json Payload to send
+			var payload = []byte(`{
+				"serial_number":`)
+			payload = append(payload, []byte(currentDeviceInformation.SerialNumber)...)
+			payload = append(payload, []byte(`-X0`)...)
+			payload = append(payload, []byte(strconv.Itoa(portNumber))...)
+			payload = append(payload, []byte(`,
+			"timestamp_ms:`)...)
+			payload = append(payload, []byte(strconv.Itoa(timestampMs))...)
+			payload = append(payload, []byte(`,
+			"type":Io-Link,
+			"connected":connected`)...)
+
+			// create padded binary raw sensor output
+			outputBitLength := rawSensorOutputLength * 4
+			rawSensorOutputString := string(rawSensorOutput[:])
+			rawSensorOutputBinary := HexToBin(string(rawSensorOutputString))
+			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
+
+			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
+			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.ReccordItem {
+				valueBitLength := determineValueBitLength(element) // length of value
+				leftIndex := outputBitLength - valueBitLength - element.BitOffset
+				rightIndex := outputBitLength - element.BitOffset
+				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
+				valueString := convertBinaryValueToString(binaryValue, element)
+				payload = append(payload, []byte(`,
+				"`)...)
+				payload = append(payload, []byte(element.Name.TextId)...)
+				payload = append(payload, []byte(`":`)...)
+				payload = append(payload, []byte(valueString)...)
+			}
+			payload = append(payload, []byte(`}`)...)
+			fmt.Println(payload)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}
 	}
+	return
 }
 
 func getUnixTimestampMs() (timestampMs int) {
@@ -114,5 +149,33 @@ func HexToBin(hex string) (bin string) {
 	i := new(big.Int)
 	i.SetString(hex, 16)
 	bin = fmt.Sprintf("%b", i)
+	return
+}
+func BinToHex(s string) string {
+	ui, err := strconv.ParseUint(s, 2, 64)
+	if err != nil {
+		return "error"
+	}
+
+	return fmt.Sprintf("%x", ui)
+}
+
+func determineValueBitLength(item RecordItem) (length int) {
+	if item.SimpleDatatype.Type == "BooleanT" {
+		return 1
+	} else if item.SimpleDatatype.Type == "octetStringT" {
+		return item.SimpleDatatype.FixedLength * 8
+	} else {
+		return item.SimpleDatatype.BitLength
+	}
+}
+
+func convertBinaryValueToString(binaryValue string, element RecordItem) (output string) {
+	if element.SimpleDatatype.Type == "OctetStringT" {
+		output = BinToHex(binaryValue)
+	} else {
+		outputString, _ := strconv.ParseUint(binaryValue, 2, 64)
+		return fmt.Sprintf("%v", outputString)
+	}
 	return
 }
