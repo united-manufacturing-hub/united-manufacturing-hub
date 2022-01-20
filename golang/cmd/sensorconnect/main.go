@@ -62,6 +62,7 @@ func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRa
 		case <-ticker.C:
 			var err error
 			discoveredDeviceInformation, err = DiscoverDevices(ipRange)
+			fmt.Printf("The discovered devices are: %v ", discoveredDeviceInformation)
 			if err != nil {
 				zap.S().Errorf("DiscoverDevices produced the error: %v", err)
 				continue
