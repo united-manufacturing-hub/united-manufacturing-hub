@@ -25,21 +25,8 @@ func processSensorData(sensorDataMap map[string]interface{},
 			dataPin2In := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
 			// Payload to send
-			var payload = []byte(`{
-				"serial_number":`)
-			payload = append(payload, []byte(currentDeviceInformation.SerialNumber)...)
-			payload = append(payload, []byte(`-X0`)...)
-			payload = append(payload, []byte(strconv.Itoa(portNumber))...)
-			payload = append(payload, []byte(`,
-			"timestamp_ms:`)...)
-			payload = append(payload, []byte(strconv.Itoa(timestampMs))...)
-			payload = append(payload, []byte(`,
-			"type":DI,
-			"connected":connected
-			"value":`)...)
-			payload = append(payload, dataPin2In...)
-			payload = append(payload, []byte(`}`)...)
-			fmt.Println(payload)
+			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, timestampMs)
+			var payload = fmt.Println(payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -113,9 +100,10 @@ func processSensorData(sensorDataMap map[string]interface{},
 	return
 }
 
-func getUnixTimestampMs() (timestampMs int) {
+func getUnixTimestampMs() (timestampMs string) {
 	t := time.Now()
-	timestampMs = int(t.UnixNano() / 1000000)
+	timestampMsInt := int(t.UnixNano() / 1000000)
+	timestampMs = strconv.Itoa(timestampMsInt)
 	return
 }
 
@@ -177,5 +165,24 @@ func convertBinaryValueToString(binaryValue string, element RecordItem) (output 
 		outputString, _ := strconv.ParseUint(binaryValue, 2, 64)
 		return fmt.Sprintf("%v", outputString)
 	}
+	return
+}
+
+func createDigitalInputPayload(serialNumber string, portNumberString string, timestampMs string, dataPin2In []byte) (payload []byte) {
+	payload = []byte(`{
+		"serial_number":`)
+	payload = append(payload, []byte(serialNumber)...)
+	payload = append(payload, []byte(`-X0`)...)
+	payload = append(payload, []byte(portNumberString)...)
+	payload = append(payload, []byte(`,
+	"timestamp_ms:`)...)
+	payload = append(payload, []byte(timestampMs)...)
+	payload = append(payload, []byte(`,
+	"type":DI,
+	"connected":connected
+	"value":`)...)
+	payload = append(payload, dataPin2In...)
+	payload = append(payload, []byte(`}`)...)
+
 	return
 }
