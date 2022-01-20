@@ -100,7 +100,13 @@ func initializeIoddData(relativeDirectoryPath string) (deviceMap map[IoddFilemap
 	siemensIoddFilemapKey.VendorId = 42
 
 	deviceMap, fileInfo, err = AddNewDeviceToIoddFilesAndMap(ifmIoddFilemapKey, relativeDirectoryPath, deviceMap, fileInfo)
+	if err != nil {
+		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
+	}
 	deviceMap, fileInfo, err = AddNewDeviceToIoddFilesAndMap(siemensIoddFilemapKey, relativeDirectoryPath, deviceMap, fileInfo)
+	if err != nil {
+		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
+	}
 
 	return
 }
