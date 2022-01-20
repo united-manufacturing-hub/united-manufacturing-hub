@@ -9,11 +9,11 @@ import (
 	"go.uber.org/zap"
 )
 
+//Todo: add "",updateIoddIoDeviceMapChannel chan IoddFilemapKey"
 func processSensorData(sensorDataMap map[string]interface{},
 	currentDeviceInformation DiscoveredDeviceInformation,
 	portModeMap map[int]int,
-	ioddIoDeviceMap map[IoddFilemapKey]IoDevice,
-	updateIoddIoDeviceMapChannel chan IoddFilemapKey) (err error) {
+	ioddIoDeviceMap map[IoddFilemapKey]IoDevice) (err error) {
 	timestampMs := getUnixTimestampMs()
 	for portNumber, portMode := range portModeMap {
 		//mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
@@ -55,8 +55,8 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
 			if _, ok := ioddIoDeviceMap[ioddFilemapKey]; !ok {
-				updateIoddIoDeviceMapChannel <- ioddFilemapKey // send iodd filemap Key into update channel
-				continue                                       // drop data to avoid locking
+				//updateIoddIoDeviceMapChannel <- ioddFilemapKey // send iodd filemap Key into update channel
+				continue // drop data to avoid locking
 			}
 
 			//prepare json Payload to send
@@ -80,7 +80,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			}
 			payload = append(payload, []byte(`}`)...)
-			fmt.Println(payload)
+			fmt.Println(string(payload))
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}
@@ -181,7 +181,7 @@ func createIoLinkBeginPayload(serialNumber string, portNumberString string, time
 	payload = append(payload, []byte(`-X0`)...)
 	payload = append(payload, []byte(portNumberString)...)
 	payload = append(payload, []byte(`,
-	"timestamp_ms:`)...)
+	"timestamp_ms":`)...)
 	payload = append(payload, []byte(timestampMs)...)
 	payload = append(payload, []byte(`,
 	"type":Io-Link,

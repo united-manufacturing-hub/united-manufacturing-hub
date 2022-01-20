@@ -2,9 +2,52 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 )
+
+// integration test based on working ifm sensor on gateway at specific ip address
+func TestProcessSensorData(t *testing.T) {
+
+	ipRange := "192.168.10.17/32" //CIDR Notation for 192.168.10.17 and 192.168.10.18
+	deviceInfo, err := DiscoverDevices(ipRange)
+	if err != nil {
+		t.Error(err)
+	}
+
+	sensorDataMap, err := GetSensorDataMap(deviceInfo[0])
+	if err != nil {
+		t.Error("Problem with GetModeStatusStruct")
+	}
+
+	portModeMap, err := GetPortModeMap(deviceInfo[0])
+	fmt.Printf("PortModeMap: %d", portModeMap) //"%+v",
+	if err != nil {
+		t.Error("Problem with GetModeStatusStruct")
+	}
+
+	// first remove all files from specified path
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	removeFilesFromDirectory(relativeDirectoryPath)
+
+	//Declare Variables
+	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
+	var fileInfoSlice []os.FileInfo
+	var ioddFilemapKey IoddFilemapKey
+	//ioddFilemapKey.DeviceId = 278531
+	//ioddFilemapKey.VendorId = 42
+	ioddFilemapKey.DeviceId = 1028
+	ioddFilemapKey.VendorId = 310
+	// execute function and check for errors
+	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = processSensorData(sensorDataMap, deviceInfo[0], portModeMap, ioDeviceMap)
+	t.Error(err)
+}
 
 // only works with functioning test device on correct ip: http://192.168.10.17
 func TestExtractIntFromSensorDataMap(t *testing.T) {
