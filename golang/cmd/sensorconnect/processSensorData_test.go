@@ -39,7 +39,7 @@ func TestProcessSensorData(t *testing.T) {
 	ioddFilemapKey.DeviceId = 1028
 	ioddFilemapKey.VendorId = 310
 	// execute function and check for errors
-	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
