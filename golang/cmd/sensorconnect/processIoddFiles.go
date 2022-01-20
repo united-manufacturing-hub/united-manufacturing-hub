@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -97,7 +98,7 @@ type IoddFilemapKey struct {
 func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, fileInfoSlice []os.FileInfo) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
 	err := RequestSaveIoddFile(ioddFilemapKey, ioddIoDeviceMap, relativeDirectoryPath)
 	if err != nil {
-		return ioddIoDeviceMap, fileInfoSlice, err
+		zap.S().Debugf("File with fileMapKey%v already saved.", ioddFilemapKey)
 	}
 	ioddIoDeviceMap, fileInfoSlice, err = ReadIoddFiles(ioddIoDeviceMap, fileInfoSlice, relativeDirectoryPath)
 	if err != nil {
@@ -177,6 +178,7 @@ func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[Iodd
 	// Execute download and saving of iodd file
 	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
 	if err != nil {
+		fmt.Println("Saving error")
 		return err
 	}
 	return err
