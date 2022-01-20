@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -106,5 +107,12 @@ func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map
 
 func zeroPadding(input string, length int) (output string) {
 	output = fmt.Sprintf("%0*v", length, input)
+	return
+}
+
+func HexToBin(hex string) (bin string) {
+	i := new(big.Int)
+	i.SetString(hex, 16)
+	bin = fmt.Sprintf("%b", i)
 	return
 }
