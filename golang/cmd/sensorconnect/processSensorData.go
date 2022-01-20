@@ -12,8 +12,10 @@ import (
 func processSensorData(sensorDataMap map[string]interface{},
 	currentDeviceInformation DiscoveredDeviceInformation,
 	portModeMap map[int]int,
-	ioddIoDeviceMap map[IoddFilemapKey]IoDevice) (err error) {
+	ioddIoDeviceMap map[IoddFilemapKey]IoDevice,
+	updateIoddIoDeviceMapChan chan IoddFilemapKey) (err error) {
 	timestampMs := getUnixTimestampMs()
+	fmt.Println(timestampMs)
 	for portNumber, portMode := range portModeMap {
 		//mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 		switch portMode {
@@ -54,8 +56,9 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
 			if _, ok := ioddIoDeviceMap[ioddFilemapKey]; !ok {
-				//updateIoddIoDeviceMapChannel <- ioddFilemapKey // send iodd filemap Key into update channel
-				continue // drop data to avoid locking
+				fmt.Printf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
+				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
+				continue                                    // drop data to avoid locking
 			}
 
 			//prepare json Payload to send

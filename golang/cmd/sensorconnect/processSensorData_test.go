@@ -33,6 +33,7 @@ func TestProcessSensorData(t *testing.T) {
 	//Declare Variables
 	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
 	var fileInfoSlice []os.FileInfo
+
 	var ioddFilemapKey IoddFilemapKey
 	//ioddFilemapKey.DeviceId = 278531
 	//ioddFilemapKey.VendorId = 42
@@ -40,11 +41,14 @@ func TestProcessSensorData(t *testing.T) {
 	ioddFilemapKey.VendorId = 310
 	// execute function and check for errors
 	ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	fmt.Println(ioDeviceMap)
 	if err != nil {
 		t.Error(err)
 	}
-
-	err = processSensorData(sensorDataMap, deviceInfo[0], portModeMap, ioDeviceMap)
+	updateIoddIoDeviceMapChan := make(chan IoddFilemapKey)
+	updaterChan := make(chan struct{})
+	go ioddDataDaemon(updateIoddIoDeviceMapChan, updaterChan, relativeDirectoryPath)
+	err = processSensorData(sensorDataMap, deviceInfo[0], portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
 	t.Error(err)
 }
 
