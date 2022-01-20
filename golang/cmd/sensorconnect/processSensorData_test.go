@@ -9,8 +9,11 @@ import (
 
 // integration test based on working ifm sensor on gateway at specific ip address
 func TestProcessSensorData(t *testing.T) {
-
+	// first remove all files from specified path
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	removeFilesFromDirectory(relativeDirectoryPath)
 	ipRange := "192.168.10.17/32" //CIDR Notation for 192.168.10.17 and 192.168.10.18
+
 	deviceInfo, err := DiscoverDevices(ipRange)
 	if err != nil {
 		t.Error(err)
@@ -26,10 +29,6 @@ func TestProcessSensorData(t *testing.T) {
 	if err != nil {
 		t.Error("Problem with GetModeStatusStruct")
 	}
-
-	// first remove all files from specified path
-	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
-	removeFilesFromDirectory(relativeDirectoryPath)
 
 	//Declare Variables
 	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)

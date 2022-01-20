@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 )
 
-//Todo: add "",updateIoddIoDeviceMapChannel chan IoddFilemapKey"
 func processSensorData(sensorDataMap map[string]interface{},
 	currentDeviceInformation DiscoveredDeviceInformation,
 	portModeMap map[int]int,
