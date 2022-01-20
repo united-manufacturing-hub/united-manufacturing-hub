@@ -51,3 +51,12 @@ func TestContinuousDeviceSearch(t *testing.T) {
 	go continuousDeviceSearch(tickerSearchForDevices, updaterChan, ipRange)
 	select {}
 }
+
+func TestInitializeIoddData(t *testing.T) {
+	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	deviceMap, fileinfo, err := initializeIoddData(relativeDirectoryPath)
+	fmt.Printf("Devicemap: %v", deviceMap)
+	fmt.Printf("fileinfo: %v", fileinfo)
+	fmt.Printf("err: %v", err)
+	t.Error(err)
+}
