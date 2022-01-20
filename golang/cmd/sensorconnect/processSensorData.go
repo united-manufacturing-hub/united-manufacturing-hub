@@ -112,7 +112,8 @@ func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[str
 func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) []byte {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
-	returnValue := elementMap[tag].([]byte)
+	returnString := fmt.Sprintf("%v", elementMap[tag])
+	returnValue := []byte(returnString)
 	return returnValue
 }
 
@@ -127,13 +128,11 @@ func HexToBin(hex string) (bin string) {
 	bin = fmt.Sprintf("%b", i)
 	return
 }
-func BinToHex(s string) string {
-	ui, err := strconv.ParseUint(s, 2, 64)
-	if err != nil {
-		return "error"
-	}
-
-	return fmt.Sprintf("%x", ui)
+func BinToHex(bin string) (hex string) {
+	i := new(big.Int)
+	i.SetString(bin, 2)
+	hex = fmt.Sprintf("%x", i)
+	return
 }
 
 func determineValueBitLength(item RecordItem) (length int) {
