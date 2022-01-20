@@ -25,8 +25,8 @@ func processSensorData(sensorDataMap map[string]interface{},
 			dataPin2In := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
 			// Payload to send
-			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, timestampMs)
-			var payload = fmt.Println(payload)
+			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
+			fmt.Println(payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -60,17 +60,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			}
 
 			//prepare json Payload to send
-			var payload = []byte(`{
-				"serial_number":`)
-			payload = append(payload, []byte(currentDeviceInformation.SerialNumber)...)
-			payload = append(payload, []byte(`-X0`)...)
-			payload = append(payload, []byte(strconv.Itoa(portNumber))...)
-			payload = append(payload, []byte(`,
-			"timestamp_ms:`)...)
-			payload = append(payload, []byte(strconv.Itoa(timestampMs))...)
-			payload = append(payload, []byte(`,
-			"type":Io-Link,
-			"connected":connected`)...)
+			payload := createIoLinkBeginPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs)
 
 			// create padded binary raw sensor output
 			outputBitLength := rawSensorOutputLength * 4
@@ -85,11 +75,9 @@ func processSensorData(sensorDataMap map[string]interface{},
 				rightIndex := outputBitLength - element.BitOffset
 				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
 				valueString := convertBinaryValueToString(binaryValue, element)
-				payload = append(payload, []byte(`,
-				"`)...)
-				payload = append(payload, []byte(element.Name.TextId)...)
-				payload = append(payload, []byte(`":`)...)
-				payload = append(payload, []byte(valueString)...)
+				valueName := getNameFromExternalTextCollection(element.Name.TextId, ioddIoDeviceMap[ioddFilemapKey].ExternalTextCollection.PrimaryLanguage.Text)
+				payload = attachValueString(payload, valueName, valueString)
+
 			}
 			payload = append(payload, []byte(`}`)...)
 			fmt.Println(payload)
@@ -185,4 +173,38 @@ func createDigitalInputPayload(serialNumber string, portNumberString string, tim
 	payload = append(payload, []byte(`}`)...)
 
 	return
+}
+
+func createIoLinkBeginPayload(serialNumber string, portNumberString string, timestampMs string) (payload []byte) {
+	payload = []byte(`{
+		"serial_number":`)
+	payload = append(payload, []byte(serialNumber)...)
+	payload = append(payload, []byte(`-X0`)...)
+	payload = append(payload, []byte(portNumberString)...)
+	payload = append(payload, []byte(`,
+	"timestamp_ms:`)...)
+	payload = append(payload, []byte(timestampMs)...)
+	payload = append(payload, []byte(`,
+	"type":Io-Link,
+	"connected":connected`)...)
+
+	return
+}
+
+func attachValueString(payload []byte, valueName string, valueString string) []byte {
+	payload = append(payload, []byte(`,
+	"`)...)
+	payload = append(payload, []byte(valueName)...)
+	payload = append(payload, []byte(`":`)...)
+	payload = append(payload, []byte(valueString)...)
+	return payload
+}
+
+func getNameFromExternalTextCollection(textId string, text []Text) string {
+	for _, element := range text {
+		if textId == element.Id {
+			return element.Value
+		}
+	}
+	return "error: translation not found"
 }
