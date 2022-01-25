@@ -1,7 +1,7 @@
 {{- if .Values.mqttkafkabridge.enabled -}}
 {{- if .Values.mqttkafkabridge.pdb.enabled -}}
 
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-server.fullname" . }}-mqttkafkabridge-pdb
