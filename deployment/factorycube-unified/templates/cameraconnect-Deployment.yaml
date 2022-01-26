@@ -1,4 +1,4 @@
-{{- if .Values.AAAservices.cameraconnect.enabled -}}
+{{- if .Values._000_commonConfig.datasources.barcodereader.enabled -}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -60,32 +60,32 @@ spec:
                   name: storage
               env:
                 - name: CUBE_TRANSMITTERID
-                  value: {{ .Values.AAAserialNumber | quote }}
+                  value: {{ .Values._000_commonConfig.serialNumber | quote }}
                 - name: BROKER_URL
-                  value: {{ .Values.AAAmqttBridgeURL }}
+                  value: {{ .Values._000_commonConfig.mqttBridge.remoteURL }}
                 - name: BROKER_PORT #TODO: remove this !
                 - name: TRIGGER 
-                  value: {{ .Values.AAAconfig.cameraconnect.trigger | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.trigger | quote }}
                 - name: ACQUISITION_DELAY 
-                  value: {{ .Values.AAAconfig.cameraconnect.acquisitionDelay | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.acquisitionDelay | quote }}
                 - name: CYCLE_TIME 
-                  value: {{ .Values.AAAconfig.cameraconnect.cycleTime | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.cycleTime | quote }}
                 - name: CAMERA_INTERFACE 
-                  value: {{ .Values.AAAconfig.cameraconnect.cameraInterface | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.cameraInterface | quote }}
                 - name: IMAGE_WIDTH 
-                  value: {{ .Values.AAAconfig.cameraconnect.imageWidth | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.imageWidth | quote }}
                 - name: IMAGE_HEIGHT 
-                  value: {{ .Values.AAAconfig.cameraconnect.imageHeight | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.imageHeight | quote }}
                 - name: IMAGE_CHANNELS 
-                  value: {{ .Values.AAAconfig.cameraconnect.imageChannels | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.imageChannels | quote }}
                 - name: MAC_ADDRESS 
-                  value: {{ .Values.AAAconfig.cameraconnect.macAddress | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.macAddress | quote }}
                 - name: EXPOSURE_TIME 
-                  value: {{ .Values.AAAconfig.cameraconnect.exposureTime | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.exposureTime | quote }}
                 - name: EXPOSURE_AUTO
-                  value: {{ .Values.AAAconfig.cameraconnect.exposureAuto | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.exposureAuto | quote }}
                 - name: PIXEL_FORMAT
-                  value: {{ .Values.AAAconfig.cameraconnect.pixelFormat | quote }}
+                  value: {{ .Values._000_commonConfig.datasources.cameraconnect.pixelFormat | quote }}
                 - name: LOGGING_LEVEL 
                   value: {{ .Values.cameraconnect.loggingLevel | quote }}
                 - name: DEFAULT_GENTL_PRODUCER_PATH 

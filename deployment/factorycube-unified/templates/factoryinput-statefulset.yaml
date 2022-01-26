@@ -1,4 +1,5 @@
-{{- if .Values.AAAservices.factoryinput.enabled -}}
+{{- if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled -}}
+
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

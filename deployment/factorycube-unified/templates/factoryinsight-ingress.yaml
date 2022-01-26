@@ -1,7 +1,7 @@
-{{- if .Values.AAAservices.factoryinsight.enabled -}}
+{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
 {{- if .Values.factoryinsight.ingress.enabled -}}
 
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-ingress
@@ -22,7 +22,9 @@ spec:
         paths:
           - path: /
             backend:
-              serviceName: {{ include "factorycube-unified.fullname" . }}-factoryinsight-service
-              servicePort: 80
+              service:
+                name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-service
+                port:
+                  number: 80
 {{- end -}}
 {{- end -}}

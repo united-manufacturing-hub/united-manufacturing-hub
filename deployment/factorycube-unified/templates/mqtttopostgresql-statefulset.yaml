@@ -1,4 +1,4 @@
-{{- if .Values.AAAservices.mqtttopostgresql.enabled -}}
+{{- if or .Values.mqtttopostgresql.enabled .Values._000_commonConfig.datastorage.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

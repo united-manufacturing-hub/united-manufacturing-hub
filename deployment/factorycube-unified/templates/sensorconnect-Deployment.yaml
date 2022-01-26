@@ -1,4 +1,4 @@
-{{- if .Values.AAAservices.sensorconnect.enabled -}}
+{{- if .Values._000_commonConfig.datasources.sensorconnect.enabled -}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -39,12 +39,12 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "0"
             - name: TRANSMITTERID
-              value: {{ .Values.AAAserialNumber | quote }}
+              value: {{ .Values._000_commonConfig.serialNumber | quote }}
             - name: BROKER_URL
-              value: {{ .Values.AAAmqttBridgeURL }}
+              value: {{ .Values._000_commonConfig.mqttBridge.remoteURL }}
             - name: BROKER_PORT #TODO: remove this !
             - name: IP_RANGE
-              value: {{ .Values.AAAconfig.sensorconnect.iprange | quote }}
+              value: {{ .Values._000_commonConfig.datasources.sensorconnect.iprange | quote }}
 
       serviceAccountName: {{ include "factorycube-unified.serviceAccountName" . }}
       restartPolicy: Always

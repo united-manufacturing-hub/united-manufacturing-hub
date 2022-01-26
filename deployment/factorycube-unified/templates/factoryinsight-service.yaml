@@ -1,4 +1,4 @@
-{{- if .Values.AAAservices.factoryinsight.enabled -}}
+{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:

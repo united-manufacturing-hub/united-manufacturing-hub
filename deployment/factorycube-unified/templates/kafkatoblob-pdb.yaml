@@ -1,7 +1,7 @@
-{{- if .Values.AAAservices.kafkatoblob.enabled -}}
+{{- if or .Values.kafkatoblob.enabled .Values._000_commonConfig.blobstorage.enabled -}}
 {{- if .Values.kafkatoblob.pdb.enabled -}}
 
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-kafkatoblob-pdb

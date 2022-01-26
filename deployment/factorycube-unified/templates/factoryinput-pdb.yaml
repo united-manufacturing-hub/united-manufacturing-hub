@@ -1,7 +1,7 @@
-{{- if .Values.AAAservices.factoryinput.enabled -}}
+{{- if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled -}}
 {{- if .Values.factoryinput.pdb.enabled -}}
 
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-factoryinput-pdb

@@ -43,12 +43,16 @@ dependencies:
   - name: timescaledb-single
     version: 0.9.0
     repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
-    condition: timescaledb-single.enabled
+    condition: timescaledbsingle.enabled
   - name: minio-operator
     version: 4.1.7
     repository: https://operator.min.io/
-    condition: minio-operator.enabled
+    condition: miniooperator.enabled
   - name: kafka
     version: 14.4.1
     repository: https://charts.bitnami.com/bitnami
+    condition: kafka.enabled
+  - name: kowl
+    repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+    version: 2.3.0
     condition: kafka.enabled

@@ -1,7 +1,7 @@
-{{- if .Values.AAAservices.factoryinsight.enabled -}}
+{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
 {{- if .Values.factoryinsight.pdb.enabled -}}
 
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-pdb

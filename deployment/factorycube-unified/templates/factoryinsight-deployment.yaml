@@ -1,4 +1,5 @@
-{{- if .Values.AAAservices.factoryinsight.enabled -}}
+{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,7 +72,7 @@ spec:
             - name: POSTGRES_USER
               value: {{ .Values.factoryinsight.db_user }}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.AAAconfig.factoryinsight.db_password }}
+              value: {{ .Values._000_commonConfig.datasources.factoryinsight.db_password }}
 
               {{ $index := 1 }}
               {{ range $customerName, $password := .Values.customers | default dict }}

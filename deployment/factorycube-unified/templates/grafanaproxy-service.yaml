@@ -1,4 +1,4 @@
-{{- if .Values.AAAservices.grafanaproxy.enabled -}}
+{{- if or .Values.grafanaproxy.enabled .Values._000_commonConfig.datainput.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:

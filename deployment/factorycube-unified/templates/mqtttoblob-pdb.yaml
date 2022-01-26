@@ -1,7 +1,7 @@
-{{- if .Values.AAAservices.mqtttoblob.enabled -}}
+{{- if or .Values.mqtttoblob.enabled .Values._000_commonConfig.blobstorage.enabled -}}
 {{- if .Values.mqtttoblob.pdb.enabled -}}
 
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-mqtttoblob-pdb

@@ -1,4 +1,4 @@
-{{- if .Values.AAAservices.miniooperator.enabled -}}
+{{- if or .Values.miniooperator.enabled .Values._000_commonConfig.blobstorage.enabled -}}
 
 
 apiVersion: v1
@@ -6,10 +6,10 @@ kind: Service
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-minio-service
   labels:
-      v1.min.io/tenant: {{ printf (index .Values "minio-operator" "tenants" 0).name }}
-  {{- if (index .Values "minio-operator").service.annotations }}
+      v1.min.io/tenant: {{ printf (index .Values "miniooperator" "tenants" 0).name }}
+  {{- if (index .Values "miniooperator").service.annotations }}
   annotations:
-    {{- toYaml (index .Values "minio-operator").service.annotations | nindent 4 }}
+    {{- toYaml (index .Values "miniooperator").service.annotations | nindent 4 }}
   {{- end }}
 spec:
   type: LoadBalancer
@@ -19,6 +19,6 @@ spec:
       protocol: TCP
       name: minio-https
   selector:
-      v1.min.io/tenant: {{ printf (index .Values "minio-operator" "tenants" 0).name }}
+      v1.min.io/tenant: {{ printf (index .Values "miniooperator" "tenants" 0).name }}
 
 {{- end -}}

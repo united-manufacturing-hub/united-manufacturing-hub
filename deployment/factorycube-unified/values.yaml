@@ -1,135 +1,137 @@
 # Please adjust the following lines
+_000_commonConfig:
+  serialNumber: "development"  # usually the hostname
+  
+  datasources:
+    barcodereader:
+      enabled: true
+      customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+      customerID: "raw"
+      location: "barcodereader"
+      machineID: "barcodereader"
 
-AAAserialNumber: "development"  # usually the hostname
-AAAmqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"  # e.g. mqtt.app.industrial-analytics.net:8883
-AAAmqttBridgeTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    sensorconnect:
+      enabled: true
+      iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
 
-AAAconfig:
-  barcodereader:
-    customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
-    customerID: "raw"
-    location: "barcodereader"
-    machineID: "barcodereader"
-  sensorconnect:
-    iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
-  cameraconnect:
-    trigger: "MQTT"
-    acquisitionDelay: "0.0"
-    cycleTime: "4"
-    cameraInterface: "GenICam"
-    imageWidth: "800"
-    imageHeight: "800"
-    imageChannels: "3"
-    macAddress: "02-2625A-09849"
-    exposureTime: "1000"
-    exposureAuto: "Off"
-    pixelFormat: "Mono8"
-  factoryinsight:
-    db_password: "changeme"
+    cameraconnect:
+      enabled: true
+      trigger: "MQTT"
+      acquisitionDelay: "0.0"
+      cycleTime: "4"
+      cameraInterface: "GenICam"
+      imageWidth: "800"
+      imageHeight: "800"
+      imageChannels: "3"
+      macAddress: "02-2625A-09849"
+      exposureTime: "1000"
+      exposureAuto: "Off"
+      pixelFormat: "Mono8"
 
-# Easy configuration
-AAAservices:
-  mqttbridge:
-    enabled: true
-  barcodereader:
-    enabled: true
-  sensorconnect:
-    enabled: true
-  cameraconnect:
-    enabled: true
-  nodered:
-    enabled: true
-  factoryinsight:
-    enabled: true
-  factoryinput:
-    enabled: true
-  mqtttoblob:
-    enabled: true
-  grafanaproxy:
-    enabled: true
-  mqtttopostgresql:
-    enabled: true
-  miniooperator:
-    enabled: true
-  timescaledbsingle:
-    enabled: true
-  grafana:
-    enabled: true
-  vernemq:
+    factoryinsight:
+      enabled: true
+      db_password: "changeme"
+
+  dataprocessing:
+    nodered:
+      enabled: true
+
+  infrastructure:
+    # vernemq
+    mqtt:
+      enabled: true
+    # apache kafka, mqttkafkabridge
+    kafka:
+      enabled: true
+
+  # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
+  datastorage:
     enabled: true
 
-# Certficiates for MQTT Bridge
-AAAmqttBridgeCACert: |
-    -----BEGIN CERTIFICATE-----
-    MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
-    BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
-    NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
-    AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
-    KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
-    qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
-    SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
-    Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
-    ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
-    BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
-    ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
-    oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
-    hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
-    xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
-    nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
-    AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
-    VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
-    zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
-    -----END CERTIFICATE-----
-AAAmqttBridgeCert: |
-    -----BEGIN CERTIFICATE-----
-    MIIDVTCCAj2gAwIBAgIQD9BkaD7SQzUuHzt+0P4dRTANBgkqhkiG9w0BAQsFADAW
-    MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMyNDZaFw0yNDAzMjEx
-    MTMyNDZaMBIxEDAOBgNVBAMMB1RFU1RJTkcwggEiMA0GCSqGSIb3DQEBAQUAA4IB
-    DwAwggEKAoIBAQDjPFLHojAiGFwv6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM
-    2Ta9f/nOosHTcJzy/nkpvfwz44rDSwpevLFZoPzdEI3WmsVJfb0R01lYnsLf7NyI
-    NclSHjs3Octr1EyhP8SF2tvun1zqyirT/vPNB5+hfNhxLcCw4HYxsj4XkF69Af4W
-    cLrmOHrzB2gcW1v7fozJ4MbXv2ra7jS/OseA3qIF2l8Go09mWYiLFfwtCk99rCGo
-    RzhkrVmFShFLJ8dqTAbAwuX43oeqXhMlb3kyRaoi0aRCWhMagtEcW8LqKkO5k694
-    y5Y+xTCMjJsujmWTCjHC5flfkmTk4/ClBAQDAgMBAAGjgaIwgZ8wCQYDVR0TBAIw
-    ADAdBgNVHQ4EFgQUhFaNZPNBAIVwr5eIWTxFrbINU+QwUQYDVR0jBEowSIAUvW9f
-    QDy1ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQj
-    aJ3ooVfD+cS/1tGFWwOHMz+jOTATBgNVHSUEDDAKBggrBgEFBQcDAjALBgNVHQ8E
-    BAMCB4AwDQYJKoZIhvcNAQELBQADggEBAGqggXaytY98QujICX8WxDljf4GvBN4e
-    pQ8ejjvE9n88bW51h4JOxv6toNhz3FgPWj+PDRp6oUkfujkM0Wx8iHy4O+GceD2l
-    tV91Ds86C7MncZqMN2fICkTbyzsk9ru5dqXtAIjX9Xlr5ZqDmtfgW5ze1+1UULAB
-    5i9qaP02xQpQ1YwNPD5oSnbUJB7aKfnYsXlunBAxsjbdDoTGODdsjks1TWDKpbST
-    0DRN+Jm6sggWvJitRPNWtxC2UE/DVWqtBGXPBvwFjQrJHpnqb9lpzVhxoWxY2AI4
-    61eCOb6s6MslCkER6H9jlBhIxWpEPTNgdjth6uRA48FpAqze26Sj8L4=
-    -----END CERTIFICATE-----
-AAAmqttBridgePrivkey: |
-    -----BEGIN PRIVATE KEY-----
-    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDjPFLHojAiGFwv
-    6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM2Ta9f/nOosHTcJzy/nkpvfwz44rD
-    SwpevLFZoPzdEI3WmsVJfb0R01lYnsLf7NyINclSHjs3Octr1EyhP8SF2tvun1zq
-    yirT/vPNB5+hfNhxLcCw4HYxsj4XkF69Af4WcLrmOHrzB2gcW1v7fozJ4MbXv2ra
-    7jS/OseA3qIF2l8Go09mWYiLFfwtCk99rCGoRzhkrVmFShFLJ8dqTAbAwuX43oeq
-    XhMlb3kyRaoi0aRCWhMagtEcW8LqKkO5k694y5Y+xTCMjJsujmWTCjHC5flfkmTk
-    4/ClBAQDAgMBAAECggEAJLKhS8xNqbP1b2eO09Jfxb2P6dJfRwXDybIVjT7/3QpV
-    9pibcKXDyWbZmR1/3/3X2wZt2ufryxV8W33K9vHSUn9FVw5NWdM0+WFtH2vaig1Z
-    u4AtPXIySSjIt2qGB6wJlCEQQ+3MhwUFpIVx1TrfdMU+an4XFnAlJmuZqvz2Oiew
-    uT0mX4B/Sgexp8l1b0pVMytpsEm3HM7TYaUtRbqKQcQ5HXfc+Jsm+6mCTSj0C3Vp
-    5njNwY/gBOtuO1bm+iH9RvH6TMNhBtgsfNp9p2WlrmCKM9koFrgYZscpkVKDjxTe
-    Y/Mq6/9BHyWWxfN70QHZE61985JGVDbSSdnlyQ7KAQKBgQD2Zwp7LHqBWfBHnZL7
-    4Pg05bjkAGd05BjL8KUQBOt2hFiXsPtw90BHdQXcywpd6XMx4D6tqfYLOfSSuFcm
-    pAuM8APAnH0AB4TJ3DZK1vv26a/Sel6ahjttAwFUSEnb1UugVZR2/6TUF2c/RZjK
-    QAOlpqL03Wl2T6xRBQmNXUhr4QKBgQDsFinUpthC9+R1hfKm2CCsd3l/GFbkRfAl
-    YtKN69mrPx/NiB/jBO9UBEckhrDWdzgr1wZotpYGKFD8CvAmzl4IVrJIG22efNWx
-    r8z4cTOH/b52m8pnlc1mdSuQv0RJuk0wC4eqRW8ybBcsA/JrPGKlFjvaxDLvpuW6
-    Ewd7ZWvMYwKBgQDR8bnceWloDVnNq1Uxh930NEf0/OMplbALFF+P5qE5ukpB9WpI
-    NmNufycfmWCb4+1i8c516fraVectnCOlqOCulVKdKrjW7ZEW7arU2ZiWKUbF773r
-    q7O2jnjzdyR3SqXFVyXIvsmSbN5r6sDkkuaInhL60CyrwfbwkXoyGOk8AQKBgQDj
-    7zoPz844SfHO7bYrE7voB6nL5Ynu9v82eUTkNPOA/H8OBwESQ+91ZHPzdf9B8PTQ
-    jtfnPXF3HHGkBkN6lAABeQLDz4d0Xv5KgXsZ2uFvyLKc/Sjb/avD4hhfteqObEqd
-    umQPJt6HBgkRO/ZPRovO67p6Krcq3i4qCrlMj80WFQKBgB19q/Ja0xPxrTaNjZTo
-    VkAXHU/+pY1f2xHn7hkDlVHZiqLHb/1Jt17IUd9DhXfShneH+h37OPne3iT198aG
-    Hjisp/sALgNP4jyR8w1a/OUIwBR5UhDFfPSwctyE12ojEn4syegh0sUK3i2m3Fmf
-    Ub7w8oJqMapWI3XxHOLOAi6o
-    -----END PRIVATE KEY-----
+  # mqtt-to-blob, minio, kafka-to-blob
+  blobstorage:
+    enabled: true
+
+  # factoryinput, grafanaproxy
+  datainput:
+    enabled: true
+
+  mqttBridge:
+    enabled: true
+    remoteURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"
+    topic: "ia/factoryinsight" # /# will be automatically appended to the string specified here.
+    CAcert: |
+      -----BEGIN CERTIFICATE-----
+      MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
+      BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
+      NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
+      AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
+      KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
+      qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
+      SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
+      Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
+      ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
+      BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
+      ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
+      oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
+      hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
+      xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
+      nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
+      AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
+      VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
+      zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
+      -----END CERTIFICATE-----
+    cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIDVTCCAj2gAwIBAgIQD9BkaD7SQzUuHzt+0P4dRTANBgkqhkiG9w0BAQsFADAW
+      MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMyNDZaFw0yNDAzMjEx
+      MTMyNDZaMBIxEDAOBgNVBAMMB1RFU1RJTkcwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+      DwAwggEKAoIBAQDjPFLHojAiGFwv6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM
+      2Ta9f/nOosHTcJzy/nkpvfwz44rDSwpevLFZoPzdEI3WmsVJfb0R01lYnsLf7NyI
+      NclSHjs3Octr1EyhP8SF2tvun1zqyirT/vPNB5+hfNhxLcCw4HYxsj4XkF69Af4W
+      cLrmOHrzB2gcW1v7fozJ4MbXv2ra7jS/OseA3qIF2l8Go09mWYiLFfwtCk99rCGo
+      RzhkrVmFShFLJ8dqTAbAwuX43oeqXhMlb3kyRaoi0aRCWhMagtEcW8LqKkO5k694
+      y5Y+xTCMjJsujmWTCjHC5flfkmTk4/ClBAQDAgMBAAGjgaIwgZ8wCQYDVR0TBAIw
+      ADAdBgNVHQ4EFgQUhFaNZPNBAIVwr5eIWTxFrbINU+QwUQYDVR0jBEowSIAUvW9f
+      QDy1ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQj
+      aJ3ooVfD+cS/1tGFWwOHMz+jOTATBgNVHSUEDDAKBggrBgEFBQcDAjALBgNVHQ8E
+      BAMCB4AwDQYJKoZIhvcNAQELBQADggEBAGqggXaytY98QujICX8WxDljf4GvBN4e
+      pQ8ejjvE9n88bW51h4JOxv6toNhz3FgPWj+PDRp6oUkfujkM0Wx8iHy4O+GceD2l
+      tV91Ds86C7MncZqMN2fICkTbyzsk9ru5dqXtAIjX9Xlr5ZqDmtfgW5ze1+1UULAB
+      5i9qaP02xQpQ1YwNPD5oSnbUJB7aKfnYsXlunBAxsjbdDoTGODdsjks1TWDKpbST
+      0DRN+Jm6sggWvJitRPNWtxC2UE/DVWqtBGXPBvwFjQrJHpnqb9lpzVhxoWxY2AI4
+      61eCOb6s6MslCkER6H9jlBhIxWpEPTNgdjth6uRA48FpAqze26Sj8L4=
+      -----END CERTIFICATE-----
+    privkey: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDjPFLHojAiGFwv
+      6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM2Ta9f/nOosHTcJzy/nkpvfwz44rD
+      SwpevLFZoPzdEI3WmsVJfb0R01lYnsLf7NyINclSHjs3Octr1EyhP8SF2tvun1zq
+      yirT/vPNB5+hfNhxLcCw4HYxsj4XkF69Af4WcLrmOHrzB2gcW1v7fozJ4MbXv2ra
+      7jS/OseA3qIF2l8Go09mWYiLFfwtCk99rCGoRzhkrVmFShFLJ8dqTAbAwuX43oeq
+      XhMlb3kyRaoi0aRCWhMagtEcW8LqKkO5k694y5Y+xTCMjJsujmWTCjHC5flfkmTk
+      4/ClBAQDAgMBAAECggEAJLKhS8xNqbP1b2eO09Jfxb2P6dJfRwXDybIVjT7/3QpV
+      9pibcKXDyWbZmR1/3/3X2wZt2ufryxV8W33K9vHSUn9FVw5NWdM0+WFtH2vaig1Z
+      u4AtPXIySSjIt2qGB6wJlCEQQ+3MhwUFpIVx1TrfdMU+an4XFnAlJmuZqvz2Oiew
+      uT0mX4B/Sgexp8l1b0pVMytpsEm3HM7TYaUtRbqKQcQ5HXfc+Jsm+6mCTSj0C3Vp
+      5njNwY/gBOtuO1bm+iH9RvH6TMNhBtgsfNp9p2WlrmCKM9koFrgYZscpkVKDjxTe
+      Y/Mq6/9BHyWWxfN70QHZE61985JGVDbSSdnlyQ7KAQKBgQD2Zwp7LHqBWfBHnZL7
+      4Pg05bjkAGd05BjL8KUQBOt2hFiXsPtw90BHdQXcywpd6XMx4D6tqfYLOfSSuFcm
+      pAuM8APAnH0AB4TJ3DZK1vv26a/Sel6ahjttAwFUSEnb1UugVZR2/6TUF2c/RZjK
+      QAOlpqL03Wl2T6xRBQmNXUhr4QKBgQDsFinUpthC9+R1hfKm2CCsd3l/GFbkRfAl
+      YtKN69mrPx/NiB/jBO9UBEckhrDWdzgr1wZotpYGKFD8CvAmzl4IVrJIG22efNWx
+      r8z4cTOH/b52m8pnlc1mdSuQv0RJuk0wC4eqRW8ybBcsA/JrPGKlFjvaxDLvpuW6
+      Ewd7ZWvMYwKBgQDR8bnceWloDVnNq1Uxh930NEf0/OMplbALFF+P5qE5ukpB9WpI
+      NmNufycfmWCb4+1i8c516fraVectnCOlqOCulVKdKrjW7ZEW7arU2ZiWKUbF773r
+      q7O2jnjzdyR3SqXFVyXIvsmSbN5r6sDkkuaInhL60CyrwfbwkXoyGOk8AQKBgQDj
+      7zoPz844SfHO7bYrE7voB6nL5Ynu9v82eUTkNPOA/H8OBwESQ+91ZHPzdf9B8PTQ
+      jtfnPXF3HHGkBkN6lAABeQLDz4d0Xv5KgXsZ2uFvyLKc/Sjb/avD4hhfteqObEqd
+      umQPJt6HBgkRO/ZPRovO67p6Krcq3i4qCrlMj80WFQKBgB19q/Ja0xPxrTaNjZTo
+      VkAXHU/+pY1f2xHn7hkDlVHZiqLHb/1Jt17IUd9DhXfShneH+h37OPne3iT198aG
+      Hjisp/sALgNP4jyR8w1a/OUIwBR5UhDFfPSwctyE12ojEn4syegh0sUK3i2m3Fmf
+      Ub7w8oJqMapWI3XxHOLOAi6o
+      -----END PRIVATE KEY-----
+
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
@@ -138,6 +140,7 @@ serviceAccount:
 
 ### mqttbridge ###
 mqttbridge:
+  enabled: false
   image: unitedmanufacturinghub/mqtt-bridge
   storageRequest: 1Gi
   resources:
@@ -184,30 +187,23 @@ cameraconnect:
       memory: "100Mi"
 
 ### nodered ###
+### nodered ###
 nodered:
+  enabled: false
   pluginInstallEnabled: true
   pluginInstallLines: |-
-      npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
-      npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
-      npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
-      npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
-      npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
+    npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
   tag: 2.0.6
   port: 1880
   storageRequest: 1Gi
   env:
-      NODE_RED_ENABLE_SAFE_MODE: false
-  resources:
-    requests:
-      cpu: "10m"
-      memory: "100Mi"
-    limits:
-      cpu: "500m"
-      memory: "500Mi"
+    NODE_RED_ENABLE_SAFE_MODE: false
   timezone: Berlin/Europe
-  flows: |-
-    [{"id":"41c9c6783cbe3070","type":"tab","label":"Example flow","disabled":false,"info":""},{"id":"45f7c4f7.dff1cc","type":"tab","label":"Machine data genenerator","disabled":false,"info":""},{"id":"587a158d.20327c","type":"subflow","name":"addShift","info":"","category":"","in":[{"x":40,"y":100,"wires":[{"id":"d4c91958.7b47b8"}]}],"out":[],"env":[],"meta":{},"color":"#D5F0FF","icon":"font-awesome/fa-calendar"},{"id":"9d0bf5c6.2530b8","type":"subflow","name":"output_to_activity","info":"","category":"ia: nodes","in":[],"out":[],"env":[{"name":"max_duration","type":"num","value":"10","ui":{"icon":"font-awesome/fa-clock-o","label":{"en-US":"max_duration"},"type":"input","opts":{"types":["num"]}}},{"name":"customerID","type":"str","value":"samplecustomerID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"location","type":"str","value":"samplelocation","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"AssetID","type":"str","value":"sampleAssetID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}}],"color":"#D5F0FF","icon":"node-red/sort.svg"},{"id":"882af5a6.a58b28","type":"subflow","name":"state_logic","info":"","category":"ia: nodes","in":[],"out":[],"env":[{"name":"customerID","type":"str","value":"samplecustomerID","ui":{"type":"input","opts":{"types":["str"]}}},{"name":"location","type":"str","value":"samplelocation","ui":{"type":"input","opts":{"types":["str"]}}},{"name":"AssetID","type":"str","value":"sampleAssetID","ui":{"type":"input","opts":{"types":["str"]}}}],"meta":{},"color":"#D5F0FF","icon":"node-red/status.svg"},{"id":"ae592577.420618","type":"subflow","name":"processvalue","info":"","category":"","in":[{"x":60,"y":60,"wires":[{"id":"d996e872.8c0c88"}]}],"out":[],"env":[{"name":"namePV","type":"str","value":"yourProcessValueName","ui":{"icon":"font-awesome/fa-text-width","type":"input","opts":{"types":["str"]}}},{"name":"customerID","type":"str","value":"samplecustomerID","ui":{"type":"input","opts":{"types":["str"]}}},{"name":"location","type":"str","value":"samplelocation","ui":{"type":"input","opts":{"types":["str"]}}},{"name":"AssetID","type":"str","value":"sampleAssetID","ui":{"type":"input","opts":{"types":["str"]}}}],"meta":{},"color":"#D5F0FF","icon":"font-awesome/fa-area-chart"},{"id":"fc9d8f9c.14845","type":"subflow","name":"count","info":"","category":"","in":[{"x":140,"y":120,"wires":[{"id":"a85c6ef3.fcf27"}]}],"out":[],"env":[{"name":"customerID","type":"str","value":"samplecustomerID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"location","type":"str","value":"samplelocation","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"AssetID","type":"str","value":"sampleAssetID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}}],"color":"#D5F0FF","icon":"node-red-dashboard/ui_chart.png"},{"id":"b60b06bc.cdb4c8","type":"subflow","name":"detectedAnomaly","info":"","category":"","in":[{"x":40,"y":80,"wires":[{"id":"c9fa6d5b.84b01"}]}],"out":[],"env":[{"name":"customerID","type":"str","value":"samplecustomerID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"location","type":"str","value":"samplelocation","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"AssetID","type":"str","value":"sampleAssetID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}}],"color":"#D5F0FF","icon":"node-red/alert.svg"},{"id":"b77cb6f5.685178","type":"subflow","name":"activity","info":"","category":"","in":[{"x":60,"y":80,"wires":[{"id":"6e72af6b.e6363"}]}],"out":[],"env":[{"name":"customerID","type":"str","value":"samplecustomerID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"location","type":"str","value":"samplelocation","ui":{"type":"input","opts":{"types":["str"]},"label":{}}},{"name":"AssetID","type":"str","value":"sampleAssetID","ui":{"type":"input","opts":{"types":["str"]},"label":{}}}],"color":"#D5F0FF","icon":"node-red/serial.svg"},{"id":"62375092.d1012","type":"group","z":"45f7c4f7.dff1cc","name":"Sample Data","style":{"stroke":"none","fill":"#DAECF0","label":true,"color":"#000000","label-position":"n"},"nodes":["6e3f046.47cecfc","f8283b61.08d9e8","5b0afc76.d39564","20f4ef35.92e22","5649a4d0.ce43ec","3b5e6754.ff4f18"],"x":34,"y":19,"w":212,"h":282},{"id":"7cef6b1d.d23a54","type":"group","z":"45f7c4f7.dff1cc","name":"United Manufacturing Hub Nodered-connectors","style":{"fill":"#2D393D","fill-opacity":"0.66","label":true,"color":"#ffffff","label-position":"n","stroke":"none"},"nodes":["96c50010.c50af","ae8cdaa6.a56a68","c8d8afe1.59fa","246a1685.58379a","7bb0392e.8a3bf8","b34237d9.7d2cc8","e61e8604.509d48"],"x":474,"y":19,"w":301,"h":322},{"id":"ba92812b.1beda","type":"group","z":"45f7c4f7.dff1cc","name":"Selection of standard interfaces","style":{"stroke":"none","fill":"#DAECF0","label":true,"label-position":"n","color":"#000000"},"nodes":["c3372d57.50822","37c52f75.d6a81","a8e1a854.89e108","cdd3a9a3.ceed18","28b0d095.a6f2e","15717681.474919","28ac3b5b.0c6e64","37c52f75.d6a81","6c82df5c.fb975","392b9fc.5171e6"],"x":54,"y":459,"w":572,"h":322},{"id":"5dff9791.d1b278","type":"mqtt-broker","name":"","broker":"factorycube-server-vernemq-local-service.factorycube-server","port":"8883","clientid":"","usetls":false,"compatmode":false,"protocolVersion":"4","keepalive":"60","cleansession":true,"birthTopic":"","birthQos":"0","birthPayload":"","birthMsg":{},"closeTopic":"","closeQos":"0","closePayload":"","closeMsg":{},"willTopic":"","willQos":"0","willPayload":"","willMsg":{},"sessionExpiry":""},{"id":"d4c91958.7b47b8","type":"function","z":"587a158d.20327c","name":"Create Shift","func":"timestamp_ms = Date.now() \ntimestamp_ms_end = timestamp_ms + (msg.duration_in_minutes * 60*1000)\n\nmsg.payload = {\n \"timestamp_ms\": timestamp_ms, \n \"timestamp_ms_end\": timestamp_ms_end,\n}\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/addShift\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":190,"y":100,"wires":[["38e4349e.30f73c"]]},{"id":"38e4349e.30f73c","type":"mqtt out","z":"587a158d.20327c","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"1","retain":"","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"5dff9791.d1b278","x":450,"y":100,"wires":[]},{"id":"1a01904d.a305b","type":"json","z":"9d0bf5c6.2530b8","name":"","property":"payload","action":"","pretty":false,"x":250,"y":100,"wires":[["d5821e95.eb077"]]},{"id":"85638585.b5dfb8","type":"mqtt in","z":"9d0bf5c6.2530b8","name":"MQTT-IN: output","topic":"ia/+/+/+/count","qos":"2","datatype":"auto","broker":"5dff9791.d1b278","nl":false,"rap":false,"x":100,"y":100,"wires":[["1a01904d.a305b"]]},{"id":"d5821e95.eb077","type":"function","z":"9d0bf5c6.2530b8","name":"Check for exakt Topic","func":"var topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/count\"\nif (topic == msg.topic) {\n msg.payload = msg.payload\n} else {\n msg.payload = null;\n}\nreturn msg;","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":420,"y":100,"wires":[["dc440bb.3e238f8"]]},{"id":"dc440bb.3e238f8","type":"switch","z":"9d0bf5c6.2530b8","name":"","property":"payload","propertyType":"msg","rules":[{"t":"nnull"}],"checkall":"true","repair":false,"outputs":1,"x":590,"y":100,"wires":[["c52cba61.6b62d8"]]},{"id":"b9e10ec3.94988","type":"function","z":"9d0bf5c6.2530b8","name":"Format: activity ","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"activity\": msg.payload\n}\n\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/activity\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":1400,"y":100,"wires":[["55c7ebc4.703714"]]},{"id":"55c7ebc4.703714","type":"mqtt out","z":"9d0bf5c6.2530b8","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"2","retain":"","broker":"5dff9791.d1b278","x":1670,"y":100,"wires":[]},{"id":"a0736c99.0b8bc","type":"rbe","z":"9d0bf5c6.2530b8","name":"","func":"rbe","gap":"","start":"","inout":"out","property":"payload","x":1250,"y":100,"wires":[["b9e10ec3.94988"]]},{"id":"c52cba61.6b62d8","type":"function","z":"9d0bf5c6.2530b8","name":"","func":"flow.set(\"ts_last_output\", Date.now())\nreturn null;","outputs":1,"noerr":0,"x":720,"y":100,"wires":[[]]},{"id":"3f8212b6.7c6b8e","type":"function","z":"9d0bf5c6.2530b8","name":"","func":"if (flow.get(\"ts_last_output\")==undefined) {\n flow.set(\"ts_last_output\", Date.now())\n return null;\n} else if ((Date.now()-flow.get(\"ts_last_output\"))<env.get(\"max_duration\")*1000) {\n msg.payload = true;\n} else {\n msg.payload = false;\n}\nreturn msg;","outputs":1,"noerr":0,"x":1100,"y":100,"wires":[["a0736c99.0b8bc"]]},{"id":"1a8345c1.409d4a","type":"inject","z":"9d0bf5c6.2530b8","name":"","repeat":"0.25","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"","payloadType":"date","x":930,"y":100,"wires":[["3f8212b6.7c6b8e"]]},{"id":"b3c8f72d.df9cb8","type":"function","z":"882af5a6.a58b28","name":"State logic","func":"msg.payload = msg.payload.detectedAnomaly\nreturn msg;","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":1310,"y":120,"wires":[["8515bd04.5e05b"]]},{"id":"39cac321.c87fbc","type":"function","z":"882af5a6.a58b28","name":"get currentactivity","func":"msg.payload.currentActivity = flow.get(\"currentActivity\")\nreturn msg;","outputs":1,"noerr":0,"x":830,"y":120,"wires":[["8f417e0a.f6dc9"]]},{"id":"8f417e0a.f6dc9","type":"switch","z":"882af5a6.a58b28","name":"Only when machine is not running","property":"payload.currentActivity","propertyType":"msg","rules":[{"t":"false"}],"checkall":"true","repair":false,"outputs":1,"x":1080,"y":120,"wires":[["b3c8f72d.df9cb8"]]},{"id":"e25eb0a9.c84f1","type":"function","z":"882af5a6.a58b28","name":"set currentactivity","func":"flow.set(\"currentActivity\",msg.payload.activity)\nreturn msg;","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":750,"y":40,"wires":[["a53182a9.61bec"]]},{"id":"13ec32fe.d3a99d","type":"function","z":"882af5a6.a58b28","name":"Format: state (Machine Not Running with reason)","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"state\": parseInt(msg.payload)\n}\nflow.set(\"currentState\",msg.payload.state)\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/state\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":1710,"y":120,"wires":[["dae1723d.6a99f"]]},{"id":"a53182a9.61bec","type":"switch","z":"882af5a6.a58b28","name":"","property":"payload.activity","propertyType":"msg","rules":[{"t":"true"},{"t":"false"}],"checkall":"true","repair":false,"outputs":2,"x":910,"y":40,"wires":[["1a46ed5a.1bc5a3"],["947fea87.7b4ba8","4b651e29.d8987"]]},{"id":"1a46ed5a.1bc5a3","type":"function","z":"882af5a6.a58b28","name":"Format: state (Machine running)","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"state\": 0\n}\nflow.set(\"currentState\",msg.payload.state)\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/state\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":1110,"y":40,"wires":[["dae1723d.6a99f"]]},{"id":"de0540c3.06dbd","type":"function","z":"882af5a6.a58b28","name":"Format: state (Machine not running no reason specified)","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"state\": 40000\n}\nflow.set(\"currentState\",msg.payload.state)\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/state\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":1490,"y":80,"wires":[["dae1723d.6a99f"]]},{"id":"dae1723d.6a99f","type":"mqtt out","z":"882af5a6.a58b28","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"2","retain":"","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"5dff9791.d1b278","x":2090,"y":80,"wires":[]},{"id":"8515bd04.5e05b","type":"switch","z":"882af5a6.a58b28","name":"","property":"payload","propertyType":"msg","rules":[{"t":"nnull"}],"checkall":"true","repair":false,"outputs":1,"x":1450,"y":120,"wires":[["13ec32fe.d3a99d"]]},{"id":"998214b0.4c1f38","type":"json","z":"882af5a6.a58b28","name":"","property":"payload","action":"","pretty":false,"x":250,"y":40,"wires":[["c14538f4.87cec8"]]},{"id":"22e3fbe0.e64c64","type":"mqtt in","z":"882af5a6.a58b28","name":"MQTT-IN: activity","topic":"ia/+/+/+/activity","qos":"2","datatype":"auto","broker":"5dff9791.d1b278","nl":false,"rap":false,"x":100,"y":40,"wires":[["998214b0.4c1f38"]]},{"id":"c14538f4.87cec8","type":"function","z":"882af5a6.a58b28","name":"Check for exakt Topic","func":"var topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/activity\"\nif (topic == msg.topic) {\n msg.payload = msg.payload\n} else {\n msg.payload = null;\n}\nreturn msg;","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":420,"y":40,"wires":[["e6293a0b.38e8b8"]]},{"id":"e6293a0b.38e8b8","type":"switch","z":"882af5a6.a58b28","name":"","property":"payload","propertyType":"msg","rules":[{"t":"nnull"}],"checkall":"true","repair":false,"outputs":1,"x":590,"y":40,"wires":[["e25eb0a9.c84f1"]]},{"id":"5ae068fb.be12a8","type":"mqtt in","z":"882af5a6.a58b28","name":"MQTT-IN: detectedAnomaly","topic":"ia/+/+/+/detectedAnomaly","qos":"2","datatype":"auto","broker":"5dff9791.d1b278","nl":false,"rap":false,"x":140,"y":120,"wires":[["8e9ed065.211af"]]},{"id":"8e9ed065.211af","type":"json","z":"882af5a6.a58b28","name":"","property":"payload","action":"","pretty":false,"x":330,"y":120,"wires":[["4a120d3d.8fad64"]]},{"id":"4a120d3d.8fad64","type":"function","z":"882af5a6.a58b28","name":"Check for exakt Topic","func":"var topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/detectedAnomaly\"\nif (topic == msg.topic) {\n msg.payload = msg.payload\n} else {\n msg.payload = null;\n}\nreturn msg;","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":500,"y":120,"wires":[["a82cfed9.9856a"]]},{"id":"a82cfed9.9856a","type":"switch","z":"882af5a6.a58b28","name":"","property":"payload","propertyType":"msg","rules":[{"t":"nnull"}],"checkall":"true","repair":false,"outputs":1,"x":670,"y":120,"wires":[["39cac321.c87fbc"]]},{"id":"947fea87.7b4ba8","type":"debug","z":"882af5a6.a58b28","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","statusVal":"","statusType":"auto","x":540,"y":240,"wires":[]},{"id":"4b651e29.d8987","type":"function","z":"882af5a6.a58b28","name":"Was last state == machine running?","func":"if (flow.get(\"currentState\")==0) {\n return msg;\n} else {\n return null;\n}\n\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":1120,"y":360,"wires":[["de0540c3.06dbd"]]},{"id":"4888b756.23e248","type":"mqtt out","z":"ae592577.420618","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"1","retain":"","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"5dff9791.d1b278","x":570,"y":60,"wires":[]},{"id":"d996e872.8c0c88","type":"function","z":"ae592577.420618","name":"Format: processValue","func":"var namePV = env.get(\"namePV\")\nvar tempJSON = {\n\"timestamp_ms\": Date.now(),\n}\ntempJSON[namePV]=msg.payload;\nmsg.payload= tempJSON;\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/processValue\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":300,"y":60,"wires":[["4888b756.23e248"]]},{"id":"a85c6ef3.fcf27","type":"function","z":"fc9d8f9c.14845","name":"Format: count","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"count\": msg.payload\n}\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/count\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":300,"y":120,"wires":[["767ff1ad.008cd"]]},{"id":"767ff1ad.008cd","type":"mqtt out","z":"fc9d8f9c.14845","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"2","retain":"","broker":"5dff9791.d1b278","x":550,"y":120,"wires":[]},{"id":"1222fb98.eff494","type":"mqtt out","z":"b60b06bc.cdb4c8","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"","retain":"","broker":"5dff9791.d1b278","x":470,"y":80,"wires":[]},{"id":"c9fa6d5b.84b01","type":"function","z":"b60b06bc.cdb4c8","name":"Format: detectedAnomaly","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"detectedAnomaly\": msg.payload\n}\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/detectedAnomaly\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":190,"y":80,"wires":[["1222fb98.eff494"]]},{"id":"6e72af6b.e6363","type":"function","z":"b77cb6f5.685178","name":"Format: Activity","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"activity\": msg.payload\n}\nmsg.topic = \"ia/\"+env.get(\"customerID\")+\"/\"+env.get(\"location\")+\"/\"+env.get(\"AssetID\")+\"/activity\"\nreturn msg;\n\n","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":340,"y":80,"wires":[["c68b3ec2.40d31"]]},{"id":"c68b3ec2.40d31","type":"mqtt out","z":"b77cb6f5.685178","name":"MQTT-OUT: Verarbeitete Daten","topic":"","qos":"2","retain":"","broker":"5dff9791.d1b278","x":570,"y":80,"wires":[]},{"id":"96c50010.c50af","type":"subflow:b77cb6f5.685178","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[{"name":"customerID","value":"factoryinsight","type":"str"},{"name":"location","value":"test","type":"str"},{"name":"AssetID","value":"test","type":"str"}],"x":550,"y":140,"wires":[]},{"id":"ae8cdaa6.a56a68","type":"subflow:b60b06bc.cdb4c8","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[{"name":"customerID","value":"factoryinsight","type":"str"},{"name":"location","value":"test","type":"str"},{"name":"AssetID","value":"test","type":"str"}],"x":590,"y":220,"wires":[]},{"id":"c8d8afe1.59fa","type":"subflow:fc9d8f9c.14845","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[{"name":"customerID","value":"factoryinsight","type":"str"},{"name":"location","value":"test","type":"str"},{"name":"AssetID","value":"test","type":"str"}],"x":550,"y":180,"wires":[]},{"id":"246a1685.58379a","type":"subflow:ae592577.420618","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[{"name":"customerID","value":"factoryinsight","type":"str"},{"name":"location","value":"test","type":"str"},{"name":"AssetID","value":"test","type":"str"}],"x":570,"y":260,"wires":[]},{"id":"7bb0392e.8a3bf8","type":"subflow:882af5a6.a58b28","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[{"name":"customerID","value":"factoryinsight","type":"str"},{"name":"location","value":"test","type":"str"},{"name":"AssetID","value":"test","type":"str"},{"name":"customer_states","value":"","type":"str"}],"x":560,"y":100,"wires":[]},{"id":"b34237d9.7d2cc8","type":"subflow:9d0bf5c6.2530b8","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[{"name":"customerID","value":"factoryinsight","type":"str"},{"name":"location","value":"test","type":"str"},{"name":"AssetID","value":"test","type":"str"}],"x":580,"y":60,"wires":[]},{"id":"6e3f046.47cecfc","type":"inject","z":"45f7c4f7.dff1cc","g":"62375092.d1012","name":"True","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"5","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"true","payloadType":"bool","x":130,"y":60,"wires":[["96c50010.c50af"]]},{"id":"f8283b61.08d9e8","type":"inject","z":"45f7c4f7.dff1cc","g":"62375092.d1012","name":"False","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"8","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"false","payloadType":"bool","x":130,"y":100,"wires":[["8dfcab17.6eb338"]]},{"id":"5b0afc76.d39564","type":"inject","z":"45f7c4f7.dff1cc","g":"62375092.d1012","name":"Number","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"3","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"60000","payloadType":"num","x":140,"y":180,"wires":[["ae8cdaa6.a56a68"]]},{"id":"20f4ef35.92e22","type":"inject","z":"45f7c4f7.dff1cc","g":"62375092.d1012","name":"True","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"15","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"1","payloadType":"num","x":130,"y":140,"wires":[["88623f34.27cac"]]},{"id":"5649a4d0.ce43ec","type":"inject","z":"45f7c4f7.dff1cc","g":"62375092.d1012","name":"True","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"15","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"","payloadType":"date","x":130,"y":220,"wires":[["246a1685.58379a"]]},{"id":"c3372d57.50822","type":"mqtt in","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","name":"","topic":"ia/#","qos":"2","datatype":"auto","broker":"5dff9791.d1b278","nl":false,"rap":false,"x":150,"y":500,"wires":[[]]},{"id":"a8e1a854.89e108","type":"s7 in","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","endpoint":"","mode":"single","variable":"","diff":true,"name":"","x":150,"y":620,"wires":[[]]},{"id":"cdd3a9a3.ceed18","type":"s7 out","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","endpoint":"","variable":"","name":"","x":150,"y":660,"wires":[]},{"id":"28b0d095.a6f2e","type":"http request","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","name":"REST","method":"GET","ret":"txt","paytoqs":"ignore","url":"","tls":"","persist":false,"proxy":"","authType":"","x":150,"y":700,"wires":[[]]},{"id":"15717681.474919","type":"tcp request","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","server":"","port":"","out":"time","splitc":"0","name":"TCP-IP","x":160,"y":740,"wires":[[]]},{"id":"28ac3b5b.0c6e64","type":"inject","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","name":"","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"1","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"","payloadType":"date","x":170,"y":540,"wires":[["6c82df5c.fb975"]]},{"id":"37c52f75.d6a81","type":"modbus-read","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","name":"","topic":"","showStatusActivities":false,"logIOActivities":false,"showErrors":false,"unitid":"","dataType":"","adr":"","quantity":"","rate":"","rateUnit":"","delayOnStart":false,"startDelayTime":"","server":"","useIOFile":false,"ioFile":"","useIOForPayload":false,"emptyMsgOnFail":false,"x":170,"y":580,"wires":[[],[]]},{"id":"3b5e6754.ff4f18","type":"cronplus","z":"45f7c4f7.dff1cc","g":"62375092.d1012","name":"Default shifts","outputField":"duration_in_minutes","timeZone":"Europe/Berlin","persistDynamic":false,"commandResponseMsgOutput":"output2","outputs":2,"options":[{"name":"shift_1","topic":"shift_1","payloadType":"num","payload":"180","expressionType":"cron","expression":"0 00 9 * * 1-5","location":"","offset":"0","solarType":"all","solarEvents":"sunrise,sunset"},{"name":"schedule2","topic":"schedule2","payloadType":"num","payload":"400","expressionType":"cron","expression":"0 0 13 * * 1-5","location":"","offset":"0","solarType":"all","solarEvents":"sunrise,sunset"}],"x":150,"y":260,"wires":[["e61e8604.509d48"],[]]},{"id":"e61e8604.509d48","type":"subflow:587a158d.20327c","z":"45f7c4f7.dff1cc","g":"7cef6b1d.d23a54","name":"","env":[],"x":560,"y":300,"wires":[]},{"id":"8dfcab17.6eb338","type":"delay","z":"45f7c4f7.dff1cc","name":"","pauseType":"delay","timeout":"333","timeoutUnits":"milliseconds","rate":"1","nbRateUnits":"1","rateUnits":"second","randomFirst":"1","randomLast":"5","randomUnits":"seconds","drop":false,"x":350,"y":140,"wires":[["96c50010.c50af"]]},{"id":"88623f34.27cac","type":"delay","z":"45f7c4f7.dff1cc","name":"","pauseType":"delay","timeout":"666","timeoutUnits":"milliseconds","rate":"1","nbRateUnits":"1","rateUnits":"second","randomFirst":"1","randomLast":"5","randomUnits":"seconds","drop":false,"x":350,"y":180,"wires":[["c8d8afe1.59fa"]]},{"id":"6c82df5c.fb975","type":"OpcUa-Item","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","item":"","datatype":"","value":"","name":"","x":340,"y":540,"wires":[["392b9fc.5171e6"]]},{"id":"392b9fc.5171e6","type":"OpcUa-Client","z":"45f7c4f7.dff1cc","d":true,"g":"ba92812b.1beda","endpoint":"","action":"read","deadbandtype":"a","deadbandvalue":1,"time":10,"timeUnit":"s","certificate":"n","localfile":"","localkeyfile":"","securitymode":"None","securitypolicy":"None","name":"","x":520,"y":540,"wires":[[]]},{"id":"69acedbea0a497d9","type":"inject","z":"41c9c6783cbe3070","name":"","props":[{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ia/factoryinsight/test/test/count","x":210,"y":180,"wires":[["2ec74b8f684fec8a"]]},{"id":"2ec74b8f684fec8a","type":"function","z":"41c9c6783cbe3070","name":"","func":"msg.payload = {\n\"timestamp_ms\": Date.now(),\n\"count\": 10\n}\nreturn msg;","outputs":1,"noerr":0,"initialize":"","finalize":"","libs":[],"x":380,"y":180,"wires":[["b5f390e651f93b89"]]},{"id":"b5f390e651f93b89","type":"mqtt out","z":"41c9c6783cbe3070","name":"","topic":"","qos":"","retain":"","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"5dff9791.d1b278","x":530,"y":180,"wires":[]}]
-
+  serviceType: LoadBalancer
+  ingress:
+    enabled: false
+    publicHost: ""
+    publicHostSecretName: ""
   settings: |-
     module.exports = {
         // the tcp port that the Node-RED web server is listening on
@@ -448,6 +444,7 @@ nodered:
 
 ### factoryinsight ###
 factoryinsight:
+  enabled: false
   image:
     repository: unitedmanufacturinghub/factoryinsight
     pullPolicy: IfNotPresent
@@ -485,6 +482,7 @@ factoryinsight:
 
 ### factoryinput ###
 factoryinput:
+  enabled: false
   user: factoryinsight
   service:
     annotations: {}
@@ -499,7 +497,7 @@ factoryinput:
 
 ### mqtt-to-blob ###
 mqtttoblob:
-  # not enabled by default
+  enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
     pullPolicy: Always
@@ -510,6 +508,7 @@ mqtttoblob:
 
 ### grafanaproxy ###
 grafanaproxy:
+  enabled: false
   image:
     repository: unitedmanufacturinghub/grafana-proxy
     pullPolicy: IfNotPresent
@@ -531,6 +530,7 @@ grafanaproxy:
 
 ### mqtt-to-postresql ###
 mqtttopostgresql:
+  enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-postgresql
     pullPolicy: IfNotPresent
@@ -542,8 +542,9 @@ mqtttopostgresql:
     enabled: true
     minAvailable: 1
 
-### minio-operator ###
-minio-operator:
+### miniooperator ###
+miniooperator:
+  enabled: false
   loadBalancerEnabled: false
   service:
     annotations: {}
@@ -680,14 +681,15 @@ minio-operator:
         externalCertSecret: {}
 
 ### timescaleDB ###
-timescaledb-single:
+timescaledbsingle:
+  enabled: false
   # This file and its contents are licensed under the Apache License 2.0.
   # Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 
   replicaCount: 1
 
   # To prevent very long names, we override the name, otherwise it would default to
-  # timescaledb-single (the name of the chart)
+  # timescaledbsingle (the name of the chart)
   nameOverride: timescaledb
 
   # The default Patroni name of the cluster ("scope") is derived from the name of the release,
@@ -1226,7 +1228,7 @@ timescaledb-single:
 
 ### grafana ###
 grafana:
-
+  enabled: false
   rbac:
     create: true
     ## Use an existing ClusterRole/Role (depending on rbac.namespaced false/true)
@@ -1985,3 +1987,555 @@ grafana:
   #   requests:
   #     cpu: 50m
   #     memory: 50Mi
+
+### kowl ###
+kowl:
+  enabled: false
+  kowl:
+    config:
+      kafka:
+        brokers:
+          - factorycube-server-kafka:9092
+
+
+### mqtt-kafka-bridge ###
+mqttkafkabridge:
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/mqtt-kafka-bridge
+    pullPolicy: IfNotPresent
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+### kafka-to-blob ###
+kafkatoblob:
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/kafka-to-blob
+    pullPolicy: IfNotPresent
+  replicas: 1
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+##### CONFIG FOR APACHE KAFKA #####
+kafka:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/kafka
+    tag: 2.8.1-debian-10-r31
+    pullPolicy: IfNotPresent
+    pullSecrets: [ ]
+    debug: false
+  replicas: 1
+  storageRequest: 1Gi
+  allowPlaintextListener: yes
+  service:
+    type: ClusterIP
+    port: 9092
+    internalPort: 9093
+    externalPort: 9094
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    mountPath: /bitnami/kafka
+  logPersistence:
+    enabled: false
+  provisioning:
+    enabled: false
+    numPartitions: 1
+    replicationFactor: 1
+  zookeeper:
+    enabled: true
+    auth:
+      enabled: false
+  externalZookeeper:
+    servers: [ ]
+
+
+##### CONFIG FOR REDIS #####
+redis:
+  enabled: false
+  cluster:
+    enabled: true
+    slaveCount: 1
+  clusterDomain: cluster.local
+  common:
+    exampleValue: common-chart
+    global:
+      redis: {}
+  configmap: |-
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+  global:
+    redis: {}
+  image:
+    pullPolicy: IfNotPresent
+    registry: docker.io
+    repository: bitnami/redis
+    tag: 6.0.9-debian-10-r13
+  master:
+    affinity: {}
+    command: /run.sh
+    customLivenessProbe: {}
+    customReadinessProbe: {}
+    disableCommands:
+      - FLUSHDB
+      - FLUSHALL
+    extraEnvVars: []
+    extraEnvVarsCM: []
+    extraEnvVarsSecret: []
+    extraFlags:
+      - --maxmemory 4gb
+    hostAliases: []
+    livenessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 5
+    persistence:
+      accessModes:
+        - ReadWriteOnce
+      enabled: true
+      matchExpressions: {}
+      matchLabels: {}
+      path: /data
+      size: 8Gi
+      subPath: ""
+      volumes: null
+    podAnnotations: {}
+    podLabels: {}
+    preExecCmds: ""
+    priorityClassName: ""
+    readinessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 120
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 1
+    resources:
+      limits:
+        memory: 4Gi
+      requests:
+        cpu: 100m
+        memory: 1Gi
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      port: 6379
+      type: ClusterIP
+    shareProcessNamespace: false
+    statefulset:
+      annotations: {}
+      labels: {}
+      updateStrategy: RollingUpdate
+      volumeClaimTemplates:
+        annotations: {}
+        labels: {}
+  metrics:
+    enabled: true
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/redis-exporter
+      tag: 1.13.1-debian-10-r6
+    podAnnotations:
+      prometheus.io/port: "9121"
+      prometheus.io/scrape: "true"
+    priorityClassName: {}
+    prometheusRule:
+      additionalLabels: {}
+      enabled: false
+      namespace: ""
+      rules: []
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      type: ClusterIP
+    serviceMonitor:
+      enabled: false
+      metricRelabelings: []
+      relabelings: []
+      selector:
+        prometheus: kube-prometheus
+  networkPolicy:
+    enabled: false
+    ingressNSMatchLabels: {}
+    ingressNSPodMatchLabels: {}
+  #password: changeme
+  existingSecret: redis-secret
+  existingSecretPasswordKey: redispassword
+  persistence: {}
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  podSecurityPolicy:
+    create: false
+  rbac:
+    create: false
+    role:
+      rules: []
+  redisPort: 6379
+  securityContext:
+    enabled: true
+    fsGroup: 1001
+  sentinel:
+    customLivenessProbe: {}
+    customReadinessProbe: {}
+    downAfterMilliseconds: 1000
+    enabled: true
+    extraEnvVars: []
+    extraEnvVarsCM: []
+    extraEnvVarsSecret: []
+    failoverTimeout: 18000
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/redis-sentinel
+      tag: 6.0.9-debian-10-r14
+    initialCheckTimeout: 5
+    livenessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 5
+    masterSet: mymaster
+    parallelSyncs: 1
+    port: 26379
+    preExecCmds: ""
+    # quorum: 2
+    quorum: 1
+    readinessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 120
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      redisPort: 6379
+      sentinelPort: 26379
+      type: ClusterIP
+    staticID: false
+    usePassword: true
+  serviceAccount:
+    create: false
+  slave:
+    affinity: {}
+    command: /run.sh
+    customLivenessProbe: {}
+    customReadinessProbe: {}
+    disableCommands:
+      - FLUSHDB
+      - FLUSHALL
+    extraEnvVars: []
+    extraEnvVarsCM: []
+    extraEnvVarsSecret: []
+    extraFlags: []
+    hostAliases: []
+    livenessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    persistence:
+      accessModes:
+        - ReadWriteOnce
+      enabled: true
+      matchExpressions: {}
+      matchLabels: {}
+      path: /data
+      size: 8Gi
+      subPath: ""
+    podAnnotations: {}
+    podLabels: {}
+    port: 6379
+    preExecCmds: ""
+    priorityClassName: {}
+    readinessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 120
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 10
+    resources:
+      limits:
+        memory: 4Gi
+      requests:
+        cpu: 100m
+        memory: 1Gi
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      port: 6379
+      type: ClusterIP
+    shareProcessNamespace: false
+    spreadConstraints: {}
+    statefulset:
+      annotations: {}
+      labels: {}
+      updateStrategy: RollingUpdate
+      volumeClaimTemplates:
+        annotations: {}
+        labels: {}
+  sysctlImage:
+    command: []
+    enabled: false
+    mountHostSys: false
+    pullPolicy: Always
+    registry: docker.io
+    repository: bitnami/minideb
+    resources: {}
+    tag: buster
+  tls:
+    authClients: true
+    enabled: false
+  usePassword: true
+  usePasswordFile: false
+  volumePermissions:
+    enabled: false
+    image:
+      pullPolicy: Always
+      registry: docker.io
+      repository: bitnami/minideb
+      tag: buster
+    resources: {}
+    securityContext:
+      runAsUser: 0
+
+
+##### CONFIG FOR VERNEMQ #####
+vernemq:
+  enabled: false
+  AclConfig: |-
+    pattern write ia/raw/%u/#
+    pattern write ia/%u/#
+    pattern $SYS/broker/connection/%c/state
+    user TESTING
+    topic ia/#
+    topic $SYS/#
+    topic read $share/TESTING/ia/#
+    user ia_nodered
+    topic ia/#
+  CACert: |-
+    -----BEGIN CERTIFICATE-----
+    MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
+    BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
+    NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
+    AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
+    KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
+    qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
+    SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
+    Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
+    ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
+    BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
+    ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
+    oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
+    hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
+    xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
+    nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
+    AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
+    VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
+    zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
+    -----END CERTIFICATE-----
+  Cert: |-
+    -----BEGIN CERTIFICATE-----
+    MIIDjzCCAnegAwIBAgIQB6OLOw2bXBVXZD3ArV2i+jANBgkqhkiG9w0BAQsFADAW
+    MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMxMDdaFw0yNDAzMjEx
+    MTMxMDdaMCUxIzAhBgNVBAMMGmZhY3RvcnljdWJlLXNlcnZlci12ZXJuZW1xMIIB
+    IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4EGKWn5ZSNtC5t3bsMjTMow3
+    usMfM/1NzM9MYAvUMy71WHdCt/10bnIzRwYLUMtjAQURvyq+dXaj1DMz7452uzCC
+    GE6r6SojReH7snAWMgrbDhE3psokW4LY6/tH5ihOBu1xfUtI1ac6rkHz4JsURpHj
+    5HAGnPkfOiQZc10AxBxPz9i558a7J58Y4FZ0M51rgKaWAr+qDMzjfdNI/MUs1JTd
+    Yn8QM0Sv2XjP4CziqWOa0Xf4MsoLgOqItZMLaYQwaUIkx0CV231D1cREZB2xbYSn
+    DyK9DbXumK0tsVwgXh8Q+EY0ofW+M/noukJUxIbL8E1OKwbnS+2smpz5clc+BQID
+    AQABo4HJMIHGMAkGA1UdEwQCMAAwHQYDVR0OBBYEFEPOUbp9SDAizKwHuiFhBPVH
+    OKaTMFEGA1UdIwRKMEiAFL1vX0A8tQAje5J0cQKWhIdy8Vu/oRqkGDAWMRQwEgYD
+    VQQDDAtFYXN5LVJTQSBDQYIUI2id6KFXw/nEv9bRhVsDhzM/ozkwEwYDVR0lBAww
+    CgYIKwYBBQUHAwEwCwYDVR0PBAQDAgWgMCUGA1UdEQQeMByCGmZhY3RvcnljdWJl
+    LXNlcnZlci12ZXJuZW1xMA0GCSqGSIb3DQEBCwUAA4IBAQANaEiAIR+nADiGNeOk
+    SSCRG5VeelFfO3X4wUiHrEKE6NkVVF+w6Wemogmtb+KB6NmjWAGiZep8p/R/7F75
+    iAGUk4LEAcXFMw6NWZhODlv5ryo6V2X1EuqMwXOfccbUwu7l9md+j2UxY45vp1Z2
+    +1eP/pjVmEt29HPUnWUT/rFeqlz605xYLauoSTsTxkGl5T8EoLwtvZOFnBIy7oGs
+    QzW42IlfFKNlYKHMYJ8I6AQ89+cUUko/zqUPeiFl+fl1WpXCOofEiRUd/4Z6R0Rw
+    moz/sNxvZ44GG47X2Gvc1Ewfc9rpgvSmyMTUgS4EP2p5LBQEDuFJz1DSW43QGOEx
+    6OoQ
+    -----END CERTIFICATE-----
+  Privkey: |-
+    -----BEGIN PRIVATE KEY-----
+    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDgQYpafllI20Lm
+    3duwyNMyjDe6wx8z/U3Mz0xgC9QzLvVYd0K3/XRucjNHBgtQy2MBBRG/Kr51dqPU
+    MzPvjna7MIIYTqvpKiNF4fuycBYyCtsOETemyiRbgtjr+0fmKE4G7XF9S0jVpzqu
+    QfPgmxRGkePkcAac+R86JBlzXQDEHE/P2LnnxrsnnxjgVnQznWuAppYCv6oMzON9
+    00j8xSzUlN1ifxAzRK/ZeM/gLOKpY5rRd/gyyguA6oi1kwtphDBpQiTHQJXbfUPV
+    xERkHbFthKcPIr0Nte6YrS2xXCBeHxD4RjSh9b4z+ei6QlTEhsvwTU4rBudL7aya
+    nPlyVz4FAgMBAAECggEAGr62SWSYMWA08mOzN7o7teOTIerzZbfn920hprLCc/g9
+    unc+tcK8iA+GngnSf6hB/nUkULBAVrH3h+8zWnabImf+m/eF+SDVZBg3dGh5vS4e
+    Qec7w+CHxYItbLdjM8fKxni6+D5qSVDQZsfm1fqoyGHN1AioQUBUwRJdFq0Y0kp0
+    6BwZG2Kk43JQByeKX4/D2QgZEjFCgsw2Wihy8sQkX96aXbAdUO5Um7kzf7iIMXlI
+    877uarOuCuIEYJSWjwrwu4I7CQ68lEA1pGSlEMKU9ju8KtoqaQ65ELx9PgK8df3+
+    zIM8WnZzT/US0TPI+cWvsB6yYYGsohE25oGNYMnKAQKBgQD5RGOeAR4GhBm2tRR/
+    6XzLWmru0sGif/7A/rPDjzWSlnkaqkTSK29xQZkDK9WJVLG3SWCV2XnwysLgVHyF
+    J2DlPZVDnKvS5EXwGSenzpWMm6yHNZhsA1nxvSiZBXj8MPhF5NbOrnuZJVR9+xmA
+    xQTspByMa9gwD8sXkWS+aq8+kQKBgQDmUDTfY8jtCXm9kXZPPgESGtYuDmBlvyf4
+    40Gt79FmOt3ZYBr2do0BeUnyJOFwleQeUqRIneUsUHyUHj1VI/SpBuUAPWOT9w8s
+    zlrLkmYnrOArKcZpCpWQZWyKXtomxdUlZJjFJGJfipJ1zu1G2IJZNjuuFpEJY4Jz
+    xI3JO9OqNQKBgQC28UV3enRx7dP9b0sbUd7gVHz0yMOKowvy0zxWA64a5sr9Eggu
+    g+hno/BMDojLINjJn1X+xL0lR3rdL8Sv6SXJOXhqRfspbZYS0DN1ij3iE4L9PQ2g
+    AJmrvNul6wlPdhVRHtG0oQRfcrFfQMIH6xFhKFU3jhL9uymgI3pf8mapsQKBgQCV
+    6ETR1mA0sQM1eVW5dFE8GI2qAp+J+mcpH7pjXYI9eTlnQJ+sJjPXbrvLyWeXYWjO
+    t9nIjkVZl7XOrvQa08Fut1cc1dhXuep9rn74m/yz/FkYnyNOwZ3iE7IXSm/R5ti6
+    cwTg5LLHHyn/VkWo5EnLiXpE8NlMdCG3+oqTHcbCtQKBgBoQrLzRsruiha6QP4OZ
+    eCvOVIaxuH60A85QW5pgb0IlORXfX9zjA+M3v/G+tj6y5vxPOiVJaRd6iBqEDpMd
+    337jNZKFr5EaVmF45PrcM060cbEcbdq8zCTEnQ6Y+bQiDTkfdgcE5CDJDJ7ol2I2
+    MIzsw5gq+PcsyNV5g/IUX0PJ
+    -----END PRIVATE KEY-----
+  additionalEnv:
+    - name: DOCKER_VERNEMQ_ALLOW_REGISTER_DURING_NETSPLIT
+      value: "on"
+    - name: DOCKER_VERNEMQ_ALLOW_PUBLISH_DURING_NETSPLIT
+      value: "on"
+    - name: DOCKER_VERNEMQ_ALLOW_SUBSCRIBE_DURING_NETSPLIT
+      value: "on"
+    - name: DOCKER_VERNEMQ_ALLOW_UNSUBSCRIBE_DURING_NETSPLIT
+      value: "on"
+    - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
+      value: "on"
+    - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
+      value: "-1"
+    - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
+      value: "-1"
+    - name: DOCKER_VERNEMQ_LISTENER__SSL__CAFILE
+      value: /etc/ssl/vernemq/ca.crt
+    - name: DOCKER_VERNEMQ_LISTENER__SSL__CERTFILE
+      value: /etc/ssl/vernemq/tls.crt
+    - name: DOCKER_VERNEMQ_LISTENER__SSL__KEYFILE
+      value: /etc/ssl/vernemq/tls.key
+    - name: DOCKER_VERNEMQ_ACCEPT_EULA
+      value: "yes"
+    - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__USE_IDENTITY_AS_USERNAME
+      value: "on"
+    - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
+      value: "on"
+  extraVolumeMounts:
+    - mountPath: /vernemq/etc/vmq.acl
+      name: vernemq-acl
+      readOnly: true
+      subPath: vernemq-acl
+  extraVolumes:
+    - configMap:
+        name: vernemq-acl
+      name: vernemq-acl
+  fullnameOverride: ""
+  image:
+    pullPolicy: IfNotPresent
+    repository: vernemq/vernemq
+    tag: 1.11.0
+  ingress:
+    annotations: {}
+    enabled: false
+    hosts: []
+    labels: {}
+    paths:
+      - /
+    tls: []
+  nameOverride: ""
+  nodeSelector: {}
+  pdb:
+    enabled: true
+    minAvailable: 1
+  persistentVolume:
+    accessModes:
+      - ReadWriteOnce
+    annotations: {}
+    enabled: false
+    size: 5Gi
+  podAntiAffinity: soft
+  rbac:
+    create: true
+    serviceAccount:
+      create: true
+  replicaCount: 1
+  resources: {}
+  secretMounts:
+    - name: vernemq-certificates
+      path: /etc/ssl/vernemq
+      secretName: vernemq-certificates-secret
+  securityContext:
+    fsGroup: 10000
+    runAsGroup: 10000
+    runAsUser: 10000
+  service:
+    annotations:
+      prometheus.io/port: "8888"
+      prometheus.io/scrape: "true"
+    labels: {}
+    mqtt:
+      enabled: true
+      nodePort: 1883
+      port: 1883
+    mqtts:
+      enabled: true
+      nodePort: 8883
+      port: 8883
+    type: LoadBalancer
+    ws:
+      enabled: false
+      nodePort: 8080
+      port: 8080
+    wss:
+      enabled: false
+      nodePort: 8443
+      port: 8443
+  serviceMonitor:
+    create: false
+  statefulset:
+    annotations: {}
+    labels: {}
+    lifecycle: {}
+    livenessProbe:
+      failureThreshold: 3
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    podAnnotations: {}
+    podManagementPolicy: OrderedReady
+    prometheus.io/port: "8888"
+    prometheus.io/scrape: "true"
+    readinessProbe:
+      failureThreshold: 3
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    terminationGracePeriodSeconds: 60
+    updateStrategy: RollingUpdate
+  tolerations: []

@@ -1,7 +1,7 @@
-{{- if .Values.AAAservices.factoryinsight.enabled -}}
+{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
 {{- if .Values.factoryinsight.hpa.enabled -}}
 
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-hpa
