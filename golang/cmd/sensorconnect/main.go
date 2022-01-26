@@ -18,10 +18,14 @@ var kafkaProducerClient *kafka.Producer
 var kafkaAdminClient *kafka.AdminClient
 var transmitterId string
 
+var buildtime string
+
 func main() {
 	logger, _ := zap.NewDevelopment()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+
+	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")

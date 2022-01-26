@@ -5,7 +5,7 @@ services:
   sensorconnect:
     build:
       context: ../../
-      dockerfile: ./deployment/sensorconnect/Dockerfile
+      dockerfile: /Dockerfile
     restart: unless-stopped
     logging:
         driver: "json-file"
