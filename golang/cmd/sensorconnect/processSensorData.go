@@ -74,15 +74,13 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
 			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
-				valueBitLength := determineValueBitLength(element) // length of value
-				leftIndex := outputBitLength - valueBitLength - element.BitOffset
-				rightIndex := outputBitLength - element.BitOffset
-				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-				// determine datatype of record item
-				datatype, err := determineDatatypeOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
 				if err != nil {
 					continue
 				}
+				leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
+				rightIndex := outputBitLength - element.BitOffset
+				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
 				valueString := convertBinaryValueToString(binaryValue, datatype)
 				valueName := getNameFromExternalTextCollection(element.Name.TextId, ioddIoDeviceMap[ioddFilemapKey].ExternalTextCollection.PrimaryLanguage.Text)
 				payload = attachValueString(payload, valueName, valueString)
@@ -145,24 +143,26 @@ func BinToHex(bin string) (hex string) {
 	return
 }
 
-func determineValueBitLength(item RecordItem) (length int) {
-	if item.SimpleDatatype.Type == "BooleanT" {
+func determineValueBitLength(datatype string, bitLength uint, fixedLength uint) (length uint) {
+	if datatype == "BooleanT" {
 		return 1
-	} else if item.SimpleDatatype.Type == "octetStringT" {
-		return item.SimpleDatatype.FixedLength * 8
+	} else if datatype == "octetStringT" {
+		return fixedLength * 8
 	} else {
-		return item.SimpleDatatype.BitLength
+		return bitLength
 	}
 }
 
-func determineDatatypeOfRecordItem(item RecordItem, datatypeArray []Datatype) (datatype string, err error) {
+func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArray []Datatype) (datatype string, bitLength uint, err error) {
 	if !reflect.DeepEqual(item.SimpleDatatype.Type, "") { //  true if record item includes a simple datatype
 		datatype = item.SimpleDatatype.Type
+		bitLength = determineValueBitLength(datatype, item.SimpleDatatype.BitLength, item.SimpleDatatype.FixedLength)
 		return
 	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
 		for _, datatypeElement := range datatypeArray {
 			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
 				datatype = datatypeElement.Type
+				bitLength = determineValueBitLength(datatype, datatypeElement.BitLength, datatypeElement.FixedLength)
 				return
 			}
 		}

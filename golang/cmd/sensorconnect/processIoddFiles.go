@@ -69,7 +69,8 @@ type ProcessDataIn struct {
 }
 
 type Datatype struct {
-	BitLength       int          `xml:"bitLength,attr"`
+	BitLength       uint         `xml:"bitLength,attr"`
+	FixedLength     uint         `xml:"fixedLength,attr"`
 	RecordItemArray []RecordItem `xml:"RecordItem"`
 	Type            string       `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
 	Id              string       `xml:"id,attr"`
@@ -92,8 +93,8 @@ type DatatypeRef struct {
 
 type SimpleDatatype struct {
 	Type        string `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
-	BitLength   int    `xml:"bitLength,attr"`
-	FixedLength int    `xml:"fixedLength,attr"`
+	BitLength   uint   `xml:"bitLength,attr"`
+	FixedLength uint   `xml:"fixedLength,attr"`
 }
 
 // Todo add datatyperef if not simple datatype
