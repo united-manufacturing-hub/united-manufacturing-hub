@@ -49,7 +49,6 @@ func TestProcessSensorData(t *testing.T) {
 	updaterChan := make(chan struct{})
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, updaterChan, relativeDirectoryPath)
 	err = processSensorData(sensorDataMap, deviceInfo[0], portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
-	t.Error(err)
 }
 
 // only works with functioning test device on correct ip: http://192.168.10.17
