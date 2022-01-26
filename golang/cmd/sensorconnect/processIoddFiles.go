@@ -79,10 +79,15 @@ type RecordItem struct {
 	BitOffset      int            `xml:"bitOffset,attr"`
 	SimpleDatatype SimpleDatatype `xml:"SimpleDatatype"`
 	Name           Name           `xml:"Name"`
+	DatatypeRef    DatatypeRef    `xml:"DatatypeRef"`
 }
 
 type Name struct {
 	TextId string `xml:"textId,attr"`
+}
+
+type DatatypeRef struct {
+	DatatypeId string `xml:"datatypeId,attr"`
 }
 
 type SimpleDatatype struct {

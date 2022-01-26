@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -76,7 +78,12 @@ func processSensorData(sensorDataMap map[string]interface{},
 				leftIndex := outputBitLength - valueBitLength - element.BitOffset
 				rightIndex := outputBitLength - element.BitOffset
 				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-				valueString := convertBinaryValueToString(binaryValue, element)
+				// determine datatype of record item
+				datatype, err := determineDatatypeOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+				if err != nil {
+					continue
+				}
+				valueString := convertBinaryValueToString(binaryValue, datatype)
 				valueName := getNameFromExternalTextCollection(element.Name.TextId, ioddIoDeviceMap[ioddFilemapKey].ExternalTextCollection.PrimaryLanguage.Text)
 				payload = attachValueString(payload, valueName, valueString)
 
@@ -148,10 +155,30 @@ func determineValueBitLength(item RecordItem) (length int) {
 	}
 }
 
-func convertBinaryValueToString(binaryValue string, element RecordItem) (output string) {
-	if element.SimpleDatatype.Type == "OctetStringT" {
-		output = BinToHex(binaryValue)
+func determineDatatypeOfRecordItem(item RecordItem, datatypeArray []Datatype) (datatype string, err error) {
+	if !reflect.DeepEqual(item.SimpleDatatype.Type, "") { //  true if record item includes a simple datatype
+		datatype = item.SimpleDatatype.Type
+		return
+	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
+		for _, datatypeElement := range datatypeArray {
+			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
+				datatype = datatypeElement.Type
+				return
+			}
+		}
+		err = errors.New("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
+		return
 	} else {
+		err = errors.New("Neither SimpleDatatype nor DatatypeRef included in Recorditem")
+		return
+	}
+}
+
+func convertBinaryValueToString(binaryValue string, datatype string) (output string) {
+	switch datatype {
+	case "OctetStringT":
+		output = BinToHex(binaryValue)
+	default:
 		outputString, _ := strconv.ParseUint(binaryValue, 2, 64)
 		return fmt.Sprintf("%v", outputString)
 	}
