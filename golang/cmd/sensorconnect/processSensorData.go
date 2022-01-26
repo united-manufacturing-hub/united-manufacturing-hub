@@ -15,7 +15,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 	ioddIoDeviceMap map[IoddFilemapKey]IoDevice,
 	updateIoddIoDeviceMapChan chan IoddFilemapKey) (err error) {
 	timestampMs := getUnixTimestampMs()
-	fmt.Println(timestampMs)
+	zap.S().Debugf(timestampMs)
 	for portNumber, portMode := range portModeMap {
 		//mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 		switch portMode {
@@ -27,7 +27,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			// Payload to send
 			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
-			fmt.Println(payload)
+			zap.S().Debugf("payload", payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -56,7 +56,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
 			if _, ok := ioddIoDeviceMap[ioddFilemapKey]; !ok {
-				fmt.Printf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
+				zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
 				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
 				continue                                    // drop data to avoid locking
 			}
@@ -82,7 +82,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			}
 			payload = append(payload, []byte(`}`)...)
-			fmt.Println(string(payload))
+			zap.S().Debugf(string(payload))
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}

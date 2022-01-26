@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -15,7 +14,7 @@ var ioDeviceMap map[IoddFilemapKey]IoDevice
 var fileInfoSlice []os.FileInfo
 
 func main() {
-	ipRange := "192.168.10.17/32"
+	ipRange := os.Getenv("IP_RANGE") // 192.168.10.17/32
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
@@ -62,7 +61,7 @@ func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRa
 		case <-ticker.C:
 			var err error
 			discoveredDeviceInformation, err = DiscoverDevices(ipRange)
-			fmt.Printf("The discovered devices are: %v ", discoveredDeviceInformation)
+			zap.S().Debugf("The discovered devices are: %v \n", discoveredDeviceInformation)
 			if err != nil {
 				zap.S().Errorf("DiscoverDevices produced the error: %v", err)
 				continue
@@ -79,7 +78,7 @@ func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, updaterChan c
 		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:
 			var err error
 			ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
-			fmt.Printf("added new ioDevice to map: %v", ioddFilemapKey)
+			zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
 			if err != nil {
 				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 			}
@@ -102,12 +101,10 @@ func initializeIoddData(relativeDirectoryPath string) (deviceMap map[IoddFilemap
 
 	deviceMap, fileInfo, err = AddNewDeviceToIoddFilesAndMap(ifmIoddFilemapKey, relativeDirectoryPath, deviceMap, fileInfo)
 	if err != nil {
-		fmt.Println(err)
 		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 	}
 	deviceMap, fileInfo, err = AddNewDeviceToIoddFilesAndMap(siemensIoddFilemapKey, relativeDirectoryPath, deviceMap, fileInfo)
 	if err != nil {
-		fmt.Println(err)
 		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 	}
 

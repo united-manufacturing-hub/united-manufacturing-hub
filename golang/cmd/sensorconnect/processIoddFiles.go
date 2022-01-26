@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -87,13 +86,13 @@ type SimpleDatatype struct {
 
 // Todo add datatyperef if not simple datatype
 
-//Further Datastructures
+// IoddFilemapKey Further Datastructures
 type IoddFilemapKey struct {
 	VendorId int64
 	DeviceId int
 }
 
-// uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
+// AddNewDeviceToIoddFilesAndMap uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
 // Then updates map by checking for new files, unmarhaling them und importing into map
 func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, fileInfoSlice []os.FileInfo) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
 	err := RequestSaveIoddFile(ioddFilemapKey, ioddIoDeviceMap, relativeDirectoryPath)
@@ -118,7 +117,7 @@ func UnmarshalIoddFile(ioddFile []byte) (IoDevice, error) {
 	return payload, err
 }
 
-// Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
+// ReadIoddFiles Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
 func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
 	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
 	// check for new iodd files
@@ -167,7 +166,7 @@ func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice
 	return ioddIoDeviceMap, currentFileInfoSlice, err
 }
 
-// will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
+// RequestSaveIoddFile will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
 func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, relativeDirectoryPath string) error {
 	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
@@ -178,7 +177,7 @@ func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[Iodd
 	// Execute download and saving of iodd file
 	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
 	if err != nil {
-		fmt.Println("Saving error")
+		zap.S().Errorf("Saving error: %s", err.Error())
 		return err
 	}
 	return err
