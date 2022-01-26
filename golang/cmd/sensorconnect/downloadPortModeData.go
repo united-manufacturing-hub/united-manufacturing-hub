@@ -102,7 +102,7 @@ func downloadModeStatus(url string, payload []byte) (body []byte, err error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		zap.S().Debugf("Responsstatus not 200 but instead: %s", resp.StatusCode)
+		zap.S().Debugf("Responsstatus not 200 but instead: %d", resp.StatusCode)
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)
@@ -119,13 +119,13 @@ func extractIntFromString(input string) (int, error) {
 	outputSlice := re.FindAllString(input, -1)
 	if len(outputSlice) != 1 {
 		err := errors.New("extractinfFromStringFailed")
-		zap.S().Errorf("not exactly one integer found %s, %s", len(outputSlice), err)
+		zap.S().Errorf("not exactly one integer found %d, %s", len(outputSlice), err)
 		return -1, err
 	}
 	outputNumber, err := strconv.Atoi(outputSlice[0])
 	if err != nil {
 		err := errors.New("extractinfFromStringFailed")
-		zap.S().Errorf("not exactly one integer found %s, %s", len(outputSlice), err)
+		zap.S().Errorf("not exactly one integer found %d, %s", len(outputSlice), err)
 		return -1, err
 	}
 	return outputNumber, nil

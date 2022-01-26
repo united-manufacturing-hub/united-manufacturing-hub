@@ -27,7 +27,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			// Payload to send
 			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
-			zap.S().Debugf("payload", payload)
+			zap.S().Debugf("payload %s", payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -67,7 +67,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			// create padded binary raw sensor output
 			outputBitLength := rawSensorOutputLength * 4
 			rawSensorOutputString := string(rawSensorOutput[:])
-			rawSensorOutputBinary := HexToBin(string(rawSensorOutputString))
+			rawSensorOutputBinary := HexToBin(rawSensorOutputString)
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
 			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output

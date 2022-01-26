@@ -14,7 +14,12 @@ var ioDeviceMap map[IoddFilemapKey]IoDevice
 var fileInfoSlice []os.FileInfo
 
 func main() {
+	logger, _ := zap.NewDevelopment()
+	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
+
 	ipRange := os.Getenv("IP_RANGE") // 192.168.10.17/32
+	zap.S().Infof("Scanning IP range: %s", ipRange)
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
@@ -36,6 +41,7 @@ func main() {
 }
 
 func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+	zap.S().Debugf("Starting sensor data processing daemon")
 	var err error
 	for _, deviceInfo := range discoveredDeviceInformation {
 		portModeMap, err = GetPortModeMap(deviceInfo)
@@ -56,6 +62,7 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 }
 
 func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRange string) {
+	zap.S().Debugf("Starting device search daemon")
 	for {
 		select {
 		case <-ticker.C:
@@ -73,6 +80,7 @@ func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRa
 
 }
 func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, updaterChan chan struct{}, relativeDirectoryPath string) {
+	zap.S().Debugf("Starting iodd data daemon")
 	for {
 		select {
 		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:

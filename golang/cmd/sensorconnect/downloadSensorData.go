@@ -96,7 +96,7 @@ func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		zap.S().Debugf("Responsstatus not 200 but instead: %s", resp.StatusCode)
+		zap.S().Debugf("Responsstatus not 200 but instead: %d", resp.StatusCode)
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)

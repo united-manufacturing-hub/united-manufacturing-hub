@@ -12,15 +12,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// Structs for parsing response to discover all IO-Link Master Devices
+// DiscoverResponseFromDevice Structs for parsing response to discover all IO-Link Master Devices
 type DiscoverResponseFromDevice struct {
 	Cid  int  `json:"cid"`
 	Data Data `json:"data"`
 }
 
 type Data struct {
-	Deviceinfo_serialnumber StringDataPoint `json:"/deviceinfo/serialnumber/"`
-	Deviceinfo_productcode  StringDataPoint `json:"/deviceinfo/productcode/"`
+	DeviceInfoSerialnumber StringDataPoint `json:"/deviceinfo/serialnumber/"`
+	DeviceInfoProductCode  StringDataPoint `json:"/deviceinfo/productcode/"`
 }
 
 type StringDataPoint struct {
@@ -28,7 +28,7 @@ type StringDataPoint struct {
 	Data string `json:"data"`
 }
 
-// Struct for relevant information of already discovered devices
+// DiscoveredDeviceInformation Struct for relevant information of already discovered devices
 type DiscoveredDeviceInformation struct {
 	ProductCode  string
 	SerialNumber string
@@ -62,8 +62,8 @@ func DiscoverDevices(cidr string) ([]DiscoveredDeviceInformation, error) {
 
 		discoveredDeviceInformation := DiscoveredDeviceInformation{}
 		// Insert relevant gained data into DiscoveredDeviceInformation and store in slice
-		discoveredDeviceInformation.ProductCode = unmarshaledAnswer.Data.Deviceinfo_productcode.Data
-		discoveredDeviceInformation.SerialNumber = unmarshaledAnswer.Data.Deviceinfo_serialnumber.Data
+		discoveredDeviceInformation.ProductCode = unmarshaledAnswer.Data.DeviceInfoProductCode.Data
+		discoveredDeviceInformation.SerialNumber = unmarshaledAnswer.Data.DeviceInfoSerialnumber.Data
 		discoveredDeviceInformation.Url = url
 
 		discoveredDevices = append(discoveredDevices, discoveredDeviceInformation)
