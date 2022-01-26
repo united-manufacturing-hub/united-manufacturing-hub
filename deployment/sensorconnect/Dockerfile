@@ -18,7 +18,7 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-RUN CGO_ENABLED=0 GOOS=linux go test --mod=readonly ./cmd/sensorconnect
+#RUN CGO_ENABLED=0 GOOS=linux go test --mod=readonly ./cmd/sensorconnect
 RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/sensorconnect
 
 FROM scratch
