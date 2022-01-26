@@ -17,7 +17,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 	timestampMs := getUnixTimestampMs()
 	zap.S().Debugf(timestampMs)
 	for portNumber, portMode := range portModeMap {
-		//mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
+		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 		switch portMode {
 		case 1: // digital input
 			// get value from sensorDataMap
@@ -82,6 +82,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			}
 			payload = append(payload, []byte(`}`)...)
+			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
 			zap.S().Debugf(string(payload))
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue

@@ -16,6 +16,7 @@ var fileInfoSlice []os.FileInfo
 
 var kafkaProducerClient *kafka.Producer
 var kafkaAdminClient *kafka.AdminClient
+var transmitterId string
 
 func main() {
 	logger, _ := zap.NewDevelopment()
@@ -28,6 +29,9 @@ func main() {
 
 	ipRange := os.Getenv("IP_RANGE") // 192.168.10.17/32
 	zap.S().Infof("Scanning IP range: %s", ipRange)
+
+	transmitterId = os.Getenv("TRANSMITTERID")
+
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
