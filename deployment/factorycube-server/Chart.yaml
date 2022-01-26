@@ -52,3 +52,7 @@ dependencies:
     version: 14.4.1
     repository: https://charts.bitnami.com/bitnami
     condition: kafka.enabled
+  - name: kowl
+    repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+    version: 2.3.0
+    condition: kafka.enabled
