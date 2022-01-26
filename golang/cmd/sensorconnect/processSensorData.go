@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
+// The method sends one message per sensor (active port).
 func processSensorData(sensorDataMap map[string]interface{},
 	currentDeviceInformation DiscoveredDeviceInformation,
 	portModeMap map[int]int,
@@ -96,6 +98,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 	return
 }
 
+// getUnixTimestampMs returns the current unix timestamp as string in milliseconds
 func getUnixTimestampMs() (timestampMs string) {
 	t := time.Now()
 	timestampMsInt := int(t.UnixNano() / 1000000)
@@ -103,6 +106,7 @@ func getUnixTimestampMs() (timestampMs string) {
 	return
 }
 
+// extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer
 func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
@@ -110,6 +114,7 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 	return returnValue
 }
 
+// extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer 64
 func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int64 {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
@@ -117,6 +122,7 @@ func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[str
 	return returnValue
 }
 
+// extractIntFromSensorDataMap uses the combination of key and tag to retreive a byte slice
 func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) []byte {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
@@ -125,17 +131,21 @@ func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map
 	return returnValue
 }
 
+// zeroPadding adds zeros on the left side of a string until the lengt of the string equals the requested length
 func zeroPadding(input string, length int) (output string) {
 	output = fmt.Sprintf("%0*v", length, input)
 	return
 }
 
+// HexToBin converts a hex string into a binary string
 func HexToBin(hex string) (bin string) {
 	i := new(big.Int)
 	i.SetString(hex, 16)
 	bin = fmt.Sprintf("%b", i)
 	return
 }
+
+// BinToHex converts a binary string to a hex string
 func BinToHex(bin string) (hex string) {
 	i := new(big.Int)
 	i.SetString(bin, 2)
@@ -143,6 +153,7 @@ func BinToHex(bin string) (hex string) {
 	return
 }
 
+// determineValueBitLength returns the bitlength of a value
 func determineValueBitLength(datatype string, bitLength uint, fixedLength uint) (length uint) {
 	if datatype == "BooleanT" {
 		return 1
@@ -153,6 +164,7 @@ func determineValueBitLength(datatype string, bitLength uint, fixedLength uint) 
 	}
 }
 
+// determineDatatypeAndValueBitLengthOfRecordItem finds out datatype and bit length of a given iodd RecordItem
 func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArray []Datatype) (datatype string, bitLength uint, err error) {
 	if !reflect.DeepEqual(item.SimpleDatatype.Type, "") { //  true if record item includes a simple datatype
 		datatype = item.SimpleDatatype.Type
@@ -174,6 +186,7 @@ func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArr
 	}
 }
 
+// convertBinaryValueToString converts a binary string value to a readable string according to its datatype
 func convertBinaryValueToString(binaryValue string, datatype string) (output string) {
 	switch datatype {
 	case "OctetStringT":
@@ -185,6 +198,7 @@ func convertBinaryValueToString(binaryValue string, datatype string) (output str
 	return
 }
 
+// createDigitalInputPayload creates a json output body from a DigitalInput to send via mqtt or kafka to the server
 func createDigitalInputPayload(serialNumber string, portNumberString string, timestampMs string, dataPin2In []byte) (payload []byte) {
 	payload = []byte(`{
 		"serial_number":`)
@@ -204,6 +218,7 @@ func createDigitalInputPayload(serialNumber string, portNumberString string, tim
 	return
 }
 
+// createDigitalInputPayload creates the upper json output body from an IoLink response to send via mqtt or kafka to the server
 func createIoLinkBeginPayload(serialNumber string, portNumberString string, timestampMs string) (payload []byte) {
 	payload = []byte(`{
 		"serial_number":`)
@@ -220,6 +235,7 @@ func createIoLinkBeginPayload(serialNumber string, portNumberString string, time
 	return
 }
 
+// attachValueString can be used to attach further json information to an existing output body
 func attachValueString(payload []byte, valueName string, valueString string) []byte {
 	payload = append(payload, []byte(`,
 	"`)...)
@@ -229,6 +245,7 @@ func attachValueString(payload []byte, valueName string, valueString string) []b
 	return payload
 }
 
+// getNameFromExternalTextCollection retreives the name correesponding to a textId from the iodd TextCollection
 func getNameFromExternalTextCollection(textId string, text []Text) string {
 	for _, element := range text {
 		if textId == element.Id {
