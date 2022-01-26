@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// SendKafkaMessage tries to send a message via kafka
 func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	err := CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
@@ -27,6 +28,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	}
 }
 
+// setupKafka sets up the connection to the kafka server
 func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *kafka.AdminClient, consumer *kafka.Consumer) {
 	configMap := kafka.ConfigMap{
 		"bootstrap.servers": boostrapServer,
