@@ -71,7 +71,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
 			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
-			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.ReccordItem {
+			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
 				valueBitLength := determineValueBitLength(element) // length of value
 				leftIndex := outputBitLength - valueBitLength - element.BitOffset
 				rightIndex := outputBitLength - element.BitOffset

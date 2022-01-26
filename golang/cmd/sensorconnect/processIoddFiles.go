@@ -48,7 +48,12 @@ type Text struct {
 }
 
 type DeviceFunction struct {
+	DatatypeCollection    DatatypeCollection    `xml:"DatatypeCollection"`
 	ProcessDataCollection ProcessDataCollection `xml:"ProcessDataCollection"` //ToDo: array?
+}
+
+type DatatypeCollection struct {
+	DatatypeArray []Datatype
 }
 
 type ProcessDataCollection struct {
@@ -64,8 +69,10 @@ type ProcessDataIn struct {
 }
 
 type Datatype struct {
-	BitLength   int          `xml:"bitLength,attr"`
-	ReccordItem []RecordItem `xml:"RecordItem"`
+	BitLength       int          `xml:"bitLength,attr"`
+	RecordItemArray []RecordItem `xml:"RecordItem"`
+	Type            string       `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	Id              string       `xml:"id,attr"`
 }
 
 type RecordItem struct {
