@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"os"
 	"time"
 
@@ -13,10 +14,17 @@ var sensorDataMap map[string]interface{}
 var ioDeviceMap map[IoddFilemapKey]IoDevice
 var fileInfoSlice []os.FileInfo
 
+var kafkaProducerClient *kafka.Producer
+var kafkaAdminClient *kafka.AdminClient
+
 func main() {
 	logger, _ := zap.NewDevelopment()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+
+	// Read environment variables for Kafka
+	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
 
 	ipRange := os.Getenv("IP_RANGE") // 192.168.10.17/32
 	zap.S().Infof("Scanning IP range: %s", ipRange)
