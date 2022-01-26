@@ -1,15 +1,16 @@
-{{- if or .Values.mqtttopostgresql.enabled .Values._000_commonConfig.datastorage.enabled -}}
-{{- if .Values.mqtttopostgresql.pdb.enabled -}}
+---
+{{if or .Values.mqtttopostgresql.enabled .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.mqtttopostgresql.pdb.enabled}}
 
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql-pdb
+  name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql-pdb
 spec:
-  minAvailable: {{ .Values.mqtttopostgresql.pdb.minAvailable }}
+  minAvailable: {{.Values.mqtttopostgresql.pdb.minAvailable}}
   selector:
     matchLabels:
-      name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql
+      name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
 
-{{- end -}}
-{{- end -}}
+{{end}}
+{{end}}

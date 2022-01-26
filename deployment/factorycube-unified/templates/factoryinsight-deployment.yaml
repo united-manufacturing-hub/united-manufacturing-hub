@@ -1,27 +1,28 @@
-{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
+---
+{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-deployment
+  name: {{include "factorycube-unified.fullname" .}}-factoryinsight-deployment
   labels:
-     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4 }}
-  {{- if .Values.factoryinsight.annotations }}
+    {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4}}
+  {{if .Values.factoryinsight.annotations}}
   annotations:
-    {{- toYaml .Values.factoryinsight.annotations | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.factoryinsight.annotations | nindent 4}}
+  {{end}}
 spec:
-  replicas: {{ .Values.factoryinsight.replicas }}
+  replicas: {{.Values.factoryinsight.replicas}}
   selector:
     matchLabels:
-     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 6 }}
+     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
-      name: {{ include "factorycube-unified.fullname" . }}-factoryinsight
+      name: {{include "factorycube-unified.fullname" .}}-factoryinsight
       labels:
-        {{- include "factorycube-unified.labels.factoryinsight" . | nindent 8 }}
+        {{- include "factorycube-unified.labels.factoryinsight" . | nindent 8}}
         redis-client: "true"
     spec:
       affinity:
@@ -31,15 +32,15 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{ include "factorycube-unified.fullname" . }}-factoryinsight
+                    name: {{include "factorycube-unified.fullname" .}}-factoryinsight
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{ include "factorycube-unified.fullname" . }}-factoryinsight
-          {{- if .Values.factoryinsight.image.tag }}
-          image: {{ .Values.factoryinsight.image.repository }}:{{ .Values.factoryinsight.image.tag }}
-          {{- else }}
-          image: {{ .Values.factoryinsight.image.repository }}:{{ .Chart.AppVersion }}
-          {{- end }}
+        - name: {{include "factorycube-unified.fullname" .}}-factoryinsight
+          {{if .Values.factoryinsight.image.tag}}
+          image: {{.Values.factoryinsight.image.repository}}:{{.Values.factoryinsight.image.tag}}
+          {{- else}}
+          image: {{.Values.factoryinsight.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
           imagePullPolicy: IfNotPresent
           ports:
               - name: http
@@ -47,16 +48,16 @@ spec:
                 protocol: TCP
           resources:
             limits:
-              cpu: {{ .Values.factoryinsight.resources.limits.cpu }}
+              cpu: {{.Values.factoryinsight.resources.limits.cpu}}
             requests:
-              cpu: {{ .Values.factoryinsight.resources.requests.cpu }}
+              cpu: {{.Values.factoryinsight.resources.requests.cpu}}
           env:
             - name: REDIS_URI
-              value: {{ .Values.factoryinsight.redis.URI1 }}
+              value: {{.Values.factoryinsight.redis.URI1}}
             - name: REDIS_URI2
-              value: {{ .Values.factoryinsight.redis.URI2 }}
+              value: {{.Values.factoryinsight.redis.URI2}}
             - name: REDIS_URI3
-              value: {{ .Values.factoryinsight.redis.URI3 }}
+              value: {{.Values.factoryinsight.redis.URI3}}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -64,27 +65,27 @@ spec:
                   key: redispassword
 
             - name: POSTGRES_HOST
-              value: {{ .Values.factoryinsight.db_host }}
+              value: {{.Values.factoryinsight.db_host}}
             - name: POSTGRES_PORT
-              value: {{ .Values.factoryinsight.db_port | quote }}
+              value: {{.Values.factoryinsight.db_port | quote}}
             - name: POSTGRES_DATABASE
-              value: {{ .Values.factoryinsight.db_database }}
+              value: {{.Values.factoryinsight.db_database}}
             - name: POSTGRES_USER
-              value: {{ .Values.factoryinsight.db_user }}
+              value: {{.Values.factoryinsight.db_user}}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values._000_commonConfig.datasources.factoryinsight.db_password }}
+              value: {{.Values._000_commonConfig.datasources.factoryinsight.db_password}}
 
-              {{ $index := 1 }}
-              {{ range $customerName, $password := .Values.customers | default dict }}
-            - name: CUSTOMER_NAME_{{ $index }}
-              value: {{ $customerName }}
-            - name: CUSTOMER_PASSWORD_{{ $index }}
-              value: {{ $password }}
-              {{ $index = add $index 1 }}
-              {{ end }}
+              {{$index := 1}}
+              {{range $customerName, $password := .Values.customers | default dict}}
+            - name: CUSTOMER_NAME_{{$index}}
+              value: {{$customerName}}
+            - name: CUSTOMER_PASSWORD_{{$index}}
+              value: {{$password}}
+              {{$index = add $index 1}}
+              {{end}}
 
             - name: FACTORYINSIGHT_USER
-              value: {{ .Values.factoryinsight.user }}
+              value: {{.Values.factoryinsight.user}}
             - name: FACTORYINSIGHT_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -110,4 +111,4 @@ spec:
 
       restartPolicy: Always
       terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
-{{- end -}}
+{{end}}

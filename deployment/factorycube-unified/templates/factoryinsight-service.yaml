@@ -1,14 +1,15 @@
-{{- if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled -}}
+---
+{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-factoryinsight-service
+  name: {{include "factorycube-unified.fullname" .}}-factoryinsight-service
   labels:
-     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4 }}
-  {{- if .Values.factoryinsight.service.annotations }}
+    {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4}}
+  {{if .Values.factoryinsight.service.annotations}}
   annotations:
-    {{- toYaml .Values.factoryinsight.service.annotations | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.factoryinsight.service.annotations | nindent 4}}
+  {{end}}
 spec:
   type: ClusterIP
   ports:
@@ -17,6 +18,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4}}
 
-{{- end -}}
+{{end}}

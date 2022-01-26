@@ -1,20 +1,21 @@
-{{- if or .Values.mqtttopostgresql.enabled .Values._000_commonConfig.datastorage.enabled -}}
+---
+{{if or .Values.mqtttopostgresql.enabled .Values._000_commonConfig.datastorage.enabled}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql
+  name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
   labels:
-     {{- include "factorycube-unified.labels.mqtttopostgresql" . | nindent 4 }}
-  {{- if .Values.mqtttopostgresql.annotations }}
+    {{- include "factorycube-unified.labels.mqtttopostgresql" . | nindent 4}}
+  {{if .Values.mqtttopostgresql.annotations}}
   annotations:
-    {{- toYaml .Values.mqtttopostgresql.annotations | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.mqtttopostgresql.annotations | nindent 4}}
+  {{end}}
 spec:
-  replicas: {{ .Values.mqtttopostgresql.replicas }}
+  replicas: {{.Values.mqtttopostgresql.replicas}}
   serviceName: mqtt-to-postgresql
   volumeClaimTemplates:
     - metadata:
-        name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql-data
+        name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql-data
         finalizers:
           - kubernetes.io/pvc-protection
       spec:
@@ -22,17 +23,17 @@ spec:
           - ReadWriteOnce
         resources:
          requests:
-            storage: {{ .Values.mqtttopostgresql.storageRequest }}
+            storage: {{.Values.mqtttopostgresql.storageRequest}}
   selector:
     matchLabels:
-      name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql
+      name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql
-        {{- include "factorycube-unified.labels.mqtttopostgresql" . | nindent 8 }}
+        name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
+        {{- include "factorycube-unified.labels.mqtttopostgresql" . | nindent 8}}
       annotations:
             prometheus.io/scrape: 'true'
             prometheus.io/port: '2112'
@@ -42,33 +43,33 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
               matchLabels:
-                name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql
+                name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
             topologyKey: "kubernetes.io/hostname"
       terminationGracePeriodSeconds: 180
       containers:
-        - name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql
-          {{- if .Values.mqtttopostgresql.image.tag }}
-          image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Values.mqtttopostgresql.image.tag }}
-          {{- else }}
-          image: {{ .Values.mqtttopostgresql.image.repository }}:{{ .Chart.AppVersion }}
-          {{- end }}
+        - name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
+          {{if .Values.mqtttopostgresql.image.tag}}
+          image: {{.Values.mqtttopostgresql.image.repository}}:{{.Values.mqtttopostgresql.image.tag}}
+          {{- else}}
+          image: {{.Values.mqtttopostgresql.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
           ports:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          imagePullPolicy: {{ .Values.mqtttopostgresql.image.pullPolicy}}
+          imagePullPolicy: {{.Values.mqtttopostgresql.image.pullPolicy}}
           env:
           #
             - name: POSTGRES_HOST
-              value: {{ .Values.factoryinsight.db_host }}
+              value: {{.Values.factoryinsight.db_host}}
             - name: POSTGRES_DATABASE
-              value: {{ .Values.factoryinsight.db_database}}
+              value: {{.Values.factoryinsight.db_database}}
             - name: POSTGRES_USER
-              value: {{ .Values.factoryinsight.db_user }}
+              value: {{.Values.factoryinsight.db_user}}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.factoryinsight.db_password }}
+              value: {{.Values.factoryinsight.db_password}}
             - name: POSTGRES_SSLMODE
-              value: {{ .Values.factoryinsight.db_sslmode }}
+              value: {{.Values.factoryinsight.db_sslmode}}
 
             - name: CERTIFICATE_NAME
               value: NO_CERT
@@ -77,14 +78,14 @@ spec:
               value: PRODUCTION
 
             - name: BROKER_URL
-              value: tcp://{{ include "factorycube-unified.fullname" . }}-vernemq-local-service:1883
+              value: tcp://{{include "factorycube-unified.fullname" .}}-vernemq-local-service:1883
 
             - name: REDIS_URI
-              value: {{ .Values.factoryinsight.redis.URI1 }}
+              value: {{.Values.factoryinsight.redis.URI1}}
             - name: REDIS_URI2
-              value: {{ .Values.factoryinsight.redis.URI2 }}
+              value: {{.Values.factoryinsight.redis.URI2}}
             - name: REDIS_URI3
-              value: {{ .Values.factoryinsight.redis.URI3 }}
+              value: {{.Values.factoryinsight.redis.URI3}}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -96,7 +97,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
           volumeMounts:
-          - name: {{ include "factorycube-unified.fullname" . }}-mqtttopostgresql-data
+          - name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql-data
             mountPath: /data
             # - name: secret-volume
             #   mountPath: /SSL_certs
@@ -122,5 +123,5 @@ spec:
           #secretName: mqtt-to-postgresql-secret
       serviceAccountName: ""
       restartPolicy: Always
-{{- end -}}
+{{end}}
 

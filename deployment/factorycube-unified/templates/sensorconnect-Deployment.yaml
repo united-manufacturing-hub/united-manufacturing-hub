@@ -1,52 +1,53 @@
-{{- if .Values._000_commonConfig.datasources.sensorconnect.enabled -}}
+---
+{{if .Values._000_commonConfig.datasources.sensorconnect.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-sensorconnect
+  name: {{include "factorycube-unified.fullname" .}}-sensorconnect
   labels:
-    {{- include "factorycube-unified.labels.sensorconnect" . | nindent 4 }}
+    {{- include "factorycube-unified.labels.sensorconnect" . | nindent 4}}
     app.kubernetes.io/component: "sensorconnect"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-unified.labels.sensorconnect" . | nindent 6 }}
+      {{- include "factorycube-unified.labels.sensorconnect" . | nindent 6}}
       app.kubernetes.io/component: "sensorconnect"
-  strategy:  
+  strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        {{- include "factorycube-unified.labels.sensorconnect" . | nindent 8 }}
+        {{- include "factorycube-unified.labels.sensorconnect" . | nindent 8}}
         app.kubernetes.io/component: "sensorconnect"
     spec:
       containers:
-        - name: {{ include "factorycube-unified.fullname" . }}-sensorconnect
-          {{- if .Values.sensorconnect.tag -}}
-          image: {{ .Values.sensorconnect.image }}:{{ .Values.sensorconnect.tag }}
-          {{- else }}
-          image: {{ .Values.sensorconnect.image }}:{{ .Chart.AppVersion }}
-          {{- end }}
+        - name: {{include "factorycube-unified.fullname" .}}-sensorconnect
+          {{if .Values.sensorconnect.tag}}
+          image: {{.Values.sensorconnect.image}}:{{.Values.sensorconnect.tag}}
+          {{- else}}
+          image: {{.Values.sensorconnect.image}}:{{.Chart.AppVersion}}
+          {{end}}
           resources:
             limits:
-              cpu: {{ .Values.sensorconnect.resources.limits.cpu }}
-              memory: {{ .Values.sensorconnect.resources.limits.memory }}
+              cpu: {{.Values.sensorconnect.resources.limits.cpu}}
+              memory: {{.Values.sensorconnect.resources.limits.memory}}
             requests:
-              cpu: {{ .Values.sensorconnect.resources.requests.cpu }}
-              memory: {{ .Values.sensorconnect.resources.requests.memory }}
+              cpu: {{.Values.sensorconnect.resources.requests.cpu}}
+              memory: {{.Values.sensorconnect.resources.requests.memory}}
           env:
             - name: PYTHONUNBUFFERED
               value: "0"
             - name: TRANSMITTERID
-              value: {{ .Values._000_commonConfig.serialNumber | quote }}
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
             - name: BROKER_URL
-              value: {{ .Values._000_commonConfig.mqttBridge.remoteURL }}
+              value: {{.Values._000_commonConfig.mqttBridge.remoteURL}}
             - name: BROKER_PORT #TODO: remove this !
             - name: IP_RANGE
-              value: {{ .Values._000_commonConfig.datasources.sensorconnect.iprange | quote }}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
 
-      serviceAccountName: {{ include "factorycube-unified.serviceAccountName" . }}
+      serviceAccountName: {{include "factorycube-unified.serviceAccountName" .}}
       restartPolicy: Always
 
-{{- end }}
+{{end}}

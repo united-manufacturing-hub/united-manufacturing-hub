@@ -1,29 +1,30 @@
-{{- if or .Values.nodered.enabled .Values._000_commonConfig.dataprocessing.nodered.enabled -}}
+---
+{{if or .Values.nodered.enabled .Values._000_commonConfig.dataprocessing.nodered.enabled}}
 
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-nodered
+  name: {{include "factorycube-unified.fullname" .}}-nodered
   labels:
-    {{- include "factorycube-unified.labels.nodered" . | nindent 4 }}
+    {{- include "factorycube-unified.labels.nodered" . | nindent 4}}
 spec:
-  serviceName: {{ include "factorycube-unified.fullname" . }}-nodered
+  serviceName: {{include "factorycube-unified.fullname" .}}-nodered
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-unified.labels.nodered" . | nindent 6 }}
+      {{- include "factorycube-unified.labels.nodered" . | nindent 6}}
   template:
     metadata:
       labels:
-        {{- include "factorycube-unified.labels.nodered" . | nindent 8 }}
+        {{- include "factorycube-unified.labels.nodered" . | nindent 8}}
     spec:
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
       containers:
-      - name: {{ include "factorycube-unified.fullname" . }}-nodered
-        image: nodered/node-red:{{ .Values.nodered.tag }}
+      - name: {{include "factorycube-unified.fullname" .}}-nodered
+        image: nodered/node-red:{{.Values.nodered.tag}}
         ports:
         - containerPort: 1880
           name: nodered-ui
@@ -38,25 +39,25 @@ spec:
         securityContext:
           runAsUser: 1000
         volumeMounts:
-        - name: {{ include "factorycube-unified.fullname" . }}-nodered-data
+        - name: {{include "factorycube-unified.fullname" .}}-nodered-data
           mountPath: /data
-        - name: {{ include "factorycube-unified.fullname" . }}-nodered-config
+        - name: {{include "factorycube-unified.fullname" .}}-nodered-config
           mountPath: /data/settings.js
           subPath: nodered-config
           readOnly: true
         env:
-        {{ range $ENV_NAME, $ENV_CONTENT := .Values.nodered.env | default dict }}
-        - name: {{ $ENV_NAME }}
-          value: {{ $ENV_CONTENT | quote }}
-        {{ end }}
+        {{range $ENV_NAME, $ENV_CONTENT := .Values.nodered.env | default dict}}
+        - name: {{$ENV_NAME}}
+          value: {{$ENV_CONTENT | quote}}
+        {{end}}
         - name: TZ
-          value: {{ .Values.nodered.timezone }}
+          value: {{.Values.nodered.timezone}}
       volumes:
-      - name: {{ include "factorycube-unified.fullname" . }}-nodered-data
+      - name: {{include "factorycube-unified.fullname" .}}-nodered-data
         persistentVolumeClaim:
-          claimName: {{ include "factorycube-unified.fullname" . }}-nodered-claim
-      - name: {{ include "factorycube-unified.fullname" . }}-nodered-config
+          claimName: {{include "factorycube-unified.fullname" .}}-nodered-claim
+      - name: {{include "factorycube-unified.fullname" .}}-nodered-config
         configMap:
-          name: {{ include "factorycube-unified.fullname" . }}-nodered-config
+          name: {{include "factorycube-unified.fullname" .}}-nodered-config
 
-{{- end }}
+{{end}}

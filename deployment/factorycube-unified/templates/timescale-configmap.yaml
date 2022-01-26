@@ -1,4 +1,5 @@
-{{- if or .Values.timescaledbsingle.enabled .Values._000_commonConfig.datastorage.enabled -}}
+---
+{{if or .Values.timescaledbsingle.enabled .Values._000_commonConfig.datastorage.enabled}}
 
 apiVersion: v1
 kind: ConfigMap
@@ -10,17 +11,17 @@ data:
 
     psql -d "$1" <<__SQL__
 
-    CREATE USER {{ index .Values "grafana" "grafana.ini" "database" "user" }};
-    CREATE DATABASE {{ index .Values "grafana" "grafana.ini" "database" "name" }} OWNER {{ index .Values "grafana" "grafana.ini" "database" "user" }};
-    GRANT ALL PRIVILEGES ON DATABASE {{ index .Values "grafana" "grafana.ini" "database" "name" }} TO {{ index .Values "grafana" "grafana.ini" "database" "user" }};
-    \c {{ index .Values "grafana" "grafana.ini" "database" "name" }}
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ index .Values "grafana" "grafana.ini" "database" "user" }};
+    CREATE USER {{index .Values "grafana" "grafana.ini" "database" "user"}};
+    CREATE DATABASE {{index .Values "grafana" "grafana.ini" "database" "name"}} OWNER {{index .Values "grafana" "grafana.ini" "database" "user"}};
+    GRANT ALL PRIVILEGES ON DATABASE {{index .Values "grafana" "grafana.ini" "database" "name"}} TO {{index .Values "grafana" "grafana.ini" "database" "user"}};
+    \c {{index .Values "grafana" "grafana.ini" "database" "name"}}
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{index .Values "grafana" "grafana.ini" "database" "user"}};
 
-    CREATE USER {{ .Values.factoryinsight.db_user }};
-    CREATE DATABASE {{ .Values.factoryinsight.db_database }} OWNER {{ .Values.factoryinsight.db_user }};
-    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.factoryinsight.db_database }} TO {{ .Values.factoryinsight.db_user }};
+    CREATE USER {{.Values.factoryinsight.db_user}};
+    CREATE DATABASE {{.Values.factoryinsight.db_database}} OWNER {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON DATABASE {{.Values.factoryinsight.db_database}} TO {{.Values.factoryinsight.db_user}};
 
-    \c {{ .Values.factoryinsight.db_database }}
+    \c {{.Values.factoryinsight.db_database}}
 
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -300,8 +301,8 @@ data:
     -- creating an index to increase performance
     CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
 
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ .Values.factoryinsight.db_user }};
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
 
     -- TEST DATA
     -- assetTable
@@ -7547,4 +7548,4 @@ data:
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
 
     __SQL__
-{{- end -}}
+{{end}}

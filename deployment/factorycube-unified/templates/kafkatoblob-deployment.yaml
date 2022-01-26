@@ -1,26 +1,27 @@
-{{- if or .Values.kafkatoblob.enabled .Values._000_commonConfig.blobstorage.enabled -}}
+---
+{{if or .Values.kafkatoblob.enabled .Values._000_commonConfig.blobstorage.enabled}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-kafkatoblob
+  name: {{include "factorycube-unified.fullname" .}}-kafkatoblob
   labels:
-     {{- include "factorycube-unified.labels.kafkatoblob" . | nindent 4 }}
-  {{- if .Values.kafkatoblob.annotations }}
+    {{- include "factorycube-unified.labels.kafkatoblob" . | nindent 4}}
+  {{if .Values.kafkatoblob.annotations}}
   annotations:
-    {{- toYaml .Values.kafkatoblob.annotations | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.kafkatoblob.annotations | nindent 4}}
+  {{end}}
 spec:
-  replicas: {{ .Values.kafkatoblob.replicas }}
+  replicas: {{.Values.kafkatoblob.replicas}}
   selector:
     matchLabels:
-      name: {{ include "factorycube-unified.fullname" . }}-kafkatoblob
+      name: {{include "factorycube-unified.fullname" .}}-kafkatoblob
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{ include "factorycube-unified.fullname" . }}-kafkatoblob
-        {{- include "factorycube-unified.labels.kafkatoblob" . | nindent 8 }}
+        name: {{include "factorycube-unified.fullname" .}}-kafkatoblob
+        {{- include "factorycube-unified.labels.kafkatoblob" . | nindent 8}}
     spec:
       volumes:
         - name: kubernetes-ca
@@ -33,19 +34,19 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{ include "factorycube-unified.fullname" . }}-kafkatoblob
+                    name: {{include "factorycube-unified.fullname" .}}-kafkatoblob
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{ include "factorycube-unified.fullname" . }}-kafkatoblob
-          {{- if .Values.kafkatoblob.image.tag }}
-          image: {{ .Values.kafkatoblob.image.repository }}:{{ .Values.kafkatoblob.image.tag }}
-          {{- else }}
-          image: {{ .Values.kafkatoblob.image.repository }}:{{ .Chart.AppVersion }}
-          {{- end }}
-          imagePullPolicy: {{ .Values.kafkatoblob.image.pullPolicy }}
+        - name: {{include "factorycube-unified.fullname" .}}-kafkatoblob
+          {{if .Values.kafkatoblob.image.tag}}
+          image: {{.Values.kafkatoblob.image.repository}}:{{.Values.kafkatoblob.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkatoblob.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkatoblob.image.pullPolicy}}
           env:
             - name: KAFKA_BOOSTRAP_SERVER
-              value: {{ include "factorycube-unified.fullname" . }}-kafka-local-service:1883
+              value: {{include "factorycube-unified.fullname" .}}-kafka-local-service:1883
 
             - name: KAFKA_LISTEN_TOPIC
               value: "^ia\\..+\\.rawImage"
@@ -100,5 +101,5 @@ spec:
               subPath: ca.crt
       serviceAccountName: ""
       restartPolicy: Always
-{{- end -}}
+{{end}}
 

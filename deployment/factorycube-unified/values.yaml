@@ -1,7 +1,8 @@
+---
 # Please adjust the following lines
 _000_commonConfig:
   serialNumber: "development"  # usually the hostname
-  
+
   datasources:
     barcodereader:
       enabled: true
@@ -59,7 +60,7 @@ _000_commonConfig:
   mqttBridge:
     enabled: true
     remoteURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"
-    topic: "ia/factoryinsight" # /# will be automatically appended to the string specified here.
+    topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     CAcert: |
       -----BEGIN CERTIFICATE-----
       MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
@@ -639,7 +640,7 @@ miniooperator:
       ## PriorityClassName indicates the Pod priority and hence importance of a Pod relative to other Pods.
       ## This is applied to MinIO pods only.
       ## Refer Kubernetes documentation for details https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass/
-      priorityClassName : ""
+      priorityClassName: ""
       ## Define configuration for Console (Graphical user interface for MinIO)
       ## Refer https://github.com/minio/console
       console:
@@ -2027,11 +2028,11 @@ kafka:
     repository: bitnami/kafka
     tag: 2.8.1-debian-10-r31
     pullPolicy: IfNotPresent
-    pullSecrets: [ ]
+    pullSecrets: []
     debug: false
   replicas: 1
   storageRequest: 1Gi
-  allowPlaintextListener: yes
+  allowPlaintextListener: true
   service:
     type: ClusterIP
     port: 9092
@@ -2054,7 +2055,7 @@ kafka:
     auth:
       enabled: false
   externalZookeeper:
-    servers: [ ]
+    servers: []
 
 
 ##### CONFIG FOR REDIS #####
@@ -2176,7 +2177,7 @@ redis:
     enabled: false
     ingressNSMatchLabels: {}
     ingressNSPodMatchLabels: {}
-  #password: changeme
+  # password: changeme
   existingSecret: redis-secret
   existingSecretPasswordKey: redispassword
   persistence: {}

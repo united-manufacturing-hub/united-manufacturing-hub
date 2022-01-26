@@ -1,15 +1,16 @@
-{{- if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled -}}
+---
+{{if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled}}
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-factoryinput-service
+  name: {{include "factorycube-unified.fullname" .}}-factoryinput-service
   labels:
-     {{- include "factorycube-unified.labels.factoryinput" . | nindent 4 }}
-  {{- if .Values.factoryinput.service.annotations }}
+    {{- include "factorycube-unified.labels.factoryinput" . | nindent 4}}
+  {{if .Values.factoryinput.service.annotations}}
   annotations:
-    {{- toYaml .Values.factoryinput.service.annotations | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.factoryinput.service.annotations | nindent 4}}
+  {{end}}
 spec:
   type: ClusterIP
   ports:
@@ -18,6 +19,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-     {{- include "factorycube-unified.labels.factoryinput" . | nindent 4 }}
+     {{- include "factorycube-unified.labels.factoryinput" . | nindent 4}}
 
-{{- end -}}
+{{end}}

@@ -1,26 +1,27 @@
-{{- if or .Values.grafanaproxy.enabled .Values._000_commonConfig.datainput.enabled -}}
+---
+{{if or .Values.grafanaproxy.enabled .Values._000_commonConfig.datainput.enabled}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
+  name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
   labels:
-     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 4 }}
-  {{- if .Values.grafanaproxy.annotations }}
+    {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 4}}
+  {{if .Values.grafanaproxy.annotations}}
   annotations:
-    {{- toYaml .Values.grafanaproxy.annotations | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.grafanaproxy.annotations | nindent 4}}
+  {{end}}
 spec:
-  replicas: {{ .Values.grafanaproxy.replicas }}
+  replicas: {{.Values.grafanaproxy.replicas}}
   selector:
     matchLabels:
-     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 6 }}
+     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
-      name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
+      name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
       labels:
-        {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 8 }}
+        {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 8}}
     spec:
       affinity:
         podAntiAffinity:
@@ -29,25 +30,25 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
+                    name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{ include "factorycube-unified.fullname" . }}-grafanaproxy
-          {{- if .Values.grafanaproxy.image.tag }}
-          image: {{ .Values.grafanaproxy.image.repository }}:{{ .Values.grafanaproxy.image.tag }}
-          {{- else }}
-          image: {{ .Values.grafanaproxy.image.repository }}:{{ .Chart.AppVersion }}
-          {{- end }}
-          imagePullPolicy: {{ .Values.grafanaproxy.image.pullPolicy }}
+        - name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
+          {{if .Values.grafanaproxy.image.tag}}
+          image: {{.Values.grafanaproxy.image.repository}}:{{.Values.grafanaproxy.image.tag}}
+          {{- else}}
+          image: {{.Values.grafanaproxy.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.grafanaproxy.image.pullPolicy}}
           ports:
               - name: http
                 containerPort: 80
                 protocol: TCP
           resources:
             limits:
-              cpu: {{ .Values.grafanaproxy.resources.limits.cpu }}
+              cpu: {{.Values.grafanaproxy.resources.limits.cpu}}
             requests:
-              cpu: {{ .Values.grafanaproxy.resources.requests.cpu }}
+              cpu: {{.Values.grafanaproxy.resources.requests.cpu}}
           env:
             - name: FACTORYINPUT_KEY
               valueFrom:
@@ -93,4 +94,4 @@ spec:
 
       restartPolicy: Always
       terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
-{{- end -}}
+{{end}}
