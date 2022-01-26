@@ -2349,3 +2349,10 @@ kafka:
   externalZookeeper:
     servers: [ ]
 
+kowl:
+  enabled: true
+  kowl:
+    config:
+      kafka:
+        brokers:
+          - factorycube-server-kafka:9092
