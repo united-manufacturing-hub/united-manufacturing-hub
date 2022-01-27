@@ -2,6 +2,7 @@
 apiVersion: v2
 name: factorycube-unified
 description: A Helm chart for Kubernetes
+icon: https://avatars.githubusercontent.com/u/77492553
 
 # A chart can be either an 'application' or a 'library' chart.
 #
