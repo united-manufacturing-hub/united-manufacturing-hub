@@ -4,31 +4,31 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-mqttbridge
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
   labels:
-    {{- include "factorycube-unified.labels.mqttbridge" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 4}}
 spec:
-  serviceName: {{include "factorycube-unified.fullname" .}}-mqttbridge
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-unified.labels.mqttbridge" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 6}}
   template:
     metadata:
       labels:
-        {{- include "factorycube-unified.labels.mqttbridge" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 8}}
     spec:
       containers:
-      - name: {{include "factorycube-unified.fullname" .}}-mqttbridge
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
         {{if .Values.mqttbridge.tag}}
         image: {{.Values.mqttbridge.image}}:{{.Values.mqttbridge.tag}}
         {{- else}}
         image: {{.Values.mqttbridge.image}}:{{.Chart.AppVersion}}
         {{end}}
         volumeMounts:
-        - name: {{include "factorycube-unified.fullname" .}}-mqttbridge-data
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
           mountPath: /data/queue
-        - name: {{include "factorycube-unified.fullname" .}}-mqttbridge-certificates
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-certificates
           mountPath: /SSL_certs/remote
           readOnly: true
         resources:
@@ -52,7 +52,7 @@ spec:
         - name: LOCAL_CERTIFICATE_NAME
           value: "LOCAL"
         - name: LOCAL_BROKER_URL
-          value: 'mqtt://{{include "factorycube-unified.fullname" .}}-emqxedge-headless:1883'
+          value: 'mqtt://{{include "united-manufacturing-hub.fullname" .}}-emqxedge-headless:1883'
         - name: LOCAL_SUB_TOPIC
           value: {{.Values._000_commonConfig.mqttBridge.topic}}
         - name: LOCAL_PUB_TOPIC
@@ -62,13 +62,13 @@ spec:
         - name: BRIDGE_ONE_WAY
           value: "true"
       volumes:
-      - name: {{include "factorycube-unified.fullname" .}}-mqttbridge-data
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
         persistentVolumeClaim:
-          claimName: {{include "factorycube-unified.fullname" .}}-mqttbridge-claim
-      - name: {{include "factorycube-unified.fullname" .}}-mqttbridge-config
+          claimName: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-claim
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-config
         configMap:
-          name: {{include "factorycube-unified.fullname" .}}-mqttbridge-config
-      - name: {{include "factorycube-unified.fullname" .}}-mqttbridge-certificates
+          name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-config
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-certificates
         secret:
-          secretName: {{include "factorycube-unified.fullname" .}}-mqttbridge-secrets
+          secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-secrets
 {{end}}

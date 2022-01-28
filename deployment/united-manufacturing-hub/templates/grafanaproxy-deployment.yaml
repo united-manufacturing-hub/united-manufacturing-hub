@@ -3,9 +3,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
+  name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy
   labels:
-    {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 4}}
   {{if .Values.grafanaproxy.annotations}}
   annotations:
     {{- toYaml .Values.grafanaproxy.annotations | nindent 4}}
@@ -14,14 +14,14 @@ spec:
   replicas: {{.Values.grafanaproxy.replicas}}
   selector:
     matchLabels:
-     {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 6}}
+     {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
-      name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
+      name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy
       labels:
-        {{- include "factorycube-unified.labels.grafanaproxy" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 8}}
     spec:
       affinity:
         podAntiAffinity:
@@ -30,10 +30,10 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
+                    name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-grafanaproxy
+        - name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy
           {{if .Values.grafanaproxy.image.tag}}
           image: {{.Values.grafanaproxy.image.repository}}:{{.Values.grafanaproxy.image.tag}}
           {{- else}}

@@ -1,11 +1,11 @@
 ---
-{{if or .Values.vernemq.enabled .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vernemq-acl
   labels:
-    {{- include "factorycube-unified.labels.vernemq" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.vernemq" . | nindent 4}}
 data:
   vernemq-acl: |
      {{.Values._000_commonConfig.infrastructure.mqtt.AclConfig | nindent 5}}

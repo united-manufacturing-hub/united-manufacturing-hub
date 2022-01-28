@@ -4,11 +4,11 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-mqttbridge-claim
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-claim
   annotations:
     "helm.sh/resource-policy": keep
   labels:
-    {{- include "factorycube-unified.labels.mqttbridge" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 4}}
 spec:
   accessModes:
   - ReadWriteOnce

@@ -5,12 +5,12 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-factoryinput-pdb
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-pdb
 spec:
   minAvailable: {{.Values.factoryinput.pdb.minAvailable}}
   selector:
     matchLabels:
-      name: {{include "factorycube-unified.fullname" .}}-factoryinput
+      name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
 
 {{end}}
 {{end}}

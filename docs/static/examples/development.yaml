@@ -168,7 +168,7 @@ write_files:
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
     enabled: false
-    remoteURL: "ssl://factorycube-unified-vernemq-local-service.factorycube-unified:8883"
+    remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     CAcert: |
       -----BEGIN CERTIFICATE-----

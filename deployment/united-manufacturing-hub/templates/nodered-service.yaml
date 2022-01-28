@@ -1,13 +1,13 @@
 ---
-{{if or .Values.nodered.enabled .Values._000_commonConfig.dataprocessing.nodered.enabled}}
+{{if .Values._000_commonConfig.dataprocessing.nodered.enabled}}
 
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-nodered-service
+  name: {{include "united-manufacturing-hub.fullname" .}}-nodered-service
   labels:
-    {{- include "factorycube-unified.labels.nodered" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
 spec:
   type: {{.Values.nodered.serviceType}}
   ports:
@@ -16,6 +16,6 @@ spec:
     protocol: TCP
     name: http
   selector:
-      {{- include "factorycube-unified.labels.nodered" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.nodered" . | nindent 6}}
 
 {{end}}

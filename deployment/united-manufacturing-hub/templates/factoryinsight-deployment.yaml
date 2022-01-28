@@ -4,9 +4,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-factoryinsight-deployment
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-deployment
   labels:
-    {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
   {{if .Values.factoryinsight.annotations}}
   annotations:
     {{- toYaml .Values.factoryinsight.annotations | nindent 4}}
@@ -15,14 +15,14 @@ spec:
   replicas: {{.Values.factoryinsight.replicas}}
   selector:
     matchLabels:
-     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 6}}
+     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
-      name: {{include "factorycube-unified.fullname" .}}-factoryinsight
+      name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
       labels:
-        {{- include "factorycube-unified.labels.factoryinsight" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 8}}
         redis-client: "true"
     spec:
       affinity:
@@ -32,10 +32,10 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{include "factorycube-unified.fullname" .}}-factoryinsight
+                    name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-factoryinsight
+        - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
           {{if .Values.factoryinsight.image.tag}}
           image: {{.Values.factoryinsight.image.repository}}:{{.Values.factoryinsight.image.tag}}
           {{- else}}

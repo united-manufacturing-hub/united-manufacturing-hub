@@ -4,9 +4,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
   labels:
-    {{- include "factorycube-unified.labels.mqttkafkabridge" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.mqttkafkabridge" . | nindent 4}}
   {{if .Values.mqttkafkabridge.annotations}}
   annotations:
     {{- toYaml .Values.mqttkafkabridge.annotations | nindent 4}}
@@ -15,14 +15,14 @@ spec:
   replicas: {{.Values.mqttkafkabridge.replicas}}
   selector:
     matchLabels:
-      name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
-        {{- include "factorycube-unified.labels.mqttkafkabridge" . | nindent 8}}
+        name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+        {{- include "united-manufacturing-hub.labels.mqttkafkabridge" . | nindent 8}}
     spec:
       volumes:
         - name: kubernetes-ca
@@ -35,10 +35,10 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+                    name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
           {{if .Values.mqttkafkabridge.image.tag}}
           image: {{.Values.mqttkafkabridge.image.repository}}:{{.Values.mqttkafkabridge.image.tag}}
           {{- else}}
@@ -47,7 +47,7 @@ spec:
           imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
           env:
             - name: MQTT_BROKER_URL
-              value: {{include "factorycube-unified.fullname" .}}-vernemq-local-service:1883
+              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
 
             - name: MQTT_CERTIFICATE_NAME
               value: "NO_NAME"
@@ -56,7 +56,7 @@ spec:
               value: "ia/#"
 
             - name: KAFKA_BOOSTRAP_SERVER
-              value: {{include "factorycube-unified.fullname" .}}-kafka:9092
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
 
             - name: KAFKA_LISTEN_TOPIC
               value: "^ia.+"

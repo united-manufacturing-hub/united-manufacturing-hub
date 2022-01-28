@@ -8,7 +8,7 @@ Certificate:
         Validity
             Not Before: Apr  6 11:31:07 2021 GMT
             Not After : Mar 21 11:31:07 2024 GMT
-        Subject: CN=factorycube-unified-vernemq
+        Subject: CN=united-manufacturing-hub-vernemq
         Subject Public Key Info:
             Public Key Algorithm: rsaEncryption
                 RSA Public-Key: (2048 bit)
@@ -47,7 +47,7 @@ Certificate:
             X509v3 Key Usage: 
                 Digital Signature, Key Encipherment
             X509v3 Subject Alternative Name: 
-                DNS:factorycube-unified-vernemq
+                DNS:united-manufacturing-hub-vernemq
     Signature Algorithm: sha256WithRSAEncryption
          0d:68:48:80:21:1f:a7:00:38:86:35:e3:a4:49:20:91:1b:95:
          5e:7a:51:5f:3b:75:f8:c1:48:87:ac:42:84:e8:d9:15:54:5f:

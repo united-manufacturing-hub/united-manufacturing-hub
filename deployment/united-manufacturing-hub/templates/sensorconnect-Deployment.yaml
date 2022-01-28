@@ -4,26 +4,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-sensorconnect
+  name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
   labels:
-    {{- include "factorycube-unified.labels.sensorconnect" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 4}}
     app.kubernetes.io/component: "sensorconnect"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-unified.labels.sensorconnect" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 6}}
       app.kubernetes.io/component: "sensorconnect"
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        {{- include "factorycube-unified.labels.sensorconnect" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 8}}
         app.kubernetes.io/component: "sensorconnect"
     spec:
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-sensorconnect
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
           {{if .Values.sensorconnect.tag}}
           image: {{.Values.sensorconnect.image}}:{{.Values.sensorconnect.tag}}
           {{- else}}
@@ -42,11 +42,11 @@ spec:
             - name: TRANSMITTERID
               value: {{.Values._000_commonConfig.serialNumber | quote}}
             - name: BROKER_URL
-              value: mqtt://{{include "factorycube-unified.fullname" .}}-vernemq-local-service:1883
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
             - name: IP_RANGE
               value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
 
-      serviceAccountName: {{include "factorycube-unified.serviceAccountName" .}}
+      serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}
       restartPolicy: Always
 
 {{end}}

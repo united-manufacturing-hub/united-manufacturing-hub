@@ -4,9 +4,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-mqtttoblob
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
   labels:
-    {{- include "factorycube-unified.labels.mqtttoblob" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.mqtttoblob" . | nindent 4}}
   {{if .Values.mqtttoblob.annotations}}
   annotations:
     {{- toYaml .Values.mqtttoblob.annotations | nindent 4}}
@@ -15,14 +15,14 @@ spec:
   replicas: {{.Values.mqtttoblob.replicas}}
   selector:
     matchLabels:
-      name: {{include "factorycube-unified.fullname" .}}-mqtttoblob
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{include "factorycube-unified.fullname" .}}-mqtttoblob
-        {{- include "factorycube-unified.labels.mqtttoblob" . | nindent 8}}
+        name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
+        {{- include "united-manufacturing-hub.labels.mqtttoblob" . | nindent 8}}
     spec:
       volumes:
         - name: kubernetes-ca
@@ -35,10 +35,10 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{include "factorycube-unified.fullname" .}}-mqtttoblob
+                    name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
                 topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-mqtttoblob
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
           {{if .Values.mqtttoblob.image.tag}}
           image: {{.Values.mqtttoblob.image.repository}}:{{.Values.mqtttoblob.image.tag}}
           {{- else}}
@@ -56,7 +56,7 @@ spec:
               value: "1883"
 
             - name: BROKER_URL
-              value: {{include "factorycube-unified.fullname" .}}-vernemq-local-service
+              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
 
             - name: BUCKET_NAME
               value: "umh"
