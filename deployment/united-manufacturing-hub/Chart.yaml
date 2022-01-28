@@ -1,6 +1,6 @@
 ---
 apiVersion: v2
-name: factorycube-unified
+name: united-manufacturing-hub
 description: A Helm chart for Kubernetes
 icon: https://avatars.githubusercontent.com/u/77492553
 
@@ -17,13 +17,13 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.7.0
+version: 0.8.0-prerelease
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "0.7.0"
+appVersion: "0.8.0-prerelease"
 
 home: https://www.umh.app
 sources:
@@ -57,4 +57,4 @@ dependencies:
   - name: kowl
     repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
     version: 2.3.0
-    condition: global._000_commonConfig.infrastructure.kafka.enabled
+    condition: .Values._000_commonConfig.infrastructure.kafka.enabled

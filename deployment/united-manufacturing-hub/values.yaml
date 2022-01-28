@@ -23,7 +23,7 @@ _000_commonConfig:
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
     cameraconnect:
-      enabled: true
+      enabled: false
       trigger: "MQTT"
       acquisitionDelay: "0.0"
       cycleTime: "4"
@@ -147,7 +147,7 @@ _000_commonConfig:
   # mqtt-to-blob, minio, kafka-to-blob
   # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
   blobstorage:
-    enabled: true
+    enabled: false
 
   # factoryinput, grafanaproxy
   # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
@@ -1730,12 +1730,12 @@ grafana:
           access: proxy
           # <int> org id. will default to orgId 1 if not specified
           orgId: 1
-          url: "http://factorycube-unified-factoryinsight-service/"
+          url: "http://united-manufacturing-hub-factoryinsight-service/"
           # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
           jsonData:
             customerId: $FACTORYINSIGHT_CUSTOMERID
             apiKey: $FACTORYINSIGHT_PASSWORD
-            serverURL: "http://factorycube-unified-factoryinsight-service/"
+            serverURL: "http://united-manufacturing-hub-factoryinsight-service/"
             apiKeyConfigured: true
           version: 1
           # <bool> allow users to edit datasources from the UI.
@@ -1831,7 +1831,7 @@ grafana:
     grafana_net:
       url: https://grafana.net
     database:
-      host: factorycube-unified
+      host: united-manufacturing-hub
       user: "grafana"
       name: "grafana"
       password: "changeme"
@@ -2031,7 +2031,7 @@ kowl:
     config:
       kafka:
         brokers:
-          - factorycube-unified-kafka:9092
+          - united-manufacturing-hub-kafka:9092
 
 
 ### mqtt-kafka-bridge ###
