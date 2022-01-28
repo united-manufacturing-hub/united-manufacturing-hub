@@ -69,7 +69,7 @@ spec:
             - name: SSL_CERT_FILE
               value: /certs/kubernetes-ca.pem
             - name: MINIO_URL
-              value: 'umhminio-hl.factorycube-unified.svc.cluster.local:9000'
+              value: 'umhminio-hl:9000'
 
             - name: MINIO_ACCESS_KEY
               valueFrom:

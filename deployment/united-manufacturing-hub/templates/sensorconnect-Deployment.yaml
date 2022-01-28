@@ -42,8 +42,7 @@ spec:
             - name: TRANSMITTERID
               value: {{.Values._000_commonConfig.serialNumber | quote}}
             - name: BROKER_URL
-              value: {{.Values._000_commonConfig.mqttBridge.remoteURL}}
-            - name: BROKER_PORT #TODO: remove this !
+              value: mqtt://{{include "factorycube-unified.fullname" .}}-vernemq-local-service:1883
             - name: IP_RANGE
               value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
 
