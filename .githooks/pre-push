@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 This pre-push hooks check for validity of yaml and Chart.yaml files
 It requires yamllint and helm to be installed
