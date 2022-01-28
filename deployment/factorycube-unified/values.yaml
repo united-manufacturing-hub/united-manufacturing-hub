@@ -41,7 +41,7 @@ _000_commonConfig:
     # vernemq
     mqtt:
       enabled: true
-    # apache kafka, mqttkafkabridge
+    # apache kafka, mqttkafkabridge, kowl
     kafka:
       enabled: true
 
@@ -548,7 +548,6 @@ mqtttopostgresql:
 
 ### miniooperator ###
 miniooperator:
-  enabled: false
   loadBalancerEnabled: false
   service:
     annotations: {}
@@ -686,7 +685,6 @@ miniooperator:
 
 ### timescaleDB ###
 timescaledbsingle:
-  enabled: false
   # This file and its contents are licensed under the Apache License 2.0.
   # Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 
@@ -1232,7 +1230,6 @@ timescaledbsingle:
 
 ### grafana ###
 grafana:
-  enabled: false
   rbac:
     create: true
     ## Use an existing ClusterRole/Role (depending on rbac.namespaced false/true)
@@ -2025,7 +2022,6 @@ kafkatoblob:
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
-  enabled: false
   image:
     registry: docker.io
     repository: bitnami/kafka
@@ -2063,7 +2059,6 @@ kafka:
 
 ##### CONFIG FOR REDIS #####
 redis:
-  enabled: false
   cluster:
     enabled: true
     slaveCount: 1
@@ -2337,7 +2332,6 @@ redis:
 
 ##### CONFIG FOR VERNEMQ #####
 vernemq:
-  enabled: false
   AclConfig: |-
     pattern write ia/raw/%u/#
     pattern write ia/%u/#

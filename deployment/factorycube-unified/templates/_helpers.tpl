@@ -181,7 +181,3 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
-{{- define "clusterName" -}}
-{{- default .Release.Name .Values.timescaledbsingle.clusterName | trunc 63 -}}
-{{- end -}}
