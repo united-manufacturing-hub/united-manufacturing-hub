@@ -1,0 +1,102 @@
+---
+{{if or .Values.mqttkafkabridge.enabled .Values._000_commonConfig.infrastructure.kafka.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+  labels:
+    {{- include "factorycube-unified.labels.mqttkafkabridge" . | nindent 4}}
+  {{if .Values.mqttkafkabridge.annotations}}
+  annotations:
+    {{- toYaml .Values.mqttkafkabridge.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.mqttkafkabridge.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+        {{- include "factorycube-unified.labels.mqttkafkabridge" . | nindent 8}}
+    spec:
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+          {{if .Values.mqttkafkabridge.image.tag}}
+          image: {{.Values.mqttkafkabridge.image.repository}}:{{.Values.mqttkafkabridge.image.tag}}
+          {{- else}}
+          image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
+          env:
+            - name: MQTT_BROKER_URL
+              value: {{include "factorycube-unified.fullname" .}}-vernemq-local-service:1883
+
+            - name: MQTT_CERTIFICATE_NAME
+              value: "NO_NAME"
+
+            - name: MQTT_TOPIC
+              value: "ia/#"
+
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "factorycube-unified.fullname" .}}-kafka:9092
+
+            - name: KAFKA_LISTEN_TOPIC
+              value: "^ia.+"
+
+            - name: REDIS_URI
+              value: {{.Values.factoryinsight.redis.URI1}}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: redispassword
+
+
+
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          # livenessProbe:
+          #   httpGet:
+          #     path: /live
+          #     port: 8086
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 5
+
+          # define a readiness probe that checks every 5 seconds
+          #readinessProbe:
+          #  httpGet:
+          #    path: /ready
+          #    port: 8086
+          #  periodSeconds: 5
+          resources: {}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+
