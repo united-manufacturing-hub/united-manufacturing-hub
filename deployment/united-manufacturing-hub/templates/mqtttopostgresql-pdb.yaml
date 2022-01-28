@@ -5,12 +5,12 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql-pdb
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqtttopostgresql-pdb
 spec:
   minAvailable: {{.Values.mqtttopostgresql.pdb.minAvailable}}
   selector:
     matchLabels:
-      name: {{include "factorycube-unified.fullname" .}}-mqtttopostgresql
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqtttopostgresql
 
 {{end}}
 {{end}}

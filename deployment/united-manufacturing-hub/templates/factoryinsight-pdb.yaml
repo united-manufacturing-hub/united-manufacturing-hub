@@ -5,9 +5,9 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-factoryinsight-pdb
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-pdb
   labels:
-    {{- include "factorycube-unified.labels.factoryinsight" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
   {{if .Values.factoryinsight.pdb.annotations}}
   annotations:
     {{- toYaml .Values.factoryinsight.pdb.annotations | nindent 4}}
@@ -16,7 +16,7 @@ spec:
   minAvailable: {{.Values.factoryinsight.pdb.minAvailable}}
   selector:
     matchLabels:
-     {{- include "factorycube-unified.labels.factoryinsight" . | nindent 6}}
+     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}
 
 {{end}}
 {{end}}

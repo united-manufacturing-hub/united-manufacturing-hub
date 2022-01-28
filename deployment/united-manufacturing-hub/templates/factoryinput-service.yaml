@@ -4,9 +4,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-factoryinput-service
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-service
   labels:
-    {{- include "factorycube-unified.labels.factoryinput" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
   {{if .Values.factoryinput.service.annotations}}
   annotations:
     {{- toYaml .Values.factoryinput.service.annotations | nindent 4}}
@@ -19,6 +19,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-     {{- include "factorycube-unified.labels.factoryinput" . | nindent 4}}
+     {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
 
 {{end}}

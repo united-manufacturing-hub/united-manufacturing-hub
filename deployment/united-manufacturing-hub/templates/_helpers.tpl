@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "factorycube-unified.name" -}}
+{{- define "united-manufacturing-hub.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "factorycube-unified.fullname" -}}
+{{- define "united-manufacturing-hub.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -22,161 +22,161 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "factorycube-unified.chart" -}}
+{{- define "united-manufacturing-hub.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "factorycube-unified.labels.common" -}}
+{{- define "united-manufacturing-hub.labels.common" -}}
 app.kubernetes.io/instance: {{ .Release.Name }}
-helm.sh/chart: {{ include "factorycube-unified.chart" . }}
+helm.sh/chart: {{ include "united-manufacturing-hub.chart" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-app.kubernetes.io/part-of: {{ include "factorycube-unified.name" . }}
+app.kubernetes.io/part-of: {{ include "united-manufacturing-hub.name" . }}
 {{- end }}
 
 {{/*
 Labels for barcodereader
 */}}
-{{- define "factorycube-unified.labels.barcodereader" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-barcodereader
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.barcodereader" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-barcodereader
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for mqtt-bridge
 */}}
-{{- define "factorycube-unified.labels.mqttbridge" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-mqttbridge
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.mqttbridge" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-mqttbridge
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for factoryinsight
 */}}
-{{- define "factorycube-unified.labels.factoryinsight" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-factoryinsight
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.factoryinsight" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-factoryinsight
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for mqtttopostgresql
 */}}
-{{- define "factorycube-unified.labels.mqtttopostgresql" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-mqtttopostgresql
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.mqtttopostgresql" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-mqtttopostgresql
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for mqtttoblob
 */}}
-{{- define "factorycube-unified.labels.mqtttoblob" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-mqtttoblob
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.mqtttoblob" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-mqtttoblob
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for nodered
 */}}
-{{- define "factorycube-unified.labels.nodered" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-nodered
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.nodered" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-nodered
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for redis
 */}}
-{{- define "factorycube-unified.labels.redis" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-redis
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.redis" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-redis
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for timescaledb
 */}}
-{{- define "factorycube-unified.labels.timescaledb" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-timescaledb
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.timescaledb" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-timescaledb
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for grafanaproxy
 */}}
-{{- define "factorycube-unified.labels.grafanaproxy" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-grafanaproxy
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.grafanaproxy" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-grafanaproxy
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 
 {{/*
 Labels for factoryinput
 */}}
-{{- define "factorycube-unified.labels.factoryinput" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-factoryinput
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.factoryinput" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-factoryinput
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for kafkatoblob
 */}}
-{{- define "factorycube-unified.labels.kafkatoblob" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-kafkatoblob
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.kafkatoblob" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatoblob
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for mqttkafkabridge
 */}}
-{{- define "factorycube-unified.labels.mqttkafkabridge" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-mqttkafkabridge
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.mqttkafkabridge" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-mqttkafkabridge
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 
 {{/*
 Labels for sensorconnect
 */}}
-{{- define "factorycube-unified.labels.sensorconnect" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-sensorconnect
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.sensorconnect" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-sensorconnect
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for cameraconnect
 */}}
-{{- define "factorycube-unified.labels.cameraconnect" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-cameraconnect
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.cameraconnect" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-cameraconnect
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 {{/*
 Labels for vernemq
 */}}
-{{- define "factorycube-unified.labels.vernemq" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-vernemq
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.vernemq" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-vernemq
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 
 {{/*
 Labels for emqxedge
 */}}
-{{- define "factorycube-unified.labels.emqxedge" -}}
-app.kubernetes.io/name: {{ include "factorycube-unified.name" . }}-emqxedge
-{{ include "factorycube-unified.labels.common" . }}
+{{- define "united-manufacturing-hub.labels.emqxedge" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-emqxedge
+{{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "factorycube-unified.serviceAccountName" -}}
+{{- define "united-manufacturing-hub.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "factorycube-unified.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "united-manufacturing-hub.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

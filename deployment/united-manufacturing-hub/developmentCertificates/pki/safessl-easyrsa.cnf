@@ -1,6 +1,6 @@
 # For use with Easy-RSA 3.1 and OpenSSL or LibreSSL
 
-RANDFILE		= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/.rnd
+RANDFILE		= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/.rnd
 
 ####################################################################
 [ ca ]
@@ -9,17 +9,17 @@ default_ca	= CA_default		# The default ca section
 ####################################################################
 [ CA_default ]
 
-dir		= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki	# Where everything is kept
-certs		= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki			# Where the issued certs are kept
-crl_dir		= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki			# Where the issued crl are kept
-database	= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/index.txt	# database index file.
-new_certs_dir	= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/certs_by_serial	# default place for new certs.
+dir		= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki	# Where everything is kept
+certs		= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki			# Where the issued certs are kept
+crl_dir		= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki			# Where the issued crl are kept
+database	= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/index.txt	# database index file.
+new_certs_dir	= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/certs_by_serial	# default place for new certs.
 
-certificate	= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/ca.crt	 	# The CA certificate
-serial		= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/serial 		# The current serial number
-crl		= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/crl.pem 		# The current CRL
-private_key	= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/private/ca.key	# The private key
-RANDFILE	= /home/jeremy/git/united-manufacturing-hub/deployment/factorycube-unified/developmentCertificates/pki/.rand		# private random number file
+certificate	= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/ca.crt	 	# The CA certificate
+serial		= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/serial 		# The current serial number
+crl		= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/crl.pem 		# The current CRL
+private_key	= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/private/ca.key	# The private key
+RANDFILE	= /home/jeremy/git/united-manufacturing-hub/deployment/united-manufacturing-hub/developmentCertificates/pki/.rand		# private random number file
 
 x509_extensions	= basic_exts		# The extentions to add to the cert
 

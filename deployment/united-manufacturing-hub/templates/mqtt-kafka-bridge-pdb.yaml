@@ -5,12 +5,12 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge-pdb
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-pdb
 spec:
   minAvailable: {{.Values.mqttkafkabridge.pdb.minAvailable}}
   selector:
     matchLabels:
-      name: {{include "factorycube-unified.fullname" .}}-mqttkafkabridge
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
 
 {{end}}
 {{end}}

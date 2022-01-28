@@ -4,22 +4,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-cameraconnect
+  name: {{include "united-manufacturing-hub.fullname" .}}-cameraconnect
   labels:
-    {{- include "factorycube-unified.labels.cameraconnect" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.cameraconnect" . | nindent 4}}
     app.kubernetes.io/component: "cameraconnect"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-unified.labels.cameraconnect" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.cameraconnect" . | nindent 6}}
       app.kubernetes.io/component: "cameraconnect"
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        {{- include "factorycube-unified.labels.cameraconnect" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.cameraconnect" . | nindent 8}}
         app.kubernetes.io/component: "cameraconnect"
     spec:
       hostNetwork: true
@@ -43,7 +43,7 @@ spec:
             - mountPath: /genTLProducer
               name: cameraconnect-gentlproducer
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-cameraconnect
+        - name: {{include "united-manufacturing-hub.fullname" .}}-cameraconnect
           {{if .Values.cameraconnect.tag}}
           image: {{.Values.cameraconnect.image}}:{{.Values.cameraconnect.tag}}
           {{- else}}
@@ -91,7 +91,7 @@ spec:
               value: {{.Values.cameraconnect.loggingLevel | quote}}
             - name: DEFAULT_GENTL_PRODUCER_PATH
               value: "/app/assets/producer_files"
-      serviceAccountName: {{include "factorycube-unified.serviceAccountName" .}}
+      serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}
       restartPolicy: Always
 
 {{end}}

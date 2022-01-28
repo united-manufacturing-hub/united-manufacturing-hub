@@ -4,22 +4,22 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{include "factorycube-unified.fullname" .}}-barcodereader
+  name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
   labels:
-    {{- include "factorycube-unified.labels.barcodereader" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 4}}
 spec:
-  serviceName: {{include "factorycube-unified.fullname" .}}-barcodereader
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
   replicas: 1
   selector:
     matchLabels:
-      {{- include "factorycube-unified.labels.barcodereader" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 6}}
   template:
     metadata:
       labels:
-        {{- include "factorycube-unified.labels.barcodereader" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 8}}
     spec:
       containers:
-        - name: {{include "factorycube-unified.fullname" .}}-barcodereader
+        - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
           {{if .Values.barcodereader.tag}}
           image: {{.Values.barcodereader.image}}:{{.Values.barcodereader.tag}}
           {{- else}}

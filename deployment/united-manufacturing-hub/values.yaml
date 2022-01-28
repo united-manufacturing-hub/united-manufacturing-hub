@@ -157,7 +157,7 @@ _000_commonConfig:
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
     enabled: false
-    remoteURL: "ssl://factorycube-unified-vernemq-local-service.factorycube-unified:8883"
+    remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     CAcert: |
       -----BEGIN CERTIFICATE-----
@@ -492,13 +492,13 @@ factoryinsight:
   replicas: 2
   user: "factoryinsight"
   # Password will be generated automatically
-  db_host: "factorycube-unified"
+  db_host: "united-manufacturing-hub"
   db_database: "factoryinsight"
   db_user: "factoryinsight"
   redis:
-    URI1: factorycube-unified-redis-node-0.factorycube-unified-redis-headless:26379
-    URI2: factorycube-unified-redis-node-1.factorycube-unified-redis-headless:26379
-    URI3: factorycube-unified-redis-node-2.factorycube-unified-redis-headless:26379
+    URI1: united-manufacturing-hub-redis-node-0.united-manufacturing-hub-redis-headless:26379
+    URI2: united-manufacturing-hub-redis-node-1.united-manufacturing-hub-redis-headless:26379
+    URI3: united-manufacturing-hub-redis-node-2.united-manufacturing-hub-redis-headless:26379
   service:
     annotations: {}
   pdb:
@@ -581,8 +581,8 @@ mqtttopostgresql:
     enabled: true
     minAvailable: 1
 
-### miniooperator ###
-miniooperator:
+### minio-operator ###
+minio-operator:
   loadBalancerEnabled: false
   service:
     annotations: {}
@@ -596,7 +596,7 @@ miniooperator:
         tag: RELEASE.2021-06-17T00-10-46Z
         pullPolicy: IfNotPresent
       ## Customize namespace for tenant deployment
-      namespace: factorycube-unified
+      namespace: united-manufacturing-hub
       ## Customize any private registry image pull secret.
       ## currently only one secret registry is supported
       imagePullSecret: {}
@@ -719,14 +719,14 @@ miniooperator:
         externalCertSecret: {}
 
 ### timescaleDB ###
-timescaledbsingle:
+timescaledb-single:
   # This file and its contents are licensed under the Apache License 2.0.
   # Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 
   replicaCount: 1
 
   # To prevent very long names, we override the name, otherwise it would default to
-  # timescaledbsingle (the name of the chart)
+  # timescaledb-single (the name of the chart)
   nameOverride: timescaledb
 
   # The default Patroni name of the cluster ("scope") is derived from the name of the release,
