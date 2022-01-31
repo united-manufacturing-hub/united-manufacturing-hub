@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -179,8 +180,12 @@ func kafkaToQueue(topic string) {
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
+			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
+				zap.S().Warnf("Topic not yet available, retrying later")
+				internal.SleepBackedOff(retry, 10*time.Millisecond, 60*time.Second)
+				retry += 1
 			} else {
-				zap.S().Errorf("Failed to read kafka message: %s", err)
+				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
