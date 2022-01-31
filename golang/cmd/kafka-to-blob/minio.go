@@ -26,7 +26,13 @@ func setupMinio(MinioUrl string, MinioAccessKey string, MinioSecretKey string, M
 		panic(err)
 	}
 	if !bucketExists {
-		panic(fmt.Sprintf("Bucket '%s' does not exist", MinioBucketName))
+		err := mioClient.MakeBucket(context.Background(), MinioBucketName, minio.MakeBucketOptions{
+			ObjectLocking: false,
+		})
+		if err != nil {
+			fmt.Sprintf("Bucket '%s' does not exist and failed to create !", MinioBucketName)
+			panic(err)
+		}
 	}
 	return
 }
