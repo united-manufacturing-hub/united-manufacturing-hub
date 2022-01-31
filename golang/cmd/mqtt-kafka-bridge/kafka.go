@@ -185,6 +185,7 @@ func kafkaToQueue(topic string) {
 				zap.S().Warnf("Topic not yet available, retrying later")
 				internal.SleepBackedOff(retry, 10*time.Millisecond, 60*time.Second)
 				retry += 1
+				continue
 			} else {
 				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
