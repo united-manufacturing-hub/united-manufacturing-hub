@@ -178,7 +178,7 @@ serviceAccount:
 
 ### mqttbridge ###
 mqttbridge:
-  enabled: true
+  enabled: false
   image: unitedmanufacturinghub/mqtt-bridge
   storageRequest: 1Gi
   resources:
