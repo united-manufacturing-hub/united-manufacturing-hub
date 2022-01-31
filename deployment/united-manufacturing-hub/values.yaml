@@ -40,7 +40,7 @@ _000_commonConfig:
   dataprocessing:
     nodered:
       enabled: true
-      defaultFlows: true
+      defaultFlows: false
 
   # Infrastructure
   infrastructure:

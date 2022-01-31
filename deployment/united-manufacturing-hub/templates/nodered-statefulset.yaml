@@ -34,7 +34,7 @@ spec:
             - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-flows
               mountPath: /data/flows.default
               subPath: nodered-flows
-        {{- end }}
+        {{ end }}
 
         {{ if .Values.nodered.pluginInstallEnabled }}
         - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init-plugin
@@ -46,8 +46,7 @@ spec:
             - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi;
               cd /data;
               if mkdir DO_NOT_DELETE; then
-                  {{ default "" .Values.nodered.pluginInstallLines | nindent 12}}
-
+                {{ default "" .Values.nodered.pluginInstallLines}}
               else
               echo "Initial installation already completed. Please use Node-RED UI for further package installations";
               exit 0;
@@ -55,7 +54,7 @@ spec:
           volumeMounts:
             - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
               mountPath: /data
-        {{- end }}
+        {{ end }}
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
         image: nodered/node-red:{{.Values.nodered.tag}}
