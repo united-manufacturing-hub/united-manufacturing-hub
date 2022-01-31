@@ -39,6 +39,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
+	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
 
 	// Redis cache
 	redisURI := os.Getenv("REDIS_URI")
@@ -77,7 +78,10 @@ func main() {
 	zap.S().Debugf("Setting up MQTT")
 	//mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
-
+	err = CreateTopicIfNotExists(KafkaBaseTopic)
+	if err != nil {
+		panic(err)
+	}
 	zap.S().Debugf("Setting up Kafka")
 	kafkaProducerClient, kafkaAdminClient, kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
 
