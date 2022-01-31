@@ -46,7 +46,7 @@ spec:
           imagePullPolicy: {{.Values.kafkatoblob.image.pullPolicy}}
           env:
             - name: KAFKA_BOOSTRAP_SERVER
-              value: {{include "united-manufacturing-hub.fullname" .}}-kafka-local-service:1883
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
 
             - name: KAFKA_LISTEN_TOPIC
               value: "^ia\\..+\\.rawImage"
