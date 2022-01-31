@@ -22,6 +22,40 @@ spec:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
+      initContainers:
+
+        {{ if .Values._000_commonConfig.dataprocessing.nodered.defaultFlows }}
+        - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init
+          image: busybox:1.28
+          command: [ 'sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null' ]
+          volumeMounts:
+            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
+              mountPath: /data
+            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-flows
+              mountPath: /data/flows.default
+              subPath: nodered-flows
+        {{- end }}
+
+        {{ if .Values.nodered.pluginInstallEnabled }}
+        - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init-plugin
+          image: node:14
+          command:
+            - 'sh'
+            - '-c'
+          args:
+            - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi;
+              cd /data;
+              if mkdir DO_NOT_DELETE; then
+                  {{ default "" .Values.nodered.pluginInstallLines | nindent 12}}
+
+              else
+              echo "Initial installation already completed. Please use Node-RED UI for further package installations";
+              exit 0;
+              fi;
+          volumeMounts:
+            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
+              mountPath: /data
+        {{- end }}
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
         image: nodered/node-red:{{.Values.nodered.tag}}
