@@ -120,15 +120,7 @@ func main() {
 	zap.S().Debugf("Setting up database")
 	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
 	// Setting up queues
-	zap.S().Debugf("Set	ting up queues")
-
-	for {
-		if IsPostgresSQLAvailable() {
-			break
-		}
-		zap.S().Debugf("Postgres not yet available")
-		time.Sleep(1 * time.Second)
-	}
+	zap.S().Debugf("Setting up queues")
 
 	addOrderHandler = *NewAddOrderHandler()
 	addParentToChildHandler = *NewAddParentToChildHandler()

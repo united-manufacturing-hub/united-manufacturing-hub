@@ -1,5 +1,6 @@
 ---
 {{if .Values._000_commonConfig.blobstorage.enabled}}
+{{ if index .Values "minio-operator" "loadBalancerEnabled" }}
 
 apiVersion: v1
 kind: Service
@@ -21,4 +22,5 @@ spec:
   selector:
       v1.min.io/tenant: {{printf (index .Values "minio-operator" "tenants" 0).name}}
 
+{{end}}
 {{end}}

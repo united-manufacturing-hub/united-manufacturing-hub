@@ -63,4 +63,4 @@ dependencies:
   - name: kowl
     repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
     version: 2.3.0
-    condition: .Values._000_commonConfig.infrastructure.kafka.enabled
+    condition: global._000_commonConfig.infrastructure.kafka.enabled
