@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
@@ -30,7 +29,7 @@ func setupMinio(MinioUrl string, MinioAccessKey string, MinioSecretKey string, M
 			ObjectLocking: false,
 		})
 		if err != nil {
-			fmt.Sprintf("Bucket '%s' does not exist and failed to create !", MinioBucketName)
+			zap.S().Errorf("Bucket '%s' does not exist and failed to create !", MinioBucketName)
 			panic(err)
 		}
 	}
