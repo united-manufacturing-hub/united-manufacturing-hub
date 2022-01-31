@@ -156,7 +156,7 @@ _000_commonConfig:
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
-    enabled: true
+    enabled: false
     remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     CAcert: |
