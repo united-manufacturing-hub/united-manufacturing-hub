@@ -50,7 +50,7 @@ spec:
               value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
 
             - name: MQTT_CERTIFICATE_NAME
-              value: "NO_NAME"
+              value: "NO_CERT"
 
             - name: MQTT_TOPIC
               value: "ia/#"
