@@ -51,6 +51,9 @@ spec:
             - name: KAFKA_LISTEN_TOPIC
               value: "^ia\\..+\\.rawImage"
 
+            - name: KAFKA_BASE_TOPIC
+              value: "ia"
+
             - name: BUCKET_NAME
               value: "umh"
 
