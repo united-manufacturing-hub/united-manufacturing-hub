@@ -175,6 +175,7 @@ func kafkaToQueue(topic string) {
 		panic(err)
 	}
 
+	retry := int64(0)
 	for !ShuttingDown {
 		msg, err := kafkaConsumerClient.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
