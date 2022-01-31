@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/minio/minio-go/v7"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -36,6 +37,8 @@ func processKafkaQueue(topic string, bucketName string) {
 		panic(err)
 	}
 
+	retry := int64(0)
+
 	for !ShuttingDown {
 		if minioClient.IsOffline() {
 			zap.S().Warnf("Minio is down")
@@ -47,11 +50,16 @@ func processKafkaQueue(topic string, bucketName string) {
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
+			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
+				zap.S().Warnf("Topic not yet available, retrying later")
+				internal.SleepBackedOff(retry, 10*time.Millisecond, 60*time.Second)
+				retry += 1
 			} else {
 				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
+
 		}
 
 		var rawImage RawImage
