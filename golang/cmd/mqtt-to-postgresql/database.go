@@ -39,6 +39,16 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	} else {
 		isDryRun = false
 	}
+	for {
+		var ok bool
+		var perr error
+		if ok, perr = IsPostgresSQLAvailable(); ok {
+			break
+		}
+		zap.S().Warnf("Postgres not yet available: %s", perr)
+		time.Sleep(1 * time.Second)
+	}
+
 	db.SetMaxOpenConns(20)
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
@@ -66,14 +76,15 @@ func ValidateStruct(vstruct interface{}) bool {
 }
 
 //IsPostgresSQLAvailable returns if the database is reachable by PING command
-func IsPostgresSQLAvailable() bool {
+func IsPostgresSQLAvailable() (bool, error) {
+	var err error
 	if db != nil {
-		err := db.Ping()
+		err = db.Ping()
 		if err == nil {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, err
 }
 
 // ShutdownDB closes all database connections
