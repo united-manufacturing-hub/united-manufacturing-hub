@@ -78,12 +78,13 @@ func main() {
 	zap.S().Debugf("Setting up MQTT")
 	//mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
+
+	zap.S().Debugf("Setting up Kafka")
+	kafkaProducerClient, kafkaAdminClient, kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
 	err = CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
-	zap.S().Debugf("Setting up Kafka")
-	kafkaProducerClient, kafkaAdminClient, kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
 
 	zap.S().Debugf("Start Queue processors")
 	go processIncomingMessages()
