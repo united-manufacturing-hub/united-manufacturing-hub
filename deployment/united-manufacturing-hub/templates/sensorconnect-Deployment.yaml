@@ -42,7 +42,9 @@ spec:
             - name: TRANSMITTERID
               value: {{.Values._000_commonConfig.serialNumber | quote}}
             - name: BROKER_URL
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+            - name: BROKER_PORT
+              value: "1883"
             - name: IP_RANGE
               value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
 
