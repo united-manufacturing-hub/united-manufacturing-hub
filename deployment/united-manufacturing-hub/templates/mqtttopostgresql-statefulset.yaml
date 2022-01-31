@@ -68,8 +68,6 @@ spec:
               value: {{.Values.factoryinsight.db_user}}
             - name: POSTGRES_PASSWORD
               value: {{.Values._000_commonConfig.datastorage.db_password}}
-            - name: POSTGRES_SSLMODE
-              value: {{.Values.factoryinsight.db_sslmode}}
 
             - name: CERTIFICATE_NAME
               value: NO_CERT
