@@ -41,7 +41,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			keyPdin := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
 			connectionCode := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
 			if connectionCode != 200 {
-				zap.S().Errorf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
+				zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
 				continue
 			}
 

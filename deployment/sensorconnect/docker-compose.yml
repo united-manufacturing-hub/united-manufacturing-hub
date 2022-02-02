@@ -35,7 +35,7 @@ services:
 
   sensorconnect:
     image: scarjit/sensorconnect:latest
-    restart: on-failure
+    restart: always
     volumes:
       - ./ioddfiles/:/opt/ioddfiles/
     environment:
@@ -43,6 +43,8 @@ services:
       - KAFKA_BOOSTRAP_SERVER=kafka:9092
       - TRANSMITTERID=12345
       - IODD_FILE_PATH=/opt/ioddfiles
+    depends_on:
+      - kafka
 
 volumes:
   zookeeper_data:
