@@ -74,10 +74,12 @@ func processSensorData(sensorDataMap map[string]interface{},
 			rawSensorOutputBinary := HexToBin(rawSensorOutputString)
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
+			zap.S().Warnf("RecordItemArray: %d for port: %d and sn: %s", len(ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray), portNumber, mqttRawTopic)
 			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
 			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
 				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
 				if err != nil {
+					zap.S().Warnf("%s", err.Error())
 					continue
 				}
 				leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
@@ -178,7 +180,9 @@ func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArr
 				bitLength = determineValueBitLength(datatype, datatypeElement.BitLength, datatypeElement.FixedLength)
 				return
 			}
+			zap.S().Warnf("datatypeElement.Id vs item.DatatypeRef.DatatypeId: %s vs %s", datatypeElement.Id, item.DatatypeRef.DatatypeId)
 		}
+		zap.S().Warnf("datatypeArray: %v", datatypeArray)
 		err = errors.New("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
 		return
 	} else {
