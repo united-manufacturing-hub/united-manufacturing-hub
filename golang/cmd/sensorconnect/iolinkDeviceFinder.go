@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -116,15 +117,16 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 		return
 	}
 	client := &http.Client{}
+	client.Timeout = time.Second * 50
 	resp, err := client.Do(req)
 	if err != nil {
-		zap.S().Debugf("Client at %s did not respond.", url)
+		zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		zap.S().Debugf("Responsstatus not 200 but instead: %s", resp.StatusCode)
+		zap.S().Debugf("Respons status not 200 but instead: %s", resp.StatusCode)
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)

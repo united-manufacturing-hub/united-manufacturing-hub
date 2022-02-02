@@ -150,12 +150,14 @@ func getUrl(url string) (body []byte, err error, status int) {
 	globalSleepTimer += 1
 	var resp *http.Response
 	resp, err = http.Get(url)
+	if err != nil {
+		zap.S().Errorf("%s", err.Error())
+		return
+	}
 	defer resp.Body.Close()
 	status = resp.StatusCode
 	if status != 200 {
-		return
-	}
-	if err != nil {
+		zap.S().Errorf("Not status 200")
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)
