@@ -84,6 +84,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 				rightIndex := outputBitLength - element.BitOffset
 				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
 				valueString := convertBinaryValueToString(binaryValue, datatype)
+				name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
 				valueName := getNameFromExternalTextCollection(element.Name.TextId, ioddIoDeviceMap[ioddFilemapKey].ExternalTextCollection.PrimaryLanguage.Text)
 				payload = attachValueString(payload, valueName, valueString)
 
@@ -173,7 +174,7 @@ func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArr
 	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
 		for _, datatypeElement := range datatypeArray {
 			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
-				datatype = datatypeElement.Type
+				datatype = datatypeElement.Type // IntegerT or UIntegerT or Float32T
 				bitLength = determineValueBitLength(datatype, datatypeElement.BitLength, datatypeElement.FixedLength)
 				return
 			}
@@ -183,6 +184,69 @@ func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArr
 	} else {
 		err = errors.New("Neither SimpleDatatype nor DatatypeRef included in Recorditem")
 		return
+	}
+}
+
+// checkSingleValuesAndValueRanges checks if value of record item is in a given valuerange or on a singlevalue. It returns the name of the singlevalue and an error if a ValueRange or SingleValue
+//are given but not met
+func checkSingleValuesAndValueRanges(item RecordItem, valueString string, datatype string, datatypeArray []Datatype) (name string, err error){
+	if !reflect.DeepEqual(item.SimpleDatatype.Type, ""){ // enters if simple datatype
+		if  (reflect.DeepEqual(item.SimpleDatatype.ValueRange, "") && reflect.DeepEqual(item.SimpleDatatype.SingleValue, "")){ // simple datatype doesn't contain SingleValue or ValueRange
+			return nil, nil
+		}else if !reflect.DeepEqual(item.SimpleDatatype.ValueRange, ""){// simple datatype contains ValueRange
+			if reflect.DeepEqual(datatype, "IntegerT"){
+				intUpperBound, err := strconv.Atoi(item.SimpleDatatype.ValueRange.UpperValue)
+				if err != nil {
+					return
+				}
+				intLowerBound, err := strconv.Atoi(item.SimpleDatatype.ValueRange.LowerValue)
+				if err != nil {
+					return
+				}
+			} else if reflect.DeepEqual(datatype, "UIntegerT"){
+				intUpperBound, err := strconv.Atoi(item.SimpleDatatype.ValueRange.UpperValue)
+				if err != nil {
+					return
+				}
+				intLowerBound, err := strconv.Atoi(item.SimpleDatatype.ValueRange.LowerValue)
+				if err != nil {
+					return
+				}
+			} else if reflect.DeepEqual(datatype, "Float32T"){
+				floatUpperBound, err := strconv.ParseFloat(item.SimpleDatatype.ValueRange.UpperValue, 32)
+				if err != nil {
+					return
+				}
+				floatLowerBound, err := strconv.ParseFloat(item.SimpleDatatype.ValueRange.UpperValue, 32)
+				if err != nil {
+					return
+				}
+			return nil, checkIfValueInValueRange()
+		}
+	}
+	
+	} 
+	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
+		for _, datatypeElement := range datatypeArray {
+			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
+				
+				return
+			}
+		}
+		err = errors.New("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
+		return
+	} else {
+		err = errors.New("Neither SimpleDatatype nor DatatypeRef included in Recorditem")
+		return
+}
+
+
+// valueRangeOrSingleValueExists returns true if a RecordItem holds single values or valueRanges
+func valueRangeOrSingleValueExistsInSimpleDatatype(item RecordItem){
+	if (reflect.DeepEqual(item.SimpleDatatype.ValueRange, "") && reflect.DeepEqual(item.SimpleDatatype.SingleValue, ""){
+		return false
+	} else{
+		return true
 	}
 }
 

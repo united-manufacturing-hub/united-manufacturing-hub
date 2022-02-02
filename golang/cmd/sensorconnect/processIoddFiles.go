@@ -104,9 +104,11 @@ type DatatypeRef struct {
 }
 
 type SimpleDatatype struct {
-	Type        string `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
-	BitLength   uint   `xml:"bitLength,attr"`
-	FixedLength uint   `xml:"fixedLength,attr"`
+	Type        string      `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	BitLength   uint        `xml:"bitLength,attr"`
+	FixedLength uint        `xml:"fixedLength,attr"`
+	SingleValue SingleValue `xml:"SingleValue"`
+	ValueRange  ValueRange  `xml:"ValueRange"`
 }
 
 // Todo add datatyperef if not simple datatype
