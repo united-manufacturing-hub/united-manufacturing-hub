@@ -84,7 +84,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 				rightIndex := outputBitLength - element.BitOffset
 				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
 				valueString := convertBinaryValueToString(binaryValue, datatype)
-				name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+				//name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
 				valueName := getNameFromExternalTextCollection(element.Name.TextId, ioddIoDeviceMap[ioddFilemapKey].ExternalTextCollection.PrimaryLanguage.Text)
 				payload = attachValueString(payload, valueName, valueString)
 
@@ -187,6 +187,7 @@ func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArr
 	}
 }
 
+/*
 // checkSingleValuesAndValueRanges checks if value of record item is in a given valuerange or on a singlevalue. It returns the name of the singlevalue and an error if a ValueRange or SingleValue
 //are given but not met
 func checkSingleValuesAndValueRanges(item RecordItem, valueString string, datatype string, datatypeArray []Datatype) (name string, err error){
@@ -224,12 +225,12 @@ func checkSingleValuesAndValueRanges(item RecordItem, valueString string, dataty
 			return nil, checkIfValueInValueRange()
 		}
 	}
-	
-	} 
+
+	}
 	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
 		for _, datatypeElement := range datatypeArray {
 			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
-				
+
 				return
 			}
 		}
@@ -249,7 +250,7 @@ func valueRangeOrSingleValueExistsInSimpleDatatype(item RecordItem){
 		return true
 	}
 }
-
+*/
 // convertBinaryValueToString converts a binary string value to a readable string according to its datatype
 func convertBinaryValueToString(binaryValue string, datatype string) (output string) {
 	switch datatype {
