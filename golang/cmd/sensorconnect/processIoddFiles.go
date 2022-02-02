@@ -163,7 +163,7 @@ func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice
 		zap.S().Debugf("File %v not already in map.", name)
 		// if the oldFileInfoSlice doesn't contain a file with this name the file is new
 		// create path to file
-		absoluteFilePath := absoluteDirectoryPath + "\\" + name
+		absoluteFilePath := absoluteDirectoryPath + "/" + name
 		// read file
 		dat, err := ioutil.ReadFile(absoluteFilePath)
 		if err != nil {

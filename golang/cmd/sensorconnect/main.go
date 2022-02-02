@@ -36,7 +36,7 @@ func main() {
 
 	transmitterId = os.Getenv("TRANSMITTERID")
 
-	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH") //"../sensorconnect/IoddFiles/"
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
 	ioDeviceMap, fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
@@ -58,23 +58,24 @@ func main() {
 
 func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon")
-	var err error
-	for _, deviceInfo := range discoveredDeviceInformation {
-		portModeMap, err = GetPortModeMap(deviceInfo)
-		if err != nil {
-			zap.S().Errorf("GetPortModeMap produced the error: %v", err)
-		}
-		sensorDataMap, err = GetSensorDataMap(deviceInfo)
-		if err != nil {
-			zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
-		}
+	for {
+		var err error
+		for _, deviceInfo := range discoveredDeviceInformation {
+			portModeMap, err = GetPortModeMap(deviceInfo)
+			if err != nil {
+				zap.S().Errorf("GetPortModeMap produced the error: %v", err)
+			}
+			sensorDataMap, err = GetSensorDataMap(deviceInfo)
+			if err != nil {
+				zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
+			}
 
-		err = processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
-		if err != nil {
-			zap.S().Errorf("processSensorData produced the error: %v", err)
+			err = processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
+			if err != nil {
+				zap.S().Errorf("processSensorData produced the error: %v", err)
+			}
 		}
 	}
-
 }
 
 func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRange string) {

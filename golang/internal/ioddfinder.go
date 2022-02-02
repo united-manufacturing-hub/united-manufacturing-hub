@@ -29,7 +29,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 		zap.S().Errorf("Unable to find absoluteDirectoryPath: %v", err)
 		return err
 	}
-	absoluteFilePath := absoluteDirectoryPath + "\\" + filemap[0].Name
+	absoluteFilePath := absoluteDirectoryPath + "/" + filemap[0].Name
 	zap.S().Debugf("Saving file to path: " + absoluteFilePath)
 
 	// check for existing file with same name

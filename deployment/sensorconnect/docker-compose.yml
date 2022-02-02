@@ -35,10 +35,13 @@ services:
 
   sensorconnect:
     image: scarjit/sensorconnect:latest
+    volumes:
+      - ./ioddfiles/:/opt/ioddfiles/
     environment:
       - IP_RANGE=192.168.10.17/32
       - KAFKA_BOOSTRAP_SERVER=kafka:9092
       - TRANSMITTERID=12345
+      - IODD_FILE_PATH=/opt/ioddfiles
 
 volumes:
   zookeeper_data:
