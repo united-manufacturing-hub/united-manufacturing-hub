@@ -35,6 +35,7 @@ services:
 
   sensorconnect:
     image: scarjit/sensorconnect:latest
+    restart: on-failure
     volumes:
       - ./ioddfiles/:/opt/ioddfiles/
     environment:

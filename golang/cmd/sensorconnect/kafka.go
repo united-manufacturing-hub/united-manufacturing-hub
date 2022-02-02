@@ -13,6 +13,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	err := CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
+		panic("Failed to create topic")
 		return
 	}
 
