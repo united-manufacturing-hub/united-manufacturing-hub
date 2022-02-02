@@ -118,7 +118,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	}
 	client := &http.Client{}
 	client.CloseIdleConnections()
-	client.Timeout = time.Second * 50
+	client.Timeout = time.Second * 5
 	resp, err := client.Do(req)
 	if err != nil {
 		zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
