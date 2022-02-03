@@ -37,12 +37,12 @@ services:
     image: scarjit/sensorconnect:latest
     restart: always
     volumes:
-      - ./ioddfiles/:/opt/ioddfiles/
+      - ./ioddfiles/:/ioddfiles/
     environment:
       - IP_RANGE=192.168.10.17/32
       - KAFKA_BOOSTRAP_SERVER=kafka:9092
       - TRANSMITTERID=12345
-      - IODD_FILE_PATH=/opt/ioddfiles
+      - IODD_FILE_PATH=/ioddfiles
     depends_on:
       - kafka
 

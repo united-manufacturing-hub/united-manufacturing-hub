@@ -1,0 +1,22 @@
+---
+{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.factoryinsight.pdb.enabled}}
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-pdb
+  labels:
+    {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
+  {{if .Values.factoryinsight.pdb.annotations}}
+  annotations:
+    {{- toYaml .Values.factoryinsight.pdb.annotations | nindent 4}}
+  {{end}}
+spec:
+  minAvailable: {{.Values.factoryinsight.pdb.minAvailable}}
+  selector:
+    matchLabels:
+     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}
+
+{{end}}
+{{end}}

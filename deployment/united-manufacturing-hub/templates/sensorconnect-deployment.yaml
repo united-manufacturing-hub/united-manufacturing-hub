@@ -1,0 +1,59 @@
+---
+{{if .Values._000_commonConfig.datasources.sensorconnect.enabled}}
+
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
+  labels:
+    {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 4}}
+spec:
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 6}}
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 8}}
+    spec:
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
+          {{if .Values.sensorconnect.tag}}
+          image: {{.Values.sensorconnect.image}}:{{.Values.sensorconnect.tag}}
+          {{- else}}
+          image: {{.Values.sensorconnect.image}}:{{.Chart.AppVersion}}
+          {{end}}
+          resources:
+            limits:
+              cpu: {{.Values.sensorconnect.resources.limits.cpu}}
+              memory: {{.Values.sensorconnect.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.sensorconnect.resources.requests.cpu}}
+              memory: {{.Values.sensorconnect.resources.requests.memory}}
+          env:
+            - name: TRANSMITTERID
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
+
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: IP_RANGE
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
+
+            - name: IODD_FILE_PATH
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath | quote}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
+              mountPath: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath}}
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
+          persistentVolumeClaim:
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-claim
+
+      serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}
+      restartPolicy: Always
+
+{{end}}

@@ -1,0 +1,97 @@
+---
+{{if .Values._000_commonConfig.datasources.cameraconnect.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-cameraconnect
+  labels:
+    {{- include "united-manufacturing-hub.labels.cameraconnect" . | nindent 4}}
+    app.kubernetes.io/component: "cameraconnect"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.cameraconnect" . | nindent 6}}
+      app.kubernetes.io/component: "cameraconnect"
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.cameraconnect" . | nindent 8}}
+        app.kubernetes.io/component: "cameraconnect"
+    spec:
+      hostNetwork: true
+      volumes:
+        - name: storage
+          emptyDir: {}
+        - name: cameraconnect-gentlproducer
+          hostPath:
+            path: /home/rancher/genicam_producer
+      initContainers:
+        - args:
+            - mkdir -p /app/assets/producer_files && cp -u /genTLProducer/files.zip /app/assets/ && unzip -n /app/assets/files.zip -d /app/assets/producer_files
+          command:
+            - /bin/sh
+            - -c
+          image: busybox
+          name: init-cameraconnect-gentlproducer
+          volumeMounts:
+            - mountPath: /app/assets
+              name: storage
+            - mountPath: /genTLProducer
+              name: cameraconnect-gentlproducer
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-cameraconnect
+          {{if .Values.cameraconnect.tag}}
+          image: {{.Values.cameraconnect.image}}:{{.Values.cameraconnect.tag}}
+          {{- else}}
+          image: {{.Values.cameraconnect.image}}:{{.Chart.AppVersion}}
+          {{end}}
+          resources:
+            limits:
+              cpu: {{.Values.cameraconnect.resources.limits.cpu}}
+              memory: {{.Values.cameraconnect.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.cameraconnect.resources.requests.cpu}}
+              memory: {{.Values.cameraconnect.resources.requests.memory}}
+          volumeMounts:
+            - mountPath: /app/assets
+              name: storage
+          env:
+            - name: CUBE_TRANSMITTERID
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
+            - name: BROKER_URL
+              value: {{.Values._000_commonConfig.mqttBridge.remoteURL}}
+            - name: BROKER_PORT #TODO: remove this !
+            - name: TRIGGER
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.trigger | quote}}
+            - name: ACQUISITION_DELAY
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.acquisitionDelay | quote}}
+            - name: CYCLE_TIME
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.cycleTime | quote}}
+            - name: CAMERA_INTERFACE
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.cameraInterface | quote}}
+            - name: IMAGE_WIDTH
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageWidth | quote}}
+            - name: IMAGE_HEIGHT
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageHeight | quote}}
+            - name: IMAGE_CHANNELS
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageChannels | quote}}
+            - name: MAC_ADDRESS
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.macAddress | quote}}
+            - name: EXPOSURE_TIME
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.exposureTime | quote}}
+            - name: EXPOSURE_AUTO
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.exposureAuto | quote}}
+            - name: PIXEL_FORMAT
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.pixelFormat | quote}}
+            - name: LOGGING_LEVEL
+              value: {{.Values.cameraconnect.loggingLevel | quote}}
+            - name: DEFAULT_GENTL_PRODUCER_PATH
+              value: "/app/assets/producer_files"
+      serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}
+      restartPolicy: Always
+
+{{end}}

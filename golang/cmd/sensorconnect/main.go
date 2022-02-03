@@ -21,8 +21,8 @@ var transmitterId string
 var buildtime string
 
 func main() {
-	//logger, _ := zap.NewDevelopment()
-	logger, _ := zap.NewProduction()
+	logger, _ := zap.NewDevelopment()
+	//logger, _ := zap.NewProduction()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -41,6 +41,7 @@ func main() {
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
 	ioDeviceMap, fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
+	zap.S().Debugf("ioDeviceMap len: %v", ioDeviceMap)
 	if err != nil {
 		zap.S().Errorf("initializeIoddData produced the error: %v", err)
 	}
@@ -60,6 +61,7 @@ func main() {
 func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon")
 	for {
+		time.Sleep(10 * time.Second)
 		var err error
 		for _, deviceInfo := range discoveredDeviceInformation {
 			portModeMap, err = GetPortModeMap(deviceInfo)
@@ -71,6 +73,7 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 				zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
 			}
 
+			zap.S().Debugf("ioDeviceMap len: %v", ioDeviceMap)
 			err = processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
 			if err != nil {
 				zap.S().Errorf("processSensorData produced the error: %v", err)
@@ -103,7 +106,9 @@ func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, updaterChan c
 		select {
 		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:
 			var err error
+			zap.S().Debugf("[PRE-AddNewDeviceToIoddFilesAndMap] ioDeviceMap len: %v", ioDeviceMap)
 			ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+			zap.S().Debugf("[POST-AddNewDeviceToIoddFilesAndMap] ioDeviceMap len: %v", ioDeviceMap)
 			zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
 			if err != nil {
 				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)

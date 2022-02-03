@@ -1,0 +1,16 @@
+---
+{{if or .Values.mqttkafkabridge.enabled .Values._000_commonConfig.infrastructure.kafka.enabled}}
+{{if .Values.mqttkafkabridge.pdb.enabled}}
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-pdb
+spec:
+  minAvailable: {{.Values.mqttkafkabridge.pdb.minAvailable}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+
+{{end}}
+{{end}}

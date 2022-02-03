@@ -1,0 +1,102 @@
+---
+{{if or .Values.kafkatoblob.enabled .Values._000_commonConfig.blobstorage.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkatoblob" . | nindent 4}}
+  {{if .Values.kafkatoblob.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkatoblob.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.kafkatoblob.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
+        {{- include "united-manufacturing-hub.labels.kafkatoblob" . | nindent 8}}
+    spec:
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
+          {{if .Values.kafkatoblob.image.tag}}
+          image: {{.Values.kafkatoblob.image.repository}}:{{.Values.kafkatoblob.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkatoblob.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkatoblob.image.pullPolicy}}
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: KAFKA_LISTEN_TOPIC
+              value: "^ia\\..+\\.rawImage"
+
+            - name: KAFKA_BASE_TOPIC
+              value: "ia"
+
+            - name: BUCKET_NAME
+              value: "umh"
+
+            - name: MINIO_SECURE
+              value: '1'
+
+            - name: SSL_CERT_FILE
+              value: /certs/kubernetes-ca.pem
+
+            - name: MINIO_URL
+              value: 'umhminio-hl.united-manufacturing-hub.svc.cluster.local:9000'
+
+            - name: MINIO_ACCESS_KEY
+              value: {{printf (index .Values "minio-operator" "tenants" 0).secrets.accessKey}}
+
+            - name: MINIO_SECRET_KEY
+              value: {{printf (index .Values "minio-operator" "tenants" 0).secrets.secretKey}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          # livenessProbe:
+          #   httpGet:
+          #     path: /live
+          #     port: 8086
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 5
+
+          # define a readiness probe that checks every 5 seconds
+          #readinessProbe:
+          #  httpGet:
+          #    path: /ready
+          #    port: 8086
+          #  periodSeconds: 5
+          resources: {}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+

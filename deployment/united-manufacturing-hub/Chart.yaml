@@ -1,0 +1,66 @@
+---
+apiVersion: v2
+name: united-manufacturing-hub
+description: A Helm chart for Kubernetes
+icon: https://avatars.githubusercontent.com/u/77492553
+
+# A chart can be either an 'application' or a 'library' chart.
+#
+# Application charts are a collection of templates that can be packaged into versioned archives
+# to be deployed.
+#
+# Library charts provide useful utilities or functions for the chart developer. They're included as
+# a dependency of application charts to inject those utilities and functions into the rendering
+# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 0.8.0-prerelease
+
+# This is the version number of the application being deployed. This version number should be
+# incremented each time you make changes to the application. Versions are not expected to
+# follow Semantic Versioning. They should reflect the version the application is using.
+# It is recommended to use it with quotes.
+appVersion: "0.8.0-prerelease"
+
+home: https://www.umh.app
+sources:
+  - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+
+dependencies:
+  - name: redis
+    version: 12.7.3
+    repository: https://charts.bitnami.com/bitnami
+    condition: _000_commonConfig.datastorage.enabled
+
+  - name: vernemq
+    version: 1.6.7
+    repository: https://vernemq.github.io/docker-vernemq
+    condition: _000_commonConfig.infrastructure.mqtt.enabled
+
+  - name: grafana
+    version: 6.13.5
+    repository: https://grafana.github.io/helm-charts
+    condition: _000_commonConfig.datastorage.enabled
+
+  - name: timescaledb-single
+    version: 0.9.0
+    repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+    condition: _000_commonConfig.datastorage.enabled
+
+  - name: minio-operator
+    version: 4.1.7
+    repository: https://operator.min.io/
+    condition: _000_commonConfig.datastorage.enabled
+
+  - name: kafka
+    version: 14.4.1
+    repository: https://charts.bitnami.com/bitnami
+    condition: _000_commonConfig.infrastructure.kafka.enabled
+
+  - name: kowl
+    repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+    version: 2.3.0
+    condition: _000_commonConfig.infrastructure.kafka.enabled

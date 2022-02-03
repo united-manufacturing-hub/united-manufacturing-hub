@@ -1,0 +1,26 @@
+---
+{{if .Values._000_commonConfig.blobstorage.enabled}}
+{{ if index .Values "minio-operator" "loadBalancerEnabled" }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-minio-service
+  labels:
+    v1.min.io/tenant: {{printf (index .Values "minio-operator" "tenants" 0).name}}
+  {{- if (index .Values "minio-operator").service.annotations}}
+  annotations:
+    {{- toYaml (index .Values "minio-operator").service.annotations | nindent 4}}
+  {{end}}
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+      name: minio-https
+  selector:
+      v1.min.io/tenant: {{printf (index .Values "minio-operator" "tenants" 0).name}}
+
+{{end}}
+{{end}}
