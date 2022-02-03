@@ -91,7 +91,6 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			continue
 		}
 	}
-	return
 }
 
 //processData is function which can handle the input of datatype, datatypeRef and simpleDatatype structures. It determies which was given and calls the corresponding functions.
