@@ -96,7 +96,8 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 	}
 }
 
-//processData is function which can handle the input of datatype, datatypeRef and simpleDatatype structures. It determies which was given and calls the corresponding functions.
+// processData turns raw sensor data into human readable data and attaches it to the payload. It can handle the input of datatype, datatypeRef and simpleDatatype structures.
+// It determines which one of those was given (not empty) and delegates the processing accordingly.
 func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype SimpleDatatype, bitOffset int,
 	payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype,
 	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
@@ -120,7 +121,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 	}
 }
 
-//
+// getDatatypeFromDatatypeRef uses the given datatypeReference to find the actual datatype description in the datatypeReferenceArray and returns it.
 func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray []Datatype) (datatypeOut Datatype, err error) {
 	for _, datatypeElement := range datatypeReferenceArray {
 		if reflect.DeepEqual(datatypeElement.Id, datatypeRef.DatatypeId) {
@@ -133,6 +134,7 @@ func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray 
 	return
 }
 
+// processSimpleDatatype uses the given simple datatype information to attach the information to the payload
 func processSimpleDatatype(simpleDatatype SimpleDatatype, payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int,
 	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
 
@@ -143,6 +145,7 @@ func processSimpleDatatype(simpleDatatype SimpleDatatype, payload []byte, output
 	return
 }
 
+// extractBinaryValueFromRawSensorOutput handles the cutting and converting of the actual raw sensor data.
 func extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded string, typeString string, bitLength uint, fixedLength uint, outputBitLength int, bitOffset int) string {
 	valueBitLength := determineValueBitLength(typeString, bitLength, fixedLength)
 
@@ -167,9 +170,10 @@ func processDatatype(datatype Datatype, payload []byte, outputBitLength int, raw
 	}
 }
 
-func processRecordType(payload []byte, RecordItemArray []RecordItem, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype, primLangExternalTextCollection []Text) []byte {
+// processRecordType iterates through the given recordItemArray and calls the processData function for each RecordItem
+func processRecordType(payload []byte, recordItemArray []RecordItem, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype, primLangExternalTextCollection []Text) []byte {
 	// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
-	for _, element := range RecordItemArray {
+	for _, element := range recordItemArray {
 		var datatypeEmpty Datatype
 		var err error
 		payload, err = processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
@@ -180,6 +184,7 @@ func processRecordType(payload []byte, RecordItemArray []RecordItem, outputBitLe
 	return payload
 }
 
+// isEmpty determines if an field of a struct is empty of filled
 func isEmpty(object interface{}) bool {
 	//First check normal definitions of empty
 	if object == nil {
