@@ -127,7 +127,7 @@ func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray 
 		}
 	}
 	zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
-	err = fmt.Errorf("Did not find Datatype structure for given datatype reference id")
+	err = fmt.Errorf("did not find Datatype structure for given datatype reference id: %v", datatypeRef.DatatypeId)
 	return
 }
 
