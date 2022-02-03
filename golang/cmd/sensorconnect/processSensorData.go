@@ -80,8 +80,11 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
 
 			var err error
+
+			// use the acquired info to process the raw data coming from the sensor correctly in to human readable data and attach to payload
 			payload, err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
 			if err != nil {
+				payload = attachValueString(payload, "RawSensorOutput", string(rawSensorOutput[:])) // if an error occurs attach the raw sensor data to the payload
 				zap.S().Errorf("Processing Sensordata failed: %v", err)
 			}
 
