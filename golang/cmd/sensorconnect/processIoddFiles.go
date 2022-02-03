@@ -133,13 +133,19 @@ func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirect
 	return ioddIoDeviceMap, fileInfoSlice, err
 }
 
-func UnmarshalIoddFile(ioddFile []byte) (IoDevice, error) {
+func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, error) {
 	payload := IoDevice{}
 
 	// Unmarshal file with Unmarshal
 	err := xml.Unmarshal(ioddFile, &payload)
 	if err != nil {
-		panic(err) //Todo change to zap stuff
+		zap.S().Errorf("Unmarshaling of IoDevice %#v failed. Deleting iodd.xml file now and stopping container after that. Error: %v", ioddFile, err)
+		err = os.Remove(absoluteFilePath)
+		// If unmarshaling fails we remove the iodd.xml file and stop tze container
+		if err != nil {
+			zap.S().Errorf("Removing file: %#v failed. Stopping container now. Error: %v", absoluteFilePath, err)
+		}
+		panic(err)
 	}
 	return payload, err
 }
@@ -171,7 +177,7 @@ func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice
 		}
 		// Unmarshal
 		ioDevice := IoDevice{}
-		ioDevice, err = UnmarshalIoddFile(dat)
+		ioDevice, err = UnmarshalIoddFile(dat, absoluteFilePath)
 		if err != nil {
 			return ioddIoDeviceMap, oldFileInfoSlice, err
 		}
