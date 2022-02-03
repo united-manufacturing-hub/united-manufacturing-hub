@@ -65,8 +65,9 @@ type ProcessData struct {
 }
 
 type ProcessDataIn struct {
-	Datatype    Datatype
-	DatatypeRef DatatypeRef
+	Datatype    Datatype    `xml:"Datatype"`
+	DatatypeRef DatatypeRef `xml:"DatatypeRef"`
+	Name        Name        `xml:"Name"`
 }
 
 type Datatype struct {

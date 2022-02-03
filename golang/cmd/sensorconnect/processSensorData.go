@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -77,9 +76,11 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			// Extract important IoddStruct parts for better readability
 			processDataIn := cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn
 			datatypeReferenceArray := cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray
+			var emptySimpleDatatype SimpleDatatype
+			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
 
 			var err error
-			payload, err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, nil, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray)
+			payload, err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
 			if err != nil {
 				zap.S().Errorf("Processing Sensordata failed: %v", err)
 			}
@@ -126,7 +127,7 @@ func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray 
 		}
 	}
 	zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
-	err = new.Errorf("Did not find Datatype structure for given datatype reference id")
+	err = fmt.Errorf("Did not find Datatype structure for given datatype reference id")
 	return
 }
 
@@ -270,30 +271,6 @@ func determineValueBitLength(datatype string, bitLength uint, fixedLength uint) 
 		return fixedLength * 8
 	} else {
 		return bitLength
-	}
-}
-
-// determineDatatypeAndValueBitLengthOfRecordItem finds out datatype and bit length of a given iodd RecordItem
-func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArray []Datatype) (datatype string, bitLength uint, err error) {
-	if !reflect.DeepEqual(item.SimpleDatatype.Type, "") { //  true if record item includes a simple datatype
-		datatype = item.SimpleDatatype.Type
-		bitLength = determineValueBitLength(datatype, item.SimpleDatatype.BitLength, item.SimpleDatatype.FixedLength)
-		return
-	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
-		for _, datatypeElement := range datatypeArray {
-			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
-				datatype = datatypeElement.Type // IntegerT or UIntegerT or Float32T
-				bitLength = determineValueBitLength(datatype, datatypeElement.BitLength, datatypeElement.FixedLength)
-				return
-			}
-			//zap.S().Warnf("datatypeElement.Id vs item.DatatypeRef.DatatypeId: %s vs %s", datatypeElement.Id, item.DatatypeRef.DatatypeId)
-		}
-		//zap.S().Warnf("datatypeArray: %v", datatypeArray)
-		err = errors.New("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
-		return
-	} else {
-		err = errors.New("Neither SimpleDatatype nor DatatypeRef included in Recorditem")
-		return
 	}
 }
 
