@@ -53,7 +53,7 @@ type DeviceFunction struct {
 }
 
 type DatatypeCollection struct {
-	DatatypeArray []Datatype
+	DatatypeArray []Datatype `xml:"Datatype"`
 }
 
 type ProcessDataCollection struct {
