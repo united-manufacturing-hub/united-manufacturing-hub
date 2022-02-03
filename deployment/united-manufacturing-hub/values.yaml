@@ -203,8 +203,9 @@ barcodereader:
 
 ### sensorconnect ###
 sensorconnect:
-  image: unitedmanufacturinghub/sensorconnect
+  image: scarjit/sensorconnect
   storageRequest: 1Gi
+  tag: latest
   resources:
     requests:
       cpu: "10m"
