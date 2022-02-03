@@ -101,11 +101,15 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 		payloadOut, err = processSimpleDatatype(simpleDatatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, nameTextId, primLangExternalTextCollection)
 		return
 	} else if !isEmpty(datatype) {
-		payloadOut, err = processDatatype(datype, payload, outputBitLength, rawSensorOutputBinaryPadded)
+		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
 		return
 	} else if !isEmpty(datatypeRef) {
-		datatype = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
-		payloadOut, err = processDatatype(datype, payload, outputBitLength, rawSensorOutputBinaryPadded)
+		datatype, err = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
+		if err != nil {
+			zap.S().Errorf("Error with getDatatypeFromDatatypeRef: %v", err)
+			return
+		}
+		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
 		return
 	} else {
 		zap.S().Errorf("Missing input, neither simpleDatatype or datatype or datatypeRef given.")
@@ -113,22 +117,36 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 	}
 }
 
+//
+func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray []Datatype) (datatypeOut Datatype, err error) {
+	for _, datatypeElement := range datatypeReferenceArray {
+		if reflect.DeepEqual(datatypeElement.Id, datatypeRef.DatatypeId) {
+			datatypeOut = datatypeElement
+			return
+		}
+	}
+	zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
+	err = new.Errorf("Did not find Datatype structure for given datatype reference id")
+	return
+}
+
 func processSimpleDatatype(simpleDatatype SimpleDatatype, payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int,
 	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
-	datatypeString := simpleDatatype.Type
-	valueBitLength := determineValueBitLength(datatypeString, simpleDatatype.BitLength, simpleDatatype.FixedLength)
-	if err != nil {
-		zap.S().Errorf("%s", err.Error())
-		return
-	}
+
+	binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, simpleDatatype.Type, simpleDatatype.BitLength, simpleDatatype.FixedLength, outputBitLength, bitOffset)
+	valueString := convertBinaryValueToString(binaryValue, simpleDatatype.Type)
+	valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
+	payloadOut = attachValueString(payload, valueName, valueString)
+	return
+}
+
+func extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded string, typeString string, bitLength uint, fixedLength uint, outputBitLength int, bitOffset int) string {
+	valueBitLength := determineValueBitLength(typeString, bitLength, fixedLength)
 
 	leftIndex := outputBitLength - int(valueBitLength) - bitOffset
 	rightIndex := outputBitLength - bitOffset
 	binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-	valueString := convertBinaryValueToString(binaryValue, datatypeString)
-	valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
-	payloadOut = attachValueString(payload, valueName, valueString)
-	return
+	return binaryValue
 }
 
 // processDatatype can process a Datatype structure. If the bitOffset is not given, enter zero.
@@ -136,7 +154,12 @@ func processDatatype(datatype Datatype, payload []byte, outputBitLength int, raw
 	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
 	if reflect.DeepEqual(datatype.Type, "RecordT") {
 		payloadOut = processRecordType(payload, datatype.RecordItemArray, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, primLangExternalTextCollection)
-
+		return
+	} else {
+		binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, datatype.Type, datatype.BitLength, datatype.FixedLength, outputBitLength, bitOffset)
+		valueString := convertBinaryValueToString(binaryValue, datatype.Type)
+		valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
+		payloadOut = attachValueString(payload, valueName, valueString)
 		return
 	}
 }
@@ -152,34 +175,6 @@ func processRecordType(payload []byte, RecordItemArray []RecordItem, outputBitLe
 		}
 	}
 	return payload
-}
-
-// resolveDatatypeRefOfProcessDataIn detects if a DatatypeReference is used and if yes -> puts datatype from reference in ProcessDataIn
-func resolveDatatypeRefOfProcessDataIn(input ProcessDataIn, references []Datatype) ProcessDataIn {
-	if !isEmpty(input.DatatypeRef) && isEmpty(input.Datatype) {
-		for _, datatypeElement := range references {
-			if reflect.DeepEqual(datatypeElement.Id, input.DatatypeRef.DatatypeId) {
-				input.Datatype = datatypeElement
-				return input
-			}
-		}
-		zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
-	}
-	return input
-}
-
-// resolveDatatypeRefOfRecordItem detects if a DatatypeReference is used and if yes -> puts datatype from reference in RecordItem
-func resolveDatatypeRefOfRecordItem(input ProcessDataIn, references []Datatype) ProcessDataIn {
-	if !isEmpty(input.DatatypeRef) && isEmpty(input.Datatype) {
-		for _, datatypeElement := range references {
-			if reflect.DeepEqual(datatypeElement.Id, input.DatatypeRef.DatatypeId) {
-				input.Datatype = datatypeElement
-				return input
-			}
-		}
-		zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
-	}
-	return input
 }
 
 func isEmpty(object interface{}) bool {
