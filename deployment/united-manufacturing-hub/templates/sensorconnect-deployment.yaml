@@ -51,6 +51,17 @@ spec:
               value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka}}
             - name: USE_MQTT
               value: {{.Values._000_commonConfig.datasources.sensorconnect.useMQTT}}
+
+            - name: MQTT_BROKER_URL
+              value: {{ include "united-manufacturing-hub.fullname" . }}-vernemq-local-service:1883
+
+            - name: MQTT_CERTIFICATE_NAME
+              value: "NO_NAME"
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath}}

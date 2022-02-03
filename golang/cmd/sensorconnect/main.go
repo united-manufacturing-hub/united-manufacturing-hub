@@ -2,15 +2,18 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 )
 
+var mqttClient MQTT.Client
 var discoveredDeviceInformation []DiscoveredDeviceInformation
 
 //var ioDeviceMap map[IoddFilemapKey]IoDevice
@@ -24,6 +27,9 @@ var transmitterId string
 
 var buildtime string
 
+var useKafka bool
+var useMQTT bool
+
 func main() {
 	// TODO remove me !
 	time.Sleep(10 * time.Second)
@@ -36,9 +42,24 @@ func main() {
 
 	internal.InitMemcache()
 
-	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
-	kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
+	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
+	useMQTT = os.Getenv("USE_MQTT") == "1" || strings.ToLower(os.Getenv("USE_MQTT")) == "true"
+
+	if useMQTT {
+		zap.S().Infof("Starting with MQTT")
+		// Read environment variables for MQTT
+		MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
+		MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
+		podName := os.Getenv("MY_POD_NAME")
+		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName)
+	}
+
+	if useKafka {
+		zap.S().Infof("Starting with Kafka")
+		// Read environment variables for Kafka
+		KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+		kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
+	}
 
 	sensorTickSpeedMS, err := strconv.Atoi(os.Getenv("SENSOR_TICK_SPEED_MS"))
 	if err != nil {

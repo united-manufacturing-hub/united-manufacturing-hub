@@ -27,6 +27,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			// Payload to send
 			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
+			go SendMQTTMessage(mqttRawTopic, payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -90,6 +91,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			}
 			payload = append(payload, []byte(`}`)...)
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
+			go SendMQTTMessage(mqttRawTopic, payload)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}

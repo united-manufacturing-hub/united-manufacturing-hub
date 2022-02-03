@@ -12,6 +12,9 @@ import (
 
 // SendKafkaMessage tries to send a message via kafka
 func SendKafkaMessage(kafkaTopicName string, message []byte) {
+	if !useKafka {
+		return
+	}
 	err := CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
@@ -43,6 +46,9 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 
 // setupKafka sets up the connection to the kafka server
 func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *kafka.AdminClient, consumer *kafka.Consumer) {
+	if !useKafka {
+		return
+	}
 	configMap := kafka.ConfigMap{
 		"bootstrap.servers": boostrapServer,
 		"security.protocol": "plaintext",
@@ -87,6 +93,9 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 var lastMetaData *kafka.Metadata
 
 func TopicExists(kafkaTopicName string) (exists bool, err error) {
+	if !useKafka {
+		return
+	}
 	//Check if lastMetaData was initialized
 	if lastMetaData == nil {
 		// Get initial map of metadata
@@ -115,12 +124,18 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 }
 
 func GetMetaData() (metadata *kafka.Metadata, err error) {
+	if !useKafka {
+		return
+	}
 	metadata, err = kafkaAdminClient.GetMetadata(nil, true, 1*1000)
 	return
 }
 
 //goland:noinspection GoVetLostCancel
 func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
+	if !useKafka {
+		return
+	}
 	exists, err := TopicExists(kafkaTopicName)
 	if err != nil {
 		return err
@@ -150,6 +165,9 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 }
 
 func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
+	if !useKafka {
+		return
+	}
 	if strings.Contains(MqttTopicName, ".") {
 		zap.S().Errorf("Illegal MQTT Topic name received: %s", MqttTopicName)
 	}

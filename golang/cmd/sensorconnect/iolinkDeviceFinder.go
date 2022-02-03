@@ -100,11 +100,11 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	}
 
 	discoveredDeviceInformation := DiscoveredDeviceInformation{}
-	zap.S().Infof("Found device at %s", url)
 	// Insert relevant gained data into DiscoveredDeviceInformation and store in slice
 	discoveredDeviceInformation.ProductCode = unmarshaledAnswer.Data.DeviceInfoProductCode.Data
 	discoveredDeviceInformation.SerialNumber = unmarshaledAnswer.Data.DeviceInfoSerialnumber.Data
 	discoveredDeviceInformation.Url = url
+	zap.S().Infof("Found device (SN: %s, PN: %s) at %s", discoveredDeviceInformation.SerialNumber, discoveredDeviceInformation.ProductCode, url)
 	discoveredDevices = append(discoveredDevices, discoveredDeviceInformation)
 	return
 }

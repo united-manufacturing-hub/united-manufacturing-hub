@@ -33,6 +33,15 @@ services:
     depends_on:
       - kafka
 
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mosquitto
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../../golang/test/mqtt-bridge/config:/mosquitto/config
+
   sensorconnect:
     image: scarjit/sensorconnect:latest
     restart: always
@@ -44,10 +53,14 @@ services:
       - TRANSMITTERID=12345
       - IODD_FILE_PATH=/ioddfiles
       - USE_KAFKA=1
-      - USE_MQTT=0
+      - USE_MQTT=1
       - SENSOR_TICK_SPEED_MS=10
+      - MQTT_CERTIFICATE_NAME=NO_CERT
+      - MQTT_BROKER_URL=mosquitto:1883
+      - MY_POD_NAME=sensorconnect
     depends_on:
       - kafka
+      - mosquitto
 
 volumes:
   zookeeper_data:
