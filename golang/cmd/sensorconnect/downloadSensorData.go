@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -17,6 +19,18 @@ type SensorDataInformation struct {
 
 // GetSensorDataMap returns a map of one IO-Link-Master with the port number as key and the port mode as value
 func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map[string]interface{}, error) {
+	var sensorDataMap map[string]interface{}
+	var val interface{}
+	var found bool
+
+	cacheKey := fmt.Sprintf("GetSensorDataMap%s", currentDeviceInformation.Url)
+
+	val, found = internal.GetMemcached(cacheKey)
+	if found {
+		sensorDataMap = val.(map[string]interface{})
+		return sensorDataMap, nil
+	}
+
 	numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
 	modeRequestBody := createSensorDataRequestBody(numberOfPorts)
 	respBody, err := downloadSensorData(currentDeviceInformation.Url, modeRequestBody)
@@ -24,7 +38,10 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 		zap.S().Errorf("download of response from url %s failed.", currentDeviceInformation.Url)
 		return nil, err
 	}
-	sensorDataMap, err := unmarshalSensorData(respBody)
+	sensorDataMap, err = unmarshalSensorData(respBody)
+	if err == nil {
+		internal.SetMemcached(cacheKey, sensorDataMap)
+	}
 	return sensorDataMap, err
 }
 

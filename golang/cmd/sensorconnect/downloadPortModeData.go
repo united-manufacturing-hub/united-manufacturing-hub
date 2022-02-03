@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -19,6 +21,16 @@ type ModeInformation struct {
 
 // GetPortModeMap returns a map of one IO-Link-Master with the port number as key and the port mode as value
 func GetPortModeMap(currentDeviceInformation DiscoveredDeviceInformation) (map[int]int, error) {
+	var modeMap map[int]int
+	var val interface{}
+	var found bool
+
+	cacheKey := fmt.Sprintf("GetPortModeMap%s", currentDeviceInformation.Url)
+	val, found = internal.GetMemcached(cacheKey)
+	if found {
+		modeMap = val.(map[int]int)
+		return modeMap, nil
+	}
 
 	numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
 	modeRequestBody := createModeRequestBody(numberOfPorts)
@@ -27,7 +39,12 @@ func GetPortModeMap(currentDeviceInformation DiscoveredDeviceInformation) (map[i
 		zap.S().Errorf("download of response from url %s failed.", currentDeviceInformation.Url)
 		return nil, err
 	}
-	modeMap, err := unmarshalModeInformation(respBody)
+	modeMap, err = unmarshalModeInformation(respBody)
+
+	if err == nil {
+		internal.SetMemcached(cacheKey, modeMap)
+	}
+
 	return modeMap, err
 }
 

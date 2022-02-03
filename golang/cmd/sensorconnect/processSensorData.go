@@ -17,9 +17,8 @@ func processSensorData(sensorDataMap map[string]interface{},
 	currentDeviceInformation DiscoveredDeviceInformation,
 	portModeMap map[int]int,
 	ioddIoDeviceMap map[IoddFilemapKey]IoDevice,
-	updateIoddIoDeviceMapChan chan IoddFilemapKey) (err error) {
+	updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	timestampMs := getUnixTimestampMs()
-	zap.S().Debugf(timestampMs)
 	for portNumber, portMode := range portModeMap {
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 		switch portMode {
@@ -31,7 +30,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			// Payload to send
 			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
-			zap.S().Debugf("payload %s", payload)
+			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
 		case 2: // digital output
 			// Todo
 			continue
@@ -41,7 +40,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			keyPdin := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
 			connectionCode := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
 			if connectionCode != 200 {
-				zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
+				//zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
 				continue
 			}
 
@@ -60,7 +59,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 
 			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
 			if _, ok := ioddIoDeviceMap[ioddFilemapKey]; !ok {
-				zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
+				//zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
 				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
 				continue                                    // drop data to avoid locking
 			}
@@ -74,7 +73,6 @@ func processSensorData(sensorDataMap map[string]interface{},
 			rawSensorOutputBinary := HexToBin(rawSensorOutputString)
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
-			zap.S().Warnf("RecordItemArray: %d for port: %d and sn: %s", len(ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray), portNumber, mqttRawTopic)
 			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
 			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
 				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
@@ -93,7 +91,6 @@ func processSensorData(sensorDataMap map[string]interface{},
 			}
 			payload = append(payload, []byte(`}`)...)
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
-			zap.S().Debugf(string(payload))
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}
@@ -180,9 +177,9 @@ func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArr
 				bitLength = determineValueBitLength(datatype, datatypeElement.BitLength, datatypeElement.FixedLength)
 				return
 			}
-			zap.S().Warnf("datatypeElement.Id vs item.DatatypeRef.DatatypeId: %s vs %s", datatypeElement.Id, item.DatatypeRef.DatatypeId)
+			//zap.S().Warnf("datatypeElement.Id vs item.DatatypeRef.DatatypeId: %s vs %s", datatypeElement.Id, item.DatatypeRef.DatatypeId)
 		}
-		zap.S().Warnf("datatypeArray: %v", datatypeArray)
+		//zap.S().Warnf("datatypeArray: %v", datatypeArray)
 		err = errors.New("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
 		return
 	} else {

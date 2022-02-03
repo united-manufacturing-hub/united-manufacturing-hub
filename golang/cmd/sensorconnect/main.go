@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
 	"time"
 
@@ -28,6 +29,8 @@ func main() {
 
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
+	internal.InitMemcache()
+
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
@@ -51,7 +54,10 @@ func main() {
 
 	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
 
-	time.Sleep(5 * time.Second)
+	for len(discoveredDeviceInformation) == 0 {
+		// Wait for sensor reading until at least 1 device is discovered
+		time.Sleep(1 * time.Second)
+	}
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
 	go continuousSensorDataProcessing(updateIoddIoDeviceMapChan)
 
@@ -77,10 +83,7 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 				zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
 			}
 
-			err = processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
-			if err != nil {
-				zap.S().Errorf("processSensorData produced the error: %v", err)
-			}
+			go processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
 		}
 	}
 }

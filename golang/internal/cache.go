@@ -22,6 +22,8 @@ var memCache *cache.Cache
 var redisDataExpiration time.Duration
 var memoryDataExpiration time.Duration
 
+var redisInitialized bool
+
 // InitCache initializes a redis cache
 func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPassword string, redisDB int, dryRun string) {
 
@@ -41,9 +43,19 @@ func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPasswor
 	memoryDataExpiration = 10 * time.Second
 
 	memCache = cache.New(memoryDataExpiration, 20*time.Second)
+	redisInitialized = true
+}
+
+func InitMemcache() {
+	memoryDataExpiration = 10 * time.Second
+	memCache = cache.New(memoryDataExpiration, 20*time.Second)
+	redisInitialized = false
 }
 
 func IsRedisAvailable() bool {
+	if !redisInitialized {
+		return false
+	}
 	if rdb != nil {
 		statusCmd := rdb.Ping(ctx)
 
@@ -764,4 +776,13 @@ func SetTieredLongTerm(key string, value interface{}) {
 //SetTieredShortTerm is an helper, that calls SetTiered with default memory expiration
 func SetTieredShortTerm(key string, value interface{}) {
 	SetTiered(key, value, memoryDataExpiration)
+}
+
+func SetMemcached(key string, value interface{}) {
+	memCache.SetDefault(key, value)
+}
+
+func GetMemcached(key string) (value interface{}, found bool) {
+	value, found = memCache.Get(key)
+	return
 }
