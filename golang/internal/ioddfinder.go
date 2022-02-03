@@ -34,9 +34,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 
 	// check for existing file with same name
 	if _, err := os.Stat(absoluteFilePath); err == nil {
-		// file already exists -> don't exchange
-		err = errors.New("found file already exists: Filename from ioddfinder website found in local IoddFiles folder")
-		return err
+		return nil
 	}
 
 	// save iodd file

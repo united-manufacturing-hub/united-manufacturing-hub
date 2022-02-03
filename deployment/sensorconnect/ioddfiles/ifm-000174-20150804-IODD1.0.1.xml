@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="utf-8"?>
+<IODevice xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.io-link.com/IODD/2009/11" xsi:schemaLocation="http://www.io-link.com/IODD/2009/11 IODD1.0.1.xsd">
+	<DocumentInfo version="V1.0.7" releaseDate="2015-08-04" copyright="Copyright 2015, ifm electronic gmbh"/>
+	<ProfileHeader>
+		<ProfileIdentification>IO-Link Device Profile</ProfileIdentification>
+		<ProfileRevision>1.00</ProfileRevision>
+		<ProfileName>Device Profile for IO-Link Devices</ProfileName>
+		<ProfileSource>IO-Link Consortium</ProfileSource>
+		<ProfileClassID>Device</ProfileClassID>
+		<ISO15745Reference>
+			<ISO15745Part>1</ISO15745Part>
+			<ISO15745Edition>1</ISO15745Edition>
+			<ProfileTechnology>IODD</ProfileTechnology>
+		</ISO15745Reference>
+	</ProfileHeader>
+	<ProfileBody>
+		<DeviceIdentity vendorId="310" vendorName="ifm electronic gmbh" deviceId="372">
+			<VendorText textId="TI_VendorText"/>
+			<VendorUrl textId="TI_VendorUrl"/>
+			<VendorLogo name="ifm-logo.png"/>
+			<DeviceFamily textId="TI_DeviceFamily"/>
+			<DeviceVariantCollection>
+				<DeviceVariant productId="O5D100" deviceSymbol="ifm-000174-O5D10x-pic.png" deviceIcon="ifm-000174-O5D1xx-icon.png">
+					<ProductName textId="TN_Product1"/>
+					<ProductText textId="TD_Product1"/>
+				</DeviceVariant>
+				<DeviceVariant productId="O5D102" deviceSymbol="ifm-000174-O5D10x-pic.png" deviceIcon="ifm-000174-O5D1xx-icon.png">
+					<ProductName textId="TN_Product2"/>
+					<ProductText textId="TD_Product2"/>
+				</DeviceVariant>
+				<DeviceVariant productId="O5D150" deviceSymbol="ifm-000174-O5D15x-pic.png" deviceIcon="ifm-000174-O5D1xx-icon.png">
+					<ProductName textId="TN_Product3"/>
+					<ProductText textId="TD_Product3"/>
+				</DeviceVariant>
+				<DeviceVariant productId="O5D152" deviceSymbol="ifm-000174-O5D15x-pic.png" deviceIcon="ifm-000174-O5D1xx-icon.png">
+					<ProductName textId="TN_Product4"/>
+					<ProductText textId="TD_Product4"/>
+				</DeviceVariant>
+			</DeviceVariantCollection>
+		</DeviceIdentity>
+		<DeviceFunction>
+			<VariableCollection>
+				<StdVariableRef id="V_DirectParameters_1"/>
+				<StdVariableRef id="V_DirectParameters_2"/>
+				<StdVariableRef id="V_SystemCommand">
+					<StdSingleValueRef value="130"/>
+					<SingleValue value="240">
+						<Name textId="TN_SysCmd240"/>
+					</SingleValue>
+					<SingleValue value="241">
+						<Name textId="TN_SysCmd241"/>
+					</SingleValue>
+					<SingleValue value="242">
+						<Name textId="TN_SysCmd242"/>
+					</SingleValue>
+					<SingleValue value="243">
+						<Name textId="TN_SysCmd243"/>
+					</SingleValue>
+				</StdVariableRef>
+				<StdVariableRef id="V_VendorName" fixedLengthRestriction="32" defaultValue="ifm electronic gmbh" />
+				<StdVariableRef id="V_VendorText" fixedLengthRestriction="32" defaultValue="www.ifm.com" />
+				<StdVariableRef id="V_ProductName" fixedLengthRestriction="32" defaultValue="" />
+				<StdVariableRef id="V_ProductID" fixedLengthRestriction="32" defaultValue="" />
+				<StdVariableRef id="V_ProductText" fixedLengthRestriction="32" defaultValue="Laser Sensor" />
+				<StdVariableRef id="V_HardwareRevision" fixedLengthRestriction="32" defaultValue="" />
+				<StdVariableRef id="V_FirmwareRevision" fixedLengthRestriction="16" defaultValue="" />
+				<StdVariableRef id="V_ApplicationSpecificName" fixedLengthRestriction="16" defaultValue="***" />
+				<StdVariableRef id="V_ProcessDataIn" />
+				<Variable id="V_BDC1_SP" index="60" accessRights="rw" dynamic="true">
+					<Datatype xsi:type="RecordT" bitLength="32" subindexAccessSupported="true">
+						<RecordItem subindex="1" bitOffset="16">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="16">
+								<ValueRange lowerValue="5" upperValue="200"/>
+							</SimpleDatatype>
+							<Name textId="TN_BDC1_SP1"/>
+						</RecordItem>
+						<RecordItem subindex="2" bitOffset="0">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="16">
+								<SingleValue value="0">
+									<Name textId="TN_BDC1_SP2_0"/>
+								</SingleValue>
+							</SimpleDatatype>
+							<Name textId="TN_BDC1_SP2"/>
+						</RecordItem>
+					</Datatype>
+					<RecordItemInfo subindex="1" defaultValue="100" />
+					<RecordItemInfo subindex="2" defaultValue="0" />
+					<Name textId="TN_BDC1"/>
+					<Description textId="TD_BDC1_SP"/>
+				</Variable>
+				<Variable id="V_BDC1_Config" index="61" accessRights="rw">
+					<Datatype xsi:type="RecordT" bitLength="32" subindexAccessSupported="true">
+						<RecordItem subindex="1" bitOffset="24">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="8">
+								<SingleValue value="0">
+									<Name textId="TN_BDC1_Config_Logic0"/>
+								</SingleValue>
+								<SingleValue value="1">
+									<Name textId="TN_BDC1_Config_Logic1"/>
+								</SingleValue>
+							</SimpleDatatype>
+							<Name textId="TN_BDC1_Config_Logic"/>
+						</RecordItem>
+						<RecordItem subindex="2" bitOffset="16">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="8">
+								<SingleValue value="1">
+									<Name textId="TN_BDC1_Config_Mode1"/>
+								</SingleValue>
+							</SimpleDatatype>
+							<Name textId="TN_BDC1_Config_Mode"/>
+						</RecordItem>
+						<RecordItem subindex="3" bitOffset="0">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="16">
+								<SingleValue value="0">
+									<Name textId="TN_BDC1_Config_Hyst_0"/>
+								</SingleValue>
+							</SimpleDatatype>
+							<Name textId="TN_BDC1_Config_Hyst"/>
+						</RecordItem>
+					</Datatype>
+					<RecordItemInfo subindex="1" defaultValue="0" />
+					<RecordItemInfo subindex="2" defaultValue="1" />
+					<RecordItemInfo subindex="3" defaultValue="0" />
+					<Name textId="TN_BDC1"/>
+					<Description textId="TD_BDC1_Config"/>
+				</Variable>
+				<Variable id="V_Limit_PDV" index="64" accessRights="ro">
+					<Datatype xsi:type="RecordT" bitLength="32" subindexAccessSupported="true">
+						<RecordItem subindex="1" bitOffset="16">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="16" />
+							<Name textId="TN_Limit_PDV_min"/>
+						</RecordItem>
+						<RecordItem subindex="2" bitOffset="0">
+							<SimpleDatatype xsi:type="UIntegerT" bitLength="16" />
+							<Name textId="TN_Limit_PDV_max"/>
+						</RecordItem>
+					</Datatype>
+					<RecordItemInfo subindex="1" defaultValue="5" />
+					<RecordItemInfo subindex="2" defaultValue="200" />
+					<Name textId="TN_Limit_PDV"/>
+					<Description textId="TD_Limit_PDV"/>
+				</Variable>
+				<Variable id="V_Align" index="69" accessRights="ro">
+					<Datatype xsi:type="UIntegerT" bitLength="8">
+						<ValueRange lowerValue="0" upperValue="100"/>
+					</Datatype>
+					<Name textId="TN_Align"/>
+					<Description textId="TD_Align"/>
+				</Variable>
+				<Variable id="V_dFOValue" index="74" accessRights="rw" defaultValue="100">
+					<Datatype xsi:type="UIntegerT" bitLength="16">
+						<ValueRange lowerValue="0" upperValue="2000"/>
+					</Datatype>
+					<Name textId="TN_dFOValue"/>
+					<Description textId="TD_dFOValue"/>
+				</Variable>
+				<Variable id="V_dSValue" index="76" accessRights="rw" defaultValue="0">
+					<Datatype xsi:type="UIntegerT" bitLength="16">
+						<ValueRange lowerValue="0" upperValue="2000"/>
+					</Datatype>
+					<Name textId="TN_dSValue"/>
+					<Description textId="TD_dSValue"/>
+				</Variable>
+				<Variable id="V_drValue" index="78" accessRights="rw" defaultValue="0">
+					<Datatype xsi:type="UIntegerT" bitLength="16">
+						<ValueRange lowerValue="0" upperValue="2000"/>
+					</Datatype>
+					<Name textId="TN_drValue"/>
+					<Description textId="TD_drValue"/>
+				</Variable>
+				<Variable id="V_LaserConfig" index="80" accessRights="rw" defaultValue="1">
+					<Datatype xsi:type="UIntegerT" bitLength="8">
+						<SingleValue value="0">
+							<Name textId="TN_LaserConfig_Off"/>
+						</SingleValue>
+						<SingleValue value="1">
+							<Name textId="TN_LaserConfig_On"/>
+						</SingleValue>
+					</Datatype>
+					<Name textId="TN_LaserConfig"/>
+					<Description textId="TD_LaserConfig"/>
+				</Variable>
+				<Variable id="V_DisplayConfig" index="96" accessRights="rw" defaultValue="1">
+					<Datatype xsi:type="UIntegerT" bitLength="8">
+						<SingleValue value="0">
+							<Name textId="TN_DisplayConfig_Off"/>
+						</SingleValue>
+						<SingleValue value="1">
+							<Name textId="TN_DisplayConfig_On"/>
+						</SingleValue>
+						<SingleValue value="2">
+							<Name textId="TN_DisplayConfig_Rotate"/>
+						</SingleValue>
+					</Datatype>
+					<Name textId="TN_DisplayConfig"/>
+					<Description textId="TD_DisplayConfig"/>
+				</Variable>
+				<Variable id="V_KeyLock" index="100" accessRights="rw" dynamic="true" defaultValue="1">
+					<Datatype xsi:type="UIntegerT" bitLength="8">
+						<SingleValue value="0">
+							<Name textId="TN_KeyLock_Locked"/>
+						</SingleValue>
+						<SingleValue value="1">
+							<Name textId="TN_KeyLock_Unlocked"/>
+						</SingleValue>
+					</Datatype>
+					<Name textId="TN_KeyLock"/>
+				</Variable>
+			</VariableCollection>
+			<ProcessDataCollection>
+				<ProcessData id="V_PdT">
+					<ProcessDataIn id="V_PdInT" bitLength="16">
+						<Datatype xsi:type="RecordT" bitLength="16" subindexAccessSupported="false">
+							<RecordItem bitOffset="4" subindex="1">
+								<SimpleDatatype xsi:type="UIntegerT" bitLength="12">
+									<ValueRange lowerValue="5" upperValue="200"/>
+								</SimpleDatatype>
+								<Name textId="TN_PDV1"/>
+							</RecordItem>
+							<RecordItem bitOffset="0" subindex="2">
+								<SimpleDatatype xsi:type="BooleanT">
+									<SingleValue value="false">
+										<Name textId="TN_PDV2_false"/>
+									</SingleValue>
+									<SingleValue value="true">
+										<Name textId="TN_PDV2_true"/>
+									</SingleValue>
+								</SimpleDatatype>
+								<Name textId="TN_PDV2"/>
+							</RecordItem>
+						</Datatype>
+						<Name textId="TN_PD_In"/>
+					</ProcessDataIn>
+				</ProcessData>
+			</ProcessDataCollection>
+			<EventCollection>
+				<Event code="16928" type="Warning">
+					<Name textId="TN_Ev_4220"/>
+					<Description textId="TD_Ev_4220"/>
+				</Event>
+				<Event code="36016" type="Warning">
+					<Name textId="TN_Ev_8CB0"/>
+					<Description textId="TD_Ev_8CB0"/>
+				</Event>
+				<Event code="36017" type="Warning">
+					<Name textId="TN_Ev_8CB1"/>
+					<Description textId="TD_Ev_8CB1"/>
+				</Event>
+				<Event code="36020" type="Error">
+					<Name textId="TN_Ev_8CB4"/>
+					<Description textId="TD_Ev_8CB4"/>
+				</Event>
+				<Event code="36021" type="Error">
+					<Name textId="TN_Ev_8CB5"/>
+					<Description textId="TD_Ev_8CB5"/>
+				</Event>
+				<Event code="36004" type="Warning">
+					<Name textId="TN_Ev_8CA4"/>
+					<Description textId="TD_Ev_8CA4"/>
+				</Event>
+				<Event code="36350" type="Warning">
+					<Name textId="TN_Ev_8DFE"/>
+					<Description textId="TD_Ev_8DFE"/>
+				</Event>
+				<Event code="36351" type="Warning">
+					<Name textId="TN_Ev_8DFF"/>
+					<Description textId="TD_Ev_8DFF"/>
+				</Event>
+			</EventCollection>
+			<UserInterface>
+				<MenuCollection>
+					<Menu id="M_MR_SR_Ident">
+						<VariableRef variableId="V_VendorName"/>
+						<VariableRef variableId="V_VendorText"/>
+						<VariableRef variableId="V_ProductName"/>
+						<VariableRef variableId="V_ProductID"/>
+						<VariableRef variableId="V_ProductText"/>
+						<VariableRef variableId="V_HardwareRevision"/>
+						<VariableRef variableId="V_FirmwareRevision"/>
+						<VariableRef variableId="V_ApplicationSpecificName"/>
+					</Menu>
+					<Menu id="M_OR_Ident">
+						<VariableRef variableId="V_VendorName"/>
+						<VariableRef variableId="V_VendorText"/>
+						<VariableRef variableId="V_ProductName"/>
+						<VariableRef variableId="V_ProductID"/>
+						<VariableRef variableId="V_ProductText"/>
+						<VariableRef variableId="V_HardwareRevision"/>
+						<VariableRef variableId="V_FirmwareRevision"/>
+						<VariableRef variableId="V_ApplicationSpecificName" accessRightRestriction="ro"/>
+					</Menu>
+					<Menu id="M_MR_SR_Param_BDC1">
+						<Name textId="TN_Param_BDC1"/>
+						<RecordItemRef variableId="V_BDC1_SP" subindex="1" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" />
+						<RecordItemRef variableId="V_BDC1_Config" subindex="1" />
+						<VariableRef variableId="V_Align" displayFormat="Dec" gradient="1" offset="0" unitCode="1342" />
+						<VariableRef variableId="V_dFOValue" displayFormat="Dec" gradient="1" offset="0" unitCode="1056" />
+						<VariableRef variableId="V_dSValue" displayFormat="Dec" gradient="1" offset="0" unitCode="1056" />
+						<VariableRef variableId="V_drValue" displayFormat="Dec" gradient="1" offset="0" unitCode="1056" />
+					</Menu>
+					<Menu id="M_OR_Param_BDC1">
+						<Name textId="TN_Param_BDC1"/>
+						<RecordItemRef variableId="V_BDC1_SP" subindex="1" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" accessRightRestriction="ro" />
+						<RecordItemRef variableId="V_BDC1_Config" subindex="1" accessRightRestriction="ro" />
+						<VariableRef variableId="V_Align" displayFormat="Dec" gradient="1" offset="0" unitCode="1342" />
+						<VariableRef variableId="V_dFOValue" displayFormat="Dec" gradient="1" offset="0" unitCode="1056" accessRightRestriction="ro"/>
+						<VariableRef variableId="V_dSValue" displayFormat="Dec" gradient="1" offset="0" unitCode="1056" accessRightRestriction="ro"/>
+						<VariableRef variableId="V_drValue" displayFormat="Dec" gradient="1" offset="0" unitCode="1056" accessRightRestriction="ro"/>
+					</Menu>
+					<Menu id="M_MR_SR_Param_Limit_PDV">
+						<Name textId="TN_Param_Limit_PDV"/>
+						<RecordItemRef variableId="V_Limit_PDV" subindex="1" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" />
+						<RecordItemRef variableId="V_Limit_PDV" subindex="2" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" />
+					</Menu>
+					<Menu id="M_OR_Param_Limit_PDV">
+						<Name textId="TN_Param_Limit_PDV"/>
+						<RecordItemRef variableId="V_Limit_PDV" subindex="1" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" />
+						<RecordItemRef variableId="V_Limit_PDV" subindex="2" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" />
+					</Menu>
+					<Menu id="M_MR_SR_Param_Setup">
+						<Name textId="TN_Param_Setup"/>
+						<VariableRef variableId="V_LaserConfig"/>
+						<VariableRef variableId="V_DisplayConfig"/>
+						<VariableRef variableId="V_KeyLock"/>
+						<VariableRef variableId="V_SystemCommand" displayFormat="Button" buttonValue="130" />
+					</Menu>
+					<Menu id="M_OR_Param_Setup">
+						<Name textId="TN_Param_Setup"/>
+						<VariableRef variableId="V_LaserConfig" accessRightRestriction="ro" />
+						<VariableRef variableId="V_DisplayConfig" accessRightRestriction="ro" />
+						<VariableRef variableId="V_KeyLock" accessRightRestriction="ro" />
+					</Menu>
+					<Menu id="M_MR_SR_Param">
+						<MenuRef menuId="M_MR_SR_Param_BDC1"/>
+						<MenuRef menuId="M_MR_SR_Param_Limit_PDV"/>
+						<MenuRef menuId="M_MR_SR_Param_Setup"/>
+					</Menu>
+					<Menu id="M_OR_Param">
+						<MenuRef menuId="M_OR_Param_BDC1"/>
+						<MenuRef menuId="M_OR_Param_Limit_PDV"/>
+						<MenuRef menuId="M_OR_Param_Setup"/>
+					</Menu>
+					<Menu id="M_OR_MR_SR_Observe">
+						<RecordItemRef variableId="V_ProcessDataIn" subindex="1" displayFormat="Dec" gradient="1" offset="0" unitCode="1012" />
+						<RecordItemRef variableId="V_ProcessDataIn" subindex="2" />
+					</Menu>
+				</MenuCollection>
+				<ObserverRoleMenuSet>
+					<IdentificationMenu menuId="M_OR_Ident"/>
+					<ParameterMenu menuId="M_OR_Param"/>
+					<ObservationMenu menuId="M_OR_MR_SR_Observe"/>
+				</ObserverRoleMenuSet>
+				<MaintenanceRoleMenuSet>
+					<IdentificationMenu menuId="M_MR_SR_Ident"/>
+					<ParameterMenu menuId="M_MR_SR_Param"/>
+					<ObservationMenu menuId="M_OR_MR_SR_Observe"/>
+				</MaintenanceRoleMenuSet>
+				<SpecialistRoleMenuSet>
+					<IdentificationMenu menuId="M_MR_SR_Ident"/>
+					<ParameterMenu menuId="M_MR_SR_Param"/>
+					<ObservationMenu menuId="M_OR_MR_SR_Observe"/>
+				</SpecialistRoleMenuSet>
+			</UserInterface>
+		</DeviceFunction>
+	</ProfileBody>
+	<CommNetworkProfile xsi:type="IOLinkCommNetworkProfileT" iolinkRevision="V1.0">
+		<TransportLayers>
+			<PhysicalLayer minCycleTime="6400" sioSupported="true" baudrate="COM2" />
+		</TransportLayers>
+	</CommNetworkProfile>
+	<ExternalTextCollection>
+		<PrimaryLanguage xml:lang="en">
+			<Text id="TI_VendorText" value="www.ifm.com"/>
+			<Text id="TI_VendorUrl" value="www.ifm.com/ifmgb/web/io-link_down.htm"/>
+			<Text id="TI_DeviceFamily" value="O5D"/>
+			<Text id="TN_Product1" value="O5D100"/>
+			<Text id="TD_Product1" value="Optical distance sensor. Visible laser light, protection class 2 laser. Connection: 2 switching outputs normally open / closed complementary DC PNP"/>
+			<Text id="TN_Product2" value="O5D102"/>
+			<Text id="TD_Product2" value="Optical distance sensor. Visible laser light, protection class 2 laser. Connection: 2 switching outputs normally open / closed complementary DC NPN"/>
+			<Text id="TN_Product3" value="O5D150"/>
+			<Text id="TD_Product3" value="Optical distance sensor. Visible laser light, protection class 1 laser. Connection: 2 switching outputs normally open / closed complementary DC PNP"/>
+			<Text id="TN_Product4" value="O5D152"/>
+			<Text id="TD_Product4" value="Optical distance sensor. Visible laser light, protection class 1 laser. Connection: 2 switching outputs normally open / closed complementary DC NPN"/>
+			<Text id="TN_SysCmd240" value="Command triggers Event 8DFE to appear"/>
+			<Text id="TN_SysCmd241" value="Command triggers Event 8DFE to disappear"/>
+			<Text id="TN_SysCmd242" value="Command triggers Event 8DFF to appear"/>
+			<Text id="TN_SysCmd243" value="Command triggers Event 8DFF to disappear"/>
+			<Text id="TN_BDC1" value="SP"/>
+			<Text id="TD_BDC1_SP" value="Smart Sensor Profile: BDC1 Switchpoints"/>
+			<Text id="TN_BDC1_SP1" value="Switch Point 1"/>
+			<Text id="TN_BDC1_SP2" value="Switch Point 2"/>
+			<Text id="TN_BDC1_SP2_0" value="(Not used)"/>
+			<Text id="TD_BDC1_Config" value="Smart Sensor Profile: BDC1 Switchpoint configuration"/>
+			<Text id="TN_BDC1_Config_Logic" value="Switchpoint Logic"/>
+			<Text id="TN_BDC1_Config_Logic0" value="Closing Contact"/>
+			<Text id="TN_BDC1_Config_Logic1" value="Break Contact"/>
+			<Text id="TN_BDC1_Config_Mode" value="Switchpoint Mode"/>
+			<Text id="TN_BDC1_Config_Mode1" value="Single Point"/>
+			<Text id="TN_BDC1_Config_Hyst" value="Switchpoint Hysteresis"/>
+			<Text id="TN_BDC1_Config_Hyst_0" value="(Not used)"/>
+			<Text id="TN_Limit_PDV" value="Process data limits"/>
+			<Text id="TD_Limit_PDV" value="Process data limit values"/>
+			<Text id="TN_Limit_PDV_min" value="Min"/>
+			<Text id="TN_Limit_PDV_max" value="Max"/>
+			<Text id="TN_Align" value="Align"/>
+			<Text id="TD_Align" value="Align Signal"/>
+			<Text id="TN_KeyLock" value="Keylock"/>
+			<Text id="TN_KeyLock_Locked" value="Locked"/>
+			<Text id="TN_KeyLock_Unlocked" value="Unlocked"/>
+			<Text id="TN_dFOValue" value="dFO"/>
+			<Text id="TD_dFOValue" value="Time delay after signal loss (100 ms steps)"/>
+			<Text id="TN_dSValue" value="dS"/>
+			<Text id="TD_dSValue" value="Switch-On delay"/>
+			<Text id="TN_drValue" value="dr"/>
+			<Text id="TD_drValue" value="Switch-Off delay"/>
+			<Text id="TN_DisplayConfig" value="Display"/>
+			<Text id="TD_DisplayConfig" value="Display configuration"/>
+			<Text id="TN_DisplayConfig_On" value="Display on"/>
+			<Text id="TN_DisplayConfig_Rotate" value="Display rotated"/>
+			<Text id="TN_DisplayConfig_Off" value="Display off"/>
+			<Text id="TN_LaserConfig" value="Laser"/>
+			<Text id="TD_LaserConfig" value="Laser configuration"/>
+			<Text id="TN_LaserConfig_On" value="Laser on"/>
+			<Text id="TN_LaserConfig_Off" value="Laser off"/>
+			<Text id="TN_PDV1" value="Distance"/>
+			<Text id="TN_PDV2" value="Switchstate [OUT1]."/>
+			<Text id="TN_PDV2_true" value="Active"/>
+			<Text id="TN_PDV2_false" value="Inactive"/>
+			<Text id="TN_PD_In" value="Process data input"/>
+			<Text id="TN_Ev_4220" value="Device temparature under-run"/>
+			<Text id="TD_Ev_4220" value="Insulate device"/>
+			<Text id="TN_Ev_8CB0" value="nEA"/>
+			<Text id="TD_Ev_8CB0" value="Object to near"/>
+			<Text id="TN_Ev_8CB1" value="fAr"/>
+			<Text id="TD_Ev_8CB1" value="Object to far"/>
+			<Text id="TN_Ev_8CB4" value="+"/>
+			<Text id="TD_Ev_8CB4" value="Too much intensity"/>
+			<Text id="TN_Ev_8CB5" value="-"/>
+			<Text id="TD_Ev_8CB5" value="No Object"/>
+			<Text id="TN_Ev_8CA4" value="ErP"/>
+			<Text id="TD_Ev_8CA4" value="Plausibility error"/>
+			<Text id="TN_Ev_8DFE" value="Test Event 1"/>
+			<Text id="TD_Ev_8DFE" value="Event appears by setting index 2 to value 240, Event disappears by setting index 2 to value 241"/>
+			<Text id="TN_Ev_8DFF" value="Test Event 2"/>
+			<Text id="TD_Ev_8DFF" value="Event appears by setting index 2 to value 242, Event disappears by setting index 2 to value 243"/>
+			<Text id="TN_Param_BDC1" value="Switchpoint configuration" />
+			<Text id="TN_Param_Limit_PDV" value="Process data limit values" />
+			<Text id="TN_Param_Setup" value="Setup" />
+		</PrimaryLanguage>
+	</ExternalTextCollection>
+	<Stamp crc="1795466800"><Checker name="IODD-Checker V1.0.9" version="V1.0.9.0"/></Stamp>
+</IODevice>

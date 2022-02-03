@@ -48,7 +48,7 @@ func TestProcessSensorData(t *testing.T) {
 	updateIoddIoDeviceMapChan := make(chan IoddFilemapKey)
 	updaterChan := make(chan struct{})
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, updaterChan, relativeDirectoryPath)
-	err = processSensorData(sensorDataMap, deviceInfo[0], portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
+	err = processSensorData(sensorDataMap, deviceInfo[0], nil, nil)
 	if err != nil {
 		t.Error(err)
 	}

@@ -35,7 +35,10 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		"bootstrap.servers": boostrapServer,
 		"security.protocol": "plaintext",
 		"group.id":          "sensorconnect",
-		"batch.size":        8192,
+		/*
+			"linger.ms":                             10,
+			"batch.size":                            16384,
+			"max.in.flight.requests.per.connection": 60,*/
 	}
 	producer, err := kafka.NewProducer(&configMap)
 
@@ -60,11 +63,12 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 				if ev.TopicPartition.Error != nil {
 					zap.S().Errorf("Delivery failed: %v (%s)", ev.TopicPartition, ev.TopicPartition.Error)
 				} else {
-					zap.S().Debugf("Delivered message to %v", ev.TopicPartition)
+					//zap.S().Debugf("Delivered message to %v", ev.TopicPartition)
 				}
 			}
 		}
 	}()
+
 	return
 }
 
@@ -82,7 +86,6 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 
 	//Check if current metadata cache has topic listed
 	if _, ok := lastMetaData.Topics[kafkaTopicName]; ok {
-		//zap.S().Debugf("[CACHED] Topic %s exists", kafkaTopicName)
 		return true, nil
 	}
 
@@ -93,7 +96,6 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 	}
 
 	if _, ok := lastMetaData.Topics[kafkaTopicName]; ok {
-		//zap.S().Debugf("[CACHED] Topic %s exists", kafkaTopicName)
 		return true, nil
 	}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -11,12 +12,9 @@ import (
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
 // The method sends one message per sensor (active port).
-func processSensorData(sensorDataMap map[string]interface{},
-	currentDeviceInformation DiscoveredDeviceInformation,
-	portModeMap map[int]int,
-	ioddIoDeviceMap map[IoddFilemapKey]IoDevice,
-	updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int, sensorDataMap map[string]interface{}) {
 	timestampMs := getUnixTimestampMs()
+
 	for portNumber, portMode := range portModeMap {
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 		switch portMode {
@@ -55,8 +53,10 @@ func processSensorData(sensorDataMap map[string]interface{},
 			ioddFilemapKey.DeviceId = deviceId
 			ioddFilemapKey.VendorId = vendorId
 
+			var idm interface{}
+			var ok bool
 			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
-			if _, ok := ioddIoDeviceMap[ioddFilemapKey]; !ok {
+			if idm, ok = ioDeviceMap.Load(ioddFilemapKey); !ok {
 				//zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
 				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
 				continue                                    // drop data to avoid locking
@@ -71,9 +71,10 @@ func processSensorData(sensorDataMap map[string]interface{},
 			rawSensorOutputBinary := HexToBin(rawSensorOutputString)
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
+			cidm := idm.(IoDevice)
 			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
-			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
-				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+			for _, element := range cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
+				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
 				if err != nil {
 					//zap.S().Warnf("%s", err.Error())
 					continue
@@ -83,7 +84,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
 				valueString := convertBinaryValueToString(binaryValue, datatype)
 				//name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
-				valueName := getNameFromExternalTextCollection(element.Name.TextId, ioddIoDeviceMap[ioddFilemapKey].ExternalTextCollection.PrimaryLanguage.Text)
+				valueName := getNameFromExternalTextCollection(element.Name.TextId, cidm.ExternalTextCollection.PrimaryLanguage.Text)
 				payload = attachValueString(payload, valueName, valueString)
 
 			}
@@ -108,7 +109,12 @@ func getUnixTimestampMs() (timestampMs string) {
 func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
-	returnValue := int(elementMap[tag].(float64))
+
+	val, ok := elementMap[tag].(float64)
+	if !ok {
+		zap.S().Errorf("Failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
+	}
+	returnValue := int(val)
 	return returnValue
 }
 
@@ -116,7 +122,11 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int64 {
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
-	returnValue := int64(elementMap[tag].(float64))
+	val, ok := elementMap[tag].(float64)
+	if !ok {
+		zap.S().Errorf("Failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
+	}
+	returnValue := int64(val)
 	return returnValue
 }
 

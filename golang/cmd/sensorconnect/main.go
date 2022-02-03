@@ -4,15 +4,17 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
 )
 
 var discoveredDeviceInformation []DiscoveredDeviceInformation
-var portModeMap map[int]int
-var sensorDataMap map[string]interface{}
-var ioDeviceMap map[IoddFilemapKey]IoDevice
+
+//var ioDeviceMap map[IoddFilemapKey]IoDevice
+var ioDeviceMap sync.Map
+
 var fileInfoSlice []os.FileInfo
 
 var kafkaProducerClient *kafka.Producer
@@ -22,6 +24,7 @@ var transmitterId string
 var buildtime string
 
 func main() {
+	time.Sleep(30 * time.Second)
 	logger, _ := zap.NewDevelopment()
 	//logger, _ := zap.NewProduction()
 	zap.ReplaceGlobals(logger)
@@ -43,8 +46,11 @@ func main() {
 	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH")
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
-	ioDeviceMap, fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
-	zap.S().Debugf("ioDeviceMap len: %v", ioDeviceMap)
+
+	ioDeviceMap = sync.Map{}
+
+	fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
+
 	if err != nil {
 		zap.S().Errorf("initializeIoddData produced the error: %v", err)
 	}
@@ -55,10 +61,19 @@ func main() {
 	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
 
 	for len(discoveredDeviceInformation) == 0 {
-		// Wait for sensor reading until at least 1 device is discovered
+		zap.S().Infof("No devices discovered yet.")
 		time.Sleep(1 * time.Second)
 	}
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
+
+	for {
+		for GetSyncMapLen(&ioDeviceMap) == 0 {
+			zap.S().Infof("Initial iodd file download not yet complete, awaiting.")
+			time.Sleep(1 * time.Second)
+		}
+		break
+	}
+
 	go continuousSensorDataProcessing(updateIoddIoDeviceMapChan)
 
 	select {} // block forever
@@ -74,6 +89,9 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 			continue
 		}
 		for _, deviceInfo := range discoveredDeviceInformation {
+			var portModeMap map[int]int
+			var sensorDataMap map[string]interface{}
+
 			portModeMap, err = GetPortModeMap(deviceInfo)
 			if err != nil {
 				zap.S().Errorf("GetPortModeMap produced the error: %v", err)
@@ -83,7 +101,7 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 				zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
 			}
 
-			go processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
+			processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
 		}
 	}
 }
@@ -94,6 +112,7 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 		select {
 		case <-ticker.C:
 			var err error
+			zap.S().Debugf("Starting device scan..")
 			discoveredDeviceInformation, err = DiscoverDevices(ipRange)
 			zap.S().Debugf("The discovered devices are: %v \n", discoveredDeviceInformation)
 			if err != nil {
@@ -110,9 +129,7 @@ func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, relativeDirec
 		select {
 		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:
 			var err error
-			zap.S().Debugf("[PRE-AddNewDeviceToIoddFilesAndMap] ioDeviceMap len: %v", ioDeviceMap)
-			ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
-			zap.S().Debugf("[POST-AddNewDeviceToIoddFilesAndMap] ioDeviceMap len: %v", ioDeviceMap)
+			_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
 			zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
 			if err != nil {
 				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
@@ -122,8 +139,7 @@ func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, relativeDirec
 	}
 }
 
-func initializeIoddData(relativeDirectoryPath string) (deviceMap map[IoddFilemapKey]IoDevice, fileInfo []os.FileInfo, err error) {
-	deviceMap = make(map[IoddFilemapKey]IoDevice)
+func initializeIoddData(relativeDirectoryPath string) (fileInfo []os.FileInfo, err error) {
 
 	var ifmIoddFilemapKey IoddFilemapKey
 	ifmIoddFilemapKey.DeviceId = 1028
@@ -132,14 +148,24 @@ func initializeIoddData(relativeDirectoryPath string) (deviceMap map[IoddFilemap
 	siemensIoddFilemapKey.DeviceId = 278531
 	siemensIoddFilemapKey.VendorId = 42
 
-	deviceMap, fileInfo, err = AddNewDeviceToIoddFilesAndMap(ifmIoddFilemapKey, relativeDirectoryPath, deviceMap, fileInfo)
+	fileInfo, err = AddNewDeviceToIoddFilesAndMap(ifmIoddFilemapKey, relativeDirectoryPath, fileInfo)
 	if err != nil {
 		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 	}
-	deviceMap, fileInfo, err = AddNewDeviceToIoddFilesAndMap(siemensIoddFilemapKey, relativeDirectoryPath, deviceMap, fileInfo)
+	fileInfo, err = AddNewDeviceToIoddFilesAndMap(siemensIoddFilemapKey, relativeDirectoryPath, fileInfo)
 	if err != nil {
 		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 	}
 
 	return
+}
+
+func GetSyncMapLen(p *sync.Map) int {
+	mapLen := 0
+	p.Range(func(key, value interface{}) bool {
+		mapLen += 1
+		return true
+	})
+
+	return mapLen
 }

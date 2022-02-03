@@ -121,16 +121,21 @@ type IoddFilemapKey struct {
 
 // AddNewDeviceToIoddFilesAndMap uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
 // Then updates map by checking for new files, unmarhaling them und importing into map
-func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, fileInfoSlice []os.FileInfo) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
-	err := RequestSaveIoddFile(ioddFilemapKey, ioddIoDeviceMap, relativeDirectoryPath)
+func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
+	zap.S().Debugf("[PRE-RequestSaveIoddFile]")
+	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
+	zap.S().Debugf("[POST-RequestSaveIoddFile]")
 	if err != nil {
 		zap.S().Debugf("File with fileMapKey%v already saved.", ioddFilemapKey)
 	}
-	ioddIoDeviceMap, fileInfoSlice, err = ReadIoddFiles(ioddIoDeviceMap, fileInfoSlice, relativeDirectoryPath)
+	zap.S().Debugf("[PRE-ReadIoddFiles]")
+	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
+	zap.S().Debugf("[POST-ReadIoddFiles]")
 	if err != nil {
-		return ioddIoDeviceMap, fileInfoSlice, err
+		zap.S().Errorf("Error in AddNewDeviceToIoddFilesAndMap: %s", err.Error())
+		return fileInfoSlice, err
 	}
-	return ioddIoDeviceMap, fileInfoSlice, err
+	return fileInfoSlice, nil
 }
 
 func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, error) {
@@ -151,13 +156,13 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 }
 
 // ReadIoddFiles Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
-func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) (map[IoddFilemapKey]IoDevice, []os.FileInfo, error) {
+func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) ([]os.FileInfo, error) {
 	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
 	// check for new iodd files
 	currentFileInfoSlice, err := ioutil.ReadDir(absoluteDirectoryPath)
 	if err != nil {
 		err = errors.New("reading of currentFileInfoSlice from specified directory failed")
-		return ioddIoDeviceMap, oldFileInfoSlice, err
+		return oldFileInfoSlice, err
 	}
 	currentNames := getNamesOfFileInfo(currentFileInfoSlice)
 	oldNames := getNamesOfFileInfo(oldFileInfoSlice)
@@ -173,47 +178,52 @@ func ReadIoddFiles(ioddIoDeviceMap map[IoddFilemapKey]IoDevice, oldFileInfoSlice
 		// read file
 		dat, err := ioutil.ReadFile(absoluteFilePath)
 		if err != nil {
-			return ioddIoDeviceMap, oldFileInfoSlice, err
+			return oldFileInfoSlice, err
 		}
 		// Unmarshal
 		ioDevice := IoDevice{}
 		ioDevice, err = UnmarshalIoddFile(dat, absoluteFilePath)
 		if err != nil {
-			return ioddIoDeviceMap, oldFileInfoSlice, err
+			return oldFileInfoSlice, err
 		}
 		// create ioddFilemapKey of unmarshaled file
 		var ioddFilemapKey IoddFilemapKey
 		ioddFilemapKey.DeviceId = ioDevice.ProfileBody.DeviceIdentity.DeviceId
 		ioddFilemapKey.VendorId = ioDevice.ProfileBody.DeviceIdentity.VendorId
 		// Check if IoDevice for created ioddfilemapKey already exists in ioddIoDeviceMap
-		if _, ok := ioddIoDeviceMap[ioddFilemapKey]; ok {
+
+		if idm, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
 			// IoDevice is already in ioddIoDeviceMap
 			// -> replace depending on date (newest version should be used)
-			if earlier, _ := currentDateEarlierThenOldDate(ioDevice.DocumentInfo.ReleaseDate, ioddIoDeviceMap[ioddFilemapKey].DocumentInfo.ReleaseDate); earlier {
-				ioddIoDeviceMap[ioddFilemapKey] = ioDevice
+			if earlier, _ := currentDateEarlierThenOldDate(ioDevice.DocumentInfo.ReleaseDate, idm.(IoDevice).DocumentInfo.ReleaseDate); earlier {
+				ioDeviceMap.Store(ioddFilemapKey, ioDevice)
 			}
 			continue
 		}
-		ioddIoDeviceMap[ioddFilemapKey] = ioDevice
+		ioDeviceMap.Store(ioddFilemapKey, ioDevice)
 	}
-	return ioddIoDeviceMap, currentFileInfoSlice, err
+	return currentFileInfoSlice, err
 }
 
 // RequestSaveIoddFile will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
-func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, ioddIoDeviceMap map[IoddFilemapKey]IoDevice, relativeDirectoryPath string) error {
+func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string) error {
+	zap.S().Infof("1")
 	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
-	if _, ok := ioddIoDeviceMap[ioddFilemapKey]; ok {
+	if _, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
 		err = errors.New("request to save Iodd File invalid: entry for ioddFilemapKey already exists")
 		return err
 	}
+	zap.S().Infof("2")
 	// Execute download and saving of iodd file
 	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
+	zap.S().Infof("3")
 	if err != nil {
 		zap.S().Errorf("Saving error: %s", err.Error())
 		return err
 	}
-	return err
+	zap.S().Infof("4")
+	return nil
 }
 
 // Checks if slice contains entry
