@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 	"strings"
-	"time"
 )
 
 // SendKafkaMessage tries to send a message via kafka
@@ -13,7 +15,15 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	err := CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
-		panic("Failed to create topic")
+		return
+	}
+
+	messageHash := xxh3.Hash(message)
+	cacheKey := fmt.Sprintf("SendKafkaMessage%s%d", kafkaTopicName, messageHash)
+
+	_, found := internal.GetMemcached(cacheKey)
+	if found {
+		zap.S().Debugf("Duplicate message for topic %s, you might want to increase SENSOR_TICK_SPEED_MS !", kafkaTopicName)
 		return
 	}
 
@@ -26,6 +36,8 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	}, nil)
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
+	} else {
+		internal.SetMemcached(cacheKey, nil)
 	}
 }
 
@@ -117,6 +129,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		return
 	}
 
+	zap.S().Infof("Creating new Topic %s", kafkaTopicName)
 	var cancel context.CancelFunc
 	defer func() {
 		if cancel != nil {
@@ -127,27 +140,12 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		Topic:         kafkaTopicName,
 		NumPartitions: 1,
 	}
-	var maxExecutionTime = time.Duration(5) * time.Second
-	d := time.Now().Add(maxExecutionTime)
-	var ctx context.Context
-	ctx, cancel = context.WithDeadline(context.Background(), d)
-	topics, err := kafkaAdminClient.CreateTopics(ctx, []kafka.TopicSpecification{topicSpecification})
+	topics, err := kafkaAdminClient.CreateTopics(context.Background(), []kafka.TopicSpecification{topicSpecification})
 	if err != nil || len(topics) != 1 {
 		zap.S().Errorf("Failed to create Topic %s : %s", kafkaTopicName, err)
 		return
 	}
 
-	select {
-	case <-time.After(maxExecutionTime):
-		zap.S().Errorf("Topic creation deadline reached")
-		return
-	case <-ctx.Done():
-		err = ctx.Err()
-		if err != nil && err != context.DeadlineExceeded {
-			zap.S().Errorf("Failed to await deadline: %s", err)
-			return
-		}
-	}
 	return
 }
 

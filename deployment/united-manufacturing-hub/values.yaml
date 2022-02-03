@@ -20,6 +20,9 @@ _000_commonConfig:
       enabled: true
       iprange: "192.168.10.17/24"  # IP Range in CIDR notation
       ioddfilepath: "/ioddfiles"
+      useKafka: true
+      useMQTT: false
+      tickSpeed: 100
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures

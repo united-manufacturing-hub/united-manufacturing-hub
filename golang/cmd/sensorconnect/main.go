@@ -4,6 +4,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -24,7 +25,8 @@ var transmitterId string
 var buildtime string
 
 func main() {
-	time.Sleep(30 * time.Second)
+	// TODO remove me !
+	time.Sleep(10 * time.Second)
 	logger, _ := zap.NewDevelopment()
 	//logger, _ := zap.NewProduction()
 	zap.ReplaceGlobals(logger)
@@ -38,13 +40,17 @@ func main() {
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
 
+	sensorTickSpeedMS, err := strconv.Atoi(os.Getenv("SENSOR_TICK_SPEED_MS"))
+	if err != nil {
+		panic("Couldn't convert SENSOR_TICK_SPEED_MS env to int")
+	}
+
 	ipRange := os.Getenv("IP_RANGE")
 	zap.S().Infof("Scanning IP range: %s", ipRange)
 
 	transmitterId = os.Getenv("TRANSMITTERID")
 
 	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH")
-	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
 
 	ioDeviceMap = sync.Map{}
@@ -74,34 +80,38 @@ func main() {
 		break
 	}
 
-	go continuousSensorDataProcessing(updateIoddIoDeviceMapChan)
+	zap.S().Infof("Requesting data every %d ms", sensorTickSpeedMS)
+	tickerProcessSensorData := time.NewTicker(time.Duration(sensorTickSpeedMS) * time.Millisecond)
+	defer tickerProcessSensorData.Stop()
+	go continuousSensorDataProcessing(tickerProcessSensorData, updateIoddIoDeviceMapChan)
 
 	select {} // block forever
 }
 
-func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon")
+
 	for {
-		var err error
-		if len(discoveredDeviceInformation) == 0 {
-			zap.S().Debugf("No devices !")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		for _, deviceInfo := range discoveredDeviceInformation {
-			var portModeMap map[int]int
-			var sensorDataMap map[string]interface{}
+		select {
+		case <-ticker.C:
+			var err error
+			for _, deviceInfo := range discoveredDeviceInformation {
+				var portModeMap map[int]int
+				var sensorDataMap map[string]interface{}
 
-			portModeMap, err = GetPortModeMap(deviceInfo)
-			if err != nil {
-				zap.S().Errorf("GetPortModeMap produced the error: %v", err)
-			}
-			sensorDataMap, err = GetSensorDataMap(deviceInfo)
-			if err != nil {
-				zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
-			}
+				portModeMap, err = GetPortModeMap(deviceInfo)
+				if err != nil {
+					zap.S().Errorf("GetPortModeMap produced the error: %v for URL %s & Serial %s", err, deviceInfo.Url, deviceInfo.SerialNumber)
+					continue
+				}
+				sensorDataMap, err = GetSensorDataMap(deviceInfo)
+				if err != nil {
+					zap.S().Errorf("GetSensorDataMap produced the error: %v for URL %s & Serial %s", err, deviceInfo.Url, deviceInfo.SerialNumber)
+					continue
+				}
 
-			processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
+				go processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
+			}
 		}
 	}
 }

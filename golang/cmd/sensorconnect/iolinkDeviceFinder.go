@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -55,6 +56,24 @@ func DiscoverDevices(cidr string) ([]DiscoveredDeviceInformation, error) {
 	zap.S().Infof("Waiting for discovery to complete...")
 	wg.Wait()
 	zap.S().Infof("Discovery completed, found : %d", len(discoveredDevices))
+
+	//Pre-create kafka topics to reduce load later !
+	for _, currentDeviceInformation := range discoveredDevices {
+		portModeMap, err := GetPortModeMap(currentDeviceInformation)
+		if err != nil {
+			continue
+		}
+		for portNumber, _ := range portModeMap {
+			mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
+			kafkaTopic := MqttTopicToKafka(mqttRawTopic)
+			err := CreateTopicIfNotExists(kafkaTopic)
+			if err != nil {
+				zap.S().Errorf("Failed to create topic %s", err)
+				continue
+			}
+		}
+	}
+
 	tmp := make([]DiscoveredDeviceInformation, len(discoveredDevices))
 	copy(tmp, discoveredDevices)
 	return tmp, err
