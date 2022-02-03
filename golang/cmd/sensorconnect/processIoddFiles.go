@@ -65,7 +65,8 @@ type ProcessData struct {
 }
 
 type ProcessDataIn struct {
-	Datatype Datatype
+	Datatype    Datatype
+	DatatypeRef DatatypeRef
 }
 
 type Datatype struct {
