@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
@@ -77,7 +75,7 @@ func processSensorData(sensorDataMap map[string]interface{},
 			for _, element := range ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
 				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
 				if err != nil {
-					zap.S().Warnf("%s", err.Error())
+					//zap.S().Warnf("%s", err.Error())
 					continue
 				}
 				leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
