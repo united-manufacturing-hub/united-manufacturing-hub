@@ -132,30 +132,24 @@ func processSimpleDatatype(simpleDatatype SimpleDatatype, payload []byte, output
 }
 
 // processDatatype can process a Datatype structure. If the bitOffset is not given, enter zero.
-func processDatatype(datatype Datatype, payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int,
+func processDatatype(datatype Datatype, payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int, datatypeReferenceArray []Datatype,
 	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
 	if reflect.DeepEqual(datatype.Type, "RecordT") {
-		payloadOut = processRecordType(payload, datatype.RecordItemArray, outputBitLength, rawSensorOutputBinaryPadded)
+		payloadOut = processRecordType(payload, datatype.RecordItemArray, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, primLangExternalTextCollection)
+
 		return
 	}
 }
 
-func processRecordType(payload []byte, RecordItemArray []RecordItem, outputBitLength int, rawSensorOutputBinaryPadded string) []byte {
+func processRecordType(payload []byte, RecordItemArray []RecordItem, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype, primLangExternalTextCollection []Text) []byte {
 	// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
 	for _, element := range RecordItemArray {
-		datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+		var datatypeEmpty Datatype
+		var err error
+		payload, err = processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
 		if err != nil {
-			//zap.S().Warnf("%s", err.Error())
-			continue
+			zap.S().Errorf("Procession of RecordItem failed: %v", element)
 		}
-		leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
-		rightIndex := outputBitLength - element.BitOffset
-		binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-		valueString := convertBinaryValueToString(binaryValue, datatype)
-		//name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
-		valueName := getNameFromExternalTextCollection(element.Name.TextId, cidm.ExternalTextCollection.PrimaryLanguage.Text)
-		payload = attachValueString(payload, valueName, valueString)
-
 	}
 	return payload
 }
