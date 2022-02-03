@@ -3,11 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"math/big"
 	"reflect"
 	"strconv"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
@@ -72,22 +73,22 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
 			cidm := idm.(IoDevice)
-			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
-			for _, element := range cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
-				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
-				if err != nil {
-					//zap.S().Warnf("%s", err.Error())
-					continue
-				}
-				leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
-				rightIndex := outputBitLength - element.BitOffset
-				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-				valueString := convertBinaryValueToString(binaryValue, datatype)
-				//name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
-				valueName := getNameFromExternalTextCollection(element.Name.TextId, cidm.ExternalTextCollection.PrimaryLanguage.Text)
-				payload = attachValueString(payload, valueName, valueString)
 
+			// Extract important IoddStruct parts for better readability
+			processDataIn := cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn
+			DatatypeReferenceArray := cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray
+
+			// Process processDataIn Struct recursively
+
+			processDataIn = resolveDatatypeRefOfProcessDataIn(processDataIn, DatatypeReferenceArray)
+			if !isEmpty(processDataIn.DatatypeRef) && isEmpty(processDataIn.Datatype) {
+				for _, datatypeElement := range cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray {
+					if reflect.DeepEqual(datatypeElement.Id, processDataIn.DatatypeRef.DatatypeId) {
+						processDataIn.Datatype = datatypeElement
+					}
+				}
 			}
+
 			payload = append(payload, []byte(`}`)...)
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
@@ -95,6 +96,61 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 		}
 	}
 	return
+}
+
+func resolveDatatypeRefOfProcessDataIn(input ProcessDataIn, references []Datatype) ProcessDataIn {
+	if !isEmpty(input.DatatypeRef) && isEmpty(input.Datatype) {
+		for _, datatypeElement := range references {
+			if reflect.DeepEqual(datatypeElement.Id, input.DatatypeRef.DatatypeId) {
+				input.Datatype = datatypeElement
+				return input
+			}
+		}
+		zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
+	}
+	return input
+}
+
+func processRecordItem() {
+
+	// go through possibilitys of
+	// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
+	for _, element := range cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
+		datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+		if err != nil {
+			//zap.S().Warnf("%s", err.Error())
+			continue
+		}
+		leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
+		rightIndex := outputBitLength - element.BitOffset
+		binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
+		valueString := convertBinaryValueToString(binaryValue, datatype)
+		//name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
+		valueName := getNameFromExternalTextCollection(element.Name.TextId, cidm.ExternalTextCollection.PrimaryLanguage.Text)
+		payload = attachValueString(payload, valueName, valueString)
+
+	}
+}
+
+func isEmpty(object interface{}) bool {
+	//First check normal definitions of empty
+	if object == nil {
+		return true
+	} else if object == "" {
+		return true
+	} else if object == false {
+		return true
+	}
+
+	//Then see if it's a struct
+	if reflect.ValueOf(object).Kind() == reflect.Struct {
+		// and create an empty copy of the struct object to compare against
+		empty := reflect.New(reflect.TypeOf(object)).Elem().Interface()
+		if reflect.DeepEqual(object, empty) {
+			return true
+		}
+	}
+	return false
 }
 
 // getUnixTimestampMs returns the current unix timestamp as string in milliseconds
