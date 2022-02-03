@@ -32,12 +32,12 @@ func main() {
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
 
-	ipRange := os.Getenv("IP_RANGE") // 192.168.10.17/32
+	ipRange := os.Getenv("IP_RANGE")
 	zap.S().Infof("Scanning IP range: %s", ipRange)
 
 	transmitterId = os.Getenv("TRANSMITTERID")
 
-	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH") //"../sensorconnect/IoddFiles/"
+	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH")
 	var err error
 	// creating ioDeviceMap and downloading initial set of iodd files
 	ioDeviceMap, fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
@@ -47,12 +47,12 @@ func main() {
 	}
 	tickerSearchForDevices := time.NewTicker(5 * time.Second)
 	defer tickerSearchForDevices.Stop()
-	updaterChan := make(chan struct{})
-	defer close(updaterChan) // close the channel
 	updateIoddIoDeviceMapChan := make(chan IoddFilemapKey)
 
-	go continuousDeviceSearch(tickerSearchForDevices, updaterChan, ipRange)
-	go ioddDataDaemon(updateIoddIoDeviceMapChan, updaterChan, relativeDirectoryPath)
+	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
+
+	time.Sleep(5 * time.Second)
+	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
 	go continuousSensorDataProcessing(updateIoddIoDeviceMapChan)
 
 	select {} // block forever
@@ -61,8 +61,12 @@ func main() {
 func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon")
 	for {
-		time.Sleep(10 * time.Second)
 		var err error
+		if len(discoveredDeviceInformation) == 0 {
+			zap.S().Debugf("No devices !")
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		for _, deviceInfo := range discoveredDeviceInformation {
 			portModeMap, err = GetPortModeMap(deviceInfo)
 			if err != nil {
@@ -73,7 +77,6 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 				zap.S().Errorf("GetSensorDataMap produced the error: %v", err)
 			}
 
-			zap.S().Debugf("ioDeviceMap len: %v", ioDeviceMap)
 			err = processSensorData(sensorDataMap, deviceInfo, portModeMap, ioDeviceMap, updateIoddIoDeviceMapChan)
 			if err != nil {
 				zap.S().Errorf("processSensorData produced the error: %v", err)
@@ -82,7 +85,7 @@ func continuousSensorDataProcessing(updateIoddIoDeviceMapChan chan IoddFilemapKe
 	}
 }
 
-func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRange string) {
+func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
 	for {
 		select {
@@ -94,13 +97,11 @@ func continuousDeviceSearch(ticker *time.Ticker, updaterChan chan struct{}, ipRa
 				zap.S().Errorf("DiscoverDevices produced the error: %v", err)
 				continue
 			}
-		case <-updaterChan:
-			return
 		}
 	}
 
 }
-func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, updaterChan chan struct{}, relativeDirectoryPath string) {
+func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, relativeDirectoryPath string) {
 	zap.S().Debugf("Starting iodd data daemon")
 	for {
 		select {
@@ -114,8 +115,6 @@ func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, updaterChan c
 				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 			}
 			continue
-		case <-updaterChan:
-			return
 		}
 	}
 }

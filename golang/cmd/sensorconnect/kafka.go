@@ -35,6 +35,7 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		"bootstrap.servers": boostrapServer,
 		"security.protocol": "plaintext",
 		"group.id":          "sensorconnect",
+		"batch.size":        8192,
 	}
 	producer, err := kafka.NewProducer(&configMap)
 

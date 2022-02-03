@@ -18,7 +18,7 @@ _000_commonConfig:
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
       enabled: true
-      iprange: "192.168.10.17/32"  # IP Range in CIDR notation
+      iprange: "192.168.10.17/24"  # IP Range in CIDR notation
       ioddfilepath: "/ioddfiles"
 
     # Warning: unstable
