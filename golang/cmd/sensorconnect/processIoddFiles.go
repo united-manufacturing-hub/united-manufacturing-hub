@@ -81,15 +81,16 @@ type Datatype struct {
 }
 
 type SingleValue struct {
-	Value string `xml:"value",attr` // can be any kind of type depending on Type of item -> determine later
+	Value string `xml:"value,attr"` // can be any kind of type depending on Type of item -> determine later
 	Name  Name   `xml:"Name"`
 }
 
 type ValueRange struct {
-	LowerValue string `xml:"lowerValue, attr"`  // can be any kind of type depending on Type of item -> determine later
-	UpperValue string `xml:"upperValue", attr"` // can be any kind of type depending on Type of item -> determine later
+	LowerValue string `xml:"lowerValue,attr"` // can be any kind of type depending on Type of item -> determine later
+	UpperValue string `xml:"upperValue,attr"` // can be any kind of type depending on Type of item -> determine later
 	Name       Name   `xml:"Name"`
 }
+
 type RecordItem struct {
 	BitOffset      int            `xml:"bitOffset,attr"`
 	SimpleDatatype SimpleDatatype `xml:"SimpleDatatype"`
