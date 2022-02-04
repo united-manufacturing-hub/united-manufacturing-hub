@@ -30,6 +30,8 @@ var buildtime string
 var useKafka bool
 var useMQTT bool
 
+var deviceFinderFrequencyInS = 20
+
 func main() {
 	var logger *zap.Logger
 	if os.Getenv("DEBUG") == "1" {
@@ -89,7 +91,16 @@ func main() {
 	if err != nil {
 		zap.S().Errorf("initializeIoddData produced the error: %v", err)
 	}
-	tickerSearchForDevices := time.NewTicker(5 * time.Second)
+
+	if os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC") != "" {
+		deviceFinderFrequencyInS, err = strconv.Atoi(os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC"))
+		if err != nil {
+			zap.S().Errorf("Couldn't convert DEVICE_FINDER_FREQUENCY_IN_SEC env to int, defaulting to 20 sec")
+
+		}
+	}
+
+	tickerSearchForDevices := time.NewTicker(time.Duration(deviceFinderFrequencyInS) * time.Second)
 	defer tickerSearchForDevices.Stop()
 	updateIoddIoDeviceMapChan := make(chan IoddFilemapKey)
 

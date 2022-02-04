@@ -155,21 +155,21 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	}
 	client := &http.Client{}
 	client.CloseIdleConnections()
-	client.Timeout = time.Second * 5
+	client.Timeout = time.Second * time.Duration(deviceFinderFrequencyInS)
 	resp, err := client.Do(req)
 	if err != nil {
-		//zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
+		zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		//zap.S().Debugf("Respons status not 200 but instead: %s", resp.StatusCode)
+		zap.S().Debugf("Response status not 200 but instead: %s", resp.StatusCode)
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		//zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
+		zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
 		return
 	}
 	return

@@ -119,7 +119,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with processSimpleDatatype: %v", err)
 			return
 		}
-		zap.S().Debugf("Processed simple Datatype, Payload = %v", string(payload))
+		//zap.S().Debugf("Processed simple Datatype, Payload = %v", string(payload))
 		return
 	} else if !isEmpty(datatype) {
 		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
@@ -127,7 +127,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with processDatatype: %v", err)
 			return
 		}
-		zap.S().Debugf("Processed Datatype, Payload = %v", string(payload))
+		//zap.S().Debugf("Processed Datatype, Payload = %v", string(payload))
 		return
 	} else if !isEmpty(datatypeRef) {
 		datatype, err = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
@@ -135,7 +135,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with getDatatypeFromDatatypeRef: %v", err)
 			return
 		}
-		zap.S().Debugf("Processed datatypeRef, Payload = %v", string(payload))
+		//zap.S().Debugf("Processed datatypeRef, Payload = %v", string(payload))
 		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
 		return
 	} else {
@@ -202,7 +202,7 @@ func processRecordType(payload []byte, recordItemArray []RecordItem, outputBitLe
 		var datatypeEmpty Datatype
 		var err error
 		payload, err = processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
-		zap.S().Debugf("Processed RecordItem = %v with datatype %v iodd information", element)
+		//zap.S().Debugf("Processed RecordItem = %v with datatype %v iodd information", element)
 		if err != nil {
 			zap.S().Errorf("Procession of RecordItem failed: %v", element)
 		}

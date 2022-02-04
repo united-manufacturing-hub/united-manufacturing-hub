@@ -103,7 +103,7 @@ func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		zap.S().Debugf("Client at %s did not respond.", url)
+		//zap.S().Debugf("Client at %s did not respond.", url)
 		return
 	}
 	defer resp.Body.Close()
