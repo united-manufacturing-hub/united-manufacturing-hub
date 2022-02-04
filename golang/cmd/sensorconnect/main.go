@@ -31,10 +31,12 @@ var useKafka bool
 var useMQTT bool
 
 func main() {
-	// TODO remove me !
-	time.Sleep(10 * time.Second)
-	logger, _ := zap.NewDevelopment()
-	//logger, _ := zap.NewProduction()
+	var logger *zap.Logger
+	if os.Getenv("DEBUG") == "1" {
+		logger, _ = zap.NewDevelopment()
+	} else {
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -44,6 +46,11 @@ func main() {
 
 	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
 	useMQTT = os.Getenv("USE_MQTT") == "1" || strings.ToLower(os.Getenv("USE_MQTT")) == "true"
+
+	if !useKafka && !useMQTT {
+		zap.S().Errorf("Neither kafka nor MQTT output enabled, exiting !")
+		return
+	}
 
 	if useMQTT {
 		zap.S().Infof("Starting with MQTT")
@@ -63,7 +70,8 @@ func main() {
 
 	sensorTickSpeedMS, err := strconv.Atoi(os.Getenv("SENSOR_TICK_SPEED_MS"))
 	if err != nil {
-		panic("Couldn't convert SENSOR_TICK_SPEED_MS env to int")
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_SPEED_MS env to int, defaulting to 100")
+		sensorTickSpeedMS = 100
 	}
 
 	ipRange := os.Getenv("IP_RANGE")

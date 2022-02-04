@@ -58,6 +58,7 @@ services:
       - MQTT_CERTIFICATE_NAME=NO_CERT
       - MQTT_BROKER_URL=mosquitto:1883
       - MY_POD_NAME=sensorconnect
+      - DEBUG=1
     depends_on:
       - kafka
       - mosquitto
