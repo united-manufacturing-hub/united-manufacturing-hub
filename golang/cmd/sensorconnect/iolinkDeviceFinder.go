@@ -53,9 +53,9 @@ func DiscoverDevices(cidr string) ([]DiscoveredDeviceInformation, error) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	zap.S().Infof("Waiting for discovery to complete...")
+	//zap.S().Infof("Waiting for discovery to complete...")
 	wg.Wait()
-	zap.S().Infof("Discovery completed, found : %d", len(discoveredDevices))
+	//zap.S().Infof("Discovery completed, found : %d", len(discoveredDevices))
 
 	//Pre-create kafka topics to reduce load later !
 	for _, currentDeviceInformation := range discoveredDevices {
