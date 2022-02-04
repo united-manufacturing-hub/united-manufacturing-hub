@@ -118,23 +118,27 @@ func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapCh
 			var err error
 			for _, deviceInfo := range discoveredDeviceInformation {
 				var portModeMap map[int]int
-				var sensorDataMap map[string]interface{}
 
 				portModeMap, err = GetPortModeMap(deviceInfo)
 				if err != nil {
 					zap.S().Errorf("GetPortModeMap produced the error: %v for URL %s & Serial %s", err, deviceInfo.Url, deviceInfo.SerialNumber)
 					continue
 				}
-				sensorDataMap, err = GetSensorDataMap(deviceInfo)
-				if err != nil {
-					zap.S().Errorf("GetSensorDataMap produced the error: %v for URL %s & Serial %s", err, deviceInfo.Url, deviceInfo.SerialNumber)
-					continue
-				}
 
-				go processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
+				go downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap)
 			}
 		}
 	}
+}
+
+func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int) {
+	var sensorDataMap map[string]interface{}
+	var err error
+	sensorDataMap, err = GetSensorDataMap(deviceInfo)
+	if err != nil {
+		return
+	}
+	processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
 }
 
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {

@@ -47,6 +47,7 @@ services:
     restart: always
     volumes:
       - ./ioddfiles/:/ioddfiles/
+      - ./logs/:/logs/
     environment:
       - IP_RANGE=192.168.10.0/24
       - KAFKA_BOOSTRAP_SERVER=kafka:9092
@@ -54,7 +55,7 @@ services:
       - IODD_FILE_PATH=/ioddfiles
       - USE_KAFKA=1
       - USE_MQTT=0
-      - SENSOR_TICK_SPEED_MS=10
+      - SENSOR_TICK_SPEED_MS=100
       - MQTT_CERTIFICATE_NAME=NO_CERT
       - MQTT_BROKER_URL=mosquitto:1883
       - MY_POD_NAME=sensorconnect

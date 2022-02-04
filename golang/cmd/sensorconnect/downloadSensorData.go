@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
 	"strconv"
-
-	"go.uber.org/zap"
 )
 
 type SensorDataInformation struct {
@@ -19,31 +18,26 @@ type SensorDataInformation struct {
 
 // GetSensorDataMap returns a map of one IO-Link-Master with the port number as key and the port mode as value
 func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map[string]interface{}, error) {
-	var tmpSensorDataMap map[string]interface{}
 	var val interface{}
 	var found bool
+	var modeRequestBody []byte
 
-	cacheKey := fmt.Sprintf("GetSensorDataMap%s", currentDeviceInformation.Url)
+	cacheKey := fmt.Sprintf("GetSensorDataMap%s", currentDeviceInformation.ProductCode)
 
 	val, found = internal.GetMemcached(cacheKey)
 	if found {
-		tmpSensorDataMap = val.(map[string]interface{})
-		return tmpSensorDataMap, nil
+		modeRequestBody = val.([]byte)
+	} else {
+		numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
+		modeRequestBody = createSensorDataRequestBody(numberOfPorts)
+		internal.SetMemcachedLong(cacheKey, modeRequestBody, -1)
 	}
 
-	numberOfPorts := findNumberOfPorts(currentDeviceInformation.ProductCode)
-	modeRequestBody := createSensorDataRequestBody(numberOfPorts)
 	respBody, err := downloadSensorData(currentDeviceInformation.Url, modeRequestBody)
 	if err != nil {
-		zap.S().Errorf("download of response from url %s failed.", currentDeviceInformation.Url)
 		return nil, err
 	}
-	tmpSensorDataMap, err = unmarshalSensorData(respBody)
-	if err == nil {
-		internal.SetMemcached(cacheKey, tmpSensorDataMap)
-	} else {
-		panic(err)
-	}
+	tmpSensorDataMap, err := unmarshalSensorData(respBody)
 	return tmpSensorDataMap, err
 }
 

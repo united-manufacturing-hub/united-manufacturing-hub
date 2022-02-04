@@ -786,3 +786,7 @@ func GetMemcached(key string) (value interface{}, found bool) {
 	value, found = memCache.Get(key)
 	return
 }
+
+func SetMemcachedLong(key string, value interface{}, d time.Duration) {
+	memCache.Set(key, value, d)
+}

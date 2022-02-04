@@ -1,14 +1,18 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 )
+
+var pSDID = uint64(0)
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
 // The method sends one message per sensor (active port).
@@ -90,6 +94,13 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			}
 
 			payload = append(payload, []byte(`}`)...)
+
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, uint64(pSDID))
+			os.WriteFile(fmt.Sprintf("/logs/dump%d.bin", pSDID), payload, 0644)
+			pSDID++
+			payload = append(payload, b...)
+
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
 			go SendMQTTMessage(mqttRawTopic, payload)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)

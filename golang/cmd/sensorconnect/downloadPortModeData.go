@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -42,7 +43,7 @@ func GetPortModeMap(currentDeviceInformation DiscoveredDeviceInformation) (map[i
 	modeMap, err = unmarshalModeInformation(respBody)
 
 	if err == nil {
-		internal.SetMemcached(cacheKey, modeMap)
+		internal.SetMemcachedLong(cacheKey, modeMap, time.Second*20)
 	}
 
 	return modeMap, err
@@ -111,9 +112,9 @@ func downloadModeStatus(url string, payload []byte) (body []byte, err error) {
 		return
 	}
 	client := &http.Client{}
+	client.CloseIdleConnections()
 	resp, err := client.Do(req)
 	if err != nil {
-		zap.S().Debugf("Client at %s did not respond.", url)
 		return
 	}
 	defer resp.Body.Close()
@@ -124,7 +125,6 @@ func downloadModeStatus(url string, payload []byte) (body []byte, err error) {
 	}
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
 		return
 	}
 	return
