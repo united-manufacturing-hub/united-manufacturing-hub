@@ -114,7 +114,7 @@ func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 	}
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
+		//zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
 		return
 	}
 	return

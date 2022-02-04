@@ -210,22 +210,18 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string)
 
 // RequestSaveIoddFile will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
 func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string) error {
-	zap.S().Infof("1")
 	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
 	if _, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
 		err = errors.New("request to save Iodd File invalid: entry for ioddFilemapKey already exists")
 		return err
 	}
-	zap.S().Infof("2")
 	// Execute download and saving of iodd file
 	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
-	zap.S().Infof("3")
 	if err != nil {
 		zap.S().Errorf("Saving error: %s", err.Error())
 		return err
 	}
-	zap.S().Infof("4")
 	return nil
 }
 

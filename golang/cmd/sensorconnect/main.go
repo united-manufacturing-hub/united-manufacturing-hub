@@ -96,7 +96,7 @@ func main() {
 	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
 
 	for len(discoveredDeviceInformation) == 0 {
-		zap.S().Infof("No devices discovered yet.")
+		zap.S().Debugf("No devices discovered yet.")
 		time.Sleep(1 * time.Second)
 	}
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)

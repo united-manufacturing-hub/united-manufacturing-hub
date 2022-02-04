@@ -29,7 +29,18 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 		zap.S().Errorf("Unable to find absoluteDirectoryPath: %v", err)
 		return err
 	}
-	absoluteFilePath := absoluteDirectoryPath + "/" + filemap[0].Name
+
+	//Get latest file
+	latest := int64(0)
+	index := 0
+	for i, file := range filemap {
+		if file.Context.UploadDate > latest {
+			index = i
+			latest = file.Context.UploadDate
+		}
+	}
+
+	absoluteFilePath := absoluteDirectoryPath + "/" + filemap[index].Name
 	zap.S().Debugf("Saving file to path: " + absoluteFilePath)
 
 	// check for existing file with same name
@@ -38,7 +49,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 	}
 
 	// save iodd file
-	err = ioutil.WriteFile(absoluteFilePath, filemap[0].File, 0644)
+	err = ioutil.WriteFile(absoluteFilePath, filemap[index].File, 0644)
 	if err != nil {
 		zap.S().Errorf("Unable to write file: %v", err)
 		return err
@@ -155,7 +166,6 @@ func getUrl(url string) (body []byte, err error, status int) {
 	defer resp.Body.Close()
 	status = resp.StatusCode
 	if status != 200 {
-		zap.S().Errorf("Not status 200")
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)
