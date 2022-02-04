@@ -3,7 +3,7 @@ title: "Kafka"
 linkTitle: "Kafka"
 weight: 2
 description: >
-This documents our Kafka structure and settings
+  This documents our Kafka structure and settings
 ---
 
 ### Default settings
