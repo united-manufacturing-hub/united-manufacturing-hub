@@ -63,7 +63,7 @@ func DiscoverDevices(cidr string) ([]DiscoveredDeviceInformation, error) {
 		if err != nil {
 			continue
 		}
-		for portNumber, _ := range portModeMap {
+		for portNumber := range portModeMap {
 			mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 			kafkaTopic := MqttTopicToKafka(mqttRawTopic)
 			err := CreateTopicIfNotExists(kafkaTopic)
@@ -106,7 +106,6 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	discoveredDeviceInformation.Url = url
 	zap.S().Infof("Found device (SN: %s, PN: %s) at %s", discoveredDeviceInformation.SerialNumber, discoveredDeviceInformation.ProductCode, url)
 	discoveredDevices = append(discoveredDevices, discoveredDeviceInformation)
-	return
 }
 
 func ConvertCidrToIpRange(cidr string) (start uint32, finish uint32, err error) {
