@@ -47,7 +47,6 @@ services:
     restart: always
     volumes:
       - ./ioddfiles/:/ioddfiles/
-      - ./logs/:/logs/
     environment:
       - IP_RANGE=192.168.10.0/24
       - KAFKA_BOOSTRAP_SERVER=kafka:9092
