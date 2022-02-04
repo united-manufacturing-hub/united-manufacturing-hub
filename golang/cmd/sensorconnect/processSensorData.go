@@ -1,13 +1,13 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"math/big"
 	"reflect"
 	"strconv"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
@@ -73,22 +73,22 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
 			cidm := idm.(IoDevice)
-			// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
-			for _, element := range cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray {
-				datatype, valueBitLength, err := determineDatatypeAndValueBitLengthOfRecordItem(element, cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
-				if err != nil {
-					//zap.S().Warnf("%s", err.Error())
-					continue
-				}
-				leftIndex := outputBitLength - int(valueBitLength) - element.BitOffset
-				rightIndex := outputBitLength - element.BitOffset
-				binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-				valueString := convertBinaryValueToString(binaryValue, datatype)
-				//name, err := checkSingleValuesAndValueRanges(element, valueString, datatype, ioddIoDeviceMap[ioddFilemapKey].ProfileBody.DeviceFunction.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray)
-				valueName := getNameFromExternalTextCollection(element.Name.TextId, cidm.ExternalTextCollection.PrimaryLanguage.Text)
-				payload = attachValueString(payload, valueName, valueString)
 
+			// Extract important IoddStruct parts for better readability
+			processDataIn := cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn
+			datatypeReferenceArray := cidm.ProfileBody.DeviceFunction.DatatypeCollection.DatatypeArray
+			var emptySimpleDatatype SimpleDatatype
+			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
+
+			var err error
+
+			// use the acquired info to process the raw data coming from the sensor correctly in to human readable data and attach to payload
+			payload, err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
+			if err != nil {
+				payload = attachValueString(payload, "RawSensorOutput", string(rawSensorOutput[:])) // if an error occurs attach the raw sensor data to the payload
+				zap.S().Errorf("Processing Sensordata failed: %v", err)
 			}
+
 			payload = append(payload, []byte(`}`)...)
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
 			go SendMQTTMessage(mqttRawTopic, payload)
@@ -96,7 +96,116 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			continue
 		}
 	}
+}
+
+// processData turns raw sensor data into human readable data and attaches it to the payload. It can handle the input of datatype, datatypeRef and simpleDatatype structures.
+// It determines which one of those was given (not empty) and delegates the processing accordingly.
+func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype SimpleDatatype, bitOffset int,
+	payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype,
+	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
+	if !isEmpty(simpleDatatype) {
+		payloadOut, err = processSimpleDatatype(simpleDatatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, nameTextId, primLangExternalTextCollection)
+		return
+	} else if !isEmpty(datatype) {
+		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
+		return
+	} else if !isEmpty(datatypeRef) {
+		datatype, err = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
+		if err != nil {
+			zap.S().Errorf("Error with getDatatypeFromDatatypeRef: %v", err)
+			return
+		}
+		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
+		return
+	} else {
+		zap.S().Errorf("Missing input, neither simpleDatatype or datatype or datatypeRef given.")
+		return
+	}
+}
+
+// getDatatypeFromDatatypeRef uses the given datatypeReference to find the actual datatype description in the datatypeReferenceArray and returns it.
+func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray []Datatype) (datatypeOut Datatype, err error) {
+	for _, datatypeElement := range datatypeReferenceArray {
+		if reflect.DeepEqual(datatypeElement.Id, datatypeRef.DatatypeId) {
+			datatypeOut = datatypeElement
+			return
+		}
+	}
+	zap.S().Errorf("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
+	err = fmt.Errorf("did not find Datatype structure for given datatype reference id: %v", datatypeRef.DatatypeId)
 	return
+}
+
+// processSimpleDatatype uses the given simple datatype information to attach the information to the payload
+func processSimpleDatatype(simpleDatatype SimpleDatatype, payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int,
+	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
+
+	binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, simpleDatatype.Type, simpleDatatype.BitLength, simpleDatatype.FixedLength, outputBitLength, bitOffset)
+	valueString := convertBinaryValueToString(binaryValue, simpleDatatype.Type)
+	valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
+	payloadOut = attachValueString(payload, valueName, valueString)
+	return
+}
+
+// extractBinaryValueFromRawSensorOutput handles the cutting and converting of the actual raw sensor data.
+func extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded string, typeString string, bitLength uint, fixedLength uint, outputBitLength int, bitOffset int) string {
+	valueBitLength := determineValueBitLength(typeString, bitLength, fixedLength)
+
+	leftIndex := outputBitLength - int(valueBitLength) - bitOffset
+	rightIndex := outputBitLength - bitOffset
+	binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
+	return binaryValue
+}
+
+// processDatatype can process a Datatype structure. If the bitOffset is not given, enter zero.
+func processDatatype(datatype Datatype, payload []byte, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int, datatypeReferenceArray []Datatype,
+	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
+	if reflect.DeepEqual(datatype.Type, "RecordT") {
+		payloadOut = processRecordType(payload, datatype.RecordItemArray, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, primLangExternalTextCollection)
+		return
+	} else {
+		binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, datatype.Type, datatype.BitLength, datatype.FixedLength, outputBitLength, bitOffset)
+		valueString := convertBinaryValueToString(binaryValue, datatype.Type)
+		valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
+		payloadOut = attachValueString(payload, valueName, valueString)
+		return
+	}
+}
+
+// processRecordType iterates through the given recordItemArray and calls the processData function for each RecordItem
+func processRecordType(payload []byte, recordItemArray []RecordItem, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype, primLangExternalTextCollection []Text) []byte {
+	// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
+	for _, element := range recordItemArray {
+		var datatypeEmpty Datatype
+		var err error
+		payload, err = processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
+		if err != nil {
+			zap.S().Errorf("Procession of RecordItem failed: %v", element)
+		}
+	}
+	return payload
+}
+
+// isEmpty determines if an field of a struct is empty of filled
+func isEmpty(object interface{}) bool {
+	//First check normal definitions of empty
+	if object == nil {
+		return true
+	} else if object == "" {
+		return true
+	} else if object == false {
+		return true
+	}
+
+	//Then see if it's a struct
+	if reflect.ValueOf(object).Kind() == reflect.Struct {
+		// and create an empty copy of the struct object to compare against
+		empty := reflect.New(reflect.TypeOf(object)).Elem().Interface()
+		if reflect.DeepEqual(object, empty) {
+			return true
+		}
+	}
+	return false
 }
 
 // getUnixTimestampMs returns the current unix timestamp as string in milliseconds
@@ -171,30 +280,6 @@ func determineValueBitLength(datatype string, bitLength uint, fixedLength uint) 
 		return fixedLength * 8
 	} else {
 		return bitLength
-	}
-}
-
-// determineDatatypeAndValueBitLengthOfRecordItem finds out datatype and bit length of a given iodd RecordItem
-func determineDatatypeAndValueBitLengthOfRecordItem(item RecordItem, datatypeArray []Datatype) (datatype string, bitLength uint, err error) {
-	if !reflect.DeepEqual(item.SimpleDatatype.Type, "") { //  true if record item includes a simple datatype
-		datatype = item.SimpleDatatype.Type
-		bitLength = determineValueBitLength(datatype, item.SimpleDatatype.BitLength, item.SimpleDatatype.FixedLength)
-		return
-	} else if !reflect.DeepEqual(item.DatatypeRef.DatatypeId, "") { // true if record item includes a datatypeRef -> look for type into DatatypeCollection with id
-		for _, datatypeElement := range datatypeArray {
-			if reflect.DeepEqual(datatypeElement.Id, item.DatatypeRef.DatatypeId) {
-				datatype = datatypeElement.Type // IntegerT or UIntegerT or Float32T
-				bitLength = determineValueBitLength(datatype, datatypeElement.BitLength, datatypeElement.FixedLength)
-				return
-			}
-			//zap.S().Warnf("datatypeElement.Id vs item.DatatypeRef.DatatypeId: %s vs %s", datatypeElement.Id, item.DatatypeRef.DatatypeId)
-		}
-		//zap.S().Warnf("datatypeArray: %v", datatypeArray)
-		err = errors.New("DatatypeRef.DatatypeId is not in DatatypeCollection of Iodd file -> Datatype could not be determined.")
-		return
-	} else {
-		err = errors.New("Neither SimpleDatatype nor DatatypeRef included in Recorditem")
-		return
 	}
 }
 
