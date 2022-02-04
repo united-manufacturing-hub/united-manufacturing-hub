@@ -38,7 +38,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			keyPdin := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
 			connectionCode := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
 			if connectionCode != 200 {
-				//zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
+				zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
 				continue
 			}
 
@@ -59,7 +59,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			var ok bool
 			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
 			if idm, ok = ioDeviceMap.Load(ioddFilemapKey); !ok {
-				//zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
+				zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
 				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
 				continue                                    // drop data to avoid locking
 			}
@@ -119,7 +119,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with processSimpleDatatype: %v", err)
 			return
 		}
-		//zap.S().Debugf("Processed simple Datatype, Payload = %v", string(payload))
+		zap.S().Debugf("Processed simple Datatype, Payload = %v", string(payload))
 		return
 	} else if !isEmpty(datatype) {
 		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
@@ -127,7 +127,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with processDatatype: %v", err)
 			return
 		}
-		//zap.S().Debugf("Processed Datatype, Payload = %v", string(payload))
+		zap.S().Debugf("Processed Datatype, Payload = %v", string(payload))
 		return
 	} else if !isEmpty(datatypeRef) {
 		datatype, err = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
@@ -135,7 +135,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with getDatatypeFromDatatypeRef: %v", err)
 			return
 		}
-		//zap.S().Debugf("Processed datatypeRef, Payload = %v", string(payload))
+		zap.S().Debugf("Processed datatypeRef, Payload = %v", string(payload))
 		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
 		return
 	} else {
