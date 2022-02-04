@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"reflect"
 	"testing"
 )
 
+/*
 // integration test based on working ifm sensor on gateway at specific ip address
 func TestProcessSensorData(t *testing.T) {
 	// first remove all files from specified path
@@ -103,7 +102,7 @@ func TestExtractByteArrayFromSensorDataMap(t *testing.T) {
 		t.Error("Problem with extractByteArrayFromSensorDataMap")
 	}
 }
-
+*/
 func TestBitConversions(t *testing.T) {
 	longHexString := "0000FC000001FF000000FF000161FF000025FF03"
 	length := len(longHexString) * 4
