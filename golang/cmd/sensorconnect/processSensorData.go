@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha512"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -26,7 +27,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 
 			// Payload to send
 			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
-			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
+			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload, GenerateKafkaKey(currentDeviceInformation))
 			go SendMQTTMessage(mqttRawTopic, payload)
 		case 2: // digital output
 			// Todo
@@ -91,12 +92,20 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 
 			payload = append(payload, []byte(`}`)...)
 
-			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload)
+			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload, GenerateKafkaKey(currentDeviceInformation))
 			go SendMQTTMessage(mqttRawTopic, payload)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}
 	}
+}
+
+func GenerateKafkaKey(information DiscoveredDeviceInformation) []byte {
+	sha_512 := sha512.New()
+	sha_512.Write([]byte(information.Url))
+	sha_512.Write([]byte(information.ProductCode))
+	sha_512.Write([]byte(information.SerialNumber))
+	return sha_512.Sum(nil)
 }
 
 // processData turns raw sensor data into human readable data and attaches it to the payload. It can handle the input of datatype, datatypeRef and simpleDatatype structures.

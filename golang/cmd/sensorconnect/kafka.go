@@ -11,7 +11,7 @@ import (
 )
 
 // SendKafkaMessage tries to send a message via kafka
-func SendKafkaMessage(kafkaTopicName string, message []byte) {
+func SendKafkaMessage(kafkaTopicName string, message []byte, key []byte) {
 	if !useKafka {
 		return
 	}
@@ -36,6 +36,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 			Partition: kafka.PartitionAny,
 		},
 		Value: message,
+		Key:   key,
 	}, nil)
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
