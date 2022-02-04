@@ -83,7 +83,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
 
 			var err error
-			zap.S().Debugf("Starting to process port number = %v", portNumber)
+			zap.S().Debugf("Starting to process port number = %v with device id = %v and raw sensor output = %v", portNumber, deviceId, string(rawSensorOutput))
 			// use the acquired info to process the raw data coming from the sensor correctly in to human readable data and attach to payload
 			payload, err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
 			if err != nil {
