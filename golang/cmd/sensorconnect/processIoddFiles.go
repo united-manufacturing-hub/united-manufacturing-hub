@@ -71,13 +71,13 @@ type ProcessDataIn struct {
 }
 
 type Datatype struct {
-	BitLength       uint         `xml:"bitLength,attr"`
-	FixedLength     uint         `xml:"fixedLength,attr"`
-	RecordItemArray []RecordItem `xml:"RecordItem"`
-	Type            string       `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
-	Id              string       `xml:"id,attr"`
-	SingleValue     SingleValue  `xml:"SingleValue"`
-	ValueRange      ValueRange   `xml:"ValueRange"`
+	BitLength        uint          `xml:"bitLength,attr"`
+	FixedLength      uint          `xml:"fixedLength,attr"`
+	RecordItemArray  []RecordItem  `xml:"RecordItem"`
+	Type             string        `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	Id               string        `xml:"id,attr"`
+	SingleValueArray []SingleValue `xml:"SingleValue"`
+	ValueRangeArray  []ValueRange  `xml:"ValueRange"`
 }
 
 type SingleValue struct {
