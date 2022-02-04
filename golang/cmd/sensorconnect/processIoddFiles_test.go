@@ -22,7 +22,7 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	var err error
 
 	// execute function and check for errors
-	ioDeviceMap, fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
@@ -45,11 +45,10 @@ func TestRequestSaveIoddFile(t *testing.T) {
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
-	emptyIoDeviceMap := make(map[IoddFilemapKey]IoDevice)
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
 	removeFilesFromDirectory(relativeDirectoryPath)
-	err := RequestSaveIoddFile(ioddFilemapKey, emptyIoDeviceMap, relativeDirectoryPath)
+	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,7 +63,7 @@ func TestReadIoddFiles(t *testing.T) {
 	// first remove all files from specified path
 	removeFilesFromDirectory(relativeDirectoryPath)
 	var err error
-	ioDeviceMap, fileInfoSlice, err = ReadIoddFiles(ioDeviceMap, fileInfoSlice, relativeDirectoryPath)
+	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
 	// no changes in directory -> no new new files read
 	if err != nil {
 		t.Error(err)
@@ -73,11 +72,11 @@ func TestReadIoddFiles(t *testing.T) {
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
-	err = RequestSaveIoddFile(ioddFilemapKey, ioDeviceMap, relativeDirectoryPath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
-	ioDeviceMap, _, err = ReadIoddFiles(ioDeviceMap, fileInfoSlice, relativeDirectoryPath)
+	_, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
 	// check if new entry exits for filemap Key
 	if _, ok := ioDeviceMap[ioddFilemapKey]; !ok {
 		fmt.Println(ok)
@@ -121,24 +120,24 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	var err error
 
 	// execute function and check for errors
-	ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeDirectoryPath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
 	// execute function and check for errors
-	ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// execute function and check for errors
-	ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeDirectoryPath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// execute function and check for errors
-	ioDeviceMap, _, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeDirectoryPath, ioDeviceMap, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeDirectoryPath, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// execute function and check for errors
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeDirectoryPath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
