@@ -3,7 +3,7 @@ entries:
   grafana:
   - apiVersion: v2
     appVersion: 8.0.3
-    created: "2022-02-04T13:44:53.561755+01:00"
+    created: "2022-02-04T13:54:43.2295587+01:00"
     description: The leading tool for querying and visualizing time series and metrics.
     digest: f75ed59055c716461d77413cf823987b65f50a991655c36e2b07b758eb38887d
     home: https://grafana.net
@@ -32,7 +32,7 @@ entries:
       category: Infrastructure
     apiVersion: v2
     appVersion: 2.8.1
-    created: "2022-02-04T13:44:53.5697557+01:00"
+    created: "2022-02-04T13:54:43.2380924+01:00"
     dependencies:
     - name: common
       repository: https://charts.bitnami.com/bitnami
@@ -66,7 +66,7 @@ entries:
   kowl:
   - apiVersion: v2
     appVersion: v1.5.0
-    created: "2022-02-04T13:44:53.5704533+01:00"
+    created: "2022-02-04T13:54:43.2388414+01:00"
     description: A Helm chart for Kowl & Kowl Business
     digest: 4876dcdc736b5f5d4294cc127d33146431f2e92e7f91dab855021391db9c4f28
     name: kowl
@@ -77,7 +77,7 @@ entries:
   minio-operator:
   - apiVersion: v2
     appVersion: v4.1.3
-    created: "2022-02-04T13:44:53.5720735+01:00"
+    created: "2022-02-04T13:54:43.2402403+01:00"
     description: A Helm chart for MinIO Operator
     digest: 0cf6f5c3724facc74cfeb32c17a798099f72baff9869ae6d6fb5422557fe40b7
     home: https://min.io
@@ -101,7 +101,7 @@ entries:
       category: Database
     apiVersion: v2
     appVersion: 6.0.10
-    created: "2022-02-04T13:44:53.5759322+01:00"
+    created: "2022-02-04T13:54:43.2454389+01:00"
     dependencies:
     - name: common
       repository: https://charts.bitnami.com/bitnami
@@ -132,7 +132,7 @@ entries:
     version: 12.7.3
   timescaledb-single:
   - apiVersion: v1
-    created: "2022-02-04T13:44:53.5786096+01:00"
+    created: "2022-02-04T13:54:43.2482729+01:00"
     description: TimescaleDB HA Deployment.
     digest: 8bb26c938538e767a0da086f7535e1b81fa03af292becf44d406d7a8d8da9321
     home: https://github.com/timescale/timescaledb-kubernetes
@@ -150,7 +150,7 @@ entries:
   united-manufacturing-hub:
   - apiVersion: v2
     appVersion: 0.8.0-prerelease
-    created: "2022-02-04T13:44:53.5592543+01:00"
+    created: "2022-02-04T13:54:43.2267053+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -194,7 +194,7 @@ entries:
   vernemq:
   - apiVersion: v1
     appVersion: 1.11.0
-    created: "2022-02-04T13:44:53.5794444+01:00"
+    created: "2022-02-04T13:54:43.2490263+01:00"
     description: VerneMQ is a high-performance, distributed MQTT message broker
     digest: 00de0c2885e6bb135b3d3b64fd03f42d1a0cd869e2d5607eba90cf579cdf79c9
     icon: http://www.stickpng.com/assets/thumbs/58482b21cef1014c0b5e4a24.png
@@ -202,4 +202,4 @@ entries:
     urls:
     - https://deploy-preview-822--umh-helm-repo.netlify.app/charts/vernemq-1.6.7.tgz
     version: 1.6.7
-generated: "2022-02-04T13:44:53.5301532+01:00"
+generated: "2022-02-04T13:54:43.1961966+01:00"
