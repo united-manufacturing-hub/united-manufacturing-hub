@@ -176,6 +176,7 @@ func extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded string, t
 	leftIndex := outputBitLength - int(valueBitLength) - bitOffset
 	rightIndex := outputBitLength - bitOffset
 	binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
+	zap.S().Debugf("From the complete binary value %v the part %v was extracted. Left Index : %v, Right Index : %v", rawSensorOutputBinaryPadded, binaryValue, leftIndex, rightIndex)
 	return binaryValue
 }
 
