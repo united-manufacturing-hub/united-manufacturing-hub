@@ -53,7 +53,7 @@ services:
       - TRANSMITTERID=12345
       - IODD_FILE_PATH=/ioddfiles
       - USE_KAFKA=1
-      - USE_MQTT=1
+      - USE_MQTT=0
       - SENSOR_TICK_SPEED_MS=10
       - MQTT_CERTIFICATE_NAME=NO_CERT
       - MQTT_BROKER_URL=mosquitto:1883
