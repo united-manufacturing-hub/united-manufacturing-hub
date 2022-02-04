@@ -51,6 +51,7 @@ write_files:
     dataprocessing:
       nodered:
         enabled: true
+        defaultFlows: false
 
     # Infrastructure
     infrastructure:
@@ -144,41 +145,41 @@ write_files:
           MIzsw5gq+PcsyNV5g/IUX0PJ
           -----END PRIVATE KEY-----
 
-    # apache kafka, mqttkafkabridge, kowl
-    kafka:
+      # apache kafka, mqttkafkabridge, kowl
+      kafka:
+        enabled: true
+
+    # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
+    # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
+    # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
+    datastorage:
+      enabled: true
+      db_password: "changeme"
+
+    # mqtt-to-blob, minio, kafka-to-blob
+    # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
+    blobstorage:
+      enabled: true
+
+    # factoryinput, grafanaproxy
+    # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
+    datainput:
+      enabled: true
+
+    # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
+    mqttBridge:
       enabled: false
-
-  # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
-  # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
-  # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
-  datastorage:
-    enabled: true
-    db_password: "changeme"
-
-  # mqtt-to-blob, minio, kafka-to-blob
-  # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
-  blobstorage:
-    enabled: true
-
-  # factoryinput, grafanaproxy
-  # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
-  datainput:
-    enabled: false
-
-  # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
-  mqttBridge:
-    enabled: false
-    remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
-    topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
-    CAcert: |
-      -----BEGIN CERTIFICATE-----
-      -----END CERTIFICATE-----
-    cert: |
-      -----BEGIN CERTIFICATE-----
-      -----END CERTIFICATE-----
-    privkey: |
-      -----BEGIN PRIVATE KEY-----
-      -----END PRIVATE KEY-----
+      remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
+      topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+      CAcert: |
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      cert: |
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      privkey: |
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
 
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
