@@ -105,9 +105,19 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 	nameTextId string, primLangExternalTextCollection []Text) (payloadOut []byte, err error) {
 	if !isEmpty(simpleDatatype) {
 		payloadOut, err = processSimpleDatatype(simpleDatatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, nameTextId, primLangExternalTextCollection)
+		if err != nil {
+			zap.S().Errorf("Error with processSimpleDatatype: %v", err)
+			return
+		}
+		zap.S().Debugf("Processed simple Datatype, Payload = %v", payload)
 		return
 	} else if !isEmpty(datatype) {
 		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
+		if err != nil {
+			zap.S().Errorf("Error with processDatatype: %v", err)
+			return
+		}
+		zap.S().Debugf("Processed Datatype, Payload = %v", payload)
 		return
 	} else if !isEmpty(datatypeRef) {
 		datatype, err = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
@@ -115,6 +125,7 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with getDatatypeFromDatatypeRef: %v", err)
 			return
 		}
+		zap.S().Debugf("Processed datatypeRef, Payload = %v", payload)
 		payloadOut, err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
 		return
 	} else {
@@ -128,6 +139,7 @@ func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray 
 	for _, datatypeElement := range datatypeReferenceArray {
 		if reflect.DeepEqual(datatypeElement.Id, datatypeRef.DatatypeId) {
 			datatypeOut = datatypeElement
+			zap.S().Debugf("Found matching datatype for datatypeRef, datatype = %v", datatypeOut)
 			return
 		}
 	}
@@ -164,6 +176,7 @@ func processDatatype(datatype Datatype, payload []byte, outputBitLength int, raw
 		payloadOut = processRecordType(payload, datatype.RecordItemArray, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, primLangExternalTextCollection)
 		return
 	} else {
+		zap.S().Debugf("Starting to process rawSensorOutputBinaryPadded = %v with datatype %v iodd information", datatype, rawSensorOutputBinaryPadded)
 		binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, datatype.Type, datatype.BitLength, datatype.FixedLength, outputBitLength, bitOffset)
 		valueString := convertBinaryValueToString(binaryValue, datatype.Type)
 		valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
@@ -179,6 +192,7 @@ func processRecordType(payload []byte, recordItemArray []RecordItem, outputBitLe
 		var datatypeEmpty Datatype
 		var err error
 		payload, err = processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
+		zap.S().Debugf("Processed RecordItem = %v with datatype %v iodd information", element)
 		if err != nil {
 			zap.S().Errorf("Procession of RecordItem failed: %v", element)
 		}
