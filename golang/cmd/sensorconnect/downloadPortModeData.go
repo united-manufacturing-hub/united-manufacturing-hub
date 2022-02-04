@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
 	"go.uber.org/zap"
 )
@@ -67,7 +68,7 @@ func unmarshalModeInformation(dataRaw []byte) (map[int]int, error) {
 		if elementMap == nil || elementMap["data"] == nil {
 			return nil, errors.New("elementMap is nil")
 		}
-		portMode := elementMap["data"].(int)
+		portMode := int(elementMap["data"].(float64))
 		modeMap[portNumber] = portMode
 	}
 	return modeMap, nil
