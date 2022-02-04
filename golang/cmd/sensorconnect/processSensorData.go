@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha512"
+	"encoding/base64"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -101,11 +102,15 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 }
 
 func GenerateKafkaKey(information DiscoveredDeviceInformation) []byte {
-	sha_512 := sha512.New()
-	sha_512.Write([]byte(information.Url))
-	sha_512.Write([]byte(information.ProductCode))
-	sha_512.Write([]byte(information.SerialNumber))
-	return sha_512.Sum(nil)
+	sha512 := sha512.New()
+	sha512.Write([]byte(information.Url))
+	sha512.Write([]byte(information.ProductCode))
+	sha512.Write([]byte(information.SerialNumber))
+
+	var dst []byte
+	dst = make([]byte, 0)
+	base64.StdEncoding.Encode(dst, sha512.Sum(nil))
+	return dst
 }
 
 // processData turns raw sensor data into human readable data and attaches it to the payload. It can handle the input of datatype, datatypeRef and simpleDatatype structures.

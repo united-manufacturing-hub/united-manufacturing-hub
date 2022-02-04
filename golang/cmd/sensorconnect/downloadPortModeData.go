@@ -63,7 +63,11 @@ func unmarshalModeInformation(dataRaw []byte) (map[int]int, error) {
 			continue
 		}
 		elementMap := element.(map[string]interface{})
-		portMode := int(elementMap["data"].(float64))
+
+		if elementMap == nil || elementMap["data"] == nil {
+			return nil, errors.New("elementMap is nil")
+		}
+		portMode := elementMap["data"].(int)
 		modeMap[portNumber] = portMode
 	}
 	return modeMap, nil
