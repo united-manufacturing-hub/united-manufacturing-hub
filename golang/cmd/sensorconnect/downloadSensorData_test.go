@@ -13,7 +13,7 @@ func TestCreateSensorDataRequestBody(t *testing.T) {
 	}
 }
 
-// only works with functioning test device on correct ip: http://192.168.10.17
+/* only works with functioning test device on correct ip: http://192.168.10.17
 func TestGetSensorDataMap(t *testing.T) {
 	var deviceInfo DiscoveredDeviceInformation
 	deviceInfo.ProductCode = "AL1350"
@@ -24,3 +24,4 @@ func TestGetSensorDataMap(t *testing.T) {
 		t.Error("Problem with GetModeStatusStruct")
 	}
 }
+*/
