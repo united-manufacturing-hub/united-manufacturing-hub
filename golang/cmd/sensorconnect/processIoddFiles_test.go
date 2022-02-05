@@ -11,14 +11,16 @@ import (
 func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	// first remove all files from specified path
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
-	removeFilesFromDirectory(relativeDirectoryPath)
+	err := removeFilesFromDirectory(relativeDirectoryPath)
+	if err != nil {
+		t.Errorf("removeFilesFromDirectory failed: %v", err)
+	}
 
 	//Declare Variables
 	var fileInfoSlice []os.FileInfo
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
-	var err error
 
 	// execute function and check for errors
 	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
@@ -47,20 +49,26 @@ func TestRequestSaveIoddFile(t *testing.T) {
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
 	removeFilesFromDirectory(relativeDirectoryPath)
+	ioDeviceMap.Delete(ioddFilemapKey)
 	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
 	// Remove file after test again
-	removeFilesFromDirectory(relativeDirectoryPath)
+	err = removeFilesFromDirectory(relativeDirectoryPath)
+	if err != nil {
+		t.Errorf("removeFilesFromDirectory failed: %v", err)
+	}
 }
 
 func TestReadIoddFiles(t *testing.T) {
 	var fileInfoSlice []os.FileInfo
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
-	removeFilesFromDirectory(relativeDirectoryPath)
-	var err error
+	err := removeFilesFromDirectory(relativeDirectoryPath)
+	if err != nil {
+		t.Errorf("removeFilesFromDirectory failed: %v", err)
+	}
 	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
 	// no changes in directory -> no new new files read
 	if err != nil {
@@ -70,6 +78,7 @@ func TestReadIoddFiles(t *testing.T) {
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
+	ioDeviceMap.Delete(ioddFilemapKey)
 	err = RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
@@ -81,21 +90,33 @@ func TestReadIoddFiles(t *testing.T) {
 		t.Error(err) // entry does not exist
 	}
 	// Remove file after test again
-	removeFilesFromDirectory(relativeDirectoryPath)
+	err = removeFilesFromDirectory(relativeDirectoryPath)
+	if err != nil {
+		t.Errorf("removeFilesFromDirectory failed: %v", err)
+	}
 }
 
 // Deletes complete directory and creates new one
-func removeFilesFromDirectory(relativeDirectoryPath string) {
+func removeFilesFromDirectory(relativeDirectoryPath string) error {
 	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
-	os.RemoveAll(absoluteDirectoryPath)
-	os.MkdirAll(absoluteDirectoryPath, 0755)
+	err := os.RemoveAll(absoluteDirectoryPath)
+	if err != nil {
+		return err
+	}
+	err = os.MkdirAll(absoluteDirectoryPath, 0755)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func TestUnmarshalIoddFiles(t *testing.T) {
 	// first remove all files from specified path
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
-	removeFilesFromDirectory(relativeDirectoryPath)
-
+	err := removeFilesFromDirectory(relativeDirectoryPath)
+	if err != nil {
+		t.Errorf("removeFilesFromDirectory failed: %v", err)
+	}
 	//Declare Variables
 	var fileInfoSlice []os.FileInfo
 
@@ -114,7 +135,6 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	var ioddFilemapKey_IFMiodd IoddFilemapKey
 	ioddFilemapKey_IFMiodd.DeviceId = 967
 	ioddFilemapKey_IFMiodd.VendorId = 310
-	var err error
 
 	// execute function and check for errors
 	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeDirectoryPath, fileInfoSlice)
