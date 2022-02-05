@@ -180,10 +180,6 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 
-	//Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
-	if !reflect.DeepEqual(len(ioDevice.ExternalTextCollection.PrimaryLanguage.Text), 177) {
-		t.Errorf("ExternalTexctCollectionLength: %v", len(ioDevice.ExternalTextCollection.PrimaryLanguage.Text))
-	}
 	//Id: should give out "TI_ProductName0"
 	if !reflect.DeepEqual(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id, "TI_ProductName0") {
 		t.Error()
