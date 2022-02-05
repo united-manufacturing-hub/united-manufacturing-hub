@@ -14,7 +14,6 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	removeFilesFromDirectory(relativeDirectoryPath)
 
 	//Declare Variables
-	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
 	var fileInfoSlice []os.FileInfo
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
@@ -27,14 +26,14 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 		t.Error(err)
 	}
 	// check if new entry exits for filemap Key
-	if _, ok := ioDeviceMap[ioddFilemapKey]; !ok {
+	if _, ok := ioDeviceMap.Load(ioddFilemapKey); !ok {
 		fmt.Println(ok)
 		t.Error(err) // entry does not exist
 	}
 	// check if fileInfoSlice is correctly changed
 	name := getNamesOfFileInfo(fileInfoSlice)
-	if !reflect.DeepEqual(name[0], "Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.0.1.xml") {
-		t.Error()
+	if !reflect.DeepEqual(name[0], "Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml") {
+		t.Error(name[0])
 	}
 	if len(name) != 1 {
 		t.Error()
