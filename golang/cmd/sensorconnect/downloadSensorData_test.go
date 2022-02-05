@@ -8,7 +8,7 @@ import (
 func TestCreateSensorDataRequestBody(t *testing.T) {
 	testOutputThreePorts := createSensorDataRequestBody(3)
 	fmt.Println(string(testOutputThreePorts[:]))
-	if testOutputThreePorts != nil {
+	if testOutputThreePorts == nil {
 		t.Error("err")
 	}
 }
