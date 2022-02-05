@@ -24,7 +24,7 @@ func TestFindNumberOfPorts(t *testing.T) {
 	}
 }
 
-// only works with functioning test device on correct ip: http://192.168.10.17
+/* only works with functioning test device on correct ip: http://192.168.10.17
 func TestGetPortModeMap(t *testing.T) {
 	var deviceInfo DiscoveredDeviceInformation
 	deviceInfo.ProductCode = "AL1350"
@@ -35,7 +35,7 @@ func TestGetPortModeMap(t *testing.T) {
 		t.Error("Problem with GetModeStatusStruct")
 	}
 }
-
+*/
 func TestExtractIntFromString(t *testing.T) {
 	testString := "/iolinkmaster/port[23]/mode"
 	answerInt, err := extractIntFromString(testString)
