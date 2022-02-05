@@ -56,7 +56,6 @@ func TestRequestSaveIoddFile(t *testing.T) {
 }
 
 func TestReadIoddFiles(t *testing.T) {
-	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
 	var fileInfoSlice []os.FileInfo
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
@@ -77,7 +76,7 @@ func TestReadIoddFiles(t *testing.T) {
 	}
 	_, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
 	// check if new entry exits for filemap Key
-	if _, ok := ioDeviceMap[ioddFilemapKey]; !ok {
+	if _, ok := ioDeviceMap.Load(ioddFilemapKey); !ok {
 		fmt.Println(ok)
 		t.Error(err) // entry does not exist
 	}
@@ -98,7 +97,6 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	removeFilesFromDirectory(relativeDirectoryPath)
 
 	//Declare Variables
-	ioDeviceMap := make(map[IoddFilemapKey]IoDevice)
 	var fileInfoSlice []os.FileInfo
 
 	var ioddFilemapKey_IFM IoddFilemapKey
@@ -142,8 +140,8 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	}
 
 	// Set io Device to ifm
-	ioDevice := ioDeviceMap[ioddFilemapKey_IFM]
-
+	ioDeviceInterface, _ := ioDeviceMap.Load(ioddFilemapKey_IFM)
+	ioDevice := ioDeviceInterface.(IoDevice)
 	//DeviceId: should give out 698
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 698) {
 		t.Error()
@@ -235,8 +233,8 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	}
 
 	// Set io Device to rexroth
-	ioDevice = ioDeviceMap[ioddFilemapKey_rexroth]
-
+	ioDeviceInterface, _ = ioDeviceMap.Load(ioddFilemapKey_rexroth)
+	ioDevice = ioDeviceInterface.(IoDevice)
 	//DeviceId: should give out 2228227
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 2228227) {
 		t.Error()
@@ -328,8 +326,8 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	}
 
 	// Set io Device to siemens
-	ioDevice = ioDeviceMap[ioddFilemapKey_siemens]
-
+	ioDeviceInterface, _ = ioDeviceMap.Load(ioddFilemapKey_siemens)
+	ioDevice = ioDeviceInterface.(IoDevice)
 	//DeviceId: should give out 278531
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 278531) {
 		t.Error()
@@ -422,8 +420,8 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	}
 
 	// Set io Device to rexroth
-	ioDevice = ioDeviceMap[ioddFilemapKey_IFMiodd]
-
+	ioDeviceInterface, _ = ioDeviceMap.Load(ioddFilemapKey_IFMiodd)
+	ioDevice = ioDeviceInterface.(IoDevice)
 	//DeviceId: should give out 967
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 967) {
 		t.Error()
