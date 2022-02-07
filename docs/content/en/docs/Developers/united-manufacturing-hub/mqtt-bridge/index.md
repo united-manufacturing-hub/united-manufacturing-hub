@@ -4,6 +4,7 @@ linkTitle: "mqtt-bridge"
 description: "This tool acts as an MQTT bridge to handle bad internet connections."
 aliases:
   - /docs/Developers/factorycube-edge/mqtt-bridge
+  - /docs/developers/factorycube-edge/mqtt-bridge
 ---
 
 ## Getting started

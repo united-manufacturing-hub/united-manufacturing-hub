@@ -6,7 +6,9 @@ weight: 5
 description: "The architecture of united-manufacturing-hub"
 aliases:
   - /docs/Developers/factorycube-edge
+  - /docs/developers/factorycube-edge
   - /docs/Developers/factorycube-server
+  - /docs/developers/factorycube-server
 ---
 
 {{< imgproc server Fit "1200x1200" >}}{{< /imgproc >}}

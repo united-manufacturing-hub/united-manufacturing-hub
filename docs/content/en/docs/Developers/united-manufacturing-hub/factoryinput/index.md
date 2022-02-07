@@ -4,6 +4,7 @@ linktitle: "factoryinput"
 description: Documentation of factoryinput
 aliases:
   - /docs/Developers/factorycube-server/factoryinput
+  - /docs/developers/factorycube-server/factoryinput
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
