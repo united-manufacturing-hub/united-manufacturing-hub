@@ -131,6 +131,10 @@ The first two nodes in this example will be the same for all other remaining exa
 
 ##### First node: MQTT-in
 
+{{< alert title="Note" color="warn">}}
+It can happen that you need to configure the username for the MQTT broker first. For this you should select a MQTT node and go into the settings of the MQTT broker. Then add there the username `ia_nodered` without any password.
+{{< /alert >}}
+
 {{< imgproc mqtt_in Fit "800x150" >}}{{< /imgproc >}}
 
 The topic structure is (see also the datamodel): `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
