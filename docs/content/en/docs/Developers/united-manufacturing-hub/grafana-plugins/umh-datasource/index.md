@@ -2,10 +2,9 @@
 title: "umh-datasource"
 linktitle: "umh-datasource"
 date: 2021-27-07
-description: >
-# United Manufacturing Hub - Datasource
+description: # United Manufacturing Hub - Datasource
 aliases:
-- /docs/Developers/factorycube-server/grafana-plugins/umh-datasource
+  - /docs/Developers/factorycube-server/grafana-plugins/umh-datasource
 ---
 
 ## What is United Manufacturing Hub Datasource?

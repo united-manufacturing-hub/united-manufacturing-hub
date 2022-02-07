@@ -3,7 +3,7 @@ title: "grafana-proxy"
 linktitle: "grafana-proxy"
 description: Documentation of grafana-proxy
 aliases:
-- /docs/Developers/factorycube-server/grafana-proxy
+  - /docs/Developers/factorycube-server/grafana-proxy
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
