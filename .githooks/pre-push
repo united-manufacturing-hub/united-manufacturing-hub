@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+"""
+This pre-push hooks check for validity of yaml and Chart.yaml files
+It requires yamllint and helm to be installed
+"""
+
+import functions.helper as helper
+helper.check_requirements()
+
+import functions.libhelmlint as libhelmlint
+import functions.libyamllint as libyamllint
+import functions.libdockerlint as libdockerlint
+import functions.libgovet as libgovet
+import functions.libstaticcheck as libstaticcheck
+
+if __name__ == '__main__':
+    failed = False
+    if libyamllint.LibYamlLint().run() != 0:
+        # failed = True
+        pass
+
+    if libhelmlint.LibHelmLint().run() != 0:
+        failed = True
+        pass
+
+    if libstaticcheck.LibStaticCheck().run() != 0:
+        failed = True
+
+    if libdockerlint.LibDockerLint().run() != 0:
+        failed = True
+
+    if libgovet.LibGoVet().run() != 0:
+        failed = True
+
+    if failed:
+        exit(1)

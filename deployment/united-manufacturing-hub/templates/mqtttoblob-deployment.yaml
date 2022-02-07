@@ -1,0 +1,107 @@
+---
+{{if or .Values.mqtttoblob.enabled .Values._000_commonConfig.blobstorage.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
+  labels:
+    {{- include "united-manufacturing-hub.labels.mqtttoblob" . | nindent 4}}
+  {{if .Values.mqtttoblob.annotations}}
+  annotations:
+    {{- toYaml .Values.mqtttoblob.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.mqtttoblob.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
+        {{- include "united-manufacturing-hub.labels.mqtttoblob" . | nindent 8}}
+    spec:
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
+          {{if .Values.mqtttoblob.image.tag}}
+          image: {{.Values.mqtttoblob.image.repository}}:{{.Values.mqtttoblob.image.tag}}
+          {{- else}}
+          image: {{.Values.mqtttoblob.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.mqtttoblob.image.pullPolicy}}
+          env:
+            - name: CERTIFICATE_NAME
+              value: NO_CERT
+
+            - name: LOGGING_LEVEL
+              value: "DEBUG"
+
+            - name: BROKER_PORT
+              value: "1883"
+
+            - name: BROKER_URL
+              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+
+            - name: BUCKET_NAME
+              value: "umh"
+
+            - name: MINIO_SECURE
+              value: 'True'
+
+            - name: TOPIC
+              value: "ia/+/+/+/productImage"
+            - name: SSL_CERT_FILE
+              value: /certs/kubernetes-ca.pem
+            - name: MINIO_URL
+              value: 'umhminio-hl.united-manufacturing-hub.svc.cluster.local:9000'
+
+            - name: MINIO_ACCESS_KEY
+              value: {{printf (index .Values "minio-operator" "tenants" 0).secrets.accessKey}}
+
+            - name: MINIO_SECRET_KEY
+              value: {{printf (index .Values "minio-operator" "tenants" 0).secrets.secretKey}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          # livenessProbe:
+          #   httpGet:
+          #     path: /live
+          #     port: 8086
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 5
+
+          # define a readiness probe that checks every 5 seconds
+          #readinessProbe:
+          #  httpGet:
+          #    path: /ready
+          #    port: 8086
+          #  periodSeconds: 5
+          resources: {}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+

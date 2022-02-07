@@ -1,0 +1,21 @@
+---
+{{if .Values._000_commonConfig.dataprocessing.nodered.enabled}}
+
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-nodered-claim
+  annotations:
+    "helm.sh/resource-policy": keep
+  labels:
+    {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
+    volume.alpha.kubernetes.io/storage-class: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{.Values.nodered.storageRequest}}
+
+{{end}}

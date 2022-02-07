@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"github.com/beeker1121/goque"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"math"
 	"time"
 )
 
@@ -61,6 +61,7 @@ func (r RecommendationDataHandler) Setup() {
 }
 func (r RecommendationDataHandler) process() {
 	var items []*goque.PriorityItem
+	loopsWithError := int64(0)
 	for !r.shutdown {
 		items = r.dequeue()
 		if len(items) == 0 {
@@ -87,7 +88,14 @@ func (r RecommendationDataHandler) process() {
 				ShutdownApplicationGraceful()
 			}
 		}
-		time.Sleep(time.Duration(math.Min(float64(100+100*len(faultyItems)), 1000)) * time.Millisecond)
+
+		if err != nil || len(faultyItems) > 0 {
+			loopsWithError += 1
+		} else {
+			loopsWithError = 0
+		}
+
+		internal.SleepBackedOff(loopsWithError, 10000*time.Nanosecond, 1000*time.Millisecond)
 	}
 }
 
@@ -126,7 +134,7 @@ func (r RecommendationDataHandler) Shutdown() (err error) {
 	return
 }
 
-func (r RecommendationDataHandler) EnqueueMQTT(_ string, _ string, _ string, payload []byte) {
+func (r RecommendationDataHandler) EnqueueMQTT(_ string, _ string, _ string, payload []byte, recursionDepth int64) {
 	zap.S().Debugf("[RecommendationDataHandler]")
 	var parsedPayload recommendationStruct
 

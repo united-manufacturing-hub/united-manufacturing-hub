@@ -1,0 +1,24 @@
+---
+{{if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled}}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-service
+  labels:
+    {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
+  {{if .Values.factoryinput.service.annotations}}
+  annotations:
+    {{- toYaml .Values.factoryinput.service.annotations | nindent 4}}
+  {{end}}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+     {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
+
+{{end}}

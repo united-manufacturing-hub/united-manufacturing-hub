@@ -63,3 +63,10 @@ PATCH version when you make backwards compatible bug fixes.
 For every sprint we increase the PATCH version.
 
 This is based on [Semantic Versioning](https://semver.org/).
+
+## Git hooks
+
+This project uses git hooks to verify its yaml files.
+Please install [Helm](https://helm.sh/docs/intro/install/) and [Yamllint](https://github.com/adrienverge/yamllint#installation).
+Afterwards set the git hook path for this repository by opening your favorite terminal and executing:
+```git config --local core.hooksPath .githooks/```

@@ -67,7 +67,6 @@ func main() {
 	PQUser := os.Getenv("POSTGRES_USER")
 	PQPassword := os.Getenv("POSTGRES_PASSWORD")
 	PWDBName := os.Getenv("POSTGRES_DATABASE")
-	SSLMODE := os.Getenv("POSTGRES_SSLMODE")
 
 	zap.S().Debugf("######################################################################################## Starting program..", PQHost, PQUser, PWDBName)
 
@@ -118,17 +117,9 @@ func main() {
 	}
 
 	zap.S().Debugf("Setting up database")
-	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, SSLMODE, dryRun)
+	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, dryRun)
 	// Setting up queues
-	zap.S().Debugf("Set	ting up queues")
-
-	for {
-		if IsPostgresSQLAvailable() {
-			break
-		}
-		zap.S().Debugf("Postgres not yet available")
-		time.Sleep(1 * time.Second)
-	}
+	zap.S().Debugf("Setting up queues")
 
 	addOrderHandler = *NewAddOrderHandler()
 	addParentToChildHandler = *NewAddParentToChildHandler()

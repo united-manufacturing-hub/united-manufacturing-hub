@@ -1,0 +1,11 @@
+---
+{{if .Values._000_commonConfig.dataprocessing.nodered.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
+data:
+  nodered-config: {{.Values.nodered.settings | toPrettyJson}}
+
+{{end}}

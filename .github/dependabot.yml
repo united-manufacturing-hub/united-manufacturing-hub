@@ -17,69 +17,93 @@ updates:
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: go"
 
   - package-ecosystem: "docker"
     directory: "/deployment/mqtt-bridge"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: docker"
 
   - package-ecosystem: "docker"
     directory: "/deployment/grafana-proxy"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: docker"
       
   - package-ecosystem: "docker"
     directory: "/deployment/factoryinsight"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: docker"
   
   - package-ecosystem: "docker"
     directory: "/deployment/mqtt-to-postgresql"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: docker"
   
   - package-ecosystem: "docker"
     directory: "/deployment/python-sdk"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: docker"
   
   - package-ecosystem: "docker"
     directory: "/deployment/sensorconnect"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: docker"
 
   - package-ecosystem: "pip"
     directory: "/mqtt-to-blob"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: python"
 
   - package-ecosystem: "pip"
     directory: "/cameraconnect"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: python"
       
   - package-ecosystem: "pip"
     directory: "/sensorconnect"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: python"
       
   - package-ecosystem: "pip"
     directory: "/python-sdk"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: python"
       
   - package-ecosystem: "pip"
     directory: "/barcodereader"
     target-branch: "staging"
     schedule:
       interval: "daily"
+    labels:
+      - "lang: python"

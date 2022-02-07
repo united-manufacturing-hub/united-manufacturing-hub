@@ -24,9 +24,9 @@ var statement *statementRegistry
 var isDryRun bool
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
-func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, sslmode string, dryRun string) {
+func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, dryRun string) {
 
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PWDBName, sslmode)
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require", PQHost, PQPort, PQUser, PQPassword, PWDBName)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
@@ -39,6 +39,16 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	} else {
 		isDryRun = false
 	}
+	for {
+		var ok bool
+		var perr error
+		if ok, perr = IsPostgresSQLAvailable(); ok {
+			break
+		}
+		zap.S().Warnf("Postgres not yet available: %s", perr)
+		time.Sleep(1 * time.Second)
+	}
+
 	db.SetMaxOpenConns(20)
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
@@ -66,14 +76,15 @@ func ValidateStruct(vstruct interface{}) bool {
 }
 
 //IsPostgresSQLAvailable returns if the database is reachable by PING command
-func IsPostgresSQLAvailable() bool {
+func IsPostgresSQLAvailable() (bool, error) {
+	var err error
 	if db != nil {
-		err := db.Ping()
+		err = db.Ping()
 		if err == nil {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, err
 }
 
 // ShutdownDB closes all database connections
@@ -183,7 +194,7 @@ func NewNullInt64(i int64) sql.NullInt64 {
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32, success bool) {
+func GetAssetID(customerID string, location string, assetID string, recursionDepth int64) (DBassetID uint32, success bool) {
 	zap.S().Debugf("[GetAssetID] customerID: %s, location: %s, assetID: %s", customerID, location, assetID)
 
 	success = false
@@ -204,8 +215,8 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 		case Unrecoverable:
 			PGErrorHandling("GetAssetID db.QueryRow()", err)
 		case TryAgain:
-			time.Sleep(1 * time.Second)
-			return GetAssetID(customerID, location, assetID)
+			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			return GetAssetID(customerID, location, assetID, recursionDepth+1)
 		case DiscardValue:
 			return 0, false
 
@@ -222,7 +233,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 }
 
 // GetProductID gets the productID for a asset and a productName from the database
-func GetProductID(DBassetID uint32, productName string) (productID int32, err error, success bool) {
+func GetProductID(DBassetID uint32, productName string, recursionDepth int64) (productID int32, err error, success bool) {
 	zap.S().Debugf("[GetProductID] DBassetID: %d, productName: %s", DBassetID, productName)
 	success = false
 
@@ -235,8 +246,8 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 		case Unrecoverable:
 			PGErrorHandling("GetProductID db.QueryRow()", err)
 		case TryAgain:
-			time.Sleep(1 * time.Second)
-			return GetProductID(DBassetID, productName)
+			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			return GetProductID(DBassetID, productName, recursionDepth+1)
 		case DiscardValue:
 			return
 		}
@@ -248,7 +259,7 @@ func GetProductID(DBassetID uint32, productName string) (productID int32, err er
 }
 
 // GetComponentID gets the componentID from the database
-func GetComponentID(assetID uint32, componentName string) (componentID int32, success bool) {
+func GetComponentID(assetID uint32, componentName string, recursionDepth int64) (componentID int32, success bool) {
 	zap.S().Debugf("[GetComponentID] assetID: %d, componentName: %s", assetID, componentName)
 	success = false
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
@@ -261,8 +272,8 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 		case Unrecoverable:
 			PGErrorHandling("GetComponentID() db.QueryRow()", err)
 		case TryAgain:
-			time.Sleep(1 * time.Second)
-			return GetComponentID(assetID, componentName)
+			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			return GetComponentID(assetID, componentName, recursionDepth+1)
 		case DiscardValue:
 			return 0, false
 		}
@@ -273,7 +284,7 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 	return
 }
 
-func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error, success bool) {
+func GetUniqueProductID(aid string, DBassetID uint32, recursionDepth int64) (uid uint32, err error, success bool) {
 	zap.S().Debugf("[GetUniqueProductID] aid: %s, DBassetID: %d", aid, DBassetID)
 	success = false
 	err = statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(aid, DBassetID).Scan(&uid)
@@ -286,8 +297,8 @@ func GetUniqueProductID(aid string, DBassetID uint32) (uid uint32, err error, su
 		case Unrecoverable:
 			PGErrorHandling("GetUniqueProductID db.QueryRow()", err)
 		case TryAgain:
-			time.Sleep(1 * time.Second)
-			GetUniqueProductID(aid, DBassetID)
+			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			GetUniqueProductID(aid, DBassetID, recursionDepth+1)
 		case DiscardValue:
 			return 0, err, false
 		}
@@ -370,7 +381,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 			ShutdownApplicationGraceful()
 		case TryAgain:
 			if recursionDepth < 10 {
-				time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+				internal.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
 				err = nil
 				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
 			} else {
@@ -402,7 +413,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 			ShutdownApplicationGraceful()
 		case TryAgain:
 			if recursionDepth < 10 {
-				time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+				internal.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
 				err = nil
 				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
 			} else {
@@ -501,6 +512,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem, recursion
 
 }
 
+//goland:noinspection SqlResolve
 func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
@@ -603,6 +615,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 	return
 }
 
+//goland:noinspection SqlResolve
 func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
@@ -713,6 +726,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 	return
 }
 
+//goland:noinspection SqlResolve,SqlResolve
 func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
@@ -814,6 +828,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 	return
 }
 
+//goland:noinspection SqlResolve
 func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*goque.PriorityItem, err error) {
 	if len(items) == 0 {
 		faultyItems = []*goque.PriorityItem{}
@@ -1050,7 +1065,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 						ShutdownApplicationGraceful()
 					case TryAgain:
 						if recursionDepth < 10 {
-							time.Sleep(time.Duration(10*recursionDepth) * time.Second)
+							internal.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
 							errx = nil
 							faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
 						}
@@ -1163,7 +1178,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem, recursionDept
 
 		var uid uint32
 		var success bool
-		uid, err, success = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		uid, err, success = GetUniqueProductID(pt.AID, pt.DBAssetID, 0)
 		if err != nil || !success {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found. AID: %s, DBAssetID %d", pt.AID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
@@ -1218,7 +1233,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem, recursi
 
 		var uid uint32
 		var success bool
-		uid, err, success = GetUniqueProductID(pt.AID, pt.DBAssetID)
+		uid, err, success = GetUniqueProductID(pt.AID, pt.DBAssetID, 0)
 		if err != nil || !success {
 			zap.S().Errorf("Stopped writing productTag in Database, uid not found. AID: %s, DBAssetID %d", pt.AID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)
@@ -1275,7 +1290,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem, recursi
 
 		var childUid uint32
 		var success bool
-		childUid, err, success = GetUniqueProductID(pt.ChildAID, pt.DBAssetID)
+		childUid, err, success = GetUniqueProductID(pt.ChildAID, pt.DBAssetID, 0)
 		if err != nil || !success {
 			zap.S().Errorf("Stopped writing addParentToChild in Database, childUid not found. ChildAID: %s, DBAssetID: %d", pt.ChildAID, pt.DBAssetID)
 			faultyItems = append(faultyItems, item)

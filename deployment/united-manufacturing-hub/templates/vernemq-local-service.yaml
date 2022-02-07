@@ -1,0 +1,25 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+  labels:
+    app.kubernetes.io/name: vernemq
+    app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
+    app.kubernetes.io/managed-by: helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8883
+      targetPort: 8883
+      protocol: TCP
+      name: mqtts
+    - port: 1883
+      targetPort: 1883
+      protocol: TCP
+      name: mqtt
+  selector:
+    app.kubernetes.io/name: vernemq
+    app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
+  {{end}}
