@@ -3,6 +3,8 @@ title: "factoryinput-panel"
 linktitle: "factoryinput-panel"
 date: 2021-27-07
 description: Documentation of factoryinput-panel
+aliases:
+- /docs/Developers/factorycube-server/grafana-plugins/umh-factoryinput-panel
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
@@ -12,7 +14,7 @@ UMH Factoryinput Panel allows to easily execute MQTT messages inside the UMH sta
 
 ## Requirements
  - A united manufacturing hub stack
- - External IP or URL of the [grafana-proxy](/docs/developers/factorycube-server/grafana-proxy) server.
+ - External IP or URL of the [grafana-proxy](/docs/developers/united-manufacturing-hub/grafana-proxy) server.
    - In most cases it is the same IP as your Grafana dashboard
 
 ## Installation

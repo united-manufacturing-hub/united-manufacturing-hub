@@ -5,6 +5,8 @@ linkTitle: "grafana-plugins"
 weight: 5 
 description: >
  Our grafana plugins
+aliases:
+  - /docs/Developers/factorycube-server/grafana-plugins
 ---
 
 ## umh-datasource

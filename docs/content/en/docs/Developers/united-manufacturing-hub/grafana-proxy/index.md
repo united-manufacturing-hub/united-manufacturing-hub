@@ -2,6 +2,8 @@
 title: "grafana-proxy"
 linktitle: "grafana-proxy"
 description: Documentation of grafana-proxy
+aliases:
+- /docs/Developers/factorycube-server/grafana-proxy
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
@@ -47,7 +49,7 @@ This chapter explains all used environment variables.
 
 **Possible values:** all DNS names or IP 
 
-**Example value:**  http://factorycube-server-factoryinput-service
+**Example value:**  http://united-manufacturing-hub-factoryinput-service
 
 ### FACTORYINSIGHT_BASE_URL
 
@@ -57,7 +59,7 @@ This chapter explains all used environment variables.
 
 **Possible values:** all DNS names or IP
 
-**Example value:**  http://factorycube-server-factoryinsight-service
+**Example value:**  http://united-manufacturing-hub-factoryinsight-service
 
 ### LOGGING_LEVEL
 
