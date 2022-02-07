@@ -1,6 +1,7 @@
 ---
 title: "Digital Shadow - track and trace"
 linkTitle: "Digital Shadow - track and trace"
+weight: 5
 description: >
   A system of features allowing tracking and tracing of individual parts through the production process. This article explains how it can be applied and how it works.
 ---

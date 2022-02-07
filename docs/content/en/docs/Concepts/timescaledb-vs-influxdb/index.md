@@ -2,6 +2,7 @@
 title: "Why we chose timescaleDB over InfluxDB"
 linkTitle: "timescaleDB vs InfluxDB"
 author: Jeremy Theocharis
+weight: 5
 description: >
     TimescaleDB is better suited for the Industrial IoT than InfluxDB, because it is stable, mature and failure resistant, it uses the very common SQL as a query language and you need a relational database for manufacturing anyway
 ---
