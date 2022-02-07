@@ -4,14 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/attribute"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
-	"github.com/omeid/pgerror"
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
-
 	"github.com/lib/pq"
+	"github.com/omeid/pgerror"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
@@ -43,13 +43,20 @@ func ShutdownDB() {
 }
 
 // PQErrorHandling logs and handles postgresql errors
-func PQErrorHandling(parentSpan opentracing.Span, sqlStatement string, err error, isCritical bool) {
+func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical bool) {
+	var span oteltrace.Span
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "PQErrorHandling", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
 
-	ext.DBStatement.Set(parentSpan, sqlStatement)
-	ext.DBType.Set(parentSpan, "sql")
-	ext.LogError(parentSpan, err)
-
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+	if span != nil {
+		span.SetAttributes(attribute.String("DBStatement", sqlStatement))
+		span.SetAttributes(attribute.String("DBType", "sql"))
+		span.SetAttributes(attribute.String("error", err.Error()))
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	if e := pgerror.ConnectionException(err); e != nil {
 		zap.S().Errorw("PostgreSQL failed: ConnectionException",
@@ -70,24 +77,22 @@ func PQErrorHandling(parentSpan opentracing.Span, sqlStatement string, err error
 }
 
 // GetLocations retrieves all locations for a given customer
-func GetLocations(parentSpan opentracing.Span, customerID string) (locations []string, error error) {
+func GetLocations(c *gin.Context, customerID string) (locations []string, error error) {
+	// OpenTelemetry tracing
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetLocations",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
-
-	span.SetTag("customerID", customerID)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetLocations", oteltrace.WithAttributes(attribute.String("customerID", customerID)))
+		defer span.End()
+	}
 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
 	rows, err := db.Query(sqlStatement, customerID)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -98,7 +103,7 @@ func GetLocations(parentSpan opentracing.Span, customerID string) (locations []s
 		var location string
 		err := rows.Scan(&location)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -106,7 +111,7 @@ func GetLocations(parentSpan opentracing.Span, customerID string) (locations []s
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -115,25 +120,27 @@ func GetLocations(parentSpan opentracing.Span, customerID string) (locations []s
 }
 
 // GetAssets retrieves all assets for a given customer
-func GetAssets(parentSpan opentracing.Span, customerID string, location string) (assets []string, error error) {
+func GetAssets(c *gin.Context, customerID string, location string) (assets []string, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetAssets",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetAssets", oteltrace.WithAttributes(attribute.String("customerID", customerID), attribute.String("location", location)))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+	}
 
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
 	rows, err := db.Query(sqlStatement, customerID, location)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -144,7 +151,7 @@ func GetAssets(parentSpan opentracing.Span, customerID string, location string) 
 		var asset string
 		err := rows.Scan(&asset)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -152,7 +159,7 @@ func GetAssets(parentSpan opentracing.Span, customerID string, location string) 
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -161,24 +168,26 @@ func GetAssets(parentSpan opentracing.Span, customerID string, location string) 
 }
 
 // GetComponents retrieves all assets for a given customer
-func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []string, error error) {
+func GetComponents(c *gin.Context, assetID uint32) (components []string, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetComponents",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetComponents", oteltrace.WithAttributes(attribute.Int("assetID", int(assetID))))
+		defer span.End()
+	}
 
-	span.SetTag("assetID", assetID)
+	if span != nil {
+		span.SetAttributes(attribute.Int("assetID", int(assetID)))
+	}
 
 	sqlStatement := `SELECT distinct(componentname) FROM componentTable WHERE asset_id=$1;`
 
 	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -189,7 +198,7 @@ func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []st
 		var component string
 		err := rows.Scan(&component)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -197,7 +206,7 @@ func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []st
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -206,21 +215,22 @@ func GetComponents(parentSpan opentracing.Span, assetID uint32) (components []st
 }
 
 // GetStatesRaw gets all states for a specific asset in a timerange. It returns an array of datamodel.StateEntry
-func GetStatesRaw(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
+func GetStatesRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetStatesRaw",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetStatesRaw")
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -251,7 +261,7 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		} else {
@@ -270,10 +280,10 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 
 		rows, err := db.Query(sqlStatement, assetID, from, to)
 		if err == sql.ErrNoRows {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -286,7 +296,7 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 
 			err := rows.Scan(&timestamp, &dataPoint)
 			if err != nil {
-				PQErrorHandling(span, sqlStatement, err, false)
+				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
 				return
 			}
@@ -301,7 +311,7 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -316,21 +326,22 @@ func GetStatesRaw(parentSpan opentracing.Span, customerID string, location strin
 }
 
 // GetShiftsRaw gets all shifts for a specific asset in a timerange in a raw format
-func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
+func GetShiftsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetShiftsRaw",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetShiftsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -376,7 +387,7 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 			}
 			data = append(data, fullRow)
 		} else if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		} else {
@@ -407,10 +418,10 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 
 		rows, err := db.Query(sqlStatement, assetID, from, to) //OFFSET to prevent entering first result twice
 		if err == sql.ErrNoRows {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -421,7 +432,7 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 
 			err := rows.Scan(&timestampStart, &timestampEnd, &shiftType)
 			if err != nil {
-				PQErrorHandling(span, sqlStatement, err, false)
+				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
 				return
 			}
@@ -434,7 +445,7 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -458,24 +469,25 @@ func GetShiftsRaw(parentSpan opentracing.Span, customerID string, location strin
 }
 
 // GetShifts gets all shifts for a specific asset in a timerange
-func GetShifts(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+func GetShifts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetShifts",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetShifts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "shiftName"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-	configuration, err := GetCustomerConfiguration(span, customerID)
+	configuration, err := GetCustomerConfiguration(c, customerID)
 	if err != nil {
 		zap.S().Errorw("GetCustomerConfiguration failed",
 			"error", err,
@@ -484,7 +496,7 @@ func GetShifts(parentSpan opentracing.Span, customerID string, location string, 
 		return
 	}
 
-	rawShifts, err := GetShiftsRaw(span, customerID, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customerID, location, asset, from, to, configuration)
 	if err != nil {
 		zap.S().Errorw("GetShiftsRaw failed",
 			"error", err,
@@ -507,22 +519,24 @@ func GetShifts(parentSpan opentracing.Span, customerID string, location string, 
 }
 
 // GetProcessValue gets all data for specific valueName and for a specific asset in a timerange
-func GetProcessValue(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
+func GetProcessValue(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetProcessValue",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetProcessValue", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-	span.SetTag("valueName", valueName)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.String("valueName", valueName))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -535,10 +549,10 @@ func GetProcessValue(parentSpan opentracing.Span, customerID string, location st
 	sqlStatement := `SELECT timestamp, value FROM processValueTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
 	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -552,7 +566,7 @@ func GetProcessValue(parentSpan opentracing.Span, customerID string, location st
 
 		err := rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -561,7 +575,7 @@ func GetProcessValue(parentSpan opentracing.Span, customerID string, location st
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -571,20 +585,22 @@ func GetProcessValue(parentSpan opentracing.Span, customerID string, location st
 }
 
 // GetCurrentState gets the latest state of an asset
-func GetCurrentState(parentSpan opentracing.Span, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
+func GetCurrentState(c *gin.Context, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetCurrentState",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetCurrentState", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("keepStatesInteger", keepStatesInteger)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -593,7 +609,7 @@ func GetCurrentState(parentSpan opentracing.Span, customerID string, location st
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "state"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	configuration, err := GetCustomerConfiguration(span, customerID)
+	configuration, err := GetCustomerConfiguration(c, customerID)
 	if err != nil {
 		zap.S().Errorw("GetCustomerConfiguration failed",
 			"error", err,
@@ -608,10 +624,10 @@ func GetCurrentState(parentSpan opentracing.Span, customerID string, location st
 	sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 ORDER BY timestamp DESC LIMIT 1;`
 	err = db.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -623,7 +639,7 @@ func GetCurrentState(parentSpan opentracing.Span, customerID string, location st
 		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
-		fullRow := []interface{}{ConvertStateToString(span, dataPoint, 0, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{ConvertStateToString(c, dataPoint, 0, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -631,19 +647,21 @@ func GetCurrentState(parentSpan opentracing.Span, customerID string, location st
 }
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
-func GetDataTimeRangeForAsset(parentSpan opentracing.Span, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
+func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetDataTimeRangeForAsset",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetDataTimeRangeForAsset", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -661,10 +679,10 @@ func GetDataTimeRangeForAsset(parentSpan opentracing.Span, customerID string, lo
 
 	err = db.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -685,15 +703,14 @@ func GetDataTimeRangeForAsset(parentSpan opentracing.Span, customerID string, lo
 }
 
 // GetCountsRaw gets all states for a specific asset in a timerange
-func GetCountsRaw(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.CountEntry, error error) {
+func GetCountsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.CountEntry, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetCountsRaw",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetCountsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -715,10 +732,10 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 		rows, err := db.Query(sqlStatement, assetID, from, to)
 		if err == sql.ErrNoRows {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -732,7 +749,7 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 
 			err := rows.Scan(&timestamp, &dataPoint, &dataPoint2)
 			if err != nil {
-				PQErrorHandling(span, sqlStatement, err, false)
+				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
 				return
 			}
@@ -745,7 +762,7 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -759,19 +776,18 @@ func GetCountsRaw(parentSpan opentracing.Span, customerID string, location strin
 }
 
 // GetCounts gets all states for a specific asset in a timerange
-func GetCounts(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+func GetCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetCounts",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	JSONColumnName2 := customerID + "-" + location + "-" + asset + "-" + "scrap"
 	data.ColumnNames = []string{JSONColumnName, JSONColumnName2, "timestamp"}
 
-	countSlice, err := GetCountsRaw(span, customerID, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customerID, location, asset, from, to)
 	if err != nil {
 		zap.S().Errorf("GetCountsRaw failed", err)
 		error = err
@@ -790,18 +806,17 @@ func GetCounts(parentSpan opentracing.Span, customerID string, location string, 
 //TODO test GetTotalCounts
 
 // GetTotalCounts gets the sum of produced units for a specific asset in a timerange
-func GetTotalCounts(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+func GetTotalCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetTotalCounts",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetTotalCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	countSlice, err := GetCountsRaw(span, customerID, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customerID, location, asset, from, to)
 	if err != nil {
 		zap.S().Errorf("GetCountsRaw failed", err)
 		error = err
@@ -822,22 +837,24 @@ func GetTotalCounts(parentSpan opentracing.Span, customerID string, location str
 }
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
-func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+func GetProductionSpeed(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetProductionSpeed",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetProductionSpeed", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-	span.SetTag("aggregatedInterval", aggregatedInterval)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -858,10 +875,10 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 	rows, err := db.Query(sqlStatement, assetID, from, to)
 
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -877,7 +894,7 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 
 		err := rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -906,7 +923,7 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -915,22 +932,24 @@ func GetProductionSpeed(parentSpan opentracing.Span, customerID string, location
 }
 
 // GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
-func GetQualityRate(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+func GetQualityRate(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetProductionSpeed",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetQualityRate", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-	span.SetTag("aggregatedInterval", aggregatedInterval)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -954,10 +973,10 @@ func GetQualityRate(parentSpan opentracing.Span, customerID string, location str
 	rows, err := db.Query(sqlStatement, assetID, from, to)
 
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -973,7 +992,7 @@ func GetQualityRate(parentSpan opentracing.Span, customerID string, location str
 
 		err := rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1002,7 +1021,7 @@ func GetQualityRate(parentSpan opentracing.Span, customerID string, location str
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1011,12 +1030,12 @@ func GetQualityRate(parentSpan opentracing.Span, customerID string, location str
 }
 
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
-func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetCustomerConfiguration",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetCustomerConfiguration", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -1068,7 +1087,7 @@ func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (c
 		configuration.LanguageCode = 0
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1084,17 +1103,19 @@ func GetCustomerConfiguration(parentSpan opentracing.Span, customerID string) (c
 }
 
 // GetRecommendations gets all current recommendations for a specific asset
-func GetRecommendations(parentSpan opentracing.Span, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
+func GetRecommendations(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetRecommendations",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetRecommendations", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
 	data.ColumnNames = []string{"timestamp", "recommendationType", "recommendationValues", "recommendationTextEN", "recommendationTextDE", "diagnoseTextEN", "diagnoseTextDE"}
 
@@ -1109,10 +1130,10 @@ func GetRecommendations(parentSpan opentracing.Span, customerID string, location
 	// AND (timestamp=) used to only get the recommendations from the latest calculation batch (avoid showing old ones)
 	rows, err := db.Query(sqlStatement, likeString)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1130,7 +1151,7 @@ func GetRecommendations(parentSpan opentracing.Span, customerID string, location
 
 		err := rows.Scan(&timestamp, &recommendationType, &recommendationValues, &recommendationTextEN, &recommendationTextDE, &diagnoseTextEN, &diagnoseTextDE)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1141,7 +1162,7 @@ func GetRecommendations(parentSpan opentracing.Span, customerID string, location
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1150,19 +1171,21 @@ func GetRecommendations(parentSpan opentracing.Span, customerID string, location
 }
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
-func GetMaintenanceActivities(parentSpan opentracing.Span, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
+func GetMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetMaintenanceActivities",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1178,10 +1201,10 @@ func GetMaintenanceActivities(parentSpan opentracing.Span, customerID string, lo
 
 	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1196,7 +1219,7 @@ func GetMaintenanceActivities(parentSpan opentracing.Span, customerID string, lo
 
 		err := rows.Scan(&componentName, &activityType, &timestamp)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1205,7 +1228,7 @@ func GetMaintenanceActivities(parentSpan opentracing.Span, customerID string, lo
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1214,21 +1237,23 @@ func GetMaintenanceActivities(parentSpan opentracing.Span, customerID string, lo
 }
 
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
-func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+func GetUniqueProducts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetUniqueProducts",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetUniqueProducts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1245,10 +1270,10 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 
 	rows, err := db.Query(sqlStatement, assetID, from, to)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1266,7 +1291,7 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 
 		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1286,7 +1311,7 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1301,18 +1326,21 @@ func GetUniqueProducts(parentSpan opentracing.Span, customerID string, location 
 }
 
 // GetUpcomingTimeBasedMaintenanceActivities returns UpcomingTimeBasedMaintenanceActivities array for an asset
-func GetUpcomingTimeBasedMaintenanceActivities(parentSpan opentracing.Span, customerID string, location string, asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetUpcomingTimeBasedMaintenanceActivities",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetUpcomingTimeBasedMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1346,10 +1374,10 @@ func GetUpcomingTimeBasedMaintenanceActivities(parentSpan opentracing.Span, cust
 
 	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1368,7 +1396,7 @@ func GetUpcomingTimeBasedMaintenanceActivities(parentSpan opentracing.Span, cust
 
 		err := rows.Scan(&ComponentName, &IntervallInHours, &ActivityType, &LatestActivity, &NextActivity, &Duration)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1387,20 +1415,23 @@ func GetUpcomingTimeBasedMaintenanceActivities(parentSpan opentracing.Span, cust
 }
 
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
-func GetOrdersRaw(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersRaw, error error) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetOrdersRaw",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func GetOrdersRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersRaw, error error) {
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetOrdersRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1423,10 +1454,10 @@ func GetOrdersRaw(parentSpan opentracing.Span, customerID string, location strin
 
 	rows, err := db.Query(sqlStatement, assetID, from, to)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1446,7 +1477,7 @@ func GetOrdersRaw(parentSpan opentracing.Span, customerID string, location strin
 
 		err := rows.Scan(&orderName, &targetUnits, &beginTimestamp, &endTimestamp, &productName, &timePerUnitInSeconds)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1464,19 +1495,21 @@ func GetOrdersRaw(parentSpan opentracing.Span, customerID string, location strin
 }
 
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
-func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, location string, asset string) (data []string, error error) {
+func GetDistinctProcessValues(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetDistinctProcessValues",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetDistinctProcessValues", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1485,10 +1518,10 @@ func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, lo
 	sqlStatement := "SELECT distinct valueName FROM processValueTable WHERE asset_id=$1;"
 	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1500,7 +1533,7 @@ func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, lo
 
 		err := rows.Scan(&currentString)
 		if err != nil {
-			PQErrorHandling(span, sqlStatement, err, false)
+			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
 			return
 		}
@@ -1510,7 +1543,7 @@ func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, lo
 
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1519,12 +1552,12 @@ func GetDistinctProcessValues(parentSpan opentracing.Span, customerID string, lo
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(parentSpan opentracing.Span, customerID string, location string, assetID string) (DBassetID uint32, error error) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetAssetID",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func GetAssetID(c *gin.Context, customerID string, location string, assetID string) (DBassetID uint32, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetAssetID", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -1537,11 +1570,11 @@ func GetAssetID(parentSpan opentracing.Span, customerID string, location string,
 	sqlStatement := "SELECT id FROM assetTable WHERE assetid=$1 AND location=$2 AND customer=$3;"
 	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = errors.New("Asset does not exist")
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatement, err, false)
+		PQErrorHandling(c, sqlStatement, err, false)
 		error = err
 		return
 	}
@@ -1554,22 +1587,24 @@ func GetAssetID(parentSpan opentracing.Span, customerID string, location string,
 }
 
 // GetUniqueProductsWithTags gets all unique products with tags and parents for a specific asset in a specific time range
-func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, location string, asset string,
+func GetUniqueProductsWithTags(c *gin.Context, customerID string, location string, asset string,
 	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetUniqueProductsWithTags",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetUniqueProductsWithTags", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
-	assetID, err := GetAssetID(span, customerID, location, asset)
+	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
 		return
@@ -1609,10 +1644,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatementData, err, false)
+		PQErrorHandling(c, sqlStatementData, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementData, err, false)
+		PQErrorHandling(c, sqlStatementData, err, false)
 		error = err
 		return
 	}
@@ -1621,10 +1656,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	rowsStrings, err := db.Query(sqlStatementDataStrings, assetID, from, to)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		PQErrorHandling(c, sqlStatementDataStrings, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		PQErrorHandling(c, sqlStatementDataStrings, err, false)
 		error = err
 		return
 	}
@@ -1633,10 +1668,10 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 	rowsInheritance, err := db.Query(sqlStatementDataInheritance, assetID, from, to)
 	if err == sql.ErrNoRows {
-		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
 		error = err
 		return
 	}
@@ -1663,7 +1698,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
-			PQErrorHandling(span, sqlStatementData, err, false)
+			PQErrorHandling(c, sqlStatementData, err, false)
 			error = err
 			return
 		}
@@ -1704,7 +1739,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatementData, err, false)
+		PQErrorHandling(c, sqlStatementData, err, false)
 		error = err
 		return
 	}
@@ -1718,7 +1753,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 		err := rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
 		if err != nil {
-			PQErrorHandling(span, sqlStatementData, err, false)
+			PQErrorHandling(c, sqlStatementData, err, false)
 			error = err
 			return
 		}
@@ -1742,7 +1777,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 	err = rowsStrings.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatementDataStrings, err, false)
+		PQErrorHandling(c, sqlStatementDataStrings, err, false)
 		error = err
 		return
 	}
@@ -1756,7 +1791,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 
 		err := rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
 		if err != nil {
-			PQErrorHandling(span, sqlStatementData, err, false)
+			PQErrorHandling(c, sqlStatementData, err, false)
 			error = err
 			return
 		}
@@ -1775,7 +1810,7 @@ func GetUniqueProductsWithTags(parentSpan opentracing.Span, customerID string, l
 	}
 	err = rowsInheritance.Err()
 	if err != nil {
-		PQErrorHandling(span, sqlStatementDataInheritance, err, false)
+		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
 		error = err
 		return
 	}

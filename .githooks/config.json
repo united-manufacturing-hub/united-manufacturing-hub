@@ -1,0 +1,17 @@
+{
+  "yamllint": {
+    "allow": [
+      "comments-indentation",
+      "line-length",
+      "syntax",
+      "empty-lines"
+    ],
+    "warn": [
+      "line-length",
+      "comments",
+      "empty-lines",
+      "trailing-spaces",
+      "indentation"
+    ]
+  }
+}

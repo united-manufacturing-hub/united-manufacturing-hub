@@ -1,0 +1,19 @@
+---
+{{if or .Values.mqttbridge.enabled .Values._000_commonConfig.mqttBridge.enabled}}
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-claim
+  annotations:
+    "helm.sh/resource-policy": keep
+  labels:
+    {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 4}}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{.Values.mqttbridge.storageRequest}}
+
+{{end}}

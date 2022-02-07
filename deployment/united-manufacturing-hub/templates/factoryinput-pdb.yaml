@@ -1,0 +1,16 @@
+---
+{{if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled}}
+{{if .Values.factoryinput.pdb.enabled}}
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-pdb
+spec:
+  minAvailable: {{.Values.factoryinput.pdb.minAvailable}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+
+{{end}}
+{{end}}

@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/attribute"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"log"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 
@@ -27,7 +28,12 @@ type ChannelResult struct {
 }
 
 // ConvertStateToString converts a state in integer format to a human readable string
-func ConvertStateToString(parentSpan opentracing.Span, state int, languageCode int, configuration datamodel.CustomerConfiguration) (stateString string) {
+func ConvertStateToString(c *gin.Context, state int, languageCode int, configuration datamodel.CustomerConfiguration) (stateString string) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "ConvertStateToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
+
 	languageCode = configuration.LanguageCode
 
 	stateString = datamodel.ConvertStateToString(state, languageCode)
@@ -36,25 +42,35 @@ func ConvertStateToString(parentSpan opentracing.Span, state int, languageCode i
 }
 
 // BusinessLogicErrorHandling logs and handles errors during the business logic
-func BusinessLogicErrorHandling(parentSpan opentracing.Span, operationName string, err error, isCritical bool) {
+func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error, isCritical bool) {
 
-	ext.LogError(parentSpan, err)
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "BusinessLogicErrorHandling", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+		span.SetAttributes(attribute.String("error", err.Error()))
+
+		traceID = span.SpanContext().SpanID().String()
+
+	}
 
 	zap.S().Errorw("Error in business logic. ",
 		"operation name", operationName,
 		"error", err,
 		"traceID", traceID,
 	)
-
 	if isCritical {
 		ShutdownApplicationGraceful()
 	}
 }
 
 // ConvertActivityToString converts a maintenance activity in integer format to a human readable string
-func ConvertActivityToString(parentSpan opentracing.Span, activity int, configuration datamodel.CustomerConfiguration) (activityString string) {
+func ConvertActivityToString(c *gin.Context, activity int, configuration datamodel.CustomerConfiguration) (activityString string) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "ConvertActivityToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	languageCode := configuration.LanguageCode
 
 	if languageCode == 0 {
@@ -81,12 +97,11 @@ func ConvertActivityToString(parentSpan opentracing.Span, activity int, configur
 }
 
 // calculateDurations returns an array with the duration between the states.
-func calculateDurations(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, returnChannel chan ChannelResult) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"calculateDurations",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, returnChannel chan ChannelResult) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "calculateDurations", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Prepare ChannelResult
 	var durations []float64
@@ -107,7 +122,7 @@ func calculateDurations(parentSpan opentracing.Span, temporaryDatapoints []datam
 		if timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0 {
 
 			err = errors.New("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0 detected")
-			BusinessLogicErrorHandling(parentSpan, "calculateDurations", err, false)
+			BusinessLogicErrorHandling(c, "calculateDurations", err, false)
 			zap.S().Errorw("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0",
 				"timestampAfterCurrentOne.Sub(timestampCurrent).Seconds()", timestampAfterCurrentOne.Sub(timestampCurrent).Seconds(),
 				"timestampAfterCurrentOne", timestampAfterCurrentOne,
@@ -125,12 +140,12 @@ func calculateDurations(parentSpan opentracing.Span, temporaryDatapoints []datam
 	returnChannel <- ChannelResult
 }
 
-func transformToStateArray(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, returnChannel chan ChannelResult) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"transformToStateArray",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, returnChannel chan ChannelResult) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "transformToStateArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 
 	// Prepare ChannelResult
 	var stateArray []int
@@ -148,13 +163,12 @@ func transformToStateArray(parentSpan opentracing.Span, temporaryDatapoints []da
 	returnChannel <- ChannelResult
 }
 
-func getTotalDurationForState(parentSpan opentracing.Span, durationArray []float64, stateArray []int, state int, returnChannel chan ChannelResult) {
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"getTotalDurationForState",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArray []int, state int, returnChannel chan ChannelResult) {
 
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getTotalDurationForState", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Prepare ChannelResult
 	var totalDuration float64
 	var err error
@@ -167,7 +181,7 @@ func getTotalDurationForState(parentSpan opentracing.Span, durationArray []float
 			totalDuration += durationArray[index]
 			if durationArray[index] < 0 {
 				err = fmt.Errorf("durationArray[index] < 0: %f", durationArray[index])
-				BusinessLogicErrorHandling(parentSpan, "getTotalDurationForState", err, false)
+				BusinessLogicErrorHandling(c, "getTotalDurationForState", err, false)
 			}
 		}
 	}
@@ -183,14 +197,11 @@ func getTotalDurationForState(parentSpan opentracing.Span, durationArray []float
 	returnChannel <- ChannelResult
 }
 
-func addUnknownMicrostops(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"addUnknownMicrostops",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func addUnknownMicrostops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "addUnknownMicrostops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// Loop through all datapoints
@@ -359,8 +370,12 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 
 // calculatateLowSpeedStates splits up a "Running" state into multiple states either "Running" or "LowSpeed"
 // additionally it caches it results. See also cache.go
-func calculatateLowSpeedStates(parentSpan opentracing.Span, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "calculatateLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
 	if cacheHit {
@@ -412,17 +427,11 @@ func calculatateLowSpeedStates(parentSpan opentracing.Span, assetID uint32, coun
 }
 
 // Note: assetID is only used for caching
-func addLowSpeedStates(parentSpan opentracing.Span, assetID uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil {
-		span = opentracing.StartSpan(
-			"addLowSpeedStates",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
-	} else {
-		span = nil
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "addLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// actual function start
@@ -452,7 +461,7 @@ func addLowSpeedStates(parentSpan opentracing.Span, assetID uint32, stateArray [
 		averageProductionSpeedPerMinute := getProducedPiecesFromCountSlice(countSlice, timestamp, followingDataPoint.Timestamp) / stateDuration
 
 		if averageProductionSpeedPerMinute < configuration.LowSpeedThresholdInPcsPerHour/60 {
-			rows, err := calculatateLowSpeedStates(span, assetID, countSlice, timestamp, followingDataPoint.Timestamp, configuration)
+			rows, err := calculatateLowSpeedStates(c, assetID, countSlice, timestamp, followingDataPoint.Timestamp, configuration)
 			if err != nil {
 				zap.S().Errorf("calculatateLowSpeedStates failed", err)
 				error = err
@@ -474,17 +483,12 @@ func addLowSpeedStates(parentSpan opentracing.Span, assetID uint32, stateArray [
 	return
 }
 
-func specifySmallNoShiftsAsBreaks(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"specifySmallNoShiftsAsBreaks",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "specifySmallNoShiftsAsBreaks", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -520,14 +524,11 @@ func specifySmallNoShiftsAsBreaks(parentSpan opentracing.Span, stateArray []data
 	return
 }
 
-func removeSmallRunningStates(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"removeSmallRunningStates",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "removeSmallRunningStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// Loop through all datapoints
@@ -565,14 +566,11 @@ func removeSmallRunningStates(parentSpan opentracing.Span, stateArray []datamode
 	return
 }
 
-func removeSmallStopStates(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"removeSmallStopStates",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "removeSmallStopStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// Loop through all datapoints
@@ -610,14 +608,11 @@ func removeSmallStopStates(parentSpan opentracing.Span, stateArray []datamodel.S
 	return
 }
 
-func combineAdjacentStops(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"combineAdjacentStops",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "combineAdjacentStops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// Loop through all datapoints
@@ -659,16 +654,12 @@ func combineAdjacentStops(parentSpan opentracing.Span, stateArray []datamodel.St
 	return
 }
 
-func specifyUnknownStopsWithFollowingStopReason(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"specifyUnknownStopsWithFollowingStopReason",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
-	}
+func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "specifyUnknownStopsWithFollowingStopReason", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -762,26 +753,26 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from time.Time, 
 }
 
 // GetOrdersTimeline gets all orders for a specific asset in a timerange for a timeline
-func GetOrdersTimeline(parentSpan opentracing.Span, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	// Jaeger tracing
-	span := opentracing.StartSpan(
-		"GetOrdersTimeline",
-		opentracing.ChildOf(parentSpan.Context()))
-	defer span.Finish()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "GetOrdersTimeline", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 
-	span.SetTag("customerID", customerID)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+
+	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	//configuration := getCustomerConfiguration(span, customerID, location, asset)
 
-	rawOrders, err := GetOrdersRaw(span, customerID, location, asset, from, to)
+	rawOrders, err := GetOrdersRaw(c, customerID, location, asset, from, to)
 	if err != nil {
 		zap.S().Errorf("GetOrdersRaw failed", err)
 		error = err
@@ -799,14 +790,11 @@ func GetOrdersTimeline(parentSpan opentracing.Span, customerID string, location 
 
 }
 
-func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"calculateOrderInformation",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "calculateOrderInformation", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	data.ColumnNames = []string{
@@ -862,14 +850,14 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 			actualTimePerUnit = int(actualDuration / int(actualUnits))
 		}
 
-		processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, rawOrders, from, to, configuration)
+		processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, rawOrders, from, to, configuration)
 		if err != nil {
 			errReturn = err
 			return
 		}
 
 		// data.ColumnNames = []string{"state", "duration"}
-		stopParetos, err := CalculateStopParetos(span, processedStates, from, to, true, true, configuration)
+		stopParetos, err := CalculateStopParetos(c, processedStates, from, to, true, true, configuration)
 		if err != nil {
 			errReturn = err
 			return
@@ -993,7 +981,13 @@ func calculateOrderInformation(parentSpan opentracing.Span, rawOrders []datamode
 }
 
 // processStatesOptimized splits up arrays efficiently for better caching
-func processStatesOptimized(parentSpan opentracing.Span, assetID uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processStatesOptimized", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
+
 	var processedStatesTemp []datamodel.StateEntry
 
 	for current := from; current != to; {
@@ -1001,14 +995,14 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID uint32, stateAr
 		currentTo := current.AddDate(0, 0, 1)
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
-			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
+			processedStatesTemp, err = processStates(c, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
 				return
 			}
 			current = to
 		} else { //otherwise, calculate for entire time range
-			processedStatesTemp, err = processStates(parentSpan, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			processedStatesTemp, err = processStates(c, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
 
@@ -1024,7 +1018,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID uint32, stateAr
 	}
 
 	// resolving issue #17 (States change depending on the zoom level during time ranges longer than a day)
-	processedStateArray, err = combineAdjacentStops(parentSpan, processedStateArray, configuration)
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration)
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1048,7 +1042,7 @@ func processStatesOptimized(parentSpan opentracing.Span, assetID uint32, stateAr
 
 // processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent)
 // and calculating new ones (e.g. microstops)
-func processStates(parentSpan opentracing.Span,
+func processStates(c *gin.Context,
 	assetID uint32,
 	stateArray []datamodel.StateEntry,
 	rawShifts []datamodel.ShiftEntry,
@@ -1062,13 +1056,10 @@ func processStates(parentSpan opentracing.Span,
 	err error,
 ) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"processStates",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
@@ -1078,7 +1069,9 @@ func processStates(parentSpan opentracing.Span,
 	processedStateArray, cacheHit = internal.GetProcessStatesFromCache(key)
 	if cacheHit {
 		//zap.S().Debugf("processStates CacheHit")
-		span.SetTag("CacheHit", true)
+		if span != nil {
+			span.SetAttributes(attribute.Bool("CacheHit", true))
+		}
 		return
 	}
 
@@ -1087,67 +1080,67 @@ func processStates(parentSpan opentracing.Span,
 	countSlice = removeUnnecessaryElementsFromCountSlice(countSlice, from, to)
 	orderArray = removeUnnecessaryElementsFromOrderArray(orderArray, from, to)
 
-	processedStateArray, err = removeSmallRunningStates(span, processedStateArray, configuration)
+	processedStateArray, err = removeSmallRunningStates(c, processedStateArray, configuration)
 	if err != nil {
 		zap.S().Errorf("removeSmallRunningStates failed", err)
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
 	}
 
-	processedStateArray, err = removeSmallStopStates(span, processedStateArray, configuration)
+	processedStateArray, err = removeSmallStopStates(c, processedStateArray, configuration)
 	if err != nil {
 		zap.S().Errorf("removeSmallStopStates failed", err)
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
 	}
 
-	processedStateArray, err = addNoShiftsToStates(span, rawShifts, processedStateArray, from, to, configuration)
+	processedStateArray, err = addNoShiftsToStates(c, rawShifts, processedStateArray, from, to, configuration)
 	if err != nil {
 		zap.S().Errorf("addNoShiftsToStates failed", err)
 		return
 	}
 
-	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(span, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
+	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(c, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
 	if err != nil {
 		zap.S().Errorf("specifyUnknownStopsWithFollowingStopReason failed", err)
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(span, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
 	}
 
-	processedStateArray, err = addLowSpeedStates(span, assetID, processedStateArray, countSlice, configuration)
+	processedStateArray, err = addLowSpeedStates(c, assetID, processedStateArray, countSlice, configuration)
 	if err != nil {
 		zap.S().Errorf("addLowSpeedStates failed", err)
 		return
 	}
 
-	processedStateArray, err = addUnknownMicrostops(span, processedStateArray, configuration)
+	processedStateArray, err = addUnknownMicrostops(c, processedStateArray, configuration)
 	if err != nil {
 		zap.S().Errorf("addUnknownMicrostops failed", err)
 		return
 	}
 
-	processedStateArray, err = automaticallyIdentifyChangeovers(span, processedStateArray, orderArray, from, to, configuration)
+	processedStateArray, err = automaticallyIdentifyChangeovers(c, processedStateArray, orderArray, from, to, configuration)
 	if err != nil {
 		zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
 		return
 	}
 
-	processedStateArray, err = specifySmallNoShiftsAsBreaks(span, processedStateArray, configuration)
+	processedStateArray, err = specifySmallNoShiftsAsBreaks(c, processedStateArray, configuration)
 	if err != nil {
 		zap.S().Errorf("specifySmallNoShiftsAsBreaks failed", err)
 		return
@@ -1176,23 +1169,19 @@ func debugCheckForUnorderedStates(states []datamodel.StateEntry) {
 	}
 }
 
-func getParetoArray(parentSpan opentracing.Span, durationArray []float64, stateArray []int, includeRunning bool) (paretos []datamodel.ParetoEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"getParetoArray",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
-	}
+func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, includeRunning bool) (paretos []datamodel.ParetoEntry, error error) {
 
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getParetoArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	totalDurationChannel := make(chan ChannelResult)
 
 	uniqueStateArray := internal.UniqueInt(stateArray)
 
 	// Loop through all datapoints and start getTotalDurationForState
 	for _, state := range uniqueStateArray {
-		go getTotalDurationForState(span, durationArray, stateArray, state, totalDurationChannel)
+		go getTotalDurationForState(c, durationArray, stateArray, state, totalDurationChannel)
 	}
 
 	// get all results back
@@ -1233,22 +1222,18 @@ func getParetoArray(parentSpan opentracing.Span, durationArray []float64, stateA
 }
 
 // CalculateStopParetos calculates the paretos for a given []datamodel.StateEntry
-func CalculateStopParetos(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculateStopParetos",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
-	}
+func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateStopParetos", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(span, temporaryDatapoints, from, to, durationArrayChannel)
-	go transformToStateArray(span, temporaryDatapoints, stateArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
 	durationArrayResult := <-durationArrayChannel
@@ -1268,7 +1253,7 @@ func CalculateStopParetos(parentSpan opentracing.Span, temporaryDatapoints []dat
 	}
 	stateArray := stateArrayResult.returnValue.([]int)
 
-	paretoArray, err := getParetoArray(span, durationArray, stateArray, includeRunning)
+	paretoArray, err := getParetoArray(c, durationArray, stateArray, includeRunning)
 	if err != nil {
 		zap.S().Errorf("Error in getParetoArray", err)
 		error = err
@@ -1281,7 +1266,7 @@ func CalculateStopParetos(parentSpan opentracing.Span, temporaryDatapoints []dat
 			fullRow := []interface{}{pareto.State, pareto.Duration}
 			data = append(data, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(span, pareto.State, 0, configuration), pareto.Duration}
+			fullRow := []interface{}{ConvertStateToString(c, pareto.State, 0, configuration), pareto.Duration}
 			data = append(data, fullRow)
 		}
 
@@ -1291,14 +1276,11 @@ func CalculateStopParetos(parentSpan opentracing.Span, temporaryDatapoints []dat
 }
 
 // CalculateStateHistogram calculates the histogram for a given []datamodel.StateEntry
-func CalculateStateHistogram(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculateStateHistogram",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateStateHistogram", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	var stateOccurances [datamodel.MaxState]int //All are initialized with 0
@@ -1324,7 +1306,7 @@ func CalculateStateHistogram(parentSpan opentracing.Span, temporaryDatapoints []
 			fullRow := []interface{}{index, occurances}
 			data = append(data, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(span, index, 0, configuration), occurances}
+			fullRow := []interface{}{ConvertStateToString(c, index, 0, configuration), occurances}
 			data = append(data, fullRow)
 		}
 
@@ -1334,22 +1316,18 @@ func CalculateStateHistogram(parentSpan opentracing.Span, temporaryDatapoints []
 }
 
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
-func CalculateAvailability(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculateAvailability",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
-	}
+func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateAvailability", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(span, temporaryDatapoints, from, to, durationArrayChannel)
-	go transformToStateArray(span, temporaryDatapoints, stateArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
 	durationArrayResult := <-durationArrayChannel
@@ -1369,7 +1347,7 @@ func CalculateAvailability(parentSpan opentracing.Span, temporaryDatapoints []da
 	}
 	stateArray := stateArrayResult.returnValue.([]int)
 
-	paretoArray, err := getParetoArray(span, durationArray, stateArray, true)
+	paretoArray, err := getParetoArray(c, durationArray, stateArray, true)
 	if err != nil {
 		zap.S().Errorf("Error in getParetoArray", err)
 		error = err
@@ -1395,22 +1373,19 @@ func CalculateAvailability(parentSpan opentracing.Span, temporaryDatapoints []da
 }
 
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
-func CalculatePerformance(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculatePerformance",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(span, temporaryDatapoints, from, to, durationArrayChannel)
-	go transformToStateArray(span, temporaryDatapoints, stateArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
 	durationArrayResult := <-durationArrayChannel
@@ -1430,7 +1405,7 @@ func CalculatePerformance(parentSpan opentracing.Span, temporaryDatapoints []dat
 	}
 	stateArray := stateArrayResult.returnValue.([]int)
 
-	paretoArray, err := getParetoArray(span, durationArray, stateArray, true)
+	paretoArray, err := getParetoArray(c, durationArray, stateArray, true)
 	if err != nil {
 		zap.S().Errorf("Error in getParetoArray", err)
 		error = err
@@ -1456,14 +1431,11 @@ func CalculatePerformance(parentSpan opentracing.Span, temporaryDatapoints []dat
 }
 
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
-func CalculateQuality(parentSpan opentracing.Span, temporaryDatapoints []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculateQuality",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// Loop through all datapoints and calculate good pieces and scrap
@@ -1520,22 +1492,19 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 }
 
 // CalculateOEE calculates the OEE
-func CalculateOEE(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculateOEE",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateOEE", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(span, temporaryDatapoints, from, to, durationArrayChannel)
-	go transformToStateArray(span, temporaryDatapoints, stateArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
 	durationArrayResult := <-durationArrayChannel
@@ -1555,7 +1524,7 @@ func CalculateOEE(parentSpan opentracing.Span, temporaryDatapoints []datamodel.S
 	}
 	stateArray := stateArrayResult.returnValue.([]int)
 
-	paretoArray, err := getParetoArray(span, durationArray, stateArray, true)
+	paretoArray, err := getParetoArray(c, durationArray, stateArray, true)
 	if err != nil {
 		zap.S().Errorf("Error in getParetoArray", err)
 		error = err
@@ -1585,14 +1554,11 @@ func CalculateOEE(parentSpan opentracing.Span, temporaryDatapoints []datamodel.S
 }
 
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
-func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"CalculateAverageStateTime",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func CalculateAverageStateTime(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "CalculateAverageStateTime", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	key := fmt.Sprintf("CalculateAverageStateTime-%s-%s-%s-%s-%d", internal.AsHash(temporaryDatapoints), from, to, internal.AsHash(configuration), targetState)
@@ -1636,7 +1602,7 @@ func CalculateAverageStateTime(parentSpan opentracing.Span, temporaryDatapoints 
 			// additional error check (this fails if the states are not in order)
 			if timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0 {
 				error = errors.New("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0 detected")
-				BusinessLogicErrorHandling(parentSpan, "calculateDurations", error, false)
+				BusinessLogicErrorHandling(c, "calculateDurations", error, false)
 				zap.S().Errorw("timestampAfterCurrentOne.Sub(timestampCurrent).Seconds() < 0",
 					"timestampAfterCurrentOne.Sub(timestampCurrent).Seconds()", timestampAfterCurrentOne.Sub(timestampCurrent).Seconds(),
 					"timestampAfterCurrentOne", timestampAfterCurrentOne,
@@ -1773,14 +1739,11 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 }
 
 // automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
-func automaticallyIdentifyChangeovers(parentSpan opentracing.Span, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if parentSpan != nil { //nil during testing
-		span = opentracing.StartSpan(
-			"automaticallyIdentifyChangeovers",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "automaticallyIdentifyChangeovers", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	// Loop through all datapoints

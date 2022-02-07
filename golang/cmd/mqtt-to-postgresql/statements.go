@@ -358,7 +358,7 @@ func prep(query string, recursionDepth int) *sql.Stmt {
 		case Unrecoverable:
 			ShutdownApplicationGraceful()
 		case TryAgain:
-			time.Sleep(time.Duration(10) * time.Second)
+			time.Sleep(1 * time.Second)
 			return prep(query, recursionDepth+1)
 		case DiscardValue:
 			// This should NEVER happen here, but it's safer to shut down, else the statement won't be prepared

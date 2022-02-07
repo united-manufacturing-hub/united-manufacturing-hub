@@ -79,7 +79,7 @@ func (r StoredRawMQTTHandler) reprocess() {
 		item, err := r.ProcessPriorityQueue.Dequeue()
 		if err != nil {
 			// Sleep if there is any error and just try again later
-			time.Sleep(10 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -98,7 +98,7 @@ func (r StoredRawMQTTHandler) reprocess() {
 					// Failed to re-enqueue
 					ShutdownApplicationGraceful()
 				}
-				time.Sleep(10 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 			item, err = r.ProcessPriorityQueue.Dequeue()
 		}
@@ -130,7 +130,7 @@ type mqttMessage struct {
 	Prefix     string
 }
 
-func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, prefix string) {
+func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, prefix string, recursionDepth int64) {
 	zap.S().Debugf("[StoredRawMQTTHandler]")
 	var marshal []byte
 

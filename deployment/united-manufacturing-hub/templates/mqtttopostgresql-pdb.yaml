@@ -1,0 +1,16 @@
+---
+{{if or .Values.mqtttopostgresql.enabled .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.mqtttopostgresql.pdb.enabled}}
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqtttopostgresql-pdb
+spec:
+  minAvailable: {{.Values.mqtttopostgresql.pdb.minAvailable}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqtttopostgresql
+
+{{end}}
+{{end}}

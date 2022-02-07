@@ -1,0 +1,125 @@
+---
+{{if or .Values.factoryinput.enabled .Values._000_commonConfig.datainput.enabled}}
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+  labels:
+  {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
+  {{if .Values.factoryinput.annotations}}
+  annotations:
+  {{- toYaml .Values.factoryinput.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.factoryinput.replicas}}
+  serviceName: factoryinput
+  volumeClaimTemplates:
+    - metadata:
+        name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-data
+        finalizers:
+          - kubernetes.io/pvc-protection
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{.Values.factoryinput.storageRequest}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+      {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+              topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 70
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+          {{if .Values.factoryinput.image.tag}}
+          image: {{.Values.factoryinput.image.repository}}:{{.Values.factoryinput.image.tag}}
+          {{- else}}
+          image: {{.Values.factoryinput.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          imagePullPolicy: {{.Values.factoryinput.image.pullPolicy}}
+          env:
+            - name: CERTIFICATE_NAME
+              value: NO_CERT
+
+            - name: LOGGING_LEVEL
+              value: PRODUCTION
+
+            - name: BROKER_URL
+              value: tcp://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: VERSION
+              value: "1"
+
+            - name: FACTORYINPUT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: customerID
+
+            - name: FACTORYINPUT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinput-secret
+                  key: password
+
+            {{$index := 1}}
+            {{range $customerName, $password := .Values.customers | default dict}}
+            - name: CUSTOMER_NAME_{{$index}}
+              value: {{$customerName}}
+            - name: CUSTOMER_PASSWORD_{{$index}}
+              value: {{$password}}
+              {{$index = add $index 1}}
+            {{end}}
+
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-data
+              mountPath: /data
+              # - name: secret-volume
+              #   mountPath: /SSL_certs
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            initialDelaySeconds: 30
+            periodSeconds: 5
+
+          # define a readiness probe that checks every 5 seconds
+          #readinessProbe:
+          #  httpGet:
+          #    path: /ready
+          #    port: 8086
+          #  periodSeconds: 5
+          resources: {}
+          #volumes:
+          #- name: secret-volume
+          #secret:
+          #secretName: factoryinput-secret
+      serviceAccountName: ""
+      restartPolicy: Always
+  {{end}}

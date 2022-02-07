@@ -1,22 +1,43 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	_ "go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"io/ioutil"
 	"net/http"
 	"time"
 
-	ginopentracing "github.com/Bose/go-gin-opentracing"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
+
+var tracer = otel.Tracer("factoryinput-server")
+
+func initTracer() *sdktrace.TracerProvider {
+	exporter, err := stdout.New(stdout.WithPrettyPrint())
+	if err != nil {
+		panic(err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithBatcher(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return tp
+}
 
 // SetupRestAPI initializes the REST API and starts listening
 func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaegerPort string) {
@@ -34,26 +55,15 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	// Setting up the tracer
+	tp := initTracer()
 
-	// initialize the global singleton for tracing...
-	tracer, reporter, closer, err := ginopentracing.InitTracing("factoryinsight", jaegerHost+":"+jaegerPort, ginopentracing.WithEnableInfoLog(false))
-	if err != nil {
-		panic("unable to init tracing")
-	}
-	defer func(closer io.Closer) {
-		err := closer.Close()
-		if err != nil {
-			zap.S().Errorf("Failed to close Tracer", err)
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			panic(fmt.Sprintf("Error shutting down tracer provider: %v", err))
 		}
-	}(closer)
-	defer reporter.Close()
-	opentracing.SetGlobalTracer(tracer)
-
-	// create the middleware
-	p := ginopentracing.OpenTracer([]byte("api-request-"))
-
+	}()
 	// tell gin to use the middleware
-	router.Use(p)
+	router.Use(otelgin.Middleware("factoryinput"))
 
 	// Healthcheck
 	router.GET("/", func(c *gin.Context) {
@@ -73,7 +83,7 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 		v1.POST("/:customer/:location/:asset/:value", postMQTTHandler)
 	}
 
-	err = router.Run(":80")
+	err := router.Run(":80")
 	if err != nil {
 		zap.S().Errorf("Failed to bind to port 80", err)
 		ShutdownApplicationGraceful()
@@ -81,23 +91,30 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 	}
 }
 
-func handleInternalServerError(parentSpan opentracing.Span, c *gin.Context, err error) {
-
-	ext.LogError(parentSpan, err)
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+func handleInternalServerError(c *gin.Context, err error) {
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	zap.S().Errorw("Internal server error",
-		"error", err,
+		"error", internal.SanitizeString(err.Error()),
 		"trace id", traceID,
 	)
 
 	c.String(http.StatusInternalServerError, "The server had an internal error. Please mention the following trace id while contacting our support: "+traceID)
 }
 
-func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err error) {
+func handleInvalidInputError(c *gin.Context, err error) {
 
-	ext.LogError(parentSpan, err)
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	zap.S().Errorw("Invalid input error",
 		"error", err,
@@ -109,11 +126,16 @@ func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err er
 
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
+		defer span.End()
+	}
+
 	user := c.MustGet(gin.AuthUserKey)
-	if user != customer && user != "jeremy" {
+	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, customer)
-		return fmt.Errorf("User %s unauthorized to access %s", user, customer)
+		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		return fmt.Errorf("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil
 }
@@ -139,38 +161,34 @@ type MQTTData struct {
 }
 
 func postMQTTHandler(c *gin.Context) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "postMQTTHandler", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "postMQTTHandler", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "postMQTTHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	jsonBytes, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 	}
 
 	jsonData := string(jsonBytes)
-	zap.S().Warnf("jsonData: %s", jsonData)
+	zap.S().Warnf("jsonData: %s", internal.SanitizeString(jsonData))
 
 	if !IsJSON(jsonData) {
-		handleInvalidInputError(span, c, errors.New("Input is not valid JSON"))
+		handleInvalidInputError(c, errors.New("Input is not valid JSON"))
 	}
 
 	var postMQTTRequest postMQTTRequest
 	err = c.BindUri(&postMQTTRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Check whether user has access to that customer
 	err = checkIfUserIsAllowed(c, postMQTTRequest.Customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -182,7 +200,7 @@ func postMQTTHandler(c *gin.Context) {
 		JSONData: jsonData,
 	})
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 }
