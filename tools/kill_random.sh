@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# This script kills a random pod inside factorycube-server ever 0-256 seconds
+# This script kills a random pod inside united-manufacturing-hub ever 0-256 seconds
 
 while :
 do
 
-    pods=$(kubectl get pods --no-headers -o custom-columns=":metadata.name" --namespace factorycube-server)
+    pods=$(kubectl get pods --no-headers -o custom-columns=":metadata.name" --namespace united-manufacturing-hub)
 
     SAVEIFS=$IFS
     IFS=$'\n'
@@ -18,7 +18,7 @@ do
     index=$(($RANDOM % $size))
     echo [$now] ${pods[$index]}
 
-    kubectl delete pods ${pods[$index]} --grace-period=0 --force --namespace factorycube-server  > /dev/null 2>&1
+    kubectl delete pods ${pods[$index]} --grace-period=0 --force --namespace united-manufacturing-hub  > /dev/null 2>&1
 
     sleep $(( $RANDOM % 256 ))
 done

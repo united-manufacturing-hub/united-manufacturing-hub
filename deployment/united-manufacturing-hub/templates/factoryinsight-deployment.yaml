@@ -1,0 +1,114 @@
+---
+{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-deployment
+  labels:
+    {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
+  {{if .Values.factoryinsight.annotations}}
+  annotations:
+    {{- toYaml .Values.factoryinsight.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.factoryinsight.replicas}}
+  selector:
+    matchLabels:
+     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
+      labels:
+        {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 8}}
+        redis-client: "true"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
+          {{if .Values.factoryinsight.image.tag}}
+          image: {{.Values.factoryinsight.image.repository}}:{{.Values.factoryinsight.image.tag}}
+          {{- else}}
+          image: {{.Values.factoryinsight.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: IfNotPresent
+          ports:
+              - name: http
+                containerPort: 80
+                protocol: TCP
+          resources:
+            limits:
+              cpu: {{.Values.factoryinsight.resources.limits.cpu}}
+            requests:
+              cpu: {{.Values.factoryinsight.resources.requests.cpu}}
+          env:
+            - name: REDIS_URI
+              value: {{.Values.factoryinsight.redis.URI1}}
+            - name: REDIS_URI2
+              value: {{.Values.factoryinsight.redis.URI2}}
+            - name: REDIS_URI3
+              value: {{.Values.factoryinsight.redis.URI3}}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: redispassword
+
+            - name: POSTGRES_HOST
+              value: {{.Values.factoryinsight.db_host}}
+            - name: POSTGRES_PORT
+              value: {{.Values.factoryinsight.db_port | quote}}
+            - name: POSTGRES_DATABASE
+              value: {{.Values.factoryinsight.db_database}}
+            - name: POSTGRES_USER
+              value: {{.Values.factoryinsight.db_user}}
+            - name: POSTGRES_PASSWORD
+              value: {{.Values._000_commonConfig.datastorage.db_password}}
+
+              {{$index := 1}}
+              {{range $customerName, $password := .Values.customers | default dict}}
+            - name: CUSTOMER_NAME_{{$index}}
+              value: {{$customerName}}
+            - name: CUSTOMER_PASSWORD_{{$index}}
+              value: {{$password}}
+              {{$index = add $index 1}}
+              {{end}}
+
+            - name: FACTORYINSIGHT_USER
+              value: {{.Values.factoryinsight.user}}
+            - name: FACTORYINSIGHT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinsight-secret
+                  key: password
+            - name: VERSION
+              value: "1"
+
+          # define a liveness probe that checks every 1 seconds, starting after 30 seconds
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            initialDelaySeconds: 30
+            periodSeconds: 1
+
+          # define a readiness probe that checks every 15 seconds
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8086
+            periodSeconds: 1
+
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 300 # the longest requests can up to 4 minutes
+{{end}}

@@ -1,0 +1,32 @@
+---
+{{if .Values._000_commonConfig.dataprocessing.nodered.enabled}}
+
+{{if .Values.nodered.ingress.enabled}}
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-nodered-ingress
+  labels:
+    {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
+  {{if .Values.nodered.ingress.annotations}}
+  annotations:
+    {{- toYaml .Values.nodered.ingress.annotations | nindent 4}}
+  {{end}}
+spec:
+  tls:
+  - hosts:
+    - {{.Values.nodered.ingress.publicHost}}
+    secretName: {{.Values.nodered.ingress.publicHostSecretName}}
+  rules:
+    - host: {{.Values.nodered.ingress.publicHost}}
+      http:
+        paths:
+          - path: /nodered
+            backend:
+              service:
+                name: {{include "united-manufacturing-hub.fullname" .}}-nodered-service
+                port:
+                  number: 1880
+{{end}}
+{{end}}

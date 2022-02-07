@@ -9,89 +9,179 @@ write_files:
 
 # Write Helm values file
 - content: |
-    # mqttBridgeURL points factorycube-edge to factorycube-server
-    mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"
-    mqttBridgeTopic: "ia/factoryinsight"
-   
-    # scans only localhost by default to prevent spamming the network
-    sensorconnect:
-      iprange: "127.0.0.1/32"
 
-    # Certficiates for MQTT Bridge
-    # These are development certificates. DO NOT USE IN PRODUCTION (some idiots will still do it...)
-    mqttBridgeCACert: |
+  # Please adjust the following lines
+  # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
+  _000_commonConfig:
+    serialNumber: "development"  # usually the hostname
+
+    # This allows to specify data sources, which is mostly used for instances running on the edge
+    datasources:
+
+      # barcodereader reads out connected USB barcodereaders emulating a keyboard
+      barcodereader:
+        enabled: true
+        customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+        customerID: "raw"
+        location: "barcodereader"
+        machineID: "barcodereader"
+
+      # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
+      sensorconnect:
+        enabled: true
+        iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
+
+      # Warning: unstable
+      # cameraconnect searches for GenICam compatible cameras and reads out the pictures
+      cameraconnect:
+        enabled: false
+        trigger: "MQTT"
+        acquisitionDelay: "0.0"
+        cycleTime: "4"
+        cameraInterface: "GenICam"
+        imageWidth: "800"
+        imageHeight: "800"
+        imageChannels: "3"
+        macAddress: "02-2625A-09849"
+        exposureTime: "1000"
+        exposureAuto: "Off"
+        pixelFormat: "Mono8"
+
+    # dataprocessing involves microservices, whose main purpose is to process the data
+    dataprocessing:
+      nodered:
+        enabled: true
+        defaultFlows: false
+
+    # Infrastructure
+    infrastructure:
+
+      # vernemq
+      mqtt:
+        enabled: true
+        AclConfig: |-
+          pattern write ia/raw/%u/#
+          pattern write ia/%u/#
+          pattern $SYS/broker/connection/%c/state
+
+          user TESTING
+          topic ia/#
+          topic $SYS/#
+          topic read $share/TESTING/ia/#
+          
+          user ia_nodered
+          topic ia/#
+        CACert: |-
+          -----BEGIN CERTIFICATE-----
+          MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
+          BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
+          NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
+          AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
+          KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
+          qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
+          SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
+          Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
+          ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
+          BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
+          ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
+          oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
+          hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
+          xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
+          nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
+          AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
+          VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
+          zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
+          -----END CERTIFICATE-----
+        Cert: |-
+          -----BEGIN CERTIFICATE-----
+          MIIDjzCCAnegAwIBAgIQB6OLOw2bXBVXZD3ArV2i+jANBgkqhkiG9w0BAQsFADAW
+          MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMxMDdaFw0yNDAzMjEx
+          MTMxMDdaMCUxIzAhBgNVBAMMGmZhY3RvcnljdWJlLXNlcnZlci12ZXJuZW1xMIIB
+          IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4EGKWn5ZSNtC5t3bsMjTMow3
+          usMfM/1NzM9MYAvUMy71WHdCt/10bnIzRwYLUMtjAQURvyq+dXaj1DMz7452uzCC
+          GE6r6SojReH7snAWMgrbDhE3psokW4LY6/tH5ihOBu1xfUtI1ac6rkHz4JsURpHj
+          5HAGnPkfOiQZc10AxBxPz9i558a7J58Y4FZ0M51rgKaWAr+qDMzjfdNI/MUs1JTd
+          Yn8QM0Sv2XjP4CziqWOa0Xf4MsoLgOqItZMLaYQwaUIkx0CV231D1cREZB2xbYSn
+          DyK9DbXumK0tsVwgXh8Q+EY0ofW+M/noukJUxIbL8E1OKwbnS+2smpz5clc+BQID
+          AQABo4HJMIHGMAkGA1UdEwQCMAAwHQYDVR0OBBYEFEPOUbp9SDAizKwHuiFhBPVH
+          OKaTMFEGA1UdIwRKMEiAFL1vX0A8tQAje5J0cQKWhIdy8Vu/oRqkGDAWMRQwEgYD
+          VQQDDAtFYXN5LVJTQSBDQYIUI2id6KFXw/nEv9bRhVsDhzM/ozkwEwYDVR0lBAww
+          CgYIKwYBBQUHAwEwCwYDVR0PBAQDAgWgMCUGA1UdEQQeMByCGmZhY3RvcnljdWJl
+          LXNlcnZlci12ZXJuZW1xMA0GCSqGSIb3DQEBCwUAA4IBAQANaEiAIR+nADiGNeOk
+          SSCRG5VeelFfO3X4wUiHrEKE6NkVVF+w6Wemogmtb+KB6NmjWAGiZep8p/R/7F75
+          iAGUk4LEAcXFMw6NWZhODlv5ryo6V2X1EuqMwXOfccbUwu7l9md+j2UxY45vp1Z2
+          +1eP/pjVmEt29HPUnWUT/rFeqlz605xYLauoSTsTxkGl5T8EoLwtvZOFnBIy7oGs
+          QzW42IlfFKNlYKHMYJ8I6AQ89+cUUko/zqUPeiFl+fl1WpXCOofEiRUd/4Z6R0Rw
+          moz/sNxvZ44GG47X2Gvc1Ewfc9rpgvSmyMTUgS4EP2p5LBQEDuFJz1DSW43QGOEx
+          6OoQ
+          -----END CERTIFICATE-----
+        Privkey: |-
+          -----BEGIN PRIVATE KEY-----
+          MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDgQYpafllI20Lm
+          3duwyNMyjDe6wx8z/U3Mz0xgC9QzLvVYd0K3/XRucjNHBgtQy2MBBRG/Kr51dqPU
+          MzPvjna7MIIYTqvpKiNF4fuycBYyCtsOETemyiRbgtjr+0fmKE4G7XF9S0jVpzqu
+          QfPgmxRGkePkcAac+R86JBlzXQDEHE/P2LnnxrsnnxjgVnQznWuAppYCv6oMzON9
+          00j8xSzUlN1ifxAzRK/ZeM/gLOKpY5rRd/gyyguA6oi1kwtphDBpQiTHQJXbfUPV
+          xERkHbFthKcPIr0Nte6YrS2xXCBeHxD4RjSh9b4z+ei6QlTEhsvwTU4rBudL7aya
+          nPlyVz4FAgMBAAECggEAGr62SWSYMWA08mOzN7o7teOTIerzZbfn920hprLCc/g9
+          unc+tcK8iA+GngnSf6hB/nUkULBAVrH3h+8zWnabImf+m/eF+SDVZBg3dGh5vS4e
+          Qec7w+CHxYItbLdjM8fKxni6+D5qSVDQZsfm1fqoyGHN1AioQUBUwRJdFq0Y0kp0
+          6BwZG2Kk43JQByeKX4/D2QgZEjFCgsw2Wihy8sQkX96aXbAdUO5Um7kzf7iIMXlI
+          877uarOuCuIEYJSWjwrwu4I7CQ68lEA1pGSlEMKU9ju8KtoqaQ65ELx9PgK8df3+
+          zIM8WnZzT/US0TPI+cWvsB6yYYGsohE25oGNYMnKAQKBgQD5RGOeAR4GhBm2tRR/
+          6XzLWmru0sGif/7A/rPDjzWSlnkaqkTSK29xQZkDK9WJVLG3SWCV2XnwysLgVHyF
+          J2DlPZVDnKvS5EXwGSenzpWMm6yHNZhsA1nxvSiZBXj8MPhF5NbOrnuZJVR9+xmA
+          xQTspByMa9gwD8sXkWS+aq8+kQKBgQDmUDTfY8jtCXm9kXZPPgESGtYuDmBlvyf4
+          40Gt79FmOt3ZYBr2do0BeUnyJOFwleQeUqRIneUsUHyUHj1VI/SpBuUAPWOT9w8s
+          zlrLkmYnrOArKcZpCpWQZWyKXtomxdUlZJjFJGJfipJ1zu1G2IJZNjuuFpEJY4Jz
+          xI3JO9OqNQKBgQC28UV3enRx7dP9b0sbUd7gVHz0yMOKowvy0zxWA64a5sr9Eggu
+          g+hno/BMDojLINjJn1X+xL0lR3rdL8Sv6SXJOXhqRfspbZYS0DN1ij3iE4L9PQ2g
+          AJmrvNul6wlPdhVRHtG0oQRfcrFfQMIH6xFhKFU3jhL9uymgI3pf8mapsQKBgQCV
+          6ETR1mA0sQM1eVW5dFE8GI2qAp+J+mcpH7pjXYI9eTlnQJ+sJjPXbrvLyWeXYWjO
+          t9nIjkVZl7XOrvQa08Fut1cc1dhXuep9rn74m/yz/FkYnyNOwZ3iE7IXSm/R5ti6
+          cwTg5LLHHyn/VkWo5EnLiXpE8NlMdCG3+oqTHcbCtQKBgBoQrLzRsruiha6QP4OZ
+          eCvOVIaxuH60A85QW5pgb0IlORXfX9zjA+M3v/G+tj6y5vxPOiVJaRd6iBqEDpMd
+          337jNZKFr5EaVmF45PrcM060cbEcbdq8zCTEnQ6Y+bQiDTkfdgcE5CDJDJ7ol2I2
+          MIzsw5gq+PcsyNV5g/IUX0PJ
+          -----END PRIVATE KEY-----
+
+      # apache kafka, mqttkafkabridge, kowl
+      kafka:
+        enabled: true
+
+    # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
+    # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
+    # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
+    datastorage:
+      enabled: true
+      db_password: "changeme"
+
+    # mqtt-to-blob, minio, kafka-to-blob
+    # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
+    blobstorage:
+      enabled: true
+
+    # factoryinput, grafanaproxy
+    # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
+    datainput:
+      enabled: true
+
+    # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
+    mqttBridge:
+      enabled: false
+      remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
+      topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+      CAcert: |
         -----BEGIN CERTIFICATE-----
-        MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
-        BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
-        NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
-        AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
-        KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
-        qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
-        SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
-        Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
-        ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
-        BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
-        ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
-        oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
-        hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
-        xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
-        nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
-        AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
-        VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
-        zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
         -----END CERTIFICATE-----
-    mqttBridgeCert: |
+      cert: |
         -----BEGIN CERTIFICATE-----
-        MIIDVTCCAj2gAwIBAgIQD9BkaD7SQzUuHzt+0P4dRTANBgkqhkiG9w0BAQsFADAW
-        MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMyNDZaFw0yNDAzMjEx
-        MTMyNDZaMBIxEDAOBgNVBAMMB1RFU1RJTkcwggEiMA0GCSqGSIb3DQEBAQUAA4IB
-        DwAwggEKAoIBAQDjPFLHojAiGFwv6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM
-        2Ta9f/nOosHTcJzy/nkpvfwz44rDSwpevLFZoPzdEI3WmsVJfb0R01lYnsLf7NyI
-        NclSHjs3Octr1EyhP8SF2tvun1zqyirT/vPNB5+hfNhxLcCw4HYxsj4XkF69Af4W
-        cLrmOHrzB2gcW1v7fozJ4MbXv2ra7jS/OseA3qIF2l8Go09mWYiLFfwtCk99rCGo
-        RzhkrVmFShFLJ8dqTAbAwuX43oeqXhMlb3kyRaoi0aRCWhMagtEcW8LqKkO5k694
-        y5Y+xTCMjJsujmWTCjHC5flfkmTk4/ClBAQDAgMBAAGjgaIwgZ8wCQYDVR0TBAIw
-        ADAdBgNVHQ4EFgQUhFaNZPNBAIVwr5eIWTxFrbINU+QwUQYDVR0jBEowSIAUvW9f
-        QDy1ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQj
-        aJ3ooVfD+cS/1tGFWwOHMz+jOTATBgNVHSUEDDAKBggrBgEFBQcDAjALBgNVHQ8E
-        BAMCB4AwDQYJKoZIhvcNAQELBQADggEBAGqggXaytY98QujICX8WxDljf4GvBN4e
-        pQ8ejjvE9n88bW51h4JOxv6toNhz3FgPWj+PDRp6oUkfujkM0Wx8iHy4O+GceD2l
-        tV91Ds86C7MncZqMN2fICkTbyzsk9ru5dqXtAIjX9Xlr5ZqDmtfgW5ze1+1UULAB
-        5i9qaP02xQpQ1YwNPD5oSnbUJB7aKfnYsXlunBAxsjbdDoTGODdsjks1TWDKpbST
-        0DRN+Jm6sggWvJitRPNWtxC2UE/DVWqtBGXPBvwFjQrJHpnqb9lpzVhxoWxY2AI4
-        61eCOb6s6MslCkER6H9jlBhIxWpEPTNgdjth6uRA48FpAqze26Sj8L4=
         -----END CERTIFICATE-----
-    mqttBridgePrivkey: |
+      privkey: |
         -----BEGIN PRIVATE KEY-----
-        MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDjPFLHojAiGFwv
-        6kkH9ml1xtxhlD9O4FWDhzzvqaEW4tqtV1FM2Ta9f/nOosHTcJzy/nkpvfwz44rD
-        SwpevLFZoPzdEI3WmsVJfb0R01lYnsLf7NyINclSHjs3Octr1EyhP8SF2tvun1zq
-        yirT/vPNB5+hfNhxLcCw4HYxsj4XkF69Af4WcLrmOHrzB2gcW1v7fozJ4MbXv2ra
-        7jS/OseA3qIF2l8Go09mWYiLFfwtCk99rCGoRzhkrVmFShFLJ8dqTAbAwuX43oeq
-        XhMlb3kyRaoi0aRCWhMagtEcW8LqKkO5k694y5Y+xTCMjJsujmWTCjHC5flfkmTk
-        4/ClBAQDAgMBAAECggEAJLKhS8xNqbP1b2eO09Jfxb2P6dJfRwXDybIVjT7/3QpV
-        9pibcKXDyWbZmR1/3/3X2wZt2ufryxV8W33K9vHSUn9FVw5NWdM0+WFtH2vaig1Z
-        u4AtPXIySSjIt2qGB6wJlCEQQ+3MhwUFpIVx1TrfdMU+an4XFnAlJmuZqvz2Oiew
-        uT0mX4B/Sgexp8l1b0pVMytpsEm3HM7TYaUtRbqKQcQ5HXfc+Jsm+6mCTSj0C3Vp
-        5njNwY/gBOtuO1bm+iH9RvH6TMNhBtgsfNp9p2WlrmCKM9koFrgYZscpkVKDjxTe
-        Y/Mq6/9BHyWWxfN70QHZE61985JGVDbSSdnlyQ7KAQKBgQD2Zwp7LHqBWfBHnZL7
-        4Pg05bjkAGd05BjL8KUQBOt2hFiXsPtw90BHdQXcywpd6XMx4D6tqfYLOfSSuFcm
-        pAuM8APAnH0AB4TJ3DZK1vv26a/Sel6ahjttAwFUSEnb1UugVZR2/6TUF2c/RZjK
-        QAOlpqL03Wl2T6xRBQmNXUhr4QKBgQDsFinUpthC9+R1hfKm2CCsd3l/GFbkRfAl
-        YtKN69mrPx/NiB/jBO9UBEckhrDWdzgr1wZotpYGKFD8CvAmzl4IVrJIG22efNWx
-        r8z4cTOH/b52m8pnlc1mdSuQv0RJuk0wC4eqRW8ybBcsA/JrPGKlFjvaxDLvpuW6
-        Ewd7ZWvMYwKBgQDR8bnceWloDVnNq1Uxh930NEf0/OMplbALFF+P5qE5ukpB9WpI
-        NmNufycfmWCb4+1i8c516fraVectnCOlqOCulVKdKrjW7ZEW7arU2ZiWKUbF773r
-        q7O2jnjzdyR3SqXFVyXIvsmSbN5r6sDkkuaInhL60CyrwfbwkXoyGOk8AQKBgQDj
-        7zoPz844SfHO7bYrE7voB6nL5Ynu9v82eUTkNPOA/H8OBwESQ+91ZHPzdf9B8PTQ
-        jtfnPXF3HHGkBkN6lAABeQLDz4d0Xv5KgXsZ2uFvyLKc/Sjb/avD4hhfteqObEqd
-        umQPJt6HBgkRO/ZPRovO67p6Krcq3i4qCrlMj80WFQKBgB19q/Ja0xPxrTaNjZTo
-        VkAXHU/+pY1f2xHn7hkDlVHZiqLHb/1Jt17IUd9DhXfShneH+h37OPne3iT198aG
-        Hjisp/sALgNP4jyR8w1a/OUIwBR5UhDFfPSwctyE12ojEn4syegh0sUK3i2m3Fmf
-        Ub7w8oJqMapWI3XxHOLOAi6o
         -----END PRIVATE KEY-----
 
-  path: /home/rancher/configs/factorycube-edge-development.yaml
+  path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
 - content: |
       #!/bin/bash
@@ -107,8 +197,8 @@ write_files:
 
       # Restart as rancher
       if [ $UID -eq 0 ]; then
-      echo "Initial setup! Waiting 20 seconds for full startup..."
-      sleep 20
+      echo "Initial setup! Waiting 60 seconds for full startup..."
+      sleep 60
 
 
       ###
@@ -209,36 +299,25 @@ write_files:
       echo "Helm installed!"
 
       echo "Adding helm repo..."
-      if ! helm repo add united-manufacturing-hub https://repo.umh.app/ ; then
+      if ! helm repo add united-manufacturing-hub https://repo.umh.app ; then
       echo "Failed to add umh repository, aborting setup"
       exit
       fi
       echo "Added helm repo!"
 
-      echo "Creating namespaces factorycube-edge and factorycube-server..."
-      if ! kubectl create namespace factorycube-edge ; then
-      echo "Failed to create kubernetes namespace for factorycube-edge, aborting setup"
+      echo "Creating namespace united-manufacturing-hub..."
+      if ! kubectl create namespace united-manufacturing-hub; then
+      echo "Failed to create kubernetes namespace for united-manufacturing-hub, aborting setup"
       exit
       fi
-      if ! kubectl create namespace factorycube-server ; then
-      echo "Failed to create kubernetes namespace for factorycube-server, aborting setup"
-      exit
-      fi
-      echo "Created namespaces!"
+      echo "Created namespace!"
 
-      echo "Install factorycube-edge..."
-      if ! helm install factorycube-edge united-manufacturing-hub/factorycube-edge --values "/home/rancher/configs/factorycube-edge-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-edge --devel ; then
-      echo "Failed to install factorycube-edge using helm, aborting setup"
+      echo "Install Helm chart united-manufacturing-hub..."
+      if ! helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --values "/home/rancher/configs/united-manufacturing-hub-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub --devel ; then
+      echo "Failed to install united-manufacturing-hub using helm, aborting setup"
       exit
       fi
-      echo "Installed factorycube-edge!"
-
-      echo "Install factorycube-server..."
-      if ! helm install factorycube-server united-manufacturing-hub/factorycube-server --kubeconfig /etc/rancher/k3s/k3s.yaml -n factorycube-server --devel ; then
-      echo "Failed to install factorycube-server using helm, aborting setup"
-      exit
-      fi
-      echo "Installed factorycube-server!"
+      echo "Installed Helm chart!"
 
       echo "Enabling SSH password authentification..."
       if ! sudo sed -i 's/PasswordAuthentication  no/PasswordAuthentication  yes/g' /etc/ssh/sshd_config ; then
@@ -260,11 +339,20 @@ write_files:
 
       num1=$(k3s -v | grep -o 'v1.[0-9][0-9]' | sed 's/v//g')
       num2="1.20"
+      num3="1.21"
 
       if (( $(echo "$num1 < $num2" |bc -l) )); then
-      echo "k3os version outdated !"
+      echo "k3os version outdated ! This can cause various issues."
       echo "Installed version:   $num1"
-      echo "Recommended version: $num2"
+      echo "Minimal version:     $num2"
+      echo "Maximal version:     $num3"
+      fi
+
+      if (( $(echo "$num1 > $num3" |bc -l) )); then
+      echo "k3os version too new! This can cause various issues."
+      echo "Installed version:   $num1"
+      echo "Minimal version:     $num2"
+      echo "Maximal version:     $num3"
       fi
 
   path: /home/rancher/initial_setup.sh

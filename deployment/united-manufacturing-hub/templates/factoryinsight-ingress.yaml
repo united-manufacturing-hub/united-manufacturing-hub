@@ -1,0 +1,31 @@
+---
+{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.factoryinsight.ingress.enabled}}
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-ingress
+  labels:
+    {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
+  {{if .Values.factoryinsight.ingress.annotations}}
+  annotations:
+    {{- toYaml .Values.factoryinsight.ingress.annotations | nindent 4}}
+  {{end}}
+spec:
+  tls:
+  - hosts:
+    - {{.Values.factoryinsight.ingress.publicHost}}
+    secretName: {{.Values.factoryinsight.ingress.publicHostSecretName}}
+  rules:
+    - host: {{.Values.factoryinsight.ingress.publicHost}}
+      http:
+        paths:
+          - path: /
+            backend:
+              service:
+                name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-service
+                port:
+                  number: 80
+{{end}}
+{{end}}

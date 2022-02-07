@@ -10,7 +10,7 @@ This article is split up into two parts:
 
 The first part will focus on factorycube-edge and the Industrial Automation world. The second part will focus on factorycube-server and the IT world.
 
-## factorycube-edge
+## Using it on the edge
 
 The world of Industrial Automation is heavily regulated as very often not only expensive machines are controlled, but also machines that can potentially injure a human being. Here are some information that will help you in setting it up in production (not legal advice!).
 
@@ -45,6 +45,10 @@ Our certified device "machineconnect" will have that network setup by default. O
 
 ### Other useful commands
 
+{{< alert title="Note" color="info">}}
+Deprecated! Please use installation script instead specified in development.yaml
+{{< /alert >}}
+
 Quick setup on k3OS:
 
 1. `export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3  && chmod 700 get_helm.sh && ./get_helm.sh`
@@ -52,6 +56,10 @@ Quick setup on k3OS:
 3. `helm install factorycube-edge /home/rancher/united-manufacturing-hub/deployment/factorycube-edge --values "/home/rancher/CUSTOM.yaml" --kubeconfig /etc/rancher/k3s/k3s.yaml`
 
 ## factorycube-server
+
+{{< alert title="Note" color="info">}}
+Deprecated! These changes need to be applied not for factorycube-server, but to the new Helm chart `united-manufacturing-hub`. It may require some additional changes. It is left in as it is still better than nothing.
+{{< /alert >}}
 
 In general the factorycube-server installation is tailored strongly to the environments it is running in. Therefore, we can only provide general guidance on setting it up.
 
