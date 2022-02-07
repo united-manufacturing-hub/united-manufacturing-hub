@@ -5,6 +5,7 @@ description: >
   The following guide describes how to catch data from the MQTT-Broker and push them to the MIN.io blob storage
 aliases:
   - /docs/Developers/factorycube-server/mqtt-to-blob
+  - /docs/developers/factorycube-server/mqtt-to-blob
 ---
 {{% pageinfo color="warning" %}}
 **This microservice is still in development and is not considered stable for production use.**

@@ -5,6 +5,7 @@ description: >
   This docker container automatically detects cameras in the network and makes them accessible via MQTT. The MQTT output is specified in [the MQTT documentation](/docs/concepts/mqtt/)
 aliases:
   - /docs/Developers/factorycube-edge/cameraconnect
+  - /docs/developers/factorycube-edge/cameraconnect
 ---
 
 **This microservice is still in development and is not considered stable for production use.**

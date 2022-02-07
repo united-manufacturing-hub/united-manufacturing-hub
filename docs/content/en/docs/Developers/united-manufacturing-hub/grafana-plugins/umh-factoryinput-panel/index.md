@@ -5,6 +5,7 @@ date: 2021-27-07
 description: Documentation of factoryinput-panel
 aliases:
   - /docs/Developers/factorycube-server/grafana-plugins/umh-factoryinput-panel
+  - /docs/developers/factorycube-server/grafana-plugins/umh-factoryinput-panel
 ---
 
 **This microservice is still in development and is not considered stable for production use.**

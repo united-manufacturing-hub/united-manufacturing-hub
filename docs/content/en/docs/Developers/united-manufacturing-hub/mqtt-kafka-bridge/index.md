@@ -5,6 +5,7 @@ description: >
   This docker container transfers messages from mqtt to kafka and vise versa
 aliases:
   - /docs/Developers/factorycube-server/mqtt-kafka-bridge
+  - /docs/developers/factorycube-server/mqtt-kafka-bridge
 ---
 
 ## Getting started

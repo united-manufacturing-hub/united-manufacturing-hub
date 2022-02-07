@@ -6,6 +6,7 @@ description: >
   This is the documentation for the container barcodereader.
 aliases:
   - /docs/Developers/factorycube-edge/barcodereader
+  - /docs/developers/factorycube-edge/barcodereader
 ---
 
 

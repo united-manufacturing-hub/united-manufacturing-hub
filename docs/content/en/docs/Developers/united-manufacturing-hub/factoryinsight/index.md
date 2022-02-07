@@ -5,6 +5,7 @@ description: >
   This document describes the usage of factoryinsight including environment variables and the REST API
 aliases:
   - /docs/Developers/factorycube-server/factoryinsight
+  - /docs/developers/factorycube-server/factoryinsight
 ---
 
 ## Getting started

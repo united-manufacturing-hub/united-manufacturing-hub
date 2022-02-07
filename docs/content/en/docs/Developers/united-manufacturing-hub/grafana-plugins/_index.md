@@ -6,6 +6,7 @@ weight: 5
 description: "Our grafana plugins"
 aliases:
   - /docs/Developers/factorycube-server/grafana-plugins
+  - /docs/developers/factorycube-server/grafana-plugins
 ---
 
 ## umh-datasource
