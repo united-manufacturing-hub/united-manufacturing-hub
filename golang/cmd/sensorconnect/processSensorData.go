@@ -104,12 +104,12 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 }
 
 func GenerateKafkaKey(information DiscoveredDeviceInformation) []byte {
-	sha512 := sha512.New()
-	sha512.Write([]byte(information.Url))
-	sha512.Write([]byte(information.ProductCode))
-	sha512.Write([]byte(information.SerialNumber))
+	sha512hasher := sha512.New()
+	sha512hasher.Write([]byte(information.Url))
+	sha512hasher.Write([]byte(information.ProductCode))
+	sha512hasher.Write([]byte(information.SerialNumber))
 
-	sum := sha512.Sum(nil)
+	sum := sha512hasher.Sum(nil)
 	var dst []byte
 	dst = make([]byte, len(sum))
 	base64.StdEncoding.Encode(dst, sum)
