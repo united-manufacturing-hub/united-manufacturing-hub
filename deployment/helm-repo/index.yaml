@@ -2,6 +2,19 @@ apiVersion: v1
 entries:
   factorycube-edge:
   - apiVersion: v2
+    appVersion: 0.7.2
+    created: "2021-12-23T14:12:39.7752829+01:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: b99287dead65cf872d7fb1e14860c8e5ff062f1677ca28f039607178cc1c5cc4
+    home: https://www.umh.app
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/factorycube-edge-0.7.2.tgz
+    version: 0.7.2
+  - apiVersion: v2
     appVersion: 0.7.1
     created: "2022-02-04T14:40:00.8460452+01:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
@@ -119,6 +132,40 @@ entries:
     - https://deploy-preview-822--umh-helm-repo.netlify.app/factorycube-edge-0.4.4.tgz
     version: 0.4.4
   factorycube-server:
+  - apiVersion: v2
+    appVersion: 0.7.2
+    created: "2021-12-23T14:12:39.9347387+01:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 9014b2c78ecd43164ec0a5dbb06a776b7c4664531c4c38043ddbab9f5724c852
+    home: https://www.umh.app
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/factorycube-server-0.7.2.tgz
+    version: 0.7.2
   - apiVersion: v2
     appVersion: 0.7.1
     created: "2022-02-04T14:40:00.9758396+01:00"
