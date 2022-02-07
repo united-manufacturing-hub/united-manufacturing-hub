@@ -53,7 +53,7 @@ dependencies:
   - name: minio-operator
     version: 4.1.7
     repository: https://operator.min.io/
-    condition: _000_commonConfig.datastorage.enabled
+    condition: _000_commonConfig.blobstorage.enabled
 
   - name: kafka
     version: 14.4.1
