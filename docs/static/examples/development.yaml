@@ -299,7 +299,7 @@ write_files:
       echo "Helm installed!"
 
       echo "Adding helm repo..."
-      if ! helm repo add united-manufacturing-hub https://deploy-preview-822--umh-helm-repo.netlify.app/ ; then
+      if ! helm repo add united-manufacturing-hub https://repo.umh.app ; then
       echo "Failed to add umh repository, aborting setup"
       exit
       fi
