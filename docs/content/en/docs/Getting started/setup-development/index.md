@@ -94,6 +94,10 @@ Password: `rancher`
 
 #### Step 4: Getting Kubernetes credentials
 
+{{< alert title="Note" color="info">}}
+For experts: in the folder `/tools` you can find a bash script that will do this step automatically for you 
+{{< /alert >}}
+
 Execute `cat /etc/rancher/k3s/k3s.yaml` in your SSH session on your laptop  to retrieve the Kubernetes credentials. Copy the content of the result into your clipboard.
 
 {{< imgproc k3s_secret_1.png Fit "1280x500" >}}Execute `cat /etc/rancher/k3s/k3s.yaml`{{< /imgproc >}}
@@ -163,16 +167,12 @@ This option is only recommended for developers. Therefore, the installation is t
 {{< imgproc minikube_1.png Fit "1280x500" >}}Output of the command `minikube start`{{< /imgproc >}}
 2. If everything went well, kubectl is now configured to use the minikube cluster by default. `kubectl version` should look like in the screenshot.
 {{< imgproc minikube_2.png Fit "1280x500" >}}Expected output of `kubectl version`{{< /imgproc >}}
-3. Go into the cloned repository and into the folder `deployment/factorycube-edge`
-4. execute: `kubectl create namespace factorycube-edge && kubectl create namespace factorycube-server`
+3. Go into the cloned repository and into the folder `deployment/united-manufacturing-hub`
+4. execute: `kubectl create namespace united-manufacturing-hub`
 {{< imgproc minikube_3.png Fit "1280x500" >}}Expected output of `kubectl create namespace`{{< /imgproc >}}
-5. Execute the following command to get an example development configuration: `curl https://docs.umh.app/examples/factorycube-server/development_values.yaml --output development_values.yaml`
 {{< imgproc minikube_4.png Fit "1280x500" >}}Output of curl{{< /imgproc >}}
-6. Install factorycube-edge by executing the following command: `helm install factorycube-edge . --values ./development_values.yaml -n factorycube-edge`
+6. Install by executing the following command: `helm install united-manufacturing-hub . -n united-manufacturing-hub`
 {{< imgproc minikube_5.png Fit "1280x500" >}}Output of `helm install`{{< /imgproc >}}
-7. Go to the factorcube-server folder, e.g. `cd ../factorycube-server`
-8. Install factorycube-server by executing the following command: `helm install factorycube-server . -n factorycube-server`
-{{< imgproc minikube_6.png Fit "1280x500" >}}Output of `helm install`{{< /imgproc >}}
 
 Now go grab a coffee and wait 15-20 minutes until all pods are "Running".
 
