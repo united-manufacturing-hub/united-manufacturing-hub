@@ -1,7 +1,9 @@
 ---
 title: "factoryinput"
 linktitle: "factoryinput"
-description: Documentation of factoryinput
+description: Documentation of factoryinputaliases:
+aliases:
+  - /docs/Developers/factorycube-server/factoryinput
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
@@ -70,7 +72,7 @@ Type: string
 
 Possible values: all
 
-Example value: tcp://factorycube-server-vernemq-local-service:1883
+Example value: tcp://united-manufacturing-hub-vernemq-local-service:1883
 
 ### CUSTOMER_NAME_{NUMBER}
 

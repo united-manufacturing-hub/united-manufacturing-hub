@@ -3,6 +3,8 @@ title: "mqtt-to-blob"
 linkTitle: "mqtt-to-blob"
 description: >
   The following guide describes how to catch data from the MQTT-Broker and push them to the MIN.io blob storage
+aliases:
+- /docs/Developers/factorycube-server/mqtt-to-blob
 ---
 {{% pageinfo color="warning" %}}
 **This microservice is still in development and is not considered stable for production use.**
@@ -10,7 +12,7 @@ description: >
 
 {{< imgproc mqtttoblob Fit "448x61" >}}{{< /imgproc >}}
 
-MQTT-to-Blob has the function of subscribing to MQTT topics and storing the information into a MIN.io blob storage. The current iteration of MQTT-to-Blob can subscribe to [cameraconnect](/docs/developers/factorycube-edge/cameraconnect)'s MQTT topic and send the image data to MIN.io server's bucket.
+MQTT-to-Blob has the function of subscribing to MQTT topics and storing the information into a MIN.io blob storage. The current iteration of MQTT-to-Blob can subscribe to [cameraconnect](/docs/developers/united-manufacturing-hub/cameraconnect)'s MQTT topic and send the image data to MIN.io server's bucket.
 
 The input format of mqtt-to-blob is in accordance with [```/productImage```](/docs/concepts/mqtt/#productimage) JSON format. The information from the JSON is extracted and then stored into an image file in MIN.io with the metadata attached.
 
