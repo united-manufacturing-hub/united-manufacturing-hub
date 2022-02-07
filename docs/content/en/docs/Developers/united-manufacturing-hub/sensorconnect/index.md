@@ -3,6 +3,8 @@ title: "sensorconnect"
 linkTitle: "sensorconnect"
 description: >
   This docker container automatically detects ifm gateways in the specified network and reads their sensor values in the highest possible data frequency. The MQTT output is specified in [the MQTT documentation](/docs/concepts/mqtt/)
+aliases:
+  - /docs/Developers/factorycube-edge/sensorconnect
 ---
 
 ## Getting started

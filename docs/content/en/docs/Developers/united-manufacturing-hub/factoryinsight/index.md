@@ -1,22 +1,21 @@
 ---
-title: "mqtt-to-postgresql"
-linktitle: "mqtt-to-postgresql"
+title: "factoryinsight"
+linkTitle: "factoryinsight"
 description: >
-  Documentation of mqtt-to-postgresql
+  This document describes the usage of factoryinsight including environment variables and the REST API
+aliases:
+  - /docs/Developers/factorycube-server/factoryinsight
 ---
-
-mqtt-to-postgresql subscribes to the MQTT broker (in the stack this is [VerneMQ](https://github.com/vernemq/vernemq)), parses incoming messages on the topic "ia/#" and stores them in the postgresql / [timescaleDB database](https://github.com/timescale/timescaledb) (if they are in the correct [datamodel](/docs/concepts/mqtt/))
 
 ## Getting started
 
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
-docker-compose -f ./deployment/mqtt-to-postgresql/docker-compose-mqtt-to-postgresql-development.yml --env-file ./.env up -d --build
+Go to the root folder of the project and execute the following command:
 
-## Message processing flow
-Below diagram shows an abstract flow, of an incoming MQTT message.
-
-[![MQTT-Flow](MQTT-Flow.svg)](MQTT-Flow.svg)
+```bash
+sudo docker build -f deployment/factoryinsight/Dockerfile -t factoryinsight:latest . && sudo docker run factoryinsight:latest 
+```
 
 ## Environment variables
 
@@ -30,7 +29,7 @@ This chapter explains all used environment variables.
 
 **Possible values:** all DNS names or IP 
 
-**Example value:**  factorycube-server
+**Example value:**  united-manufacturing-hub
 
 ### POSTGRES_PORT
 
@@ -72,9 +71,39 @@ This chapter explains all used environment variables.
 
 **Example value:**  changeme
 
-### DRY_RUN
+### FACTORYINSIGHT_USER
 
-**Description:** Enables dry run mode (doing everything, even "writing" to database, except committing the changes.) 
+**Description:** Specifies the admin user for the REST API 
+
+**Type:** string
+
+**Possible values:** all
+
+**Example value:**  jeremy
+
+### FACTORYINSIGHT_PASSWORD
+
+**Description:** Specifies the password for the admin user for the REST API 
+
+**Type:** string
+
+**Possible values:** all
+
+**Example value:**  changeme
+
+### VERSION
+
+**Description:** The version of the API used (currently not used yet) 
+
+**Type:** int
+
+**Possible values:** all
+
+**Example value:**  1
+
+### DEBUG_ENABLED
+
+**Description:** Enables debug logging 
 
 **Type:** string
 
@@ -90,7 +119,7 @@ This chapter explains all used environment variables.
 
 **Possible values:** All valids URIs
 
-**Example value:** factorycube-server-redis-node-0.factorycube-server-redis-headless:26379
+**Example value:** united-manufacturing-hub-redis-node-0.united-manufacturing-hub-redis-headless:26379
 
 ### REDIS_URI2
 
@@ -100,7 +129,7 @@ This chapter explains all used environment variables.
 
 **Possible values:** All valids URIs
 
-**Example value:** factorycube-server-redis-node-1.factorycube-server-redis-headless:26379
+**Example value:** united-manufacturing-hub-redis-node-1.united-manufacturing-hub-redis-headless:26379
 
 ### REDIS_URI3
 
@@ -110,7 +139,7 @@ This chapter explains all used environment variables.
 
 **Possible values:** All valids URIs
 
-**Example value:** factorycube-server-redis-node-2.factorycube-server-redis-headless:26379
+**Example value:** united-manufacturing-hub-redis-node-2.united-manufacturing-hub-redis-headless:26379
 
 ### REDIS_PASSWORD
 
@@ -122,24 +151,8 @@ This chapter explains all used environment variables.
 
 **Example value:** changeme 
 
-### MY_POD_NAME
 
-**Description:** The pod name. Used only for tracing, logging and  MQTT client id. 
+## REST API
 
-**Type:** string
-
-**Possible values:** all 
-
-**Example value:** app-mqtttopostgresql-0 
-
-### MQTT_TOPIC
-
-**Description:** Topic to subscribe to. Only set for debugging purposes, e.g., to subscribe to a certain message type. Default usually works fine.  
-
-**Type:** string
-
-**Possible values:**  all possible MQTT topics 
-
-**Example value:** $share/MQTT_TO_POSTGRESQL/ia/# 
-
+{{< swaggerui src="/openapi/factoryinsight.yml" >}}
 

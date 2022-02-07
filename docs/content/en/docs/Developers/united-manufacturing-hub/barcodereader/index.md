@@ -4,6 +4,8 @@ linkTitle: "barcodereader"
 date: 2021-03-15
 description: >
   This is the documentation for the container barcodereader.
+aliases:
+  - /docs/Developers/factorycube-edge/barcodereader
 ---
 
 

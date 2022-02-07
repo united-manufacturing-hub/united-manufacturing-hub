@@ -3,6 +3,8 @@ title: "cameraconnect"
 linkTitle: "cameraconnect"
 description: >
   This docker container automatically detects cameras in the network and makes them accessible via MQTT. The MQTT output is specified in [the MQTT documentation](/docs/concepts/mqtt/)
+aliases:
+  - /docs/Developers/factorycube-edge/cameraconnect
 ---
 
 **This microservice is still in development and is not considered stable for production use.**
@@ -11,7 +13,7 @@ description: >
 
 ### Using the Helm chart
 
-By default cameraconnect will be deactivated in factorycube-edge. First, you need to enable it in the factorycube-edge values. Then you need to create a folder on the node in `/home/rancher/gentl_producer` and move your genTL producer files (*.cti) and all required libaries into that folder. Then apply your settings to the Helm chart with `helm upgrade`.
+By default cameraconnect will be deactivated in united-manufacturing-hub. First, you need to enable it in the united-manufacturing-hub values. Then you need to create a folder on the node in `/home/rancher/gentl_producer` and move your genTL producer files (*.cti) and all required libaries into that folder. Then apply your settings to the Helm chart with `helm upgrade`.
 
 Another idea for changing it:
 `helm install ....... --set 'cameraconnect.enabled=true'`
