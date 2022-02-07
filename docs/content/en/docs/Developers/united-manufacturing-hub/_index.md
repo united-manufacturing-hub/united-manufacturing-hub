@@ -3,8 +3,7 @@
 title: "united-manufacturing-hub"
 linkTitle: "united-manufacturing-hub"
 weight: 5
-description: >
-The architecture of united-manufacturing-hub
+description: "The architecture of united-manufacturing-hub"
 aliases:
   - /docs/Developers/factorycube-edge
   - /docs/Developers/factorycube-server

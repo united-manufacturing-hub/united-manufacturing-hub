@@ -3,8 +3,7 @@
 title: "grafana-plugins"
 linkTitle: "grafana-plugins"
 weight: 5 
-description: >
- Our grafana plugins
+description: "Our grafana plugins"
 aliases:
   - /docs/Developers/factorycube-server/grafana-plugins
 ---
