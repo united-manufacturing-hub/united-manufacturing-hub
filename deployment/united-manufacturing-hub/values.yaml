@@ -227,12 +227,6 @@ cameraconnect:
 ### nodered ###
 nodered:
   pluginInstallEnabled: true
-  pluginInstallLines: |-
-      npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
-      npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
-      npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
-      npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
-      npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
   tag: 2.0.6
   port: 1880
   storageRequest: 1Gi
