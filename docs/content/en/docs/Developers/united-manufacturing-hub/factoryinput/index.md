@@ -1,7 +1,7 @@
 ---
 title: "factoryinput"
 linktitle: "factoryinput"
-description: Documentation of factoryinputaliases:
+description: Documentation of factoryinput
 aliases:
   - /docs/Developers/factorycube-server/factoryinput
 ---
