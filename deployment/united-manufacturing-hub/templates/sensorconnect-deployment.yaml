@@ -54,13 +54,13 @@ spec:
               value: {{ include "united-manufacturing-hub.fullname" . }}-vernemq-local-service:1883
 
             - name: LOWER_SENSOR_TICK_TIME_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeed}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeedMs}}
             - name: UPPER_SENSOR_TICK_TIME_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeed}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeedMs}}
             - name: SENSOR_TICK_STEP_MS_UP
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUp}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUpMs}}
             - name: SENSOR_TICK_STEP_MS_DOWN
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDown}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDownMs}}
 
             - name: MQTT_CERTIFICATE_NAME
               value: "NO_NAME"
