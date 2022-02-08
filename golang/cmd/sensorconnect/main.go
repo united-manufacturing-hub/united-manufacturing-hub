@@ -35,12 +35,14 @@ var useMQTT bool
 
 var deviceFinderFrequencyInS = 20
 
-var minSensorTickSpeed int
+var lowestSensorTickTime int
 
-var maxSensorTickSpeed int
+var upperSensorTickTime int
 
-var SensorTickSpeedStep int
+var sensorTickTimeSteppingUp int
 var actualSensorTickSpeed int
+
+var sensorTickTimeSteppingDown int
 
 func main() {
 	var logger *zap.Logger
@@ -81,20 +83,25 @@ func main() {
 	}
 
 	var err error
-	minSensorTickSpeed, err = strconv.Atoi(os.Getenv("SENSOR_TICK_MAX_SPEED_MS"))
+	lowestSensorTickTime, err = strconv.Atoi(os.Getenv("LOWER_SENSOR_TICK_TIME_MS"))
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_MAX_SPEED_MS env to int, defaulting to 100")
-		minSensorTickSpeed = 100
+		zap.S().Errorf("Couldn't convert LOWER_SENSOR_TICK_TIME_MS env to int, defaulting to 100")
+		lowestSensorTickTime = 100
 	}
-	maxSensorTickSpeed, err = strconv.Atoi(os.Getenv("SENSOR_TICK_MIN_SPEED_MS"))
+	upperSensorTickTime, err = strconv.Atoi(os.Getenv("UPPER_SENSOR_TICK_TIME_MS"))
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_MIN_SPEED_MS env to int, defaulting to 100")
-		maxSensorTickSpeed = 100
+		zap.S().Errorf("Couldn't convert UPPER_SENSOR_TICK_TIME_MS env to int, defaulting to 100")
+		upperSensorTickTime = 100
 	}
-	SensorTickSpeedStep, err = strconv.Atoi(os.Getenv("SENSOR_TICK_MAX_SPEED_MS"))
+	sensorTickTimeSteppingUp, err = strconv.Atoi(os.Getenv("SENSOR_TICK_STEP_MS_UP"))
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_MAX_SPEED_MS env to int, defaulting to 10")
-		SensorTickSpeedStep = 10
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 10")
+		sensorTickTimeSteppingUp = 10
+	}
+	sensorTickTimeSteppingDown, err = strconv.Atoi(os.Getenv("SENSOR_TICK_STEP_MS_DOWN"))
+	if err != nil {
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 10")
+		sensorTickTimeSteppingDown = 10
 	}
 
 	ipRange := os.Getenv("IP_RANGE")
@@ -139,7 +146,7 @@ func main() {
 		zap.S().Infof("Initial iodd file download not yet complete, awaiting.")
 		time.Sleep(1 * time.Second)
 	}
-	actualSensorTickSpeed = minSensorTickSpeed
+	actualSensorTickSpeed = lowestSensorTickTime
 	zap.S().Infof("Requesting data every %d ms", actualSensorTickSpeed)
 	tickerProcessSensorData := time.NewTicker(time.Duration(actualSensorTickSpeed) * time.Millisecond)
 	defer tickerProcessSensorData.Stop()
@@ -151,7 +158,7 @@ func main() {
 func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon")
 
-	cyclesWithoutError := uint32(0)
+	cyclesWithoutError := uint64(0)
 	for {
 
 		select {
@@ -175,25 +182,25 @@ func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapCh
 			})
 
 			// Don't change read speed, if not configured !
-			if maxSensorTickSpeed == minSensorTickSpeed {
+			if upperSensorTickTime == lowestSensorTickTime {
 				continue
 			}
 
 			if hadError {
 				cyclesWithoutError = 0
-				actualSensorTickSpeed += SensorTickSpeedStep
-				if actualSensorTickSpeed > maxSensorTickSpeed {
-					actualSensorTickSpeed = maxSensorTickSpeed
+				actualSensorTickSpeed += sensorTickTimeSteppingUp
+				if actualSensorTickSpeed > upperSensorTickTime {
+					actualSensorTickSpeed = upperSensorTickTime
 				}
 				zap.S().Debugf("Increased tick time to %d", actualSensorTickSpeed)
 				ticker.Reset(time.Duration(actualSensorTickSpeed) * time.Millisecond)
 			} else {
 				cyclesWithoutError += 1
 				if cyclesWithoutError%10 == 0 {
-					if actualSensorTickSpeed > minSensorTickSpeed {
-						actualSensorTickSpeed -= SensorTickSpeedStep
-						if actualSensorTickSpeed < minSensorTickSpeed {
-							actualSensorTickSpeed = minSensorTickSpeed
+					if actualSensorTickSpeed > lowestSensorTickTime {
+						actualSensorTickSpeed -= sensorTickTimeSteppingDown
+						if actualSensorTickSpeed < lowestSensorTickTime {
+							actualSensorTickSpeed = lowestSensorTickTime
 						}
 						zap.S().Debugf("Reduced tick time to %d", actualSensorTickSpeed)
 						ticker.Reset(time.Duration(actualSensorTickSpeed) * time.Millisecond)

@@ -45,8 +45,6 @@ spec:
 
             - name: IODD_FILE_PATH
               value: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath | quote}}
-            - name: SENSOR_TICK_MAX_SPEED_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.tickSpeed}}
             - name: USE_KAFKA
               value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka}}
             - name: USE_MQTT
@@ -54,6 +52,15 @@ spec:
 
             - name: MQTT_BROKER_URL
               value: {{ include "united-manufacturing-hub.fullname" . }}-vernemq-local-service:1883
+
+            - name: LOWER_SENSOR_TICK_TIME_MS
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeed}}
+            - name: UPPER_SENSOR_TICK_TIME_MS
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeed}}
+            - name: SENSOR_TICK_STEP_MS_UP
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUp}}
+            - name: SENSOR_TICK_STEP_MS_DOWN
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDown}}
 
             - name: MQTT_CERTIFICATE_NAME
               value: "NO_NAME"

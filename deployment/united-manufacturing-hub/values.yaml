@@ -22,7 +22,10 @@ _000_commonConfig:
       ioddfilepath: "/ioddfiles"
       useKafka: true
       useMQTT: false
-      tickSpeed: 100
+      lowerTickSpeed: 100 # Fastest time, sensors should be requested to serve data
+      upperTickSpeed: 100 # Slowest time, sensors should be requested to serve data
+      TickSpeedSteppingUp: 10 # Time to add to actual stepping in case of failure
+      TickSpeedSteppingDown: 1 # Time to add to actual stepping in case of no-failure
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures

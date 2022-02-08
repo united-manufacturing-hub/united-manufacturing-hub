@@ -109,7 +109,7 @@ func SendMQTTMessage(topic string, message []byte) {
 
 	_, found := internal.GetMemcached(cacheKey)
 	if found {
-		zap.S().Debugf("Duplicate message for topic %s, you might want to increase SENSOR_TICK_MAX_SPEED_MS !", topic)
+		zap.S().Debugf("Duplicate message for topic %s, you might want to increase LOWER_SENSOR_TICK_TIME_MS !", topic)
 		return
 	}
 
