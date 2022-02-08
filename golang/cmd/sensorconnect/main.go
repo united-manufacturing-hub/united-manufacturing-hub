@@ -14,7 +14,10 @@ import (
 )
 
 var mqttClient MQTT.Client
-var discoveredDeviceInformation []DiscoveredDeviceInformation
+
+//var discoveredDeviceInformation []DiscoveredDeviceInformation
+// key is url
+var discoveredDeviceInformation sync.Map
 
 //var ioDeviceMap map[IoddFilemapKey]IoDevice
 var ioDeviceMap sync.Map
@@ -31,6 +34,13 @@ var useKafka bool
 var useMQTT bool
 
 var deviceFinderFrequencyInS = 20
+
+var minSensorTickSpeed int
+
+var maxSensorTickSpeed int
+
+var SensorTickSpeedStep int
+var actualSensorTickSpeed int
 
 func main() {
 	var logger *zap.Logger
@@ -70,10 +80,21 @@ func main() {
 		kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
-	sensorTickSpeedMS, err := strconv.Atoi(os.Getenv("SENSOR_TICK_SPEED_MS"))
+	var err error
+	minSensorTickSpeed, err = strconv.Atoi(os.Getenv("SENSOR_TICK_MAX_SPEED_MS"))
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_SPEED_MS env to int, defaulting to 100")
-		sensorTickSpeedMS = 100
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_MAX_SPEED_MS env to int, defaulting to 100")
+		minSensorTickSpeed = 100
+	}
+	maxSensorTickSpeed, err = strconv.Atoi(os.Getenv("SENSOR_TICK_MIN_SPEED_MS"))
+	if err != nil {
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_MIN_SPEED_MS env to int, defaulting to 100")
+		maxSensorTickSpeed = 100
+	}
+	SensorTickSpeedStep, err = strconv.Atoi(os.Getenv("SENSOR_TICK_MAX_SPEED_MS"))
+	if err != nil {
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_MAX_SPEED_MS env to int, defaulting to 10")
+		SensorTickSpeedStep = 10
 	}
 
 	ipRange := os.Getenv("IP_RANGE")
@@ -85,6 +106,7 @@ func main() {
 	// creating ioDeviceMap and downloading initial set of iodd files
 
 	ioDeviceMap = sync.Map{}
+	discoveredDeviceInformation = sync.Map{}
 
 	fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
 
@@ -106,22 +128,20 @@ func main() {
 
 	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
 
-	for len(discoveredDeviceInformation) == 0 {
-		zap.S().Debugf("No devices discovered yet.")
+	for GetSyncMapLen(&discoveredDeviceInformation) == 0 {
+		zap.S().Infof("No devices discovered yet.")
 		time.Sleep(1 * time.Second)
 	}
+
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
 
-	for {
-		for GetSyncMapLen(&ioDeviceMap) == 0 {
-			zap.S().Infof("Initial iodd file download not yet complete, awaiting.")
-			time.Sleep(1 * time.Second)
-		}
-		break
+	for GetSyncMapLen(&ioDeviceMap) == 0 {
+		zap.S().Infof("Initial iodd file download not yet complete, awaiting.")
+		time.Sleep(1 * time.Second)
 	}
-
-	zap.S().Infof("Requesting data every %d ms", sensorTickSpeedMS)
-	tickerProcessSensorData := time.NewTicker(time.Duration(sensorTickSpeedMS) * time.Millisecond)
+	actualSensorTickSpeed = minSensorTickSpeed
+	zap.S().Infof("Requesting data every %d ms", actualSensorTickSpeed)
+	tickerProcessSensorData := time.NewTicker(time.Duration(actualSensorTickSpeed) * time.Millisecond)
 	defer tickerProcessSensorData.Stop()
 	go continuousSensorDataProcessing(tickerProcessSensorData, updateIoddIoDeviceMapChan)
 
@@ -131,20 +151,54 @@ func main() {
 func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon")
 
+	cyclesWithoutError := uint32(0)
 	for {
+
 		select {
 		case <-ticker.C:
 			var err error
-			for _, deviceInfo := range discoveredDeviceInformation {
+
+			hadError := false
+			discoveredDeviceInformation.Range(func(key, rawCurrentDeviceInformation interface{}) bool {
+				deviceInfo := rawCurrentDeviceInformation.(DiscoveredDeviceInformation)
 				var portModeMap map[int]int
 
 				portModeMap, err = GetPortModeMap(deviceInfo)
 				if err != nil {
-					zap.S().Errorf("GetPortModeMap produced the error: %v for URL %s & Serial %s", err, deviceInfo.Url, deviceInfo.SerialNumber)
-					continue
+					zap.S().Warnf("Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
+					hadError = true
+					return true
 				}
 
 				go downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap)
+				return true
+			})
+
+			// Don't change read speed, if not configured !
+			if maxSensorTickSpeed == minSensorTickSpeed {
+				continue
+			}
+
+			if hadError {
+				cyclesWithoutError = 0
+				actualSensorTickSpeed += SensorTickSpeedStep
+				if actualSensorTickSpeed > maxSensorTickSpeed {
+					actualSensorTickSpeed = maxSensorTickSpeed
+				}
+				zap.S().Debugf("Increased tick time to %d", actualSensorTickSpeed)
+				ticker.Reset(time.Duration(actualSensorTickSpeed) * time.Millisecond)
+			} else {
+				cyclesWithoutError += 1
+				if cyclesWithoutError%10 == 0 {
+					if actualSensorTickSpeed > minSensorTickSpeed {
+						actualSensorTickSpeed -= SensorTickSpeedStep
+						if actualSensorTickSpeed < minSensorTickSpeed {
+							actualSensorTickSpeed = minSensorTickSpeed
+						}
+						zap.S().Debugf("Reduced tick time to %d", actualSensorTickSpeed)
+						ticker.Reset(time.Duration(actualSensorTickSpeed) * time.Millisecond)
+					}
+				}
 			}
 		}
 	}
@@ -167,8 +221,7 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 		case <-ticker.C:
 			var err error
 			zap.S().Debugf("Starting device scan..")
-			discoveredDeviceInformation, err = DiscoverDevices(ipRange)
-			zap.S().Debugf("The discovered devices are: %v \n", discoveredDeviceInformation)
+			err = DiscoverDevices(ipRange)
 			if err != nil {
 				zap.S().Errorf("DiscoverDevices produced the error: %v", err)
 				continue

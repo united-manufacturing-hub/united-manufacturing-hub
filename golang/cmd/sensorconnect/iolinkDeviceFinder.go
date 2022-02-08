@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
 	"log"
 	"net"
@@ -38,30 +39,29 @@ type DiscoveredDeviceInformation struct {
 	Url          string
 }
 
-var discoveredDevices []DiscoveredDeviceInformation
-
-func DiscoverDevices(cidr string) ([]DiscoveredDeviceInformation, error) {
-	var err error
-	discoveredDevices = discoveredDevices[:0]
+func DiscoverDevices(cidr string) (err error) {
 	start, finish, err := ConvertCidrToIpRange(cidr)
+	if err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 	// loop through addresses as uint32
+	nDevices := finish - start
+	zap.S().Debugf("Scanning %d IP addresses", nDevices)
 	for i := start; i <= finish; i++ {
 		wg.Add(1)
 		go GetDiscoveredDeviceInformation(&wg, i)
-		time.Sleep(10 * time.Millisecond)
+		internal.SleepBackedOff(int64(i), 10*time.Nanosecond, 100*time.Millisecond)
 	}
 
-	//zap.S().Infof("Waiting for discovery to complete...")
 	wg.Wait()
-	//zap.S().Infof("Discovery completed, found : %d", len(discoveredDevices))
-
 	//Pre-create kafka topics to reduce load later !
-	for _, currentDeviceInformation := range discoveredDevices {
+	discoveredDeviceInformation.Range(func(key, rawCurrentDeviceInformation interface{}) bool {
+		currentDeviceInformation := rawCurrentDeviceInformation.(DiscoveredDeviceInformation)
 		portModeMap, err := GetPortModeMap(currentDeviceInformation)
 		if err != nil {
-			continue
+			return true
 		}
 		for portNumber := range portModeMap {
 			mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
@@ -69,14 +69,13 @@ func DiscoverDevices(cidr string) ([]DiscoveredDeviceInformation, error) {
 			err := CreateTopicIfNotExists(kafkaTopic)
 			if err != nil {
 				zap.S().Errorf("Failed to create topic %s", err)
-				continue
+				return true
 			}
 		}
-	}
+		return true
+	})
 
-	tmp := make([]DiscoveredDeviceInformation, len(discoveredDevices))
-	copy(tmp, discoveredDevices)
-	return tmp, err
+	return nil
 }
 
 func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
@@ -99,13 +98,14 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 		return
 	}
 
-	discoveredDeviceInformation := DiscoveredDeviceInformation{}
+	ddI := DiscoveredDeviceInformation{}
 	// Insert relevant gained data into DiscoveredDeviceInformation and store in slice
-	discoveredDeviceInformation.ProductCode = unmarshaledAnswer.Data.DeviceInfoProductCode.Data
-	discoveredDeviceInformation.SerialNumber = unmarshaledAnswer.Data.DeviceInfoSerialnumber.Data
-	discoveredDeviceInformation.Url = url
-	zap.S().Infof("Found device (SN: %s, PN: %s) at %s", discoveredDeviceInformation.SerialNumber, discoveredDeviceInformation.ProductCode, url)
-	discoveredDevices = append(discoveredDevices, discoveredDeviceInformation)
+	ddI.ProductCode = unmarshaledAnswer.Data.DeviceInfoProductCode.Data
+	ddI.SerialNumber = unmarshaledAnswer.Data.DeviceInfoSerialnumber.Data
+	ddI.Url = url
+	zap.S().Infof("Found device (SN: %s, PN: %s) at %s", ddI.SerialNumber, ddI.ProductCode, url)
+	//Only needs write locking, if not present !
+	discoveredDeviceInformation.LoadOrStore(ddI.Url, ddI)
 }
 
 func ConvertCidrToIpRange(cidr string) (start uint32, finish uint32, err error) {
@@ -157,13 +157,13 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	client.Timeout = time.Second * time.Duration(deviceFinderFrequencyInS)
 	resp, err := client.Do(req)
 	if err != nil {
-		zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
+		//zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		zap.S().Debugf("Response status not 200 but instead: %s", resp.StatusCode)
+		zap.S().Debugf("Response status not 200 but instead: %d (URL: %s)", resp.StatusCode, url)
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)

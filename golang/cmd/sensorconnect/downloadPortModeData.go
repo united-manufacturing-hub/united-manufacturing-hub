@@ -38,7 +38,6 @@ func GetPortModeMap(currentDeviceInformation DiscoveredDeviceInformation) (map[i
 	modeRequestBody := createModeRequestBody(numberOfPorts)
 	respBody, err := downloadModeStatus(currentDeviceInformation.Url, modeRequestBody)
 	if err != nil {
-		zap.S().Errorf("download of response from url %s failed.", currentDeviceInformation.Url)
 		return nil, err
 	}
 	modeMap, err = unmarshalModeInformation(respBody)

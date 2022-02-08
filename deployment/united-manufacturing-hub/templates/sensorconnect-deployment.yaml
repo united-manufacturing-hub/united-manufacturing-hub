@@ -45,7 +45,7 @@ spec:
 
             - name: IODD_FILE_PATH
               value: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath | quote}}
-            - name: SENSOR_TICK_SPEED_MS
+            - name: SENSOR_TICK_MAX_SPEED_MS
               value: {{.Values._000_commonConfig.datasources.sensorconnect.tickSpeed}}
             - name: USE_KAFKA
               value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka}}

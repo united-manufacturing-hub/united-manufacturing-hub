@@ -15,18 +15,20 @@ func SendKafkaMessage(kafkaTopicName string, message []byte, key []byte) {
 	if !useKafka {
 		return
 	}
-	err := CreateTopicIfNotExists(kafkaTopicName)
-	if err != nil {
-		zap.S().Errorf("Failed to create topic %s", err)
-		return
-	}
 
 	messageHash := xxh3.Hash(message)
 	cacheKey := fmt.Sprintf("SendKafkaMessage%s%d", kafkaTopicName, messageHash)
 
 	_, found := internal.GetMemcached(cacheKey)
 	if found {
-		zap.S().Debugf("Duplicate message for topic %s, you might want to increase SENSOR_TICK_SPEED_MS !", kafkaTopicName)
+		zap.S().Debugf("Duplicate message for topic %s, you might want to increase SENSOR_TICK_MAX_SPEED_MS !", kafkaTopicName)
+		return
+	}
+
+	err := CreateTopicIfNotExists(kafkaTopicName)
+	if err != nil {
+		zap.S().Errorf("Failed to create topic %s", err)
+		panic("Failed to create topic, restarting")
 		return
 	}
 
