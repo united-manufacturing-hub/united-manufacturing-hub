@@ -207,6 +207,10 @@ func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapCh
 					}
 				}
 			}
+
+			if hadError && actualSensorTickSpeed == upperSensorTickTime {
+				zap.S().Warnf("One of your sensors is to slow or died !")
+			}
 		}
 	}
 }
