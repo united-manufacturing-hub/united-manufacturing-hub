@@ -52,7 +52,7 @@ dependencies:
     condition: _000_commonConfig.datastorage.enabled
 
   - name: minio-operator
-    version: 4.1.7
+    version: 4.3.7
     repository: https://operator.min.io/
     condition: _000_commonConfig.blobstorage.enabled
 
