@@ -980,39 +980,6 @@ timescaledb-single:
         name: timescale-post-init-pw
         optional: false
 
-  loadBalancer:
-    # If not enabled, we still expose the primary using a so called Headless Service
-    # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
-    enabled: true
-    port: 5432
-    # Read more about the AWS annotations here:
-    # https://kubernetes.io/docs/concepts/cluster-administration/cloud-providers/#aws
-    # https://docs.aws.amazon.com/eks/latest/userguide/load-balancing.html
-    annotations:
-      # Setting idle-timeout to the maximum allowed value, as in general
-      # database connections are long lived
-      service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
-
-      # service.beta.kubernetes.io/aws-load-balancer-type: nlb            # Use an NLB instead of ELB
-      # service.beta.kubernetes.io/aws-load-balancer-internal: 0.0.0.0/0  # Internal Load Balancer
-    # Define extra things that should go in the service spec
-    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core
-    spec:
-    # loadBalancerSourceRanges:
-    # - "0.0.0.0/0"
-
-  replicaLoadBalancer:
-    # If not enabled, we still expose the replica's using a so called Headless Service
-    # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
-    enabled: false
-    port: 5433
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
-    # Define extra things that should go in the service spec
-    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core
-    spec:
-    # loadBalancerSourceRanges:
-    # - "0.0.0.0/0"
 
   readinessProbe:
     enabled: true
@@ -2122,7 +2089,7 @@ redis:
     pullPolicy: IfNotPresent
     registry: docker.io
     repository: bitnami/redis
-    tag: 6.0.9-debian-10-r13
+    tag: 6.2.6-debian-10-r103
   master:
     affinity: {}
     command: /run.sh
@@ -2283,19 +2250,7 @@ redis:
     usePassword: true
   serviceAccount:
     create: false
-  slave:
-    affinity: {}
-    command: /run.sh
-    customLivenessProbe: {}
-    customReadinessProbe: {}
-    disableCommands:
-      - FLUSHDB
-      - FLUSHALL
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
-    extraFlags: []
-    hostAliases: []
+  replica:
     livenessProbe:
       enabled: true
       failureThreshold: 5
@@ -2307,16 +2262,11 @@ redis:
       accessModes:
         - ReadWriteOnce
       enabled: true
-      matchExpressions: {}
-      matchLabels: {}
       path: /data
       size: 8Gi
       subPath: ""
-    podAnnotations: {}
-    podLabels: {}
-    port: 6379
-    preExecCmds: ""
-    priorityClassName: {}
+    containerPorts:
+      redis: 6379
     readinessProbe:
       enabled: true
       failureThreshold: 5
@@ -2333,42 +2283,22 @@ redis:
     service:
       annotations: {}
       externalTrafficPolicy: Cluster
-      labels: {}
-      port: 6379
+      ports:
+        redis: 6379
       type: ClusterIP
     shareProcessNamespace: false
-    spreadConstraints: {}
-    statefulset:
-      annotations: {}
-      labels: {}
-      updateStrategy: RollingUpdate
-      volumeClaimTemplates:
-        annotations: {}
-        labels: {}
-  sysctlImage:
-    command: []
+    updateStrategy:
+      type: RollingUpdate
+  sysctl:
     enabled: false
-    mountHostSys: false
-    pullPolicy: Always
-    registry: docker.io
-    repository: bitnami/minideb
-    resources: {}
-    tag: buster
   tls:
     authClients: true
     enabled: false
-  usePassword: true
-  usePasswordFile: false
+  auth:
+    enabled: true
+    usePasswordFiles: false
   volumePermissions:
     enabled: false
-    image:
-      pullPolicy: Always
-      registry: docker.io
-      repository: bitnami/minideb
-      tag: buster
-    resources: {}
-    securityContext:
-      runAsUser: 0
 
 
 ##### CONFIG FOR VERNEMQ #####
