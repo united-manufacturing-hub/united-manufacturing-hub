@@ -37,7 +37,7 @@ dependencies:
     condition: _000_commonConfig.datastorage.enabled
 
   - name: vernemq
-    version: 1.6.7
+    version: 1.6.12-1
     repository: https://vernemq.github.io/docker-vernemq
     condition: _000_commonConfig.infrastructure.mqtt.enabled
 
