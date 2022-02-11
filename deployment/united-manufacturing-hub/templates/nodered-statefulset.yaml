@@ -46,9 +46,13 @@ spec:
             - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi;
               cd /data;
               if mkdir DO_NOT_DELETE; then
-                {{ default "" .Values.nodered.pluginInstallLines}}
+                npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
+                npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
+                npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
+                npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
+                npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
               else
-              echo "Initial installation already completed. Please use Node-RED UI for further package installations";
+                echo "Initial installation already completed. Please use Node-RED UI for further package installations";
               exit 0;
               fi;
           volumeMounts:
@@ -92,5 +96,7 @@ spec:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
         configMap:
           name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
-
+      - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
+        configMap:
+          name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
 {{end}}

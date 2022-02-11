@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 )
@@ -545,7 +544,6 @@ func TestProcessStates_Complex_1(t *testing.T) {
 
 func Test_processStatesOptimized(t *testing.T) {
 	type args struct {
-		parentSpan    opentracing.Span
 		assetID       uint32
 		stateArray    []datamodel.StateEntry
 		rawShifts     []datamodel.ShiftEntry
@@ -627,7 +625,7 @@ func Test_processStatesOptimized(t *testing.T) {
 
 		// Executing tests
 		t.Run(tt.name, func(t *testing.T) {
-			gotProcessedStateArray, err := processStatesOptimized(tt.args.parentSpan, tt.args.assetID, tt.args.stateArray, tt.args.rawShifts, tt.args.countSlice, tt.args.orderArray, tt.args.from, tt.args.to, tt.args.configuration)
+			gotProcessedStateArray, err := processStatesOptimized(nil, tt.args.assetID, tt.args.stateArray, tt.args.rawShifts, tt.args.countSlice, tt.args.orderArray, tt.args.from, tt.args.to, tt.args.configuration)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("processStatesOptimized() error = %v, wantErr %v", err, tt.wantErr)
 				return

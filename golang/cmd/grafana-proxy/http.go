@@ -2,16 +2,22 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	ginopentracing "github.com/Bose/go-gin-opentracing"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	_ "go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
@@ -30,6 +36,22 @@ var FactoryInsightBaseUrl string
 
 const tracingContext = "tracing-context"
 
+var tracer = otel.Tracer("grafana-proxy-server")
+
+func initTracer() *sdktrace.TracerProvider {
+	exporter, err := stdout.New(stdout.WithPrettyPrint())
+	if err != nil {
+		panic(err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithBatcher(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return tp
+}
+
 func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -44,25 +66,16 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 	//   - stack means whether output the stack info.
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
-	// initialize the global singleton for tracing...
-	tracer, reporter, closer, err := ginopentracing.InitTracing("factoryinsight", jaegerHost+":"+jaegerPort, ginopentracing.WithEnableInfoLog(false))
-	if err != nil {
-		panic("unable to init tracing")
-	}
-	defer func(closer io.Closer) {
-		err := closer.Close()
-		if err != nil {
-			panic(err)
+	// Setting up the tracer
+	tp := initTracer()
+
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			panic(fmt.Sprintf("Error shutting down tracer provider: %v", err))
 		}
-	}(closer)
-	defer reporter.Close()
-	opentracing.SetGlobalTracer(tracer)
-
-	// create the middleware
-	p := ginopentracing.OpenTracer([]byte("api-request-"))
-
+	}()
 	// tell gin to use the middleware
-	router.Use(p)
+	router.Use(otelgin.Middleware("grafana-proxy"))
 
 	// Healthcheck
 	router.GET("/", func(c *gin.Context) {
@@ -78,22 +91,30 @@ func SetupRestAPI(jaegerHost string, jaegerPort string) {
 		v1.OPTIONS(serviceRoute, optionsCORSHAndler)
 	}
 
-	err = router.Run(":80")
+	err := router.Run(":80")
 	if err != nil {
 		panic(err)
 	}
 }
 
 func optionsCORSHAndler(c *gin.Context) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "optionsCORSHAndler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	zap.S().Debugf("optionsCORSHAndler")
 	AddCorsHeaders(c)
 	c.Status(http.StatusOK)
 }
 
-func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err error) {
+func handleInvalidInputError(c *gin.Context, err error) {
 
-	ext.LogError(parentSpan, err)
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+		traceID = span.SpanContext().SpanID().String()
+	}
 
 	zap.S().Errorw("Invalid input error",
 		"error", err,
@@ -109,15 +130,12 @@ type getProxyRequestPath struct {
 }
 
 func handleProxyRequest(c *gin.Context, method string) {
-	zap.S().Debugf("getProxyHandler")
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get(tracingContext); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "getProxyHandler", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "getProxyHandler", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "handleProxyRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
+
+	zap.S().Debugf("getProxyHandler")
 
 	var getProxyRequestPath getProxyRequestPath
 	var err error
@@ -125,14 +143,14 @@ func handleProxyRequest(c *gin.Context, method string) {
 	// Failed to parse request into service name and original url
 	err = c.BindUri(&getProxyRequestPath)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 	var bodyBytes []byte
 	if c.Request.Body != nil {
 		bodyBytes, err = ioutil.ReadAll(c.Request.Body)
 		if err != nil {
-			handleInvalidInputError(span, c, err)
+			handleInvalidInputError(c, err)
 			return
 		}
 	}
@@ -140,12 +158,12 @@ func handleProxyRequest(c *gin.Context, method string) {
 
 	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(getProxyRequestPath.OriginalURI))
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 	// Invalid url
 	if !match {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -159,34 +177,47 @@ func handleProxyRequest(c *gin.Context, method string) {
 		HandleFactoryInsight(c, getProxyRequestPath, method, bodyBytes)
 	default:
 		{
-			zap.S().Warnf("getProxyRequestPath.Service", getProxyRequestPath.Service)
+			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(getProxyRequestPath.Service))
 			c.AbortWithStatus(http.StatusBadRequest)
 		}
 	}
 }
 
 func AddCorsHeaders(c *gin.Context) {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "AddCorsHeaders", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	origin := c.GetHeader("Origin")
-	zap.S().Debugf("Requesting origin: %s", origin)
+	zap.S().Debugf("Requesting origin: %s", internal.SanitizeString(origin))
 	if len(origin) == 0 {
 		zap.S().Debugf("Add cors wildcard")
 		origin = "*"
 	} else {
-		zap.S().Debugf("Set cors origin to: %s", origin)
+		zap.S().Debugf("Set cors origin to: %s", internal.SanitizeString(origin))
 	}
 	c.Header("Access-Control-Allow-Headers", "content-type, Authorization")
 	c.Header("Access-Control-Allow-Credentials", "true")
-	c.Header("Access-Control-Allow-Origin", origin)
+	c.Header("Access-Control-Allow-Origin", internal.SanitizeString(origin))
 	c.Header("Access-Control-Allow-Methods", "*")
 }
 
 func postProxyHandler(c *gin.Context) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "postProxyHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Add cors headers for reply to original requester
 	AddCorsHeaders(c)
 	handleProxyRequest(c, "POST")
 }
 
 func getProxyHandler(c *gin.Context) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getProxyHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
 	// Add cors headers for reply to original requester
 	AddCorsHeaders(c)
 	handleProxyRequest(c, "GET")
@@ -198,15 +229,11 @@ func IsBase64(s string) bool {
 }
 
 func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string, bytes []byte) {
-	zap.S().Debugf("HandleFactoryInsight")
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get(tracingContext); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInsight", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInsight", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "HandleFactoryInsight", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
+	zap.S().Debugf("HandleFactoryInsight")
 
 	authHeader := c.GetHeader("authorization")
 	s := strings.Split(authHeader, " ")
@@ -239,14 +266,14 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 	}
 
 	zap.S().Debugf("FactoryInsightBaseUrl: ", FactoryInsightBaseUrl)
-	zap.S().Debugf("proxyUrl: ", proxyUrl)
-	zap.S().Debugf("path: ", path)
+	zap.S().Debugf("proxyUrl: ", internal.SanitizeString(proxyUrl))
+	zap.S().Debugf("path: ", internal.SanitizeString(path))
 
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s%s", FactoryInsightBaseUrl, proxyUrl, path))
 
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -255,14 +282,10 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 
 // HandleFactoryInput handles proxy requests to factoryinput
 func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get(tracingContext); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "HandleFactoryInput", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "HandleFactoryInput", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	zap.S().Warnf("HandleFactoryInput")
 
@@ -279,7 +302,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	loggedIn, err := CheckUserLoggedIn(sessionCookie)
 	if err != nil {
 		zap.S().Warnf("Login error")
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 	}
 
 	// Abort if not logged in
@@ -294,10 +317,10 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
-	zap.S().Warnf("Proxified URL: %s", u.String())
+	zap.S().Warnf("Proxified URL: %s", internal.SanitizeString(u.String()))
 	if err != nil {
-		zap.S().Warnf("url.Parse failed", fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
-		handleInvalidInputError(span, c, err)
+		zap.S().Warnf("url.Parse failed: %s", internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -305,11 +328,11 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	s := strings.Split(u.Path, "/")
 	if len(s) != 7 {
 		zap.S().Warnf("String split failed", len(s))
-		handleInvalidInputError(span, c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
+		handleInvalidInputError(c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
 		return
 	}
 
-	zap.S().Debugf("splits: ", s)
+	zap.S().Debugf("splits: ", internal.SanitizeStringArray(s))
 
 	customer := s[3]
 
@@ -317,18 +340,18 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Get grafana organizations of user
 	orgas, err := user.GetOrgas(sessionCookie)
 	if err != nil {
-		zap.S().Warnf("GetOrgas failed", err, sessionCookie)
-		handleInvalidInputError(span, c, err)
+		zap.S().Warnf("GetOrgas failed %s, %s", err, internal.SanitizeString(sessionCookie))
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	zap.S().Warnf("My Orgas: ", orgas)
-	zap.S().Warnf("Customer: %s", customer)
+	zap.S().Warnf("Customer: %s", internal.SanitizeString(customer))
 	// Check if user is in orga, with same name as customer
 	allowedOrg := false
 	for _, orgsElement := range orgas {
 		if orgsElement.Name == customer {
-			zap.S().Warnf("%s vs %s", orgsElement.Name, customer)
+			zap.S().Warnf("%s vs %s", internal.SanitizeString(orgsElement.Name), internal.SanitizeString(customer))
 			allowedOrg = true
 			break
 		}
@@ -345,10 +368,14 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 }
 
 func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string, bodyBytes []byte) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "DoProxiedRequest", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
 	// Proxy request to backend
 	client := &http.Client{}
 
-	zap.S().Debugf("Request URL: ", u.String())
+	zap.S().Debugf("Request URL: %s", internal.SanitizeString(u.String()))
 	//CORS request !
 	if u.String() == "" {
 		zap.S().Debugf("CORS Answer")
@@ -362,7 +389,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 
 		var req *http.Request
 		if bodyBytes != nil && len(bodyBytes) > 0 {
-			zap.S().Warnf("Request with body bytes: ", bodyBytes)
+			zap.S().Warnf("Request with body bytes: %s", internal.SanitizeByteArray(bodyBytes))
 			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
 			zap.S().Warnf("Request without body bytes")
@@ -370,12 +397,12 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 
 		}
 		if err != nil {
-			zap.S().Warnf("Request error: ", err)
+			zap.S().Warnf("Request error: %s", err)
 			return
 		}
 		// Add headers for backend
 		if len(sessionCookie) > 0 {
-			req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessionCookie))
+			req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", internal.SanitizeString(sessionCookie)))
 		}
 		req.Header.Set("Authorization", authorizationKey)
 

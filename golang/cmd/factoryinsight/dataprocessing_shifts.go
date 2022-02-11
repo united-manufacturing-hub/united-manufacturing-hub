@@ -1,9 +1,11 @@
 package main
 
 import (
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/attribute"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 )
@@ -267,14 +269,11 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 	return
 }
 
-func addNoShiftsToStates(parentSpan opentracing.Span, rawShifts []datamodel.ShiftEntry, stateArray []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, stateArray []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	// Jaeger tracing
-	if parentSpan != nil { //nil during testing
-		span := opentracing.StartSpan(
-			"addNoShiftsToStates",
-			opentracing.ChildOf(parentSpan.Context()))
-		defer span.Finish()
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "addNoShiftsToStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
 
 	processedShifts := cleanRawShiftData(rawShifts, from, to, configuration)
