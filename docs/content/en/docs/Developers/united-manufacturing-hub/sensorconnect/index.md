@@ -2,7 +2,10 @@
 title: "sensorconnect"
 linkTitle: "sensorconnect"
 description: >
-  This docker container automatically detects ifm gateways in the specified network and reads their sensor values in the highest possible data frequency.
+  This docker container automatically detects ifm gateways in the specified network and reads their sensor values in the highest possible data frequency. The MQTT output is specified in [the MQTT documentation](/docs/concepts/mqtt/)
+aliases:
+  - /docs/Developers/factorycube-edge/sensorconnect
+  - /docs/developers/factorycube-edge/sensorconnect
 ---
 
 ## Getting started
@@ -10,6 +13,7 @@ description: >
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
 1. execute `docker-compose -f ./deployment/sensorconnect/docker-compose.yaml up -d --build`
+
 
 ## Environment variables
 

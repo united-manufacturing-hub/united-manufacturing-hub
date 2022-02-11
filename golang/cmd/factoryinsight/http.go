@@ -1,20 +1,42 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"net/http"
 	"strings"
 	"time"
 
-	ginopentracing "github.com/Bose/go-gin-opentracing"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	_ "go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+var tracer = otel.Tracer("factoryinsight-server")
+
+func initTracer() *sdktrace.TracerProvider {
+	exporter, err := stdout.New(stdout.WithPrettyPrint())
+	if err != nil {
+		panic(err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithBatcher(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return tp
+}
 
 // SetupRestAPI initializes the REST API and starts listening
 func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaegerPort string) {
@@ -32,21 +54,15 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	// Setting up the tracer
+	tp := initTracer()
 
-	// initialize the global singleton for tracing...
-	tracer, reporter, closer, err := ginopentracing.InitTracing("factoryinsight", jaegerHost+":"+jaegerPort, ginopentracing.WithEnableInfoLog(false))
-	if err != nil {
-		panic("unable to init tracing")
-	}
-	defer closer.Close()
-	defer reporter.Close()
-	opentracing.SetGlobalTracer(tracer)
-
-	// create the middleware
-	p := ginopentracing.OpenTracer([]byte("api-request-"))
-
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			panic(fmt.Sprintf("Error shutting down tracer provider: %v", err))
+		}
+	}()
 	// tell gin to use the middleware
-	router.Use(p)
+	router.Use(otelgin.Middleware("factoryinsight"))
 
 	// Healthcheck
 	router.GET("/", func(c *gin.Context) {
@@ -68,10 +84,16 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 	router.Run(":80")
 }
 
-func handleInternalServerError(parentSpan opentracing.Span, c *gin.Context, err error) {
+func handleInternalServerError(c *gin.Context, err error) {
 
-	ext.LogError(parentSpan, err)
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+	var span oteltrace.Span
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
+
+	traceID = span.SpanContext().SpanID().String()
 
 	zap.S().Errorw("Internal server error",
 		"error", err,
@@ -81,13 +103,19 @@ func handleInternalServerError(parentSpan opentracing.Span, c *gin.Context, err 
 	c.String(http.StatusInternalServerError, "The server had an internal error. Please mention the following trace id while contacting our support: "+traceID)
 }
 
-func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err error) {
+func handleInvalidInputError(c *gin.Context, err error) {
 
-	ext.LogError(parentSpan, err)
-	traceID, _ := internal.ExtractTraceID(parentSpan)
+	var span oteltrace.Span
+	traceID := "Failed to get traceID"
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
+		defer span.End()
+	}
+
+	traceID = span.SpanContext().SpanID().String()
 
 	zap.S().Errorw("Invalid input error",
-		"error", err,
+		"error", internal.SanitizeString(err.Error()),
 		"trace id", traceID,
 	)
 
@@ -96,11 +124,16 @@ func handleInvalidInputError(parentSpan opentracing.Span, c *gin.Context, err er
 
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
+		defer span.End()
+	}
 	user := c.MustGet(gin.AuthUserKey)
-	if user != customer && user != "jeremy" {
+	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, customer)
-		return fmt.Errorf("User %s unauthorized to access %s", user, customer)
+		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		return fmt.Errorf("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil
 }
@@ -112,15 +145,12 @@ type getLocationsRequest struct {
 }
 
 func getLocationsHandler(c *gin.Context) {
+	// OpenTelemetry tracing
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "getLocationsHandler", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "getLocationsHandler", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getLocationsHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getLocationsRequest getLocationsRequest
 	var err error
@@ -128,7 +158,7 @@ func getLocationsHandler(c *gin.Context) {
 
 	err = c.BindUri(&getLocationsRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -139,9 +169,9 @@ func getLocationsHandler(c *gin.Context) {
 	}
 
 	// Fetching from the database
-	locations, err = GetLocations(span, getLocationsRequest.Customer)
+	locations, err = GetLocations(c, getLocationsRequest.Customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -157,14 +187,10 @@ type getAssetsRequest struct {
 
 func getAssetsHandler(c *gin.Context) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "getAssetsHandler", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "getAssetsHandler", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getAssetsHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getAssetsRequest getAssetsRequest
 	var err error
@@ -172,7 +198,7 @@ func getAssetsHandler(c *gin.Context) {
 
 	err = c.BindUri(&getAssetsRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -183,9 +209,9 @@ func getAssetsHandler(c *gin.Context) {
 	}
 
 	// Fetching from the database
-	assets, err = GetAssets(span, getAssetsRequest.Customer, getAssetsRequest.Location)
+	assets, err = GetAssets(c, getAssetsRequest.Customer, getAssetsRequest.Location)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -202,20 +228,16 @@ type getValuesRequest struct {
 
 func getValuesHandler(c *gin.Context) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "getValuesHandler", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "getValuesHandler", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getValuesHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getValuesRequest getValuesRequest
 
 	err := c.BindUri(&getValuesRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -256,9 +278,9 @@ func getValuesHandler(c *gin.Context) {
 	processValues, cacheHit := internal.GetDistinctProcessValuesFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
 
 	if !cacheHit { // data NOT found
-		processValues, err = GetDistinctProcessValues(span, getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
+		processValues, err = GetDistinctProcessValues(c, getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
 		if err != nil {
-			handleInternalServerError(span, c, err)
+			handleInternalServerError(c, err)
 			return
 		}
 
@@ -283,21 +305,17 @@ type getDataRequest struct {
 
 func getDataHandler(c *gin.Context) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "getDataHandler", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "getDataHandler", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "getDataHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getDataRequest getDataRequest
 	var err error
 
 	err = c.BindUri(&getDataRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -360,7 +378,7 @@ func getDataHandler(c *gin.Context) {
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
 		} else {
-			handleInvalidInputError(span, c, err)
+			handleInvalidInputError(c, err)
 			return
 		}
 
@@ -380,14 +398,11 @@ type getStatesRequest struct {
 // The result is usually visualized in "DiscretePanel" in Grafana.
 func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processStatesRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processStatesRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processStatesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -400,7 +415,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getStatesRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -409,60 +424,62 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 	keepStatesInteger := getStatesRequest.KeepStatesInteger
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-	span.SetTag("keepStatesInteger", keepStatesInteger)
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
+	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -479,7 +496,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 			fullRow := []interface{}{dataPoint.State, float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(span, dataPoint.State, 0, configuration), float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			fullRow := []interface{}{ConvertStateToString(c, dataPoint.State, 0, configuration), float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
 	}
@@ -502,14 +519,11 @@ type getAggregatedStatesRequest struct {
 // If the aggregationType is not 0 it will aggregate over various categories, e.g. day or hour
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processAggregatedStatesRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processAggregatedStatesRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAggregatedStatesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -523,7 +537,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 	err = c.BindQuery(&getAggregatedStatesRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -534,64 +548,66 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	includeRunning := getAggregatedStatesRequest.IncludeRunning
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-	span.SetTag("keepStatesInteger", keepStatesInteger)
-	span.SetTag("aggregationType", aggregationType)
-	span.SetTag("includeRunning", includeRunning)
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+		span.SetAttributes(attribute.Int("aggregationType", aggregationType))
+		span.SetAttributes(attribute.Bool("includeRunning", *includeRunning))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// TODO: parallelize
 
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// ### calculate (only one function allowed here) ###
 
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
+	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -602,10 +618,10 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	if aggregationType == 0 { // default case. aggregate over everything
 		data.ColumnNames = []string{"state", "duration"}
 
-		data.Datapoints, err = CalculateStopParetos(span, processedStates, from, to, *includeRunning, keepStatesInteger, configuration)
+		data.Datapoints, err = CalculateStopParetos(c, processedStates, from, to, *includeRunning, keepStatesInteger, configuration)
 
 		if err != nil {
-			handleInternalServerError(span, c, err)
+			handleInternalServerError(c, err)
 			return
 		}
 	} else {
@@ -642,9 +658,9 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 				processedStatesCleaned := removeUnnecessaryElementsFromStateSlice(processedStates, oldD, d)
 
-				tempResult, err := CalculateStopParetos(span, processedStatesCleaned, oldD, d, *includeRunning, true, configuration)
+				tempResult, err := CalculateStopParetos(c, processedStatesCleaned, oldD, d, *includeRunning, true, configuration)
 				if err != nil {
-					handleInternalServerError(span, c, err)
+					handleInternalServerError(c, err)
 					return
 				}
 
@@ -688,14 +704,11 @@ type getAvailabilityRequest struct {
 
 func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processAvailabilityRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processAvailabilityRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAvailabilityRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -708,7 +721,7 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getAvailabilityRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -716,57 +729,60 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getAvailabilityRequest.To
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
+	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -775,10 +791,10 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "availability"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculateAvailability(span, processedStates, from, to, configuration)
+	data.Datapoints, err = CalculateAvailability(c, processedStates, from, to, configuration)
 
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -794,14 +810,11 @@ type getPerformanceRequest struct {
 
 func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processPerformanceRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processPerformanceRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processPerformanceRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -814,7 +827,7 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getPerformanceRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -822,58 +835,61 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getPerformanceRequest.To
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
+	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -882,10 +898,10 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "performance"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculatePerformance(span, processedStates, from, to, configuration)
+	data.Datapoints, err = CalculatePerformance(c, processedStates, from, to, configuration)
 
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -901,14 +917,11 @@ type getQualityRequest struct {
 
 func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processQualityRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processQualityRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processQualityRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -921,7 +934,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getQualityRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -929,25 +942,27 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getQualityRequest.To
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 	// ### fetch necessary data from database ###
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -956,10 +971,10 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "quality"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculateQuality(span, countSlice, from, to, configuration)
+	data.Datapoints, err = CalculateQuality(c, countSlice, from, to, configuration)
 
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -975,14 +990,11 @@ type getOEERequest struct {
 
 func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processOEERequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processOEERequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processOEERequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -995,7 +1007,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getOEERequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -1003,50 +1015,53 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getOEERequest.To
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1067,30 +1082,30 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(span, processedStates, current, to, configuration)
+			tempDatapoints, err = CalculateOEE(c, processedStates, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(span, processedStates, current, currentTo, configuration)
+			tempDatapoints, err = CalculateOEE(c, processedStates, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
@@ -1116,14 +1131,11 @@ type getStateHistogramRequest struct {
 
 func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processStateHistogramRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processStateHistogramRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processStateHistogramRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1136,7 +1148,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	err = c.BindQuery(&getStateHistogramRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -1146,60 +1158,62 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	keepStatesInteger := getStateHistogramRequest.KeepStatesInteger
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
-	span.SetTag("includeRunning", includeRunning)
-	span.SetTag("keepStatesInteger", keepStatesInteger)
 
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+		span.SetAttributes(attribute.Bool("includeRunning", includeRunning))
+		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
+	}
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(span, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
+	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1207,10 +1221,10 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"state", "occurances"}
 
-	data.Datapoints, err = CalculateStateHistogram(span, processedStates, from, to, includeRunning, keepStatesInteger, configuration)
+	data.Datapoints, err = CalculateStateHistogram(c, processedStates, from, to, includeRunning, keepStatesInteger, configuration)
 
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1266,29 +1280,26 @@ type getUniqueProductsWithTagsRequest struct {
 }
 
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processCurrentStateRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processCurrentStateRequest", c.Request.Method, c.Request.URL.Path)
+
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processCurrentStateRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getCurrentStateRequest getCurrentStateRequest
 	var err error
 
 	err = c.BindQuery(&getCurrentStateRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Fetching from the database
 	// TODO: #89 Return timestamps in RFC3339 in /currentState
-	state, err := GetCurrentState(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCurrentStateRequest.KeepStatesInteger)
+	state, err := GetCurrentState(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCurrentStateRequest.KeepStatesInteger)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, state)
@@ -1296,14 +1307,10 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processCountsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processCountsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processCountsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getCountsRequest getCountsRequest
 	var err error
@@ -1311,15 +1318,15 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getCountsRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
-	counts, err = GetCounts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCountsRequest.From, getCountsRequest.To)
+	counts, err = GetCounts(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getCountsRequest.From, getCountsRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, counts)
@@ -1327,19 +1334,15 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processRecommendationRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processRecommendationRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processRecommendationRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// Fetching from the database
-	recommendations, err := GetRecommendations(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	recommendations, err := GetRecommendations(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, recommendations)
@@ -1347,28 +1350,24 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 
 func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processShiftsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processShiftsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processShiftsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getShiftsRequest getShiftsRequest
 	var err error
 
 	err = c.BindQuery(&getShiftsRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Fetching from the database
-	shifts, err := GetShifts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getShiftsRequest.From, getShiftsRequest.To)
+	shifts, err := GetShifts(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getShiftsRequest.From, getShiftsRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, shifts)
@@ -1376,21 +1375,17 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processProcessValueRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processProcessValueRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processProcessValueRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getProcessValueRequest getProcessValueRequest
 	var err error
 
 	err = c.BindQuery(&getProcessValueRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -1399,9 +1394,9 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// TODO: #96 Return timestamps in RFC3339 in /processValue
 
 	// Fetching from the database
-	processValues, err := GetProcessValue(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueRequest.From, getProcessValueRequest.To, valueName)
+	processValues, err := GetProcessValue(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueRequest.From, getProcessValueRequest.To, valueName)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, processValues)
@@ -1409,19 +1404,15 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processTimeRangeRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processTimeRangeRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processTimeRangeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// Fetching from the database
-	timeRange, err := GetDataTimeRangeForAsset(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	timeRange, err := GetDataTimeRangeForAsset(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, timeRange)
@@ -1429,18 +1420,14 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processUpcomingMaintenanceActivitiesRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processUpcomingMaintenanceActivitiesRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processUpcomingMaintenanceActivitiesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
-	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1448,16 +1435,16 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 	data.ColumnNames = []string{"Machine", "Component", "Activity", "Duration", "Status"}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, getDataRequest.Customer)
+	configuration, err := GetCustomerConfiguration(c, getDataRequest.Customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// TODO: #100 Return timestamps in RFC3339 in /maintenanceActivities
 
 	for _, timeBasedMaintenanceActivity := range rawData {
-		var activityString = ConvertActivityToString(span, timeBasedMaintenanceActivity.ActivityType, configuration)
+		var activityString = ConvertActivityToString(c, timeBasedMaintenanceActivity.ActivityType, configuration)
 
 		if timeBasedMaintenanceActivity.DurationInDays.Valid != true || timeBasedMaintenanceActivity.LatestActivity.Valid != true || timeBasedMaintenanceActivity.NextActivity.Valid != true {
 			fullRow := []interface{}{getDataRequest.Asset, timeBasedMaintenanceActivity.ComponentName, activityString, 0, 0}
@@ -1480,72 +1467,68 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 
 func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processOrderTableRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processOrderTableRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processOrderTableRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getOrderRequest getOrderRequest
 	var err error
 
 	err = c.BindQuery(&getOrderRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Fetch data from database
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, getDataRequest.Customer)
+	configuration, err := GetCustomerConfiguration(c, getDataRequest.Customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
-	assetID, err := GetAssetID(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
-	rawOrders, err := GetOrdersRaw(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
+	rawOrders, err := GetOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for actual units calculation
-	countSlice, err := GetCountsRaw(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
+	countSlice, err := GetCountsRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To, configuration)
+	rawStates, err := GetStatesRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To, configuration)
+	rawShifts, err := GetShiftsRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// TODO: #98 Return timestamps in RFC3339 in /orderTable
 
 	// Process data
-	data, err := calculateOrderInformation(span, rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
+	data, err := calculateOrderInformation(c, rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1554,30 +1537,26 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processOrderTimelineRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processOrderTimelineRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processOrderTimelineRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getOrderRequest getOrderRequest
 	var err error
 
 	err = c.BindQuery(&getOrderRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
-	data, err := GetOrdersTimeline(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
+	data, err := GetOrdersTimeline(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1586,19 +1565,15 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processMaintenanceActivitiesRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processMaintenanceActivitiesRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processMaintenanceActivitiesRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// Fetching from the database
-	data, err := GetMaintenanceActivities(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	data, err := GetMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1607,30 +1582,26 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 
 func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processUniqueProductsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processUniqueProductsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processUniqueProductsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getUniqueProductsRequest getUniqueProductsRequest
 	var err error
 
 	err = c.BindQuery(&getUniqueProductsRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// TODO: #99 Return timestamps in RFC3339 in /uniqueProducts
 
 	// Fetching from the database
-	uniqueProducts, err := GetUniqueProducts(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsRequest.From, getUniqueProductsRequest.To)
+	uniqueProducts, err := GetUniqueProducts(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsRequest.From, getUniqueProductsRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, uniqueProducts)
@@ -1638,25 +1609,21 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processMaintenanceComponentsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processMaintenanceComponentsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processMaintenanceComponentsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// Fetching from the database
-	assetID, err := GetAssetID(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
-	data, err := GetComponents(span, assetID)
+	data, err := GetComponents(c, assetID)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1665,14 +1632,10 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 
 func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processProductionSpeedRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processProductionSpeedRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processProductionSpeedRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getProductionSpeedRequest getProductionSpeedRequest
 	var err error
@@ -1680,14 +1643,14 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 
 	err = c.BindQuery(&getProductionSpeedRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Fetching from the database
-	counts, err = GetProductionSpeed(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProductionSpeedRequest.From, getProductionSpeedRequest.To, getProductionSpeedRequest.AggregationInterval)
+	counts, err = GetProductionSpeed(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProductionSpeedRequest.From, getProductionSpeedRequest.To, getProductionSpeedRequest.AggregationInterval)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, counts)
@@ -1695,14 +1658,10 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 
 func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processQualityRateRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processQualityRateRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processQualityRateRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getQualityRateRequest getQualityRateRequest
 	var err error
@@ -1710,14 +1669,14 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getQualityRateRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Fetching from the database
-	counts, err = GetQualityRate(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getQualityRateRequest.From, getQualityRateRequest.To, getQualityRateRequest.AggregationInterval)
+	counts, err = GetQualityRate(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getQualityRateRequest.From, getQualityRateRequest.To, getQualityRateRequest.AggregationInterval)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, counts)
@@ -1725,14 +1684,10 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processFactoryLocationsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processFactoryLocationsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processFactoryLocationsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processFactoryLocationsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"Location", "Metric", "Geohash"}
@@ -1752,14 +1707,11 @@ type getAverageCleaningTimeRequest struct {
 
 func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processAverageCleaningTimeRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processAverageCleaningTimeRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAverageCleaningTimeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1772,7 +1724,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 
 	err = c.BindQuery(&getAverageCleaningTimeRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -1780,51 +1732,53 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 	to := getAverageCleaningTimeRequest.To
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1845,30 +1799,30 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, to, configuration, 18) // Cleaning is 18
+			tempDatapoints, err = CalculateAverageStateTime(c, processedStates, current, to, configuration, 18) // Cleaning is 18
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, currentTo, configuration, 18)
+			tempDatapoints, err = CalculateAverageStateTime(c, processedStates, current, currentTo, configuration, 18)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
@@ -1894,14 +1848,11 @@ type getAverageChangeoverTimeRequest struct {
 
 func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// ### activate jaeger tracing ###
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processAverageChangeoverTimeRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processAverageChangeoverTimeRequest", c.Request.Method, c.Request.URL.Path)
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "processAverageChangeoverTimeRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1914,7 +1865,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 	err = c.BindQuery(&getAverageChangeoverTimeRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
@@ -1922,51 +1873,54 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	to := getAverageChangeoverTimeRequest.To
 
 	// ### jaeger addon ###
-	span.SetTag("customer", customer)
-	span.SetTag("location", location)
-	span.SetTag("asset", asset)
-	span.SetTag("from", from)
-	span.SetTag("to", to)
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customer", customer))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(span, customer, location, asset)
+	assetID, err := GetAssetID(c, customer, location, asset)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(span, customer)
+	configuration, err := GetCustomerConfiguration(c, customer)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(span, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(span, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(span, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(span, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 
@@ -1985,30 +1939,30 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, to, configuration, datamodel.ChangeoverState)
+			tempDatapoints, err = CalculateAverageStateTime(c, processedStates, current, to, configuration, datamodel.ChangeoverState)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
 			current = to
 		} else { //otherwise, calculate for entire time range
 
-			processedStates, err := processStates(span, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(span, processedStates, current, currentTo, configuration, datamodel.ChangeoverState)
+			tempDatapoints, err = CalculateAverageStateTime(c, processedStates, current, currentTo, configuration, datamodel.ChangeoverState)
 			if err != nil {
-				handleInternalServerError(span, c, err)
+				handleInternalServerError(c, err)
 				return
 			}
 
@@ -2023,32 +1977,26 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	c.JSON(http.StatusOK, data)
 }
 
-
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	// Jaeger tracing
-	var span opentracing.Span
-	if cspan, ok := c.Get("tracing-context"); ok {
-		span = ginopentracing.StartSpanWithParent(cspan.(opentracing.Span).Context(), "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
-	} else {
-		span = ginopentracing.StartSpanWithHeader(&c.Request.Header, "processUniqueProductsWithTagsRequest", c.Request.Method, c.Request.URL.Path)
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processUniqueProductsWithTagsRequest", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
 	}
-	defer span.Finish()
 
 	var getUniqueProductsWithTagsRequest getUniqueProductsWithTagsRequest
 	var err error
 
 	err = c.BindQuery(&getUniqueProductsWithTagsRequest)
 	if err != nil {
-		handleInvalidInputError(span, c, err)
+		handleInvalidInputError(c, err)
 		return
 	}
 
-
 	// Fetching from the database
-	uniqueProductsWithTags, err := GetUniqueProductsWithTags(span, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsWithTagsRequest.From, getUniqueProductsWithTagsRequest.To)
+	uniqueProductsWithTags, err := GetUniqueProductsWithTags(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getUniqueProductsWithTagsRequest.From, getUniqueProductsWithTagsRequest.To)
 	if err != nil {
-		handleInternalServerError(span, c, err)
+		handleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, uniqueProductsWithTags)

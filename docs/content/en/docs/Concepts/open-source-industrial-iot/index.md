@@ -2,6 +2,7 @@
 title: "Open source in Industrial IoT: an open and robust infrastructure instead of reinventing the wheel."
 linkTitle: "Open Source in Industrial IoT"
 author: Jeremy Theocharis
+weight: 5
 description: >
   How we are keeping up with the established players in Industrial IoT and why we believe the United Manufacturing Hub is changing the future of Industrial IoT and Industry 4.0 with the help of Open Source.
 ---

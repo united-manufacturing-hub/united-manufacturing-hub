@@ -1,6 +1,7 @@
 ---
 title: "An introduction into certificates and secure communication in IoT for normal people"
 linkTitle: "Public-Key-Infrastructure"
+weight: 5
 aliases:
     - /docs/tutorials/general/symmetric-asymmetric-encryption
 description: >
