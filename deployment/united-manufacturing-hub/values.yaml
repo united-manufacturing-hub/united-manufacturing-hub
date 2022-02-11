@@ -2121,7 +2121,7 @@ redis:
     pullPolicy: IfNotPresent
     registry: docker.io
     repository: bitnami/redis
-    tag: 6.0.9-debian-10-r13
+    tag: 6.2.6-debian-10-r103
   master:
     affinity: {}
     command: /run.sh
@@ -2282,19 +2282,7 @@ redis:
     usePassword: true
   serviceAccount:
     create: false
-  slave:
-    affinity: {}
-    command: /run.sh
-    customLivenessProbe: {}
-    customReadinessProbe: {}
-    disableCommands:
-      - FLUSHDB
-      - FLUSHALL
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
-    extraFlags: []
-    hostAliases: []
+  replica:
     livenessProbe:
       enabled: true
       failureThreshold: 5
@@ -2306,16 +2294,11 @@ redis:
       accessModes:
         - ReadWriteOnce
       enabled: true
-      matchExpressions: {}
-      matchLabels: {}
       path: /data
       size: 8Gi
       subPath: ""
-    podAnnotations: {}
-    podLabels: {}
-    port: 6379
-    preExecCmds: ""
-    priorityClassName: {}
+    containerPorts:
+      redis: 6379
     readinessProbe:
       enabled: true
       failureThreshold: 5
@@ -2332,42 +2315,22 @@ redis:
     service:
       annotations: {}
       externalTrafficPolicy: Cluster
-      labels: {}
-      port: 6379
+      ports:
+        redis: 6379
       type: ClusterIP
     shareProcessNamespace: false
-    spreadConstraints: {}
-    statefulset:
-      annotations: {}
-      labels: {}
-      updateStrategy: RollingUpdate
-      volumeClaimTemplates:
-        annotations: {}
-        labels: {}
-  sysctlImage:
-    command: []
+    updateStrategy:
+      type: RollingUpdate
+  sysctl:
     enabled: false
-    mountHostSys: false
-    pullPolicy: Always
-    registry: docker.io
-    repository: bitnami/minideb
-    resources: {}
-    tag: buster
   tls:
     authClients: true
     enabled: false
-  usePassword: true
-  usePasswordFile: false
+  auth:
+    enabled: true
+    usePasswordFiles: false
   volumePermissions:
     enabled: false
-    image:
-      pullPolicy: Always
-      registry: docker.io
-      repository: bitnami/minideb
-      tag: buster
-    resources: {}
-    securityContext:
-      runAsUser: 0
 
 
 ##### CONFIG FOR VERNEMQ #####

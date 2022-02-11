@@ -1,7 +1,7 @@
 dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 12.7.3
+  version: 16.2.0
 - name: vernemq
   repository: https://vernemq.github.io/docker-vernemq
   version: 1.6.7
