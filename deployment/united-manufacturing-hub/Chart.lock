@@ -7,7 +7,7 @@ dependencies:
   version: 1.6.7
 - name: grafana
   repository: https://grafana.github.io/helm-charts
-  version: 6.13.5
+  version: 6.21.1
 - name: timescaledb-single
   repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
   version: 0.9.0
@@ -20,5 +20,6 @@ dependencies:
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
-digest: sha256:166e0e30d5fbd40461c87a37be5ff771f513b67ac3e4e0cbc616841130952f33
-generated: "2022-02-11T10:18:53.7823489+01:00"
+digest: sha256:0f2739a8347dc44c0d1f210d6cb4a113284d0fdd3b1e5632724a8dc10a818c6d
+generated: "2022-02-11T10:44:38.0447972+01:00"
+
