@@ -47,7 +47,7 @@ dependencies:
     condition: _000_commonConfig.datastorage.enabled
 
   - name: timescaledb-single
-    version: 0.9.0
+    version: 0.10.0
     repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
     condition: _000_commonConfig.datastorage.enabled
 
