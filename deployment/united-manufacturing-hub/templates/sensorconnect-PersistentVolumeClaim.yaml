@@ -11,7 +11,7 @@ metadata:
     {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 4}}
 spec:
   accessModes:
-  - ReadWriteOnce
+    - ReadWriteOnce
   resources:
     requests:
       storage: {{.Values.sensorconnect.storageRequest}}
