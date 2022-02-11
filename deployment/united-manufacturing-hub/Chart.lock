@@ -4,7 +4,7 @@ dependencies:
   version: 16.2.0
 - name: vernemq
   repository: https://vernemq.github.io/docker-vernemq
-  version: 1.6.7
+  version: 1.6.12-1
 - name: grafana
   repository: https://grafana.github.io/helm-charts
   version: 6.21.1
