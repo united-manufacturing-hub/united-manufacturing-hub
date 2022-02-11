@@ -1,20 +1,73 @@
-version: '3.7'
+version: "2"
+
 services:
-  ### ia: sensor connect
-  # Reads sensor data and forwards it to the MQTT Broker
-  sensorconnect:
-    build:
-      context: ../../
-      dockerfile: ./deployment/sensorconnect/Dockerfile
-    restart: unless-stopped
-    logging:
-        driver: "json-file"
-        options:
-            max-file: "5"
-            max-size: "10m"
+  zookeeper:
+    image: docker.io/bitnami/zookeeper:3.7
+    ports:
+      - "2181:2181"
+    volumes:
+      - "zookeeper_data:/bitnami"
     environment:
-      - PYTHONUNBUFFERED=0
-      - TRANSMITTERID=prototyp
-      - BROKER_URL=mqtt.umh.app
-      - BROKER_PORT=8883
-      - IP_RANGE=192.168.1.0/24
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: docker.io/bitnami/kafka:3
+    ports:
+      - "9092:9092"
+    volumes:
+      - "kafka_data:/bitnami"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+
+  kowl:
+    image: quay.io/cloudhut/kowl:v1.4.0
+    restart: on-failure
+    hostname: kowl
+    volumes:
+      - ./config.yaml:/etc/kowl/config.yaml
+    ports:
+      - "8080:8080"
+    entrypoint: ./kowl --config.filepath=/etc/kowl/config.yaml
+    depends_on:
+      - kafka
+
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mosquitto
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../../golang/test/mqtt-bridge/config:/mosquitto/config
+
+  sensorconnect:
+    image: scarjit/sensorconnect:latest
+    restart: always
+    volumes:
+      - ./ioddfiles/:/ioddfiles/
+    environment:
+      - IP_RANGE=192.168.10.0/24
+      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+      - TRANSMITTERID=12345
+      - IODD_FILE_PATH=/ioddfiles
+      - USE_KAFKA=1
+      - USE_MQTT=0
+      - LOWER_SENSOR_TICK_TIME_MS=100
+      - SENSOR_TICK_STEP_MS_UP=50
+      - SENSOR_TICK_STEP_MS_DOWN=1
+      - UPPER_SENSOR_TICK_TIME_MS=1000
+      - MQTT_CERTIFICATE_NAME=NO_CERT
+      - MQTT_BROKER_URL=mosquitto:1883
+      - MY_POD_NAME=sensorconnect
+      - DEBUG=1
+    depends_on:
+      - kafka
+      - mosquitto
+
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local

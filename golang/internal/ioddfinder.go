@@ -8,9 +8,54 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
+
+func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (err error) {
+	// download iodd file
+	filemap, err := GetIoddFile(vendorId, deviceId)
+	if err != nil {
+		return err
+	}
+
+	// build path for downloaded file
+	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
+	if err != nil {
+		zap.S().Errorf("Unable to find absoluteDirectoryPath: %v", err)
+		return err
+	}
+
+	//Get latest file
+	latest := int64(0)
+	index := 0
+	for i, file := range filemap {
+		if file.Context.UploadDate > latest {
+			index = i
+			latest = file.Context.UploadDate
+		}
+	}
+
+	absoluteFilePath := absoluteDirectoryPath + "/" + filemap[index].Name
+	zap.S().Debugf("Saving file to path: " + absoluteFilePath)
+
+	// check for existing file with same name
+	if _, err := os.Stat(absoluteFilePath); err == nil {
+		return nil
+	}
+
+	// save iodd file
+	err = ioutil.WriteFile(absoluteFilePath, filemap[index].File, 0644)
+	if err != nil {
+		zap.S().Errorf("Unable to write file: %v", err)
+		return err
+	}
+	return
+}
 
 // GetIoddFile downloads a ioddfiles from ioddfinder and returns a list of valid files for the request (This can be multiple, if the vendor has multiple languages or versions published)
 func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
@@ -114,12 +159,13 @@ func getUrl(url string) (body []byte, err error, status int) {
 	globalSleepTimer += 1
 	var resp *http.Response
 	resp, err = http.Get(url)
+	if err != nil {
+		zap.S().Errorf("%s", err.Error())
+		return
+	}
 	defer resp.Body.Close()
 	status = resp.StatusCode
 	if status != 200 {
-		return
-	}
-	if err != nil {
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)

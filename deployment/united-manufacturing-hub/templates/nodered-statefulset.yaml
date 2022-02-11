@@ -99,5 +99,4 @@ spec:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
         configMap:
           name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
-
 {{end}}

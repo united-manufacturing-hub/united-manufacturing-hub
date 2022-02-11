@@ -3,7 +3,6 @@
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
 _000_commonConfig:
   serialNumber: "default"  # usually the hostname
-
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
 
@@ -17,8 +16,15 @@ _000_commonConfig:
 
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
-      enabled: false
-      iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
+      enabled: true
+      iprange: "192.168.10.17/24"  # IP Range in CIDR notation
+      ioddfilepath: "/ioddfiles"
+      useKafka: true
+      useMQTT: false
+      lowerTickSpeedMs: 100 # Fastest time, sensors should be requested to serve data
+      upperTickSpeedMs: 100 # Slowest time, sensors should be requested to serve data
+      TickSpeedSteppingUpMs: 10 # Time to add to actual stepping in case of failure
+      TickSpeedSteppingDownMs: 1 # Time to add to actual stepping in case of no-failure
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
@@ -202,6 +208,7 @@ barcodereader:
 
 ### sensorconnect ###
 sensorconnect:
+  storageRequest: 1Gi
   image: unitedmanufacturinghub/sensorconnect
   resources:
     requests:
