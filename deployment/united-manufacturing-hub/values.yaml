@@ -2074,9 +2074,10 @@ kafka:
   allowPlaintextListener: true
   service:
     type: ClusterIP
-    port: 9092
-    internalPort: 9093
-    externalPort: 9094
+    ports:
+      client: 9092
+      internal: 9093
+      external: 9094
   persistence:
     enabled: true
     accessModes:
