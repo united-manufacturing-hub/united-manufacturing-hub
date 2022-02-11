@@ -1,26 +1,23 @@
 ---
 {{if .Values._000_commonConfig.datasources.sensorconnect.enabled}}
 
+
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
   labels:
     {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 4}}
-    app.kubernetes.io/component: "sensorconnect"
 spec:
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
   replicas: 1
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 6}}
-      app.kubernetes.io/component: "sensorconnect"
-  strategy:
-    type: RollingUpdate
   template:
     metadata:
       labels:
         {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 8}}
-        app.kubernetes.io/component: "sensorconnect"
     spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
@@ -37,16 +34,44 @@ spec:
               cpu: {{.Values.sensorconnect.resources.requests.cpu}}
               memory: {{.Values.sensorconnect.resources.requests.memory}}
           env:
-            - name: PYTHONUNBUFFERED
-              value: "0"
             - name: TRANSMITTERID
               value: {{.Values._000_commonConfig.serialNumber | quote}}
-            - name: BROKER_URL
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
-            - name: BROKER_PORT
-              value: "1883"
+
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
             - name: IP_RANGE
               value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
+
+            - name: IODD_FILE_PATH
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath | quote}}
+
+            - name: USE_KAFKA
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka | quote }}
+            - name: USE_MQTT
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.useMQTT| quote }}
+
+            - name: LOWER_SENSOR_TICK_TIME_MS
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeedMs| quote }}
+            - name: UPPER_SENSOR_TICK_TIME_MS
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeedMs| quote }}
+            - name: SENSOR_TICK_STEP_MS_UP
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUpMs| quote }}
+            - name: SENSOR_TICK_STEP_MS_DOWN
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDownMs| quote }}
+            - name: DEVICE_FINDER_FREQUENCY_IN_SEC
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderFrequenceySec| quote }}
+
+            - name: BROKER_URL
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
+              mountPath: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath}}
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
+          persistentVolumeClaim:
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-claim
 
       serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}
       restartPolicy: Always
