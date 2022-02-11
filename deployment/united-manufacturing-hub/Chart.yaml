@@ -32,22 +32,22 @@ sources:
 
 dependencies:
   - name: redis
-    version: 12.7.3
+    version: 16.2.0
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
   - name: vernemq
-    version: 1.6.7
+    version: 1.6.12-1
     repository: https://vernemq.github.io/docker-vernemq
     condition: _000_commonConfig.infrastructure.mqtt.enabled
 
   - name: grafana
-    version: 6.13.5
+    version: 6.21.1
     repository: https://grafana.github.io/helm-charts
     condition: _000_commonConfig.datastorage.enabled
 
   - name: timescaledb-single
-    version: 0.9.0
+    version: 0.10.0
     repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
     condition: _000_commonConfig.datastorage.enabled
 
