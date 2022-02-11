@@ -79,7 +79,7 @@ func main() {
 		zap.S().Infof("Starting with Kafka")
 		// Read environment variables for Kafka
 		KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
-		kafkaProducerClient, kafkaAdminClient, _ = setupKafka(KafkaBoostrapServer)
+		kafkaProducerClient, kafkaAdminClient = setupKafka(KafkaBoostrapServer)
 	}
 
 	var err error

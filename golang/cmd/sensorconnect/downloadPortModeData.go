@@ -124,7 +124,7 @@ func downloadModeStatus(url string, payload []byte) (body []byte, err error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		zap.S().Debugf("Responsstatus not 200 but instead: %d", resp.StatusCode)
+		zap.S().Debugf("Response status not 200 but instead: %d", resp.StatusCode)
 		return
 	}
 	body, err = ioutil.ReadAll(resp.Body)

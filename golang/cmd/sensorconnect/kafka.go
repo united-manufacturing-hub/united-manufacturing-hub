@@ -48,7 +48,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte, key []byte) {
 }
 
 // setupKafka sets up the connection to the kafka server
-func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *kafka.AdminClient, consumer *kafka.Consumer) {
+func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *kafka.AdminClient) {
 	if !useKafka {
 		return
 	}
@@ -68,11 +68,6 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 	}
 
 	adminClient, err = kafka.NewAdminClient(&configMap)
-	if err != nil {
-		panic(err)
-	}
-
-	consumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
 		panic(err)
 	}
