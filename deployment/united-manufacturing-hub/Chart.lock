@@ -10,7 +10,7 @@ dependencies:
   version: 6.13.5
 - name: timescaledb-single
   repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
-  version: 0.9.0
+  version: 0.10.0
 - name: minio-operator
   repository: https://operator.min.io/
   version: 4.1.7
@@ -20,5 +20,5 @@ dependencies:
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
-digest: sha256:6102797d84f88508aaadf46417e3513f3389d88de71d52f886e602f8179be69c
-generated: "2022-01-28T18:04:34.470668+01:00"
+digest: sha256:18688c4de713d15dd485fbf9b2cbd03398610907f58fc090eb4406acfd6cf4af
+generated: "2022-02-11T10:49:06.673419+01:00"
