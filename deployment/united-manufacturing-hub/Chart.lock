@@ -1,13 +1,13 @@
 dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 12.7.3
+  version: 16.2.0
 - name: vernemq
   repository: https://vernemq.github.io/docker-vernemq
-  version: 1.6.7
+  version: 1.6.12-1
 - name: grafana
   repository: https://grafana.github.io/helm-charts
-  version: 6.13.5
+  version: 6.21.1
 - name: timescaledb-single
   repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
   version: 0.10.0
@@ -20,5 +20,5 @@ dependencies:
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
-digest: sha256:18688c4de713d15dd485fbf9b2cbd03398610907f58fc090eb4406acfd6cf4af
-generated: "2022-02-11T10:49:06.673419+01:00"
+digest: sha256:0f2739a8347dc44c0d1f210d6cb4a113284d0fdd3b1e5632724a8dc10a818c6d
+generated: "2022-02-11T10:44:38.0447972+01:00"
