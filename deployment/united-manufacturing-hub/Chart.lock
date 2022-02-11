@@ -13,12 +13,12 @@ dependencies:
   version: 0.10.0
 - name: minio-operator
   repository: https://operator.min.io/
-  version: 4.1.7
+  version: 4.3.7
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
   version: 15.0.1
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
-digest: sha256:0f2739a8347dc44c0d1f210d6cb4a113284d0fdd3b1e5632724a8dc10a818c6d
-generated: "2022-02-11T10:44:38.0447972+01:00"
+digest: sha256:1d50cf0f1a8c7633cced1b8a076852f4173f9525283e53d1d0b92895bf84e25a
+generated: "2022-02-11T10:54:28.2493084+01:00"
