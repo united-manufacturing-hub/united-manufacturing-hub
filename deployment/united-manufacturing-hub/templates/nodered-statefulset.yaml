@@ -51,6 +51,7 @@ spec:
                 npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
                 npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
                 npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
+                npm list node-red-contrib-kafka-manager || npm install node-red-contrib-kafka-manager;
               else
                 echo "Initial installation already completed. Please use Node-RED UI for further package installations";
               exit 0;
