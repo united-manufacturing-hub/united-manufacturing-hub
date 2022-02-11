@@ -2070,40 +2070,10 @@ redis:
   cluster:
     enabled: true
     slaveCount: 1
-  clusterDomain: cluster.local
-  common:
-    exampleValue: common-chart
-    global:
-      redis: {}
-  configmap: |-
-    # Enable AOF https://redis.io/topics/persistence#append-only-file
-    appendonly yes
-    # Disable RDB persistence, AOF persistence already enabled.
-    save ""
-  containerSecurityContext:
-    enabled: true
-    runAsUser: 1001
-  global:
-    redis: {}
-  image:
-    pullPolicy: IfNotPresent
-    registry: docker.io
-    repository: bitnami/redis
-    tag: 6.2.6-debian-10-r103
   master:
-    affinity: {}
     command: /run.sh
-    customLivenessProbe: {}
-    customReadinessProbe: {}
-    disableCommands:
-      - FLUSHDB
-      - FLUSHALL
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
     extraFlags:
       - --maxmemory 4gb
-    hostAliases: []
     livenessProbe:
       enabled: true
       failureThreshold: 5
@@ -2115,16 +2085,9 @@ redis:
       accessModes:
         - ReadWriteOnce
       enabled: true
-      matchExpressions: {}
-      matchLabels: {}
       path: /data
       size: 8Gi
       subPath: ""
-      volumes: null
-    podAnnotations: {}
-    podLabels: {}
-    preExecCmds: ""
-    priorityClassName: ""
     readinessProbe:
       enabled: true
       failureThreshold: 5
@@ -2141,54 +2104,22 @@ redis:
     service:
       annotations: {}
       externalTrafficPolicy: Cluster
-      labels: {}
-      port: 6379
+      ports:
+        redis: 6379
       type: ClusterIP
-    shareProcessNamespace: false
-    statefulset:
-      annotations: {}
-      labels: {}
-      updateStrategy: RollingUpdate
-      volumeClaimTemplates:
-        annotations: {}
-        labels: {}
   metrics:
     enabled: true
-    image:
-      pullPolicy: IfNotPresent
-      registry: docker.io
-      repository: bitnami/redis-exporter
-      tag: 1.13.1-debian-10-r6
     podAnnotations:
       prometheus.io/port: "9121"
       prometheus.io/scrape: "true"
-    priorityClassName: {}
-    prometheusRule:
-      additionalLabels: {}
-      enabled: false
-      namespace: ""
-      rules: []
-    service:
-      annotations: {}
-      externalTrafficPolicy: Cluster
-      labels: {}
-      type: ClusterIP
     serviceMonitor:
       enabled: false
-      metricRelabelings: []
-      relabelings: []
-      selector:
-        prometheus: kube-prometheus
   networkPolicy:
     enabled: false
     ingressNSMatchLabels: {}
     ingressNSPodMatchLabels: {}
-  # password: changeme
-  existingSecret: redis-secret
-  existingSecretPasswordKey: redispassword
-  persistence: {}
-  podDisruptionBudget:
-    enabled: true
+  pdb:
+    create: true
     minAvailable: 2
   podSecurityPolicy:
     create: false
@@ -2196,24 +2127,10 @@ redis:
     create: false
     role:
       rules: []
-  redisPort: 6379
-  securityContext:
-    enabled: true
-    fsGroup: 1001
   sentinel:
-    customLivenessProbe: {}
-    customReadinessProbe: {}
     downAfterMilliseconds: 1000
     enabled: true
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
     failoverTimeout: 18000
-    image:
-      pullPolicy: IfNotPresent
-      registry: docker.io
-      repository: bitnami/redis-sentinel
-      tag: 6.0.9-debian-10-r14
     initialCheckTimeout: 5
     livenessProbe:
       enabled: true
@@ -2224,9 +2141,9 @@ redis:
       timeoutSeconds: 5
     masterSet: mymaster
     parallelSyncs: 1
-    port: 26379
+    containerPorts:
+      sentinel: 26379
     preExecCmds: ""
-    # quorum: 2
     quorum: 1
     readinessProbe:
       enabled: true
@@ -2246,8 +2163,6 @@ redis:
       redisPort: 6379
       sentinelPort: 26379
       type: ClusterIP
-    staticID: false
-    usePassword: true
   serviceAccount:
     create: false
   replica:
@@ -2297,6 +2212,8 @@ redis:
   auth:
     enabled: true
     usePasswordFiles: false
+    existingSecret: redis-secret
+    existingSecretPasswordKey: redispassword
   volumePermissions:
     enabled: false
 
