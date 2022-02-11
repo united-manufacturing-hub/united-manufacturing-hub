@@ -57,7 +57,7 @@ dependencies:
     condition: _000_commonConfig.blobstorage.enabled
 
   - name: kafka
-    version: 14.4.1
+    version: 15.0.1
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.infrastructure.kafka.enabled
 

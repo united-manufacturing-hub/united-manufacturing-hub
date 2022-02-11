@@ -16,7 +16,7 @@ dependencies:
   version: 4.1.7
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
-  version: 14.4.1
+  version: 15.0.1
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
