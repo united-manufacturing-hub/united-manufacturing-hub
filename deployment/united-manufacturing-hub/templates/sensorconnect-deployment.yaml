@@ -47,20 +47,20 @@ spec:
               value: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath | quote}}
 
             - name: USE_KAFKA
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka | quote }}
             - name: USE_MQTT
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.useMQTT}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.useMQTT| quote }}
 
             - name: LOWER_SENSOR_TICK_TIME_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeedMs}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeedMs| quote }}
             - name: UPPER_SENSOR_TICK_TIME_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeedMs}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeedMs| quote }}
             - name: SENSOR_TICK_STEP_MS_UP
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUpMs}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUpMs| quote }}
             - name: SENSOR_TICK_STEP_MS_DOWN
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDownMs}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDownMs| quote }}
             - name: DEVICE_FINDER_FREQUENCY_IN_SEC
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderFrequenceySec}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderFrequenceySec| quote }}
 
             - name: BROKER_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
