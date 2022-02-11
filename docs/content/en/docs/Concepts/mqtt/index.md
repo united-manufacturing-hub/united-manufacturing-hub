@@ -72,12 +72,37 @@ Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
 
 This means that the transmitter with the serial number `2020-0102` has one ifm gateway connected to it with the serial number `0000005898845`. This gateway has the sensor `210-156` connected to the first port `X01`.
 
-```json
+```JSON
 {
-    "timestamp_ms": 1588879689394, 
-    "distance": 16
+  "timestamp_ms": ..., // int
+  "type": "IO-Link", // in case of IO-Link
+  "connected": 1, // 1 if connected
+  "<value1Name>": <convertedValue1>, //for example: "distance": 16,
+  "<value2Name>": <convertedValue2>,
+  ...
+  "<valueNName>": <convertedValueN>
 }
 ```
+
+If the device is not known from one of the IODD-XML files, the received valueString is directly written into the JSON message:
+```JSON
+{
+  "timestamp_ms": ...,
+  "type": "IO-Link", //in case of IO-Link
+  "connected": 1, // 1 in case of connected
+  "value_string": <unconvertedValue>
+}
+```
+
+If the connection can not be established:
+```JSON
+{
+  "timestamp_ms": ...,
+  "type": "IO-Link", //in case of IO-Link
+  "connected": 0, // 0 in case of not connected, also no value included in JSON
+}
+```
+
 {{% /alert %}}
 
 ### Topic: ia/rawImage/
