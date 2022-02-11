@@ -1,7 +1,7 @@
 dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 12.7.3
+  version: 16.2.0
 - name: vernemq
   repository: https://vernemq.github.io/docker-vernemq
   version: 1.6.7
@@ -20,5 +20,5 @@ dependencies:
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
-digest: sha256:6102797d84f88508aaadf46417e3513f3389d88de71d52f886e602f8179be69c
-generated: "2022-01-28T18:04:34.470668+01:00"
+digest: sha256:5f75785dc4a9afc9335f7263951bbc40518ed56a3ee5f1e488566ae5dd95da2c
+generated: "2022-02-11T10:27:59.9514342+01:00"
