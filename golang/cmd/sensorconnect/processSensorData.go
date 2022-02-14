@@ -429,9 +429,7 @@ func convertBinaryValueToString(binaryValue string, datatype string) (output str
 // createDigitalInputPayload creates a json output body from a DigitalInput to send via mqtt or kafka to the server
 func createDigitalInputPayload(portNumberString string, timestampMs string, dataPin2In []byte) (payload []byte) {
 	payload = []byte(`{`)
-	payload = append(payload, []byte(`-X0`)...)
-	payload = append(payload, []byte(portNumberString)...)
-	payload = append(payload, []byte(`,
+	payload = append(payload, []byte(`
 	"timestamp_ms:`)...)
 	payload = append(payload, []byte(timestampMs)...)
 	payload = append(payload, []byte(`,
@@ -447,9 +445,7 @@ func createDigitalInputPayload(portNumberString string, timestampMs string, data
 // createDigitalInputPayload creates the upper json output body from an IoLink response to send via mqtt or kafka to the server
 func createIoLinkBeginPayload(portNumberString string, timestampMs string) (payload []byte) {
 	payload = []byte(`{`)
-	payload = append(payload, []byte(`-X0`)...)
-	payload = append(payload, []byte(portNumberString)...)
-	payload = append(payload, []byte(`,
+	payload = append(payload, []byte(`
 	"timestamp_ms":`)...)
 	payload = append(payload, []byte(timestampMs)...)
 	payload = append(payload, []byte(`,
