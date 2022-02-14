@@ -73,7 +73,7 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 		//zap.S().Errorf("Unmarshal of body from url %s failed.", url)
 		return
 	}
-	// Check CID
+	// Check CID (23 is chosen at random ?)
 	if unmarshaledAnswer.Cid != 23 {
 		//zap.S().Errorf("Incorrect or missing cid in response. (Should be 23). UnmarshaledAnswer: %s, CurrentUrl: %s, body: %v", unmarshaledAnswer, url, body)
 		return

@@ -125,15 +125,11 @@ type IoddFilemapKey struct {
 // AddNewDeviceToIoddFilesAndMap uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
 // Then updates map by checking for new files, unmarhaling them und importing into map
 func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
-	zap.S().Debugf("[PRE-RequestSaveIoddFile]")
 	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
-	zap.S().Debugf("[POST-RequestSaveIoddFile]")
 	if err != nil {
 		zap.S().Debugf("File with fileMapKey%v already saved.", ioddFilemapKey)
 	}
-	zap.S().Debugf("[PRE-ReadIoddFiles]")
 	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
-	zap.S().Debugf("[POST-ReadIoddFiles]")
 	if err != nil {
 		zap.S().Errorf("Error in AddNewDeviceToIoddFilesAndMap: %s", err.Error())
 		return fileInfoSlice, err
@@ -235,6 +231,7 @@ func contains(slice []string, entry string) bool {
 	return false
 }
 
+//getNamesOfFileInfo returns the names of files stored inside a FileInfo slice
 func getNamesOfFileInfo(fileInfoSlice []os.FileInfo) (namesSlice []string) {
 	for _, element := range fileInfoSlice {
 		namesSlice = append(namesSlice, element.Name())
@@ -242,6 +239,7 @@ func getNamesOfFileInfo(fileInfoSlice []os.FileInfo) (namesSlice []string) {
 	return
 }
 
+//currentDateEarlierThenOldDate returns if a date is earlier then another
 func currentDateEarlierThenOldDate(currentDate string, oldDate string) (bool, error) {
 	const shortDate = "2006-01-02"
 	parsedCurrentDate, err := time.Parse(shortDate, currentDate)

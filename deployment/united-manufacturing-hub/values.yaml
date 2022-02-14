@@ -213,6 +213,7 @@ sensorconnect:
   DeviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
   MaxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
   SubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
+  debug: 0 # Set to 1 to enable debug output
   resources:
     requests:
       cpu: "10m"

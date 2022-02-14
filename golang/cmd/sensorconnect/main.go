@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -14,9 +15,6 @@ import (
 
 var mqttClient MQTT.Client
 
-//var discoveredDeviceInformation []DiscoveredDeviceInformation
-// key is url
-//var discoveredDeviceInformation sync.Map
 var discoveredDeviceChannel chan DiscoveredDeviceInformation
 var forgetDeviceChannel chan DiscoveredDeviceInformation
 
@@ -137,7 +135,8 @@ func main() {
 
 	ioDeviceMap = sync.Map{}
 
-	fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
+	//fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
+	fileInfoSlice = make([]os.FileInfo, 0)
 
 	if err != nil {
 		zap.S().Errorf("initializeIoddData produced the error: %v", err)
@@ -173,11 +172,6 @@ func main() {
 
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
 
-	for GetSyncMapLen(&ioDeviceMap) == 0 {
-		zap.S().Infof("Initial iodd file download not yet complete, awaiting.")
-		time.Sleep(1 * time.Second)
-	}
-
 	discoveredDeviceChannel = make(chan DiscoveredDeviceInformation)
 	forgetDeviceChannel = make(chan DiscoveredDeviceInformation)
 
@@ -188,6 +182,7 @@ func main() {
 	select {} // block forever
 }
 
+//continuousSensorDataProcessingV2 Spawns go routines for new devices, who will download,process and send data from sensors to Kafka/MQTT
 func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Debugf("Starting sensor data processing daemon v2")
 
@@ -214,6 +209,8 @@ func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemap
 	}
 }
 
+//continuousSensorDataProcessingDeviceDaemon Downloads sensordata, processes it and then sends it to Kafka/MQTT.
+// Has a backoff mechanism to prevent overloading io-link masters
 func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Infof("Started new daemon for device %v", deviceInfo)
 
@@ -289,6 +286,7 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 	}
 }
 
+//downloadSensorDataMapAndProcess downloads sensor data and processes it
 func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int, errChan chan error) {
 	var sensorDataMap map[string]interface{}
 	var err error
@@ -300,6 +298,7 @@ func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, upd
 	go processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
 }
 
+//continuousDeviceSearch Searches for devices everytime ticker is triggered
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
 	err := DiscoverDevices(ipRange)
@@ -317,27 +316,42 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	}
 
 }
+
+//ioddDataDaemon Starts a demon to download IODD files
 func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, relativeDirectoryPath string) {
 	zap.S().Debugf("Starting iodd data daemon")
+
 	for {
 		select {
 		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:
+
+			cacheKey := fmt.Sprintf("ioddDataDaemon%d:%d", ioddFilemapKey.DeviceId, ioddFilemapKey.VendorId)
+
+			// Prevents download attempt spam
+			_, found := internal.GetMemcached(cacheKey)
+			if found {
+				continue
+			}
 			var err error
 			_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
 			zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
 			if err != nil {
 				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
+				continue
 			}
-			continue
+			internal.SetMemcached(cacheKey, nil)
 		}
 	}
 }
 
+//initializeIoddData Downloads common IODD files (this is mostly used for debugging)
 func initializeIoddData(relativeDirectoryPath string) (fileInfo []os.FileInfo, err error) {
 
+	//1028 is https://ioddfinder.io-link.com/productvariants/search/20582
 	var ifmIoddFilemapKey IoddFilemapKey
 	ifmIoddFilemapKey.DeviceId = 1028
 	ifmIoddFilemapKey.VendorId = 310
+	// 278531 is https://ioddfinder.io-link.com/productvariants/search/1804
 	var siemensIoddFilemapKey IoddFilemapKey
 	siemensIoddFilemapKey.DeviceId = 278531
 	siemensIoddFilemapKey.VendorId = 42
@@ -354,6 +368,7 @@ func initializeIoddData(relativeDirectoryPath string) (fileInfo []os.FileInfo, e
 	return
 }
 
+//GetSyncMapLen retrieves length of a sync.Map
 func GetSyncMapLen(p *sync.Map) int {
 	mapLen := 0
 	p.Range(func(key, value interface{}) bool {

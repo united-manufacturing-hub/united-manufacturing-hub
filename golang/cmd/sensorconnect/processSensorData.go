@@ -35,7 +35,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			}
 
 			// Payload to send
-			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
+			payload := createDigitalInputPayload(portNumberString, timestampMs, dataPin2In)
 			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), payload, GenerateKafkaKey(currentDeviceInformation))
 			go SendMQTTMessage(mqttRawTopic, payload)
 		case 2: // digital output
@@ -90,11 +90,11 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			if idm, ok = ioDeviceMap.Load(ioddFilemapKey); !ok {
 				zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
 				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
-				continue                                    // drop data to avoid locking
+				return                                      // return here, other ports will face the same problem !
 			}
 
 			//prepare json Payload to send
-			payload := createIoLinkBeginPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs)
+			payload := createIoLinkBeginPayload(portNumberString, timestampMs)
 
 			// create padded binary raw sensor output
 			outputBitLength := rawSensorOutputLength * 4
@@ -427,10 +427,8 @@ func convertBinaryValueToString(binaryValue string, datatype string) (output str
 }
 
 // createDigitalInputPayload creates a json output body from a DigitalInput to send via mqtt or kafka to the server
-func createDigitalInputPayload(serialNumber string, portNumberString string, timestampMs string, dataPin2In []byte) (payload []byte) {
-	payload = []byte(`{
-		"serial_number":`)
-	payload = append(payload, []byte(serialNumber)...)
+func createDigitalInputPayload(portNumberString string, timestampMs string, dataPin2In []byte) (payload []byte) {
+	payload = []byte(`{`)
 	payload = append(payload, []byte(`-X0`)...)
 	payload = append(payload, []byte(portNumberString)...)
 	payload = append(payload, []byte(`,
@@ -447,10 +445,8 @@ func createDigitalInputPayload(serialNumber string, portNumberString string, tim
 }
 
 // createDigitalInputPayload creates the upper json output body from an IoLink response to send via mqtt or kafka to the server
-func createIoLinkBeginPayload(serialNumber string, portNumberString string, timestampMs string) (payload []byte) {
-	payload = []byte(`{
-		"serial_number":`)
-	payload = append(payload, []byte(serialNumber)...)
+func createIoLinkBeginPayload(portNumberString string, timestampMs string) (payload []byte) {
+	payload = []byte(`{`)
 	payload = append(payload, []byte(`-X0`)...)
 	payload = append(payload, []byte(portNumberString)...)
 	payload = append(payload, []byte(`,

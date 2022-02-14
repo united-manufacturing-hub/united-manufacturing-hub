@@ -75,7 +75,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) {
 	opts.AddBroker(mqttBrokerURL)
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("MQTT_KAFKA_BRIDGE")
+		opts.SetUsername("SENSORCONNECT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 

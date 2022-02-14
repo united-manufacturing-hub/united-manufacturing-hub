@@ -69,7 +69,8 @@ spec:
               value: {{.Values.sensorconnect.DeviceFinderTimeoutSec| quote }}
             - name: SUB_TWENTY_MS
               value: {{.Values.sensorconnect.SubTwentyMs| quote }}
-
+            - name: DEBUG
+              value: {{.Values.sensorconnect.debug| quote }}
 
             - name: BROKER_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
