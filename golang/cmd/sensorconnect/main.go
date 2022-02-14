@@ -227,10 +227,10 @@ func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, upd
 
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
+	err := DiscoverDevices(ipRange)
 	for {
 		select {
 		case <-ticker.C:
-			var err error
 			zap.S().Debugf("Starting device scan..")
 			err = DiscoverDevices(ipRange)
 			if err != nil {

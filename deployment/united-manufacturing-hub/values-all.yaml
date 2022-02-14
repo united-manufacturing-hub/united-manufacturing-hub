@@ -19,9 +19,9 @@ _000_commonConfig:
       enabled: true
       iprange: "192.168.10.1/24"  # IP Range in CIDR notation
       ioddfilepath: "/ioddfiles"
-      useKafka: 1
-      useMQTT: 0
-      lowerTickSpeedMs: 100 # Fastest time, sensors should be requested to serve data
+      useKafka: true
+      useMQTT: false
+      lowerTickSpeedMs: 50 # Fastest time, sensors should be requested to serve data
       upperTickSpeedMs: 100 # Slowest time, sensors should be requested to serve data
       TickSpeedSteppingUpMs: 10 # Time to add to actual stepping in case of failure
       TickSpeedSteppingDownMs: 1 # Time to add to actual stepping in case of no-failure
@@ -210,7 +210,8 @@ barcodereader:
 ### sensorconnect ###
 sensorconnect:
   storageRequest: 1Gi
-  image: unitedmanufacturinghub/sensorconnect
+  image: scarjit/sensorconnect
+  tag: latest
   resources:
     requests:
       cpu: "10m"
@@ -597,10 +598,6 @@ minio-operator:
     # Tenant name
     - name: umhminio
       ## Registry location and Tag to download MinIO Server image
-      image:
-        repository: minio/minio
-        tag: RELEASE.2021-06-17T00-10-46Z
-        pullPolicy: IfNotPresent
       ## Customize namespace for tenant deployment
       namespace: "united-manufacturing-hub"
       ## Customize any private registry image pull secret.
@@ -684,45 +681,6 @@ minio-operator:
       ## This is applied to MinIO pods only.
       ## Refer Kubernetes documentation for details https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass/
       priorityClassName: ""
-      ## Define configuration for Console (Graphical user interface for MinIO)
-      ## Refer https://github.com/minio/console
-      console:
-        image:
-          repository: minio/console
-          tag: v0.7.5
-          pullPolicy: IfNotPresent
-        replicaCount: 1
-        secrets:
-          enabled: true
-          name: console-secret
-          passphrase: SECRET
-          salt: THISISAVERYBADSALT
-          accessKey: YOURCONSOLEACCESS
-          secretKey: YOURCONSOLESECRET
-        ## Used to specify a toleration for Tenant Console pods.
-        tolerations: []
-        ## nodeSelector parameters for Tenant Console Pods. It specifies a map of key-value pairs. For the pod to be
-        ## eligible to run on a node, the node must have each of the
-        ## indicated key-value pairs as labels.
-        ## Read more here: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
-        nodeSelector: {}
-        ## Affinity settings for Tenant Console Pods. Read more about affinity
-        ## here: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity.
-        affinity: {}
-        ## Configure resource requests and limits for Tenant Console containers
-        resources: {}
-        ## Configure security context
-        securityContext: {}
-        ## Add environment variables to be set in Tenant Console container (https://github.com/minio/minio/tree/master/docs/config)
-        env: {}
-        ## Use this field to provide one or more external CA certificates. This is used by Console
-        ## to verify TLS connections with other applications:
-        ## https://github.com/minio/minio/tree/master/docs/tls/kubernetes#2-create-kubernetes-secret
-        externalCaCertSecret: {}
-        ## Use this field to provide a list of Secrets with external certificates. This can be used to to configure
-        ## TLS for MinIO Console pods. Create secrets as explained here:
-        ## https://github.com/minio/minio/tree/master/docs/tls/kubernetes#2-create-kubernetes-secret
-        externalCertSecret: {}
 
 ### timescaleDB ###
 timescaledb-single:
@@ -743,13 +701,6 @@ timescaledb-single:
   # The major PostgreSQL version to use, defaults to the default version of the Docker image
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
   version:
-
-  image:
-    # Image was built from
-    # https://github.com/timescale/timescaledb-docker-ha
-    repository: timescaledev/timescaledb-ha
-    tag: pg12-ts2.0-latest
-    pullPolicy: IfNotPresent
 
   # These secrets should exist before the Helm is used to deploy this TimescaleDB.
   # You can use generate_kustomization.sh to help in creating these secrets, or have
@@ -1054,7 +1005,7 @@ timescaledb-single:
     #   cpu: 100m
     #   memory: 128Mi
     # requests:
-    #   cpu: 100m
+  #   cpu: 100m
   #   memory: 128Mi
 
   sharedMemory:
@@ -1086,7 +1037,7 @@ timescaledb-single:
     # https://github.com/timescale/timescaledb-tune
     args: {}
       # max-conns: 120
-      # cpus: 5
+    # cpus: 5
     # memory: 4GB
 
   # pgBouncer does connection pooling for PostgreSQL
@@ -1145,10 +1096,6 @@ timescaledb-single:
   # https://github.com/wrouesnel/postgres_exporter
   prometheus:
     enabled: false
-    image:
-      repository: wrouesnel/postgres_exporter
-      tag: v0.7.0
-      pullPolicy: Always
     # Extra custom environment variables for prometheus.
     # These should be an EnvVar, as this allows you to inject secrets into the environment
     # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#envvar-v1-core
@@ -1291,25 +1238,15 @@ grafana:
   ##
   # schedulerName: "default-scheduler"
 
-  image:
-    repository: grafana/grafana
-    tag: 8.1.3
-    sha: ""
-    pullPolicy: IfNotPresent
-
-    ## Optionally specify an array of imagePullSecrets.
-    ## Secrets must be manually created in the namespace.
-    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-    ##
-    # pullSecrets:
-    #   - myRegistrKeySecretName
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistrKeySecretName
 
   testFramework:
     enabled: false
-    image: "bats/bats"
-    tag: "v1.1.0"
-    imagePullPolicy: IfNotPresent
-    securityContext: {}
 
   securityContext:
     runAsUser: 472
@@ -1323,12 +1260,12 @@ grafana:
     # - name: certs-configmap
     #   mountPath: /etc/grafana/ssl/
     #   subPath: certificates.crt # (optional)
-    #   configMap: certs-configmap
+  #   configMap: certs-configmap
   #   readOnly: true
 
 
   extraEmptyDirMounts: []
-    # - name: provisioning-notifiers
+  # - name: provisioning-notifiers
   #   mountPath: /etc/grafana/provisioning/notifiers
 
 
@@ -1337,12 +1274,6 @@ grafana:
 
   ## Assign a PriorityClassName to pods if set
   # priorityClassName:
-
-  downloadDashboardsImage:
-    repository: curlimages/curl
-    tag: 7.73.0
-    sha: ""
-    pullPolicy: IfNotPresent
 
   downloadDashboards:
     env: {}
@@ -1390,13 +1321,13 @@ grafana:
   extraExposePorts: []
     # - name: keycloak
     #   port: 8080
-    #   targetPort: 8080
+  #   targetPort: 8080
   #   type: ClusterIP
 
   # overrides pod.spec.hostAliases in the grafana deployment's pods
   hostAliases: []
     # - ip: "1.2.3.4"
-    #   hostnames:
+  #   hostnames:
   #     - "my.host.com"
 
   ingress:
@@ -1406,7 +1337,7 @@ grafana:
     # ingressClassName: nginx
     # Values can be templated
     annotations: {}
-      # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
     labels: {}
     path: /
@@ -1526,13 +1457,6 @@ grafana:
     ##
     enabled: true
 
-    ## initChownData container image
-    ##
-    image:
-      repository: busybox
-      tag: "1.31.1"
-      sha: ""
-      pullPolicy: IfNotPresent
 
     ## initChownData resource requests and limits
     ## Ref: http://kubernetes.io/docs/user-guide/compute-resources/
@@ -1658,7 +1582,7 @@ grafana:
     #    readOnly: true
     #    volumeAttributes:
     #      secretProviderClass: "akv-grafana-spc"
-    #    nodePublishSecretRef:                       # Only required when using service principal mode
+  #    nodePublishSecretRef:                       # Only required when using service principal mode
   #       name: grafana-akv-creds                  # Only required when using service principal mode
 
   ## Additional grafana server volume mounts
@@ -1670,7 +1594,7 @@ grafana:
     #   existingClaim: volume-claim
     # - name: extra-volume-1
     #   mountPath: /mnt/volume1
-    #   readOnly: true
+  #   readOnly: true
   #   hostPath: /usr/shared/
 
   ## Pass the plugins you want installed as a list.
@@ -1773,7 +1697,7 @@ grafana:
     #     token: ''
     #   local-dashboard-base64:
     #     url: https://example.com/repository/test-b64.json
-    #     token: ''
+  #     token: ''
   #     b64content: true
 
   ## Reference to external ConfigMap per provider. Use provider name as key and ConfigMap name as value.
@@ -1811,7 +1735,7 @@ grafana:
       ssl_mode: require
       type: postgres
         ## grafana Authentication can be enabled with the following values on grafana.ini
-        # server:
+      # server:
       # The full public facing url you use in browser, used for redirects and emails
     #    root_url:
     # https://grafana.com/docs/grafana/latest/auth/github/#enable-github-in-grafana
@@ -1869,10 +1793,6 @@ grafana:
   ## Sidecars that collect the configmaps with specified label and stores the included files them into the respective folders
   ## Requires at least Grafana 5 to work and can't be used together with parameters dashboardProviders, datasources and dashboards
   sidecar:
-    image:
-      repository: quay.io/kiwigrid/k8s-sidecar
-      tag: 1.10.7
-      sha: ""
     imagePullPolicy: IfNotPresent
     resources: {}
     #   limits:
@@ -1950,15 +1870,6 @@ grafana:
     # Enable the image-renderer deployment & service
     enabled: false
     replicas: 1
-    image:
-      # image-renderer Image repository
-      repository: grafana/grafana-image-renderer
-      # image-renderer Image tag
-      tag: latest
-      # image-renderer Image sha (optional)
-      sha: ""
-      # image-renderer ImagePullPolicy
-      pullPolicy: Always
     # extra environment variables
     env:
       HTTP_HOST: "0.0.0.0"
@@ -2030,13 +1941,6 @@ kafkatoblob:
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
-  image:
-    registry: docker.io
-    repository: bitnami/kafka
-    tag: 2.8.1-debian-10-r31
-    pullPolicy: IfNotPresent
-    pullSecrets: []
-    debug: false
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
@@ -2258,10 +2162,6 @@ vernemq:
         name: vernemq-acl
       name: vernemq-acl
   fullnameOverride: ""
-  image:
-    pullPolicy: IfNotPresent
-    repository: vernemq/vernemq
-    tag: 1.11.0
   ingress:
     annotations: {}
     enabled: false
