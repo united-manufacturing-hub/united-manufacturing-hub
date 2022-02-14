@@ -18,18 +18,6 @@ _000_commonConfig:
     sensorconnect:
       enabled: true
       iprange: "192.168.10.1/24"  # IP Range in CIDR notation
-      ioddfilepath: "/ioddfiles"
-      useKafka: true
-      useMQTT: false
-      lowerTickSpeedMs: 20 # Fastest time, sensors should be requested to serve data
-      upperTickSpeedMs: 1000 # Slowest time, sensors should be requested to serve data
-      TickSpeedSteppingUpMs: 20 # Time to add to actual stepping in case of failure
-      TickSpeedSteppingDownMs: 1 # Time to add to actual stepping in case of no-failure
-      DeviceFinderFrequenceySec: 20
-      SensorStartSpeed: 100
-      MaxSensorErrorCount: 50
-      DeviceFinderTimeoutSec: 1
-      SubTwentyMs: 0
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
@@ -215,6 +203,16 @@ barcodereader:
 sensorconnect:
   storageRequest: 1Gi
   image: unitedmanufacturinghub/sensorconnect
+  ioddfilepath: "/ioddfiles"
+  lowerTickSpeedMs: 20 # Fastest time, sensors should be requested to serve data
+  upperTickSpeedMs: 1000 # Slowest time, sensors should be requested to serve data
+  TickSpeedSteppingUpMs: 20 # Time to add to actual stepping in case of failure
+  TickSpeedSteppingDownMs: 1 # Time to add to actual stepping in case of no-failure
+  SensorStartSpeedMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
+  DeviceFinderFrequenceySec: 20 # Time in sec, before finding new devices
+  DeviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
+  MaxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
+  SubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
   resources:
     requests:
       cpu: "10m"

@@ -44,31 +44,31 @@ spec:
               value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
 
             - name: IODD_FILE_PATH
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath | quote}}
+              value: {{.Values.sensorconnect.ioddfilepath | quote}}
 
             - name: USE_KAFKA
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.useKafka | quote }}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.enabled | quote }}
             - name: USE_MQTT
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.useMQTT| quote }}
+              value: {{.Values._000_commonConfig.infrastructure.mqtt.enabled| quote }}
 
             - name: LOWER_SENSOR_TICK_TIME_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.lowerTickSpeedMs| quote }}
+              value: {{.Values.sensorconnect.lowerTickSpeedMs| quote }}
             - name: UPPER_SENSOR_TICK_TIME_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.upperTickSpeedMs| quote }}
+              value: {{.Values.sensorconnect.upperTickSpeedMs| quote }}
             - name: SENSOR_TICK_STEP_MS_UP
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingUpMs| quote }}
+              value: {{.Values.sensorconnect.TickSpeedSteppingUpMs| quote }}
             - name: SENSOR_TICK_STEP_MS_DOWN
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDownMs| quote }}
+              value: {{.Values.sensorconnect.TickSpeedSteppingDownMs| quote }}
             - name: DEVICE_FINDER_FREQUENCY_IN_SEC
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderFrequenceySec| quote }}
+              value: {{.Values.sensorconnect.DeviceFinderFrequenceySec| quote }}
             - name: SENSOR_START_SPEED
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.SensorStartSpeed| quote }}
+              value: {{.Values.sensorconnect.SensorStartSpeedMs| quote }}
             - name: MAX_SENSOR_ERROR_COUNT
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.MaxSensorErrorCount| quote }}
+              value: {{.Values.sensorconnect.MaxSensorErrorCount| quote }}
             - name: DEVICE_FINDER_TIMEOUT_SEC
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderTimeoutSec| quote }}
+              value: {{.Values.sensorconnect.DeviceFinderTimeoutSec| quote }}
             - name: SUB_TWENTY_MS
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.SubTwentyMs| quote }}
+              value: {{.Values.sensorconnect.SubTwentyMs| quote }}
 
 
             - name: BROKER_URL
