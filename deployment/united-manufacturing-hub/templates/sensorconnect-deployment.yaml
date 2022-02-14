@@ -61,6 +61,15 @@ spec:
               value: {{.Values._000_commonConfig.datasources.sensorconnect.TickSpeedSteppingDownMs| quote }}
             - name: DEVICE_FINDER_FREQUENCY_IN_SEC
               value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderFrequenceySec| quote }}
+            - name: SENSOR_START_SPEED
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.SensorStartSpeed| quote }}
+            - name: MAX_SENSOR_ERROR_COUNT
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.MaxSensorErrorCount| quote }}
+            - name: DEVICE_FINDER_TIMEOUT_SEC
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.DeviceFinderTimeoutSec| quote }}
+            - name: SUB_TWENTY_MS
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.SubTwentyMs| quote }}
+
 
             - name: BROKER_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883

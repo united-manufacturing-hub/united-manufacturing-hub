@@ -21,11 +21,15 @@ _000_commonConfig:
       ioddfilepath: "/ioddfiles"
       useKafka: true
       useMQTT: false
-      lowerTickSpeedMs: 100 # Fastest time, sensors should be requested to serve data
-      upperTickSpeedMs: 100 # Slowest time, sensors should be requested to serve data
-      TickSpeedSteppingUpMs: 10 # Time to add to actual stepping in case of failure
+      lowerTickSpeedMs: 20 # Fastest time, sensors should be requested to serve data
+      upperTickSpeedMs: 1000 # Slowest time, sensors should be requested to serve data
+      TickSpeedSteppingUpMs: 20 # Time to add to actual stepping in case of failure
       TickSpeedSteppingDownMs: 1 # Time to add to actual stepping in case of no-failure
       DeviceFinderFrequenceySec: 20
+      SensorStartSpeed: 100
+      MaxSensorErrorCount: 50
+      DeviceFinderTimeoutSec: 1
+      SubTwentyMs: 0
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
