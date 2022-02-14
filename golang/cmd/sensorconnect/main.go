@@ -223,7 +223,7 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 	for {
 		errorCountChange := uint64(0)
 		hadError := false
-		start := time.Now()
+		//start := time.Now()
 		var err error
 		var portModeMap map[int]int
 
@@ -273,10 +273,12 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 				sleepDuration = lowestSensorTickTime
 			}
 		}
-		elapsed := time.Since(start)
-		sd := time.Duration(sleepDuration) * time.Millisecond
-		sleepTime := sd - elapsed
-
+		/*
+			elapsed := time.Since(start)
+			sd := time.Duration(sleepDuration) * time.Millisecond
+			sleepTime := sd - elapsed
+		*/
+		sleepTime := time.Duration(sleepDuration) * time.Millisecond
 		if sleepTime < time.Duration(lowestSensorTickTime)*time.Millisecond {
 			sleepTime = time.Duration(lowestSensorTickTime) * time.Millisecond
 		}
