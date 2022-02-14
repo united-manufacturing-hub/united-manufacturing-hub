@@ -34,16 +34,19 @@ var buildtime string
 var useKafka bool
 var useMQTT bool
 
-var deviceFinderFrequencyInS = 20
-var deviceFinderTimeoutInS = 1
+var deviceFinderFrequencyInS uint64
+var deviceFinderTimeoutInS uint64
 
-var lowestSensorTickTime int
-var upperSensorTickTime int
+var lowestSensorTickTime uint64
+var upperSensorTickTime uint64
 
-var sensorTickTimeSteppingUp int
-var sensorTickTimeSteppingDown int
+var sensorTickTimeSteppingUp uint64
+var sensorTickTimeSteppingDown uint64
+var sensorStartSpeed uint64
 
-var maxSensorErrorCount = uint64(10)
+var maxSensorErrorCount uint64
+
+var subTwentyMs bool
 
 func main() {
 	var logger *zap.Logger
@@ -86,25 +89,42 @@ func main() {
 	}
 
 	var err error
-	lowestSensorTickTime, err = strconv.Atoi(os.Getenv("LOWER_SENSOR_TICK_TIME_MS"))
+	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_SENSOR_TICK_TIME_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert LOWER_SENSOR_TICK_TIME_MS env to int, defaulting to 100")
-		lowestSensorTickTime = 100
+		zap.S().Errorf("Couldn't convert LOWER_SENSOR_TICK_TIME_MS env to int, defaulting to 20")
+		lowestSensorTickTime = 20
 	}
-	upperSensorTickTime, err = strconv.Atoi(os.Getenv("UPPER_SENSOR_TICK_TIME_MS"))
-	if err != nil {
-		zap.S().Errorf("Couldn't convert UPPER_SENSOR_TICK_TIME_MS env to int, defaulting to 100")
-		upperSensorTickTime = 100
+
+	subTwentyMs = os.Getenv("SUB_TWENTY_MS") == "1"
+
+	if lowestSensorTickTime < 20 {
+		if subTwentyMs {
+			zap.S().Warnf("Going under 20MS is not recommendet with IFM IO-Link Masters")
+		} else {
+			panic("LOWER_SENSOR_TICK_TIME_MS under 20 can IFM IO-Link Master failures, set SUB_TWENTY_MS to 1 to continue !")
+		}
 	}
-	sensorTickTimeSteppingUp, err = strconv.Atoi(os.Getenv("SENSOR_TICK_STEP_MS_UP"))
+
+	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_SENSOR_TICK_TIME_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 10")
-		sensorTickTimeSteppingUp = 10
+		zap.S().Errorf("Couldn't convert UPPER_SENSOR_TICK_TIME_MS env to int, defaulting to 1000")
+		upperSensorTickTime = 1000
 	}
-	sensorTickTimeSteppingDown, err = strconv.Atoi(os.Getenv("SENSOR_TICK_STEP_MS_DOWN"))
+	sensorTickTimeSteppingUp, err = strconv.ParseUint(os.Getenv("SENSOR_TICK_STEP_MS_UP"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 10")
-		sensorTickTimeSteppingDown = 10
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 20")
+		sensorTickTimeSteppingUp = 20
+	}
+	sensorTickTimeSteppingDown, err = strconv.ParseUint(os.Getenv("SENSOR_TICK_STEP_MS_DOWN"), 10, 64)
+	if err != nil {
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 1")
+		sensorTickTimeSteppingDown = 1
+	}
+
+	sensorStartSpeed, err = strconv.ParseUint(os.Getenv("SENSOR_START_SPEED"), 10, 64)
+	if err != nil {
+		zap.S().Errorf("Couldn't convert SENSOR_START_SPEED env to int, defaulting to LOWER_SENSOR_TICK_TIME_MS")
+		sensorStartSpeed = lowestSensorTickTime
 	}
 
 	ipRange := os.Getenv("IP_RANGE")
@@ -123,33 +143,28 @@ func main() {
 		zap.S().Errorf("initializeIoddData produced the error: %v", err)
 	}
 
-	if os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC") != "" {
-		deviceFinderFrequencyInS, err = strconv.Atoi(os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC"))
-		if err != nil {
-			zap.S().Errorf("Couldn't convert DEVICE_FINDER_FREQUENCY_IN_SEC env to int, defaulting to 20 sec")
+	deviceFinderFrequencyInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC"), 10, 64)
+	if err != nil {
+		zap.S().Errorf("Couldn't convert DEVICE_FINDER_FREQUENCY_IN_SEC env to int, defaulting to 20 sec")
+		deviceFinderFrequencyInS = 20
 
-		}
 	}
 
-	if os.Getenv("DEVICE_FINDER_TIMEOUT_SEC") != "" {
-		deviceFinderTimeoutInS, err = strconv.Atoi(os.Getenv("DEVICE_FINDER_TIMEOUT_SEC"))
-		if err != nil {
-			zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec")
+	deviceFinderTimeoutInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_TIMEOUT_SEC"), 10, 64)
+	if err != nil {
+		zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec")
+		deviceFinderTimeoutInS = 1
 
-		}
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
 		panic("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_FREQUENCY_IN_SEC")
 	}
 
-	if os.Getenv("MAX_SENSOR_ERROR_COUNT") != "" {
-		var maxSC int
-		maxSC, err = strconv.Atoi(os.Getenv("MAX_SENSOR_ERROR_COUNT"))
-		if err != nil {
-			zap.S().Errorf("Couldn't convert MAX_SENSOR_ERROR_COUNT env to int, defaulting to 10")
-		}
-		maxSensorErrorCount = uint64(maxSC)
+	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)
+	if err != nil {
+		zap.S().Errorf("Couldn't convert MAX_SENSOR_ERROR_COUNT env to int, defaulting to 50")
+		maxSensorErrorCount = 50
 	}
 
 	tickerSearchForDevices := time.NewTicker(time.Duration(deviceFinderFrequencyInS) * time.Second)
@@ -202,48 +217,59 @@ func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemap
 func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
 	zap.S().Infof("Started new daemon for device %v", deviceInfo)
 
-	var errorcount uint64
+	var errorCount uint64
+	// Ramp up speed
 	sleepDuration := lowestSensorTickTime
+	var errChan chan error
+	errChan = make(chan error, 512)
+
 	for {
+		errorCountChange := uint64(0)
+		hadError := false
 		start := time.Now()
 		var err error
 		var portModeMap map[int]int
-		hadError := false
 
 		portModeMap, err = GetPortModeMap(deviceInfo)
 		if err != nil {
 			zap.S().Warnf("[GPMM] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
 			hadError = true
+			errorCount += 1
+			errorCountChange += 1
 		}
-
 		if !hadError {
-			err = downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap)
-			if err != nil {
-				zap.S().Warnf("[DSDMAP] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
-				hadError = true
+			go downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, errChan)
+		}
+
+		var hasData = true
+		for {
+			select {
+			case ex := <-errChan:
+				{
+					errorCount += 1
+					errorCountChange += 1
+					zap.S().Warnf("[DSDMAP] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, ex.Error())
+					hadError = true
+				}
+			default:
+				hasData = false
+			}
+			if !hasData {
+				break
 			}
 		}
 
-		if hadError {
-			errorcount += 1
-		} else {
-			if errorcount > 0 {
-				errorcount -= 1
-			}
-		}
-
-		if errorcount >= maxSensorErrorCount {
+		if errorCount >= maxSensorErrorCount {
 			zap.S().Errorf("Sensor [%v] is unavailable !", deviceInfo)
 			forgetDeviceChannel <- deviceInfo
 			return
 		}
 
 		if hadError {
-			sleepDuration += sensorTickTimeSteppingUp
+			sleepDuration += sensorTickTimeSteppingUp * errorCountChange
 			if sleepDuration > upperSensorTickTime {
 				sleepDuration = upperSensorTickTime
 			}
-			zap.S().Debugf("Sensor [%v] sleep duration increased !", deviceInfo.Url)
 		} else {
 			sleepDuration -= sensorTickTimeSteppingDown
 			if sleepDuration < lowestSensorTickTime {
@@ -253,21 +279,25 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 		elapsed := time.Since(start)
 		sd := time.Duration(sleepDuration) * time.Millisecond
 		sleepTime := sd - elapsed
-		if sleepTime < time.Duration(0) {
-			zap.S().Warnf("[CSDPDD] Can't keep up, sensor %s is to fast ! Elapsed: %s vs Sleep %s", deviceInfo.Url, elapsed.String(), sd.String())
+
+		if sleepTime < time.Duration(lowestSensorTickTime)*time.Millisecond {
+			sleepTime = time.Duration(lowestSensorTickTime) * time.Millisecond
 		}
+
+		zap.S().Debugf("Sleep time: %s for sensor %s", sleepTime.String(), deviceInfo.Url)
 		time.Sleep(sleepTime)
 	}
 }
 
-func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int) (err error) {
+func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int, errChan chan error) {
 	var sensorDataMap map[string]interface{}
+	var err error
 	sensorDataMap, err = GetSensorDataMap(deviceInfo)
 	if err != nil {
-		return err
+		errChan <- err
+		return
 	}
 	go processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
-	return nil
 }
 
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {

@@ -7,8 +7,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type SensorDataInformation struct {
@@ -92,6 +94,8 @@ func createSensorDataRequestBody(numberOfPorts int) []byte {
 	return payload
 }
 
+var clientPool map[string]http.Client
+
 // downloadSensorData sends a POST request to the given url with the given payload. It returns the body and an error in case of problems.
 func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 	// Create Request
@@ -100,10 +104,32 @@ func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 		zap.S().Warnf("Failed to create post request for url: %s", url)
 		return
 	}
-	client := &http.Client{}
+
+	var client http.Client
+	var ok bool
+	if client, ok = clientPool[url]; !ok {
+		client = http.Client{
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				ForceAttemptHTTP2:     false,
+				MaxIdleConns:          100,
+				MaxConnsPerHost:       0,
+				IdleConnTimeout:       10 * time.Second,
+				TLSHandshakeTimeout:   1 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		}
+		if clientPool == nil {
+			clientPool = make(map[string]http.Client)
+		}
+		clientPool[url] = client
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
-		//zap.S().Debugf("Client at %s did not respond.", url)
 		return
 	}
 	defer resp.Body.Close()
@@ -114,7 +140,6 @@ func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 	}
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		//zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
 		return
 	}
 	return

@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/base64"
+	"errors"
 
 	//"encoding/base64"
 	"fmt"
@@ -26,7 +27,12 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			// get value from sensorDataMap
 			portNumberString := strconv.Itoa(portNumber)
 			key := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
-			dataPin2In := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
+			dataPin2In, err := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
+
+			if err != nil {
+				zap.S().Errorf("%s", err.Error())
+				continue
+			}
 
 			// Payload to send
 			payload := createDigitalInputPayload(currentDeviceInformation.SerialNumber, portNumberString, timestampMs, dataPin2In)
@@ -39,7 +45,12 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			// check connection status
 			portNumberString := strconv.Itoa(portNumber)
 			keyPdin := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
-			connectionCode := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
+			connectionCode, err := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
+
+			if err != nil {
+				zap.S().Errorf("%s", err.Error())
+				continue
+			}
 			if connectionCode != 200 {
 				//zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
 				continue
@@ -48,9 +59,24 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			// get Deviceid
 			keyDeviceid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/deviceid"
 			keyVendorid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/vendorid"
-			deviceId := extractIntFromSensorDataMap(keyDeviceid, "data", sensorDataMap)
-			vendorId := extractInt64FromSensorDataMap(keyVendorid, "data", sensorDataMap)
-			rawSensorOutput := extractByteArrayFromSensorDataMap(keyPdin, "data", sensorDataMap)
+			deviceId, err := extractIntFromSensorDataMap(keyDeviceid, "data", sensorDataMap)
+
+			if err != nil {
+				zap.S().Errorf("%s", err.Error())
+				continue
+			}
+			vendorId, err := extractInt64FromSensorDataMap(keyVendorid, "data", sensorDataMap)
+
+			if err != nil {
+				zap.S().Errorf("%s", err.Error())
+				continue
+			}
+			rawSensorOutput, err := extractByteArrayFromSensorDataMap(keyPdin, "data", sensorDataMap)
+
+			if err != nil {
+				zap.S().Errorf("%s", err.Error())
+				continue
+			}
 			rawSensorOutputLength := len(rawSensorOutput)
 
 			//create IoddFilemapKey
@@ -84,7 +110,6 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			var emptySimpleDatatype SimpleDatatype
 			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
 
-			var err error
 			//zap.S().Debugf("Starting to process port number = %v with device id = %v and raw sensor output = %v", portNumber, deviceId, string(rawSensorOutput))
 			// use the acquired info to process the raw data coming from the sensor correctly in to human readable data and attach to payload
 			payload, err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
@@ -250,7 +275,10 @@ func getUnixTimestampMs() (timestampMs string) {
 }
 
 // extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer
-func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int {
+func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) (int, error) {
+	if _, ok := sensorDataMap[key]; !ok {
+		return 0, errors.New(fmt.Sprintf("Key %s not in sensorDataMap", key))
+	}
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
 
@@ -259,11 +287,14 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 		zap.S().Errorf("Failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
 	}
 	returnValue := int(val)
-	return returnValue
+	return returnValue, nil
 }
 
 // extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer 64
-func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) int64 {
+func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) (int64, error) {
+	if _, ok := sensorDataMap[key]; !ok {
+		return 0, errors.New(fmt.Sprintf("Key %s not in sensorDataMap", key))
+	}
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
 	val, ok := elementMap[tag].(float64)
@@ -271,16 +302,19 @@ func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[str
 		zap.S().Errorf("Failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
 	}
 	returnValue := int64(val)
-	return returnValue
+	return returnValue, nil
 }
 
 // extractIntFromSensorDataMap uses the combination of key and tag to retreive a byte slice
-func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) []byte {
+func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) ([]byte, error) {
+	if _, ok := sensorDataMap[key]; !ok {
+		return nil, errors.New(fmt.Sprintf("Key %s not in sensorDataMap", key))
+	}
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
 	returnString := fmt.Sprintf("%v", elementMap[tag])
 	returnValue := []byte(returnString)
-	return returnValue
+	return returnValue, nil
 }
 
 // zeroPadding adds zeros on the left side of a string until the lengt of the string equals the requested length
