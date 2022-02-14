@@ -4,20 +4,21 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 var mqttClient MQTT.Client
 
 //var discoveredDeviceInformation []DiscoveredDeviceInformation
 // key is url
-var discoveredDeviceInformation sync.Map
+//var discoveredDeviceInformation sync.Map
+var discoveredDeviceChannel chan DiscoveredDeviceInformation
+var forgetDeviceChannel chan DiscoveredDeviceInformation
 
 //var ioDeviceMap map[IoddFilemapKey]IoDevice
 var ioDeviceMap sync.Map
@@ -34,20 +35,22 @@ var useKafka bool
 var useMQTT bool
 
 var deviceFinderFrequencyInS = 20
+var deviceFinderTimeoutInS = 1
 
 var lowestSensorTickTime int
-
 var upperSensorTickTime int
 
 var sensorTickTimeSteppingUp int
-var actualSensorTickSpeed int
-
 var sensorTickTimeSteppingDown int
+
+var maxSensorErrorCount = uint64(10)
 
 func main() {
 	var logger *zap.Logger
 	if os.Getenv("DEBUG") == "1" {
+		time.Sleep(15 * time.Second)
 		logger, _ = zap.NewDevelopment()
+		zap.S().Debugf("Starting in DEBUG mode !")
 	} else {
 		logger, _ = zap.NewProduction()
 	}
@@ -113,7 +116,6 @@ func main() {
 	// creating ioDeviceMap and downloading initial set of iodd files
 
 	ioDeviceMap = sync.Map{}
-	discoveredDeviceInformation = sync.Map{}
 
 	fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
 
@@ -129,16 +131,30 @@ func main() {
 		}
 	}
 
+	if os.Getenv("DEVICE_FINDER_TIMEOUT_SEC") != "" {
+		deviceFinderTimeoutInS, err = strconv.Atoi(os.Getenv("DEVICE_FINDER_TIMEOUT_SEC"))
+		if err != nil {
+			zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec")
+
+		}
+	}
+
+	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
+		panic("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_FREQUENCY_IN_SEC")
+	}
+
+	if os.Getenv("MAX_SENSOR_ERROR_COUNT") != "" {
+		var maxSC int
+		maxSC, err = strconv.Atoi(os.Getenv("MAX_SENSOR_ERROR_COUNT"))
+		if err != nil {
+			zap.S().Errorf("Couldn't convert MAX_SENSOR_ERROR_COUNT env to int, defaulting to 10")
+		}
+		maxSensorErrorCount = uint64(maxSC)
+	}
+
 	tickerSearchForDevices := time.NewTicker(time.Duration(deviceFinderFrequencyInS) * time.Second)
 	defer tickerSearchForDevices.Stop()
 	updateIoddIoDeviceMapChan := make(chan IoddFilemapKey)
-
-	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
-
-	for GetSyncMapLen(&discoveredDeviceInformation) == 0 {
-		zap.S().Infof("No devices discovered yet.")
-		time.Sleep(1 * time.Second)
-	}
 
 	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
 
@@ -146,88 +162,118 @@ func main() {
 		zap.S().Infof("Initial iodd file download not yet complete, awaiting.")
 		time.Sleep(1 * time.Second)
 	}
-	actualSensorTickSpeed = lowestSensorTickTime
-	zap.S().Infof("Requesting data every %d ms", actualSensorTickSpeed)
-	tickerProcessSensorData := time.NewTicker(time.Duration(actualSensorTickSpeed) * time.Millisecond)
-	defer tickerProcessSensorData.Stop()
-	go continuousSensorDataProcessing(tickerProcessSensorData, updateIoddIoDeviceMapChan)
 
+	discoveredDeviceChannel = make(chan DiscoveredDeviceInformation)
+	forgetDeviceChannel = make(chan DiscoveredDeviceInformation)
+
+	go continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan)
+
+	time.Sleep(1 * time.Second)
+	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
 	select {} // block forever
 }
 
-func continuousSensorDataProcessing(ticker *time.Ticker, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
-	zap.S().Debugf("Starting sensor data processing daemon")
+func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+	zap.S().Debugf("Starting sensor data processing daemon v2")
 
-	cyclesWithoutError := uint64(0)
+	// The boolean value is not used
+	var activeDevices map[string]bool
+	activeDevices = make(map[string]bool)
+
 	for {
-
 		select {
-		case <-ticker.C:
-			var err error
-
-			hadError := false
-			discoveredDeviceInformation.Range(func(key, rawCurrentDeviceInformation interface{}) bool {
-				deviceInfo := rawCurrentDeviceInformation.(DiscoveredDeviceInformation)
-				var portModeMap map[int]int
-
-				portModeMap, err = GetPortModeMap(deviceInfo)
-				if err != nil {
-					zap.S().Warnf("Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
-					hadError = true
-					return true
-				}
-
-				go downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap)
-				return true
-			})
-
-			// Don't change read speed, if not configured !
-			if upperSensorTickTime == lowestSensorTickTime {
-				continue
-			}
-
-			if hadError {
-				cyclesWithoutError = 0
-				actualSensorTickSpeed += sensorTickTimeSteppingUp
-				if actualSensorTickSpeed > upperSensorTickTime {
-					actualSensorTickSpeed = upperSensorTickTime
-				}
-				zap.S().Debugf("Increased tick time to %d", actualSensorTickSpeed)
-				ticker.Reset(time.Duration(actualSensorTickSpeed) * time.Millisecond)
-			} else {
-				cyclesWithoutError += 1
-				if cyclesWithoutError%10 == 0 {
-					if actualSensorTickSpeed > lowestSensorTickTime {
-						actualSensorTickSpeed -= sensorTickTimeSteppingDown
-						if actualSensorTickSpeed < lowestSensorTickTime {
-							actualSensorTickSpeed = lowestSensorTickTime
-						}
-						zap.S().Debugf("Reduced tick time to %d", actualSensorTickSpeed)
-						ticker.Reset(time.Duration(actualSensorTickSpeed) * time.Millisecond)
-					}
+		case ddi := <-discoveredDeviceChannel:
+			{
+				if _, ok := activeDevices[ddi.Url]; !ok {
+					zap.S().Debugf("New device ! %v", ddi)
+					go continuousSensorDataProcessingDeviceDaemon(ddi, updateIoddIoDeviceMapChan)
+					activeDevices[ddi.Url] = true
 				}
 			}
-
-			if hadError && actualSensorTickSpeed == upperSensorTickTime {
-				zap.S().Warnf("One of your sensors is to slow or died !")
+		case fddi := <-forgetDeviceChannel:
+			{
+				zap.S().Debugf("Got FDDI: %v", fddi)
+				delete(activeDevices, fddi.Url)
 			}
 		}
 	}
 }
 
-func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int) {
+func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+	zap.S().Infof("Started new daemon for device %v", deviceInfo)
+
+	var errorcount uint64
+	sleepDuration := lowestSensorTickTime
+	for {
+		start := time.Now()
+		var err error
+		var portModeMap map[int]int
+		hadError := false
+
+		portModeMap, err = GetPortModeMap(deviceInfo)
+		if err != nil {
+			zap.S().Warnf("[GPMM] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
+			hadError = true
+		}
+
+		if !hadError {
+			err = downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap)
+			if err != nil {
+				zap.S().Warnf("[DSDMAP] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
+				hadError = true
+			}
+		}
+
+		if hadError {
+			errorcount += 1
+		} else {
+			if errorcount > 0 {
+				errorcount -= 1
+			}
+		}
+
+		if errorcount >= maxSensorErrorCount {
+			zap.S().Errorf("Sensor [%v] is unavailable !", deviceInfo)
+			forgetDeviceChannel <- deviceInfo
+			return
+		}
+
+		if hadError {
+			sleepDuration += sensorTickTimeSteppingUp
+			if sleepDuration > upperSensorTickTime {
+				sleepDuration = upperSensorTickTime
+			}
+			zap.S().Debugf("Sensor [%v] sleep duration increased !", deviceInfo.Url)
+		} else {
+			sleepDuration -= sensorTickTimeSteppingDown
+			if sleepDuration < lowestSensorTickTime {
+				sleepDuration = lowestSensorTickTime
+			}
+		}
+		elapsed := time.Since(start)
+		sd := time.Duration(sleepDuration) * time.Millisecond
+		sleepTime := sd - elapsed
+		if sleepTime < time.Duration(0) {
+			zap.S().Warnf("[CSDPDD] Can't keep up, sensor %s is to fast ! Elapsed: %s vs Sleep %s", deviceInfo.Url, elapsed.String(), sd.String())
+		}
+		time.Sleep(sleepTime)
+	}
+}
+
+func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int) (err error) {
 	var sensorDataMap map[string]interface{}
-	var err error
 	sensorDataMap, err = GetSensorDataMap(deviceInfo)
 	if err != nil {
-		return
+		return err
 	}
-	processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
+	go processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
+	return nil
 }
 
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
 	err := DiscoverDevices(ipRange)
+	zap.S().Debugf("Initial discovery completed")
 	for {
 		select {
 		case <-ticker.C:
