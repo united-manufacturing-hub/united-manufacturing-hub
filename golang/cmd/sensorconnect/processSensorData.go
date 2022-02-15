@@ -435,7 +435,7 @@ func createDigitalInputPayload(portNumberString string, timestampMs string, data
 	payload = append(payload, []byte(timestampMs)...)
 	payload = append(payload, []byte(`,
 	"type":DI,
-	"connected":connected
+	"connected":"connected"
 	"value":`)...)
 	payload = append(payload, dataPin2In...)
 	payload = append(payload, []byte(`}`)...)
@@ -451,7 +451,7 @@ func createIoLinkBeginPayload(portNumberString string, timestampMs string) (payl
 	payload = append(payload, []byte(timestampMs)...)
 	payload = append(payload, []byte(`,
 	"type":Io-Link,
-	"connected":connected`)...)
+	"connected":"connected"`)...)
 
 	return
 }
