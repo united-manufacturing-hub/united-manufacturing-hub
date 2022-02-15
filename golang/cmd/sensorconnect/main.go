@@ -95,9 +95,9 @@ func main() {
 	}
 
 	var err error
-	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_SENSOR_TICK_TIME_MS"), 10, 64)
+	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_POLLING_TIME"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert LOWER_SENSOR_TICK_TIME_MS env to int, defaulting to 20. err: %s", err.Error())
+		zap.S().Errorf("Couldn't convert LOWER_POLLING_TIME env to int, defaulting to 20. err: %s", err.Error())
 		lowestSensorTickTime = 20
 	}
 
@@ -107,29 +107,29 @@ func main() {
 		if subTwentyMs {
 			zap.S().Warnf("Going under 20MS is not recommendet with IFM IO-Link Masters")
 		} else {
-			panic("LOWER_SENSOR_TICK_TIME_MS under 20 can IFM IO-Link Master failures, set SUB_TWENTY_MS to 1 to continue !")
+			panic("LOWER_POLLING_TIME under 20 can IFM IO-Link Master failures, set SUB_TWENTY_MS to 1 to continue !")
 		}
 	}
 
-	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_SENSOR_TICK_TIME_MS"), 10, 64)
+	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_POLLING_TIME"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert UPPER_SENSOR_TICK_TIME_MS env to int, defaulting to 1000. err: %s", err.Error())
+		zap.S().Errorf("Couldn't convert UPPER_POLLING_TIME env to int, defaulting to 1000. err: %s", err.Error())
 		upperSensorTickTime = 1000
 	}
-	sensorTickTimeSteppingUp, err = strconv.ParseUint(os.Getenv("SENSOR_TICK_STEP_MS_UP"), 10, 64)
+	sensorTickTimeSteppingUp, err = strconv.ParseUint(os.Getenv("POLLING_SPEED_STEP_UP_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 20. err: %s", err.Error())
+		zap.S().Errorf("Couldn't convert POLLING_SPEED_STEP_UP_MS env to int, defaulting to 20. err: %s", err.Error())
 		sensorTickTimeSteppingUp = 20
 	}
-	sensorTickTimeSteppingDown, err = strconv.ParseUint(os.Getenv("SENSOR_TICK_STEP_MS_DOWN"), 10, 64)
+	sensorTickTimeSteppingDown, err = strconv.ParseUint(os.Getenv("POLLING_SPEED_STEP_DOWN_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 1. err: %s", err.Error())
+		zap.S().Errorf("Couldn't convert POLLING_SPEED_STEP_UP_MS env to int, defaulting to 1. err: %s", err.Error())
 		sensorTickTimeSteppingDown = 1
 	}
 
-	sensorStartSpeed, err = strconv.ParseUint(os.Getenv("SENSOR_START_SPEED"), 10, 64)
+	sensorStartSpeed, err = strconv.ParseUint(os.Getenv("SENSOR_INITIAL_POLLING_TIME_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_START_SPEED env to int, defaulting to LOWER_SENSOR_TICK_TIME_MS. err: %s", err.Error())
+		zap.S().Errorf("Couldn't convert SENSOR_INITIAL_POLLING_TIME_MS env to int, defaulting to LOWER_POLLING_TIME. err: %s", err.Error())
 		sensorStartSpeed = lowestSensorTickTime
 	}
 
@@ -139,9 +139,9 @@ func main() {
 		additionalSleepTimePerActivePort = 0
 	}
 
-	deviceFinderFrequencyInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC"), 10, 64)
+	deviceFinderFrequencyInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_TIME_SEC"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert DEVICE_FINDER_FREQUENCY_IN_SEC env to int, defaulting to 20 sec. err: %s", err.Error())
+		zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIME_SEC env to int, defaulting to 20 sec. err: %s", err.Error())
 		deviceFinderFrequencyInS = 20
 
 	}
@@ -154,7 +154,7 @@ func main() {
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
-		panic("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_FREQUENCY_IN_SEC")
+		panic("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_TIME_SEC")
 	}
 
 	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)

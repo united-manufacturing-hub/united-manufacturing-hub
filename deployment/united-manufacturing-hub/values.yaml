@@ -204,17 +204,17 @@ sensorconnect:
   storageRequest: 1Gi
   image: unitedmanufacturinghub/sensorconnect
   ioddfilepath: "/ioddfiles"
-  lowerTickSpeedMs: 20 # Fastest time, sensors should be requested to serve data
-  upperTickSpeedMs: 1000 # Slowest time, sensors should be requested to serve data
-  TickSpeedSteppingUpMs: 20 # Time to add to actual stepping in case of failure
-  TickSpeedSteppingDownMs: 1 # Time to add to actual stepping in case of no-failure
-  SensorStartSpeedMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
-  DeviceFinderFrequenceySec: 20 # Time in sec, before finding new devices
-  DeviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
-  MaxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
-  SubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
-  AdditionalSleepTimePerActivePortMs: 0.0 # Additional time to add to sleep time, based on active ports (especially helpful if you mix devices with 1-2 sensors and devices with 8 sensors)
-  AdditionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
+  lowerPollingTime: 20 # Fastest time, sensors should be requested to serve data
+  upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
+  pollingSpeedStepUpMs: 20 # Time to add to actual stepping in case of failure
+  pollingSpeedStepDownMs: 1 # Time to add to actual stepping in case of no-failure
+  sensorInitialPollingTimeMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
+  deviceFinderTimeSec: 20 # Time in sec, before finding new devices
+  deviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
+  maxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
+  allowSubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
+  additionalSleepTimePerActivePortMs: 0.0 # Additional time to add to sleep time, based on active ports (especially helpful if you mix devices with 1-2 sensors and devices with 8 sensors)
+  additionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
                             # Example:
                             # [{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]
   debug: 0 # Set to 1 to enable debug output

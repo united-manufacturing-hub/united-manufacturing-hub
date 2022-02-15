@@ -51,28 +51,28 @@ spec:
             - name: USE_MQTT
               value: {{.Values._000_commonConfig.infrastructure.mqtt.enabled| quote }}
 
-            - name: LOWER_SENSOR_TICK_TIME_MS
-              value: {{.Values.sensorconnect.lowerTickSpeedMs| quote }}
-            - name: UPPER_SENSOR_TICK_TIME_MS
-              value: {{.Values.sensorconnect.upperTickSpeedMs| quote }}
-            - name: SENSOR_TICK_STEP_MS_UP
-              value: {{.Values.sensorconnect.TickSpeedSteppingUpMs| quote }}
-            - name: SENSOR_TICK_STEP_MS_DOWN
-              value: {{.Values.sensorconnect.TickSpeedSteppingDownMs| quote }}
-            - name: DEVICE_FINDER_FREQUENCY_IN_SEC
-              value: {{.Values.sensorconnect.DeviceFinderFrequenceySec| quote }}
-            - name: SENSOR_START_SPEED
-              value: {{.Values.sensorconnect.SensorStartSpeedMs| quote }}
+            - name: LOWER_POLLING_TIME_MS
+              value: {{.Values.sensorconnect.lowerPollingTime| quote }}
+            - name: UPPER_POLLING_TIME_MS
+              value: {{.Values.sensorconnect.upperPollingTime| quote }}
+            - name: POLLING_SPEED_STEP_UP_MS
+              value: {{.Values.sensorconnect.pollingSpeedStepUpMs| quote }}
+            - name: POLLING_SPEED_STEP_DOWN_MS
+              value: {{.Values.sensorconnect.pollingSpeedStepDownMs| quote }}
+            - name: DEVICE_FINDER_TIME_SEC
+              value: {{.Values.sensorconnect.deviceFinderTimeSec| quote }}
+            - name: SENSOR_INITIAL_POLLING_TIME_MS
+              value: {{.Values.sensorconnect.sensorInitialPollingTimeMs| quote }}
             - name: MAX_SENSOR_ERROR_COUNT
-              value: {{.Values.sensorconnect.MaxSensorErrorCount| quote }}
+              value: {{.Values.sensorconnect.maxSensorErrorCount| quote }}
             - name: DEVICE_FINDER_TIMEOUT_SEC
-              value: {{.Values.sensorconnect.DeviceFinderTimeoutSec| quote }}
+              value: {{.Values.sensorconnect.deviceFinderTimeoutSec| quote }}
             - name: SUB_TWENTY_MS
-              value: {{.Values.sensorconnect.SubTwentyMs| quote }}
+              value: {{.Values.sensorconnect.allowSubTwentyMs| quote }}
             - name: ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS
-              value: {{.Values.sensorconnect.AdditionalSleepTimePerActivePortMs| quote }}
+              value: {{.Values.sensorconnect.additionalSleepTimePerActivePortMs| quote }}
             - name: ADDITIONAL_SLOWDOWN_MAP
-              value: {{.Values.sensorconnect.AdditionalSlowDownMap| quote }}
+              value: {{.Values.sensorconnect.additionalSlowDownMap| quote }}
             - name: DEBUG
               value: {{.Values.sensorconnect.debug| quote }}
 
