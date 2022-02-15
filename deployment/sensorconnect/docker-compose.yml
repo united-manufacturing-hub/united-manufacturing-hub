@@ -3,14 +3,17 @@ version: "2"
 services:
   zookeeper:
     image: docker.io/bitnami/zookeeper:3.7
+    restart: always
     ports:
       - "2181:2181"
     volumes:
       - "zookeeper_data:/bitnami"
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
+
   kafka:
     image: docker.io/bitnami/kafka:3
+    restart: always
     ports:
       - "9092:9092"
     volumes:
@@ -23,7 +26,7 @@ services:
 
   kowl:
     image: quay.io/cloudhut/kowl:v1.4.0
-    restart: on-failure
+    restart: always
     hostname: kowl
     volumes:
       - ./config.yaml:/etc/kowl/config.yaml
@@ -35,6 +38,7 @@ services:
 
   mosquitto:
     image: eclipse-mosquitto
+    restart: always
     hostname: mosquitto
     container_name: mosquitto
     ports:
@@ -64,7 +68,7 @@ services:
       - DEVICE_FINDER_TIMEOUT_SEC=1
       - ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS=0.0
       - SUB_TWENTY_MS=0
-      - ADDITIONAL_SLOWDOWN_MAP=[]
+      - ADDITIONAL_SLOWDOWN_MAP=[{"url":"http://192.168.0.33","slowdown_ms":10}]
       - MQTT_CERTIFICATE_NAME=NO_CERT
       - MQTT_BROKER_URL=mosquitto:1883
       - MY_POD_NAME=sensorconnect
@@ -72,6 +76,44 @@ services:
     depends_on:
       - kafka
       - mosquitto
+
+  influxdb:
+    image: influxdb:latest
+    restart: always
+    ports:
+      - '8086:8086'
+    volumes:
+      - ./influxdb-storage:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=db0
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+  telegraf:
+    image: telegraf:latest
+    restart: always
+    volumes:
+      - ./telegraf/etc/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - influxdb
+    links:
+      - influxdb
+    ports:
+      - '127.0.0.1:8125:8125/udp'
 
 volumes:
   zookeeper_data:
