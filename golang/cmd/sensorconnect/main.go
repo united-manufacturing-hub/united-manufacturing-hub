@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
@@ -23,6 +24,8 @@ var ioDeviceMap sync.Map
 
 var fileInfoSlice []os.FileInfo
 
+var slowDownMap sync.Map
+
 var kafkaProducerClient *kafka.Producer
 var kafkaAdminClient *kafka.AdminClient
 var transmitterId string
@@ -44,7 +47,11 @@ var sensorStartSpeed uint64
 
 var maxSensorErrorCount uint64
 
+var updateIoddIoDeviceMapChan chan IoddFilemapKey
+
 var subTwentyMs bool
+
+var additionalSleepTimePerActivePort float64
 
 func main() {
 	var logger *zap.Logger
@@ -61,6 +68,7 @@ func main() {
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	internal.InitMemcache()
+	cP = sync.Map{}
 
 	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
 	useMQTT = os.Getenv("USE_MQTT") == "1" || strings.ToLower(os.Getenv("USE_MQTT")) == "true"
@@ -89,7 +97,7 @@ func main() {
 	var err error
 	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_SENSOR_TICK_TIME_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert LOWER_SENSOR_TICK_TIME_MS env to int, defaulting to 20")
+		zap.S().Errorf("Couldn't convert LOWER_SENSOR_TICK_TIME_MS env to int, defaulting to 20. err: %s", err.Error())
 		lowestSensorTickTime = 20
 	}
 
@@ -105,53 +113,42 @@ func main() {
 
 	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_SENSOR_TICK_TIME_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert UPPER_SENSOR_TICK_TIME_MS env to int, defaulting to 1000")
+		zap.S().Errorf("Couldn't convert UPPER_SENSOR_TICK_TIME_MS env to int, defaulting to 1000. err: %s", err.Error())
 		upperSensorTickTime = 1000
 	}
 	sensorTickTimeSteppingUp, err = strconv.ParseUint(os.Getenv("SENSOR_TICK_STEP_MS_UP"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 20")
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 20. err: %s", err.Error())
 		sensorTickTimeSteppingUp = 20
 	}
 	sensorTickTimeSteppingDown, err = strconv.ParseUint(os.Getenv("SENSOR_TICK_STEP_MS_DOWN"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 1")
+		zap.S().Errorf("Couldn't convert SENSOR_TICK_STEP_MS_UP env to int, defaulting to 1. err: %s", err.Error())
 		sensorTickTimeSteppingDown = 1
 	}
 
 	sensorStartSpeed, err = strconv.ParseUint(os.Getenv("SENSOR_START_SPEED"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_START_SPEED env to int, defaulting to LOWER_SENSOR_TICK_TIME_MS")
+		zap.S().Errorf("Couldn't convert SENSOR_START_SPEED env to int, defaulting to LOWER_SENSOR_TICK_TIME_MS. err: %s", err.Error())
 		sensorStartSpeed = lowestSensorTickTime
 	}
 
-	ipRange := os.Getenv("IP_RANGE")
-	zap.S().Infof("Scanning IP range: %s", ipRange)
-
-	transmitterId = os.Getenv("TRANSMITTERID")
-
-	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH")
-	// creating ioDeviceMap and downloading initial set of iodd files
-
-	ioDeviceMap = sync.Map{}
-
-	//fileInfoSlice, err = initializeIoddData(relativeDirectoryPath)
-	fileInfoSlice = make([]os.FileInfo, 0)
-
+	additionalSleepTimePerActivePort, err = strconv.ParseFloat(os.Getenv("ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS"), 64)
 	if err != nil {
-		zap.S().Errorf("initializeIoddData produced the error: %v", err)
+		zap.S().Errorf("Couldn't convert ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS env to float, defaulting to 0. err: %s", err.Error())
+		additionalSleepTimePerActivePort = 0
 	}
 
 	deviceFinderFrequencyInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_FREQUENCY_IN_SEC"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert DEVICE_FINDER_FREQUENCY_IN_SEC env to int, defaulting to 20 sec")
+		zap.S().Errorf("Couldn't convert DEVICE_FINDER_FREQUENCY_IN_SEC env to int, defaulting to 20 sec. err: %s", err.Error())
 		deviceFinderFrequencyInS = 20
 
 	}
 
 	deviceFinderTimeoutInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_TIMEOUT_SEC"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec")
+		zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec. err: %s", err.Error())
 		deviceFinderTimeoutInS = 1
 
 	}
@@ -162,20 +159,64 @@ func main() {
 
 	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert MAX_SENSOR_ERROR_COUNT env to int, defaulting to 50")
+		zap.S().Errorf("Couldn't convert MAX_SENSOR_ERROR_COUNT env to int, defaulting to 50. err: %s", err.Error())
 		maxSensorErrorCount = 50
 	}
 
+	type SlowDownMapJSONElement struct {
+		Serialnumber *string `json:"serialnumber,omitempty"`
+		SlowdownMS   float64 `json:"slowdown_ms"`
+		URL          *string `json:"url,omitempty"`
+		Productcode  *string `json:"productcode,omitempty"`
+	}
+	type SlowDownMapJSON []SlowDownMapJSONElement
+
+	slowdownMapRaw := os.Getenv("ADDITIONAL_SLOWDOWN_MAP")
+	slowDownMap = sync.Map{}
+	if slowdownMapRaw != "" {
+		var r SlowDownMapJSON
+		err = json.Unmarshal([]byte(slowdownMapRaw), &r)
+		if err != nil {
+			zap.S().Errorf("Failed to convert ADDITIONAL_SLOWDOWN_MAP json to go struct. err: %s", err.Error())
+		} else {
+			for _, element := range r {
+				if element.Serialnumber != nil {
+					slowDownMap.Store(fmt.Sprintf("SN_%s", *element.Serialnumber), element.SlowdownMS)
+					zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.Serialnumber, element.SlowdownMS)
+				}
+				if element.Productcode != nil {
+					slowDownMap.Store(fmt.Sprintf("PC_%s", *element.Productcode), element.SlowdownMS)
+					zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.Productcode, element.SlowdownMS)
+				}
+				if element.URL != nil {
+					slowDownMap.Store(fmt.Sprintf("URL_%s", *element.URL), element.SlowdownMS)
+					zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.URL, element.SlowdownMS)
+				}
+			}
+		}
+	}
+
+	ipRange := os.Getenv("IP_RANGE")
+	zap.S().Infof("Scanning IP range: %s", ipRange)
+
+	transmitterId = os.Getenv("TRANSMITTERID")
+
+	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH")
+
+	ioDeviceMap = sync.Map{}
+
+	fileInfoSlice = make([]os.FileInfo, 0)
+
 	tickerSearchForDevices := time.NewTicker(time.Duration(deviceFinderFrequencyInS) * time.Second)
 	defer tickerSearchForDevices.Stop()
-	updateIoddIoDeviceMapChan := make(chan IoddFilemapKey)
+	updateIoddIoDeviceMapChan = make(chan IoddFilemapKey)
 
-	go ioddDataDaemon(updateIoddIoDeviceMapChan, relativeDirectoryPath)
+	go ioddDataDaemon(relativeDirectoryPath)
 
 	discoveredDeviceChannel = make(chan DiscoveredDeviceInformation)
 	forgetDeviceChannel = make(chan DiscoveredDeviceInformation)
 
-	go continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan)
+	go continuousSensorDataProcessingV2()
 
 	time.Sleep(1 * time.Second)
 	go continuousDeviceSearch(tickerSearchForDevices, ipRange)
@@ -183,7 +224,7 @@ func main() {
 }
 
 //continuousSensorDataProcessingV2 Spawns go routines for new devices, who will download,process and send data from sensors to Kafka/MQTT
-func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+func continuousSensorDataProcessingV2() {
 	zap.S().Debugf("Starting sensor data processing daemon v2")
 
 	// The boolean value is not used
@@ -196,13 +237,12 @@ func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemap
 			{
 				if _, ok := activeDevices[ddi.Url]; !ok {
 					zap.S().Debugf("New device ! %v", ddi)
-					go continuousSensorDataProcessingDeviceDaemon(ddi, updateIoddIoDeviceMapChan)
+					go continuousSensorDataProcessingDeviceDaemon(ddi)
 					activeDevices[ddi.Url] = true
 				}
 			}
 		case fddi := <-forgetDeviceChannel:
 			{
-				zap.S().Debugf("Got FDDI: %v", fddi)
 				delete(activeDevices, fddi.Url)
 			}
 		}
@@ -211,31 +251,53 @@ func continuousSensorDataProcessingV2(updateIoddIoDeviceMapChan chan IoddFilemap
 
 //continuousSensorDataProcessingDeviceDaemon Downloads sensordata, processes it and then sends it to Kafka/MQTT.
 // Has a backoff mechanism to prevent overloading io-link masters
-func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey) {
+func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInformation) {
 	zap.S().Infof("Started new daemon for device %v", deviceInfo)
 
 	var errorCount uint64
 	// Ramp up speed
-	sleepDuration := lowestSensorTickTime
+	sleepDuration := sensorStartSpeed
 	var errChan chan error
 	errChan = make(chan error, 512)
 
 	for {
 		errorCountChange := uint64(0)
 		hadError := false
-		//start := time.Now()
 		var err error
-		var portModeMap map[int]int
+		var portModeMap map[int]ConnectedDeviceInfo
 
-		portModeMap, err = GetPortModeMap(deviceInfo)
+		portModeMap, err = GetUsedPortsAndModeCached(deviceInfo)
 		if err != nil {
 			zap.S().Warnf("[GPMM] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
 			hadError = true
 			errorCount += 1
 			errorCountChange += 1
 		}
+
+		hasIFMK := true
+		for port, info := range portModeMap {
+			if !info.Connected {
+				continue
+			}
+
+			iofm := IoddFilemapKey{
+				VendorId: int64(info.VendorId),
+				DeviceId: int(info.DeviceId),
+			}
+			if _, ok := ioDeviceMap.Load(iofm); !ok {
+				updateIoddIoDeviceMapChan <- iofm
+				hasIFMK = false
+				zap.S().Debugf("IoddFileMap for port %d is missing: %v", port, info)
+			}
+		}
+
+		if !hasIFMK {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
 		if !hadError {
-			go downloadSensorDataMapAndProcess(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, errChan)
+			go downloadSensorDataMapAndProcess(deviceInfo, portModeMap, errChan)
 		}
 
 		var hasData = true
@@ -273,23 +335,37 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 				sleepDuration = lowestSensorTickTime
 			}
 		}
-		/*
-			elapsed := time.Since(start)
-			sd := time.Duration(sleepDuration) * time.Millisecond
-			sleepTime := sd - elapsed
-		*/
+		lowestSleepTime := time.Duration(lowestSensorTickTime) * time.Millisecond
 		sleepTime := time.Duration(sleepDuration) * time.Millisecond
-		if sleepTime < time.Duration(lowestSensorTickTime)*time.Millisecond {
-			sleepTime = time.Duration(lowestSensorTickTime) * time.Millisecond
+		if sleepTime < lowestSleepTime {
+			sleepTime = lowestSleepTime
 		}
 
-		zap.S().Debugf("Sleep time: %s for sensor %s", sleepTime.String(), deviceInfo.Url)
+		activePorts := 0
+		for _, info := range portModeMap {
+			if info.Connected {
+				activePorts += 1
+			}
+		}
+		add := time.Duration(float64(activePorts)*additionalSleepTimePerActivePort) * time.Millisecond
+		sleepTime += add
+
+		//Lookup slowdown map
+		if value, ok := slowDownMap.Load(fmt.Sprintf("SN_%s", deviceInfo.SerialNumber)); ok {
+			sleepTime += time.Duration(value.(float64)) * time.Millisecond
+		}
+		if value, ok := slowDownMap.Load(fmt.Sprintf("PC_%s", deviceInfo.ProductCode)); ok {
+			sleepTime += time.Duration(value.(float64)) * time.Millisecond
+		}
+		if value, ok := slowDownMap.Load(fmt.Sprintf("URL_%s", deviceInfo.Url)); ok {
+			sleepTime += time.Duration(value.(float64)) * time.Millisecond
+		}
 		time.Sleep(sleepTime)
 	}
 }
 
 //downloadSensorDataMapAndProcess downloads sensor data and processes it
-func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int, errChan chan error) {
+func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, portModeMap map[int]ConnectedDeviceInfo, errChan chan error) {
 	var sensorDataMap map[string]interface{}
 	var err error
 	sensorDataMap, err = GetSensorDataMap(deviceInfo)
@@ -297,7 +373,7 @@ func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, upd
 		errChan <- err
 		return
 	}
-	go processSensorData(deviceInfo, updateIoddIoDeviceMapChan, portModeMap, sensorDataMap)
+	go processSensorData(deviceInfo, portModeMap, sensorDataMap)
 }
 
 //continuousDeviceSearch Searches for devices everytime ticker is triggered
@@ -320,63 +396,27 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 }
 
 //ioddDataDaemon Starts a demon to download IODD files
-func ioddDataDaemon(updateIoddIoDeviceMapChan chan IoddFilemapKey, relativeDirectoryPath string) {
+func ioddDataDaemon(relativeDirectoryPath string) {
 	zap.S().Debugf("Starting iodd data daemon")
 
 	for {
 		select {
 		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:
-
 			cacheKey := fmt.Sprintf("ioddDataDaemon%d:%d", ioddFilemapKey.DeviceId, ioddFilemapKey.VendorId)
-
 			// Prevents download attempt spam
 			_, found := internal.GetMemcached(cacheKey)
 			if found {
 				continue
 			}
+			internal.SetMemcached(cacheKey, nil)
 			var err error
+			zap.S().Debugf("Addining new device to iodd files and map (%v)", ioddFilemapKey)
 			_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
 			zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
 			if err != nil {
 				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
 				continue
 			}
-			internal.SetMemcached(cacheKey, nil)
 		}
 	}
-}
-
-//initializeIoddData Downloads common IODD files (this is mostly used for debugging)
-func initializeIoddData(relativeDirectoryPath string) (fileInfo []os.FileInfo, err error) {
-
-	//1028 is https://ioddfinder.io-link.com/productvariants/search/20582
-	var ifmIoddFilemapKey IoddFilemapKey
-	ifmIoddFilemapKey.DeviceId = 1028
-	ifmIoddFilemapKey.VendorId = 310
-	// 278531 is https://ioddfinder.io-link.com/productvariants/search/1804
-	var siemensIoddFilemapKey IoddFilemapKey
-	siemensIoddFilemapKey.DeviceId = 278531
-	siemensIoddFilemapKey.VendorId = 42
-
-	fileInfo, err = AddNewDeviceToIoddFilesAndMap(ifmIoddFilemapKey, relativeDirectoryPath, fileInfo)
-	if err != nil {
-		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
-	}
-	fileInfo, err = AddNewDeviceToIoddFilesAndMap(siemensIoddFilemapKey, relativeDirectoryPath, fileInfo)
-	if err != nil {
-		zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
-	}
-
-	return
-}
-
-//GetSyncMapLen retrieves length of a sync.Map
-func GetSyncMapLen(p *sync.Map) int {
-	mapLen := 0
-	p.Range(func(key, value interface{}) bool {
-		mapLen += 1
-		return true
-	})
-
-	return mapLen
 }

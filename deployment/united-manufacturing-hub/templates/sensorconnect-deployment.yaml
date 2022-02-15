@@ -69,6 +69,10 @@ spec:
               value: {{.Values.sensorconnect.DeviceFinderTimeoutSec| quote }}
             - name: SUB_TWENTY_MS
               value: {{.Values.sensorconnect.SubTwentyMs| quote }}
+            - name: ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS
+              value: {{.Values.sensorconnect.AdditionalSleepTimePerActivePortMs| quote }}
+            - name: ADDITIONAL_SLOWDOWN_MAP
+              value: {{.Values.sensorconnect.AdditionalSlowDownMap| quote }}
             - name: DEBUG
               value: {{.Values.sensorconnect.debug| quote }}
 

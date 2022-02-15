@@ -17,19 +17,29 @@ import (
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
 // The method sends one message per sensor (active port).
-func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, updateIoddIoDeviceMapChan chan IoddFilemapKey, portModeMap map[int]int, sensorDataMap map[string]interface{}) {
+func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, portModeMap map[int]ConnectedDeviceInfo, sensorDataMap map[string]interface{}) {
 	timestampMs := getUnixTimestampMs()
 
 	for portNumber, portMode := range portModeMap {
+		if !portMode.Connected {
+			continue
+		}
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
-		switch portMode {
+		switch portMode.Mode {
 		case 1: // digital input
 			// get value from sensorDataMap
 			portNumberString := strconv.Itoa(portNumber)
-			key := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pdin"
+			key := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pin2in"
 			dataPin2In, err := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
 			if err != nil {
+				zap.S().Warnf("Current Port: %d", portNumber)
+				zap.S().Warnf("Current PortMode: %v", portMode.Mode)
+				zap.S().Warnf("Current DeviceId: %v", portMode.DeviceId)
+				zap.S().Warnf("Current VendorId: %v", portMode.VendorId)
+				zap.S().Warnf("Current Connected: %v", portMode.Connected)
+				zap.S().Warnf("CDI: %v", currentDeviceInformation)
+				zap.S().Warnf("SENSORDATAMAP: %v", sensorDataMap)
 				zap.S().Errorf("%s", err.Error())
 				continue
 			}
@@ -48,29 +58,20 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 			connectionCode, err := extractIntFromSensorDataMap(keyPdin, "code", sensorDataMap)
 
 			if err != nil {
+				zap.S().Warnf("Current Port: %d", portNumber)
+				zap.S().Warnf("Current PortMode: %v", portMode.Mode)
+				zap.S().Warnf("Current DeviceId: %v", portMode.DeviceId)
+				zap.S().Warnf("Current VendorId: %v", portMode.VendorId)
+				zap.S().Warnf("Current Connected: %v", portMode.Connected)
+				zap.S().Warnf("CDI: %v", currentDeviceInformation)
+				zap.S().Warnf("SENSORDATAMAP: %v", sensorDataMap)
 				zap.S().Errorf("%s", err.Error())
 				continue
 			}
 			if connectionCode != 200 {
-				//zap.S().Debugf("connection code of port %v not 200 but: %v", portNumber, connectionCode)
 				continue
 			}
 
-			// get Deviceid
-			keyDeviceid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/deviceid"
-			keyVendorid := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/vendorid"
-			deviceId, err := extractIntFromSensorDataMap(keyDeviceid, "data", sensorDataMap)
-
-			if err != nil {
-				zap.S().Errorf("%s", err.Error())
-				continue
-			}
-			vendorId, err := extractInt64FromSensorDataMap(keyVendorid, "data", sensorDataMap)
-
-			if err != nil {
-				zap.S().Errorf("%s", err.Error())
-				continue
-			}
 			rawSensorOutput, err := extractByteArrayFromSensorDataMap(keyPdin, "data", sensorDataMap)
 
 			if err != nil {
@@ -81,8 +82,8 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, upd
 
 			//create IoddFilemapKey
 			var ioddFilemapKey IoddFilemapKey
-			ioddFilemapKey.DeviceId = deviceId
-			ioddFilemapKey.VendorId = vendorId
+			ioddFilemapKey.DeviceId = int(portMode.DeviceId)
+			ioddFilemapKey.VendorId = int64(portMode.VendorId)
 
 			var idm interface{}
 			var ok bool

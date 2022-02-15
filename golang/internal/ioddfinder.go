@@ -135,6 +135,14 @@ func readZipFile(zf *zip.File) ([]byte, error) {
 }
 
 func getUrlWithRetry(url string) (body []byte, err error) {
+	cacheKey := fmt.Sprintf("getUrlWithRetry%s", url)
+
+	val, found := GetMemcached(cacheKey)
+	if found {
+		return val.([]byte), nil
+	}
+
+	zap.S().Debugf("Getting url %s", url)
 	var status int
 	status = 1
 	for i := 0; i < 10; i++ {
@@ -143,6 +151,7 @@ func getUrlWithRetry(url string) (body []byte, err error) {
 			return
 		}
 		if status == 200 {
+			SetMemcached(cacheKey, body)
 			return
 		}
 		time.Sleep(GetBackoffTime(int64(i), 10*time.Second, 60*time.Second))

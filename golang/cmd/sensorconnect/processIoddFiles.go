@@ -125,10 +125,12 @@ type IoddFilemapKey struct {
 // AddNewDeviceToIoddFilesAndMap uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
 // Then updates map by checking for new files, unmarhaling them und importing into map
 func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
+	zap.S().Debugf("Requesting IoddFile %v -> %s", ioddFilemapKey, relativeDirectoryPath)
 	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
 		zap.S().Debugf("File with fileMapKey%v already saved.", ioddFilemapKey)
 	}
+	zap.S().Debugf("Reading IoddFiles %v -> %s", fileInfoSlice, relativeDirectoryPath)
 	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
 	if err != nil {
 		zap.S().Errorf("Error in AddNewDeviceToIoddFilesAndMap: %s", err.Error())

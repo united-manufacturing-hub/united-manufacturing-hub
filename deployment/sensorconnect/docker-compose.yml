@@ -55,17 +55,19 @@ services:
       - USE_KAFKA=1
       - USE_MQTT=1
       - SENSOR_START_SPEED=100
-      - LOWER_SENSOR_TICK_TIME_MS=25
+      - LOWER_SENSOR_TICK_TIME_MS=10
       - SENSOR_TICK_STEP_MS_UP=20
       - SENSOR_TICK_STEP_MS_DOWN=1
       - UPPER_SENSOR_TICK_TIME_MS=1000
       - MAX_SENSOR_ERROR_COUNT=50
       - DEVICE_FINDER_FREQUENCY_IN_SEC=20
       - DEVICE_FINDER_TIMEOUT_SEC=1
+      - ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS=1.0
       - MQTT_CERTIFICATE_NAME=NO_CERT
       - MQTT_BROKER_URL=mosquitto:1883
       - MY_POD_NAME=sensorconnect
-      - SUB_TWENTY_MS=0
+      - SUB_TWENTY_MS=1
+      - ADDITIONAL_SLOWDOWN_MAP=[{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]
       - DEBUG=1
     depends_on:
       - kafka

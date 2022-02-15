@@ -87,7 +87,7 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	zap.S().Infof("Found device (SN: %s, PN: %s) at %s", ddI.SerialNumber, ddI.ProductCode, url)
 
 	// Pre-create topic
-	portModeMap, err := GetPortModeMap(ddI)
+	portModeMap, err := GetUsedPortsAndModeCached(ddI)
 	if err != nil {
 		return
 	}
@@ -148,7 +148,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 		//zap.S().Warnf("Failed to create post request for url: %s", url)
 		return
 	}
-	client := &http.Client{}
+	client := GetHTTPClient(url)
 	client.CloseIdleConnections()
 	client.Timeout = time.Second * time.Duration(deviceFinderTimeoutInS)
 	resp, err := client.Do(req)
