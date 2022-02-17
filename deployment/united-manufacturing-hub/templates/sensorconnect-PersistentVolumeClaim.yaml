@@ -1,0 +1,19 @@
+---
+{{if .Values._000_commonConfig.datasources.sensorconnect.enabled}}
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-claim
+  annotations:
+    "helm.sh/resource-policy": keep
+  labels:
+    {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 4}}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{.Values.sensorconnect.storageRequest}}
+
+{{end}}

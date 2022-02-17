@@ -1,20 +1,89 @@
-version: '3.7'
+version: "2"
+
 services:
-  ### ia: sensor connect
-  # Reads sensor data and forwards it to the MQTT Broker
-  sensorconnect:
-    build:
-      context: ../../
-      dockerfile: ./deployment/sensorconnect/Dockerfile
-    restart: unless-stopped
-    logging:
-        driver: "json-file"
-        options:
-            max-file: "5"
-            max-size: "10m"
+  zookeeper:
+    image: docker.io/bitnami/zookeeper:3.7
+    restart: always
+    ports:
+      - "2181:2181"
+    volumes:
+      - "zookeeper_data:/bitnami"
     environment:
-      - PYTHONUNBUFFERED=0
-      - TRANSMITTERID=prototyp
-      - BROKER_URL=mqtt.umh.app
-      - BROKER_PORT=8883
-      - IP_RANGE=192.168.1.0/24
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: docker.io/bitnami/kafka:3
+    restart: always
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    volumes:
+      - "kafka_data:/bitnami"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,OUTSIDE://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+    depends_on:
+      - zookeeper
+
+  kowl:
+    image: quay.io/cloudhut/kowl:v1.4.0
+    restart: always
+    hostname: kowl
+    volumes:
+      - ./config.yaml:/etc/kowl/config.yaml
+    ports:
+      - "8080:8080"
+    entrypoint: ./kowl --config.filepath=/etc/kowl/config.yaml
+    depends_on:
+      - kafka
+
+  mosquitto:
+    image: eclipse-mosquitto
+    restart: always
+    hostname: mosquitto
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../../golang/test/mqtt-bridge/config:/mosquitto/config
+
+  sensorconnect:
+    image: scarjit/sensorconnect:latest
+    restart: always
+    volumes:
+      - ./ioddfiles/:/ioddfiles/
+    environment:
+      - IP_RANGE=192.168.10.0/24
+      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+      - TRANSMITTERID=12345
+      - IODD_FILE_PATH=/ioddfiles
+      - USE_KAFKA=1
+      - USE_MQTT=1
+      - SENSOR_INITIAL_POLLING_TIME_MS=100
+      - LOWER_POLLING_TIME_MS=20
+      - POLLING_SPEED_STEP_UP_MS=20
+      - POLLING_SPEED_STEP_DOWN_MS=1
+      - UPPER_POLLING_TIME_MS=1000
+      - MAX_SENSOR_ERROR_COUNT=50
+      - DEVICE_FINDER_TIME_SEC=20
+      - DEVICE_FINDER_TIMEOUT_SEC=1
+      - ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS=0.0
+      - SUB_TWENTY_MS=0
+      - ADDITIONAL_SLOWDOWN_MAP=[{"url":"http://192.168.0.33","slowdown_ms":10}]
+      - MQTT_CERTIFICATE_NAME=NO_CERT
+      - MQTT_BROKER_URL=mosquitto:1883
+      - MY_POD_NAME=sensorconnect
+      - DEBUG=1
+    depends_on:
+      - kafka
+      - mosquitto
+
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
