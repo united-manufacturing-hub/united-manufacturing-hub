@@ -73,11 +73,6 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 		//zap.S().Errorf("Unmarshal of body from url %s failed.", url)
 		return
 	}
-	// Check CID (23 is chosen at random ?)
-	if unmarshaledAnswer.Cid != 23 {
-		//zap.S().Errorf("Incorrect or missing cid in response. (Should be 23). UnmarshaledAnswer: %s, CurrentUrl: %s, body: %v", unmarshaledAnswer, url, body)
-		return
-	}
 
 	ddI := DiscoveredDeviceInformation{}
 	// Insert relevant gained data into DiscoveredDeviceInformation and store in slice
@@ -132,6 +127,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	url = "http://" + ip.String()
 
 	// Payload to send to the gateways
+	//cid can be any number
 	var payload = []byte(`{
         "code":"request",
         "cid":23,
