@@ -30,6 +30,26 @@ You can use it
 - [Go to our documentation](https://docs.umh.app/docs/) to learn about installation, maintaining, the architecture and the topic IIoT in general
 - [Go to our website](https://www.umh.app) for commercial support and implementation
 
+## Technology & architecture
+
+The UMH consists out of a single Helm Chart for Kubernetes, which allows you to easily install, provision and configure it using a single .yaml file.
+
+The Helm Chart consists out of
+- [TimescaleDB](https://www.timescale.com/), as relational and time-series database
+- [VerneMQ](https://vernemq.com/), as MQTT Broker to connect with external devices
+- [Apache Kafka](https://kafka.apache.org/), as message broker for internal communication
+- [Node-RED](https://nodered.org/), as low-code programming tool for customization
+- A wrapper around [PLC4X](https://plc4x.apache.org/), as library to read out PLCs
+- [Grafana](https://grafana.com/) and various plugins, as default visualization tool
+- [Various self-written microservices](https://docs.umh.app/docs/developers/), as application logic (e.g., customizable OEE calculation) and/or to extract data from the shop floor (e.g., IO-Link sensors)
+
+It can be deployed 
+- in a federation (recommended), to allow each machine, production line and factory to work on its own without being reliant on external factors like internet connection
+- centralized, e.g., "everything connected with the cloud"
+- decentralized, e.g., "each machine is on its own"
+
+A [full architecture diagram](https://docs.umh.app/docs/concepts/) can be found in the documentation.
+
 ## Citations
 
 - Niemeyer, C. & Gehrke, Inga & Müller, Kai & Küsters, Dennis & Gries, Thomas. (2020). Getting Small Medium Enterprises started on Industry 4.0 using retrofitting solutions. Procedia Manufacturing. 45. 208-214. 10.1016/j.promfg.2020.04.096. 
