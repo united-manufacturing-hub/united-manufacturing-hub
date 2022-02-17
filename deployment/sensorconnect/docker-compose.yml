@@ -16,11 +16,16 @@ services:
     restart: always
     ports:
       - "9092:9092"
+      - "9094:9094"
     volumes:
       - "kafka_data:/bitnami"
     environment:
       - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,OUTSIDE://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
     depends_on:
       - zookeeper
 
@@ -76,44 +81,6 @@ services:
     depends_on:
       - kafka
       - mosquitto
-
-  influxdb:
-    image: influxdb:latest
-    restart: always
-    ports:
-      - '8086:8086'
-    volumes:
-      - ./influxdb-storage:/var/lib/influxdb
-    environment:
-      - INFLUXDB_DB=db0
-      - INFLUXDB_ADMIN_USER=admin
-      - INFLUXDB_ADMIN_PASSWORD=admin
-
-  grafana:
-    image: grafana/grafana:latest
-    restart: always
-    ports:
-      - '3000:3000'
-    volumes:
-      - ./grafana-storage:/var/lib/grafana
-      - ./grafana-provisioning/:/etc/grafana/provisioning
-    depends_on:
-      - influxdb
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-
-  telegraf:
-    image: telegraf:latest
-    restart: always
-    volumes:
-      - ./telegraf/etc/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-    depends_on:
-      - influxdb
-    links:
-      - influxdb
-    ports:
-      - '127.0.0.1:8125:8125/udp'
 
 volumes:
   zookeeper_data:
