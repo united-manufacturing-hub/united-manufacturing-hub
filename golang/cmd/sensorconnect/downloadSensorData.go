@@ -69,6 +69,7 @@ func unmarshalSensorData(dataRaw []byte) (map[string]interface{}, error) {
 // createSensorDataRequestBody creates the POST request body for ifm gateways. The body is made to simultaneously request sensordata of the ports 1 - numberOfPorts.
 func createSensorDataRequestBody(connectedDeviceInfo map[int]ConnectedDeviceInfo) (payload []byte, err error) {
 	// Payload to send to the gateways
+	//cid can be any number
 	payload = []byte(`{
 	"code":"request",
 	"cid":25,

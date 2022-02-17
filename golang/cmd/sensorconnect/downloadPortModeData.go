@@ -96,6 +96,8 @@ type ConnectedDeviceInfo struct {
 
 // getUsedPortsAndMode returns which ports have sensors connected, by querying there mastercycletime & mode
 func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceInfo, err error) {
+
+	//cid can be any number
 	var payload = []byte(`{
     "code":"request",
     "cid":42,
