@@ -21,6 +21,7 @@ require (
 	github.com/prometheus/client_golang v1.12.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
+	github.com/thesyncim/spmc v0.0.0-20220106182607-fe4e25e23c21
 	github.com/uber/jaeger-client-go v2.23.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/zeebo/xxh3 v1.0.1

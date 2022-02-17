@@ -3,7 +3,6 @@
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
 _000_commonConfig:
   serialNumber: "default"  # usually the hostname
-
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
 
@@ -17,8 +16,8 @@ _000_commonConfig:
 
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
-      enabled: false
-      iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
+      enabled: true
+      iprange: "192.168.10.1/24"  # IP Range in CIDR notation
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
@@ -202,7 +201,23 @@ barcodereader:
 
 ### sensorconnect ###
 sensorconnect:
+  storageRequest: 1Gi
   image: unitedmanufacturinghub/sensorconnect
+  ioddfilepath: "/ioddfiles"
+  lowerPollingTime: 20 # Fastest time, sensors should be requested to serve data
+  upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
+  pollingSpeedStepUpMs: 20 # Time to add to actual stepping in case of failure
+  pollingSpeedStepDownMs: 1 # Time to add to actual stepping in case of no-failure
+  sensorInitialPollingTimeMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
+  deviceFinderTimeSec: 20 # Time in sec, before finding new devices
+  deviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
+  maxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
+  allowSubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
+  additionalSleepTimePerActivePortMs: 0.0 # Additional time to add to sleep time, based on active ports (especially helpful if you mix devices with 1-2 sensors and devices with 8 sensors)
+  additionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
+                            # Example:
+                            # [{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]
+  debug: 0 # Set to 1 to enable debug output
   resources:
     requests:
       cpu: "10m"
@@ -589,10 +604,6 @@ minio-operator:
     # Tenant name
     - name: umhminio
       ## Registry location and Tag to download MinIO Server image
-      image:
-        repository: minio/minio
-        tag: RELEASE.2021-06-17T00-10-46Z
-        pullPolicy: IfNotPresent
       ## Customize namespace for tenant deployment
       namespace: "united-manufacturing-hub"
       ## Customize any private registry image pull secret.
@@ -676,45 +687,6 @@ minio-operator:
       ## This is applied to MinIO pods only.
       ## Refer Kubernetes documentation for details https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass/
       priorityClassName: ""
-      ## Define configuration for Console (Graphical user interface for MinIO)
-      ## Refer https://github.com/minio/console
-      console:
-        image:
-          repository: minio/console
-          tag: v0.7.5
-          pullPolicy: IfNotPresent
-        replicaCount: 1
-        secrets:
-          enabled: true
-          name: console-secret
-          passphrase: SECRET
-          salt: THISISAVERYBADSALT
-          accessKey: YOURCONSOLEACCESS
-          secretKey: YOURCONSOLESECRET
-        ## Used to specify a toleration for Tenant Console pods.
-        tolerations: []
-        ## nodeSelector parameters for Tenant Console Pods. It specifies a map of key-value pairs. For the pod to be
-        ## eligible to run on a node, the node must have each of the
-        ## indicated key-value pairs as labels.
-        ## Read more here: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
-        nodeSelector: {}
-        ## Affinity settings for Tenant Console Pods. Read more about affinity
-        ## here: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity.
-        affinity: {}
-        ## Configure resource requests and limits for Tenant Console containers
-        resources: {}
-        ## Configure security context
-        securityContext: {}
-        ## Add environment variables to be set in Tenant Console container (https://github.com/minio/minio/tree/master/docs/config)
-        env: {}
-        ## Use this field to provide one or more external CA certificates. This is used by Console
-        ## to verify TLS connections with other applications:
-        ## https://github.com/minio/minio/tree/master/docs/tls/kubernetes#2-create-kubernetes-secret
-        externalCaCertSecret: {}
-        ## Use this field to provide a list of Secrets with external certificates. This can be used to to configure
-        ## TLS for MinIO Console pods. Create secrets as explained here:
-        ## https://github.com/minio/minio/tree/master/docs/tls/kubernetes#2-create-kubernetes-secret
-        externalCertSecret: {}
 
 ### timescaleDB ###
 timescaledb-single:
@@ -735,13 +707,6 @@ timescaledb-single:
   # The major PostgreSQL version to use, defaults to the default version of the Docker image
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
   version:
-
-  image:
-    # Image was built from
-    # https://github.com/timescale/timescaledb-docker-ha
-    repository: timescaledev/timescaledb-ha
-    tag: pg12-ts2.0-latest
-    pullPolicy: IfNotPresent
 
   # These secrets should exist before the Helm is used to deploy this TimescaleDB.
   # You can use generate_kustomization.sh to help in creating these secrets, or have
@@ -973,39 +938,6 @@ timescaledb-single:
         name: timescale-post-init-pw
         optional: false
 
-  loadBalancer:
-    # If not enabled, we still expose the primary using a so called Headless Service
-    # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
-    enabled: true
-    port: 5432
-    # Read more about the AWS annotations here:
-    # https://kubernetes.io/docs/concepts/cluster-administration/cloud-providers/#aws
-    # https://docs.aws.amazon.com/eks/latest/userguide/load-balancing.html
-    annotations:
-      # Setting idle-timeout to the maximum allowed value, as in general
-      # database connections are long lived
-      service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
-
-      # service.beta.kubernetes.io/aws-load-balancer-type: nlb            # Use an NLB instead of ELB
-      # service.beta.kubernetes.io/aws-load-balancer-internal: 0.0.0.0/0  # Internal Load Balancer
-    # Define extra things that should go in the service spec
-    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core
-    spec:
-    # loadBalancerSourceRanges:
-    # - "0.0.0.0/0"
-
-  replicaLoadBalancer:
-    # If not enabled, we still expose the replica's using a so called Headless Service
-    # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
-    enabled: false
-    port: 5433
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
-    # Define extra things that should go in the service spec
-    # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#servicespec-v1-core
-    spec:
-    # loadBalancerSourceRanges:
-    # - "0.0.0.0/0"
 
   readinessProbe:
     enabled: true
@@ -1170,10 +1102,6 @@ timescaledb-single:
   # https://github.com/wrouesnel/postgres_exporter
   prometheus:
     enabled: false
-    image:
-      repository: wrouesnel/postgres_exporter
-      tag: v0.7.0
-      pullPolicy: Always
     # Extra custom environment variables for prometheus.
     # These should be an EnvVar, as this allows you to inject secrets into the environment
     # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#envvar-v1-core
@@ -1317,10 +1245,6 @@ grafana:
   # schedulerName: "default-scheduler"
 
   image:
-    repository: grafana/grafana
-    tag: 8.1.3
-    sha: ""
-    pullPolicy: IfNotPresent
 
     ## Optionally specify an array of imagePullSecrets.
     ## Secrets must be manually created in the namespace.
@@ -1331,10 +1255,6 @@ grafana:
 
   testFramework:
     enabled: false
-    image: "bats/bats"
-    tag: "v1.1.0"
-    imagePullPolicy: IfNotPresent
-    securityContext: {}
 
   securityContext:
     runAsUser: 472
@@ -1362,12 +1282,6 @@ grafana:
 
   ## Assign a PriorityClassName to pods if set
   # priorityClassName:
-
-  downloadDashboardsImage:
-    repository: curlimages/curl
-    tag: 7.73.0
-    sha: ""
-    pullPolicy: IfNotPresent
 
   downloadDashboards:
     env: {}
@@ -1551,13 +1465,6 @@ grafana:
     ##
     enabled: true
 
-    ## initChownData container image
-    ##
-    image:
-      repository: busybox
-      tag: "1.31.1"
-      sha: ""
-      pullPolicy: IfNotPresent
 
     ## initChownData resource requests and limits
     ## Ref: http://kubernetes.io/docs/user-guide/compute-resources/
@@ -1894,10 +1801,6 @@ grafana:
   ## Sidecars that collect the configmaps with specified label and stores the included files them into the respective folders
   ## Requires at least Grafana 5 to work and can't be used together with parameters dashboardProviders, datasources and dashboards
   sidecar:
-    image:
-      repository: quay.io/kiwigrid/k8s-sidecar
-      tag: 1.10.7
-      sha: ""
     imagePullPolicy: IfNotPresent
     resources: {}
     #   limits:
@@ -1975,15 +1878,6 @@ grafana:
     # Enable the image-renderer deployment & service
     enabled: false
     replicas: 1
-    image:
-      # image-renderer Image repository
-      repository: grafana/grafana-image-renderer
-      # image-renderer Image tag
-      tag: latest
-      # image-renderer Image sha (optional)
-      sha: ""
-      # image-renderer ImagePullPolicy
-      pullPolicy: Always
     # extra environment variables
     env:
       HTTP_HOST: "0.0.0.0"
@@ -2055,21 +1949,15 @@ kafkatoblob:
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
-  image:
-    registry: docker.io
-    repository: bitnami/kafka
-    tag: 2.8.1-debian-10-r31
-    pullPolicy: IfNotPresent
-    pullSecrets: []
-    debug: false
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
   service:
     type: ClusterIP
-    port: 9092
-    internalPort: 9093
-    externalPort: 9094
+    ports:
+      client: 9092
+      internal: 9093
+      external: 9094
   persistence:
     enabled: true
     accessModes:
@@ -2095,40 +1983,10 @@ redis:
   cluster:
     enabled: true
     slaveCount: 1
-  clusterDomain: cluster.local
-  common:
-    exampleValue: common-chart
-    global:
-      redis: {}
-  configmap: |-
-    # Enable AOF https://redis.io/topics/persistence#append-only-file
-    appendonly yes
-    # Disable RDB persistence, AOF persistence already enabled.
-    save ""
-  containerSecurityContext:
-    enabled: true
-    runAsUser: 1001
-  global:
-    redis: {}
-  image:
-    pullPolicy: IfNotPresent
-    registry: docker.io
-    repository: bitnami/redis
-    tag: 6.0.9-debian-10-r13
   master:
-    affinity: {}
     command: /run.sh
-    customLivenessProbe: {}
-    customReadinessProbe: {}
-    disableCommands:
-      - FLUSHDB
-      - FLUSHALL
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
     extraFlags:
       - --maxmemory 4gb
-    hostAliases: []
     livenessProbe:
       enabled: true
       failureThreshold: 5
@@ -2140,16 +1998,9 @@ redis:
       accessModes:
         - ReadWriteOnce
       enabled: true
-      matchExpressions: {}
-      matchLabels: {}
       path: /data
       size: 8Gi
       subPath: ""
-      volumes: null
-    podAnnotations: {}
-    podLabels: {}
-    preExecCmds: ""
-    priorityClassName: ""
     readinessProbe:
       enabled: true
       failureThreshold: 5
@@ -2166,54 +2017,22 @@ redis:
     service:
       annotations: {}
       externalTrafficPolicy: Cluster
-      labels: {}
-      port: 6379
+      ports:
+        redis: 6379
       type: ClusterIP
-    shareProcessNamespace: false
-    statefulset:
-      annotations: {}
-      labels: {}
-      updateStrategy: RollingUpdate
-      volumeClaimTemplates:
-        annotations: {}
-        labels: {}
   metrics:
     enabled: true
-    image:
-      pullPolicy: IfNotPresent
-      registry: docker.io
-      repository: bitnami/redis-exporter
-      tag: 1.13.1-debian-10-r6
     podAnnotations:
       prometheus.io/port: "9121"
       prometheus.io/scrape: "true"
-    priorityClassName: {}
-    prometheusRule:
-      additionalLabels: {}
-      enabled: false
-      namespace: ""
-      rules: []
-    service:
-      annotations: {}
-      externalTrafficPolicy: Cluster
-      labels: {}
-      type: ClusterIP
     serviceMonitor:
       enabled: false
-      metricRelabelings: []
-      relabelings: []
-      selector:
-        prometheus: kube-prometheus
   networkPolicy:
     enabled: false
     ingressNSMatchLabels: {}
     ingressNSPodMatchLabels: {}
-  # password: changeme
-  existingSecret: redis-secret
-  existingSecretPasswordKey: redispassword
-  persistence: {}
-  podDisruptionBudget:
-    enabled: true
+  pdb:
+    create: true
     minAvailable: 2
   podSecurityPolicy:
     create: false
@@ -2221,24 +2040,10 @@ redis:
     create: false
     role:
       rules: []
-  redisPort: 6379
-  securityContext:
-    enabled: true
-    fsGroup: 1001
   sentinel:
-    customLivenessProbe: {}
-    customReadinessProbe: {}
     downAfterMilliseconds: 1000
     enabled: true
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
     failoverTimeout: 18000
-    image:
-      pullPolicy: IfNotPresent
-      registry: docker.io
-      repository: bitnami/redis-sentinel
-      tag: 6.0.9-debian-10-r14
     initialCheckTimeout: 5
     livenessProbe:
       enabled: true
@@ -2249,9 +2054,9 @@ redis:
       timeoutSeconds: 5
     masterSet: mymaster
     parallelSyncs: 1
-    port: 26379
+    containerPorts:
+      sentinel: 26379
     preExecCmds: ""
-    # quorum: 2
     quorum: 1
     readinessProbe:
       enabled: true
@@ -2271,23 +2076,9 @@ redis:
       redisPort: 6379
       sentinelPort: 26379
       type: ClusterIP
-    staticID: false
-    usePassword: true
   serviceAccount:
     create: false
-  slave:
-    affinity: {}
-    command: /run.sh
-    customLivenessProbe: {}
-    customReadinessProbe: {}
-    disableCommands:
-      - FLUSHDB
-      - FLUSHALL
-    extraEnvVars: []
-    extraEnvVarsCM: []
-    extraEnvVarsSecret: []
-    extraFlags: []
-    hostAliases: []
+  replica:
     livenessProbe:
       enabled: true
       failureThreshold: 5
@@ -2299,16 +2090,11 @@ redis:
       accessModes:
         - ReadWriteOnce
       enabled: true
-      matchExpressions: {}
-      matchLabels: {}
       path: /data
       size: 8Gi
       subPath: ""
-    podAnnotations: {}
-    podLabels: {}
-    port: 6379
-    preExecCmds: ""
-    priorityClassName: {}
+    containerPorts:
+      redis: 6379
     readinessProbe:
       enabled: true
       failureThreshold: 5
@@ -2325,42 +2111,24 @@ redis:
     service:
       annotations: {}
       externalTrafficPolicy: Cluster
-      labels: {}
-      port: 6379
+      ports:
+        redis: 6379
       type: ClusterIP
     shareProcessNamespace: false
-    spreadConstraints: {}
-    statefulset:
-      annotations: {}
-      labels: {}
-      updateStrategy: RollingUpdate
-      volumeClaimTemplates:
-        annotations: {}
-        labels: {}
-  sysctlImage:
-    command: []
+    updateStrategy:
+      type: RollingUpdate
+  sysctl:
     enabled: false
-    mountHostSys: false
-    pullPolicy: Always
-    registry: docker.io
-    repository: bitnami/minideb
-    resources: {}
-    tag: buster
   tls:
     authClients: true
     enabled: false
-  usePassword: true
-  usePasswordFile: false
+  auth:
+    enabled: true
+    usePasswordFiles: false
+    existingSecret: redis-secret
+    existingSecretPasswordKey: redispassword
   volumePermissions:
     enabled: false
-    image:
-      pullPolicy: Always
-      registry: docker.io
-      repository: bitnami/minideb
-      tag: buster
-    resources: {}
-    securityContext:
-      runAsUser: 0
 
 
 ##### CONFIG FOR VERNEMQ #####
@@ -2402,10 +2170,6 @@ vernemq:
         name: vernemq-acl
       name: vernemq-acl
   fullnameOverride: ""
-  image:
-    pullPolicy: IfNotPresent
-    repository: vernemq/vernemq
-    tag: 1.11.0
   ingress:
     annotations: {}
     enabled: false

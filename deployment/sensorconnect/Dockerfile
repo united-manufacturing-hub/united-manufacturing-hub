@@ -1,15 +1,31 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10.0-slim
+FROM golang:alpine as builder
 
-# Set the working directory to /app
+RUN mkdir /build
+# Add build requirements for librdkafka
+RUN apk add build-base
+
+# Get dependencies
+WORKDIR /build
+ADD ./golang/go.mod /build/go.mod
+ADD ./golang/go.sum /build/go.sum
+RUN go mod download
+
+# Only copy relevant packages to docker container
+ADD ./golang/cmd/sensorconnect /build/cmd/sensorconnect
+ADD ./golang/internal /build/internal
+ADD ./golang/pkg /build/pkg
+# ADD ./golang/test/sensorconnect /build/test
+
+WORKDIR /build
+
+#RUN CGO_ENABLED=0 GOOS=linux go test --mod=readonly ./cmd/sensorconnect
+RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/sensorconnect
+
+FROM alpine:latest as certs
+RUN apk --update add ca-certificates
+
+FROM scratch
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /build /app/
 WORKDIR /app
-
-# Install any needed packages specified in requirements.txt
-COPY ./sensorconnect/requirements.txt ./
-RUN pip install --trusted-host pypi.python.org -r requirements.txt --no-cache-dir
-
-# Copy the current directory contents into the container at /app
-COPY ./sensorconnect/src /app
-
-# Run app.py when the container launches
-CMD ["python","-u", "main.py"]
+CMD ["./mainFile"]

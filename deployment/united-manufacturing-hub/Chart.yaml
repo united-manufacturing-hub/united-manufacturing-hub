@@ -17,13 +17,14 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.8.0
 
+version: 0.8.1
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "0.8.0"
+
+appVersion: "0.8.1"
 
 home: https://www.umh.app
 sources:
@@ -31,32 +32,32 @@ sources:
 
 dependencies:
   - name: redis
-    version: 12.7.3
+    version: 16.2.0
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
   - name: vernemq
-    version: 1.6.7
+    version: 1.6.12-1
     repository: https://vernemq.github.io/docker-vernemq
     condition: _000_commonConfig.infrastructure.mqtt.enabled
 
   - name: grafana
-    version: 6.13.5
+    version: 6.21.1
     repository: https://grafana.github.io/helm-charts
     condition: _000_commonConfig.datastorage.enabled
 
   - name: timescaledb-single
-    version: 0.9.0
+    version: 0.10.0
     repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
     condition: _000_commonConfig.datastorage.enabled
 
   - name: minio-operator
-    version: 4.1.7
+    version: 4.3.7
     repository: https://operator.min.io/
     condition: _000_commonConfig.blobstorage.enabled
 
   - name: kafka
-    version: 14.4.1
+    version: 15.0.1
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.infrastructure.kafka.enabled
 
