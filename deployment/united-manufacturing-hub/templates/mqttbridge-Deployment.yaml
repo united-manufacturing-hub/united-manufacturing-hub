@@ -52,7 +52,7 @@ spec:
         - name: LOCAL_CERTIFICATE_NAME
           value: "LOCAL"
         - name: LOCAL_BROKER_URL
-          value: 'mqtt://{{include "united-manufacturing-hub.fullname" .}}-emqxedge-headless:1883'
+          value: 'mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq:1883'
         - name: LOCAL_SUB_TOPIC
           value: {{.Values._000_commonConfig.mqttBridge.topic}}
         - name: LOCAL_PUB_TOPIC
