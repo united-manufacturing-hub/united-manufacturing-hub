@@ -1,0 +1,23 @@
+---
+{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-service
+  labels:
+    {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
+  {{if .Values.factoryinsight.service.annotations}}
+  annotations:
+    {{- toYaml .Values.factoryinsight.service.annotations | nindent 4}}
+  {{end}}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
+
+{{end}}
