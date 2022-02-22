@@ -95,7 +95,7 @@ func main() {
 	}
 
 	var err error
-	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_POLLING_TIME"), 10, 64)
+	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_POLLING_TIME_MS"), 10, 64)
 	if err != nil {
 		zap.S().Errorf("Couldn't convert LOWER_POLLING_TIME env to int, defaulting to 20. err: %s", err.Error())
 		lowestSensorTickTime = 20
@@ -111,7 +111,7 @@ func main() {
 		}
 	}
 
-	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_POLLING_TIME"), 10, 64)
+	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_POLLING_TIME_MS"), 10, 64)
 	if err != nil {
 		zap.S().Errorf("Couldn't convert UPPER_POLLING_TIME env to int, defaulting to 1000. err: %s", err.Error())
 		upperSensorTickTime = 1000
