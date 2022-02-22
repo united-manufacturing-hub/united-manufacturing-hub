@@ -82,6 +82,11 @@ spec:
             - name: MQTT_CERTIFICATE_NAME
               value: "NO_CERT"
 
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values.sensorconnect.ioddfilepath}}
