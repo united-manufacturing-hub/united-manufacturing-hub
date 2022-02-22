@@ -81,7 +81,7 @@ spec:
 
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
-              mountPath: {{.Values._000_commonConfig.datasources.sensorconnect.ioddfilepath}}
+              mountPath: {{.Values.sensorconnect.ioddfilepath}}
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
