@@ -1,0 +1,16 @@
+---
+{{if or .Values.kafkatoblob.enabled .Values._000_commonConfig.blobstorage.enabled}}
+{{if .Values.kafkatoblob.pdb.enabled}}
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob-pdb
+spec:
+  minAvailable: {{.Values.kafkatoblob.pdb.minAvailable}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
+
+{{end}}
+{{end}}

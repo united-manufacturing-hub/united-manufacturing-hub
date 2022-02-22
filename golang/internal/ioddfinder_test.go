@@ -3,6 +3,8 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -42,4 +44,29 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 	}
 
 	return nil
+}
+
+func TestSaveIoddFile(t *testing.T) {
+	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
+	// test if writing iodd file works
+	err := SaveIoddFile(42, 278531, relativeDirectoryPath)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// test if existing file is detected and corresponding error is thrown
+	err = SaveIoddFile(42, 278531, relativeDirectoryPath)
+	if err == nil {
+		t.Error(err)
+	}
+
+	// Remove file after test again
+	relativeFilePath := "../cmd/sensorconnect/IoddFiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.0.1.xml"
+	absoluteFilePath, _ := filepath.Abs(relativeFilePath)
+	fmt.Println(absoluteFilePath)
+	err = os.Remove(absoluteFilePath)
+	if err != nil {
+		fmt.Println("file not deleted")
+		t.Error(err)
+	}
 }

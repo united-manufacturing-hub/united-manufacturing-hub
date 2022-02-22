@@ -1,0 +1,23 @@
+---
+{{if or .Values.grafanaproxy.enabled .Values._000_commonConfig.datainput.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy-service
+  labels:
+    {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 4}}
+  {{if .Values.grafanaproxy.service.annotations}}
+  annotations:
+    {{- toYaml .Values.grafanaproxy.service.annotations | nindent 4}}
+  {{end}}
+spec:
+  type: LoadBalancer
+  ports:
+    - port: {{.Values.grafanaproxy.service.port}}
+      targetPort: {{.Values.grafanaproxy.service.targetPort}}
+      protocol: {{.Values.grafanaproxy.service.protocol}}
+      name: {{.Values.grafanaproxy.service.name}}
+  selector:
+     {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 4}}
+
+{{end}}

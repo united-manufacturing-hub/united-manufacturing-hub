@@ -179,8 +179,11 @@ func kafkaToQueue(topic string) {
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
+			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
+				time.Sleep(5 * time.Second)
+				continue
 			} else {
-				zap.S().Errorf("Failed to read kafka message: %s", err)
+				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}

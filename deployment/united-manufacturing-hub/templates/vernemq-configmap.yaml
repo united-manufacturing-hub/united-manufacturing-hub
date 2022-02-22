@@ -1,0 +1,29 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vernemq-acl
+  labels:
+    {{- include "united-manufacturing-hub.labels.vernemq" . | nindent 4}}
+data:
+  vernemq-acl: |
+     {{.Values._000_commonConfig.infrastructure.mqtt.AclConfig | nindent 5}}
+
+     user MQTT_TO_BLOB
+     topic read ia/+/+/+/productImage
+     topic read $share/MQTT-TO-BLOB/ia/+/+/+/productImage
+
+     user MQTT_TO_POSTGRESQL
+     topic read ia/#
+     topic read $share/MQTT_TO_POSTGRESQL/ia/#
+
+     user MQTT_KAFKA_BRIDGE
+     topic ia/#
+     topic $share/MQTT_KAFKA_BRIDGE/ia/#
+
+     user FACTORYINPUT
+     topic write ia/#
+     topic write $share/FACTORYINPUT/ia/#
+
+     {{end}}

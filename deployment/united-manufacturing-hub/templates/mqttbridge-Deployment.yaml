@@ -1,0 +1,74 @@
+---
+{{if or .Values.mqttbridge.enabled .Values._000_commonConfig.mqttBridge.enabled}}
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
+  labels:
+    {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 4}}
+spec:
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 6}}
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.mqttbridge" . | nindent 8}}
+    spec:
+      containers:
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
+        {{if .Values.mqttbridge.tag}}
+        image: {{.Values.mqttbridge.image}}:{{.Values.mqttbridge.tag}}
+        {{- else}}
+        image: {{.Values.mqttbridge.image}}:{{.Chart.AppVersion}}
+        {{end}}
+        volumeMounts:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
+          mountPath: /data/queue
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-certificates
+          mountPath: /SSL_certs/remote
+          readOnly: true
+        resources:
+          limits:
+            cpu: {{.Values.mqttbridge.resources.limits.cpu}}
+            memory: {{.Values.mqttbridge.resources.limits.memory}}
+          requests:
+            cpu: {{.Values.mqttbridge.resources.requests.cpu}}
+            memory: {{.Values.mqttbridge.resources.requests.memory}}
+        env:
+        - name: REMOTE_CERTIFICATE_NAME
+          value: {{.Values._000_commonConfig.serialNumber}}
+        - name: REMOTE_BROKER_URL
+          value: {{.Values._000_commonConfig.mqttBridge.remoteURL}}
+        - name: REMOTE_SUB_TOPIC
+          value: ia
+        - name: REMOTE_PUB_TOPIC
+          value: {{.Values._000_commonConfig.mqttBridge.topic}}
+        - name: REMOTE_BROKER_SSL_ENABLED
+          value: "true"
+        - name: LOCAL_CERTIFICATE_NAME
+          value: "LOCAL"
+        - name: LOCAL_BROKER_URL
+          value: 'mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq:1883'
+        - name: LOCAL_SUB_TOPIC
+          value: {{.Values._000_commonConfig.mqttBridge.topic}}
+        - name: LOCAL_PUB_TOPIC
+          value: "ia"
+        - name: LOCAL_BROKER_SSL_ENABLED
+          value: "false"
+        - name: BRIDGE_ONE_WAY
+          value: "true"
+      volumes:
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
+        persistentVolumeClaim:
+          claimName: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-claim
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-config
+        configMap:
+          name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-config
+      - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-certificates
+        secret:
+          secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-secrets
+{{end}}

@@ -13,6 +13,7 @@ import (
 
 var kafkaConsumerClient *kafka.Consumer
 var kafkaProducerClient *kafka.Producer
+var kafkaAdminClient *kafka.AdminClient
 var minioClient *minio.Client
 
 var buildtime string
@@ -27,6 +28,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
+	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
 
 	// Read environment variables for Minio
 	MinioUrl := os.Getenv("MINIO_URL")
@@ -37,7 +39,11 @@ func main() {
 	MinioBucketName := os.Getenv("BUCKET_NAME")
 
 	zap.S().Debugf("Setting up Kafka")
-	kafkaConsumerClient, kafkaProducerClient = setupKafka(KafkaBoostrapServer)
+	kafkaConsumerClient, kafkaProducerClient, kafkaAdminClient = setupKafka(KafkaBoostrapServer)
+	err := CreateTopicIfNotExists(KafkaBaseTopic)
+	if err != nil {
+		panic(err)
+	}
 
 	zap.S().Debugf("Setting up Minio")
 	minioClient = setupMinio(MinioUrl, MinioAccessKey, MinioSecretKey, MinioSecure, MinioBucketName)

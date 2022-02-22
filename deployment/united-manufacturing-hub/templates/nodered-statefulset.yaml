@@ -1,0 +1,103 @@
+---
+{{if .Values._000_commonConfig.dataprocessing.nodered.enabled}}
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-nodered
+  labels:
+    {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
+spec:
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-nodered
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.nodered" . | nindent 6}}
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.nodered" . | nindent 8}}
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      initContainers:
+
+        {{ if .Values._000_commonConfig.dataprocessing.nodered.defaultFlows }}
+        - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init
+          image: busybox:1.28
+          command: [ 'sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null' ]
+          volumeMounts:
+            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
+              mountPath: /data
+            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-flows
+              mountPath: /data/flows.default
+              subPath: nodered-flows
+        {{ end }}
+
+        {{ if .Values.nodered.pluginInstallEnabled }}
+        - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init-plugin
+          image: node:14
+          command:
+            - 'sh'
+            - '-c'
+          args:
+            - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi;
+              cd /data;
+              if mkdir DO_NOT_DELETE; then
+                npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
+                npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
+                npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
+                npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
+                npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
+                npm list node-red-contrib-kafka-manager || npm install node-red-contrib-kafka-manager;
+              else
+                echo "Initial installation already completed. Please use Node-RED UI for further package installations";
+              exit 0;
+              fi;
+          volumeMounts:
+            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
+              mountPath: /data
+        {{ end }}
+      containers:
+      - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
+        image: nodered/node-red:{{.Values.nodered.tag}}
+        ports:
+        - containerPort: 1880
+          name: nodered-ui
+        livenessProbe:
+          httpGet:
+            path: /nodered
+            port: 1880
+        readinessProbe:
+          httpGet:
+            path: /nodered
+            port: 1880
+        securityContext:
+          runAsUser: 1000
+        volumeMounts:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-data
+          mountPath: /data
+        - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
+          mountPath: /data/settings.js
+          subPath: nodered-config
+          readOnly: true
+        env:
+        {{range $ENV_NAME, $ENV_CONTENT := .Values.nodered.env | default dict}}
+        - name: {{$ENV_NAME}}
+          value: {{$ENV_CONTENT | quote}}
+        {{end}}
+        - name: TZ
+          value: {{.Values.nodered.timezone}}
+      volumes:
+      - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-data
+        persistentVolumeClaim:
+          claimName: {{include "united-manufacturing-hub.fullname" .}}-nodered-claim
+      - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
+        configMap:
+          name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
+      - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
+        configMap:
+          name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
+{{end}}
