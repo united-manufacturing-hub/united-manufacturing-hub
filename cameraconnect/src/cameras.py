@@ -455,7 +455,7 @@ class GenICam(CamGeneral):
         #   module. This should not affect our usage of image
         #   acquirer. Only change if you know what you are doing
         self.ia.remote_device.node_map.ChunkModeActive.value = False
-
+        self.ia.remote_device.node_map.AcquisitionMode.value = "Continuous"  # fixes error for allied vision Cameras when the acquisition mode changes unpredictably
         # The number of buffers that is prepared for the image
         #   acquisition process. The buffers will be announced
         #   to the target GenTL Producer. Need this so that we
