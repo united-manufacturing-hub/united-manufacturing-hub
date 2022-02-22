@@ -76,8 +76,11 @@ spec:
             - name: DEBUG
               value: {{.Values.sensorconnect.debug| quote }}
 
-            - name: BROKER_URL
+            - name: MQTT_BROKER_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+
+            - name: MQTT_CERTIFICATE_NAME
+              value: "NO_CERT"
 
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
