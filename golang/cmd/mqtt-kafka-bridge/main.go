@@ -41,16 +41,8 @@ func main() {
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
 	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
 
-	// Redis cache
-	redisURI := os.Getenv("REDIS_URI")
-	redisURI2 := os.Getenv("REDIS_URI2")
-	redisURI3 := os.Getenv("REDIS_URI3")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-	dryRun := os.Getenv("DRY_RUN")
-
-	redisDB := 0 // default database
-	zap.S().Debugf("Setting up redis")
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
+	zap.S().Debugf("Setting up memorycache")
+	internal.InitMemcache()
 
 	zap.S().Debugf("Setting up Queues")
 	var err error
