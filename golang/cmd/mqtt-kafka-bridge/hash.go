@@ -10,11 +10,11 @@ import (
 func CheckIfNewMessageOrStore(message []byte) (new bool) {
 	hashString := xxh3.Hash(message)
 	zap.S().Debugf("Hash: %d", hashString)
-	old, _ := internal.GetTiered(strconv.FormatUint(hashString, 10))
+	_, old := internal.GetMemcached(strconv.FormatUint(hashString, 10))
 	new = !old
 	zap.S().Debugf("New: %s", new)
 	if new {
-		go internal.SetTieredShortTerm(strconv.FormatUint(hashString, 10), "")
+		go internal.SetMemcached(strconv.FormatUint(hashString, 10), "")
 	}
 	return
 }
