@@ -52,29 +52,10 @@ func DiscoverDevices(cidr string) (err error) {
 	for i := start; i <= finish; i++ {
 		wg.Add(1)
 		go GetDiscoveredDeviceInformation(&wg, i)
-		internal.SleepBackedOff(int64(i), 10*time.Nanosecond, 100*time.Millisecond)
+		internal.SleepBackedOff(int64(i), 10*time.Nanosecond, 10*time.Millisecond)
 	}
 
 	wg.Wait()
-	//Pre-create kafka topics to reduce load later !
-	discoveredDeviceInformation.Range(func(key, rawCurrentDeviceInformation interface{}) bool {
-		currentDeviceInformation := rawCurrentDeviceInformation.(DiscoveredDeviceInformation)
-		portModeMap, err := GetPortModeMap(currentDeviceInformation)
-		if err != nil {
-			return true
-		}
-		for portNumber := range portModeMap {
-			mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
-			kafkaTopic := MqttTopicToKafka(mqttRawTopic)
-			err := CreateTopicIfNotExists(kafkaTopic)
-			if err != nil {
-				zap.S().Errorf("Failed to create topic %s", err)
-				return true
-			}
-		}
-		return true
-	})
-
 	return nil
 }
 
@@ -92,11 +73,6 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 		//zap.S().Errorf("Unmarshal of body from url %s failed.", url)
 		return
 	}
-	// Check CID
-	if unmarshaledAnswer.Cid != 23 {
-		//zap.S().Errorf("Incorrect or missing cid in response. (Should be 23). UnmarshaledAnswer: %s, CurrentUrl: %s, body: %v", unmarshaledAnswer, url, body)
-		return
-	}
 
 	ddI := DiscoveredDeviceInformation{}
 	// Insert relevant gained data into DiscoveredDeviceInformation and store in slice
@@ -104,8 +80,23 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	ddI.SerialNumber = unmarshaledAnswer.Data.DeviceInfoSerialnumber.Data
 	ddI.Url = url
 	zap.S().Infof("Found device (SN: %s, PN: %s) at %s", ddI.SerialNumber, ddI.ProductCode, url)
-	//Only needs write locking, if not present !
-	discoveredDeviceInformation.LoadOrStore(ddI.Url, ddI)
+
+	// Pre-create topic
+	portModeMap, err := GetUsedPortsAndModeCached(ddI)
+	if err != nil {
+		return
+	}
+	for portNumber := range portModeMap {
+		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, ddI.SerialNumber, portNumber)
+		kafkaTopic := MqttTopicToKafka(mqttRawTopic)
+		err := CreateTopicIfNotExists(kafkaTopic)
+		if err != nil {
+			zap.S().Errorf("Failed to create topic %s", err)
+			return
+		}
+	}
+
+	discoveredDeviceChannel <- ddI
 }
 
 func ConvertCidrToIpRange(cidr string) (start uint32, finish uint32, err error) {
@@ -136,6 +127,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	url = "http://" + ip.String()
 
 	// Payload to send to the gateways
+	//cid can be any number
 	var payload = []byte(`{
         "code":"request",
         "cid":23,
@@ -152,9 +144,9 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 		//zap.S().Warnf("Failed to create post request for url: %s", url)
 		return
 	}
-	client := &http.Client{}
+	client := GetHTTPClient(url)
 	client.CloseIdleConnections()
-	client.Timeout = time.Second * time.Duration(deviceFinderFrequencyInS)
+	client.Timeout = time.Second * time.Duration(deviceFinderTimeoutInS)
 	resp, err := client.Do(req)
 	if err != nil {
 		//zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())

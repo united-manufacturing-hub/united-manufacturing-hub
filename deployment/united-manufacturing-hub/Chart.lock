@@ -20,5 +20,5 @@ dependencies:
 - name: kowl
   repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
   version: 2.3.0
-digest: sha256:1d50cf0f1a8c7633cced1b8a076852f4173f9525283e53d1d0b92895bf84e25a
-generated: "2022-02-11T10:54:28.2493084+01:00"
+digest: sha256:9ea566cb678d4553579e043b430ff94c22c4f2595f62c22a07c29ea8c32bedc6
+generated: "2022-02-11T12:50:44.7482397+01:00"

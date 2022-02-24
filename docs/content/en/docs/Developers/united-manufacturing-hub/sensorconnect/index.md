@@ -52,7 +52,7 @@ This chapter explains all used environment variables.
 
 **Example value:** /tmp/iodd
 
-### LOWER_SENSOR_TICK_TIME_MS
+### LOWER_POLLING_TIME_MS
 
 **Description:** The fastest time to read values from connected sensors in milliseconds
 
@@ -63,11 +63,11 @@ This chapter explains all used environment variables.
 **Example value:** 100
 
 
-### UPPER_SENSOR_TICK_TIME_MS
+### UPPER_POLLING_TIME_MS
 
 **Description:** The slowest time to read values from connected sensors in milliseconds
 
-**Note:** To disable this feature, set this variable to the same value as LOWER_SENSOR_TICK_TIME_MS
+**Note:** To disable this feature, set this variable to the same value as LOWER_POLLING_TIME_MS
 
 **Type:** int
 
@@ -75,7 +75,7 @@ This chapter explains all used environment variables.
 
 **Example value:** 100
 
-### SENSOR_TICK_STEP_MS_UP
+### POLLING_SPEED_STEP_UP_MS
 
 **Description:** The time to add to the actual tick rate in case of a failure (incremental)
 
@@ -85,7 +85,7 @@ This chapter explains all used environment variables.
 
 **Example value:** 10
 
-### SENSOR_TICK_STEP_MS_UP
+### POLLING_SPEED_STEP_DOWN_MS
 
 **Description:** The time to subtract from actual tick rate in case of a failure (incremental)
 
@@ -95,6 +95,82 @@ This chapter explains all used environment variables.
 
 **Example value:** 10
 
+
+### SENSOR_INITIAL_POLLING_TIME_MS
+
+**Description:** The tick speed, that sensor connect will start from. Set a bit higher than LOWER_POLLING_TIME_MS to allow sensors to recover from faults easier
+
+**Type:** int
+
+**Possible values:** all
+
+**Example value:** 100
+
+### MAX_SENSOR_ERROR_COUNT
+
+**Description:** After this numbers on errors, the sensor will be removed until the next device scan 
+
+**Type:** int
+
+**Possible values:** all
+
+**Example value:** 50
+
+
+### DEVICE_FINDER_TIME_SEC
+
+**Description:** Seconds between scanning for new devices
+
+**Type:** int
+
+**Possible values:** all
+
+**Example value:** 10
+
+
+### DEVICE_FINDER_TIMEOUT_SEC
+
+**Description:** Timeout per device for scan response
+
+**Type:** int
+
+**Possible values:** all
+
+**Example value:** 10
+
+
+### ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS
+
+**Description:** This adds a sleep per active port on an IO-Link master
+
+**Type:** float
+
+**Possible values:** all
+
+**Example value:** 0.0
+
+
+### SUB_TWENTY_MS
+
+**Description:** Allows query times below 20MS. DO NOT activate this, if you are unsure, that your devices survive this load.
+
+**Type:** bool
+
+**Possible values:** 0,1
+
+**Example value:** 0
+
+
+### ADDITIONAL_SLOWDOWN_MAP
+
+**Description:** A json map of additional slowdowns per device. Identificates can be Serialnumber, Productcode or URL
+
+**Type:** int
+
+**Possible values:** all
+
+**Example value:** []
+**Example value:** ```json[{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]```
 
 
 #### MQTT only

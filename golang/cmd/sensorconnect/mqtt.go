@@ -75,7 +75,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) {
 	opts.AddBroker(mqttBrokerURL)
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("MQTT_KAFKA_BRIDGE")
+		opts.SetUsername("SENSORCONNECT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
@@ -109,7 +109,7 @@ func SendMQTTMessage(topic string, message []byte) {
 
 	_, found := internal.GetMemcached(cacheKey)
 	if found {
-		zap.S().Debugf("Duplicate message for topic %s, you might want to increase LOWER_SENSOR_TICK_TIME_MS !", topic)
+		zap.S().Debugf("Duplicate message for topic %s, you might want to increase LOWER_POLLING_TIME !", topic)
 		return
 	}
 
