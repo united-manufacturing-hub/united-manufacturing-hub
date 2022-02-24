@@ -103,7 +103,6 @@ func main() {
 	zap.S().Debugf("Setting up MQTT")
 	podName := os.Getenv("MY_POD_NAME")
 	mqttTopic := os.Getenv("MQTT_TOPIC")
-	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName)
 
 	zap.S().Debugf("Setting up redis")
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
@@ -167,6 +166,10 @@ func main() {
 
 	//Only try to process old messages, once redis and pg are available !
 	storedRawMQTTHandler.Setup()
+
+	time.Sleep(1 * time.Second)
+	// Only allow new MQTT messages once queues are set up
+	SetupMQTT(certificateName, mqttBrokerURL, mqttTopic, health, podName)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
