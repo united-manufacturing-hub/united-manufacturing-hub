@@ -30,11 +30,11 @@ An epic consists out of multiple issues that are bundled together in a user stor
 
 #### Processing of the work package
 
-When work on a new work package (issue) is started, a new branch is created from staging with the following name: 
+When work on a new work package (issue) is started, a new branch is created from main with the following name: 
 
-`issueID-short-description`, e.g. `465-improve-documentation-factorycube`. 
+`issueType/issueID/short-description`, e.g. `docs/465/improve-documentation-factorycube`. 
 
-When the work package is processed and tested, a pull request is created from the branch to staging. A second person reviews the code and automatic tests are performed. If everything is ok the feature is committed to staging using squash & merge. 
+When the work package is processed and tested, a pull request is created from the branch to main. A second person reviews the code and automatic tests are performed. If everything is ok the feature is committed to main using squash & merge. 
 
 The commit should follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) logic. 
 
@@ -42,7 +42,7 @@ This closes the issue.
 
 #### Sprint end
 
-After 1.5 weeks the sprint should be finished with all work packages. If not, the remaining ones will be put back into the backlog. The remaining 2 days are used to test the code in the staging environment. If all tests are ok and all open bugs have been fixed, a release branch is created in the format `release/v0.0.0`. Final tests are conducted. For publishing a new version, see also [our guide on how to publish a new release](https://docs.umh.app/docs/developers/publish-new-version/)The next sprint is then discussed.
+After 1.5 weeks the sprint should be finished with all work packages. If not, the remaining ones will be put back into the backlog. The remaining 2 days are used to test the code in the main environment. If all tests are ok and all open bugs have been fixed, a release branch is created in the format `release/v0.0.0`. Final tests are conducted. For publishing a new version, see also [our guide on how to publish a new release](https://docs.umh.app/docs/developers/publish-new-version/)The next sprint is then discussed.
 
 ### Special features for externals
 
@@ -50,7 +50,7 @@ If you are external and would like to help out, there are a few more notes for y
 
 - Discuss the work packages you want to tackle with us in advance. This way we can give you input in time and avoid unnecessary work.
 - Before we can accept your code, you have to accept the CLA. You can find them in the main directory `CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md` and `CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md`.
-- Since you cannot create a new branch as an external, fork the project code first and then create a pull request from your fork to staging this project.
+- Since you cannot create a new branch as an external, fork the project code first and then create a pull request from your fork to main this project.
 
 ## Versioning
 
