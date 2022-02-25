@@ -53,7 +53,7 @@ spec:
             value: {{.Values._000_commonConfig.datasources.barcodereader.machineID}}
 
       volumes:
-        - name: dev
+        - name: devs
           hostPath:
             path: /dev/
 {{end}}
