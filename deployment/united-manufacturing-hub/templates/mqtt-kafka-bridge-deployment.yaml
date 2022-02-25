@@ -64,17 +64,6 @@ spec:
             - name: KAFKA_BASE_TOPIC
               value: "ia"
 
-            - name: REDIS_URI
-              value: {{.Values.factoryinsight.redis.URI1}}
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: redis-secret
-                  key: redispassword
-
-
-
-
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:

@@ -6,6 +6,8 @@ import os #for importing environment variables
 import time
 
 # 3rd party imports
+from urllib.parse import urlparse
+
 import evdev
 from evdev import InputDevice, categorize, ecodes
 import paho.mqtt.client as mqtt
@@ -21,7 +23,16 @@ CUSTOM_USB_NAME = os.environ.get('CUSTOM_USB_NAME')
 if not DEBUG_ENABLED:
     MQTT_CLIENT_ID = os.environ.get('MQTT_CLIENT_ID')
     BROKER_URL = os.environ.get('BROKER_URL')
-    BROKER_PORT = int(os.environ.get('BROKER_PORT'))
+    BROKER_PORT = 8883
+    if os.environ.get('BROKER_PORT') == '' or os.environ.get('BROKER_PORT') is None:
+        parsed = urlparse(BROKER_URL)
+        BROKER_PORT = parsed.port
+    else:
+        try:
+            BROKER_PORT = int(os.environ.get('BROKER_PORT'))
+        except ValueError:
+            print(str(time.ctime(time.time())) + " Failed to convert BROKER_PORT to int, using default 8883")
+            pass
     CUSTOMER_ID = os.environ.get('CUSTOMER_ID')
     LOCATION = os.environ.get('LOCATION')
     MACHINE_ID = os.environ.get('MACHINE_ID')
