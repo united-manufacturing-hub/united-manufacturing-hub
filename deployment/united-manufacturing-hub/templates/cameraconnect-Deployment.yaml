@@ -63,7 +63,7 @@ spec:
             - name: CUBE_TRANSMITTERID
               value: {{.Values._000_commonConfig.serialNumber | quote}}
             - name: BROKER_URL
-              value: {{.Values._000_commonConfig.mqttBridge.remoteURL}}
+              value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerURL}}
             - name: BROKER_PORT #TODO: remove this !
             - name: TRIGGER
               value: {{.Values._000_commonConfig.datasources.cameraconnect.trigger | quote}}

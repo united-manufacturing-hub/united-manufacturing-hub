@@ -43,8 +43,9 @@ spec:
           - name: MQTT_CLIENT_ID
             value: {{.Values._000_commonConfig.serialNumber}}-barcodereader
           - name: BROKER_URL
-            value: {{.Values._000_commonConfig.mqttBridge.remoteURL}}
-          - name: BROKER_PORT #TODO: remove this !
+            value: {{.Values._000_commonConfig.datasources.barcodereader.brokerURL}}
+          - name: BROKER_PORT
+            value: {{.Values._000_commonConfig.datasources.barcodereader.brokerPort}}
           - name: CUSTOMER_ID
             value: {{.Values._000_commonConfig.datasources.barcodereader.customerID}}
           - name: LOCATION
