@@ -13,6 +13,8 @@ _000_commonConfig:
       customerID: "raw"
       location: "barcodereader"
       machineID: "barcodereader"
+      brokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub"
+      brokerPort: 8883
 
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
@@ -157,8 +159,16 @@ _000_commonConfig:
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
     enabled: false
-    remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
-    topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
+    localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    oneWay: true
+    localBrokerSSLEnabled: false
+    localPubTopic: "ia"
+    localCertificateName: "LOCAL"
+    remoteBrokerSSLEnabled: true
+    remoteSubTopic: "ia"
+    remotePubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+
     CAcert: |
       -----BEGIN CERTIFICATE-----
       -----END CERTIFICATE-----
