@@ -13,7 +13,8 @@ Sensorconnect provides plug-and-play access to IO-Link sensors connected to IFM 
 
 ## Getting started
 ### Production setup
-Sensorconnect is by default implemented in the United Manufacturing Hub. You can use our Management SaaS tool to enable it, set your preffered transmitter id and choose the ip range to look for gateways. 
+Sensorconnect is by default implemented in the United Manufacturing Hub. You can use our Management SaaS tool to enable it in the values.yaml, set your preffered transmitter id and choose the ip range to look for gateways etc.
+All possible environment variables you can use to customize sensorconnect are described at the [environment-variables website](/docs/Developers/united-manufacturing-hub/environment-variables/).
 ### Development setup
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
@@ -43,8 +44,25 @@ Sensorconnect will scan the ip range for new ifm gateways (used to connect the I
     }
 }
 ```
+**Example answer from gateway:**
+```JSON
+{
+    "cid": 24,
+    "data": {
+        "/deviceinfo/serialnumber/": {
+            "code": 200,
+            "data": "000201610192"
+        },
+        "/deviceinfo/productcode/": {
+            "code": 200,
+            "data": "AL1350"
+        }
+    },
+    "code": 200
+}
+```
+All port modes of the connected gateways are requested. Depending on the productcode, we can determine the total number of ports on the gateway and iterate through them.
 
-All port modes of the connected gateways are requested every 10 seconds. Depending on the productcode, we can determine the total number of ports on the gateway and iterate through them.
 **Requesting port modes with following payload: (information sent during a POST request to the ifm gateways)**
 ```JSON
 {
@@ -59,7 +77,22 @@ All port modes of the connected gateways are requested every 10 seconds. Dependi
     }
 }
 ```
-
+**Example answer from gateway:**
+```JSON
+{
+    "cid": -1,
+    "data": {
+        "/iolinkmaster/port[1]/mode": {
+            "code": 200,
+            "data": 3
+        },
+        "/iolinkmaster/port[2]/mode": {
+            "code": 200,
+            "data": 3
+        }
+    }
+}
+```
 If the mode == 1: port_mode = "DI" (Digital Input)
 If the mode == 2: port_mode = "DO" (Digital output)
 If the mode == 3: port_mode = "IO_Link"
@@ -85,9 +118,32 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
   }
 }
 ```
-
-Sensorconnect receives 
-
+**Example answer from gateway:**
+```JSON
+{
+    "cid": -1,
+    "data": {
+        "/iolinkmaster/port[1]/iolinkdevice/deviceid": {
+            "code": 200,
+            "data": 278531
+        },
+        "/iolinkmaster/port[1]/iolinkdevice/pdin": {
+            "code": 200,
+            "data": "0101" //--> this contains the actual data. In this example it is the buttonbar. This value changes when one is pressed.
+        },
+        "/iolinkmaster/port[1]/iolinkdevice/vendorid": {
+            "code": 200,
+            "data": 42
+        },
+        "/iolinkmaster/port[1]/pin2in": {
+            "code": 200,
+            "data": 0
+        }
+    },
+    "code": 200
+}
+```
+The cid (Client ID) can be chosen.
 
 Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
 
