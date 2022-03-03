@@ -7,11 +7,17 @@ aliases:
   - /docs/Developers/factorycube-edge/sensorconnect
   - /docs/developers/factorycube-edge/sensorconnect
 ---
-## Sensorconnect
-Sensorconnect provides plug-and-play access to IO-Link sensors connected to IFM gateways. A typical setup has multiple sensors connected via IO-Link to ifm gateways on the shopfloor. Those gateways are connected to LAN. The sensorconnect microservice constantly monitors a given IP range for gateways. Once found, it will request sensordata in short intervals. The received data is preprocessed based on a database including thousands of sensor definitions. And because we strongly believe in open industry standards, Sensorconnect brings the data via MQTT or Kafka to your preferred software solutions, for example, features of the United Manufacturing Hub.
+## Sensorconnect overview
+Sensorconnect provides plug-and-play access to IO-Link sensors connected to IFM gateways. A typical setup has multiple sensors connected via IO-Link to ifm gateways on the production shopfloor. Those gateways are connected to LAN. The sensorconnect microservice constantly monitors a given IP range for gateways. Once a gateway is found, it automatically start requesting and processing sensordata in short intervals. The received data is preprocessed based on a database including thousands of sensor definitions. And because we strongly believe in open industry standards, Sensorconnect brings the data via MQTT or Kafka to your preferred software solutions, for example, features of the United Manufacturing Hub.
 
+## What Problem is Sensorconnect solving
+Let's take a step back and think about, why we need a special microservice:
+1. The gateways are providing a rest api to request sensordata. Meaning as long as we dont have a process to request the data, nothing will happen. 
+2. Constantly requesting and processing data with high robustness and reliability can get difficult in setups with a large number of sensors.
+3. Even if we use for example node-red to automatically request data from the rest api of the ifm gateways, the information is most of the times cryptic without proper interpretation. 
+4. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce. Those contain information to correctly interpret data from the devices. They are in XML-format. But automatic IODD interpretation is relatively complex and manually using IODD files is not economically feasible.
 
-## Getting started
+## Installation
 ### Production setup
 Sensorconnect is by default implemented in the United Manufacturing Hub. You can use our Management SaaS tool to enable it in the values.yaml, set your preffered transmitter id and choose the ip range to look for gateways etc.
 All possible environment variables you can use to customize sensorconnect are described at the [environment-variables website](/docs/Developers/united-manufacturing-hub/environment-variables/).
@@ -26,8 +32,7 @@ Here is a quick tutorial on how to start up a basic configuration / a basic dock
 
 {{< imgproc sensorconnectOverviewImage Fit "2026x1211" >}}{{< /imgproc >}}
 
-Sensorconnect is based on IO-Link. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce.
-Those contain information to correctly interpret data from the devices. They are in XML-format. Sensorconnect will download relevant IODD files automatically after installation from the IODDfinder website (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
+Sensorconnect is based on IO-Link. Sensorconnect will download relevant IODD files automatically after installation from the IODDfinder website (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
 
 Sensorconnect will scan the ip range for new ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range ("http://"+url, `payload`, timeout=0.1). It stores the ip-Adresses, with the productcodes (*the types of the devices*) and the individual serialnumbers.
 
@@ -35,7 +40,7 @@ Sensorconnect will scan the ip range for new ifm gateways (used to connect the I
 ```JSON
 {
   "code":"request",
-  "cid":-1,
+  "cid":-1, // The cid (Client ID) can be chosen.
   "adr":"/getdatamulti",
   "data":{
     "datatosend":[
@@ -129,7 +134,7 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
         },
         "/iolinkmaster/port[1]/iolinkdevice/pdin": {
             "code": 200,
-            "data": "0101" //--> this contains the actual data. In this example it is the buttonbar. This value changes when one is pressed.
+            "data": "0101" // This string contains the actual data from the sensor. In this example it is the data of a buttonbar. The value changes when one button is pressed. Interpreting this value automatically relies heavily on the IODD file of the specific sensor (information about which partition of the string holds what value (type, value name etc.)).
         },
         "/iolinkmaster/port[1]/iolinkdevice/vendorid": {
             "code": 200,
@@ -143,7 +148,7 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
     "code": 200
 }
 ```
-The cid (Client ID) can be chosen.
+
 
 Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
 
