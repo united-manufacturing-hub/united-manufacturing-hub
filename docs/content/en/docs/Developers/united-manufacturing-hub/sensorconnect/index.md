@@ -19,7 +19,7 @@ Let's take a step back and think about, why we need a special microservice:
 
 ## Installation
 ### Production setup
-We allow the user to customize sensorconnect by changing environment variables. All possible environment variables you can use to customize sensorconnect and how you change them is described at the [environment-variables website](/docs/Developers/united-manufacturing-hub/environment-variables/). Sensorconnect is by default enabled in the United Manufacturing Hub. To set your preferred serialnumber and choose the ip range to look for gateways you can configure either the values.yaml directly or use our managment SaaS tool. 
+Sensorconnect comes directly with the united manufacturing hub - no additional installation steps required. We allow the user to customize sensorconnect by changing environment variables. All possible environment variables you can use to customize sensorconnect and how you change them is described at the [environment-variables website](/docs/Developers/united-manufacturing-hub/environment-variables/). Sensorconnect is by default enabled in the United Manufacturing Hub. To set your preferred serialnumber and choose the ip range to look for gateways, you can configure either the values.yaml directly or use our managment SaaS tool. 
 
 ### Development setup
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
@@ -27,12 +27,10 @@ Here is a quick tutorial on how to start up a basic configuration / a basic dock
 1. execute `docker-compose -f ./deployment/sensorconnect/docker-compose.yaml up -d --build`
 
 
-
 ## Underlying Functionality
+Sensorconnect downloads relevant IODD files automatically after installation from the [IODDfinder website](https://io-link.com/en/IODDfinder/IODDfinder.php). If an unknown sensor is connected later, sensorconnect will automatically download the file. We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work (e.g. no internet connection).
 
-Sensorconnect is based on IO-Link. Sensorconnect will download relevant IODD files automatically after installation from the IODDfinder website (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
-
-Sensorconnect will scan the ip range for new ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range ("http://"+url, `payload`, timeout=0.1). It stores the ip-Adresses, with the productcodes (*the types of the devices*) and the individual serialnumbers.
+Sensorconnect scans the ip range for new ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range ("http://"+url, `payload`, timeout=0.1). It stores the ip-Adresses, with the productcodes (*the types of the gateways*) and the individual serialnumbers.
 
 **Scanning with following `payload`: (information sent during a POST request to the ifm gateways)**
 ```JSON
@@ -150,4 +148,4 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
 
 Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
 
-Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker. The format from sensorconnect is described in detail and with examples on the [UMH Datamodel website](/docs/concepts/mqtt/).
+Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker or via Kafka to the Kafka broker. The format of those messages coming from sensorconnect is described in detail and with examples on the [UMH Datamodel website](/docs/concepts/mqtt/).
