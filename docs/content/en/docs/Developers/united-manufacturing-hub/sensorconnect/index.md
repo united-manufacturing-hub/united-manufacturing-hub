@@ -8,19 +8,19 @@ aliases:
   - /docs/developers/factorycube-edge/sensorconnect
 ---
 ## Sensorconnect overview
-Sensorconnect provides plug-and-play access to IO-Link sensors connected to IFM gateways. A typical setup has multiple sensors connected via IO-Link to ifm gateways on the production shopfloor. Those gateways are connected to LAN. The sensorconnect microservice constantly monitors a given IP range for gateways. Once a gateway is found, it automatically start requesting and processing sensordata in short intervals. The received data is preprocessed based on a database including thousands of sensor definitions. And because we strongly believe in open industry standards, Sensorconnect brings the data via MQTT or Kafka to your preferred software solutions, for example, features of the United Manufacturing Hub.
+Sensorconnect provides plug-and-play access to [IO-Link](https://io-link.com/en/) sensors connected to [ifm gateways](https://www.ifm.com/us/en/category/245_010_010). A typical setup has multiple sensors (connected via IO-Link) to ifm gateways on the production shopfloor. Those gateways are connected via LAN to your server infrastructure. The sensorconnect microservice constantly monitors a given IP range for gateways. Once a gateway is found, it automatically starts requesting, receiving and processing sensordata in short intervals. The received data is preprocessed based on a database including thousands of sensor definitions. And because we strongly believe in open industry standards, Sensorconnect brings the data via MQTT or Kafka to your preferred software solutions, for example, features of the United Manufacturing Hub or the cloud.
 
-## What Problem is Sensorconnect solving
+## Which problems is Sensorconnect solving
 Let's take a step back and think about, why we need a special microservice:
 1. The gateways are providing a rest api to request sensordata. Meaning as long as we dont have a process to request the data, nothing will happen. 
 2. Constantly requesting and processing data with high robustness and reliability can get difficult in setups with a large number of sensors.
-3. Even if we use for example node-red to automatically request data from the rest api of the ifm gateways, the information is most of the times cryptic without proper interpretation. 
-4. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce. Those contain information to correctly interpret data from the devices. They are in XML-format. But automatic IODD interpretation is relatively complex and manually using IODD files is not economically feasible.
+3. Even if we use for example node-red flows ([flow from node-red](https://flows.nodered.org/node/sense-ifm-iolink), [flow from ifm](https://www.ifm.com/na/en/shared/technologies/io-link/system-integration/iiot-integration))to automatically request data from the rest api of the ifm gateways, the information is most of the times cryptic without proper interpretation. 
+4. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce. Those contain information to correctly interpret data from the devices. They are in XML-format and available at the [IODDfinder website](https://io-link.com/en/IODDfinder/IODDfinder.php). But automatic IODD interpretation is relatively complex and manually using IODD files is not economically feasible.
 
 ## Installation
 ### Production setup
-Sensorconnect is by default implemented in the United Manufacturing Hub. You can use our Management SaaS tool to enable it in the values.yaml, set your preffered transmitter id and choose the ip range to look for gateways etc.
-All possible environment variables you can use to customize sensorconnect are described at the [environment-variables website](/docs/Developers/united-manufacturing-hub/environment-variables/).
+We allow the user to customize sensorconnect by changing environment variables. All possible environment variables you can use to customize sensorconnect and how you change them is described at the [environment-variables website](/docs/Developers/united-manufacturing-hub/environment-variables/). Sensorconnect is by default enabled in the United Manufacturing Hub. To set your preferred serialnumber and choose the ip range to look for gateways you can configure either the values.yaml directly or use our managment SaaS tool. 
+
 ### Development setup
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
 
@@ -29,8 +29,6 @@ Here is a quick tutorial on how to start up a basic configuration / a basic dock
 
 
 ## Underlying Functionality
-
-{{< imgproc sensorconnectOverviewImage Fit "2026x1211" >}}{{< /imgproc >}}
 
 Sensorconnect is based on IO-Link. Sensorconnect will download relevant IODD files automatically after installation from the IODDfinder website (https://io-link.com/en/IODDfinder/IODDfinder.php). We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work.
 
