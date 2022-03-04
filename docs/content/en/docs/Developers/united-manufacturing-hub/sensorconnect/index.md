@@ -1,6 +1,6 @@
 ---
-title: "sensorconnect"
-linkTitle: "sensorconnect"
+title: "Sensorconnect"
+linkTitle: "Sensorconnect"
 description: >
   This docker container automatically detects ifm gateways in the specified network and reads their sensor values in the highest possible data frequency. The MQTT output is specified in [the MQTT documentation](/docs/concepts/mqtt/)
 aliases:
@@ -8,13 +8,13 @@ aliases:
   - /docs/developers/factorycube-edge/sensorconnect
 ---
 ## Sensorconnect overview
-Sensorconnect provides plug-and-play access to [IO-Link](https://io-link.com/en/) sensors connected to [ifm gateways](https://www.ifm.com/us/en/category/245_010_010). A typical setup has multiple sensors (connected via IO-Link) to ifm gateways on the production shopfloor. Those gateways are connected via LAN to your server infrastructure. The sensorconnect microservice constantly monitors a given IP range for gateways. Once a gateway is found, it automatically starts requesting, receiving and processing sensordata in short intervals. The received data is preprocessed based on a database including thousands of sensor definitions. And because we strongly believe in open industry standards, Sensorconnect brings the data via MQTT or Kafka to your preferred software solutions, for example, features of the United Manufacturing Hub or the cloud.
+Sensorconnect provides plug-and-play access to [IO-Link](https://io-link.com/en/) sensors connected to [ifm gateways](https://www.ifm.com/us/en/category/245_010_010). Digital input mode is also supported. A typical setup contains multiple sensors connected to ifm gateways on the production shopfloor. Those gateways are connected via LAN to your server infrastructure. The sensorconnect microservice constantly monitors a given IP range for gateways. Once a gateway is found, it automatically starts requesting, receiving and processing sensordata in short intervals. The received data is preprocessed based on a database including thousands of sensor definitions. And because we strongly believe in open industry standards, Sensorconnect brings the data via MQTT or Kafka to your preferred software solutions, for example, features of the United Manufacturing Hub or the cloud.
 
 ## Which problems is Sensorconnect solving
 Let's take a step back and think about, why we need a special microservice:
 1. The gateways are providing a rest api to request sensordata. Meaning as long as we dont have a process to request the data, nothing will happen. 
 2. Constantly requesting and processing data with high robustness and reliability can get difficult in setups with a large number of sensors.
-3. Even if we use for example node-red flows ([flow from node-red](https://flows.nodered.org/node/sense-ifm-iolink), [flow from ifm](https://www.ifm.com/na/en/shared/technologies/io-link/system-integration/iiot-integration))to automatically request data from the rest api of the ifm gateways, the information is most of the times cryptic without proper interpretation. 
+3. Even if we use for example node-red flows ([flow from node-red](https://flows.nodered.org/node/sense-ifm-iolink), [flow from ifm](https://www.ifm.com/na/en/shared/technologies/io-link/system-integration/iiot-integration)) to automatically request data from the rest api of the ifm gateways, the information is most of the times cryptic without proper interpretation. 
 4. Device manufacturers will provide one IODD file (IO Device Description), for every sensor and actuator they produce. Those contain information to correctly interpret data from the devices. They are in XML-format and available at the [IODDfinder website](https://io-link.com/en/IODDfinder/IODDfinder.php). But automatic IODD interpretation is relatively complex and manually using IODD files is not economically feasible.
 
 ## Installation
@@ -147,7 +147,7 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
 ```
 
 ### IODD file management
-Based on the vendorid and deviceid (extracted out of the received data from the ifm-gateway), sensorconnect looks in it's persistant storage if an iodd file is already on the available. If there is no iodd file stored for the specific sensor, it tries to download a file online and saves it. If this also is not possible, sensorconnect doesn't preprocess the pdin data entry and sends it as is via mqtt or kafka to the broker.
+Based on the vendorid and deviceid (extracted out of the received data from the ifm-gateway), sensorconnect looks in it's persistant storage if an iodd file is already on the available. If there is no iodd file stored for the specific sensor, it tries to download a file online and saves it. If this also is not possible, sensorconnect doesn't preprocess the pdin data entry and forwards it as is.
 
 ### Data interpretation (key: pdin) with IODD files
 The iodd files are in xml format and often contain multiple thousand lines. You can find [extensive documentation on the io link website](https://io-link.com/de/Download/Download.php). Especially relevant areas of the iodd files are (for our use-case):
@@ -157,6 +157,18 @@ The iodd files are in xml format and often contain multiple thousand lines. You 
 4. IODevice/DeviceFunction/DatatypeCollection: if used, contains datatypes referenced by the ProcessDataCollection(Point 3.)
 5. IODevice/ExternalTextCollection: contains translations for textId's.
 
+### Digital input data management
+The gateways are also able to receive digital input data (not IO-Link). This data is also requested and forwarded.
 
 ### Data delivery to MQTT or Kafka
-Now sensorconnect converts the data to a json containing the preprocessed data, timestamps, serialnumber etc. and sends it via MQTT to the MQTT broker or via Kafka to the Kafka broker. You can change the [environment variables](/docs/Developers/united-manufacturing-hub/environment-variables/) to choose the protocol. The format of those JSON messages coming from sensorconnect is described in detail and with examples on the [UMH Datamodel website](/docs/concepts/mqtt/).
+For delivery of the data, sensorconnect converts the it to a JSON containing the preprocessed data, timestamps, serialnumber etc. and sends it via MQTT to the MQTT broker or via Kafka to the Kafka broker. You can change the [environment variables](/docs/Developers/united-manufacturing-hub/environment-variables/) to choose your preferred protocol. The format of those JSON messages coming from sensorconnect is described in detail and with examples on the [UMH Datamodel website](/docs/concepts/mqtt/).
+
+
+## Tested gateways
+ALXXXX
+ToDo
+
+## Future plans
+- Support for additional gateway manufacturers.
+- Support for value ranges and single values specified in the IODD file (giving additional information about currently received sensor value).
+- 
