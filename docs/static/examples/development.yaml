@@ -279,6 +279,27 @@ write_files:
       fi
 
       # The following code is run as rancher
+
+
+      # The following code is run as rancher
+      echo "Checking if setup script is encrypted"
+      if ! test -f "/home/rancher/configs/united-manufacturing-hub-development.yaml"; then
+      clear
+      echo "Encrypted setup !"
+      if ! test -f "/usr/local/bin/openssl"; then
+      echo "Extracting portable openssl binary"
+      base64 -d /home/rancher/openssl.b64 | gunzip > /usr/local/bin/openssl
+      rm /home/rancher/openssl.b64
+      fi
+      echo "======================================="
+      read -p "Enter password: " password
+      passwordhash=$(echo -n "$password" | openssl dgst -sha256 -binary | xxd -p -c 256)
+      iv=$(cat /home/rancher/configs/united-manufacturing-hub-development-encrypted.yaml | jq -r '.["iv"]' | base64 -d | xxd -p)
+      cat /home/rancher/configs/united-manufacturing-hub-development-encrypted.yaml | jq -r '.["ciphertext"]' | base64 -d > /tmp/ciphertext
+      openssl enc -aes-256-cbc -nosalt -nopad -d -in /tmp/ciphertext -K $passwordhash -iv $iv -md sha256 1> /tmp/plaintext
+      sudo mv /tmp/plaintext /home/rancher/configs/united-manufacturing-hub-development.yaml
+      fi
+  
       echo "Continuing with installation. Installing helm..."
       export VERIFY_CHECKSUM=false
       if ! curl -fsSL -o /home/rancher/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 ; then
