@@ -30,6 +30,7 @@ Here is a quick tutorial on how to start up a basic configuration / a basic dock
 ## Underlying Functionality
 Sensorconnect downloads relevant IODD files automatically after installation from the [IODDfinder website](https://io-link.com/en/IODDfinder/IODDfinder.php). If an unknown sensor is connected later, sensorconnect will automatically download the file. We will also provide a folder to manually deposit IODD-files, if the automatic download doesn't work (e.g. no internet connection).
 
+### Rest API post requests from sensorconnect to the gateways
 Sensorconnect scans the ip range for new ifm gateways (used to connect the IO-Link devices to). To do that, sensorconnect iterates through all the possible ipaddresses in the specified ip-Address Range ("http://"+url, `payload`, timeout=0.1). It stores the ip-Adresses, with the productcodes (*the types of the gateways*) and the individual serialnumbers.
 
 **Scanning with following `payload`: (information sent during a POST request to the ifm gateways)**
@@ -145,7 +146,12 @@ All values of accessible ports are requested as fast as possible (ifm gateways a
 }
 ```
 
+### Data interpretation (key: pdin) with IODD files
+Based on the vendorid and deviceid (extracted out of the received data from the ifm-gateway), sensorconnect looks in the persistant storage if an iodd file is already on the device. If there is no iodd file stored for the sensor it tries to download a file online and save it. If this is also not possible, sensorconnect doesn't preprocess the pdin data entry and sends it as is via mqtt or kafka to the broker.
 
-Based on the VendorIdentifier and DeviceIdentifier (specified in the received data from the ifm-gateway), sensorconnect can look up relevant information from the IODD file to interpret the data.
+The iodd files are xml files, often with multiple thousand lines. Especially relevant areas are (for our use-case):
+1. IODevice/DocumentInfo/version: version des IODD files
+2. IODevice/ProfileBody/DeviceIdentity: deviceid, vendorid etc.
+3. IODevice/DeviceFunction/ProcessDataCollection/ProcessData/ProcessDataIn: information about the incoming data structure. Depending on used datatypes
 
 Now sensorconnect converts the data and sends it (as a JSON) via MQTT to the MQTT broker or via Kafka to the Kafka broker. The format of those messages coming from sensorconnect is described in detail and with examples on the [UMH Datamodel website](/docs/concepts/mqtt/).
