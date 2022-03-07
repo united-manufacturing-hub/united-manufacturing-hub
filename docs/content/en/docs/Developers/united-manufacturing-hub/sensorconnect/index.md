@@ -165,8 +165,8 @@ For delivery of the data, sensorconnect converts it to a JSON containing the pre
 
 
 ## Tested gateways
-ALXXXX
-ToDo
+AL1350
+AL1342
 
 ## Future plans
 - Support for additional gateway manufacturers.
