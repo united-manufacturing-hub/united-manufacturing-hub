@@ -19,7 +19,7 @@ Let's take a step back and think about, why we need a special microservice:
 
 ## Installation
 ### Production setup
-Sensorconnect comes directly with the united manufacturing hub - no additional installation steps required, just [set up the United Manufacturing Hub](docs/Getting started/). We allow the user to customize sensorconnect by changing environment variables. All possible environment variables you can use to customize sensorconnect and how you change them is described in the [environment-variables documentation](/docs/Developers/united-manufacturing-hub/environment-variables/). Sensorconnect is by default enabled in the United Manufacturing Hub. To set your preferred serialnumber and choose the ip range to look for gateways, you can configure either the values.yaml directly or use our managment SaaS tool. 
+Sensorconnect comes directly with the united manufacturing hub - no additional installation steps required, just [set up the United Manufacturing Hub](<docs/Getting started/>). We allow the user to customize sensorconnect by changing environment variables. All possible environment variables you can use to customize sensorconnect and how you change them is described in the [environment-variables documentation](/docs/Developers/united-manufacturing-hub/environment-variables/). Sensorconnect is by default enabled in the United Manufacturing Hub. To set your preferred serialnumber and choose the ip range to look for gateways, you can configure either the values.yaml directly or use our managment SaaS tool. 
 
 ### Development setup
 Here is a quick tutorial on how to start up a basic configuration / a basic docker-compose stack, so that you can develop.
