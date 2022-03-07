@@ -1,0 +1,21 @@
+name: ci
+
+
+on:
+  push
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+
+
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-init/Dockerfile --tag unitedmanufacturinghub/kafka-init:${GITHUB_REF##*/}
+
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-init:${GITHUB_REF##*/}
