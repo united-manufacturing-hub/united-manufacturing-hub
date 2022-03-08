@@ -1,9 +1,6 @@
-name: ci
-
-
+name: grafana-proxy
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest

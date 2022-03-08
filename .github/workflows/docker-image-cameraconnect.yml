@@ -1,9 +1,6 @@
-name: ci
-
-
+name: cameraconnect
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest

@@ -1,9 +1,6 @@
-name: ci
-
-
+name: factoryinsight
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest

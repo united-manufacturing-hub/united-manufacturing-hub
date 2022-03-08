@@ -1,9 +1,6 @@
-name: ci
-
-
+name: barcodereader
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest
