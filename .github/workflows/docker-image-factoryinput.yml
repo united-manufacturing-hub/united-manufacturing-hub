@@ -1,9 +1,6 @@
-name: ci
-
-
+name: factoryinput
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest

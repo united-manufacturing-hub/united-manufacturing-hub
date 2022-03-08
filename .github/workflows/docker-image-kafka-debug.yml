@@ -1,9 +1,6 @@
-name: ci
-
-
+name: kafka-debug
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest

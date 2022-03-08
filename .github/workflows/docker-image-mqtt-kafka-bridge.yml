@@ -1,9 +1,6 @@
-name: ci
-
-
+name: mqtt-kafka-bridge
 on:
   push
-
 jobs:
   docker:
     runs-on: ubuntu-latest
