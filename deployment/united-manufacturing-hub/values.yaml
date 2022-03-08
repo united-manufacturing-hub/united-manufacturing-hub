@@ -1959,6 +1959,8 @@ kafkatoblob:
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
+  livenessProbe:
+    initialDelaySeconds: 180
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
