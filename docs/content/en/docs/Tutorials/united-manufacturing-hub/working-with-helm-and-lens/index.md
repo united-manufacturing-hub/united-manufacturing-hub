@@ -153,3 +153,10 @@ export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubuser
 ```bash
 helm repo add united-manufacturing-hub https://repo.umh.app
 ```
+
+3. Get repository updates
+```bash
+helm repo update
+```
+
+4. Restart Lens (make sure to also close it in the system tray)
