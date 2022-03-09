@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
 	"go.uber.org/zap"
 	"time"
 )
@@ -28,14 +28,14 @@ func processIncomingMessages() {
 
 		//Setup Topic if not exist
 		kafkaTopicName := MqttTopicToKafka(object.Topic)
-		err = internal.CreateTopicIfNotExists(kafkaTopicName)
+		err = kafka_helper.CreateTopicIfNotExists(kafkaTopicName)
 		if err != nil {
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
 			continue
 		}
 
 		zap.S().Debugf("Sending with Topic: %s", kafkaTopicName)
-		err = internal.KafkaProducer.Produce(&kafka.Message{
+		err = kafka_helper.KafkaProducer.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     &kafkaTopicName,
 				Partition: kafka.PartitionAny,
@@ -51,13 +51,13 @@ func processIncomingMessages() {
 }
 
 func kafkaToQueue(topic string) {
-	err := internal.KafkaConsumer.Subscribe(topic, nil)
+	err := kafka_helper.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
 		panic(err)
 	}
 
 	for !ShuttingDown {
-		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err := kafka_helper.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue

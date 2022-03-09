@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/minio/minio-go/v7"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
@@ -37,13 +37,13 @@ func main() {
 	MinioBucketName := os.Getenv("BUCKET_NAME")
 
 	zap.S().Debugf("Setting up Kafka")
-	internal.SetupKafka(kafka.ConfigMap{
+	kafka_helper.SetupKafka(kafka.ConfigMap{
 		"bootstrap.servers": KafkaBoostrapServer,
 		"security.protocol": "plaintext",
 		"group.id":          "kafka-to-blob",
 	})
 
-	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
+	err := kafka_helper.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +86,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	internal.CloseKafka()
+	kafka_helper.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
