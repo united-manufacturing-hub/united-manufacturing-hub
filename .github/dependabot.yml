@@ -1,109 +1,119 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    # Workflow files stored in the
-    # default location of `.github/workflows`
-    directory: "/.github/workflows"
+  - directory: /.github/workflows
+    package-ecosystem: github-actions
     schedule:
-      interval: "daily"
-  
-  - package-ecosystem: "gomod"
-    directory: "/golang"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
-    labels:
-      - "lang: go"
+      interval: daily
 
-  - package-ecosystem: "docker"
-    directory: "/deployment/mqtt-bridge"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
+  - directory: /golang
     labels:
-      - "lang: docker"
+      - 'lang: go'
+    package-ecosystem: gomod
+    schedule:
+      interval: daily
+    target-branch: main
 
-  - package-ecosystem: "docker"
-    directory: "/deployment/grafana-proxy"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
+  - directory: /deployment/barcodereader
     labels:
-      - "lang: docker"
-      
-  - package-ecosystem: "docker"
-    directory: "/deployment/factoryinsight"
-    target-branch: "staging"
+      - 'lang: docker'
+    package-ecosystem: docker
     schedule:
-      interval: "daily"
-    labels:
-      - "lang: docker"
-  
-  - package-ecosystem: "docker"
-    directory: "/deployment/mqtt-to-postgresql"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
-    labels:
-      - "lang: docker"
-  
-  - package-ecosystem: "docker"
-    directory: "/deployment/python-sdk"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
-    labels:
-      - "lang: docker"
-  
-  - package-ecosystem: "docker"
-    directory: "/deployment/sensorconnect"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
-    labels:
-      - "lang: docker"
+      interval: daily
+    target-branch: main
 
-  - package-ecosystem: "pip"
-    directory: "/mqtt-to-blob"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
+  - directory: /deployment/cameraconnect
     labels:
-      - "lang: python"
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
 
-  - package-ecosystem: "pip"
-    directory: "/cameraconnect"
-    target-branch: "staging"
-    schedule:
-      interval: "daily"
+  - directory: /deployment/factoryinput
     labels:
-      - "lang: python"
-      
-  - package-ecosystem: "pip"
-    directory: "/sensorconnect"
-    target-branch: "staging"
+      - 'lang: docker'
+    package-ecosystem: docker
     schedule:
-      interval: "daily"
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/factoryinsight
     labels:
-      - "lang: python"
-      
-  - package-ecosystem: "pip"
-    directory: "/python-sdk"
-    target-branch: "staging"
+      - 'lang: docker'
+    package-ecosystem: docker
     schedule:
-      interval: "daily"
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/grafana-proxy
     labels:
-      - "lang: python"
-      
-  - package-ecosystem: "pip"
-    directory: "/barcodereader"
-    target-branch: "staging"
+      - 'lang: docker'
+    package-ecosystem: docker
     schedule:
-      interval: "daily"
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/mqtt-bridge
     labels:
-      - "lang: python"
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+
+  - directory: /deployment/factoryinsight
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/mqtt-to-postgresql
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/sensorconnect
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /mqtt-to-blob
+    labels:
+      - 'lang: python'
+    package-ecosystem: pip
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /cameraconnect
+    labels:
+      - 'lang: python'
+    package-ecosystem: pip
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /sensorconnect
+    labels:
+      - 'lang: python'
+    package-ecosystem: pip
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /barcodereader
+    labels:
+      - 'lang: python'
+    package-ecosystem: pip
+    schedule:
+      interval: daily
+    target-branch: main
