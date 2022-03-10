@@ -6,13 +6,13 @@ import (
 	"encoding/base64"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/minio/minio-go/v7"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
 
 func processKafkaQueue(topic string, bucketName string) {
-	err := kafka_helper.KafkaConsumer.Subscribe(topic, nil)
+	err := internal.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +24,7 @@ func processKafkaQueue(topic string, bucketName string) {
 			continue
 		}
 		var msg *kafka.Message
-		msg, err = kafka_helper.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err = internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
@@ -69,7 +69,7 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 
 	if err != nil {
 		zap.S().Warnf("Failed to put item into blob-storage: %s", err)
-		kafka_helper.KafkaProducer.Produce(&kafka.Message{
+		internal.KafkaProducer.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     msg.TopicPartition.Topic,
 				Partition: kafka.PartitionAny,

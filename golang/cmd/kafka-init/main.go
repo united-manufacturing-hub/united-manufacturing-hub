@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
@@ -24,7 +24,7 @@ func main() {
 	KafkaTopics := os.Getenv("KAFKA_TOPICS")
 
 	zap.S().Debugf("Setting up Kafka")
-	kafka_helper.SetupKafka(kafka.ConfigMap{
+	internal.SetupKafka(kafka.ConfigMap{
 		"bootstrap.servers": KafkaBoostrapServer,
 		"security.protocol": "plaintext",
 		"group.id":          "kafka-init",
@@ -60,7 +60,7 @@ func main() {
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 
-	kafka_helper.CloseKafka()
+	internal.CloseKafka()
 
 	zap.S().Infof("Successfull shutdown. Exiting.")
 

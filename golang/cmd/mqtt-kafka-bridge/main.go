@@ -6,7 +6,6 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -70,12 +69,12 @@ func main() {
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
-	kafka_helper.SetupKafka(kafka.ConfigMap{
+	internal.SetupKafka(kafka.ConfigMap{
 		"bootstrap.servers": KafkaBoostrapServer,
 		"security.protocol": "plaintext",
 		"group.id":          "mqtt-kafka-bridge",
 	})
-	err = kafka_helper.CreateTopicIfNotExists(KafkaBaseTopic)
+	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
@@ -117,7 +116,7 @@ func ShutdownApplicationGraceful() {
 	ShuttingDown = true
 	mqttClient.Disconnect(1000)
 
-	kafka_helper.CloseKafka()
+	internal.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 

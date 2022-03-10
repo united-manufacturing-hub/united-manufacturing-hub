@@ -1,4 +1,7 @@
-package kafka_helper
+//go:build kafka
+// +build kafka
+
+package internal
 
 import (
 	"context"

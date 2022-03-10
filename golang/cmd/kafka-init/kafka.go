@@ -1,14 +1,14 @@
 package main
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"strings"
 )
 
 func initKafkaTopics(topics string) {
 	topiclist := strings.Split(topics, ";")
 	for _, topic := range topiclist {
-		err := kafka_helper.CreateTopicIfNotExists(topic)
+		err := internal.CreateTopicIfNotExists(topic)
 		panic(err)
 	}
 }

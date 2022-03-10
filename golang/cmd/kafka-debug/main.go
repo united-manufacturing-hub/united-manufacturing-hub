@@ -4,7 +4,7 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/kafka_helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
@@ -25,7 +25,7 @@ func main() {
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	zap.S().Debugf("Setting up Kafka")
 
-	kafka_helper.SetupKafka(kafka.ConfigMap{
+	internal.SetupKafka(kafka.ConfigMap{
 		"bootstrap.servers": KafkaBoostrapServer,
 		"security.protocol": "plaintext",
 		"group.id":          "kafka-debug",
@@ -65,7 +65,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	kafka_helper.CloseKafka()
+	internal.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
