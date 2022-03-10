@@ -1986,7 +1986,7 @@ kafka:
       enabled: false
   externalZookeeper:
     servers: []
-
+  autoCreateTopicsEnable: true
 
 ##### CONFIG FOR REDIS #####
 redis:

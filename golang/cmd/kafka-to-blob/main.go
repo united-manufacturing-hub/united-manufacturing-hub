@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/minio/minio-go/v7"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
@@ -11,9 +12,6 @@ import (
 	"time"
 )
 
-var kafkaConsumerClient *kafka.Consumer
-var kafkaProducerClient *kafka.Producer
-var kafkaAdminClient *kafka.AdminClient
 var minioClient *minio.Client
 
 var buildtime string
@@ -39,8 +37,13 @@ func main() {
 	MinioBucketName := os.Getenv("BUCKET_NAME")
 
 	zap.S().Debugf("Setting up Kafka")
-	kafkaConsumerClient, kafkaProducerClient, kafkaAdminClient = setupKafka(KafkaBoostrapServer)
-	err := CreateTopicIfNotExists(KafkaBaseTopic)
+	internal.SetupKafka(kafka.ConfigMap{
+		"bootstrap.servers": KafkaBoostrapServer,
+		"security.protocol": "plaintext",
+		"group.id":          "kafka-to-blob",
+	})
+
+	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
@@ -83,9 +86,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	if kafkaConsumerClient != nil {
-		kafkaConsumerClient.Close()
-	}
+	internal.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
