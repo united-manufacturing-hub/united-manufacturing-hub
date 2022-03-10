@@ -16,9 +16,6 @@ import (
 )
 
 var mqttClient MQTT.Client
-var kafkaProducerClient *kafka.Producer
-var kafkaAdminClient *kafka.AdminClient
-var kafkaConsumerClient *kafka.Consumer
 var mqttIncomingQueue *goque.Queue
 var mqttOutGoingQueue *goque.Queue
 
@@ -72,8 +69,12 @@ func main() {
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
-	kafkaProducerClient, kafkaAdminClient, kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
-	err = CreateTopicIfNotExists(KafkaBaseTopic)
+	internal.SetupKafka(kafka.ConfigMap{
+		"bootstrap.servers": KafkaBoostrapServer,
+		"security.protocol": "plaintext",
+		"group.id":          "mqtt-kafka-bridge",
+	})
+	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
@@ -115,16 +116,7 @@ func ShutdownApplicationGraceful() {
 	ShuttingDown = true
 	mqttClient.Disconnect(1000)
 
-	if kafkaProducerClient != nil {
-		kafkaProducerClient.Flush(1000)
-		kafkaProducerClient.Close()
-	}
-	if kafkaAdminClient != nil {
-		kafkaAdminClient.Close()
-	}
-	if kafkaConsumerClient != nil {
-		kafkaConsumerClient.Close()
-	}
+	internal.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 

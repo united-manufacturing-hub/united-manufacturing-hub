@@ -4,14 +4,13 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 )
-
-var kafkaConsumerClient *kafka.Consumer
 
 var buildtime string
 
@@ -25,7 +24,12 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	zap.S().Debugf("Setting up Kafka")
-	kafkaConsumerClient = setupKafka(KafkaBoostrapServer)
+
+	internal.SetupKafka(kafka.ConfigMap{
+		"bootstrap.servers": KafkaBoostrapServer,
+		"security.protocol": "plaintext",
+		"group.id":          "kafka-debug",
+	})
 
 	zap.S().Debugf("Start Queue processors")
 	go startDebugger()
@@ -60,9 +64,8 @@ var ShuttingDown bool
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
-	if kafkaConsumerClient != nil {
-		kafkaConsumerClient.Close()
-	}
+
+	internal.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
