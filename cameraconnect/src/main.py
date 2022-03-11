@@ -36,7 +36,8 @@ MQTT_PORT = int(os.environ.get('MQTT_PORT', 1883))
 TRIGGER = os.environ.get('TRIGGER')
 ACQUISITION_DELAY = float(os.environ.get('ACQUISITION_DELAY', 0.0))
 CYCLE_TIME = float(os.environ.get('CYCLE_TIME', 10.0))
-
+RETRY_TIME = float(os.environ.get("RETRY_TIME", CYCLE_TIME/10))
+TARGET_FPS = float(os.environ.get("TARGET_FPS", 10.0))
 ## CAMERA SETTINGS
 CAMERA_INTERFACE = os.environ.get('CAMERA_INTERFACE')
 MAC_ADDRESS = os.environ.get('MAC_ADDRESS', '')
@@ -45,7 +46,8 @@ MQTT_ROOT_TOPIC = os.environ.get('MQTT_ROOT_TOPIC', "ia")
 
 MQTT_TOPIC_TRIGGER = f"{MQTT_ROOT_TOPIC}/trigger/{TRANSMITTER_ID}/{MAC_ADDRESS}"
 MQTT_TOPIC_IMAGE = f"{MQTT_ROOT_TOPIC}/rawImage/{TRANSMITTER_ID}/{MAC_ADDRESS}"
-TARGET_FPS = float(os.environ.get("TARGET_FPS", 10.0))
+
+
 # GenICam settings
 DEFAULT_GENTL_PRODUCER_PATH = os.environ.get('DEFAULT_GENTL_PRODUCER_PATH', '/app/assets/producer_files')
 USER_SET_SELECTOR = os.environ.get('USER_SET_SELECTOR', 'Default')
@@ -141,7 +143,8 @@ if __name__ == "__main__":
     elif TRIGGER == "MQTT":
         # Starts an asynchronous process for working with
         #   the received mqtt data
-        trigger = MqttTrigger(cam, CAMERA_INTERFACE, ACQUISITION_DELAY, MQTT_HOST, MQTT_PORT, MQTT_TOPIC_TRIGGER)
+        trigger = MqttTrigger(cam, CAMERA_INTERFACE, ACQUISITION_DELAY, MQTT_HOST, MQTT_PORT, MQTT_TOPIC_TRIGGER,
+                              retry_time=RETRY_TIME)
 
         # Run forever to stay connected
         previous_image_number = trigger.image_number
