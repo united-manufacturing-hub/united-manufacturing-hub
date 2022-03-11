@@ -223,7 +223,7 @@ class MqttTrigger(BaseTrigger):
             # harvesters instability with certain producer files, which sometimes lead to zombie threads blocking the
             # acquisition indefinitely
             self.count_error()
-            logger.error(f"failed to process message: {msg} with {traceback.format_exc()}")
+            logger.error(f"failed to process message: %s with %s \n%s", msg, _e, traceback.format_exc())
 
     def disconnect(self) -> None:
         """
