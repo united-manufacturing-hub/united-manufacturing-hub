@@ -11,6 +11,7 @@ The module provides two classes:
 
 # Import python in-built libraries
 import re
+import traceback
 from abc import ABC, abstractmethod
 import time
 import base64
@@ -21,6 +22,9 @@ import os
 import sys
 
 # import other files
+import harvesters
+
+from pixel_formats import FormatHandler, ImageData, InvalidPixelFormat
 from utils import get_logger_from_env
 
 # Import libraries that had been installed with pip install
@@ -183,8 +187,11 @@ class CamGeneral(ABC):
         Returns:
             None
         """
-        self.client.loop_stop()
-        self.client.disconnect()
+        try:
+            self.client.loop_stop()
+            self.client.disconnect()
+        except Exception as _e:
+            logger.error("failed to disconnect from mqtt broker with %s \n%s", _e, traceback.format_exc())
         logger.debug("Disconnected from MQTT broker.")
 
     @abstractmethod
@@ -198,167 +205,154 @@ class CamGeneral(ABC):
 
 
 class GenICam(CamGeneral):
-    """
-    This class is for all GenICam compatible cameras. Cameras
-    with GigE Vision or USB3 Vision transport layer always
-    support GenICam. Each instance of this class will be
-    automatically connected to the device.
-
-    The class inherits all methods from the base class CamGeneral.
-    (see description of CamGeneral) Because of that this class has
-    to define the abstract method get_image(). In this class
-    get_image() fetchs an image out of the buffer/image stream and
-    makes sure that data format is BGR8 to send it to MQTT broker
-    with _publish_mqtt().
-
-    Additional methods of the GenICam class:
-    The first method _connect() establishs a connection to the
-    GenICam camera. Afterwards, _apply_settings() applies either
-    a configurated user set of configurations or the entered
-    settings in the arguments for the class instance. The user
-    set of configurations can be created in the matrix vision
-    wxPropView or in most SDK which is provided by the camera
-    manufacturer. If no user set of configurations is used
-    and no settings are provided in the arguments, the default
-    settings of the camera will be used.
-    The method start _start_acquisition() starts the image stream
-    of the camera.
-    The last method deactivate() disconnects from camera.
-
-    Some of the comments in this class are copied from:
-    https://github.com/genicam/harvesters/blob/master/README.rst
-
-    Args of constructor:
-        mqtt_host[string]:          Hostname or IP address of the
-                                    MQTT broker
-        mqtt_port[int]:             Network port of the server
-                                    host to connect to
-        mqtt_topic[string]:         Topic on MQTT Broker where
-                                    trigger signal is send to
-                                    (e.g. "test/trigger/")
-        genTL_producer_path[string]:
-                                    Path to the *.cti file that
-                                    is used to connect to camera
-        (opt.) user_set_selector[string]:
-                                    Use an already pre-configu-
-                                    rated user set.
-                                    Possible values: "Default",
-                                        "UserSet1", "UserSet2",
-                                        "UserSet3", "UserSet4",
-                                        "UserSet5" (The number of
-                                        user sets is camera
-                                        dependent.)
-                                    Default value: "Default"
-        (opt.) image_width[int]:    Determine in pixels the region
-                                    of interest (ROI). ROI will be
-                                    always centered in camera
-                                    sensor.
-                                    A value higher than maximum
-                                    resolution of the camera will
-                                    set maximum values instead of
-                                    the values entered here.
-                                    To find out the highest value,
-                                    search for the resolution in
-                                    the specifications of the
-                                    camera.
-                                    Specifications are available
-                                    in the manual or on the
-                                    website where you bought the
-                                    camera.
-                                    Default: None
-        (opt.) image_height[int]:   see image_width
-                                    Default: None
-        (opt.) pixel_format[string]:
-                                    Set the pixel format you want
-                                    to use. This program allows
-                                    you to take pictures in
-                                    monochrome pixel formats
-                                    (use: "Mono8") and RGB/BRG
-                                    color pixel formats (use:
-                                    "RGB8Packed" or "BGR8Packed")
-                                    If you only have a camera with
-                                    only one image sensor, you can
-                                    only take monochrome images.
-                                    Possible values: "Mono8",
-                                        "RGB8Packed", "BGR8Packed"
-                                    Default value: None
-        (opt.) image_channels[int]: Number of channels (bytes per
-                                    pixel) that are used in the
-                                    array (third dimension of the
-                                    image data array).You do not
-                                    have to set this value.
-                                    If None, the best number of
-                                    channels for your set pixel
-                                    format will be used
-                                    Possible Values: 1, 3
-                                    Default value: None
-        (opt.) exposure_time[float]:
-                                    Set the exposure time manually.
-                                    Default value: None
-        (opt.) exposure_auto[string]:
-                                    Determine if camera should
-                                    automatically adjust the
-                                    exposure time.
-                                    Your settings will only be
-                                    executed if the camera supports
-                                    this. You do not have to check
-                                    if the camera supports this.
-                                    Possible values are:
-                                        - "Off":  No automatic
-                                            adjustment
-                                        - "Once": Adjusted once
-                                        - "Continuous": Continuous
-                                            adjustment (not
-                                            recommended,
-                                            Attention: This could
-                                            have a big impact on
-                                            the frame rate of your
-                                            camera)
-                                    Default value: None
-        (opt.) gain_auto[string]:   Determine if camera should
-                                    automatically adjust the gain.
-                                    Your settings will only be
-                                    executed if the camera supports
-                                    this. You do not have to check
-                                    if the camera supports this.
-                                    Possible values are:
-                                        see exposure_auto
-                                    Default value: None
-        (opt.) balance_white_auto[string]:
-                                    Determine if camera should
-                                    automatically adjust the
-                                    white balance.
-                                    Your settings will only be
-                                    executed if the camera supports
-                                    this. You do not have to check
-                                    if the camera supports this.
-                                    Possible values are:
-                                        see exposure_auto
-                                    Default value: None
-
-    Returns of constructor:
-        A configured and connected instance of GenICam ready to
-        fetch an image.
-    """
+    buffer_timeout = 20  # should be achievable for almost all network conditions
 
     def __init__(self, mqtt_host, mqtt_port, mqtt_topic, mac_address, gen_tl_producer_path_list,
                  user_set_selector="Default", image_width=None, image_height=None, pixel_format=None,
                  image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
-                 image_storage_path=None) -> None:
+                 image_storage_path=None, acquisition_frame_rate=None) -> None:
         """
-        Defines the settings for the camera configuration and
-        establish a connection to the GenICam camera.
+            This class is for all GenICam compatible cameras. Cameras
+            with GigE Vision or USB3 Vision transport layer always
+            support GenICam. Each instance of this class will be
+            automatically connected to the device.
 
-        Args:
-            see class description
+            The class inherits all methods from the base class CamGeneral.
+            (see description of CamGeneral) Because of that this class has
+            to define the abstract method get_image(). In this class
+            get_image() fetchs an image out of the buffer/image stream and
+            makes sure that data format is BGR8 to send it to MQTT broker
+            with _publish_mqtt().
 
-        Returns:
-            see class description
-        """
+            Additional methods of the GenICam class:
+            The first method _connect() establishs a connection to the
+            GenICam camera. Afterwards, _apply_settings() applies either
+            a configurated user set of configurations or the entered
+            settings in the arguments for the class instance. The user
+            set of configurations can be created in the matrix vision
+            wxPropView or in most SDK which is provided by the camera
+            manufacturer. If no user set of configurations is used
+            and no settings are provided in the arguments, the default
+            settings of the camera will be used.
+            The method start _start_acquisition() starts the image stream
+            of the camera.
+            This class disconnects from the camera after taking an image,
+            This reduces the maximum fps but frees the camera for other
+            software to connect, and is sometimes more stable
+
+            Args of constructor:
+                mqtt_host[string]:          Hostname or IP address of the
+                                            MQTT broker
+                mqtt_port[int]:             Network port of the server
+                                            host to connect to
+                mqtt_topic[string]:         Topic on MQTT Broker where
+                                            trigger signal is send to
+                                            (e.g. "test/trigger/")
+                genTL_producer_path[string]:
+                                            Path to the *.cti file that
+                                            is used to connect to camera
+                (opt.) user_set_selector[string]:
+                                            Use an already pre-configu-
+                                            rated user set.
+                                            Possible values: "Default",
+                                                "UserSet1", "UserSet2",
+                                                "UserSet3", "UserSet4",
+                                                "UserSet5" (The number of
+                                                user sets is camera
+                                                dependent.)
+                                            Default value: "Default"
+                (opt.) image_width[int]:    Determine in pixels the region
+                                            of interest (ROI). ROI will be
+                                            always centered in camera
+                                            sensor.
+                                            A value higher than maximum
+                                            resolution of the camera will
+                                            set maximum values instead of
+                                            the values entered here.
+                                            To find out the highest value,
+                                            search for the resolution in
+                                            the specifications of the
+                                            camera.
+                                            Specifications are available
+                                            in the manual or on the
+                                            website where you bought the
+                                            camera.
+                                            Default: None
+                (opt.) image_height[int]:   see image_width
+                                            Default: None
+                (opt.) pixel_format[string]:
+                                            Set the pixel format you want
+                                            to use. This program allows
+                                            you to take pictures in
+                                            monochrome pixel formats
+                                            (use: "Mono8") and RGB/BRG
+                                            color pixel formats (use:
+                                            "RGB8Packed" or "BGR8Packed")
+                                            If you only have a camera with
+                                            only one image sensor, you can
+                                            only take monochrome images.
+                                            Possible values: "Mono8",
+                                                "RGB8Packed", "BGR8Packed"
+                                            Default value: None
+                (opt.) image_channels[int]: Number of channels (bytes per
+                                            pixel) that are used in the
+                                            array (third dimension of the
+                                            image data array).You do not
+                                            have to set this value.
+                                            If None, the best number of
+                                            channels for your set pixel
+                                            format will be used
+                                            Possible Values: 1, 3
+                                            Default value: None
+                (opt.) exposure_time[float]:
+                                            Set the exposure time manually.
+                                            Default value: None
+                (opt.) exposure_auto[string]:
+                                            Determine if camera should
+                                            automatically adjust the
+                                            exposure time.
+                                            Your settings will only be
+                                            executed if the camera supports
+                                            this. You do not have to check
+                                            if the camera supports this.
+                                            Possible values are:
+                                                - "Off":  No automatic
+                                                    adjustment
+                                                - "Once": Adjusted once
+                                                - "Continuous": Continuous
+                                                    adjustment (not
+                                                    recommended,
+                                                    Attention: This could
+                                                    have a big impact on
+                                                    the frame rate of your
+                                                    camera)
+                                            Default value: None
+                (opt.) gain_auto[string]:   Determine if camera should
+                                            automatically adjust the gain.
+                                            Your settings will only be
+                                            executed if the camera supports
+                                            this. You do not have to check
+                                            if the camera supports this.
+                                            Possible values are:
+                                                see exposure_auto
+                                            Default value: None
+                (opt.) balance_white_auto[string]:
+                                            Determine if camera should
+                                            automatically adjust the
+                                            white balance.
+                                            Your settings will only be
+                                            executed if the camera supports
+                                            this. You do not have to check
+                                            if the camera supports this.
+                                            Possible values are:
+                                                see exposure_auto
+                                            Default value: None
+            """
         super().__init__(mqtt_host=mqtt_host,
                          mqtt_port=mqtt_port,
                          mqtt_topic=mqtt_topic,
                          mac_address=mac_address)
+        self.acquisition_frame_rate = acquisition_frame_rate
         logger.debug("-" * 80)
         logger.debug(f"initialised {super()} with {mqtt_host} {mqtt_port} {mqtt_topic} {mac_address}")
         self.gen_tl_producer_path_list = gen_tl_producer_path_list
@@ -373,6 +367,8 @@ class GenICam(CamGeneral):
         self.balance_white_auto = balance_white_auto
 
         self.image_storage_path = image_storage_path
+
+        self.format_handler = FormatHandler()
 
         # Connect to camera
         self._connect()
@@ -414,7 +410,7 @@ class GenICam(CamGeneral):
             logger.debug(file)
 
         # Update the list of remote devices; fills up your device
-        #   information list; multiple devices in list possible
+        # information list; multiple devices in list possible
         self.h.update()
         # If no remote devices in the list that you can control
         if len(self.h.device_info_list) == 0:
@@ -424,12 +420,12 @@ class GenICam(CamGeneral):
         for camera in self.h.device_info_list:
             logger.debug(camera)
         # Create an image acquirer object specifying a target
-        #   remote device
+        # remote device
         # As argument also user_defined_name,
-        #   vendor, model, etc. possible
+        # vendor, model, etc. possible
         # If multiple cameras in device list, choose the right
-        #   one by changing the list_index or by using another
-        #   argument
+        # one by changing the list_index or by using another
+        # argument
         first = True  # in case one camera is detected multiple times
         self.__remove_duplicate_entry_from_harvester()
         object_identifier = self.__id_processing(str(self.mac_address))
@@ -509,6 +505,40 @@ class GenICam(CamGeneral):
                 new_list.append(d)
         self.h._device_info_list = new_list
 
+    def publish_node_map(self, topic=None):
+        """
+
+        publishes node map of connected camera to mqtt for debugging
+        Returns:
+        """
+        try:
+            if topic is None:
+                topic_root = "/".join(self.mqtt_topic.split("/")[:-1])
+                topic = f"{topic_root}/node_map"
+            node_map = json.dumps(self.get_node_map_dict())
+            self.client.publish(topic=topic, payload=node_map, qos=2)
+        except Exception as _e:
+            logger.error("failed to publish node map with %s\n%s", _e, traceback.format_exc())
+
+    def get_node_map_dict(self) -> dict:
+        """
+        returns a dict of the genicam nodemap, nodes with unavailable values will have the placeholder
+        "py_value_unavailable"
+        Returns:
+
+        """
+        if self.ia is None:
+            logger.error("acquisition not started no node map available")
+            return {}
+        available_nodes = dir(self.ia.remote_device.node_map)
+        node_settings = {}
+        for a_n in available_nodes:
+            try:
+                node_settings[a_n] = self.ia.remote_device.node_map.get_node(a_n).value
+            except Exception as _e:
+                node_settings[a_n] = "py_value_unavailable"
+        return node_settings
+
     def _apply_settings(self) -> None:
         """
         Applies the settings for the camera.
@@ -531,6 +561,11 @@ class GenICam(CamGeneral):
         Returns:
             None
         """
+        # restarts acquisition if image acquisition was running before
+        was_acquiring = False
+        if self.ia.is_acquiring():
+            self._stop_acquisition()
+            was_acquiring = True
 
         # Get list of all available features of the camera
         node_map = dir(self.ia.remote_device.node_map)
@@ -539,8 +574,8 @@ class GenICam(CamGeneral):
             logger.debug(setting)
 
         # If camera was already configured and configurations
-        #   has been saved in user set, then set and load user
-        #   set here and return
+        # has been saved in user set, then set and load user
+        # set here and return
         if self.user_set_selector != "Default":
             self.ia.remote_device.node_map.UserSetSelector.value = self.user_set_selector
             self.ia.remote_device.node_map.UserSetLoad.execute()
@@ -609,6 +644,17 @@ class GenICam(CamGeneral):
             else:
                 logger.warning("Camera does not support automatic adjustment of white balance")
 
+        if self.acquisition_frame_rate is not None:
+            if "BalanceWhiteAuto" in node_map:
+                self.ia.remote_device.node_map.AcquisitionFrameRateAbs.value = self.acquisition_frame_rate
+            else:
+                logger.info("Camera does not support acquisition frame rate adjustment")
+
+        # part 2 for continued acquisition
+        if was_acquiring:
+            self._start_acquisition()
+            logger.debug("continuing acquisition after settings")
+
     def _start_acquisition(self) -> None:
         """
         Activate an image stream from camera to be able to fetch
@@ -620,9 +666,27 @@ class GenICam(CamGeneral):
         Returns:
             None
         """
+        # locks transport parameters in accordance with genciam spec
+        # this means you can not set cmera settings after starting an acquisition.
+        self.ia.remote_device.node_map.TLParamsLocked.value = 1
+
         # Starts image acquisition with harvesters
         self.ia.start_acquisition()
         logger.debug("Acquisition started.")
+
+    def _stop_acquisition(self) -> None:
+        """
+        stops image acquisition
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # stops image acquisition with harvesters
+        self.ia.stop_acquisition()
+        logger.info("Acquisition stopped.")
 
     # Get image out of image stream
     def get_image(self) -> None:
@@ -638,16 +702,23 @@ class GenICam(CamGeneral):
         """
         # Try to fetch a buffer that has been filled up with an
         #   image
-        logger.debug("#" * 36 + "get image" + "#" * 35)
+        logger.debug(" %sget image%s", "#" * 36, "#" * 35)
+
         try:
             # Default value
             retrieved_image = None
+            # start acquisition if necessary
+            if self.ia is None:
+                self._connect()
+                self._apply_settings()
+            if not self.ia.is_acquiring():
+                self._start_acquisition()
 
             # To solve the problem that buffer is already filled
             #   with an old image, but we want the newest image,
             #   This here is probably not the best way to solve
             #   the problem. It is a workaround.
-            with self.ia.fetch_buffer(timeout=20) as buffer:
+            with self.ia.fetch_buffer(timeout=self.buffer_timeout) as buffer:
                 # Do not use this buffer, use the next one
                 pass
                 logger.debug(f"buffer {buffer}")
@@ -658,51 +729,10 @@ class GenICam(CamGeneral):
                 logger.debug(HORIZONTAL_CONSOLE_LINE)
                 logger.debug("Image fetched.")
                 # Create an alias of the 2D image component:
-                component = buffer.payload.components[0]
-                # Note that the number of components can be vary.
-                #   If your target remote device transmits a
-                #   multi-part information, then you'd get two or
-                #   more components in the payload. However, this
-                #   programs works with a remote device that
-                #   transmits only a 2D image. So we manipulate
-                #   only index 0 of the list object, components.
+                # processes the image data and makes them into the BGR color format
+                image_data: ImageData = self.format_handler.process_buffer(buffer=buffer)
 
-                # As we record only two-dimensional pictures the
-                #   third position in shaps shows the number of
-                #   color values.
-                #  Mono8 is only black and white -> one color
-                #   value for each pixel (one byte per pixel)
-                #   -> image_channel = 1
-                # RGB/BGR is red, green and blue -> three color
-                #   values for each pixel to determine its
-                #   overall color (three bytes per pixel)
-                #   -> image_channel = 3
-
-                # Check if Mono or RGB/BGR to determine argument
-                #   for shape of the array of retrieved image
-                #   If number of channels is set in arguments,
-                #   do not change anything, only change if None
-                data_format = component.data_format
-                if self.image_channels is None:
-                    if data_format == "Mono8":
-                        self.image_channels = 1
-                    elif data_format == "RGB8" or data_format == "BGR8":
-                        self.image_channels = 3
-                    else:
-                        sys.exit("Unsupported pixel format: %s" % data_format)
-
-                # Generate out of buffer data, which is an
-                #   [1x(N+M+image_channels)x1] array, an
-                #   [N x M x image_channels] array where N is
-                #   height and M is width of image
-                retrieved_image = np.ndarray(buffer=component.data.copy(),
-                                             dtype=np.uint8,
-                                             shape=(component.height, component.width, self.image_channels))
-
-                # Adjust the order of red, blue and green color
-                #   to BGR which is default in opencv
-                if data_format == "RGB8":
-                    retrieved_image = cv2.cvtColor(retrieved_image, cv2.COLOR_RGB2BGR)
+                retrieved_image: np.ndarray = image_data.image_array
 
             self._publish_mqtt(retrieved_image)
             logger.debug("Image converted and published to MQTT.")
@@ -717,20 +747,43 @@ class GenICam(CamGeneral):
 
                 logger.debug("Image saved to {}".format(img_save_dir))
 
+            # free camera for other resources
+            self.disconnect_camera()
+
         # If TimeoutException because no image was fetchable,
-        #   restart the acquisition process
+        # restart the acquisition process
+        except InvalidPixelFormat:
+            logger.error("pixel format %s not supported by library please use a different one")
+            logger.error()
+            logger.error("supported formats are: %s ", self.format_handler.supported_formats)
+
         except TimeoutException:
             logger.error("Timeout ocurred during fetching an image. Camera reset and restart.")
-            self.ia.destroy()
-            self.h.reset()
-            self._connect()
-            self._apply_settings()
-            self._start_acquisition()
+
+            self.publish_node_map()
+
+            self.disconnect_camera()
             logger.debug("Camera restarted. Ready to fetch an image.")
+        # wildcard has to be handled in trigger if so desired
 
     def disconnect_camera(self):
-        self.ia.destroy()
-        self.h.reset()
+        """
+        disconnects the camera and resets the harvesters module
+        Returns:
+
+        """
+        try:
+            if self.ia is not None:
+                try:
+                    self._stop_acquisition()
+                    self.ia.destroy()
+                    logger.debug("image acquirer destroyed")
+                except Exception as _e:
+                    logger.error("failed to stop acquisition with %s, %s", _e, traceback.format_exc())
+            self.h.reset()
+        except Exception as _e:
+            logger.error("failed to disconnect from camera with %s \n%s", _e, traceback.format_exc())
+        logger.debug("harvester reset")
 
     def disconnect(self) -> None:
         """
@@ -744,12 +797,118 @@ class GenICam(CamGeneral):
         """
         # Close the connection to ...
         # ... MQTT (and stop loop)
+
         super().disconnect()
 
-        # ... GenICam (destroy image acquirer)
+        # disconnect camera
+
         self.disconnect_camera()
 
         logger.debug("Disconnected from GenICam camera.")
+
+    def __del__(self):
+        """
+        destroys genicam and mqtt connection on object deletion
+        Returns:
+
+        """
+        try:
+            self.disconnect()
+        except Exception as _e:
+            logger.critical("Failed to destroy connection")
+
+
+class FasterGenICam(GenICam):
+    """
+    version of genicam that stays connected wit the camera indefinitely
+    """
+    buffer_timeout = 5  # more aggressive timeout, may be an issue in slow network environments
+    # (where this is thw wrong class anyway)
+
+    max_skipped_frames = 5  # maximum number of consequtive skipped frames before the acquisition is restarted
+
+    # this should not be used then, fall back to standard genicam
+    def __init__(self, mqtt_host, mqtt_port, mqtt_topic, mac_address, gentl_producer_path_list,
+                 image_width=None, image_height=None, pixel_format=None,
+                 image_channels=None, exposure_time=None, exposure_auto=None, gain_auto=None, balance_white_auto=None,
+                 image_storage_path=None, acquisition_frame_rate=None):
+        super().__init__(mqtt_host=mqtt_host, mqtt_port=mqtt_port, mqtt_topic=mqtt_topic, mac_address=mac_address,
+                         gen_tl_producer_path_list=gentl_producer_path_list,
+                         image_width=image_width, image_height=image_height, pixel_format=pixel_format,
+                         image_channels=image_channels, exposure_time=exposure_time, exposure_auto=exposure_auto,
+                         gain_auto=gain_auto, balance_white_auto=balance_white_auto,
+                         image_storage_path=image_storage_path,
+                         acquisition_frame_rate=acquisition_frame_rate)
+        self.continuously_skipped_frames = 0
+        self.skipped_frames = 0
+        self._connect()
+        self._apply_settings()
+        self._start_acquisition()
+
+    def __skip_frame(self):
+        """
+        skips a frame and related crash handling
+        Returns:
+        """
+        self.skipped_frames += 1
+        self.continuously_skipped_frames += 1
+        logger.error("ressource not available, skipping frame, skipped frames = %s / %s total: %s",
+                     self.continuously_skipped_frames,
+                     self.max_skipped_frames, self.skipped_frames)
+        if self.continuously_skipped_frames > self.max_skipped_frames:
+            self.disconnect()  # handles mqtt disconnection as well to prevent the loop from calling back on
+            # dead harvesters components
+            self.continuously_skipped_frames = 0
+            logger.error("resetting due to skipped frames")
+
+    def get_image(self, export_node_map=False) -> None:
+        """
+        Fetch an image out of the image stream and make sure if
+        colored image that BGR pixel format is used.
+
+        Args:
+            export_node_map (): exports node map to file
+
+        Returns:
+            None
+        """
+
+        # Try to fetch a buffer that has been filled up with an
+        # image
+        start = datetime.datetime.now()
+
+        try:
+            # ensure connection is existing
+            if self.ia is None:
+                self._connect()
+                self._apply_settings()
+            if not self.ia.is_acquiring():
+                self._start_acquisition()
+            # skipping sac buffer for more speed
+            with self.ia.fetch_buffer(timeout=self.buffer_timeout) as buffer:
+                if len(buffer.payload.components) == 0:
+                    logger.error("buffer has no component, skipping frame")
+                    self.__skip_frame()
+                    return
+                # get image data from buffer
+                image_data = self.format_handler.process_buffer(buffer=buffer)
+                retrieved_image: np.ndarray = image_data.image_array
+                self.image_channels: int = image_data.image_channels
+            self.continuously_skipped_frames = 0
+            logger.debug(f"buffer closed")
+            self._publish_mqtt(retrieved_image)
+
+        except harvesters.core.NotAvailableException:  # exception occures immediately, race condition with other
+            # images basically impossible.
+            self.__skip_frame()
+            self.publish_node_map()
+        except TimeoutException:
+            logger.error("Timeout occurred during fetching an image. Camera reset and restart.")
+            self.publish_node_map()
+            self.disconnect()
+            logger.info("Camera restarted. Ready to fetch an image.")
+            self.__skip_frame()
+        # wildcard has to be handled in trigger
 
 
 class DummyCamera(CamGeneral):
@@ -779,7 +938,6 @@ class DummyCamera(CamGeneral):
             cv2.imwrite(img_save_dir, retrieved_image)
 
             logger.debug("Image saved to {}".format(img_save_dir))
-
 
     def __del__(self):
         pass  # nothing special to do for this class

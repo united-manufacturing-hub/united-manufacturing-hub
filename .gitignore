@@ -63,3 +63,6 @@ docs/static/openapi/output/factory_input/markdown/.openapi-generator/
 
 sensorconnect/IoddFiles
 **/__pycache__
+# ignore all kinds of venv in all subfolders
+/.venv*
+**/.venv*

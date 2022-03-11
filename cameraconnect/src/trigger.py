@@ -11,7 +11,8 @@ import datetime
 import json
 import sys
 import time
-from typing import Union
+import traceback
+from typing import Union, Callable
 import atexit
 # Import libraries that had been installed with pip install
 import paho.mqtt.client as mqtt
@@ -33,6 +34,7 @@ class BaseTrigger(ABC):
     def __init__(self):
         self.total_errors = 0
         self.errors_since_last_success = 0
+        self.image_number = 0
 
     def count_error(self):
         """
@@ -46,6 +48,15 @@ class BaseTrigger(ABC):
         if self.errors_since_last_success > ERROR_TOLERANCE:
             sys.exit(f"error tolerance exceeded with total errors {self.total_errors} "
                      f"and successive errors{self.errors_since_last_success}")
+
+    def count_image(self):
+        """
+        resets the error count since last image
+        Returns:
+
+        """
+        self.image_number += 1
+        self.errors_since_last_success = 0
 
     def __del__(self):
         self.disconnect()
@@ -83,7 +94,8 @@ class MqttTrigger(BaseTrigger):
         A connected instance of MqttTrigger
     """
 
-    def __init__(self, cam: Union[cameras.GenICam, cameras.DummyCamera], interface, acquisition_delay, mqtt_host,
+    def __init__(self, cam: Union[cameras.GenICam, cameras.DummyCamera, cameras.FasterGenICam], interface,
+                 acquisition_delay, mqtt_host,
                  mqtt_port, mqtt_topic, retry_time=0) -> None:
         """
         Connect MQTT client.
@@ -182,10 +194,12 @@ class MqttTrigger(BaseTrigger):
 
             # Get an image
             logger.info("Get an image.")
+            # loop to retry gathering an image if one acquisition fails
             while True:
                 try:
                     self.cam.get_image()
-                    break
+                    self.count_image()
+                    break # leave rety loop
                 except Exception as _e:
                     self.count_error()
                     if self.retry_time == 0:
@@ -197,12 +211,12 @@ class MqttTrigger(BaseTrigger):
                         logger.error(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
                                      f"with {_e} "
                                      f", retrying in {self.retry_time} ")
-                        time.sleep(self.rety_time)
+                        time.sleep(self.retry_time)
         except Exception as _e:  # wildcard to catch interesting side effect of paho mqtts threading behaviour +
             # harvesters instability with certain producer files, which sometimes lead to zombie threads blocking the
             # acquisition indefinitely
             self.count_error()
-            logger.error(f"failed to process message: {msg} with {_e.with_traceback()}")
+            logger.error(f"failed to process message: {msg} with {traceback.format_exc()}")
 
     def disconnect(self) -> None:
         """
@@ -259,42 +273,144 @@ class ContinuousTrigger(BaseTrigger):
         self.total_errors = 0
         self.errors_since_last_success = 0
         # Start the loop to take an image according to cycle time
-        while True:
+
+    def start_loop(self, duration=10, forever=True):
+        """
+        starts the loop of the trigger to get images.
+        when forever = true it will continue forever, if forever is false it will record for a set duration
+        Args:
+            forever ():
+            duration ():
+
+        Returns:
+
+        """
+
+        def loop_cycle(image_function_: Callable, cycle_time, trigger: ContinuousTrigger):
+            """
+            logic for a single loop cycle
+            Args:
+                image_function_ ():
+                cycle_time ():
+                trigger ():
+
+            Returns:
+
+            """
             # Get actual time and save it as start time
             timer_start = time.time()
+            # get image, retry if it fails
             while cycle_time > abs(time.time() - timer_start):
                 try:
-                    self.cam.get_image()
+                    image_function_()
+                    trigger.count_image()
                     break
                 except Exception as _e:
-                    ttw = cycle_time * RETRY_DELAY
+                    trigger.count_error()
+                    ttw = cycle_time * RETRY_DELAY  # verbosity is more important than precision in this case
                     logger.error(f"Failed to get image at:{datetime.datetime.now(tz=datetime.timezone.utc)} "
                                  f"with {_e} "
                                  f", retrying in {ttw} ")
-                    self.count_error()
+                    trigger.count_error()
                     time.sleep(ttw)
 
             # Get actual time and subtract the start time from
-            #   it to get the time which the current loop needed 
-            #   to run the code
+            # it to get the time which the current loop needed
+            # to run the code
             logger.debug(f"cycle time: {cycle_time}")
             loop_time = time.time() - timer_start
-            # If the processing time is longer than the cycle 
-            #   time throw error
-            if loop_time > self.cycle_time:
+            # If the processing time is longer than the cycle  counts as error
+            if loop_time > cycle_time:
                 logger.critical(
                     "Environment Error: CYCLE_TIME to short ||| Set cycle time is "
                     "shorter than the processing time for each image.")
-                logger.error(f"cycle time: {cycle_time} loop took {loop_time}")
-                self.count_error()
+                logger.error(f"cycle time: {trigger.cycle_time} loop took {loop_time}")
+                trigger.count_error()
 
             else:
-                # Sleep for difference of cycle time minus loop 
+                # Sleep for difference of cycle time minus loop
                 # time to have a constant cycle time
                 delay = self.cycle_time - loop_time
                 self.errors_since_last_success = 0
                 logger.debug(f"Delay {delay} s to reach constant cycle time.")
                 time.sleep(delay)
+
+        image_function = self.cam.get_image
+        if forever:
+            while True:
+                loop_cycle(image_function, self.cycle_time, self)
+        else:
+            end_time = time.time() + duration
+            while time.time() < end_time:
+                loop_cycle(image_function, self.cycle_time, self)
+
+    def disconnect(self):
+        self.cam.disconnect()
+
+
+class FPSTrigger(BaseTrigger):
+
+    def __init__(self, cam, target_fps, no_inference=False) -> None:
+        """
+
+        This class provides a continuous trigger that acquires images at a given framerate
+        only support faster Genicam
+
+        Args:
+            see class description
+
+        Returns:
+            see class description
+        """
+
+        if not issubclass(type(cam), cameras.FasterGenICam):
+            logger.warning("camera of class %s may not be able to deliver the desired framerate",
+                           type(cam))
+        super().__init__()
+
+        self.cam = cam
+        self.target_fps = target_fps
+        self.no_inference = no_inference
+
+    def start_loop(self, duration=10, forever=True):
+
+        # useful if multiple get image functions are implemented, this may be a desired feature in the future
+        def loop_cycle(image_function: Callable, cycle_time_, fpst: FPSTrigger):
+            """
+            logic for a single loop cycle
+            Args:
+                fpst ():
+                image_function ():
+                cycle_time_ ():
+
+            Returns:
+
+            """
+            cycle_end = time.time() + cycle_time_
+            try:
+                image_function()
+                fpst.count_image()
+            except Exception as _e:  # hard error during acquisition
+                logger.error("failed to get image with unhandled exception with %s, \n%s", _e, traceback.format_exc())
+                fpst.count_error()
+            try:
+                time_to_sleep = cycle_end - time.time()
+                time.sleep(time_to_sleep)
+            except ValueError:  # timeout of loop cycle, frame drops are handled by the camera itself
+                pass
+
+        cycle_time = 1 / self.target_fps
+
+        image_function = self.cam.get_image
+
+        # Start the loop to take an image according to cycle time
+        if forever:
+            while True:
+                loop_cycle(image_function, cycle_time)
+        else:
+            end_time = time.time() + duration
+            while time.time() < end_time:
+                loop_cycle(image_function, cycle_time)
 
     def disconnect(self):
         self.cam.disconnect()
