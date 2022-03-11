@@ -533,9 +533,10 @@ class GenICam(CamGeneral):
         available_nodes = dir(self.ia.remote_device.node_map)
         node_settings = {}
         for a_n in available_nodes:
+            # noinspection PyBroadException
             try:
                 node_settings[a_n] = self.ia.remote_device.node_map.get_node(a_n).value
-            except Exception as _e:
+            except Exception:  # should never crash during node generation
                 node_settings[a_n] = "py_value_unavailable"
         return node_settings
 
@@ -815,7 +816,7 @@ class GenICam(CamGeneral):
         try:
             self.disconnect()
         except Exception as _e:
-            logger.critical("Failed to destroy connection")
+            logger.critical("Failed to destroy connection with %s \n%s", _e, traceback.format_exc())
 
 
 class FasterGenICam(GenICam):
@@ -875,7 +876,6 @@ class FasterGenICam(GenICam):
 
         # Try to fetch a buffer that has been filled up with an
         # image
-        start = datetime.datetime.now()
 
         try:
             # ensure connection is existing

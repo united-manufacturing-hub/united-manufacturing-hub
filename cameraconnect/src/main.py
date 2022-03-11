@@ -52,8 +52,8 @@ USER_SET_SELECTOR = os.environ.get('USER_SET_SELECTOR', 'Default')
 IMAGE_WIDTH = int(os.environ.get('IMAGE_WIDTH', 800))  # supported by most cameras
 IMAGE_HEIGHT = int(os.environ.get('IMAGE_HEIGHT', 800))  # supported by most cameras
 PIXEL_FORMAT = os.environ.get('PIXEL_FORMAT', 'Mono8')  # supported by most cameras
-IMAGE_CHANNELS = os.environ.get('IMAGE_CHANNELS', 'None')  # None = autodetect
-EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')  # None = autodetect
+IMAGE_CHANNELS = os.environ.get('IMAGE_CHANNELS', 'None')  # None means autodetect
+EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')  # None means autodetect
 TIMEOUT_TIME = int(os.environ.get("TIMEOUT_TIME", 60))  # time after which the container restarts if no images were
 # generated to prevent zombie mqtt
 EXPOSURE_AUTO = os.environ.get('EXPOSURE_AUTO', 'Off')
