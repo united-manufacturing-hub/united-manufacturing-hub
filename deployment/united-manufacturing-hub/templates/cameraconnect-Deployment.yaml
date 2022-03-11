@@ -28,7 +28,7 @@ spec:
           emptyDir: {}
         - name: cameraconnect-gentlproducer
           hostPath:
-            path: /home/rancher/genicam_producer
+            path: {{.Values._000_commonConfig.datasources.cameraconnect.host_cti_file_location }}
       initContainers:
         - args:
             - mkdir -p /app/assets/producer_files && cp -u /genTLProducer/files.zip /app/assets/ && unzip -n /app/assets/files.zip -d /app/assets/producer_files
