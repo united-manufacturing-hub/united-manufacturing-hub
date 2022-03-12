@@ -21,7 +21,6 @@ require (
 	github.com/prometheus/client_golang v1.12.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/thesyncim/spmc v0.0.0-20220106182607-fe4e25e23c21
 	github.com/uber/jaeger-client-go v2.23.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/zeebo/xxh3 v1.0.1
@@ -30,6 +29,6 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.4.1
 	go.opentelemetry.io/otel/sdk v1.4.1
 	go.opentelemetry.io/otel/trace v1.4.1
-	go.uber.org/zap v1.20.0
+	go.uber.org/zap v1.21.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 )
