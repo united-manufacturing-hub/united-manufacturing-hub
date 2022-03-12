@@ -53,6 +53,14 @@ updates:
       interval: daily
     target-branch: main
 
+  - directory: /deployment/kafka-debug
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
   - directory: /deployment/mqtt-bridge
     labels:
       - 'lang: docker'
@@ -61,8 +69,39 @@ updates:
       interval: daily
     target-branch: main
 
+  - directory: /deployment/kafka-init
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
 
-  - directory: /deployment/factoryinsight
+  - directory: /deployment/kafka-to-blob
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/mqtt-bridge
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/mqtt-kafka-bridge
+    labels:
+      - 'lang: docker'
+    package-ecosystem: docker
+    schedule:
+      interval: daily
+    target-branch: main
+
+  - directory: /deployment/mqtt-to-blob
     labels:
       - 'lang: docker'
     package-ecosystem: docker
@@ -95,14 +134,6 @@ updates:
     target-branch: main
 
   - directory: /cameraconnect
-    labels:
-      - 'lang: python'
-    package-ecosystem: pip
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /sensorconnect
     labels:
       - 'lang: python'
     package-ecosystem: pip
