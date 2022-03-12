@@ -35,9 +35,17 @@ Create the server certificate by using the following commands (exchange mqtt.umh
 ```bash
 /usr/share/easy-rsa/easyrsa gen-req mqtt.umh.app nopass
 /usr/share/easy-rsa/easyrsa sign-req server mqtt.umh.app 
+```
+If you need to generate a certificate for an IP instead of a domain name, use the following command instead (exchange 0.0.0.0 with your IP):
+```bash
+/usr/share/easy-rsa/easyrsa --subject-alt-name="IP:0.0.0.0" gen-req 0.0.0.0 nopass
+/usr/share/easy-rsa/easyrsa sign-req server 0.0.0.0
+```
 
 Copy the private key `pki/private/mqtt.umh.app.key` and the public certificate `pki/issued/mqtt.umh.app.crt` together with the root CA `pki/ca.crt` to the configuration of the MQTT broker.
 
 ## Adding new clients
 
-Create new clients with following commands (remember to change TESTING with the planned MQTT client id): `export EASYRSA_REQ_CN=TESTING && /usr/share/easy-rsa/easyrsa gen-req $EASYRSA_REQ_CN nopass && /usr/share/easy-rsa/easyrsa sign-req client $EASYRSA_REQ_CN nopass`
+Create new clients with following commands (remember to change TESTING with the planned MQTT client id):
+
+```export EASYRSA_REQ_CN=TESTING && /usr/share/easy-rsa/easyrsa gen-req $EASYRSA_REQ_CN nopass && /usr/share/easy-rsa/easyrsa sign-req client $EASYRSA_REQ_CN nopass```
