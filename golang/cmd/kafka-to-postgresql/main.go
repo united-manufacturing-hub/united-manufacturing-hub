@@ -87,7 +87,7 @@ func main() {
 	go processKafkaQueue(KafkaTopic, processors)
 
 	for i := 0; i < processors; i++ {
-		//TODO start processors here
+		go queueProcessor()
 	}
 
 	// Allow graceful shutdown
