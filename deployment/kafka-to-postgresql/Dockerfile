@@ -11,14 +11,14 @@ ADD ./golang/go.sum /build/go.sum
 RUN go mod download
 
 # Only copy relevant packages to docker container
-ADD ./golang/cmd/kafka-to-blob /build/cmd/kafka-to-blob
+ADD ./golang/cmd/kafka-to-postgresql /build/cmd/kafka-to-postgresql
 ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
-# ADD ./golang/test/kafka-to-blob /build/test
+# ADD ./golang/test/kafka-to-postgresql /build/test
 
 WORKDIR /build
 
-RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/kafka-to-blob
+RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/kafka-to-postgresql
 
 FROM scratch
 COPY --from=builder /build /app/

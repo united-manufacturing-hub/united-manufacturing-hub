@@ -41,14 +41,14 @@ func main() {
 	zap.S().Debugf("Setting up redis")
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
-	if !internal.IsRedisAvailable() {
+	if !internal.IsRedisAvailable() && (dryRun != "true" && dryRun != "True") {
 		panic("Redis is not yet available")
 	}
 
 	// Prometheus
 	metricsPath := "/metrics"
 	metricsPort := ":2112"
-	zap.S().Debugf("Setting up metrics", metricsPath, metricsPort)
+	zap.S().Debugf("Setting up metrics %s %v", metricsPath, metricsPort)
 
 	http.Handle(metricsPath, promhttp.Handler())
 	go http.ListenAndServe(metricsPort, nil)

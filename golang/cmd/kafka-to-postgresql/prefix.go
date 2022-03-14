@@ -53,5 +53,4 @@ type prefixRegistry struct {
 	ModifyProducesPieces                  string
 	DeleteShiftById                       string
 	DeleteShiftByAssetIdAndBeginTimestamp string
-	RawMQTTRequeue                        string
 }
