@@ -31,11 +31,13 @@ _000_commonConfig:
       cameraInterface: "GenICam"
       imageWidth: "800"
       imageHeight: "800"
-      imageChannels: "3"
+      imageChannels: "1"
       macAddress: "02-2625A-09849"
       exposureTime: "1000"
       exposureAuto: "Off"
       pixelFormat: "Mono8"
+      host_cti_file_location: "/home/rancher/genicam_producer"
+
 
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:

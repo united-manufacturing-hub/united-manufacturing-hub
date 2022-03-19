@@ -18,12 +18,12 @@ import glob
 import time
 import os
 import sys
-import logging
 
 # Import self-written modules
-from cameras import GenICam
+from cameras import GenICam, FasterGenICam
 from cameras import DummyCamera
-from trigger import MqttTrigger,ContinuousTrigger
+from trigger import MqttTrigger, ContinuousTrigger, FPSTrigger
+from utils import get_logger_from_env
 
 IMAGE_PATH = os.environ.get('IMAGE_PATH', None)
 
@@ -36,89 +36,131 @@ MQTT_PORT = int(os.environ.get('MQTT_PORT', 1883))
 TRIGGER = os.environ.get('TRIGGER')
 ACQUISITION_DELAY = float(os.environ.get('ACQUISITION_DELAY', 0.0))
 CYCLE_TIME = float(os.environ.get('CYCLE_TIME', 10.0))
-
+RETRY_TIME = float(os.environ.get("RETRY_TIME", CYCLE_TIME/10))
+TARGET_FPS = float(os.environ.get("TARGET_FPS", 10.0))
 ## CAMERA SETTINGS
 CAMERA_INTERFACE = os.environ.get('CAMERA_INTERFACE')
-MAC_ADDRESS = os.environ.get('MAC_ADDRESS','')
-TRANSMITTER_ID = os.environ.get('CUBE_TRANSMITTERID','')
+MAC_ADDRESS = os.environ.get('MAC_ADDRESS', '')
+TRANSMITTER_ID = os.environ.get('CUBE_TRANSMITTERID', '')
+MQTT_ROOT_TOPIC = os.environ.get('MQTT_ROOT_TOPIC', "ia")
 
-MQTT_TOPIC_TRIGGER = "ia/trigger/"+TRANSMITTER_ID+"/"+MAC_ADDRESS
-MQTT_TOPIC_IMAGE = "ia/rawImage/"+TRANSMITTER_ID+"/"+MAC_ADDRESS
+MQTT_TOPIC_TRIGGER = f"{MQTT_ROOT_TOPIC}/trigger/{TRANSMITTER_ID}/{MAC_ADDRESS}"
+MQTT_TOPIC_IMAGE = f"{MQTT_ROOT_TOPIC}/rawImage/{TRANSMITTER_ID}/{MAC_ADDRESS}"
+
 
 # GenICam settings
 DEFAULT_GENTL_PRODUCER_PATH = os.environ.get('DEFAULT_GENTL_PRODUCER_PATH', '/app/assets/producer_files')
 USER_SET_SELECTOR = os.environ.get('USER_SET_SELECTOR', 'Default')
-IMAGE_WIDTH = int(os.environ.get('IMAGE_WIDTH', 800))
-IMAGE_HEIGHT = int(os.environ.get('IMAGE_HEIGHT', 800))
-PIXEL_FORMAT = os.environ.get('PIXEL_FORMAT', 'Mono8')
-IMAGE_CHANNELS = os.environ.get('IMAGE_CHANNELS', 'None')
-EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')
-
+IMAGE_WIDTH = int(os.environ.get('IMAGE_WIDTH', 800))  # supported by most cameras
+IMAGE_HEIGHT = int(os.environ.get('IMAGE_HEIGHT', 800))  # supported by most cameras
+PIXEL_FORMAT = os.environ.get('PIXEL_FORMAT', 'Mono8')  # supported by most cameras
+IMAGE_CHANNELS = os.environ.get('IMAGE_CHANNELS', 'None')  # None means autodetect
+EXPOSURE_TIME = os.environ.get('EXPOSURE_TIME', 'None')  # None means autodetect
+TIMEOUT_TIME = int(os.environ.get("TIMEOUT_TIME", 60))  # time after which the container restarts if no images were
+# generated to prevent zombie mqtt
 EXPOSURE_AUTO = os.environ.get('EXPOSURE_AUTO', 'Off')
+if EXPOSURE_AUTO.upper() == "OFF" or EXPOSURE_AUTO.upper() == "NONE":
+    EXPOSURE_AUTO = None
+if EXPOSURE_TIME.upper() == "OFF" or EXPOSURE_TIME.upper() == "NONE":
+    EXPOSURE_TIME = None
 GAIN_AUTO = os.environ.get('GAIN_AUTO', 'Off')
 BALANCE_WHITE_AUTO = os.environ.get('BALANCE_WHITE_AUTO', 'Off')
-LOGGING_LEVEL = os.environ.get('LOGGING_LEVEL', 'INFO')
-
 if IMAGE_CHANNELS != 'None':
     IMAGE_CHANNELS = int(IMAGE_CHANNELS)
-if EXPOSURE_TIME != 'None':
-    EXPOSURE_TIME = float(EXPOSURE_TIME)
+logger = get_logger_from_env(application="cammeraconnect", name="main")
 
 ### End of loading settings ###
-
 if __name__ == "__main__":
 
-    if LOGGING_LEVEL == "DEBUG":
-        logging.basicConfig(level=logging.DEBUG)
-    elif LOGGING_LEVEL == "INFO":
-        logging.basicConfig(level=logging.INFO)
-    elif LOGGING_LEVEL == "WARNING":
-        logging.basicConfig(level=logging.WARNING)
-    elif LOGGING_LEVEL == "ERROR":
-        logging.basicConfig(level=logging.ERROR)
-    elif LOGGING_LEVEL == "CRITICAL":
-        logging.basicConfig(level=logging.CRITICAL)
+    if EXPOSURE_TIME is not None:
+        try:
+            EXPOSURE_TIME = float(EXPOSURE_TIME)
+        except TypeError:
+            exposure_default = 15000.0
+            logger.warning(f"exposure not valid using default of:  {exposure_default}")
+            EXPOSURE_TIME = exposure_default
 
-    logging.debug("Exposure time: " + str(EXPOSURE_TIME))
-    logging.debug("Image channels: " + str(IMAGE_CHANNELS))
-    logging.debug("Set image width: " + str(IMAGE_WIDTH))
-    logging.debug("Set image height: " + str(IMAGE_HEIGHT))
+    logger.debug("Exposure time: " + str(EXPOSURE_TIME))
+    logger.debug("Image channels: " + str(IMAGE_CHANNELS))
+    logger.debug("Set image width: " + str(IMAGE_WIDTH))
+    logger.debug("Set image height: " + str(IMAGE_HEIGHT))
 
-    #detect available cti files as camera producers
+    # detect available cti files as camera producers
     cti_file_list = []
-    for name in glob.glob(str(DEFAULT_GENTL_PRODUCER_PATH)+'/**/*.cti', recursive=True):
-
+    for name in glob.glob(str(DEFAULT_GENTL_PRODUCER_PATH) + '/**/*.cti', recursive=True):
         cti_file_list.append(str(name))
 
-    #if no cti files are found, log error and exit program
-    if len(cti_file_list)==0:
-        logging.error("No producer file discovered")
+    # if no cti files are found, log error and exit program
+    if len(cti_file_list) == 0:
+        logger.error("No producer file discovered")
         exit(1)
 
     # Check selected camera interface
     if CAMERA_INTERFACE == "DummyCamera":
         cam = DummyCamera(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, 0, image_storage_path=IMAGE_PATH)
     elif CAMERA_INTERFACE == "GenICam":
-        cam = GenICam(MQTT_HOST,MQTT_PORT,MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH, exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO)
-    else: 
+        logger.debug("looking for GenICam")
+        cam = GenICam(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH,
+                      image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH,
+                      exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO)
+    elif CAMERA_INTERFACE == "FasterGenICam":
+        logger.debug("looking for FasterGenICam")
+        cam = FasterGenICam(MQTT_HOST, MQTT_PORT, MQTT_TOPIC_IMAGE, MAC_ADDRESS, cti_file_list, image_width=IMAGE_WIDTH,
+                            image_height=IMAGE_HEIGHT, pixel_format=PIXEL_FORMAT, image_storage_path=IMAGE_PATH,
+                            exposure_time=EXPOSURE_TIME, exposure_auto=EXPOSURE_AUTO,
+                            acquisition_frame_rate=TARGET_FPS)
+
+
+    else:
         # Stop system, not possible to run with this settings
-        sys.exit("Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
+        sys.exit(
+            "Environment Error: CAMERA_INTERFACE not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
 
     # Check trigger type and use appropriate instance of the
     #   trigger classes
+    logger.debug(f"looking for trigger type {TRIGGER}")
     if TRIGGER == "Continuous":
         # Never jumps out of the processes of the instance
-        ContinuousTrigger(cam,CAMERA_INTERFACE,CYCLE_TIME)
-    elif TRIGGER == "MQTT":
-        # Starts an asynchroneous process for working with 
-        #   the received mqtt data
-        trigger = MqttTrigger(cam,CAMERA_INTERFACE,ACQUISITION_DELAY,MQTT_HOST,MQTT_PORT,MQTT_TOPIC_TRIGGER)
+        ct = ContinuousTrigger(cam, CAMERA_INTERFACE, CYCLE_TIME)
+        ct.start_loop()
+    elif TRIGGER == "FPS":
+        check_cycle = TIMEOUT_TIME
+        # Never jumps out of the processes of the instance
+        fpst = FPSTrigger(cam, CAMERA_INTERFACE, TARGET_FPS)
+        previous_image_number = fpst.image_number
+        while True:
+            logger.info(f"recodring images with {TARGET_FPS} triggers for {TIMEOUT_TIME}")
+            fpst.start_loop(duration=TIMEOUT_TIME, forever=False)
+            if fpst.image_number == previous_image_number:
+                logger.error(f"image acquisition timed out after {fpst.image_number} images ")
+                sys.exit(-1)
+            else:
+                logger.info(f"{fpst.image_number - previous_image_number} images in last loop")
+                previous_image_number = fpst.image_number
 
-        # Run forever to stay connected 
+            logger.info("Still running.")
+
+    elif TRIGGER == "MQTT":
+        # Starts an asynchronous process for working with
+        #   the received mqtt data
+        trigger = MqttTrigger(cam, CAMERA_INTERFACE, ACQUISITION_DELAY, MQTT_HOST, MQTT_PORT, MQTT_TOPIC_TRIGGER,
+                              retry_time=RETRY_TIME)
+
+        # Run forever to stay connected
+        previous_image_number = trigger.image_number
         while True:
             # Avoid overloading the CPU
-            time.sleep(10)
-            logging.debug("Still running.")
+            logger.info(f"awaiting triggers for {TIMEOUT_TIME}")
+            time.sleep(TIMEOUT_TIME)
+            if trigger.image_number == previous_image_number:
+                logger.error(f"image acquisition timed out after {trigger.image_number} images ")
+                sys.exit(-1)
+            else:
+                logger.info(f"{trigger.image_number - previous_image_number} images in last loop")
+                previous_image_number = trigger.image_number
+
+            logger.info("Still running.")
     else:
         # Stop system, not possible to run with this setting
-        sys.exit("Environment Error: TRIGGER not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
+        sys.exit(
+            "Environment Error: TRIGGER not supported ||| Make sure to set a value that is allowed according to the specified possible values for this environment variable and make sure the spelling is correct.")
