@@ -355,7 +355,7 @@ class ContinuousTrigger(BaseTrigger):
 
 class FPSTrigger(BaseTrigger):
 
-    def __init__(self, cam, target_fps, no_inference=False) -> None:
+    def __init__(self, cam: cameras.CamGeneral, target_fps: float) -> None:
         """
 
         This class provides a continuous trigger that acquires images at a given framerate
@@ -375,7 +375,6 @@ class FPSTrigger(BaseTrigger):
 
         self.cam = cam
         self.target_fps = target_fps
-        self.no_inference = no_inference
 
     def __loop_cycle(self, image_function: Callable, cycle_time_):
         """

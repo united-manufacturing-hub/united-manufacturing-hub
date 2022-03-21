@@ -126,7 +126,7 @@ if __name__ == "__main__":
     elif TRIGGER == "FPS":
         check_cycle = TIMEOUT_TIME
         # Never jumps out of the processes of the instance
-        fpst = FPSTrigger(cam, CAMERA_INTERFACE, TARGET_FPS)
+        fpst = FPSTrigger(cam=cam, target_fps=TARGET_FPS)
         previous_image_number = fpst.image_number
         while True:
             logger.info(f"recodring images with {TARGET_FPS} triggers for {TIMEOUT_TIME}")
