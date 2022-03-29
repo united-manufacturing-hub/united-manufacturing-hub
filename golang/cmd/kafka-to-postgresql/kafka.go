@@ -30,9 +30,9 @@ func processKafkaQueue(topic string) {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
-				zap.S().Warnf("Unknown topic or partition: %s", err)
-				time.Sleep(5 * time.Second)
-				continue
+				zap.S().Errorf("Unknown topic or partition: %s", err)
+				ShutdownApplicationGraceful()
+				return
 			} else {
 				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
@@ -67,7 +67,7 @@ var putBackChannel chan PutBackChan
 
 func startPutbackProcessor() {
 	// Loops until the shutdown signal is received and the channel is empty
-	for !ShuttingDown || len(putBackChannel) > 0 {
+	for !ShutdownPutback {
 		select {
 		case msgX := <-putBackChannel:
 			{
@@ -75,6 +75,10 @@ func startPutbackProcessor() {
 				var msg = msgX.msg
 				var reason = msgX.reason
 				var errorString = msgX.errorString
+
+				if msg == nil {
+					continue
+				}
 
 				var kafkaKey KafkaKey
 				if msg.Key == nil {
@@ -126,10 +130,10 @@ func startPutbackProcessor() {
 	zap.S().Infof("Putback processor shutting down")
 }
 
-func CleanProcessorChannel() bool {
-	zap.S().Debugf("Cleaning up processor channel (%d)", len(processorChannel))
+// DrainChannel empties a channel into the putback channel
+func DrainChannel(c chan *kafka.Message) bool {
 	select {
-	case msg, ok := <-processorChannel:
+	case msg, ok := <-c:
 		if ok {
 			putBackChannel <- PutBackChan{msg, "Shutting down", nil}
 		} else {

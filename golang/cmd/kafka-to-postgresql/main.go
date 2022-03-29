@@ -90,12 +90,11 @@ func main() {
 	}
 
 	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers": KafkaBoostrapServer,
-		"security.protocol": "plaintext",
-		"group.id":          "kafka-to-postgresql",
-		//"enable.auto.commit": false,
+		"bootstrap.servers":  KafkaBoostrapServer,
+		"security.protocol":  "plaintext",
+		"group.id":           "kafka-to-postgresql",
 		"enable.auto.commit": true,
-		//"auto.offset.reset":  "earliest",
+		"auto.offset.reset":  "earliest",
 	})
 
 	// 1GB, 1GB
@@ -142,6 +141,7 @@ func main() {
 }
 
 var ShuttingDown bool
+var ShutdownPutback bool
 
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
@@ -151,21 +151,22 @@ func ShutdownApplicationGraceful() {
 	time.Sleep(time.Second * 5)
 
 	// Wait if there are any CountMessagesToCommitLater in the queue
-	if !CleanProcessorChannel() {
+
+	zap.S().Debugf("Cleaning up processor channel (%d)", len(processorChannel))
+	if !DrainChannel(processorChannel) {
+		time.Sleep(5 * time.Second)
+	}
+	if !DrainChannel(countChannel) {
 		time.Sleep(5 * time.Second)
 	}
 
 	time.Sleep(1 * time.Second)
 
-	for len(countChannel) > 0 {
-		zap.S().Infof("Waiting for count channel to empty: %d", len(countChannel))
-		time.Sleep(1 * time.Second)
-	}
-
 	for len(putBackChannel) > 0 {
 		zap.S().Infof("Waiting for putback channel to empty: %d", len(putBackChannel))
 		time.Sleep(1 * time.Second)
 	}
+	ShutdownPutback = true
 
 	time.Sleep(1 * time.Second)
 
@@ -186,27 +187,36 @@ func ShutdownApplicationGraceful() {
 var Commits = 0
 var Messages = 0
 var PutBacks = 0
+var InvalidMessages = 0
 
 func PerformanceReport() {
 	lastCommits := 0
 	lastMessages := 0
 	lastPutbacks := 0
+	lastInvalids := 0
+	sleepS := 10
 	for !ShuttingDown {
-		time.Sleep(time.Second * 1)
-		commitsPerSecond := Commits - lastCommits
-		messagesPerSecond := Messages - lastMessages
-		putbacksPerSecond := PutBacks - lastPutbacks
+		commitsPerSecond := (Commits - lastCommits) / sleepS
+		messagesPerSecond := (Messages - lastMessages) / sleepS
+		putbacksPerSecond := (PutBacks - lastPutbacks) / sleepS
+		invalidsPerSecond := (InvalidMessages - lastInvalids) / sleepS
 		lastCommits = Commits
 		lastMessages = Messages
 		lastPutbacks = PutBacks
+		lastInvalids = InvalidMessages
 
 		zap.S().Infof("Performance report"+
-			"\nCommits: %d, Messages: %d, PutBacks: %d, Commits/s: %d, Messages/s: %d, PutBacks/s: %d"+
+			"\nCommits: %d, Commits/s: %d"+
+			"\nMessages: %d, Messages/s: %d"+
+			"\nPutBacks: %d, PutBacks/s: %d"+
+			"\nInvalids: %d, Invalids/s: %d"+
 			"\nProcessor queue length: %d"+
 			"\nPutBack queue length: %d"+
 			"\nCount queue length: %d"+
 			"\nMessagecache hitrate %f"+
 			"\nDbcache hitrate %f"+
-			"\nCount messages commitable: %d", Commits, Messages, PutBacks, commitsPerSecond, messagesPerSecond, putbacksPerSecond, len(processorChannel), len(putBackChannel), len(countChannel), messagecache.HitRate(), dbcache.HitRate(), CountMessagesToCommitLater)
+			"\nCount messages commitable: %d", Commits, commitsPerSecond, Messages, messagesPerSecond, PutBacks, putbacksPerSecond, InvalidMessages, invalidsPerSecond, len(processorChannel), len(putBackChannel), len(countChannel), messagecache.HitRate(), dbcache.HitRate(), CountMessagesToCommitLater)
+
+		time.Sleep(time.Second * time.Duration(sleepS))
 	}
 }

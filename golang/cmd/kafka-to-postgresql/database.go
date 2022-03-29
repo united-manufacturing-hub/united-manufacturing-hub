@@ -60,10 +60,13 @@ func IsPostgresSQLAvailable() (bool, error) {
 // ShutdownDB closes all database connections
 func ShutdownDB() {
 
+	zap.S().Infof("Closing statement registry")
 	err := statement.Shutdown()
 	if err != nil {
 		panic(err)
 	}
+
+	zap.S().Infof("Closing database connection")
 	err = db.Close()
 	if err != nil {
 		panic(err)
@@ -103,14 +106,11 @@ func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 
 // GetAssetTableID gets the assetID from the database
 func GetAssetTableID(customerID string, location string, assetID string) (AssetTableID uint32, success bool) {
-	zap.S().Debugf("[GetAssetTableID] customerID: %s, location: %s, assetID: %s", customerID, location, assetID)
-
 	success = false
 	// Get from cache if possible
 	var cacheHit bool
 	AssetTableID, cacheHit = GetCacheAssetTableId(customerID, location, assetID)
 	if cacheHit {
-		zap.S().Debugf("[GetAssetTableID] Cache hit for customerID: %s, location: %s, assetID: %s", customerID, location, assetID)
 		success = true
 		return
 	}

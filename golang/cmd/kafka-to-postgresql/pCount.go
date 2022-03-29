@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lib/pq"
 	"go.uber.org/zap"
 	"time"
 )
@@ -32,13 +33,12 @@ func countProcessor() {
 	for !ShuttingDown || len(countChannel) > 0 {
 		select {
 		case <-ticker.C:
-			if len(messageMap) == 0 {
+			if CountMessagesToCommitLater == 0 {
 				ticker.Reset(tickerTime)
 				continue
 			}
 
 			var putBack map[string]map[string]map[string][]*kafka.Message
-			zap.S().Debugf("Processing CountMessagesToCommitLater (ticker)")
 			putBack = Count{}.ProcessMessages(messageMap)
 
 			for _, m := range putBack {
@@ -78,38 +78,52 @@ func countProcessor() {
 	Count{}.ProcessMessages(messageMap)
 }
 
-func (c Count) ProcessMessages(messageMap map[string]map[string]map[string][]*kafka.Message) (putPack map[string]map[string]map[string][]*kafka.Message) {
-	zap.S().Debug("Processing count CountMessagesToCommitLater")
+func (c Count) ProcessMessages(messageMap map[string]map[string]map[string][]*kafka.Message) (putBackMm map[string]map[string]map[string][]*kafka.Message) {
 
 	var txn *sql.Tx = nil
 	txn, err := db.Begin()
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		putPack = messageMap
-		return nil
+		putBackMm = messageMap
+		return
 	}
 
+	// Create tmp count table
 	ctxStmt, cancelStmt := context.WithDeadline(context.Background(), time.Now().Add(time.Second*1))
 	defer cancelStmt()
-	stmt := txn.StmtContext(ctxStmt, statement.InsertIntoCountTable)
+	stmt := txn.StmtContext(ctxStmt, statement.CreateTmpCountTable)
+	_, err = stmt.Exec()
+	if err != nil {
+		zap.S().Errorf("Error creating tmp count table: %s", err.Error())
+		putBackMm = messageMap
+		return
+	}
 
 	cntCommit := 0
+	invalidMessages := 0
 
+	ctxPrepCtx, cancelPrepCtx := context.WithDeadline(context.Background(), time.Now().Add(time.Second*1))
+	defer cancelPrepCtx()
+	var stmtCopyIn *sql.Stmt
+	stmtCopyIn, err = txn.PrepareContext(ctxPrepCtx, pq.CopyIn("tmp_counttable", "timestamp", "asset_id", "count", "scrap"))
+
+	// Insert everything into copy table
 	for customerID, customerMessageMap := range messageMap {
 		for location, locationMessageMap := range customerMessageMap {
 			for assetID, payload := range locationMessageMap {
 				AssetTableID, success := GetAssetTableID(customerID, location, assetID)
 				if !success {
 					zap.S().Debugf("Asset table not found for customer %s, location %s, asset %s", customerID, location, assetID)
-					putPack[customerID] = make(map[string]map[string][]*kafka.Message)
-					putPack[customerID][location] = make(map[string][]*kafka.Message)
-					putPack[customerID][location][assetID] = payload
+					putBackMm[customerID] = make(map[string]map[string][]*kafka.Message)
+					putBackMm[customerID][location] = make(map[string][]*kafka.Message)
+					putBackMm[customerID][location][assetID] = payload
 					continue
 				}
 
 				for _, countMessage := range payload {
 					var parsed, parsedMsg = ParseMessage(countMessage, 0)
 					if !parsed {
+						invalidMessages += 1
 						// If a message lands here, something is wrong !
 						continue
 					}
@@ -117,46 +131,77 @@ func (c Count) ProcessMessages(messageMap map[string]map[string]map[string][]*ka
 					var cnt count
 					err = jsoniter.Unmarshal(parsedMsg.Payload, &cnt)
 					if err != nil {
+						invalidMessages += 1
 						// Ignore invalid CountMessagesToCommitLater
 						continue
 					}
 
 					if cnt.Count == 0 {
+						invalidMessages += 1
 						continue
 					}
-					_, err = stmt.Exec(AssetTableID, cnt.Count, cnt.Scrap, cnt.TimestampMs)
+					timestamp := time.Unix(0, int64(cnt.TimestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
+
+					_, err = stmtCopyIn.Exec(timestamp, AssetTableID, cnt.Count, cnt.Scrap)
 					if err != nil {
 						zap.S().Errorf("Error inserting into count table: %s", err.Error())
 						zap.S().Debugf("Payload: %#v", cnt)
 						// Rollback failed inserts
 						zap.S().Errorf("Rolling back failed inserts")
 						_ = txn.Rollback()
-						putPack = messageMap
+						putBackMm = messageMap
 						return
 					}
+					cntCommit += 1
 				}
 			}
 		}
+	}
+	err = stmtCopyIn.Close()
+	if err != nil {
+		putBackMm = messageMap
+		return
+	}
+
+	var stmtInsertFromCopyTable *sql.Stmt
+	stmtInsertFromCopyTable, err = txn.Prepare(`
+			INSERT INTO counttable (SELECT * FROM tmp_counttable) ON CONFLICT DO NOTHING;
+		`)
+
+	if err != nil {
+		putBackMm = messageMap
+		return
+	}
+
+	_, err = stmtInsertFromCopyTable.Exec()
+	if err != nil {
+		putBackMm = messageMap
+		return
+	}
+
+	err = stmtInsertFromCopyTable.Close()
+	if err != nil {
+		putBackMm = messageMap
+		return
 	}
 
 	if isDryRun {
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
-			putPack = messageMap
+			putBackMm = messageMap
 			return
 		}
 	} else {
 		zap.S().Debugf("Committing %d transaction", cntCommit)
 		err = txn.Commit()
 		if err != nil {
-			putPack = messageMap
+			putBackMm = messageMap
 			return
 		}
-		cntCommit += 1
 	}
 
 	Commits += cntCommit
 
-	return putPack
+	return putBackMm
 }
