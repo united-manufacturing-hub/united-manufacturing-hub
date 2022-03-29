@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type statementRegistry struct {
+type StatementRegistry struct {
 	InsertIntoRecommendationTable *sql.Stmt
 
 	CreateTmpProcessValueTable64 *sql.Stmt
@@ -69,9 +69,11 @@ type statementRegistry struct {
 	SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId *sql.Stmt
 	CreateTmpProcessValueTableString                                                     *sql.Stmt
 	SelectProductExists                                                                  *sql.Stmt
+
+	InsertIntoCountTable *sql.Stmt
 }
 
-func (r statementRegistry) Shutdown() (err error) {
+func (r StatementRegistry) Shutdown() (err error) {
 	zap.S().Warnf("[statementRegistry] shutting down!")
 	err = r.InsertIntoRecommendationTable.Close()
 	if err != nil {
@@ -209,12 +211,16 @@ func (r statementRegistry) Shutdown() (err error) {
 	if err != nil {
 		return
 	}
+	err = r.InsertIntoCountTable.Close()
+	if err != nil {
+		return
+	}
 	return
 }
 
-func newStatementRegistry() *statementRegistry {
+func NewStatementRegistry() *StatementRegistry {
 
-	return &statementRegistry{
+	return &StatementRegistry{
 		InsertIntoRecommendationTable: prep(`
 		INSERT INTO recommendationTable (timestamp, uid, recommendationType, enabled, recommendationValues, recommendationTextEN, recommendationTextDE, diagnoseTextEN, diagnoseTextDE) 
 		VALUES (to_timestamp($1 / 1000.0),$2,$3,$4,$5,$6,$7,$8,$9) 
@@ -344,11 +350,12 @@ func newStatementRegistry() *statementRegistry {
 		SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId: prep(`SELECT uniqueProductID FROM uniqueProductTable WHERE uniqueProductAlternativeID = $1 AND NOT asset_id = $2 ORDER BY begin_timestamp_ms DESC LIMIT 1;`),
 
 		SelectProductExists: prep(`SELECT COUNT(*) as CNT FROM producttable WHERE product_id = $1`),
+
+		InsertIntoCountTable: prep(`INSERT INTO counttable (asset_id, count, scrap, timestamp) VALUES ($1,$2,$3,to_timestamp($4 / 1000.0)) ON CONFLICT DO NOTHING`),
 	}
 }
 
 func prep(query string) *sql.Stmt {
-
 	if db == nil {
 		panic("Attempting to prepare statement before opening database !")
 	}

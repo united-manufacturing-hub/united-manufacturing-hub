@@ -36,14 +36,17 @@ func SetupKafka(configMap kafka.ConfigMap) {
 }
 
 func CloseKafka() {
+	zap.S().Infof("Closing Kafka Consumer")
 	err := KafkaConsumer.Close()
 	if err != nil {
 		panic("Failed do close KafkaConsumer client !")
 	}
 
+	zap.S().Infof("Closing Kafka Producer")
 	KafkaProducer.Flush(100)
 	KafkaProducer.Close()
 
+	zap.S().Infof("Closing Kafka Admin Client")
 	KafkaAdminClient.Close()
 }
 

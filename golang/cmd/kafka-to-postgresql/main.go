@@ -9,13 +9,28 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 	"time"
 )
 
 var buildtime string
 
+var f *os.File
+
 func main() {
+	// BEGIN PROFILER
+	var perr error
+	f, perr = os.Create("cpu.pprof")
+	if perr != nil {
+		panic(perr)
+	}
+	err := pprof.StartCPUProfile(f)
+	if err != nil {
+		panic(err)
+	}
+	// END PROFILER
+
 	// Setup logger and set as global
 	var logger *zap.Logger
 	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
@@ -29,21 +44,7 @@ func main() {
 
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
-	// Redis cache
-	redisURI := os.Getenv("REDIS_URI")
-	redisURI2 := os.Getenv("REDIS_URI2")
-	redisURI3 := os.Getenv("REDIS_URI3")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-	redisDB := 0 // default database
-
 	dryRun := os.Getenv("DRY_RUN")
-
-	zap.S().Debugf("Setting up redis")
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
-
-	if !internal.IsRedisAvailable() && (dryRun != "true" && dryRun != "True") {
-		panic("Redis is not yet available")
-	}
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -66,50 +67,77 @@ func main() {
 	PQUser := os.Getenv("POSTGRES_USER")
 	PQPassword := os.Getenv("POSTGRES_PASSWORD")
 	PWDBName := os.Getenv("POSTGRES_DATABASE")
+	PQSSLMode := os.Getenv("POSTGRES_SSLMODE")
+	if PQSSLMode == "" {
+		PQSSLMode = "require"
+	} else {
+		zap.S().Warnf("Postgres SSL mode is set to %s", PQSSLMode)
+	}
 
-	zap.S().Debugf("Setting up database")
-	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, dryRun)
+	zap.S().Debugf("Setting up database with %s %d %s %s %s %s", PQHost, PQPort, PQUser, PQPassword, PWDBName, PQSSLMode)
+
+	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, dryRun, PQSSLMode)
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	if KafkaBoostrapServer == "" {
+		panic("KAFKA_BOOSTRAP_SERVER not set")
+	}
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
+	if KafkaTopic == "" {
+		panic("KAFKA_LISTEN_TOPIC not set")
+	}
 
 	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers":  KafkaBoostrapServer,
-		"security.protocol":  "plaintext",
-		"group.id":           "kafka-to-postgresql",
-		"enable.auto.commit": false,
+		"bootstrap.servers": KafkaBoostrapServer,
+		"security.protocol": "plaintext",
+		"group.id":          "kafka-to-postgresql",
+		//"enable.auto.commit": false,
+		"enable.auto.commit": true,
+		//"auto.offset.reset":  "earliest",
 	})
 
+	// 1GB, 1GB
+	InitCache(1073741824, 1073741824)
+
 	zap.S().Debugf("Starting queue processor")
-	processors := 5
-	go processKafkaQueue(KafkaTopic, processors)
+	// Reduce this number, if pg throws sql: statement is closed !!!
+	processors := 20
+
+	processorChannel = make(chan *kafka.Message, processors)
+	putBackChannel = make(chan PutBackChan, 200)
+
+	go startPutbackProcessor()
+	go processKafkaQueue(KafkaTopic)
 
 	for i := 0; i < processors; i++ {
-		go queueProcessor()
+		go queueProcessor(i)
 	}
+
+	go countProcessor()
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGTERM)
+	// It's important to handle both signals, allowing Kafka to shut down gracefully !
+	// If this is not possible, it will attempt to rebalance itself, which will increase startup time
+	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
-		// before you trapped SIGTERM your process would
-		// have exited, so we are now on borrowed time.
-		//
 		// Kubernetes sends SIGTERM 30 seconds before
 		// shutting down the pod.
 
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Recieved SIG %v", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
 
 	}()
+
+	go PerformanceReport()
 	select {} // block forever
 }
 
@@ -119,20 +147,66 @@ var ShuttingDown bool
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
+	// Important, allows high load processors to finish
+	time.Sleep(time.Second * 5)
 
-	CleanProcessorChannel()
+	// Wait if there are any CountMessagesToCommitLater in the queue
+	if !CleanProcessorChannel() {
+		time.Sleep(5 * time.Second)
+	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
+
+	for len(countChannel) > 0 {
+		zap.S().Infof("Waiting for count channel to empty: %d", len(countChannel))
+		time.Sleep(1 * time.Second)
+	}
+
+	for len(putBackChannel) > 0 {
+		zap.S().Infof("Waiting for putback channel to empty: %d", len(putBackChannel))
+		time.Sleep(1 * time.Second)
+	}
+
+	time.Sleep(1 * time.Second)
 
 	internal.CloseKafka()
 
-	time.Sleep(15 * time.Second) // Wait that all data is processed
-
-	//TODO: Add pg shutdown
+	ShutdownDB()
 
 	zap.S().Infof("Successfull shutdown. Exiting.")
+
+	pprof.StopCPUProfile()
+	f.Close()
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
+}
+
+var Commits = 0
+var Messages = 0
+var PutBacks = 0
+
+func PerformanceReport() {
+	lastCommits := 0
+	lastMessages := 0
+	lastPutbacks := 0
+	for !ShuttingDown {
+		time.Sleep(time.Second * 1)
+		commitsPerSecond := Commits - lastCommits
+		messagesPerSecond := Messages - lastMessages
+		putbacksPerSecond := PutBacks - lastPutbacks
+		lastCommits = Commits
+		lastMessages = Messages
+		lastPutbacks = PutBacks
+
+		zap.S().Infof("Performance report"+
+			"\nCommits: %d, Messages: %d, PutBacks: %d, Commits/s: %d, Messages/s: %d, PutBacks/s: %d"+
+			"\nProcessor queue length: %d"+
+			"\nPutBack queue length: %d"+
+			"\nCount queue length: %d"+
+			"\nMessagecache hitrate %f"+
+			"\nDbcache hitrate %f"+
+			"\nCount messages commitable: %d", Commits, Messages, PutBacks, commitsPerSecond, messagesPerSecond, putbacksPerSecond, len(processorChannel), len(putBackChannel), len(countChannel), messagecache.HitRate(), dbcache.HitRate(), CountMessagesToCommitLater)
+	}
 }
