@@ -51,49 +51,76 @@ func queueProcessor(qPid int) {
 
 		switch parsedMessage.PayloadType {
 		case Prefix.ProcessValueFloat64:
+			err, putback = ProcessValueFloat64{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ProcessValue:
+			err, putback = ProcessValue{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ProcessValueString:
+			err, putback = ProcessValueString{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.Count:
 			countChannel <- msg
 			continue
 		case Prefix.Recommendation:
+			zap.S().Errorf("[%d] Recommendation message not implemented", qPid)
+			//err, putback = Recommendation{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.State:
+			err, putback = State{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.UniqueProduct:
+			err, putback = UniqueProduct{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ScrapCount:
+			err, putback = ScrapCount{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.AddShift:
+			err, putback = AddShift{}.ProcessMessages(parsedMessage, qPid)
 			break
-		case Prefix.UniqueProductScrap:
+		case Prefix.ScrapUniqueProduct:
+			err, putback = ScrapUniqueProduct{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.AddProduct:
+			err, putback = AddProduct{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.AddOrder:
+			err, putback = AddOrder{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.StartOrder:
+			err, putback = StartOrder{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.EndOrder:
+			err, putback = EndOrder{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.AddMaintenanceActivity:
+			zap.S().Errorf("[%d] AddMaintenanceActivity message not implemented", qPid)
+			//err, putback = AddMaintenanceActivity{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ProductTag:
+			err, putback = ProductTag{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ProductTagString:
+			err, putback = ProductTagString{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.AddParentToChild:
+			err, putback = AddParentToChild{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ModifyState:
+			zap.S().Errorf("[%d] ModifyState message not implemented", qPid)
+			//err, putback = ModifyState{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.ModifyProducesPieces:
+			zap.S().Errorf("[%d] ModifyProducesPieces message not implemented", qPid)
+			//err, putback = ModifyProducesPieces{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.DeleteShiftById:
+			zap.S().Errorf("[%d] DeleteShiftById message not implemented", qPid)
+			//err, putback = DeleteShiftById{}.ProcessMessages(parsedMessage, qPid)
 			break
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
+			zap.S().Errorf("[%d] DeleteShiftByAssetIdAndBeginTimestamp message not implemented", qPid)
+			//err, putback = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage, qPid)
 			break
 		}
 

@@ -6,14 +6,14 @@ import (
 	"go.uber.org/zap"
 )
 
-type TEMPLATE struct{}
+type State struct{}
 
-type template struct {
-	Scrap       uint32 `json:"scrapCount"`
+type state struct {
+	State       uint32 `json:"state"`
 	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
-func (c TEMPLATE) ProcessMessages(msg ParsedMessage, pid int) (err error, putback bool) {
+func (c State) ProcessMessages(msg ParsedMessage, pid int) (err error, putback bool) {
 
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -22,7 +22,7 @@ func (c TEMPLATE) ProcessMessages(msg ParsedMessage, pid int) (err error, putbac
 		return err, true
 	}
 
-	var sC template
+	var sC state
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		// Ignore malformed messages
@@ -35,8 +35,8 @@ func (c TEMPLATE) ProcessMessages(msg ParsedMessage, pid int) (err error, putbac
 
 	// Changes should only be necessary between this marker
 
-	stmt := txn.Stmt(statement.UpdateCountTableScrap)
-	_, err = stmt.Exec(sC.TimestampMs, AssetTableID, sC.Scrap)
+	stmt := txn.Stmt(statement.InsertIntoStateTable)
+	_, err = stmt.Exec(sC.TimestampMs, AssetTableID, sC.State)
 	if err != nil {
 		return err, true
 	}

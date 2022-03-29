@@ -172,6 +172,17 @@ func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId 
 	return
 }
 
+// NewNullInt64 returns sql.NullInt64: {0 false} if i == 0 and  {<i> true} if i != 0
+func NewNullInt64(i int64) sql.NullInt64 {
+	if i == 0 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{
+		Int64: i,
+		Valid: true,
+	}
+}
+
 func GetUniqueProductID(ChildID string, DBAssetID uint32) (UniqueProductTableId uint32, success bool) {
 	success = false
 
