@@ -148,7 +148,12 @@ func queueProcessor(qPid int) {
 				break
 			}
 		} else {
-			zap.S().Debugf("[%d][Success] Successfully executed Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s", qPid, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
+			if putback {
+				zap.S().Errorf("[%d][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Putting back to queue", qPid, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
+				putBackChannel <- PutBackChan{msg: msg, reason: "Other", errorString: nil}
+			} else {
+				zap.S().Debugf("[%d][Success] Successfully executed Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s", qPid, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
+			}
 		}
 	}
 	zap.S().Debugf("[%d] Processor shutting down", qPid)
