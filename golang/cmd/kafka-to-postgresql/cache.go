@@ -4,20 +4,21 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"github.com/cespare/xxhash/v2"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
+	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 )
 
 func AsXXHash(inputs ...[]byte) []byte {
-	var h = xxhash.New()
+
+	h := xxh3.New()
+
 	for _, input := range inputs {
 		_, _ = h.Write(input)
 	}
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, h.Sum64())
-	return b
+
+	return Uint128ToBytes(h.Sum128())
 }
 
 var dbcache *freecache.Cache
@@ -36,16 +37,31 @@ func GetUint32(key []byte) (uint32, bool) {
 	if err != nil {
 		return 0, false
 	}
-	return binary.LittleEndian.Uint32(value), true
+	return BytesToUint32(value), true
 }
 
 func PutUint32(key []byte, value uint32) {
 	if dbcache == nil {
 		return
 	}
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, value)
-	_ = dbcache.Set(key, b, 0)
+	_ = dbcache.Set(key, Uint32ToBytes(value), 0)
+}
+
+func Uint32ToBytes(a uint32) (b []byte) {
+	b = make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, a)
+	return
+}
+
+func BytesToUint32(b []byte) (a uint32) {
+	return binary.LittleEndian.Uint32(b)
+}
+
+func Uint128ToBytes(a xxh3.Uint128) (b []byte) {
+	b = make([]byte, 16)
+	binary.LittleEndian.PutUint64(b[0:8], a.Lo)
+	binary.LittleEndian.PutUint64(b[8:16], a.Hi)
+	return
 }
 
 func GetCacheAssetTableId(customerID string, locationID string, assetID string) (uint32, bool) {
@@ -54,6 +70,14 @@ func GetCacheAssetTableId(customerID string, locationID string, assetID string) 
 
 func PutCacheAssetTableId(customerID string, locationID string, assetID string, assetTableId uint32) {
 	PutUint32(AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)), assetTableId)
+}
+
+func PutCacheProductTableId(customerID string, AssetTableId uint32, productTableId uint32) {
+	PutUint32(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)), productTableId)
+}
+
+func GetCacheProductTableId(customerID string, AssetTableId uint32) (uint32, bool) {
+	return GetUint32(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
 }
 
 func PutCacheParsedMessage(msg *kafka.Message) (valid bool, message ParsedMessage) {

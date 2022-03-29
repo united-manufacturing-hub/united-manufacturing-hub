@@ -117,7 +117,7 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 
 	err := statement.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.QueryRow(assetID, location, customerID).Scan(&AssetTableID)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
+		zap.S().Errorf("[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
 	} else if err != nil {
 		zap.S().Debugf("[GetAssetTableID] Error: %s", err)
 		switch GetPostgresErrorRecoveryOptions(err) {
@@ -134,6 +134,84 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 	// Store to cache if not yet existing
 	go PutCacheAssetTableId(customerID, location, assetID, AssetTableID)
 	zap.S().Debugf("Stored AssetID to cache")
+
+	success = true
+	return
+}
+
+func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId uint32, success bool) {
+	success = false
+	// Get from cache if possible
+	var cacheHit bool
+	ProductTableId, cacheHit = GetCacheProductTableId(productName, AssetTableId)
+	if cacheHit {
+		success = true
+		return
+	}
+
+	err := statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(AssetTableId, productName).Scan(&ProductTableId)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d", productName, AssetTableId)
+	} else if err != nil {
+		zap.S().Debugf("[GetProductTableId] Error: %s", err)
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case DiscardValue:
+			return 0, false
+		case DatabaseDown:
+			return 0, false
+		case Other:
+			return 0, false
+		}
+		return
+	}
+
+	go PutCacheProductTableId(productName, AssetTableId, ProductTableId)
+	zap.S().Debugf("Stored ProductName to cache")
+
+	success = true
+	return
+}
+
+func GetUniqueProductID(ChildID string, DBAssetID uint32) (UniqueProductTableId uint32, success bool) {
+	success = false
+
+	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(ChildID, DBAssetID).Scan(&UniqueProductTableId)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ChildID, DBAssetID)
+	} else if err != nil {
+		zap.S().Debugf("[GetUniqueProductID] Error: %s", err)
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case DiscardValue:
+			return 0, false
+		case DatabaseDown:
+			return 0, false
+		case Other:
+			return 0, false
+		}
+		return
+	}
+	success = true
+	return
+}
+
+func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (LatestparentUniqueProductId uint32, success bool) {
+	success = false
+
+	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(ParentID, DBAssetID).Scan(&LatestparentUniqueProductId)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
+	} else if err != nil {
+		zap.S().Debugf("[GetUniqueProductID] Error: %s", err)
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case DiscardValue:
+			return 0, false
+		case DatabaseDown:
+			return 0, false
+		case Other:
+			return 0, false
+		}
+		return
+	}
 
 	success = true
 	return

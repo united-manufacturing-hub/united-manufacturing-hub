@@ -137,12 +137,10 @@ func DrainChannel(c chan *kafka.Message) bool {
 		if ok {
 			putBackChannel <- PutBackChan{msg, "Shutting down", nil}
 		} else {
-			zap.S().Debugf("Processor channel is closed !")
 			return false
 		}
 	default:
 		{
-			zap.S().Debugf("Processor channel is empty !")
 			return true
 		}
 	}
