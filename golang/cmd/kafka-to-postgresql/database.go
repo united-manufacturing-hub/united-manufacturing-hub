@@ -38,7 +38,8 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 		panic(fmt.Sprintf("Postgres not yet available: %s", perr))
 	}
 
-	db.SetMaxOpenConns(20)
+	db.SetMaxOpenConns(100)
+	db.SetMaxIdleConns(200)
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
 
@@ -96,8 +97,9 @@ func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 	}
 
 	matchedOutOfRange, err := regexp.MatchString(`pq: value "-*\d+" is out of range for type integer`, errorString)
+	matchedTsOutOfRange, err := regexp.MatchString(`pq: timestamp out of range: .+`, errorString)
 
-	isRecoverableByDiscarding := matchedOutOfRange
+	isRecoverableByDiscarding := matchedOutOfRange || matchedTsOutOfRange
 	if isRecoverableByDiscarding {
 		return DiscardValue
 	}

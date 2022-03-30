@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
+	"time"
 )
 
 type ScrapUniqueProduct struct{}
@@ -12,12 +14,14 @@ type scrapUniqueProduct struct {
 	UID uint32 `json:"UID"`
 }
 
-func (c ScrapUniqueProduct) ProcessMessages(msg ParsedMessage, pid int) (err error, putback bool) {
+func (c ScrapUniqueProduct) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 
+	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	defer txnCtxCl()
 	var txn *sql.Tx = nil
-	txn, err = db.Begin()
+	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
-		zap.S().Errorf("[%d] Error starting transaction: %s", pid, err.Error())
+		zap.S().Errorf("Error starting transaction: %s", err.Error())
 		return err, true
 	}
 
@@ -34,8 +38,12 @@ func (c ScrapUniqueProduct) ProcessMessages(msg ParsedMessage, pid int) (err err
 
 	// Changes should only be necessary between this marker
 
-	stmt := txn.Stmt(statement.UpdateUniqueProductTableSetIsScrap)
-	_, err = stmt.Exec(sC.UID, AssetTableID)
+	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	defer txnStmtCtxCl()
+	stmt := txn.StmtContext(txnStmtCtx, statement.UpdateUniqueProductTableSetIsScrap)
+	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	defer stmtCtxCl()
+	_, err = stmt.ExecContext(stmtCtx, sC.UID, AssetTableID)
 	if err != nil {
 		return err, true
 	}
@@ -43,18 +51,18 @@ func (c ScrapUniqueProduct) ProcessMessages(msg ParsedMessage, pid int) (err err
 	// And this marker
 
 	if isDryRun {
-		zap.S().Debugf("[%d] Dry run: not committing transaction", pid)
+		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
 			return err, true
 		}
 	} else {
-		zap.S().Debugf("[%d] Committing transaction", pid)
+
 		err = txn.Commit()
 		if err != nil {
 			return err, true
 		}
 	}
 
-	return err, true
+	return err, false
 }

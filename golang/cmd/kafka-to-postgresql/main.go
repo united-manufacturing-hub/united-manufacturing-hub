@@ -4,7 +4,6 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -17,6 +16,11 @@ import (
 var buildtime string
 
 var f *os.File
+
+var HighIntegrityEnabled = false
+var HighThroughputEnabled = false
+var HITopic string
+var HTTopic string
 
 func main() {
 	// BEGIN PROFILER
@@ -84,37 +88,52 @@ func main() {
 	if KafkaBoostrapServer == "" {
 		panic("KAFKA_BOOSTRAP_SERVER not set")
 	}
-	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
-	if KafkaTopic == "" {
-		panic("KAFKA_LISTEN_TOPIC not set")
+	HITopic = os.Getenv("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC")
+	if HITopic == "" {
+		zap.S().Warnf("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC not set")
+	} else {
+		HighIntegrityEnabled = true
+	}
+	HTTopic = os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
+	if HTTopic == "" {
+		zap.S().Warnf("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC not set")
+	} else {
+		HighThroughputEnabled = true
 	}
 
-	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers":  KafkaBoostrapServer,
-		"security.protocol":  "plaintext",
-		"group.id":           "kafka-to-postgresql",
-		"enable.auto.commit": true,
-		"auto.offset.reset":  "earliest",
+	if !HighThroughputEnabled && !HighIntegrityEnabled {
+		panic("No topics enabled")
+	}
+
+	// Combining enable.auto.commit and enable.auto.offset.store
+	// leads to better performance.
+	// Processed message now will be stored locally and then automatically committed to Kafka.
+	// This still provides the at-least-once guarantee.
+	SetupHIKafka(kafka.ConfigMap{
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"security.protocol":        "plaintext",
+		"group.id":                 "kafka-to-postgresql-hi-processor",
+		"enable.auto.commit":       true,
+		"enable.auto.offset.store": false,
+		"auto.offset.reset":        "earliest",
+		"statistics.interval.ms":   1000 * 10,
 	})
 
 	// 1GB, 1GB
 	InitCache(1073741824, 1073741824)
 
 	zap.S().Debugf("Starting queue processor")
-	// Reduce this number, if pg throws sql: statement is closed !!!
-	processors := 20
+	// Reduce this number, if pg throws sql: statement is closed !!
 
-	processorChannel = make(chan *kafka.Message, processors)
-	putBackChannel = make(chan PutBackChan, 200)
-
-	go startPutbackProcessor()
-	go processKafkaQueue(KafkaTopic)
-
-	for i := 0; i < processors; i++ {
-		go queueProcessor(i)
+	if HighIntegrityEnabled {
+		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
+		highIntegrityPutBackChannel = make(chan PutBackChan, 200)
+		highIntegrityCommitChannel = make(chan *kafka.Message)
+		go startHighIntegrityPutbackProcessor()
+		go processHighIntegrityKafkaQueue()
+		go startHighIntegrityQueueProcessor()
+		go startHighIntegrityCommitProcessor()
 	}
-
-	go countProcessor()
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -152,25 +171,26 @@ func ShutdownApplicationGraceful() {
 
 	// Wait if there are any CountMessagesToCommitLater in the queue
 
-	zap.S().Debugf("Cleaning up processor channel (%d)", len(processorChannel))
-	if !DrainChannel(processorChannel) {
-		time.Sleep(5 * time.Second)
-	}
-	if !DrainChannel(countChannel) {
-		time.Sleep(5 * time.Second)
-	}
+	if HighIntegrityEnabled {
+		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
+		if !DrainHIChannel(highIntegrityProcessorChannel) {
+			time.Sleep(5 * time.Second)
+		}
 
-	time.Sleep(1 * time.Second)
-
-	for len(putBackChannel) > 0 {
-		zap.S().Infof("Waiting for putback channel to empty: %d", len(putBackChannel))
 		time.Sleep(1 * time.Second)
+
+		for len(highIntegrityPutBackChannel) > 0 {
+			zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
+			time.Sleep(1 * time.Second)
+		}
 	}
 	ShutdownPutback = true
 
 	time.Sleep(1 * time.Second)
 
-	internal.CloseKafka()
+	if HighIntegrityEnabled {
+		CloseHIKafka()
+	}
 
 	ShutdownDB()
 
@@ -194,29 +214,49 @@ func PerformanceReport() {
 	lastMessages := 0
 	lastPutbacks := 0
 	lastInvalids := 0
-	sleepS := 10
+	sleepS := 10.0
 	for !ShuttingDown {
-		commitsPerSecond := (Commits - lastCommits) / sleepS
-		messagesPerSecond := (Messages - lastMessages) / sleepS
-		putbacksPerSecond := (PutBacks - lastPutbacks) / sleepS
-		invalidsPerSecond := (InvalidMessages - lastInvalids) / sleepS
+		preExecutionTime := time.Now()
+		commitsPerSecond := float64(Commits-lastCommits) / sleepS
+		messagesPerSecond := float64(Messages-lastMessages) / sleepS
+		putbacksPerSecond := float64(PutBacks-lastPutbacks) / sleepS
+		invalidsPerSecond := float64(InvalidMessages-lastInvalids) / sleepS
 		lastCommits = Commits
 		lastMessages = Messages
 		lastPutbacks = PutBacks
 		lastInvalids = InvalidMessages
+		lowOffsetHI, highOffsetHI, _ := GetHICommitOffset()
 
 		zap.S().Infof("Performance report"+
-			"\nCommits: %d, Commits/s: %d"+
-			"\nMessages: %d, Messages/s: %d"+
-			"\nPutBacks: %d, PutBacks/s: %d"+
-			"\nInvalids: %d, Invalids/s: %d"+
+			"\nCommits: %d, Commits/s: %f"+
+			"\nMessages: %d, Messages/s: %f"+
+			"\nPutBacks: %d, PutBacks/s: %f"+
+			"\nInvalids: %d, Invalids/s: %f"+
 			"\nProcessor queue length: %d"+
 			"\nPutBack queue length: %d"+
-			"\nCount queue length: %d"+
+			"\nCommit queue length: %d"+
 			"\nMessagecache hitrate %f"+
 			"\nDbcache hitrate %f"+
-			"\nCount messages commitable: %d", Commits, commitsPerSecond, Messages, messagesPerSecond, PutBacks, putbacksPerSecond, InvalidMessages, invalidsPerSecond, len(processorChannel), len(putBackChannel), len(countChannel), messagecache.HitRate(), dbcache.HitRate(), CountMessagesToCommitLater)
+			"\nLow offset HI: %d"+
+			"\nHigh offset HI: %d",
+			Commits, commitsPerSecond,
+			Messages, messagesPerSecond,
+			PutBacks, putbacksPerSecond,
+			InvalidMessages, invalidsPerSecond,
+			len(highIntegrityProcessorChannel),
+			len(highIntegrityPutBackChannel),
+			len(highIntegrityCommitChannel),
+			messagecache.HitRate(),
+			dbcache.HitRate(),
+			lowOffsetHI,
+			highOffsetHI,
+		)
 
-		time.Sleep(time.Second * time.Duration(sleepS))
+		postExecutionTime := time.Now()
+		ExecutionTimeDiff := postExecutionTime.Sub(preExecutionTime).Seconds()
+		if ExecutionTimeDiff <= 0 {
+			continue
+		}
+		time.Sleep(time.Second * time.Duration(sleepS-ExecutionTimeDiff))
 	}
 }
