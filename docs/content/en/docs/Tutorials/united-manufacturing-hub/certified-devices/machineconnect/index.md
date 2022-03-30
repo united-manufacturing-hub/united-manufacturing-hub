@@ -47,6 +47,17 @@ There are two options to connect the PLC. We strongly recommend Option 1, but in
 
 ### Option 2: The PLC has a static IP, which cannot be changed
 
+#### New method
+
+> This method should be quicker
+
+1. Add a new interface for the PLC network
+2. Add a new route wit the target being the PLC IP and as gateway the automatically created gateway for the PLC (will not be shown by default, need to enter PLC_GW to be shown)
+3. Change NAT to "Hybrid outbound NAT rule generation" and add a NAT for PLC, Source the LAN network, Destination the PLC
+4. Thats it
+
+#### Old method
+
 1. Adding a new interface for the PLC network, e.g. "S7". {{< imgproc 1.png Fit "800x800" >}}{{< /imgproc >}}
 2. Adding a new gateway (see screenshot. Assuming 192.168.1.150 is the IP of the PLC and the above created interface is called "S7") {{< imgproc 2.png Fit "800x800" >}}{{< /imgproc >}}
 3. Adding a new route (see screenshot and assumptions of step 2) {{< imgproc 3.png Fit "800x800" >}}{{< /imgproc >}}
