@@ -80,7 +80,7 @@ func GetCacheProductTableId(customerID string, AssetTableId uint32) (uint32, boo
 	return GetUint32(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
 }
 
-func PutCacheParsedMessage(msg *kafka.Message) (valid bool, message ParsedMessage) {
+func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, message ParsedMessage) {
 	valid = false
 	if msg == nil || msg.TopicPartition.Topic == nil {
 		return

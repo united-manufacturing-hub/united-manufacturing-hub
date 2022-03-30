@@ -123,16 +123,24 @@ func main() {
 	InitCache(1073741824, 1073741824)
 
 	zap.S().Debugf("Starting queue processor")
-	// Reduce this number, if pg throws sql: statement is closed !!
 
 	if HighIntegrityEnabled {
 		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
-		highIntegrityPutBackChannel = make(chan PutBackChan, 200)
+		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
-		go startHighIntegrityPutbackProcessor()
-		go processHighIntegrityKafkaQueue()
+		go startPutbackProcessor("[HIGH_INTEGRITY]", highIntegrityPutBackChannel, HIKafkaProducer)
+		go processKafkaQueue("[HIGH INTEGRITY]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
+		go startCommitProcessor("[HIGH_INTEGRITY]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
-		go startHighIntegrityCommitProcessor()
+	}
+
+	if HighThroughputEnabled {
+		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
+		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
+		// HT has no commit channel, it uses auto commit
+		go startPutbackProcessor("[HIGH_THROUGHPUT]", highThroughputPutBackChannel, HTKafkaProducer)
+		go processKafkaQueue("[HIGH THROUGHPUT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
+		go startHighThroughputQueueProcessor()
 	}
 
 	// Allow graceful shutdown
@@ -169,11 +177,9 @@ func ShutdownApplicationGraceful() {
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
-	// Wait if there are any CountMessagesToCommitLater in the queue
-
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
-		if !DrainHIChannel(highIntegrityProcessorChannel) {
+		if !DrainChannel("[HIGH_INTEGRITY]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 			time.Sleep(5 * time.Second)
 		}
 
@@ -184,12 +190,30 @@ func ShutdownApplicationGraceful() {
 			time.Sleep(1 * time.Second)
 		}
 	}
+
+	// This is behind HI to allow a higher chance of a clean shutdown
+	if HighThroughputEnabled {
+		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
+		if !DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
+			time.Sleep(5 * time.Second)
+		}
+
+		time.Sleep(1 * time.Second)
+
+		for len(highThroughputPutBackChannel) > 0 {
+			zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
+			time.Sleep(1 * time.Second)
+		}
+	}
 	ShutdownPutback = true
 
 	time.Sleep(1 * time.Second)
 
 	if HighIntegrityEnabled {
 		CloseHIKafka()
+	}
+	if HighThroughputEnabled {
+		CloseHTKafka()
 	}
 
 	ShutdownDB()

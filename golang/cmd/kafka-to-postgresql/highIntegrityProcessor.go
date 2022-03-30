@@ -3,43 +3,14 @@ package main
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"
-	"regexp"
 )
 
-var rp = regexp.MustCompile(`ia\.([\w]*)\.([\w]*)\.([\w]*)\.([\w]*)`)
-
-type ParsedMessage struct {
-	AssetId     string
-	Location    string
-	CustomerId  string
-	PayloadType string
-	Payload     []byte
-}
-
-func ParseMessage(msg *kafka.Message) (bool, ParsedMessage) {
-
-	valid, found, message := GetCacheParsedMessage(msg)
-	if !valid {
-		return false, ParsedMessage{}
-	}
-	if found {
-		return true, message
-	}
-
-	valid, m := PutCacheParsedMessage(msg)
-	if !valid {
-		return false, ParsedMessage{}
-	}
-
-	return true, m
-
-}
-
+// startHighIntegrityQueueProcessor starts the kafka processor for the high integrity queue
 func startHighIntegrityQueueProcessor() {
 	if !HighIntegrityEnabled {
 		return
 	}
-	zap.S().Debugf("Starting queue processor")
+	zap.S().Debugf("[HI]Starting queue processor")
 	for !ShuttingDown {
 		var msg *kafka.Message
 		msg = <-highIntegrityProcessorChannel
@@ -52,20 +23,11 @@ func startHighIntegrityQueueProcessor() {
 		var putback bool
 
 		switch parsedMessage.PayloadType {
-		case Prefix.ProcessValueFloat64:
-			zap.S().Errorf("ProcessValueFloat64 not allowed for high integrity")
-			break
-		case Prefix.ProcessValue:
-			zap.S().Errorf("ProcessValue not allowed for high integrity")
-			break
-		case Prefix.ProcessValueString:
-			zap.S().Errorf("ProcessValueString not allowed for high integrity")
-			break
 		case Prefix.Count:
 			err, putback = Count{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.Recommendation:
-			zap.S().Errorf("Recommendation message not implemented")
+			zap.S().Errorf("[HI]Recommendation message not implemented")
 			//err, putback = Recommendation{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.State:
@@ -96,7 +58,7 @@ func startHighIntegrityQueueProcessor() {
 			err, putback = EndOrder{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.AddMaintenanceActivity:
-			zap.S().Errorf("AddMaintenanceActivity message not implemented")
+			zap.S().Errorf("[HI]AddMaintenanceActivity message not implemented")
 			//err, putback = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.ProductTag:
@@ -109,21 +71,24 @@ func startHighIntegrityQueueProcessor() {
 			err, putback = AddParentToChild{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.ModifyState:
-			zap.S().Errorf("ModifyState message not implemented")
+			zap.S().Errorf("[HI]ModifyState message not implemented")
 			//err, putback = ModifyState{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.ModifyProducesPieces:
-			zap.S().Errorf("ModifyProducesPieces message not implemented")
+			zap.S().Errorf("[HI]ModifyProducesPieces message not implemented")
 			//err, putback = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.DeleteShiftById:
-			zap.S().Errorf("DeleteShiftById message not implemented")
+			zap.S().Errorf("[HI]DeleteShiftById message not implemented")
 			//err, putback = DeleteShiftById{}.ProcessMessages(parsedMessage)
 			break
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-			zap.S().Errorf("DeleteShiftByAssetIdAndBeginTimestamp message not implemented")
+			zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp message not implemented")
 			//err, putback = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
 			break
+		default:
+			zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
+			putback = true
 		}
 
 		if err != nil {
@@ -131,35 +96,35 @@ func startHighIntegrityQueueProcessor() {
 			switch GetPostgresErrorRecoveryOptions(err) {
 			case DatabaseDown:
 				if putback {
-					zap.S().Errorf("[DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
-					highIntegrityPutBackChannel <- PutBackChan{msg: msg, reason: "DatabaseDown", errorString: &errStr}
+					zap.S().Errorf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
+					highIntegrityPutBackChannel <- PutBackChanMsg{msg: msg, reason: "DatabaseDown", errorString: &errStr}
 				} else {
-					zap.S().Errorf("[DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
+					zap.S().Errorf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
 					highIntegrityCommitChannel <- msg
 				}
 				break
 			case DiscardValue:
-				//zap.S().Errorf("[DiscardValue] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
+				zap.S().Errorf("[HI][DiscardValue] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
 				highIntegrityCommitChannel <- msg
 				break
 			case Other:
 				if putback {
-					zap.S().Errorf("[Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
-					highIntegrityPutBackChannel <- PutBackChan{msg: msg, reason: "Other", errorString: &errStr}
+					zap.S().Errorf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
+					highIntegrityPutBackChannel <- PutBackChanMsg{msg: msg, reason: "Other", errorString: &errStr}
 				} else {
-					zap.S().Errorf("[Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
+					zap.S().Errorf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload, err)
 					highIntegrityCommitChannel <- msg
 				}
 				break
 			}
 		} else {
 			if putback {
-				zap.S().Errorf("[No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
-				highIntegrityPutBackChannel <- PutBackChan{msg: msg, reason: "Other", errorString: nil}
+				zap.S().Errorf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
+				highIntegrityPutBackChannel <- PutBackChanMsg{msg: msg, reason: "Other", errorString: nil}
 			} else {
 				highIntegrityCommitChannel <- msg
 			}
 		}
 	}
-	zap.S().Debugf("Processor shutting down")
+	zap.S().Debugf("[HI]Processor shutting down")
 }
