@@ -119,6 +119,15 @@ func main() {
 		"statistics.interval.ms":   1000 * 10,
 	})
 
+	SetupHTKafka(kafka.ConfigMap{
+		"bootstrap.servers":      KafkaBoostrapServer,
+		"security.protocol":      "plaintext",
+		"group.id":               "kafka-to-postgresql-ht-processor",
+		"enable.auto.commit":     true,
+		"auto.offset.reset":      "earliest",
+		"statistics.interval.ms": 1000 * 10,
+	})
+
 	// 1GB, 1GB
 	InitCache(1073741824, 1073741824)
 
@@ -141,6 +150,9 @@ func main() {
 		go startPutbackProcessor("[HIGH_THROUGHPUT]", highThroughputPutBackChannel, HTKafkaProducer)
 		go processKafkaQueue("[HIGH THROUGHPUT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
 		go startHighThroughputQueueProcessor()
+
+		go startProcessValueQueueAggregator()
+		go startProcessValueStringQueueAggregator()
 	}
 
 	// Allow graceful shutdown
@@ -197,6 +209,12 @@ func ShutdownApplicationGraceful() {
 		if !DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
 			time.Sleep(5 * time.Second)
 		}
+		if !DrainChannel("[HIGH_THROUGHPUT]", processValueChannel, highThroughputPutBackChannel) {
+			time.Sleep(5 * time.Second)
+		}
+		if !DrainChannel("[HIGH_THROUGHPUT]", processValueStringChannel, highThroughputPutBackChannel) {
+			time.Sleep(5 * time.Second)
+		}
 
 		time.Sleep(1 * time.Second)
 
@@ -249,20 +267,21 @@ func PerformanceReport() {
 		lastMessages = Messages
 		lastPutbacks = PutBacks
 		lastInvalids = InvalidMessages
-		lowOffsetHI, highOffsetHI, _ := GetHICommitOffset()
 
 		zap.S().Infof("Performance report"+
 			"\nCommits: %d, Commits/s: %f"+
 			"\nMessages: %d, Messages/s: %f"+
 			"\nPutBacks: %d, PutBacks/s: %f"+
 			"\nInvalids: %d, Invalids/s: %f"+
-			"\nProcessor queue length: %d"+
-			"\nPutBack queue length: %d"+
-			"\nCommit queue length: %d"+
+			"\n[HI] Processor queue length: %d"+
+			"\n[HI] PutBack queue length: %d"+
+			"\n[HI] Commit queue length: %d"+
 			"\nMessagecache hitrate %f"+
 			"\nDbcache hitrate %f"+
-			"\nLow offset HI: %d"+
-			"\nHigh offset HI: %d",
+			"\n[HT] ProcessValue queue lenght: %d"+
+			"\n[HT] ProcessValueString queue lenght: %d"+
+			"\n[HT] Processor queue length: %d"+
+			"\n[HT] PutBack queue length: %d",
 			Commits, commitsPerSecond,
 			Messages, messagesPerSecond,
 			PutBacks, putbacksPerSecond,
@@ -272,8 +291,10 @@ func PerformanceReport() {
 			len(highIntegrityCommitChannel),
 			messagecache.HitRate(),
 			dbcache.HitRate(),
-			lowOffsetHI,
-			highOffsetHI,
+			len(processValueChannel),
+			len(processValueStringChannel),
+			len(highThroughputProcessorChannel),
+			len(highThroughputPutBackChannel),
 		)
 
 		postExecutionTime := time.Now()

@@ -26,7 +26,7 @@ type PutBackChanMsg struct {
 }
 
 func processKafkaQueue(identifier string, topic string, processorChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer, putBackChannel chan PutBackChanMsg) {
-	zap.S().Debugf("[%s]Starting Kafka consumer for topic %s", identifier, topic)
+	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
 	err := kafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
 		panic(err)
@@ -35,7 +35,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 	for !ShuttingDown {
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
-			zap.S().Debugf("[%s]Waiting for put back channel to empty: %d", identifier, len(putBackChannel))
+			zap.S().Debugf("%s Waiting for put back channel to empty: %d", identifier, len(putBackChannel))
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -46,11 +46,11 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
-				zap.S().Errorf("[%s]Unknown topic or partition: %s", identifier, err)
+				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
 				ShutdownApplicationGraceful()
 				return
 			} else {
-				zap.S().Warnf("[%s]Failed to read kafka message: %s", identifier, err)
+				zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -58,7 +58,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		processorChannel <- msg
 		Messages += 1
 	}
-	zap.S().Debugf("[%s]Shutting down Kafka consumer for topic %s", identifier, topic)
+	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
 }
 
 func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer) {
@@ -111,7 +111,7 @@ func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 				var err error
 				msg.Key, err = jsoniter.Marshal(kafkaKey)
 				if err != nil {
-					zap.S().Errorf("[%s]Failed to marshal key: %v (%s)", identifier, kafkaKey, err)
+					zap.S().Errorf("%s Failed to marshal key: %v (%s)", identifier, kafkaKey, err)
 					err = nil
 				}
 
@@ -132,7 +132,7 @@ func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 			}
 		}
 	}
-	zap.S().Infof("[%s]Putback processor shutting down", identifier)
+	zap.S().Infof("%s Putback processor shutting down", identifier)
 }
 
 // DrainChannel empties a channel into the high Throughput putback channel
@@ -153,14 +153,14 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 }
 
 func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer) {
-	zap.S().Infof("[%s]Starting commit processor", identifier)
+	zap.S().Infof("%s Starting commit processor", identifier)
 	for !ShuttingDown || len(commitChannel) > 0 {
 		select {
 		case msg := <-commitChannel:
 			{
 				_, err := kafkaConsumer.StoreMessage(msg)
 				if err != nil {
-					zap.S().Errorf("[%s]Error commiting %v: %s", identifier, msg, err)
+					zap.S().Errorf("%s Error commiting %v: %s", identifier, msg, err)
 					commitChannel <- msg
 				} else {
 					Commits += 1
@@ -168,5 +168,5 @@ func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, 
 			}
 		}
 	}
-	zap.S().Infof("[%s]Stopped commit processor", identifier)
+	zap.S().Infof("%s Stopped commit processor", identifier)
 }

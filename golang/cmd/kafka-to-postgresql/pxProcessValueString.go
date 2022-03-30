@@ -34,6 +34,7 @@ func startProcessValueStringQueueAggregator() {
 			}
 		case <-writeToDbTimer.C:
 			{
+				zap.S().Debugf("[HT][PVS] Messages length: %d", len(messages))
 				if len(messages) == 0 {
 					writeToDbTimer.Reset(time.Second * 5)
 					continue
@@ -53,6 +54,13 @@ func startProcessValueStringQueueAggregator() {
 			}
 		}
 	}
+	for _, message := range messages {
+		highThroughputPutBackChannel <- PutBackChanMsg{
+			msg:         message,
+			reason:      "Shutting down",
+			errorString: nil,
+		}
+	}
 }
 
 func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []*kafka.Message, err error, putback bool, reason string) {
@@ -67,8 +75,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
 	defer txnStmtCtxCl()
-	stmt := txn.StmtContext(txnStmtCtx, statement.CreateTmpProcessValueTable64)
-
+	stmt := txn.StmtContext(txnStmtCtx, statement.CreateTmpProcessValueTableString)
 	_, err = stmt.Exec()
 	if err != nil {
 		zap.S().Errorf("Error creating temporary table: %s", err.Error())
@@ -80,7 +87,8 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 	txnStmtCopyCtx, txnStmtCopyCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
 	defer txnStmtCopyCtxCl()
 	var stmtCopy *sql.Stmt
-	stmtCopy, err = txn.PrepareContext(txnStmtCopyCtx, pq.CopyIn("tmp_processvaluetable", "timestamp", "asset_id", "value", "valuename"))
+	stmtCopy, err = txn.PrepareContext(txnStmtCopyCtx, pq.CopyIn("tmp_processvaluestringtable", "timestamp", "asset_id", "value", "valuename"))
+	defer stmtCopy.Close()
 	if err != nil {
 		zap.S().Errorf("Error preparing copy statement: %s", err.Error())
 		return messages, err, true, "Error preparing copy statement"
@@ -125,9 +133,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 						continue
 					}
 
+					timestamp := time.Unix(0, int64(timestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
 					txnStmtCopyExecCtx, txnStmtCopyExecCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
-					_, err = stmtCopy.ExecContext(txnStmtCopyExecCtx, timestampMs, AssetTableID, value, k)
-					txnStmtCopyExecCtxCl()
+					_, err = stmtCopy.ExecContext(txnStmtCopyExecCtx, timestamp, AssetTableID, k, value)
+					defer txnStmtCopyExecCtxCl()
 					if err != nil {
 						zap.S().Errorf("Error inserting into temporary table: %s", err.Error())
 						return messages, err, true, "Error inserting into temporary table"
@@ -141,7 +150,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 	defer txnStmtCopyToPVTCtxCl()
 	var stmtCopyToPVT *sql.Stmt
 	stmtCopyToPVT, err = txn.PrepareContext(txnStmtCopyToPVTCtx, `
-			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
+			INSERT INTO processvaluetablestring (SELECT * FROM tmp_processvaluestringtable) ON CONFLICT DO NOTHING;
 		`)
 	if err != nil {
 		zap.S().Errorf("Error preparing copy to process value table statement: %s", err.Error())
@@ -150,7 +159,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 
 	txnStmtCopyToPVTExecCtx, txnStmtCopyToPVTExecCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
 	defer txnStmtCopyToPVTExecCtxCl()
-	stmtCopyToPVT.ExecContext(txnStmtCopyToPVTExecCtx)
+	_, err = stmtCopyToPVT.ExecContext(txnStmtCopyToPVTExecCtx)
 	if err != nil {
 		zap.S().Errorf("Error copying to process value table: %s", err.Error())
 		return messages, err, true, "Error copying to process value table"

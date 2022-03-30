@@ -28,12 +28,12 @@ func startProcessValueQueueAggregator() {
 		select {
 		case msg := <-processValueChannel:
 			{
-
 				messages = append(messages, msg)
 				break
 			}
 		case <-writeToDbTimer.C:
 			{
+				zap.S().Debugf("[HT][PV] Messages length: %d", len(messages))
 				if len(messages) == 0 {
 					writeToDbTimer.Reset(time.Second * 5)
 					continue
@@ -51,6 +51,13 @@ func startProcessValueQueueAggregator() {
 				}
 				break
 			}
+		}
+	}
+	for _, message := range messages {
+		highThroughputPutBackChannel <- PutBackChanMsg{
+			msg:         message,
+			reason:      "Shutting down",
+			errorString: nil,
 		}
 	}
 }
@@ -81,6 +88,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 	defer txnStmtCopyCtxCl()
 	var stmtCopy *sql.Stmt
 	stmtCopy, err = txn.PrepareContext(txnStmtCopyCtx, pq.CopyIn("tmp_processvaluetable64", "timestamp", "asset_id", "value", "valuename"))
+	defer stmtCopy.Close()
 	if err != nil {
 		zap.S().Errorf("Error preparing copy statement: %s", err.Error())
 		return messages, err, true, "Error preparing copy statement"
@@ -125,9 +133,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 						continue
 					}
 
+					timestamp := time.Unix(0, int64(timestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
 					txnStmtCopyExecCtx, txnStmtCopyExecCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
-					_, err = stmtCopy.ExecContext(txnStmtCopyExecCtx, timestampMs, AssetTableID, value, k)
-					txnStmtCopyExecCtxCl()
+					_, err = stmtCopy.ExecContext(txnStmtCopyExecCtx, timestamp, AssetTableID, k, value)
+					defer txnStmtCopyExecCtxCl()
 					if err != nil {
 						zap.S().Errorf("Error inserting into temporary table: %s", err.Error())
 						return messages, err, true, "Error inserting into temporary table"
@@ -150,7 +159,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 
 	txnStmtCopyToPVTExecCtx, txnStmtCopyToPVTExecCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
 	defer txnStmtCopyToPVTExecCtxCl()
-	stmtCopyToPVT.ExecContext(txnStmtCopyToPVTExecCtx)
+	_, err = stmtCopyToPVT.ExecContext(txnStmtCopyToPVTExecCtx)
 	if err != nil {
 		zap.S().Errorf("Error copying to process value table: %s", err.Error())
 		return messages, err, true, "Error copying to process value table"

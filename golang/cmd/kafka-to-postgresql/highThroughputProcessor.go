@@ -23,8 +23,7 @@ func startHighThroughputQueueProcessor() {
 
 		switch parsedMessage.PayloadType {
 		case Prefix.ProcessValueFloat64:
-			//processValueFloat64Channel <- msg
-			zap.S().Warnf("[HT] Deprecated topic ProcessValueFloat64, message dropped")
+			processValueChannel <- msg
 			break
 		case Prefix.ProcessValue:
 			processValueChannel <- msg
