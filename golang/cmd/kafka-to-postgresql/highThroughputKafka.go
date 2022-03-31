@@ -53,17 +53,3 @@ func CloseHTKafka() {
 	zap.S().Infof("[HT]Closing Kafka Admin Client")
 	HTKafkaAdminClient.Close()
 }
-
-func GetHTCommitOffset() (lowOffset int64, highOffset int64, err error) {
-	if !HighThroughputEnabled {
-		return 0, 0, nil
-	}
-
-	lowOffset, highOffset, err = HTKafkaConsumer.GetWatermarkOffsets(HTTopic, 0)
-	if err != nil {
-		zap.S().Infof("[HT]GetWatermarkOffsets errored: %s", err)
-		return 0, 0, err
-	}
-
-	return lowOffset, highOffset, err
-}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
@@ -38,10 +39,12 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 		panic(fmt.Sprintf("Postgres not yet available: %s", perr))
 	}
 
-	db.SetMaxOpenConns(100)
-	db.SetMaxIdleConns(200)
+	db.SetMaxOpenConns(20)
+
 	// Healthcheck
 	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
+
+	health.AddLivenessCheck("database", healthcheck.DatabasePingCheck(db, 30*time.Second))
 
 	statement = NewStatementRegistry()
 }
@@ -50,7 +53,9 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 func IsPostgresSQLAvailable() (bool, error) {
 	var err error
 	if db != nil {
-		err = db.Ping()
+		ctx, ctxClose := context.WithTimeout(context.Background(), 5*time.Second)
+		defer ctxClose()
+		err = db.PingContext(ctx)
 		if err == nil {
 			return true, nil
 		}
@@ -108,6 +113,7 @@ func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 
 // GetAssetTableID gets the assetID from the database
 func GetAssetTableID(customerID string, location string, assetID string) (AssetTableID uint32, success bool) {
+
 	success = false
 	// Get from cache if possible
 	var cacheHit bool

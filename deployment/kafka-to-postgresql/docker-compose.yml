@@ -51,6 +51,7 @@ services:
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./postgres_data:/var/lib/postgresql/data
+      #- ./postgresql.conf:/var/lib/postgresql/data/postgresql.conf
 
 
 #  kafka-to-postgresql:

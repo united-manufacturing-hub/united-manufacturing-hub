@@ -56,17 +56,3 @@ func CloseHIKafka() {
 	zap.S().Infof("[HI]Closing Kafka Admin Client")
 	HIKafkaAdminClient.Close()
 }
-
-func GetHICommitOffset() (lowOffset int64, highOffset int64, err error) {
-	if !HighIntegrityEnabled {
-		return 0, 0, nil
-	}
-
-	lowOffset, highOffset, err = HIKafkaConsumer.GetWatermarkOffsets(HITopic, 0)
-	if err != nil {
-		zap.S().Infof("[HI]GetWatermarkOffsets errored: %s", err)
-		return 0, 0, err
-	}
-
-	return lowOffset, highOffset, err
-}

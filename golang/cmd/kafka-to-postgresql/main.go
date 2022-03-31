@@ -137,9 +137,9 @@ func main() {
 		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
 		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
-		go startPutbackProcessor("[HIGH_INTEGRITY]", highIntegrityPutBackChannel, HIKafkaProducer)
-		go processKafkaQueue("[HIGH INTEGRITY]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
-		go startCommitProcessor("[HIGH_INTEGRITY]", highIntegrityCommitChannel, HIKafkaConsumer)
+		go startPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer)
+		go processKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
+		go startCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
 	}
 
@@ -147,8 +147,8 @@ func main() {
 		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
 		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
 		// HT has no commit channel, it uses auto commit
-		go startPutbackProcessor("[HIGH_THROUGHPUT]", highThroughputPutBackChannel, HTKafkaProducer)
-		go processKafkaQueue("[HIGH THROUGHPUT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
+		go startPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer)
+		go processKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
 		go startHighThroughputQueueProcessor()
 
 		go startProcessValueQueueAggregator()
@@ -191,7 +191,7 @@ func ShutdownApplicationGraceful() {
 
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
-		if !DrainChannel("[HIGH_INTEGRITY]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+		if !DrainChannel("[HT]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 			time.Sleep(5 * time.Second)
 		}
 
@@ -249,30 +249,25 @@ func ShutdownApplicationGraceful() {
 var Commits = 0
 var Messages = 0
 var PutBacks = 0
-var InvalidMessages = 0
 
 func PerformanceReport() {
 	lastCommits := 0
 	lastMessages := 0
 	lastPutbacks := 0
-	lastInvalids := 0
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
 		commitsPerSecond := float64(Commits-lastCommits) / sleepS
 		messagesPerSecond := float64(Messages-lastMessages) / sleepS
 		putbacksPerSecond := float64(PutBacks-lastPutbacks) / sleepS
-		invalidsPerSecond := float64(InvalidMessages-lastInvalids) / sleepS
 		lastCommits = Commits
 		lastMessages = Messages
 		lastPutbacks = PutBacks
-		lastInvalids = InvalidMessages
 
 		zap.S().Infof("Performance report"+
 			"\nCommits: %d, Commits/s: %f"+
 			"\nMessages: %d, Messages/s: %f"+
 			"\nPutBacks: %d, PutBacks/s: %f"+
-			"\nInvalids: %d, Invalids/s: %f"+
 			"\n[HI] Processor queue length: %d"+
 			"\n[HI] PutBack queue length: %d"+
 			"\n[HI] Commit queue length: %d"+
@@ -285,7 +280,6 @@ func PerformanceReport() {
 			Commits, commitsPerSecond,
 			Messages, messagesPerSecond,
 			PutBacks, putbacksPerSecond,
-			InvalidMessages, invalidsPerSecond,
 			len(highIntegrityProcessorChannel),
 			len(highIntegrityPutBackChannel),
 			len(highIntegrityCommitChannel),

@@ -41,7 +41,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		}
 
 		var msg *kafka.Message
-		msg, err = kafkaConsumer.ReadMessage(500)
+		msg, err = kafkaConsumer.ReadMessage(5000)
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
@@ -50,9 +50,9 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 				ShutdownApplicationGraceful()
 				return
 			} else {
-				zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
-				time.Sleep(5 * time.Second)
-				continue
+				zap.S().Warnf("%s Failed to read kafka message: %s: %s", identifier, err, err.(kafka.Error).Code())
+				ShutdownApplicationGraceful()
+				return
 			}
 		}
 		processorChannel <- msg

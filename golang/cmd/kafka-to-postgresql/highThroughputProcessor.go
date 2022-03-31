@@ -14,6 +14,9 @@ func startHighThroughputQueueProcessor() {
 	for !ShuttingDown {
 		var msg *kafka.Message
 		msg = <-highThroughputProcessorChannel
+		if msg == nil {
+			continue
+		}
 		parsed, parsedMessage := ParseMessage(msg)
 		if !parsed {
 			continue
