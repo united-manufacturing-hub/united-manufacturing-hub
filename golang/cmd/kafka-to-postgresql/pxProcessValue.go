@@ -97,7 +97,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		}
 	}
 	putBackMsg = make([]*kafka.Message, 0)
-	toCommit := 0
+	toCommit := float64(0)
 	//zap.S().Debugf("[HT][PV] 2")
 	{
 
@@ -170,9 +170,6 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 					toCommit += 1
 				}
 			}
-			if toCommit%10 == 0 {
-				//zap.S().Debugf("ToCommit: %d vs %d", toCommit, len(messages))
-			}
 		}
 		//zap.S().Debugf("Pre copy closed")
 		err = stmtCopy.Close()
@@ -228,7 +225,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		if len(putBackMsg) > 0 {
 			return putBackMsg, nil, true, "AssetID not found"
 		}
-		PutBacks += len(putBackMsg)
+		PutBacks += float64(len(putBackMsg))
 		Commits += toCommit
 	}
 	return putBackMsg, nil, false, ""

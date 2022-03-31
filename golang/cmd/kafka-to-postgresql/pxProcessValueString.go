@@ -100,7 +100,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 	}
 
 	putBackMsg = make([]*kafka.Message, 0)
-	toCommit := 0
+	toCommit := float64(0)
 	{
 
 		//zap.S().Debugf("[HT][PVS] Preparing copy statement")
@@ -223,7 +223,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		if len(putBackMsg) > 0 {
 			return putBackMsg, nil, true, "AssetID not found"
 		}
-		PutBacks += len(putBackMsg)
+		PutBacks += float64(len(putBackMsg))
 		Commits += toCommit
 	}
 
