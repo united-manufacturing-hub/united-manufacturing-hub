@@ -5,7 +5,6 @@ go 1.15
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 	github.com/beeker1121/goque v2.1.0+incompatible
-	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/coocood/freecache v1.2.1
@@ -22,6 +21,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.12.0
+	github.com/rung/go-safecast v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/uber/jaeger-client-go v2.23.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
