@@ -240,8 +240,8 @@ write_files:
       if [ $reachable_ntp_server_found -eq 0 ]; then
       echo "No reachable NTP server found."
       echo "This can happen when you either have no connection to the internet or when you are in a limited network"
-      echo "that blocks NTP requests (some universities do that). The solution is to connect ot the internet and / or"
-      echo "to specify the allowed NTP servers manually in the development.yaml. Fore more information visit docs.umh.app"
+      echo "that blocks NTP requests (some universities do that). The solution is to connect to the internet and / or"
+      echo "to specify the allowed NTP servers manually in the development.yaml. For more information visit docs.umh.app"
       fi
 
 
@@ -264,8 +264,8 @@ write_files:
       if [ $dns_query_successfull -eq 0 ]; then
       echo "Failed to resolve umh.app."
       echo "This can happen when you either have no connection to the internet or when you are in a limited network"
-      echo "that blocks DNS requests (some universities do that). The solution is to connect ot the internet and / or"
-      echo "to specify the allowed DNS servers manually in the development.yaml. Fore more information visit docs.umh.app"
+      echo "that blocks DNS requests (some universities do that). The solution is to connect to the internet and / or"
+      echo "to specify the allowed DNS servers manually in the development.yaml. For more information visit docs.umh.app"
       exit
       fi
 
