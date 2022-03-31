@@ -65,8 +65,6 @@ func main() {
 		zap.S().Warnf("Postgres SSL mode is set to %s", PQSSLMode)
 	}
 
-	zap.S().Debugf("Setting up database with %s %d %s %s %s %s", PQHost, PQPort, PQUser, PQPassword, PWDBName, PQSSLMode)
-
 	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, dryRun, PQSSLMode)
 
 	zap.S().Debugf("Setting up Kafka")
