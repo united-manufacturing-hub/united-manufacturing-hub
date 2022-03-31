@@ -13,6 +13,7 @@ func startHighIntegrityQueueProcessor() {
 	zap.S().Debugf("[HI]Starting queue processor")
 	for !ShuttingDown {
 		var msg *kafka.Message
+		// Get next message from HI kafka consumer
 		msg = <-highIntegrityProcessorChannel
 		if msg == nil {
 			continue
@@ -25,6 +26,7 @@ func startHighIntegrityQueueProcessor() {
 		var err error
 		var putback bool
 
+		// Switch based on topic
 		switch parsedMessage.PayloadType {
 		case Prefix.Count:
 			err, putback = Count{}.ProcessMessages(parsedMessage)

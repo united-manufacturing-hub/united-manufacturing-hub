@@ -9,12 +9,16 @@ var highIntegrityProcessorChannel chan *kafka.Message
 var highIntegrityCommitChannel chan *kafka.Message
 var highIntegrityPutBackChannel chan PutBackChanMsg
 
-// DrainHIChannel empties a channel into the high integrity putback channel
-
+// HIKafkaConsumer is a high Integrity Kafka consumer
 var HIKafkaConsumer *kafka.Consumer
+
+// HIKafkaProducer is a high Integrity Kafka producer
 var HIKafkaProducer *kafka.Producer
+
+// HIKafkaAdminClient is a high Integrity Kafka admin
 var HIKafkaAdminClient *kafka.AdminClient
 
+// SetupHIKafka sets up the HI Kafka consumer, producer and admin
 func SetupHIKafka(configMap kafka.ConfigMap) {
 	if !HighIntegrityEnabled {
 		return
@@ -39,6 +43,7 @@ func SetupHIKafka(configMap kafka.ConfigMap) {
 	return
 }
 
+// CloseHIKafka closes the HI Kafka consumer, producer and admin
 func CloseHIKafka() {
 	if !HighIntegrityEnabled {
 		return

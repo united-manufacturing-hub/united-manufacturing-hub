@@ -5,36 +5,23 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime/pprof"
 	"syscall"
 	"time"
 )
 
 var buildtime string
 
-var f *os.File
-
+// HighIntegrityEnabled is true, when a high integrity topic has been configured (KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC)
 var HighIntegrityEnabled = false
+
+// HighThroughputEnabled is true, when a high throughput topic has been configured (KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC)
 var HighThroughputEnabled = false
-var HITopic string
-var HTTopic string
 
 func main() {
-	// BEGIN PROFILER
-	var perr error
-	f, perr = os.Create("cpu.pprof")
-	if perr != nil {
-		panic(perr)
-	}
-	err := pprof.StartCPUProfile(f)
-	if err != nil {
-		panic(err)
-	}
-	// END PROFILER
-
 	// Setup logger and set as global
 	var logger *zap.Logger
 	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
@@ -88,19 +75,20 @@ func main() {
 	if KafkaBoostrapServer == "" {
 		panic("KAFKA_BOOSTRAP_SERVER not set")
 	}
-	HITopic = os.Getenv("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC")
+	HITopic := os.Getenv("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC")
 	if HITopic == "" {
 		zap.S().Warnf("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC not set")
 	} else {
 		HighIntegrityEnabled = true
 	}
-	HTTopic = os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
+	HTTopic := os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
 	if HTTopic == "" {
 		zap.S().Warnf("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC not set")
 	} else {
 		HighThroughputEnabled = true
 	}
 
+	// If neither high-integrity nor high-throughput topic is configured, panic
 	if !HighThroughputEnabled && !HighIntegrityEnabled {
 		panic("No topics enabled")
 	}
@@ -119,6 +107,7 @@ func main() {
 		"statistics.interval.ms":   1000 * 10,
 	})
 
+	// HT uses enable.auto.commit=true for increased performance.
 	SetupHTKafka(kafka.ConfigMap{
 		"bootstrap.servers":      KafkaBoostrapServer,
 		"security.protocol":      "plaintext",
@@ -128,11 +117,12 @@ func main() {
 		"statistics.interval.ms": 1000 * 10,
 	})
 
-	// 1GB, 1GB
+	// InitCache is initialized with 1Gb of memory for each cache
 	InitCache(1073741824, 1073741824)
 
 	zap.S().Debugf("Starting queue processor")
 
+	// Start HI related processors
 	if HighIntegrityEnabled {
 		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
 		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
@@ -143,6 +133,7 @@ func main() {
 		go startHighIntegrityQueueProcessor()
 	}
 
+	// Start HT related processors
 	if HighThroughputEnabled {
 		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
 		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
@@ -238,36 +229,33 @@ func ShutdownApplicationGraceful() {
 
 	zap.S().Infof("Successfull shutdown. Exiting.")
 
-	pprof.StopCPUProfile()
-	f.Close()
-
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
 }
 
-var Commits = 0
-var Messages = 0
-var PutBacks = 0
+var Commits = float64(0)
+var Messages = float64(0)
+var PutBacks = float64(0)
 
 func PerformanceReport() {
-	lastCommits := 0
-	lastMessages := 0
-	lastPutbacks := 0
+	lastCommits := float64(0)
+	lastMessages := float64(0)
+	lastPutbacks := float64(0)
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
-		commitsPerSecond := float64(Commits-lastCommits) / sleepS
-		messagesPerSecond := float64(Messages-lastMessages) / sleepS
-		putbacksPerSecond := float64(PutBacks-lastPutbacks) / sleepS
+		commitsPerSecond := Commits - lastCommits/sleepS
+		messagesPerSecond := Messages - lastMessages/sleepS
+		putbacksPerSecond := PutBacks - lastPutbacks/sleepS
 		lastCommits = Commits
 		lastMessages = Messages
 		lastPutbacks = PutBacks
 
 		zap.S().Infof("Performance report"+
-			"\nCommits: %d, Commits/s: %f"+
-			"\nMessages: %d, Messages/s: %f"+
-			"\nPutBacks: %d, PutBacks/s: %f"+
+			"\nCommits: %f, Commits/s: %f"+
+			"\nMessages: %f, Messages/s: %f"+
+			"\nPutBacks: %f, PutBacks/s: %f"+
 			"\n[HI] Processor queue length: %d"+
 			"\n[HI] PutBack queue length: %d"+
 			"\n[HI] Commit queue length: %d"+
@@ -290,6 +278,24 @@ func PerformanceReport() {
 			len(highThroughputProcessorChannel),
 			len(highThroughputPutBackChannel),
 		)
+
+		if Commits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
+			Commits = 0
+			lastCommits = 0
+			zap.S().Warnf("Resetting commit statistics")
+		}
+
+		if Messages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
+			Messages = 0
+			lastMessages = 0
+			zap.S().Warnf("Resetting message statistics")
+		}
+
+		if PutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
+			PutBacks = 0
+			lastPutbacks = 0
+			zap.S().Warnf("Resetting putback statistics")
+		}
 
 		postExecutionTime := time.Now()
 		ExecutionTimeDiff := postExecutionTime.Sub(preExecutionTime).Seconds()

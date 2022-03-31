@@ -147,6 +147,7 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 	return
 }
 
+// GetProductTableId gets the productID from the database using the productname and AssetTableId
 func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId uint32, success bool) {
 	success = false
 	// Get from cache if possible
@@ -191,12 +192,13 @@ func NewNullInt64(i int64) sql.NullInt64 {
 	}
 }
 
-func GetUniqueProductID(ChildID string, DBAssetID uint32) (UniqueProductTableId uint32, success bool) {
+// GetUniqueProductID gets the unique productID from the database using the UniqueProductAlternativeID and AssetTableId
+func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) (UniqueProductTableId uint32, success bool) {
 	success = false
 
-	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(ChildID, DBAssetID).Scan(&UniqueProductTableId)
+	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(UniqueProductAlternativeId, AssetTableId).Scan(&UniqueProductTableId)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ChildID, DBAssetID)
+		zap.S().Errorf("[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d", UniqueProductAlternativeId, AssetTableId)
 	} else if err != nil {
 		zap.S().Debugf("[GetUniqueProductID] Error: %s", err)
 		switch GetPostgresErrorRecoveryOptions(err) {
@@ -213,6 +215,7 @@ func GetUniqueProductID(ChildID string, DBAssetID uint32) (UniqueProductTableId 
 	return
 }
 
+// GetLatestParentUniqueProductID gets the latest parent unique productID from the database using the UniqueProductAlternativeID and AssetTableId
 func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (LatestparentUniqueProductId uint32, success bool) {
 	success = false
 

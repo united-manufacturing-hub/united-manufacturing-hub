@@ -604,6 +604,18 @@ mqtttopostgresql:
     enabled: true
     minAvailable: 1
 
+### kafka-to-postgresql ###
+kafkatopostgresql:
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/kafka-to-postgresql
+    pullPolicy: IfNotPresent
+  replicas: 1
+  storageRequest: 1Gi
+  listenTopic:
+    highIntegrity: "^ia\..+\..+\..+\.(?!processValue).+$"
+    highThroughput: "^ia\..+\..+\..+\.(processValue).*$"
+
 ### minio-operator ###
 minio-operator:
   loadBalancerEnabled: false

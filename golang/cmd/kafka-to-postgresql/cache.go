@@ -10,10 +10,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// AsXXHash returns the XXHash128 of the given data.
+// This hash is extremely fast and reasonable for use as a key in a cache.
+// https://cyan4973.github.io/xxHash/
 func AsXXHash(inputs ...[]byte) []byte {
-
 	h := xxh3.New()
-
 	for _, input := range inputs {
 		_, _ = h.Write(input)
 	}
@@ -21,15 +22,20 @@ func AsXXHash(inputs ...[]byte) []byte {
 	return Uint128ToBytes(h.Sum128())
 }
 
+// dbcache is a cache of database entries (for example database asset id's)
 var dbcache *freecache.Cache
+
+// messagecache is a cache of messages, this prevents double parsing of messages
 var messagecache *freecache.Cache
 
+// InitCache initializes the cache with the given sizes in byte
 func InitCache(DBcacheSizeBytes int, messageCacheSizeBytes int) {
 	dbcache = freecache.NewCache(DBcacheSizeBytes)
 	messagecache = freecache.NewCache(messageCacheSizeBytes)
 }
 
-func GetUint32(key []byte) (uint32, bool) {
+// GetUint32DB looks up the DB cache for the key and returns the value if found as a uint32
+func GetUint32DB(key []byte) (uint32, bool) {
 	if dbcache == nil {
 		return 0, false
 	}
@@ -40,23 +46,27 @@ func GetUint32(key []byte) (uint32, bool) {
 	return BytesToUint32(value), true
 }
 
-func PutUint32(key []byte, value uint32) {
+// PutUint32DB puts the key and value into the DB cache
+func PutUint32DB(key []byte, value uint32) {
 	if dbcache == nil {
 		return
 	}
 	_ = dbcache.Set(key, Uint32ToBytes(value), 0)
 }
 
+// Uint32ToBytes converts a uint32 to a byte array
 func Uint32ToBytes(a uint32) (b []byte) {
 	b = make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, a)
 	return
 }
 
+// BytesToUint32 converts a byte array to a uint32
 func BytesToUint32(b []byte) (a uint32) {
 	return binary.LittleEndian.Uint32(b)
 }
 
+// Uint128ToBytes converts a uint128 to a byte array
 func Uint128ToBytes(a xxh3.Uint128) (b []byte) {
 	b = make([]byte, 16)
 	binary.LittleEndian.PutUint64(b[0:8], a.Lo)
@@ -64,22 +74,27 @@ func Uint128ToBytes(a xxh3.Uint128) (b []byte) {
 	return
 }
 
+// GetCacheAssetTableId looks up the db cache for the customerId, locationId, assetId and returns the asset table id if found
 func GetCacheAssetTableId(customerID string, locationID string, assetID string) (uint32, bool) {
-	return GetUint32(AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)))
+	return GetUint32DB(AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)))
 }
 
+// PutCacheAssetTableId puts the assetTableId into the db cache, using the customerId, locationId, assetId as the key
 func PutCacheAssetTableId(customerID string, locationID string, assetID string, assetTableId uint32) {
-	PutUint32(AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)), assetTableId)
+	PutUint32DB(AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)), assetTableId)
 }
 
+// PutCacheProductTableId puts the productTableId into the db cache, using the customerId, locationId, productId as the key
 func PutCacheProductTableId(customerID string, AssetTableId uint32, productTableId uint32) {
-	PutUint32(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)), productTableId)
+	PutUint32DB(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)), productTableId)
 }
 
+// GetCacheProductTableId looks up the db cache for the customerId, locationId, productId and returns the product table id if found
 func GetCacheProductTableId(customerID string, AssetTableId uint32) (uint32, bool) {
-	return GetUint32(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
+	return GetUint32DB(AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
 }
 
+// PutCacheKafkaMessageAsParsedMessage tries to parse the kafka message and put it into the message cache, returning the parsed message if successful
 func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, message ParsedMessage) {
 	valid = false
 	if msg == nil || msg.TopicPartition.Topic == nil {
@@ -120,6 +135,7 @@ func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, messag
 	return true, pm
 }
 
+// GetCacheParsedMessage looks up the message cache for the key and returns the parsed message if found
 func GetCacheParsedMessage(msg *kafka.Message) (valid bool, found bool, message ParsedMessage) {
 	if msg == nil || msg.TopicPartition.Topic == nil {
 		return false, false, ParsedMessage{}

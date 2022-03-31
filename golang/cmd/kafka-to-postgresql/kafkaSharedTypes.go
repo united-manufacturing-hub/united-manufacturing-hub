@@ -25,6 +25,9 @@ type PutBackChanMsg struct {
 	errorString *string
 }
 
+// processKafkaQueue processes the kafka queue and sends the messages to the processorChannel.
+// It uses topic as regex for subscribing to kafka topics.
+// If the putback channel is full, it will block until the channel is free.
 func processKafkaQueue(identifier string, topic string, processorChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer, putBackChannel chan PutBackChanMsg) {
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
 	err := kafkaConsumer.Subscribe(topic, nil)
@@ -41,11 +44,14 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		}
 
 		var msg *kafka.Message
+		// Wait for new messages
+		// This has a timeout, allowing ShuttingDown to be checked
 		msg, err = kafkaConsumer.ReadMessage(5000)
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
+				// This will occur when no topic for the regex is available !
 				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
 				ShutdownApplicationGraceful()
 				return
@@ -55,12 +61,16 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 				return
 			}
 		}
+		// Insert received message into the processor channel
 		processorChannel <- msg
+		// Increase message counter, for stats
 		Messages += 1
 	}
 	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
 }
 
+// startPutbackProcessor starts the putback processor.
+// It will put unprocessable messages back into the kafka queue, modifying there key to include the reason and error.
 func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer) {
 	// Loops until the shutdown signal is received and the channel is empty
 	for !ShutdownPutback {
@@ -152,6 +162,8 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 	return false
 }
 
+// startCommitProcessor starts the commit processor.
+// It will commit messages to the kafka queue.
 func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer) {
 	zap.S().Infof("%s Starting commit processor", identifier)
 	for !ShuttingDown || len(commitChannel) > 0 {
