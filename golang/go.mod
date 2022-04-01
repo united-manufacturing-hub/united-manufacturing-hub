@@ -10,7 +10,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
-	github.com/go-redis/redis/v8 v8.11.4
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/lib/pq v1.10.4
@@ -21,7 +21,6 @@ require (
 	github.com/prometheus/client_golang v1.12.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/thesyncim/spmc v0.0.0-20220106182607-fe4e25e23c21
 	github.com/uber/jaeger-client-go v2.23.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/zeebo/xxh3 v1.0.1
