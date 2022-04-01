@@ -149,10 +149,10 @@ func PerformanceReport() {
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
-		commitsPerSecond := Commits - lastCommits/sleepS
-		messagesPerSecond := Messages - lastMessages/sleepS
-		putbacksPerSecond := PutBacks - lastPutbacks/sleepS
-		confirmsPerSecond := Confirmed - lastConfirmed/sleepS
+		commitsPerSecond := (Commits - lastCommits) / sleepS
+		messagesPerSecond := (Messages - lastMessages) / sleepS
+		putbacksPerSecond := (PutBacks - lastPutbacks) / sleepS
+		confirmsPerSecond := (Confirmed - lastConfirmed) / sleepS
 		lastCommits = Commits
 		lastMessages = Messages
 		lastPutbacks = PutBacks
@@ -192,6 +192,12 @@ func PerformanceReport() {
 			PutBacks = 0
 			lastPutbacks = 0
 			zap.S().Warnf("Resetting putback statistics")
+		}
+
+		if Confirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
+			Confirmed = 0
+			lastConfirmed = 0
+			zap.S().Warnf("Resetting confirmed statistics")
 		}
 
 		postExecutionTime := time.Now()

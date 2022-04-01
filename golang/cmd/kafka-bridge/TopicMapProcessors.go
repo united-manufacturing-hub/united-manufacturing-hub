@@ -163,6 +163,8 @@ func startEventHandler(identifier string, events chan kafka.Event, backChan chan
 							reason:      "Event channel error",
 							errorString: &errS,
 						}
+					} else {
+						Confirmed += 1
 					}
 				}
 			}
