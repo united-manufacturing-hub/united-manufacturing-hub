@@ -182,3 +182,29 @@ func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, 
 	}
 	zap.S().Infof("%s Stopped commit processor", identifier)
 }
+
+func startEventHandler(identifier string, events chan kafka.Event, backChan chan PutBackChanMsg) {
+	for !ShuttingDown || len(events) > 0 {
+		select {
+		case event := <-events:
+			switch ev := event.(type) {
+			case *kafka.Message:
+				{
+					if ev.TopicPartition.Error != nil {
+						zap.S().Errorf("Error for %s: %v", identifier, ev.TopicPartition.Error)
+						errS := ev.TopicPartition.Error.Error()
+						backChan <- PutBackChanMsg{
+							msg:         ev,
+							reason:      "Event channel error",
+							errorString: &errS,
+						}
+					} else {
+						Confirmed += 1
+					}
+				}
+			}
+		default:
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
+}

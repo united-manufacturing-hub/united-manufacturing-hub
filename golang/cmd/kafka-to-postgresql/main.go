@@ -125,20 +125,24 @@ func main() {
 		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
 		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
+		highIntegrityEventChannel := HIKafkaProducer.Events()
 		go startPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer)
 		go processKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
 		go startCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
+		go startEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
 	}
 
 	// Start HT related processors
 	if HighThroughputEnabled {
 		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
 		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
+		highThroughputEventChannel := HIKafkaProducer.Events()
 		// HT has no commit channel, it uses auto commit
 		go startPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer)
 		go processKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
 		go startHighThroughputQueueProcessor()
+		go startEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
 
 		go startProcessValueQueueAggregator()
 		go startProcessValueStringQueueAggregator()
@@ -235,25 +239,30 @@ func ShutdownApplicationGraceful() {
 var Commits = float64(0)
 var Messages = float64(0)
 var PutBacks = float64(0)
+var Confirmed = float64(0)
 
 func PerformanceReport() {
 	lastCommits := float64(0)
 	lastMessages := float64(0)
 	lastPutbacks := float64(0)
+	lastConfirmed := float64(0)
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
-		commitsPerSecond := Commits - lastCommits/sleepS
-		messagesPerSecond := Messages - lastMessages/sleepS
-		putbacksPerSecond := PutBacks - lastPutbacks/sleepS
+		commitsPerSecond := (Commits - lastCommits) / sleepS
+		messagesPerSecond := (Messages - lastMessages) / sleepS
+		putbacksPerSecond := (PutBacks - lastPutbacks) / sleepS
+		confirmedPerSecond := (Confirmed - lastConfirmed) / sleepS
 		lastCommits = Commits
 		lastMessages = Messages
 		lastPutbacks = PutBacks
+		lastConfirmed = Confirmed
 
 		zap.S().Infof("Performance report"+
 			"\nCommits: %f, Commits/s: %f"+
 			"\nMessages: %f, Messages/s: %f"+
 			"\nPutBacks: %f, PutBacks/s: %f"+
+			"\nConfirmed: %f, Confirmed/s: %f"+
 			"\n[HI] Processor queue length: %d"+
 			"\n[HI] PutBack queue length: %d"+
 			"\n[HI] Commit queue length: %d"+
@@ -266,6 +275,7 @@ func PerformanceReport() {
 			Commits, commitsPerSecond,
 			Messages, messagesPerSecond,
 			PutBacks, putbacksPerSecond,
+			Confirmed, confirmedPerSecond,
 			len(highIntegrityProcessorChannel),
 			len(highIntegrityPutBackChannel),
 			len(highIntegrityCommitChannel),
@@ -295,6 +305,11 @@ func PerformanceReport() {
 			zap.S().Warnf("Resetting putback statistics")
 		}
 
+		if Confirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
+			Confirmed = 0
+			lastConfirmed = 0
+			zap.S().Warnf("Resetting confirmed statistics")
+		}
 		postExecutionTime := time.Now()
 		ExecutionTimeDiff := postExecutionTime.Sub(preExecutionTime).Seconds()
 		if ExecutionTimeDiff <= 0 {
