@@ -7,12 +7,14 @@ require (
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/confluentinc/confluent-kafka-go v1.8.2
+	github.com/coocood/freecache v1.2.1
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
+	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.4
 	github.com/minio/minio-go/v7 v7.0.21
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
@@ -21,7 +23,6 @@ require (
 	github.com/prometheus/client_golang v1.12.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/thesyncim/spmc v0.0.0-20220106182607-fe4e25e23c21
 	github.com/uber/jaeger-client-go v2.23.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/zeebo/xxh3 v1.0.1
