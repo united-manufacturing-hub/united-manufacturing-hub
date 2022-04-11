@@ -613,8 +613,8 @@ kafkatopostgresql:
   replicas: 1
   storageRequest: 1Gi
   listenTopic:
-    highIntegrity: "^ia\..+\..+\..+\.(?!processValue).+$"
-    highThroughput: "^ia\..+\..+\..+\.(processValue).*$"
+    highIntegrity: '^ia\..+\..+\..+\.(?!processValue).+$'
+    highThroughput: '^ia\..+\..+\..+\.(processValue).*$'
 
 ### minio-operator ###
 minio-operator:
