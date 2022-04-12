@@ -8,8 +8,7 @@ description: >
 ## Prerequisites
 -	An active Tulip subscription.
 -	The UMH platform installed and configured.
--	Available data extracted from sensors, industrial controllers or other shopfloor IT systems and available in the MQTT or Apache Kafka.
--	Broker.
+-	Available data extracted from sensors, industrial controllers or other shopfloor IT systems and available in the MQTT broker or Apache Kafka.
 
 ## About Tulip
 
