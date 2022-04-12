@@ -25,7 +25,7 @@ Tulip’s most widely documented use case (in different and extensive channels s
 
 Within the Tulip platform, users can create applications using a a no-code interface. The operations are triggered by various sensors and forwarded by the hardware to the Tulip Cloud.
 
-{{< imgproc work_instructions.png Fit "800x500" >}}Work instructions in an assembly cell{{< /imgproc >}}
+{{< imgproc work-instructions.png Fit "800x500" >}}Work instructions in an assembly cell{{< /imgproc >}}
 
 In addition to apps, users can create “Tulip Analyses” to monitor KPIs and trends and provide insights to the production team. Interactive dashboards can also be created to monitor KPIs of interest.
 
