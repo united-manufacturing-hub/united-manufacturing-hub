@@ -134,3 +134,5 @@ Digital Work instruction app with Machine Attribute API connectivity.
 ## Summary
 
 This approach makes it possible to connect additional data sources to Tulip and combine Tulip with a Unified Namespace. It also reduces implementation time by eliminating the need to open ports in the corporate firewall.
+
+Interested? Then check out also the corresponding [blog article](TODO)
