@@ -79,6 +79,7 @@ func ShutdownDB() {
 	}
 }
 
+// RecoveryType Enum used to identify which operation to perform, when the db returns an error
 type RecoveryType int32
 
 const (

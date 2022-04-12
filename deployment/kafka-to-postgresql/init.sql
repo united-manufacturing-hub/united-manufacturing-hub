@@ -1,4 +1,4 @@
-
+-- Required for docker-compose
     CREATE USER factoryinsight_user;
     CREATE DATABASE factoryinsight_database OWNER factoryinsight_user;
     GRANT ALL PRIVILEGES ON DATABASE factoryinsight_database TO factoryinsight_user;

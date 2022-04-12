@@ -49,6 +49,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		msg, err = kafkaConsumer.ReadMessage(5000)
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+				// This is fine, and expected behaviour
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				// This will occur when no topic for the regex is available !
@@ -63,7 +64,8 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		}
 		// Insert received message into the processor channel
 		processorChannel <- msg
-		// Increase message counter, for stats
+		// This is for stats only, it counts the number of messages received
+		// Defined in main.go
 		Messages += 1
 	}
 	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
@@ -138,6 +140,8 @@ func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 				if err != nil {
 					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString}
 				}
+				// This is for stats only and counts the amount of messages put back
+				// Defined in main.go
 				PutBacks += 1
 			}
 		}
@@ -175,6 +179,8 @@ func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, 
 					zap.S().Errorf("%s Error commiting %v: %s", identifier, msg, err)
 					commitChannel <- msg
 				} else {
+					// This is for stats only, and counts the amounts of commits done to the kafka queue
+					// Defined in main.go
 					Commits += 1
 				}
 			}
@@ -199,6 +205,8 @@ func startEventHandler(identifier string, events chan kafka.Event, backChan chan
 							errorString: &errS,
 						}
 					} else {
+						// This is for stats only, and counts the amount of confirmed processed messages
+						// Defined in main.go
 						Confirmed += 1
 					}
 				}

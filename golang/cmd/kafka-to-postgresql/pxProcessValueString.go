@@ -16,6 +16,8 @@ var processValueStringChannel chan *kafka.Message
 
 // startProcessValueChannel reads messages from the processValueStringChannel and inserts them into a temporary buffer, before committing them to the database
 func startProcessValueStringQueueAggregator() {
+	// This channel is used to aggregate messages from the kafka queue, for further processing
+	// It size was chosen, to prevent timescaledb from choking on large inserts
 	processValueStringChannel = make(chan *kafka.Message, 5000)
 
 	messages := make([]*kafka.Message, 0)
@@ -28,6 +30,7 @@ func startProcessValueStringQueueAggregator() {
 		case msg := <-processValueStringChannel: // Receive message from channel
 			{
 				messages = append(messages, msg)
+				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= 5000 {
 					//zap.S().Debugf("[HT][PVS] Messages length: %d", len(messages))
 					putBackMsg, err, putback, reason := writeProcessValueStringToDatabase(messages)
@@ -100,6 +103,8 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 	}
 
 	putBackMsg = make([]*kafka.Message, 0)
+	// toCommit is used for stats only, it just increments, whenever a message was added to the transaction.
+	// at the end, this count is added to the global Commit counter
 	toCommit := float64(0)
 	{
 
@@ -122,6 +127,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 				continue
 			}
 
+			// sC is the payload, parsed as processValueString
 			var sC processValueString
 			err = jsoniter.Unmarshal(parsedMessage.Payload, &sC)
 			if err != nil {
@@ -137,7 +143,13 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 			}
 
 			if timestampString, timestampInParsedMessagePayload := sC["timestamp_ms"]; timestampInParsedMessagePayload {
-				tsF64 := timestampString.(float64)
+				var tsF64 float64
+				tsF64, err = getFloat(timestampString)
+
+				if err != nil {
+					//zap.S().Debugf("[HT][PVS] Could not parse timestamp: %s", err.Error())
+					continue
+				}
 				timestampMs := uint64(tsF64)
 				for k, v := range sC {
 					switch k {

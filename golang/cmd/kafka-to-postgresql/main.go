@@ -236,9 +236,16 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
+// Commits is a counter for the number of commits done (to the db), this is used for stats only
 var Commits = float64(0)
+
+// Messages is a counter for the number of messages processed, this is used for stats only
 var Messages = float64(0)
+
+// PutBacks is a counter for the number of messages returned to kafka, this is used for stats only
 var PutBacks = float64(0)
+
+// Confirmed is a counter for the number of messages confirmed to kafka, this is used for stats only
 var Confirmed = float64(0)
 
 func PerformanceReport() {

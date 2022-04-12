@@ -8,7 +8,7 @@ _000_commonConfig:
 
     # barcodereader reads out connected USB barcodereaders emulating a keyboard
     barcodereader:
-      enabled: false
+      enabled: true
       customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
       customerID: "raw"
       location: "barcodereader"
@@ -24,7 +24,7 @@ _000_commonConfig:
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
     cameraconnect:
-      enabled: false
+      enabled: true
       trigger: "MQTT"
       acquisitionDelay: "0.0"
       cycleTime: "4"
@@ -137,7 +137,7 @@ _000_commonConfig:
 
     # apache kafka, mqttkafkabridge, kowl
     kafka:
-      enabled: false
+      enabled: true
 
   # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
@@ -149,16 +149,16 @@ _000_commonConfig:
   # mqtt-to-blob, minio, kafka-to-blob
   # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
   blobstorage:
-    enabled: false
+    enabled: true
 
   # factoryinput, grafanaproxy
   # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
   datainput:
-    enabled: false
+    enabled: true
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
-    enabled: false
+    enabled: true
     remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     oneWay: true

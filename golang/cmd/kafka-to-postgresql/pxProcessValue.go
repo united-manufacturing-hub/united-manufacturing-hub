@@ -16,6 +16,8 @@ var processValueChannel chan *kafka.Message
 
 // startProcessValueChannel reads messages from the processValueChannel and inserts them into a temporary buffer, before committing them to the database
 func startProcessValueQueueAggregator() {
+	// This channel is used to aggregate messages from the kafka queue, for further processing
+	// It size was chosen, to prevent timescaledb from choking on large inserts
 	processValueChannel = make(chan *kafka.Message, 5000)
 
 	messages := make([]*kafka.Message, 0)
@@ -26,6 +28,7 @@ func startProcessValueQueueAggregator() {
 		case msg := <-processValueChannel:
 			{
 				messages = append(messages, msg)
+				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= 5000 {
 					//zap.S().Debugf("[HT][PV][AA] Messages length: %d", len(messages))
 					putBackMsg, err, putback, reason := writeProcessValueToDatabase(messages)
@@ -97,6 +100,8 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		}
 	}
 	putBackMsg = make([]*kafka.Message, 0)
+	// toCommit is used for stats only, it just increments, whenever a message was added to the transaction.
+	// at the end, this count is added to the global Commit counter
 	toCommit := float64(0)
 	//zap.S().Debugf("[HT][PV] 2")
 	{
@@ -118,6 +123,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 				continue
 			}
 
+			// sC is the payload, parsed as processValue
 			var sC processValue
 			err = jsoniter.Unmarshal(parsedMessage.Payload, &sC)
 			if err != nil {
@@ -137,8 +143,13 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 				//zap.S().Debugf("[HT][PV] Timestamp not in parsed message payload")
 				continue
 			}
+			var tsF64 float64
+			tsF64, err = getFloat(timestampString)
+			if err != nil {
+				//zap.S().Debugf("[HT][PV] Could not parse timestamp: %s", err.Error())
+				continue
+			}
 
-			tsF64 := timestampString.(float64)
 			timestampMs := uint64(tsF64)
 			////zap.S().Debugf("[HT][PV] Timestamp: %d", timestampMs)
 			for k, v := range sC {
