@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -39,7 +40,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
 			zap.S().Debugf("%s Waiting for put back channel to empty: %d", identifier, len(putBackChannel))
-			time.Sleep(constants.OneSecond)
+			time.Sleep(internal.OneSecond)
 			continue
 		}
 

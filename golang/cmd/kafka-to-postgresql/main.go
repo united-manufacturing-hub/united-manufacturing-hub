@@ -4,6 +4,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"math"
 	"net/http"
@@ -185,14 +186,14 @@ func ShutdownApplicationGraceful() {
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
 		if !DrainChannel("[HT]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
-			time.Sleep(constants.FiveSeconds)
+			time.Sleep(internal.FiveSeconds)
 		}
 
-		time.Sleep(constants.OneSecond)
+		time.Sleep(internal.OneSecond)
 
 		for len(highIntegrityPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
-			time.Sleep(constants.OneSecond)
+			time.Sleep(internal.OneSecond)
 		}
 	}
 
@@ -200,25 +201,25 @@ func ShutdownApplicationGraceful() {
 	if HighThroughputEnabled {
 		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
 		if !DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
-			time.Sleep(constants.FiveSeconds)
+			time.Sleep(internal.FiveSeconds)
 		}
 		if !DrainChannel("[HIGH_THROUGHPUT]", processValueChannel, highThroughputPutBackChannel) {
-			time.Sleep(constants.FiveSeconds)
+			time.Sleep(internal.FiveSeconds)
 		}
 		if !DrainChannel("[HIGH_THROUGHPUT]", processValueStringChannel, highThroughputPutBackChannel) {
-			time.Sleep(constants.FiveSeconds)
+			time.Sleep(internal.FiveSeconds)
 		}
 
-		time.Sleep(constants.OneSecond)
+		time.Sleep(internal.OneSecond)
 
 		for len(highThroughputPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
-			time.Sleep(constants.OneSecond)
+			time.Sleep(internal.OneSecond)
 		}
 	}
 	ShutdownPutback = true
 
-	time.Sleep(constants.OneSecond)
+	time.Sleep(internal.OneSecond)
 
 	if HighIntegrityEnabled {
 		CloseHIKafka()
