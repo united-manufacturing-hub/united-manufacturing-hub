@@ -39,7 +39,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
 			zap.S().Debugf("%s Waiting for put back channel to empty: %d", identifier, len(putBackChannel))
-			time.Sleep(1 * time.Second)
+			time.Sleep(constants.OneSecond)
 			continue
 		}
 

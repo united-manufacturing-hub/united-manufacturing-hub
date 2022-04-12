@@ -156,6 +156,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 				switch k {
 				case "timestamp_ms":
 				// Copied these exceptions from mqtt-to-postgresql
+				// These are here for historical reasons
 				case "measurement":
 				case "serial_number":
 					break
@@ -169,6 +170,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 						continue
 					}
 
+					// This coversion is necessary for postgres
 					timestamp := time.Unix(0, int64(timestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
 
 					////zap.S().Debugf("[HT][PV] Inserting %d, %s, %f, %s", AssetTableID, timestamp, value, k)

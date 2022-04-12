@@ -42,7 +42,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	db.SetMaxOpenConns(20)
 
 	// Healthcheck
-	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, 1*time.Second))
+	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, constants.OneSecond))
 
 	health.AddLivenessCheck("database", healthcheck.DatabasePingCheck(db, 30*time.Second))
 
@@ -53,7 +53,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 func IsPostgresSQLAvailable() (bool, error) {
 	var err error
 	if db != nil {
-		ctx, ctxClose := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, ctxClose := context.WithTimeout(context.Background(), constants.FiveSeconds)
 		defer ctxClose()
 		err = db.PingContext(ctx)
 		if err == nil {

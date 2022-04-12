@@ -19,7 +19,7 @@ type addOrder struct {
 // ProcessMessages processes a AddOrder kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
 func (c AddOrder) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 
-	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(constants.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
@@ -50,12 +50,12 @@ func (c AddOrder) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 
 	// Changes should only be necessary between this marker
 
-	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(constants.FiveSeconds))
 	// txnStmtCtxCl is the cancel function of the context, used in the statement creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
 	stmt := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableScrap)
-	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(constants.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()

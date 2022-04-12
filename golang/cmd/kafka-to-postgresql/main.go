@@ -185,14 +185,14 @@ func ShutdownApplicationGraceful() {
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
 		if !DrainChannel("[HT]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
-			time.Sleep(5 * time.Second)
+			time.Sleep(constants.FiveSeconds)
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(constants.OneSecond)
 
 		for len(highIntegrityPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
-			time.Sleep(1 * time.Second)
+			time.Sleep(constants.OneSecond)
 		}
 	}
 
@@ -200,25 +200,25 @@ func ShutdownApplicationGraceful() {
 	if HighThroughputEnabled {
 		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
 		if !DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
-			time.Sleep(5 * time.Second)
+			time.Sleep(constants.FiveSeconds)
 		}
 		if !DrainChannel("[HIGH_THROUGHPUT]", processValueChannel, highThroughputPutBackChannel) {
-			time.Sleep(5 * time.Second)
+			time.Sleep(constants.FiveSeconds)
 		}
 		if !DrainChannel("[HIGH_THROUGHPUT]", processValueStringChannel, highThroughputPutBackChannel) {
-			time.Sleep(5 * time.Second)
+			time.Sleep(constants.FiveSeconds)
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(constants.OneSecond)
 
 		for len(highThroughputPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
-			time.Sleep(1 * time.Second)
+			time.Sleep(constants.OneSecond)
 		}
 	}
 	ShutdownPutback = true
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(constants.OneSecond)
 
 	if HighIntegrityEnabled {
 		CloseHIKafka()
