@@ -2,12 +2,8 @@
 title: "How to connect the United Manufacturing Hub to Tulip"
 linkTitle: "Connecting UMH with Tulip"
 description: >
-  Combine all shop floor data with work instructions from Tulip (www.tulip.co) using the UMH approach. This approach does not require opening ports and additionally allows to deeply integrate Tulip into the shopfloor IT.
+  Combine all shop floor data with work instructions from Tulip (www.tulip.co) using the UMH approach. This approach does not require opening ports and additionally allows to deeply integrate Tulip into the shopfloor IT. For more information on the shared value proposition and the use-case please check out also [our blog article](TODO)
 ---
-
-{{% alert title="Info" color="primary" %}}
-For more information on the shared value proposition and the use-case please check out also [out blog article](TODO)
-{{% /alert %}}
 
 ## Prerequisites
 -	An active Tulip subscription.
@@ -97,10 +93,6 @@ Having performed the previous steps, the Tulip configuration is finalized. The n
 
 ### Connecting to the Tulip Machines Attributes API using Node-RED
 
-{{% alert title="Info" color="primary" %}}
-Useful link: [Using Node-RED with the Tulip API](https://support.tulip.co/en/articles/5445452-using-node-red-with-the-tulip-api)
-{{% /alert %}}
-
 In the manufacturer’s environment, UMH installed an electrical cabinet (E-rack) with an Industrial PC (IPC). The IPC was connected to the industrial controller of the machine and reads several data tags such as power time, hydraulic pump time and power consumption, with a flow in Node-RED (see also the blog article mentioned at the beginning of the article)
  
 {{< imgproc Picture10.png Fit "800x500" >}}
@@ -141,4 +133,4 @@ Digital Work instruction app with Machine Attribute API connectivity.
 
 ## Summary
 
-TODO
+This approach makes it possible to connect additional data sources to Tulip and combine Tulip with a Unified Namespace. It also reduces implementation time by eliminating the need to open ports in the corporate firewall.
