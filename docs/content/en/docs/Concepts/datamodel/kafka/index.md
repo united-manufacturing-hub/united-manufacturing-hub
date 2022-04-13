@@ -144,6 +144,6 @@ Note, that we could have gone for disabling "enable.auto.commit", but in our tes
 
 For in-depth information about how we handle message inside our microservices, please see their documentation:
 
-- [Kafka-to-blob](https://docs.umh.app/docs/developers/united-manufacturing-hub/kafka-to-blob/)
-- [Kafka-to-postgresql](https://docs.umh.app/docs/developers/united-manufacturing-hub/kafka-to-postgresql/)
-- [Kafka-bridge](https://docs.umh.app/docs/developers/united-manufacturing-hub/kafka-bridge/)
+- [Kafka-to-blob](/docs/developers/united-manufacturing-hub/kafka-to-blob/)
+- [Kafka-to-postgresql](/docs/developers/united-manufacturing-hub/kafka-to-postgresql/)
+- [Kafka-bridge](/docs/developers/united-manufacturing-hub/kafka-bridge/)
