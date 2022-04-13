@@ -35,3 +35,17 @@ The following environment variables are used by the microservice:
 | KAFKA_BOOSTRAP_SERVERS             | String  | The kafka server to connect to.                                                     |
 | KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC  | String  | The kafka topic to listen to for high integrity messages. (This can be a regex)     |
 | KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC | String  | The kafka topic to listen to for high throughput messages. (This can be a regex)    |
+
+
+# Program flow
+
+The graphic below shows the program flow of the microservice.
+
+![Kafka-to-postgres-flow](kafka-to-postgresql-flow.drawio.svg)
+
+# Data flow
+
+## High Integrity
+The graphic below shows the flow for an example High Integrity message.
+
+![Kafka-hi-data-flow](HICountFlow.drawio.svg)
