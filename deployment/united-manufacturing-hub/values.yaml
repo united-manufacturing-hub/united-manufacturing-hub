@@ -179,6 +179,11 @@ _000_commonConfig:
       -----BEGIN PRIVATE KEY-----
       -----END PRIVATE KEY-----
 
+  kafkaBridge:
+    enabled: false
+    remotebootstrapServer: ""
+    topicmap: ""
+
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
@@ -248,6 +253,13 @@ cameraconnect:
     limits:
       cpu: "100m"
       memory: "100Mi"
+
+
+### cameraconnect ###
+kafkabridge:
+  image: unitedmanufacturinghub/kafkabridge
+  # tag: development
+
 
 ### nodered ###
 nodered:
