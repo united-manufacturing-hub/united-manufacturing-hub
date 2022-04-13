@@ -54,9 +54,9 @@ Then you will need to link this Machine API to a Machine.
 
 ### Create a Machine Type
 
-Navigate to the tab “Shopfloor”  “Machines” then change to the tab “Machine Types”. Here, click in the button “Create type”. For now, only change the name of the machine type. 
+Navigate to the tab “Shopfloor” --> “Machines” then change to the tab “Machine Types”. Here, click in the button “Create type”. For now, only change the name of the machine type. 
  
-{{< imgproc Picture5.png Fit "800x500" >}}
+{{< imgproc Picture4.png Fit "800x500" >}}
 Creating a Machine Type.
 {{< /imgproc >}}
 
@@ -64,7 +64,7 @@ Creating a Machine Type.
 
 Go to the Machine Library tab and click the Create Machine button. Assign a name for your machine. Then select Tulip API as the data source. The Tulip interface will ask you to assign your machine to a station. If multiple stations use the data, we recommend selecting "None". Finally, select the machine type you just created.
  
-{{< imgproc Picture6.png Fit "800x500" >}}
+{{< imgproc Picture5.png Fit "800x500" >}}
 Creating a Machine.
 {{< /imgproc >}}
 
@@ -72,19 +72,19 @@ Creating a Machine.
 
 Return to the Machine Type tab and navigate to the Machine Type you previously created. Click the edit button and scroll down and head to “Add Machine Attribute”.
  
-{{< imgproc Picture7.png Fit "800x500" >}}
+{{< imgproc Picture6.png Fit "800x500" >}}
 Adding a Machine Attribute.
 {{< /imgproc >}}
 
 Here you are able to create new machine attributes or assign ones you created and used before.
  
-{{< imgproc Picture8.png Fit "800x500" >}}
+{{< imgproc Picture7.png Fit "800x500" >}}
 Assign a name and a type to the Machine Attribute.
 {{< /imgproc >}}
 
 Having performed the previous steps, you are now able to to find the field mappings for each Machine Attribute. Go to the tab “Shopfloor/Machines”, select the machine name of interest, and click in the Configuration tab. There you’ll discover field mappings for each Machine Attributes. The “Attibute ID” and “Machine ID” will be used for setting up the connection in Node-RED.
  
-{{< imgproc Picture9.png Fit "800x500" >}}
+{{< imgproc Picture8.png Fit "800x500" >}}
 Field mappings
 {{< /imgproc >}}
 
@@ -94,25 +94,25 @@ Having performed the previous steps, the Tulip configuration is finalized. The n
 
 In the manufacturer’s environment, UMH installed an electrical cabinet (E-rack) with an Industrial PC (IPC). The IPC was connected to the industrial controller of the machine and reads several data tags such as power time, hydraulic pump time and power consumption, with a flow in Node-RED (see also the blog article mentioned at the beginning of the article)
  
-{{< imgproc Picture10.png Fit "800x500" >}}
+{{< imgproc Picture9.png Fit "800x500" >}}
 Automatic saw with E-rack.
 {{< /imgproc >}}
 
 To connect to the Tulip Machine Attributes API, two nodes were used, namely a function node and a HTTP response. 
  
-{{< imgproc Picture11.png Fit "800x500" >}}
+{{< imgproc Picture10.png Fit "800x500" >}}
 Function and HTTP response nodes used.
 {{< /imgproc >}}
 
 For the function node, the message must contain the “Attribute ID” and “Machine ID” corresponding to the data tag being acquired from the industrial controller.
  
-{{< imgproc Picture12.png Fit "800x500" >}}
+{{< imgproc Picture11.png Fit "800x500" >}}
 Content in the function node.
 {{< /imgproc >}}
 
 For the HTTP response node, a configuration with the Tulip platform is required. This information was acquired while creating the bot in the Tulip environment.
  
-{{< imgproc Picture13.png Fit "800x500" >}}
+{{< imgproc Picture12.png Fit "800x500" >}}
 HTTP response node configuration.
 {{< /imgproc >}}
 
@@ -120,7 +120,10 @@ Having set everything up, the connection between the Node-RED flow and the Tulip
 
 ### Using the data in Tulip app
 Data coming from industrial controllers or sensors can be connected, leveraging the Machine Attribute created as any other Tulip device. For this, please navigate to the “Apps” tab and create a new app or select one you already created.
- In the App editor, select to create a new trigger. 
+
+{{< imgproc Picture13.png Fit "800x500" >}}
+In the App editor, select to create a new trigger. 
+{{< /imgproc >}}
  
 The trigger menu will appear, and by selecting:
 When – Machine – Specific Machine
