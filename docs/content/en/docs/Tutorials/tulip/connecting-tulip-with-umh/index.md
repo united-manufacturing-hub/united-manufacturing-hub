@@ -2,7 +2,7 @@
 title: "How to connect the United Manufacturing Hub to Tulip"
 linkTitle: "Connecting UMH with Tulip"
 description: >
-  Combine all shop floor data with work instructions from Tulip (www.tulip.co) using the UMH approach. This approach does not require opening ports and additionally allows to deeply integrate Tulip into the shopfloor IT. For more information on the shared value proposition and the use-case please check out also [our blog article](TODO)
+  Combine all shop floor data with work instructions from Tulip (www.tulip.co) using the UMH approach. This approach does not require opening ports and additionally allows to deeply integrate Tulip into the shopfloor IT. For more information on the shared value proposition and the use-case please check out also [our blog article](https://www.umh.app/post/combine-all-shop-floor-data-with-work-instructions)
 ---
 
 ## Prerequisites
@@ -134,4 +134,4 @@ Digital Work instruction app with Machine Attribute API connectivity.
 
 This approach makes it possible to connect additional data sources to Tulip and combine Tulip with a Unified Namespace. It also reduces implementation time by eliminating the need to open ports in the corporate firewall.
 
-Interested? Then check out also the corresponding [blog article](TODO)
+Interested? Then check out also the corresponding [blog article](https://www.umh.app/post/combine-all-shop-floor-data-with-work-instructions)
