@@ -8,7 +8,7 @@ _000_commonConfig:
 
     # barcodereader reads out connected USB barcodereaders emulating a keyboard
     barcodereader:
-      enabled: false
+      enabled: true
       customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
       customerID: "raw"
       location: "barcodereader"
@@ -24,7 +24,7 @@ _000_commonConfig:
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
     cameraconnect:
-      enabled: false
+      enabled: true
       trigger: "MQTT"
       acquisitionDelay: "0.0"
       cycleTime: "4"
@@ -137,7 +137,7 @@ _000_commonConfig:
 
     # apache kafka, mqttkafkabridge, kowl
     kafka:
-      enabled: false
+      enabled: true
 
   # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
@@ -149,16 +149,16 @@ _000_commonConfig:
   # mqtt-to-blob, minio, kafka-to-blob
   # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
   blobstorage:
-    enabled: false
+    enabled: true
 
   # factoryinput, grafanaproxy
   # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
   datainput:
-    enabled: false
+    enabled: true
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
-    enabled: false
+    enabled: true
     remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     oneWay: true
@@ -178,6 +178,11 @@ _000_commonConfig:
     privkey: |
       -----BEGIN PRIVATE KEY-----
       -----END PRIVATE KEY-----
+
+  kafkaBridge:
+    enabled: false
+    remotebootstrapServer: ""
+    topicmap: ""
 
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
@@ -248,6 +253,13 @@ cameraconnect:
     limits:
       cpu: "100m"
       memory: "100Mi"
+
+
+### cameraconnect ###
+kafkabridge:
+  image: unitedmanufacturinghub/kafkabridge
+  # tag: development
+
 
 ### nodered ###
 nodered:
@@ -603,6 +615,18 @@ mqtttopostgresql:
   pdb:
     enabled: true
     minAvailable: 1
+
+### kafka-to-postgresql ###
+kafkatopostgresql:
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/kafka-to-postgresql
+    pullPolicy: IfNotPresent
+  replicas: 1
+  storageRequest: 1Gi
+  listenTopic:
+    highIntegrity: '^ia\..+\..+\..+\.(?!processValue).+$'
+    highThroughput: '^ia\..+\..+\..+\.(processValue).*$'
 
 ### minio-operator ###
 minio-operator:

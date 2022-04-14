@@ -172,6 +172,16 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-emqxedge
 
 
 {{/*
+Labels for kafkatopostgresql
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkatopostgresql" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatopostgresql
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
