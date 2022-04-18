@@ -2,13 +2,13 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-var kafkaAdminClient *kafka.AdminClient
 var buildtime string
 
 func main() {
@@ -24,7 +24,11 @@ func main() {
 	KafkaTopics := os.Getenv("KAFKA_TOPICS")
 
 	zap.S().Debugf("Setting up Kafka")
-	kafkaAdminClient = setupKafka(KafkaBoostrapServer)
+	internal.SetupKafka(kafka.ConfigMap{
+		"bootstrap.servers": KafkaBoostrapServer,
+		"security.protocol": "plaintext",
+		"group.id":          "kafka-init",
+	})
 
 	initKafkaTopics(KafkaTopics)
 
@@ -56,7 +60,7 @@ func main() {
 func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 
-	kafkaAdminClient.Close()
+	internal.CloseKafka()
 
 	zap.S().Infof("Successfull shutdown. Exiting.")
 

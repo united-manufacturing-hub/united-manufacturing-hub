@@ -1,0 +1,70 @@
+---
+{{if .Values._000_commonConfig.kafkaBridge.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkabridge" . | nindent 4}}
+  {{if .Values.kafkabridge.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkabridge.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.kafkabridge.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
+        {{- include "united-manufacturing-hub.labels.kafkabridge" . | nindent 8}}
+    spec:
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
+          {{if .Values.kafkabridge.image.tag}}
+          image: {{.Values.kafkabridge.image.repository}}:{{.Values.kafkabridge.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkabridge.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkabridge.image.pullPolicy}}
+          env:
+            - name: LOCAL_KAFKA_BOOTSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: REMOTE_KAFKA_BOOTSTRAP_SERVER
+              value: {{.Values._000_commonConfig.kafkaBridge.remotebootstrapServer}}
+
+            - name: KAFKA_TOPIC_MAP
+              value: {{.Values._000_commonConfig.kafkaBridge.topicmap}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          resources: {}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+

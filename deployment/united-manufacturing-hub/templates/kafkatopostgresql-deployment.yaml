@@ -1,0 +1,84 @@
+---
+{{if or .Values.kafkatopostgresql.enabled .Values._000_commonConfig.infrastructure.kafka.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 4}}
+  {{if .Values.kafkatopostgresql.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkatopostgresql.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.kafkatopostgresql.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+        {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+                topologyKey: "kubernetes.io/hostname"
+      # Be nice to kafka & the db
+      terminationGracePeriodSeconds: 180
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+          {{if .Values.kafkatopostgresql.image.tag}}
+          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Values.kafkatopostgresql.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
+          env:
+
+            - name: POSTGRES_HOST
+              value: {{.Values.factoryinsight.db_host}}
+            - name: POSTGRES_DATABASE
+              value: {{.Values.factoryinsight.db_database}}
+            - name: POSTGRES_USER
+              value: {{.Values.factoryinsight.db_user}}
+            - name: POSTGRES_PASSWORD
+              value: {{.Values._000_commonConfig.datastorage.db_password}}
+
+            - name: LOGGING_LEVEL
+              value: PRODUCTION
+
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC
+              value: {{.Values.kafkatopostgresql.listenTopic.highIntegrity | quote }}
+            - name: KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC
+              value: {{.Values.kafkatopostgresql.listenTopic.highThroughput | quote}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+
