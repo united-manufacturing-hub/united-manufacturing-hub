@@ -574,7 +574,7 @@ mqtttoblob:
   enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   pdb:
     enabled: true
@@ -621,8 +621,8 @@ kafkatopostgresql:
   enabled: false
   image:
     repository: unitedmanufacturinghub/kafka-to-postgresql
-    pullPolicy: Always
-    tag: latest
+    pullPolicy: IfNotPresent
+    #tag: latest
   replicas: 1
   storageRequest: 1Gi
   listenTopic:
