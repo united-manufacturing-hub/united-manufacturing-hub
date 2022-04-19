@@ -47,13 +47,13 @@ spec:
               value: {{.Values.sensorconnect.ioddfilepath | quote}}
 
             - name: USE_KAFKA
-              {{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datasources.sensorconnect.enabled}}
+              {{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datasources.sensorconnect.enableKafka}}
               value: "true"
               {{else}}
               value: "false"
               {{end}}
             - name: USE_MQTT
-              {{if and .Values._000_commonConfig.infrastructure.mqtt.enabled .Values._000_commonConfig.datasources.sensorconnect.enabled}}
+              {{if and .Values._000_commonConfig.infrastructure.mqtt.enabled .Values._000_commonConfig.datasources.sensorconnect.enableMQTT}}
               value: "true"
               {{else}}
               value: "false"
