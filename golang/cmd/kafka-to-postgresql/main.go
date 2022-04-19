@@ -183,6 +183,11 @@ var ShutdownPutback bool
 
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
+	if ShuttingDown {
+		// Already shutting down
+		return
+	}
+
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 	// Important, allows high load processors to finish
