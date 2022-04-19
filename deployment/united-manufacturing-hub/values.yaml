@@ -1987,7 +1987,9 @@ kafkatoblob:
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
   livenessProbe:
-    initialDelaySeconds: 180
+    initialDelaySeconds: 600
+    failureThreshold: 10
+    timeoutSeconds: 10
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
