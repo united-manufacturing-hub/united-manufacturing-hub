@@ -33,6 +33,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
 	err := kafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
+		zap.S().Errorf("%s Failed to subscribe to topic %s: %s", identifier, topic, err)
 		panic(err)
 	}
 

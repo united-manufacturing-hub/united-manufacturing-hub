@@ -31,7 +31,7 @@ try
         {
             continue
         }
-        $tag_name = "united-manufacturing-hub/$( $child.Name ):$docker_tag"
+        $tag_name = "unitedmanufacturinghub/$( $child.Name ):$docker_tag"
 
         Write-Output $child.Name
         Write-Output $tag_name
