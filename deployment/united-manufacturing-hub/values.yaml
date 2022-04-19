@@ -135,11 +135,11 @@ _000_commonConfig:
         MIzsw5gq+PcsyNV5g/IUX0PJ
         -----END PRIVATE KEY-----
 
-    # apache kafka, mqttkafkabridge, kowl
+    # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
 
-  # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
+  # timescaledb, factoryinsight, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
   # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
   datastorage:
@@ -158,7 +158,7 @@ _000_commonConfig:
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
-    enabled: true
+    enabled: false
     remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     oneWay: true
@@ -621,11 +621,14 @@ kafkatopostgresql:
   enabled: false
   image:
     repository: unitedmanufacturinghub/kafka-to-postgresql
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
+    tag: latest
   replicas: 1
   storageRequest: 1Gi
   listenTopic:
-    highIntegrity: '^ia\..+\..+\..+\.(?!processValue).+$'
+    # All topics except processValue
+    # Kafka doesn't seem to be able to do negative lookaheads
+    highIntegrity: '^ia\..+\..+\..+\.(addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct).+$'
     highThroughput: '^ia\..+\..+\..+\.(processValue).*$'
 
 ### minio-operator ###

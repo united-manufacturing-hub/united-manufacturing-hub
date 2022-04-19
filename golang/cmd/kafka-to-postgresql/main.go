@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -79,12 +80,14 @@ func main() {
 		zap.S().Warnf("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC not set")
 	} else {
 		HighIntegrityEnabled = true
+		HITopic = strings.ReplaceAll(HITopic, `\\`, `\`)
 	}
 	HTTopic := os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
 	if HTTopic == "" {
 		zap.S().Warnf("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC not set")
 	} else {
 		HighThroughputEnabled = true
+		HTTopic = strings.ReplaceAll(HTTopic, `\\`, `\`)
 	}
 
 	// If neither high-integrity nor high-throughput topic is configured, panic
@@ -96,25 +99,27 @@ func main() {
 	// leads to better performance.
 	// Processed message now will be stored locally and then automatically committed to Kafka.
 	// This still provides the at-least-once guarantee.
-	SetupHIKafka(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        "plaintext",
-		"group.id":                 "kafka-to-postgresql-hi-processor",
-		"enable.auto.commit":       true,
-		"enable.auto.offset.store": false,
-		"auto.offset.reset":        "earliest",
-		"statistics.interval.ms":   1000 * 10,
-	})
+	if HighIntegrityEnabled {
+		SetupHIKafka(kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        "plaintext",
+			"group.id":                 "kafka-to-postgresql-hi-processor",
+			"enable.auto.commit":       true,
+			"enable.auto.offset.store": false,
+			"auto.offset.reset":        "earliest",
+		})
+	}
 
 	// HT uses enable.auto.commit=true for increased performance.
-	SetupHTKafka(kafka.ConfigMap{
-		"bootstrap.servers":      KafkaBoostrapServer,
-		"security.protocol":      "plaintext",
-		"group.id":               "kafka-to-postgresql-ht-processor",
-		"enable.auto.commit":     true,
-		"auto.offset.reset":      "earliest",
-		"statistics.interval.ms": 1000 * 10,
-	})
+	if HighThroughputEnabled {
+		SetupHTKafka(kafka.ConfigMap{
+			"bootstrap.servers":  KafkaBoostrapServer,
+			"security.protocol":  "plaintext",
+			"group.id":           "kafka-to-postgresql-ht-processor",
+			"enable.auto.commit": true,
+			"auto.offset.reset":  "earliest",
+		})
+	}
 
 	// InitCache is initialized with 1Gb of memory for each cache
 	InitCache(1073741824, 1073741824)
