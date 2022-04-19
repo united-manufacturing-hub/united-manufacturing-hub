@@ -272,7 +272,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "orderTable")
 	values = append(values, "orderTimeline")
 	values = append(values, "uniqueProductsWithTags")
-
+	values = append(values, "accumulatedProducts")
 	// Get from cache if possible
 	var cacheHit bool
 	processValues, cacheHit := internal.GetDistinctProcessValuesFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
@@ -374,6 +374,8 @@ func getDataHandler(c *gin.Context) {
 		processOrderTimelineRequest(c, getDataRequest)
 	case "uniqueProductsWithTags":
 		processUniqueProductsWithTagsRequest(c, getDataRequest)
+	case "accumulatedProducts":
+		processAccumulatedProducts(c, getDataRequest)
 	default:
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
@@ -2000,4 +2002,33 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 		return
 	}
 	c.JSON(http.StatusOK, uniqueProductsWithTags)
+}
+
+type getProcessAccumulatedProducts struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
+func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
+	if c != nil {
+		_, span := tracer.Start(c.Request.Context(), "processAccumulatedProducts", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
+		defer span.End()
+	}
+
+	var getProcessAccumulatedProducts getProcessAccumulatedProducts
+	var err error
+
+	err = c.BindQuery(&getProcessAccumulatedProducts)
+	if err != nil {
+		handleInvalidInputError(c, err)
+		return
+	}
+
+	accumulatedProducts, err := GetAccumulatedProducts(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessAccumulatedProducts.From, getProcessAccumulatedProducts.To)
+	if err != nil {
+		handleInternalServerError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, accumulatedProducts)
+
 }
