@@ -1824,3 +1824,388 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 
 	return
 }
+
+type CountStruct struct {
+	timestamp time.Time
+	count     int
+	scrap     int
+}
+type OrderStruct struct {
+	orderID        int
+	productId      int
+	targetUnits    int
+	beginTimeStamp time.Time
+	endTimeStamp   sql.NullTime
+}
+
+type ProductStruct struct {
+	productId               int
+	timePerProductUnitInSec float64
+}
+
+// GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
+func GetAccumulatedProducts(c *gin.Context, customerID string, location string, asset string,
+	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+
+	var span oteltrace.Span
+	if c != nil {
+		_, span = tracer.Start(c.Request.Context(), "GetAccumulatedProducts",
+			oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
+		defer span.End()
+	}
+
+	if span != nil {
+		span.SetAttributes(attribute.String("customerID", customerID))
+		span.SetAttributes(attribute.String("location", location))
+		span.SetAttributes(attribute.String("asset", asset))
+		span.SetAttributes(attribute.String("from", from.String()))
+		span.SetAttributes(attribute.String("to", to.String()))
+	}
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	zap.S().Debugf("Request ts: %d -> %d", from.UnixMilli(), to.UnixMilli())
+
+	// Selects orders outside observation range
+	sqlStatementGetOutsider := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE
+      ot.asset_id = $1
+  AND
+      ot.begin_timestamp IS NOT NULL
+AND (
+                ot.begin_timestamp <= $2
+            AND
+                ot.end_timestamp IS NULL
+        OR
+                ot.end_timestamp >= $2
+    )
+ORDER BY begin_timestamp ASC
+LIMIT 1;
+`
+	// Select orders inside observation range
+	sqlStatementGetInsiders := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE ot.asset_id = $1
+AND (
+          ot.begin_timestamp >= $2
+          AND
+          ot.begin_timestamp <= $3
+          )
+AND ot.order_id != $4
+ORDER BY begin_timestamp ASC
+;
+`
+	// Select orders inside observation range, if there are no outsiders
+	sqlStatementGetInsidersNoOutsider := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE ot.asset_id = $1
+AND (
+          ot.begin_timestamp >= $2
+          AND
+          ot.begin_timestamp <= $3
+          )
+ORDER BY begin_timestamp ASC
+;
+`
+
+	// Get order outside observation window
+	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
+	err = row.Err()
+	if err == sql.ErrNoRows {
+		zap.S().Debugf("No outsider rows")
+		//We don't care if there is no outside order, in this case we will just select all insider orders
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
+		error = err
+		return
+	}
+
+	// Holds an order, retrieved from our DB
+	type Order struct {
+		OID            int
+		PID            int
+		timestampBegin time.Time
+		timestampEnd   sql.NullTime
+		targetUnits    sql.NullInt32
+		AID            int
+	}
+
+	// Order that has started before observation time
+	var OuterOrder Order
+
+	var OidOuter int
+	var PidOuter int
+	var timestampbeginOuter time.Time
+	var timestampendOuter sql.NullTime
+	var targetunitsOuter sql.NullInt32
+	var AidOuter int
+	foundOutsider := true
+
+	err = row.Scan(&OidOuter, &PidOuter, &timestampbeginOuter, &timestampendOuter, &targetunitsOuter, &AidOuter)
+
+	OuterOrder = Order{
+		OID:            OidOuter,
+		PID:            PidOuter,
+		timestampBegin: timestampbeginOuter,
+		timestampEnd:   timestampendOuter,
+		targetUnits:    targetunitsOuter,
+		AID:            AidOuter,
+	}
+
+	if err == sql.ErrNoRows {
+		foundOutsider = false
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
+		error = err
+		return
+	}
+
+	var insideOrderRows *sql.Rows
+	if foundOutsider {
+		// Get insiders without the outsider order
+		zap.S().Debugf("Query with outsider: ", OuterOrder)
+		insideOrderRows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
+	} else {
+		// Get insiders
+		zap.S().Debugf("Query without outsider: ", OuterOrder)
+		insideOrderRows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
+	}
+
+	if err == sql.ErrNoRows {
+		// It is valid to have no internal rows !
+		zap.S().Debugf("No internal rows")
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
+		error = err
+		return
+	}
+
+	// List of all inside orders
+	var insideOrders []Order
+
+	foundInsider := false
+	for insideOrderRows.Next() {
+
+		var OID int
+		var PID int
+		var timestampBegin time.Time
+		var timestampEnd sql.NullTime
+		var targetUnits sql.NullInt32
+		var AID int
+		err := insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
+		if err != nil {
+			PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
+			error = err
+			return
+		}
+		foundInsider = true
+		zap.S().Debugf("Found insider: %d, %d, %s, %s, %d, %d", OID, PID, timestampBegin, timestampEnd, targetUnits, AID)
+		insideOrders = append(insideOrders, Order{
+			OID,
+			PID,
+			timestampBegin,
+			timestampEnd,
+			targetUnits,
+			AID,
+		})
+	}
+
+	var observationStart time.Time
+	var observationEnd time.Time
+
+	if !foundInsider && !foundOutsider {
+		zap.S().Debugf("No insiders or outsiders !")
+		observationStart = from
+		observationEnd = to
+	} else {
+
+		// If value before observation window, use it's begin timestamp
+		// Else iter all inside rows and select the lowest timestamp
+		if foundOutsider {
+			observationStart = OuterOrder.timestampBegin
+		} else {
+			observationStart = time.Unix(1<<16-1, 0)
+			for _, rowdatum := range insideOrders {
+				if rowdatum.timestampBegin.Before(observationStart) {
+					observationStart = rowdatum.timestampBegin
+				}
+			}
+		}
+
+		observationEnd = time.Unix(0, 0)
+		// If value inside observation window, iterate them and select the greatest time.
+		// If order has no end, assume unix max time
+		if foundInsider {
+			for _, rowdatum := range insideOrders {
+				if rowdatum.timestampEnd.Valid {
+					if rowdatum.timestampEnd.Time.After(observationEnd) {
+						observationEnd = rowdatum.timestampEnd.Time
+						zap.S().Debugf("[1992] Set observationEnd %s", observationEnd.String())
+					}
+				} else {
+					if time.Unix(1<<16-1, 0).After(observationEnd) {
+						observationEnd = time.Unix(1<<16-1, 0)
+						zap.S().Debugf("[1996] Set observationEnd %s", observationEnd.String())
+					}
+				}
+			}
+		}
+		// Check if our starting order has the largest end time
+		// Also assign unix max time, if there is still no valid value
+		if OuterOrder.timestampEnd.Valid {
+			if OuterOrder.timestampEnd.Time.After(observationEnd) {
+				observationEnd = OuterOrder.timestampEnd.Time
+				zap.S().Debugf("[2005] Set observationEnd %s", observationEnd.String())
+			}
+		} else if observationEnd.Equal(time.Unix(0, 0)) {
+			observationEnd = to
+			zap.S().Debugf("[2009] Set observationEnd %s", observationEnd.String())
+		}
+	}
+
+	if observationStart.After(observationEnd) {
+		zap.S().Warnf("observationStart > observationEnd: %s > %s", observationStart.String(), observationEnd.String())
+	}
+
+	zap.S().Debugf("Set observation start to: %s", observationStart)
+	zap.S().Debugf("Set observation end to: %s", observationEnd)
+
+	//Get all counts
+	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp <= to_timestamp($3::double precision) ORDER BY timestamp ASC;`
+
+	countQueryBegin := observationStart.UnixMilli()
+	countQueryEnd := int64(0)
+	if to.After(observationEnd) {
+		countQueryEnd = to.UnixMilli()
+	} else {
+		countQueryEnd = observationEnd.UnixMilli()
+	}
+
+	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(countQueryBegin)/1000, float64(countQueryEnd)/1000)
+
+	defer countRows.Close()
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatementGetCounts, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetCounts, err, false)
+		error = err
+		return
+	}
+
+	countMap := make([]CountStruct, 0)
+
+	for countRows.Next() {
+		var timestamp time.Time
+		var count int
+		var scrap int
+		err := countRows.Scan(&timestamp, &count, &scrap)
+
+		if err != nil {
+			PQErrorHandling(c, sqlStatementGetCounts, err, false)
+			error = err
+			return
+		}
+
+		countMap = append(countMap, CountStruct{timestamp: timestamp, count: count, scrap: scrap})
+	}
+
+	//Get all orders in timeframe
+	sqlGetRunningOrders := `SELECT order_id, product_id, target_units, begin_timestamp, end_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision) OR end_timestamp = NULL`
+
+	orderQueryBegin := observationStart.UnixMilli()
+	orderQueryEnd := int64(0)
+	if to.After(observationEnd) {
+		orderQueryEnd = to.UnixMilli()
+	} else {
+		orderQueryEnd = observationEnd.UnixMilli()
+	}
+
+	orderRows, err := db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
+
+	defer orderRows.Close()
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlGetRunningOrders, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlGetRunningOrders, err, false)
+		error = err
+		return
+	}
+
+	orderMap := make([]OrderStruct, 0)
+
+	for orderRows.Next() {
+		var orderID int
+		var productId int
+		var targetUnits int
+		var beginTimeStamp time.Time
+		var endTimeStamp sql.NullTime
+		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
+
+		if err != nil {
+			PQErrorHandling(c, sqlGetRunningOrders, err, false)
+			error = err
+			return
+		}
+
+		orderMap = append(orderMap, OrderStruct{
+			orderID:        orderID,
+			productId:      productId,
+			targetUnits:    targetUnits,
+			beginTimeStamp: beginTimeStamp,
+			endTimeStamp:   endTimeStamp,
+		})
+	}
+
+	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
+
+	productRows, err := db.Query(sqlGetProductsPerSec, assetID)
+
+	defer productRows.Close()
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+		error = err
+		return
+	}
+	productMap := make(map[int]ProductStruct, 0)
+
+	for productRows.Next() {
+		var productId int
+		var timePerUnitInSec float64
+		err := productRows.Scan(&productId, &timePerUnitInSec)
+
+		if err != nil {
+			PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+			error = err
+			return
+		}
+
+		productMap[productId] = ProductStruct{productId: productId, timePerProductUnitInSec: timePerUnitInSec}
+	}
+
+	zap.S().Debugf("AssetID: %d", assetID)
+	data, err = CalculateAccumulatedProducts(c, to, observationStart, observationEnd, countMap, orderMap, productMap)
+	return data, err
+}
+
+// BeforeOrEqual returns if t is before or equal to u
+func BeforeOrEqual(t time.Time, u time.Time) bool {
+	return t.Before(u) || t.Equal(u)
+}
+
+// AfterOrEqual returns if t is after or equal to u
+func AfterOrEqual(t time.Time, u time.Time) bool {
+	return t.After(u) || t.Equal(u)
+}
