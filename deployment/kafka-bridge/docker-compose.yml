@@ -1,0 +1,94 @@
+version: "2"
+
+services:
+  zookeeper_local:
+    image: docker.io/bitnami/zookeeper:3.7
+    restart: always
+    ports:
+      - "2181:2181"
+    volumes:
+      - "zookeeper_data_local:/bitnami"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  zookeeper_remote:
+    image: docker.io/bitnami/zookeeper:3.7
+    restart: always
+    ports:
+      - "12181:12181"
+    volumes:
+      - "zookeeper_data_remote:/bitnami"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+      - ZOO_PORT_NUMBER=12181
+
+  kafka_local:
+    image: docker.io/bitnami/kafka:3
+    restart: always
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    volumes:
+      - "kafka_data_local:/bitnami"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper_local:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,OUTSIDE://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+    depends_on:
+      - zookeeper_local
+
+  kafka_remote:
+    image: docker.io/bitnami/kafka:3
+    restart: always
+    ports:
+      - "19092:19092"
+      - "19094:19094"
+    volumes:
+      - "kafka_data_remote:/bitnami"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper_remote:12181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:19092,OUTSIDE://0.0.0.0:19094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:19092,OUTSIDE://localhost:19094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+    depends_on:
+      - zookeeper_remote
+
+  kowl_local:
+    image: quay.io/cloudhut/kowl:v1.5.0
+    restart: always
+    hostname: kowl
+    volumes:
+      - ./config_local.yaml:/etc/kowl/config.yaml
+    ports:
+      - "8080:8080"
+    entrypoint: ./kowl --config.filepath=/etc/kowl/config.yaml
+    depends_on:
+      - kafka_local
+
+  kowl_remote:
+    image: quay.io/cloudhut/kowl:v1.5.0
+    restart: always
+    hostname: kowl
+    volumes:
+      - ./config_remote.yaml:/etc/kowl/config.yaml
+    ports:
+      - "18080:8080"
+    entrypoint: ./kowl --config.filepath=/etc/kowl/config.yaml
+    depends_on:
+      - kafka_remote
+
+
+volumes:
+  zookeeper_data_local:
+    driver: local
+  zookeeper_data_remote:
+    driver: local
+  kafka_data_local:
+    driver: local
+  kafka_data_remote:
+    driver: local
