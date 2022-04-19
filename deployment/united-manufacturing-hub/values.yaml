@@ -2025,6 +2025,13 @@ kafka:
   externalZookeeper:
     servers: []
   autoCreateTopicsEnable: true
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
 
 ##### CONFIG FOR REDIS #####
 redis:
