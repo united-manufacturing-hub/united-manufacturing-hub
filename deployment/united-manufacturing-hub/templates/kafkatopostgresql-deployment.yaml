@@ -61,9 +61,9 @@ spec:
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
 
             - name: KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC
-              value: {{.Values.kafkatopostgresql.listenTopic.highIntegrity | quote }}
+              value: {{.Values.kafkatopostgresql.listenTopic.highIntegrity }}
             - name: KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC
-              value: {{.Values.kafkatopostgresql.listenTopic.highThroughput | quote}}
+              value: {{.Values.kafkatopostgresql.listenTopic.highThroughput}}
 
             - name: MY_POD_NAME
               valueFrom:
