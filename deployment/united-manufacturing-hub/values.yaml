@@ -20,6 +20,8 @@ _000_commonConfig:
     sensorconnect:
       enabled: true
       iprange: "192.168.10.1/24"  # IP Range in CIDR notation
+      enableKafka: true
+      enableMQTT: true
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
