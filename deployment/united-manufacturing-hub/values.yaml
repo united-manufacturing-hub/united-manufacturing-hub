@@ -2275,7 +2275,7 @@ vernemq:
     lifecycle: {}
     livenessProbe:
       failureThreshold: 3
-      initialDelaySeconds: 90
+      initialDelaySeconds: 600
       periodSeconds: 10
       successThreshold: 1
       timeoutSeconds: 5
