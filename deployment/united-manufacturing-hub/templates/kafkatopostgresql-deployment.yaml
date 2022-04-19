@@ -77,7 +77,15 @@ spec:
               port: 8086
             initialDelaySeconds: 30
             periodSeconds: 5
-            
+
+          resources:
+            limits:
+              cpu: {{.Values.kafkatopostgresql.resources.limits.cpu}}
+              memory: {{.Values.kafkatopostgresql.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.kafkatopostgresql.resources.requests.cpu}}
+              memory: {{.Values.kafkatopostgresql.resources.requests.memory}}
+
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}
