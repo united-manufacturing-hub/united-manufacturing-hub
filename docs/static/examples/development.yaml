@@ -312,7 +312,7 @@ write_files:
       echo "Created namespace!"
 
       echo "Install Helm chart united-manufacturing-hub..."
-      if ! helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --values "/home/rancher/configs/united-manufacturing-hub-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub --devel ; then
+      if ! helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --values "/home/rancher/configs/united-manufacturing-hub-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub ; then
       echo "Failed to install united-manufacturing-hub using helm, aborting setup"
       exit
       fi

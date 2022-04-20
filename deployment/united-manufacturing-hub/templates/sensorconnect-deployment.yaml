@@ -47,9 +47,17 @@ spec:
               value: {{.Values.sensorconnect.ioddfilepath | quote}}
 
             - name: USE_KAFKA
-              value: {{.Values._000_commonConfig.infrastructure.kafka.enabled | quote }}
+              {{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datasources.sensorconnect.enableKafka}}
+              value: "true"
+              {{else}}
+              value: "false"
+              {{end}}
             - name: USE_MQTT
-              value: {{.Values._000_commonConfig.infrastructure.mqtt.enabled| quote }}
+              {{if and .Values._000_commonConfig.infrastructure.mqtt.enabled .Values._000_commonConfig.datasources.sensorconnect.enableMQTT}}
+              value: "true"
+              {{else}}
+              value: "false"
+              {{end}}
 
             - name: LOWER_POLLING_TIME_MS
               value: {{.Values.sensorconnect.lowerPollingTime| quote }}
