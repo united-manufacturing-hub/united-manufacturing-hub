@@ -20,6 +20,8 @@ _000_commonConfig:
     sensorconnect:
       enabled: true
       iprange: "192.168.10.1/24"  # IP Range in CIDR notation
+      enableKafka: true
+      enableMQTT: false
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
@@ -135,11 +137,11 @@ _000_commonConfig:
         MIzsw5gq+PcsyNV5g/IUX0PJ
         -----END PRIVATE KEY-----
 
-    # apache kafka, mqttkafkabridge, kowl
+    # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
 
-  # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
+  # timescaledb, factoryinsight, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
   # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
   datastorage:
@@ -158,7 +160,7 @@ _000_commonConfig:
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
-    enabled: true
+    enabled: false
     remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
     localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
     oneWay: true
@@ -574,7 +576,7 @@ mqtttoblob:
   enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   pdb:
     enabled: true
@@ -622,11 +624,21 @@ kafkatopostgresql:
   image:
     repository: unitedmanufacturinghub/kafka-to-postgresql
     pullPolicy: IfNotPresent
+    #tag: latest
   replicas: 1
   storageRequest: 1Gi
   listenTopic:
-    highIntegrity: '^ia\..+\..+\..+\.(?!processValue).+$'
+    # All topics except processValue
+    # Kafka doesn't seem to be able to do negative lookaheads
+    highIntegrity: '^ia\..+\..+\..+\.(addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct).+$'
     highThroughput: '^ia\..+\..+\..+\.(processValue).*$'
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 250Mi
 
 ### minio-operator ###
 minio-operator:
@@ -1984,7 +1996,9 @@ kafkatoblob:
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
   livenessProbe:
-    initialDelaySeconds: 180
+    initialDelaySeconds: 600
+    failureThreshold: 10
+    timeoutSeconds: 10
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
@@ -2013,6 +2027,13 @@ kafka:
   externalZookeeper:
     servers: []
   autoCreateTopicsEnable: true
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 4Gi
+    requests:
+      cpu: 500m
+      memory: 250Mi
 
 ##### CONFIG FOR REDIS #####
 redis:
@@ -2270,7 +2291,7 @@ vernemq:
     lifecycle: {}
     livenessProbe:
       failureThreshold: 3
-      initialDelaySeconds: 90
+      initialDelaySeconds: 600
       periodSeconds: 10
       successThreshold: 1
       timeoutSeconds: 5
