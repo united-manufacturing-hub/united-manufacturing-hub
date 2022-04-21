@@ -31,13 +31,12 @@ var nearMemoryLimit = false
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
+	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
+		logger, _ = zap.NewDevelopment()
+	} else {
 
-	//if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
-	logger, _ = zap.NewDevelopment()
-	//} else {
-
-	//	logger, _ = zap.NewProduction()
-	//}
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -148,14 +147,14 @@ func main() {
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Starting HI queue processor")
 		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
-		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
+		highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
 		highIntegrityEventChannel := HIKafkaProducer.Events()
-		go startPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer)
-		go processKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
-		go startCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
+		go internal.KafkaStartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer)
+		go internal.KafkaProcessQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
+		go internal.KafkaStartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
-		go startEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
+		go internal.StartEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
 		zap.S().Debugf("Started HI queue processor")
 	}
 
@@ -163,13 +162,13 @@ func main() {
 	if HighThroughputEnabled {
 		zap.S().Debugf("Starting HT queue processor")
 		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
-		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
+		highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highThroughputEventChannel := HIKafkaProducer.Events()
 		// HT has no commit channel, it uses auto commit
-		go startPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer)
-		go processKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
+		go internal.KafkaStartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer)
+		go internal.KafkaProcessQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
 		go startHighThroughputQueueProcessor()
-		go startEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
+		go internal.StartEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
 
 		go startProcessValueQueueAggregator()
 		go startProcessValueStringQueueAggregator()
@@ -223,11 +222,15 @@ func main() {
 	}()
 
 	go PerformanceReport()
-	select {} // block forever
+	select {
+	case <-internal.ShutdownMainChan:
+		zap.S().Info("Shutdown signal received from kafka")
+		ShutdownApplicationGraceful()
+		return
+	} // block forever
 }
 
 var ShuttingDown bool
-var ShutdownPutback bool
 
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
@@ -238,12 +241,13 @@ func ShutdownApplicationGraceful() {
 
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
+	internal.KafkaShuttingDown = true
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
-		if !DrainChannel("[HT]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+		if !internal.DrainChannel("[HT]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
 
@@ -258,13 +262,13 @@ func ShutdownApplicationGraceful() {
 	// This is behind HI to allow a higher chance of a clean shutdown
 	if HighThroughputEnabled {
 		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
-		if !DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
+		if !internal.DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
-		if !DrainChannel("[HIGH_THROUGHPUT]", processValueChannel, highThroughputPutBackChannel) {
+		if !internal.DrainChannel("[HIGH_THROUGHPUT]", processValueChannel, highThroughputPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
-		if !DrainChannel("[HIGH_THROUGHPUT]", processValueStringChannel, highThroughputPutBackChannel) {
+		if !internal.DrainChannel("[HIGH_THROUGHPUT]", processValueStringChannel, highThroughputPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
 
@@ -275,7 +279,7 @@ func ShutdownApplicationGraceful() {
 			time.Sleep(internal.OneSecond)
 		}
 	}
-	ShutdownPutback = true
+	internal.KafkaShutdownPutback = true
 
 	time.Sleep(internal.OneSecond)
 
@@ -295,18 +299,6 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
-// Commits is a counter for the number of commits done (to the db), this is used for stats only
-var Commits = float64(0)
-
-// Messages is a counter for the number of messages processed, this is used for stats only
-var Messages = float64(0)
-
-// PutBacks is a counter for the number of messages returned to kafka, this is used for stats only
-var PutBacks = float64(0)
-
-// Confirmed is a counter for the number of messages confirmed to kafka, this is used for stats only
-var Confirmed = float64(0)
-
 func PerformanceReport() {
 	lastCommits := float64(0)
 	lastMessages := float64(0)
@@ -315,20 +307,20 @@ func PerformanceReport() {
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
-		commitsPerSecond := (Commits - lastCommits) / sleepS
-		messagesPerSecond := (Messages - lastMessages) / sleepS
-		putbacksPerSecond := (PutBacks - lastPutbacks) / sleepS
-		confirmedPerSecond := (Confirmed - lastConfirmed) / sleepS
-		lastCommits = Commits
-		lastMessages = Messages
-		lastPutbacks = PutBacks
-		lastConfirmed = Confirmed
+		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
+		messagesPerSecond := (internal.KafkaMessages - lastMessages) / sleepS
+		putbacksPerSecond := (internal.KafkaPutBacks - lastPutbacks) / sleepS
+		confirmedPerSecond := (internal.KafkaConfirmed - lastConfirmed) / sleepS
+		lastCommits = internal.KafkaCommits
+		lastMessages = internal.KafkaMessages
+		lastPutbacks = internal.KafkaPutBacks
+		lastConfirmed = internal.KafkaConfirmed
 
 		zap.S().Infof("Performance report"+
-			"\nCommits: %f, Commits/s: %f"+
-			"\nMessages: %f, Messages/s: %f"+
-			"\nPutBacks: %f, PutBacks/s: %f"+
-			"\nConfirmed: %f, Confirmed/s: %f"+
+			"\nKafkaCommits: %f, KafkaCommits/s: %f"+
+			"\nKafkaMessages: %f, KafkaMessages/s: %f"+
+			"\nKafkaPutBacks: %f, KafkaPutBacks/s: %f"+
+			"\nKafkaConfirmed: %f, KafkaConfirmed/s: %f"+
 			"\n[HI] Processor queue length: %d"+
 			"\n[HI] PutBack queue length: %d"+
 			"\n[HI] Commit queue length: %d"+
@@ -338,14 +330,14 @@ func PerformanceReport() {
 			"\n[HT] ProcessValueString queue lenght: %d"+
 			"\n[HT] Processor queue length: %d"+
 			"\n[HT] PutBack queue length: %d",
-			Commits, commitsPerSecond,
-			Messages, messagesPerSecond,
-			PutBacks, putbacksPerSecond,
-			Confirmed, confirmedPerSecond,
+			internal.KafkaCommits, commitsPerSecond,
+			internal.KafkaMessages, messagesPerSecond,
+			internal.KafkaPutBacks, putbacksPerSecond,
+			internal.KafkaConfirmed, confirmedPerSecond,
 			len(highIntegrityProcessorChannel),
 			len(highIntegrityPutBackChannel),
 			len(highIntegrityCommitChannel),
-			messagecache.HitRate(),
+			internal.Messagecache.HitRate(),
 			dbcache.HitRate(),
 			len(processValueChannel),
 			len(processValueStringChannel),
@@ -353,26 +345,26 @@ func PerformanceReport() {
 			len(highThroughputPutBackChannel),
 		)
 
-		if Commits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
-			Commits = 0
+		if internal.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
+			internal.KafkaCommits = 0
 			lastCommits = 0
 			zap.S().Warnf("Resetting commit statistics")
 		}
 
-		if Messages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
-			Messages = 0
+		if internal.KafkaMessages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
+			internal.KafkaMessages = 0
 			lastMessages = 0
 			zap.S().Warnf("Resetting message statistics")
 		}
 
-		if PutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
-			PutBacks = 0
+		if internal.KafkaPutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
+			internal.KafkaPutBacks = 0
 			lastPutbacks = 0
 			zap.S().Warnf("Resetting putback statistics")
 		}
 
-		if Confirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
-			Confirmed = 0
+		if internal.KafkaConfirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
+			internal.KafkaConfirmed = 0
 			lastConfirmed = 0
 			zap.S().Warnf("Resetting confirmed statistics")
 		}

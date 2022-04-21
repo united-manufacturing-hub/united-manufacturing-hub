@@ -17,7 +17,7 @@ type scrapCount struct {
 }
 
 // ProcessMessages processes a ScrapCount kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c ScrapCount) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
+func (c ScrapCount) ProcessMessages(msg internal.ParsedMessage) (err error, putback bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
