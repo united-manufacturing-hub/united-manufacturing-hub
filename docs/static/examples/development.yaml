@@ -12,11 +12,11 @@ write_files:
     # Please adjust the following lines
     # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
     _000_commonConfig:
+    
       serialNumber: "development"  # usually the hostname
-
+    
       # This allows to specify data sources, which is mostly used for instances running on the edge
       datasources:
-
         # barcodereader reads out connected USB barcodereaders emulating a keyboard
         barcodereader:
           enabled: true
@@ -24,12 +24,16 @@ write_files:
           customerID: "raw"
           location: "barcodereader"
           machineID: "barcodereader"
-
+          brokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub"
+          brokerPort: 8883
+    
         # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
         sensorconnect:
           enabled: true
           iprange: "127.0.0.1/32"  # e.g. 172.21.9.0/24
-
+          enableKafka: true
+          enableMQTT: false
+    
         # Warning: unstable
         # cameraconnect searches for GenICam compatible cameras and reads out the pictures
         cameraconnect:
@@ -45,16 +49,16 @@ write_files:
           exposureTime: "1000"
           exposureAuto: "Off"
           pixelFormat: "Mono8"
-
+    
       # dataprocessing involves microservices, whose main purpose is to process the data
       dataprocessing:
         nodered:
           enabled: true
           defaultFlows: false
-
+    
       # Infrastructure
       infrastructure:
-
+    
         # vernemq
         mqtt:
           enabled: true
@@ -62,7 +66,7 @@ write_files:
             pattern write ia/raw/%u/#
             pattern write ia/%u/#
             pattern $SYS/broker/connection/%c/state
-
+    
             user TESTING
             topic ia/#
             topic $SYS/#
@@ -143,33 +147,34 @@ write_files:
             337jNZKFr5EaVmF45PrcM060cbEcbdq8zCTEnQ6Y+bQiDTkfdgcE5CDJDJ7ol2I2
             MIzsw5gq+PcsyNV5g/IUX0PJ
             -----END PRIVATE KEY-----
-
-        # apache kafka, mqttkafkabridge, kowl
+    
+        # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
         kafka:
           enabled: true
-
-      # timescaledb, factoryinsight, mqtt-to-postgresql, grafana, redis
+    
+      # timescaledb, factoryinsight, grafana, redis
       # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
       # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
       datastorage:
         enabled: true
         db_password: "changeme"
-
+    
       # mqtt-to-blob, minio, kafka-to-blob
       # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
       blobstorage:
         enabled: true
-
+    
       # factoryinput, grafanaproxy
       # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
       datainput:
         enabled: true
-
+    
       # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
       mqttBridge:
         enabled: false
-        remoteURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
-        topic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+        remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
+        localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+
         CAcert: |
           -----BEGIN CERTIFICATE-----
           -----END CERTIFICATE-----
@@ -179,6 +184,11 @@ write_files:
         privkey: |
           -----BEGIN PRIVATE KEY-----
           -----END PRIVATE KEY-----
+    
+      kafkaBridge:
+        enabled: false
+        remotebootstrapServer: ""
+        topicmap: "
 
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
