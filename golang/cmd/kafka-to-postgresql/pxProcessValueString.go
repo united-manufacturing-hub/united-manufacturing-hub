@@ -5,6 +5,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -32,15 +33,15 @@ func startProcessValueStringQueueAggregator() {
 				messages = append(messages, msg)
 				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= 5000 {
-					//zap.S().Debugf("[HT][PVS] Messages length: %d", len(messages))
+					//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 					putBackMsg, err, putback, reason := writeProcessValueStringToDatabase(messages)
 					if putback {
 						for _, message := range putBackMsg {
 							errStr := err.Error()
-							highThroughputPutBackChannel <- PutBackChanMsg{
-								msg:         message,
-								reason:      reason,
-								errorString: &errStr,
+							highThroughputPutBackChannel <- internal.PutBackChanMsg{
+								Msg:         message,
+								Reason:      reason,
+								ErrorString: &errStr,
 							}
 						}
 					}
@@ -51,7 +52,7 @@ func startProcessValueStringQueueAggregator() {
 			}
 		case <-writeToDbTimer.C: // Commit data into db
 			{
-				//zap.S().Debugf("[HT][PVS] Messages length: %d", len(messages))
+				//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 				if len(messages) == 0 {
 
 					continue
@@ -60,10 +61,10 @@ func startProcessValueStringQueueAggregator() {
 				if putback {
 					for _, message := range putBackMsg {
 						errStr := err.Error()
-						highThroughputPutBackChannel <- PutBackChanMsg{
-							msg:         message,
-							reason:      reason,
-							errorString: &errStr,
+						highThroughputPutBackChannel <- internal.PutBackChanMsg{
+							Msg:         message,
+							Reason:      reason,
+							ErrorString: &errStr,
 						}
 					}
 				}
@@ -74,10 +75,10 @@ func startProcessValueStringQueueAggregator() {
 		}
 	}
 	for _, message := range messages {
-		highThroughputPutBackChannel <- PutBackChanMsg{
-			msg:         message,
-			reason:      "Shutting down",
-			errorString: nil,
+		highThroughputPutBackChannel <- internal.PutBackChanMsg{
+			Msg:         message,
+			Reason:      "Shutting down",
+			ErrorString: nil,
 		}
 	}
 }
@@ -120,7 +121,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		//zap.S().Debugf("[HT][PVS] Copying %d messages to temporary table", len(messages))
 		// Copy into the temporary table
 		for _, message := range messages {
-			couldParse, parsedMessage := ParseMessage(message)
+			couldParse, parsedMessage := internal.ParseMessage(message)
 			if !couldParse {
 
 				////zap.S().Debugf("Could not parse ! %v", message)
@@ -237,8 +238,8 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		if len(putBackMsg) > 0 {
 			return putBackMsg, nil, true, "AssetID not found"
 		}
-		PutBacks += float64(len(putBackMsg))
-		Commits += toCommit
+		internal.KafkaPutBacks += float64(len(putBackMsg))
+		internal.KafkaCommits += toCommit
 	}
 
 	return putBackMsg, nil, false, ""
