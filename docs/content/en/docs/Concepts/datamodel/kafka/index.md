@@ -28,6 +28,11 @@ There are two exception to this rule:
 
 Specifications for those can be found on the [UMH datamodel](https://docs.umh.app/docs/concepts/mqtt/) page. 
 
+All Topics may have suffixes, which might get ignored by the different microservices.
+For example:
+```
+  ia.testCustomer.testLocation.testAsset.processValue.temperature
+```
 
 All names have to match the following regex:
 ```regexp
