@@ -1,6 +1,8 @@
-package internal
+package main
 
 import (
+	"github.com/go-playground/assert/v2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"math/rand"
 	"testing"
 	"time"
@@ -10,9 +12,9 @@ func TestInsert101(t *testing.T) {
 
 	r := NewBoolRandGen()
 
-	initialMessages := make([]Activity, 10)
+	initialMessages := make([]datamodel.Activity, 10)
 	for i := 0; i < 10; i++ {
-		initialMessages[i] = Activity{
+		initialMessages[i] = datamodel.Activity{
 			TimestampMs: uint64(i),
 			Activity:    r.Bool(),
 		}
@@ -23,28 +25,29 @@ func TestInsert101(t *testing.T) {
 
 	kmsq := NewKafkaMessageStreamQueue(initialMessages)
 
-	kmsq.Enqueue(Activity{
+	kmsq.Enqueue(datamodel.Activity{
 		TimestampMs: uint64(101),
 		Activity:    true,
 	})
-	kmsq.Enqueue(Activity{
+	kmsq.Enqueue(datamodel.Activity{
 		TimestampMs: uint64(102),
 		Activity:    true,
 	})
-	kmsq.Enqueue(Activity{
+	kmsq.Enqueue(datamodel.Activity{
 		TimestampMs: uint64(103),
 		Activity:    true,
 	})
-	kmsq.Enqueue(Activity{
-		TimestampMs: uint64(104),
-		Activity:    true,
-	})
-	kmsq.Enqueue(Activity{
+	kmsq.Enqueue(datamodel.Activity{
 		TimestampMs: uint64(105),
 		Activity:    true,
 	})
+	kmsq.Enqueue(datamodel.Activity{
+		TimestampMs: uint64(104),
+		Activity:    true,
+	})
 
-	kmsq.GetLatestByTimestamp()
+	latest := kmsq.GetLatestByTimestamp()
+	assert.Equal(t, latest.TimestampMs, uint64(105))
 
 }
 

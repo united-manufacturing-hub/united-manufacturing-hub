@@ -1,16 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
 )
-
-var activityProcessorChannel chan *kafka.Message
-var activityCommitChannel chan *kafka.Message
 
 var buildtime string
 
@@ -51,16 +50,36 @@ func main() {
 			"auto.offset.reset":        "earliest",
 		})
 
-		activityProcessorChannel = make(chan *kafka.Message, 100)
-		activityCommitChannel = make(chan *kafka.Message)
+		ActivityProcessorChannel = make(chan *kafka.Message, 100)
+		ActivityCommitChannel = make(chan *kafka.Message)
 		activityEventChannel := ActivityKafkaProducer.Events()
 		activityTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
 		go internal.KafkaStartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer)
-		go internal.KafkaProcessQueue("[AC]", activityTopic, activityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel)
-		go internal.KafkaStartCommitProcessor("[AC]", activityCommitChannel, ActivityKafkaConsumer)
+		go internal.KafkaProcessQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel)
+		go internal.KafkaStartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
+	}
+
+	if AnomalyEnabled {
+		SetupAnomalyKafka(kafka.ConfigMap{
+			"security.protocol":  "plaintext",
+			"group.id":           fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
+			"enable.auto.commit": true,
+			"auto.offset.reset":  "earliest",
+		})
+
+		AnomalyProcessorChannel = make(chan *kafka.Message, 100)
+		AnomalyCommitChannel = make(chan *kafka.Message)
+		anomalyEventChannel := AnomalyKafkaProducer.Events()
+		anomalyTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
+
+		go internal.KafkaStartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer)
+		go internal.KafkaProcessQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel)
+		go internal.KafkaStartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
+		go internal.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)
+		go startAnomalyActivityProcessor()
 	}
 
 	if !ActivityEnabled && !AnomalyEnabled {
