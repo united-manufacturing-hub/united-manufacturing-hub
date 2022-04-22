@@ -259,7 +259,8 @@ cameraconnect:
 
 ### cameraconnect ###
 kafkabridge:
-  image: unitedmanufacturinghub/kafkabridge
+  image:
+    repository: unitedmanufacturinghub/kafkabridge
   # tag: development
 
 

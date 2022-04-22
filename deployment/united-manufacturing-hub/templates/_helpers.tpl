@@ -180,6 +180,13 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatop
 {{- end }}
 
 
+{{/*
+Labels for kafkabridge
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkabridge" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkabridge
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
 
 {{/*
 Create the name of the service account to use
