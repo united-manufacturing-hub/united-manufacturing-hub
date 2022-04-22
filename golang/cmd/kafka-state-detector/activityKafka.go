@@ -70,7 +70,7 @@ func startActivityProcessor() {
 	for !ShuttingDown {
 		var msg *kafka.Message
 		// Get next message from HI kafka consumer
-		msg = <-activityProcessorChannel
+		msg = <-ActivityProcessorChannel
 		if msg == nil {
 			continue
 		}
@@ -118,6 +118,6 @@ func startActivityProcessor() {
 			}
 			continue
 		}
-		activityCommitChannel <- msg
+		ActivityCommitChannel <- msg
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var buildtime string
@@ -122,4 +123,48 @@ func ShutdownApplicationGraceful() {
 	}
 	zap.S().Info("Shutting down application")
 	ShuttingDown = true
+
+	internal.KafkaShuttingDown = true
+	// Important, allows high load processors to finish
+	time.Sleep(time.Second * 5)
+
+	if ActivityEnabled {
+		if !internal.DrainChannel("[AC]", ActivityProcessorChannel, ActivityPutBackChannel) {
+			time.Sleep(internal.FiveSeconds)
+		}
+		time.Sleep(internal.OneSecond)
+
+		for len(ActivityPutBackChannel) > 0 {
+			zap.S().Infof("Waiting for putback channel to empty: %d", len(ActivityPutBackChannel))
+			time.Sleep(internal.OneSecond)
+		}
+	}
+
+	if AnomalyEnabled {
+		if !internal.DrainChannel("[AC]", AnomalyProcessorChannel, AnomalyPutBackChannel) {
+			time.Sleep(internal.FiveSeconds)
+		}
+		time.Sleep(internal.OneSecond)
+
+		for len(AnomalyPutBackChannel) > 0 {
+			zap.S().Infof("Waiting for putback channel to empty: %d", len(AnomalyPutBackChannel))
+			time.Sleep(internal.OneSecond)
+		}
+	}
+
+	internal.KafkaShutdownPutback = true
+	time.Sleep(internal.OneSecond)
+
+	if ActivityEnabled {
+		CloseActivityKafka()
+	}
+	if AnomalyEnabled {
+		CloseAnomalyKafka()
+	}
+
+	zap.S().Infof("Successfull shutdown. Exiting.")
+
+	// Gracefully exit.
+	// (Use runtime.GoExit() if you need to call defers)
+	os.Exit(0)
 }
