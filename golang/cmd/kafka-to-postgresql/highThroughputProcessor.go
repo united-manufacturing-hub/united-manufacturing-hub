@@ -42,7 +42,7 @@ func startHighThroughputQueueProcessor() {
 
 		if putback {
 			zap.S().Errorf("[HT][No-Error KafkaPutback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
-			highThroughputPutBackChannel <- PutBackChanMsg{msg: msg, reason: "Other", errorString: nil}
+			highThroughputPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other", ErrorString: nil}
 		}
 	}
 	zap.S().Debugf("[HT]Processor shutting down")
