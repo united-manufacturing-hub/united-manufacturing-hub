@@ -82,79 +82,48 @@ type modelStateRegistry struct {
 
 func GetStateFromString(stateString string) uint64 {
 
-	switch stateString {
+	stateMap := map[string]uint64{
 
-	case ModelState.ProducingAtFullSpeedState:
-		return ProducingAtFullSpeedState
-	case ModelState.ProducingAtLowerThanFullSpeedState:
-		return ProducingAtLowerThanFullSpeedState
-	case ModelState.UnknownState:
-		return UnknownState
-	case ModelState.UnspecifiedStopState:
-		return UnspecifiedStopState
-	case ModelState.IdleState:
-		return IdleState
-	case ModelState.OperatorInteractionState:
-		return OperatorInteractionState
-	case ModelState.MicrostopState:
-		return MicrostopState
-	case ModelState.InletJamState:
-		return InletJamState
-	case ModelState.OutletJamState:
-		return OutletJamState
-	case ModelState.CongestionBypassState:
-		return CongestionBypassState
-	case ModelState.MissingBottleCapsRinneState:
-		return MissingBottleCapsRinneState
-	case ModelState.MissingBottleCapsUebergabeState:
-		return MissingBottleCapsUebergabeState
-	case ModelState.MaterialIssueOtherState:
-		return MaterialIssueOtherState
-	case ModelState.ChangeoverState:
-		return ChangeoverState
-	case ModelState.ChangeoverPreparationState:
-		return ChangeoverPreparationState
-	case ModelState.ChangeoverPostprocessingState:
-		return ChangeoverPostprocessingState
-	case ModelState.CleaningState:
-		return CleaningState
-	case ModelState.EmptyingState:
-		return EmptyingState
-	case ModelState.SettingUpState:
-		return SettingUpState
-	case ModelState.OperatorNotAtMachineState:
-		return OperatorNotAtMachineState
-	case ModelState.OperatorBreakState:
-		return OperatorBreakState
-	case ModelState.NoShiftState:
-		return NoShiftState
-	case ModelState.NoOrderState:
-		return NoOrderState
-	case ModelState.EquipmentFailureState:
-		return EquipmentFailureState
-	case ModelState.EquipmentFailureStateWelder:
-		return EquipmentFailureStateWelder
-	case ModelState.EquipmentFailureStateExpender:
-		return EquipmentFailureStateExpender
-	case ModelState.EquipmentFailureStatePalletizer:
-		return EquipmentFailureStatePalletizer
-	case ModelState.EquipmentFailureStateUnderbody:
-		return EquipmentFailureStateUnderbody
-	case ModelState.EquipmentFailureStateTopcover:
-		return EquipmentFailureStateTopcover
-	case ModelState.ExternalFailureState:
-		return ExternalFailureState
-	case ModelState.ExternalInterferenceState:
-		return ExternalInterferenceState
-	case ModelState.CraneNotAvailableState:
-		return CraneNotAvailableState
-	case ModelState.PreventiveMaintenanceStop:
-		return PreventiveMaintenanceStop
-	case ModelState.TechnicalOtherStop:
-		return TechnicalOtherStop
-	case ModelState.MaxState:
-		return MaxState
+		ModelState.ProducingAtFullSpeedState:          ProducingAtFullSpeedState,
+		ModelState.ProducingAtLowerThanFullSpeedState: ProducingAtLowerThanFullSpeedState,
+		ModelState.UnknownState:                       UnknownState,
+		ModelState.UnspecifiedStopState:               UnspecifiedStopState,
+		ModelState.IdleState:                          IdleState,
+		ModelState.OperatorInteractionState:           OperatorInteractionState,
+		ModelState.MicrostopState:                     MicrostopState,
+		ModelState.InletJamState:                      InletJamState,
+		ModelState.OutletJamState:                     OutletJamState,
+		ModelState.CongestionBypassState:              CongestionBypassState,
+		ModelState.MissingBottleCapsRinneState:        MissingBottleCapsRinneState,
+		ModelState.MissingBottleCapsUebergabeState:    MissingBottleCapsUebergabeState,
+		ModelState.MaterialIssueOtherState:            MaterialIssueOtherState,
+		ModelState.ChangeoverState:                    ChangeoverState,
+		ModelState.ChangeoverPreparationState:         ChangeoverPreparationState,
+		ModelState.ChangeoverPostprocessingState:      ChangeoverPostprocessingState,
+		ModelState.CleaningState:                      CleaningState,
+		ModelState.EmptyingState:                      EmptyingState,
+		ModelState.SettingUpState:                     SettingUpState,
+		ModelState.OperatorNotAtMachineState:          OperatorNotAtMachineState,
+		ModelState.OperatorBreakState:                 OperatorBreakState,
+		ModelState.NoShiftState:                       NoShiftState,
+		ModelState.NoOrderState:                       NoOrderState,
+		ModelState.EquipmentFailureState:              EquipmentFailureState,
+		ModelState.EquipmentFailureStateWelder:        EquipmentFailureStateWelder,
+		ModelState.EquipmentFailureStateExpender:      EquipmentFailureStateExpender,
+		ModelState.EquipmentFailureStatePalletizer:    EquipmentFailureStatePalletizer,
+		ModelState.EquipmentFailureStateUnderbody:     EquipmentFailureStateUnderbody,
+		ModelState.EquipmentFailureStateTopcover:      EquipmentFailureStateTopcover,
+		ModelState.ExternalFailureState:               ExternalFailureState,
+		ModelState.ExternalInterferenceState:          ExternalInterferenceState,
+		ModelState.CraneNotAvailableState:             CraneNotAvailableState,
+		ModelState.PreventiveMaintenanceStop:          PreventiveMaintenanceStop,
+		ModelState.TechnicalOtherStop:                 TechnicalOtherStop,
+		ModelState.MaxState:                           MaxState,
 	}
 
+	value, ok := stateMap[stateString]
+	if ok {
+		return value
+	}
 	return 0
 }
