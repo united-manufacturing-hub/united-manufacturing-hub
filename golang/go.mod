@@ -9,6 +9,7 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/coocood/freecache v1.2.1
 	github.com/eclipse/paho.mqtt.golang v1.3.5
+	github.com/gammazero/deque v0.1.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-redis/redis/v8 v8.11.4
