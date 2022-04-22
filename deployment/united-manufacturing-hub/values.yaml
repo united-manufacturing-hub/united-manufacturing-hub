@@ -195,11 +195,21 @@ _000_commonConfig:
 #        send_direction: to_remote
 
 
+  kafkaStateDetector:
+    enabled: true
+
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
 serviceAccount:
   create: true
+
+### kafkastatedetector ###
+kafkastatedetector:
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/kafkastatedetector
+    pullPolicy: IfNotPresent
 
 ### mqttbridge ###
 mqttbridge:
