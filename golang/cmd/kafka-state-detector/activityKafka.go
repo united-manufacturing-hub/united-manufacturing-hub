@@ -66,16 +66,6 @@ func CloseActivityKafka() {
 	ActivityKafkaAdminClient.Close()
 }
 
-type ActivityMessage struct {
-	TimestampMs uint64 `json:"timestampMs"`
-	Activity    bool   `json:"activity"`
-}
-
-type StateMessage struct {
-	TimestampMs uint64 `json:"timestampMs"`
-	State       int64  `json:"state"`
-}
-
 func startActivityProcessor() {
 	for !ShuttingDown {
 		var msg *kafka.Message
@@ -93,14 +83,14 @@ func startActivityProcessor() {
 			continue
 		}
 
-		var activityMessage ActivityMessage
+		var activityMessage datamodel.Activity
 		err := jsoniter.Unmarshal(parsedMessage.Payload, &activityMessage)
 		if err != nil {
-			zap.S().Errorf("[Activity] Failed to parse activity message: %s", err)
+			zap.S().Errorf("[AC] Failed to parse activity message: %s", err)
 			continue
 		}
 
-		var stateMessage StateMessage
+		var stateMessage datamodel.State
 		if activityMessage.Activity {
 			stateMessage.State = datamodel.ProducingAtFullSpeedState
 		} else {
@@ -128,5 +118,6 @@ func startActivityProcessor() {
 			}
 			continue
 		}
+		activityCommitChannel <- msg
 	}
 }
