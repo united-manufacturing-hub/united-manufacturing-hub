@@ -179,6 +179,13 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatop
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
+{{/*
+Labels for kafkastatedetector
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkastatedetector" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkastatedetector
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
 
 
 {{/*
