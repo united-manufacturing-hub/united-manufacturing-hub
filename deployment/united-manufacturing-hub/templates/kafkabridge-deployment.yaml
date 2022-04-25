@@ -11,7 +11,6 @@ metadata:
     {{- toYaml .Values.kafkabridge.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.kafkabridge.replicas}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
@@ -52,7 +51,7 @@ spec:
               value: {{.Values._000_commonConfig.kafkaBridge.remotebootstrapServer}}
 
             - name: KAFKA_TOPIC_MAP
-              value: {{.Values._000_commonConfig.kafkaBridge.topicmap}}
+              value: {{.Values._000_commonConfig.kafkaBridge.topicmap | toJson | quote}}
 
             - name: MY_POD_NAME
               valueFrom:
