@@ -12,8 +12,8 @@ import (
 type ScrapCount struct{}
 
 type scrapCount struct {
-	Scrap       uint32 `json:"scrapCount"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	Scrap       *uint32 `json:"scrapCount"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a ScrapCount kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -37,6 +37,10 @@ func (c ScrapCount) ProcessMessages(msg ParsedMessage) (err error, putback bool)
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
+	}
+	if !internal.IsValidStruct(sC, []string{}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {

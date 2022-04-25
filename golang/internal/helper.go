@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -113,4 +114,28 @@ func Divmod(numerator, denominator int64) (quotient, remainder int64) {
 	quotient = numerator / denominator // integer division, decimals are truncated
 	remainder = numerator % denominator
 	return
+}
+
+func IsValidStruct(testStruct interface{}, allowedNilFields []string) (success bool) {
+	success = true
+	v := reflect.ValueOf(testStruct)
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Pointer() == 0 {
+			if contains(allowedNilFields, v.Type().Field(i).Name) {
+				continue
+			}
+			zap.S().Warnf("%s is nil, check for typing errors !\n", v.Type().Field(i).Name)
+			success = false
+		}
+	}
+	return
+}
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }

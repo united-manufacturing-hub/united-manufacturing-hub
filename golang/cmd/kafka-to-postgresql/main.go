@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -195,14 +196,23 @@ func main() {
 
 	}()
 
+	// The following code keeps the memory usage low
+	debug.SetGCPercent(10)
 	go func() {
-		allowed := uint64(float64(allowedMemorySize) * 0.9)
+		allowedSeventyFivePerc := uint64(float64(allowedMemorySize) * 0.9)
+		allowedNintyPerc := uint64(float64(allowedMemorySize) * 0.75)
 		for {
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
-			if m.Alloc > allowed {
+			if m.Alloc > allowedNintyPerc {
 				zap.S().Errorf("Memory usage is too high: %d bytes, slowing ingress !", m.TotalAlloc)
 				nearMemoryLimit = true
+				debug.FreeOSMemory()
+				time.Sleep(internal.FiveSeconds)
+			}
+			if m.Alloc > allowedSeventyFivePerc {
+				zap.S().Errorf("Memory usage is high: %d bytes !", m.TotalAlloc)
+				nearMemoryLimit = false
 				runtime.GC()
 				time.Sleep(internal.FiveSeconds)
 			} else {

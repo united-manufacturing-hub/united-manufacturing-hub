@@ -12,9 +12,9 @@ import (
 type Count struct{}
 
 type count struct {
-	Count       uint32 `json:"count"`
-	Scrap       uint32 `json:"scrap:omitempty"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	Count       *uint32 `json:"count"`
+	Scrap       *uint32 `json:"scrap:omitempty"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a Count kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -38,6 +38,10 @@ func (c Count) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
+	}
+	if !internal.IsValidStruct(sC, []string{}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
 	}
 
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)

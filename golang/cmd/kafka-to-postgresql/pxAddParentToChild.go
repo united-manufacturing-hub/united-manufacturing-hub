@@ -12,9 +12,9 @@ import (
 type AddParentToChild struct{}
 
 type addParentToChild struct {
-	ChildAID    string `json:"childAID"`
-	ParentAID   string `json:"parentAID"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	ChildAID    *string `json:"childAID"`
+	ParentAID   *string `json:"parentAID"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a AddParentToChild kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -39,6 +39,10 @@ func (c AddParentToChild) ProcessMessages(msg ParsedMessage) (err error, putback
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
 	}
+	if !internal.IsValidStruct(sC, []string{}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
+	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		return nil, true
@@ -46,13 +50,13 @@ func (c AddParentToChild) ProcessMessages(msg ParsedMessage) (err error, putback
 
 	// Changes should only be necessary between this marker
 	var ChildUID uint32
-	ChildUID, success = GetUniqueProductID(sC.ChildAID, AssetTableID)
+	ChildUID, success = GetUniqueProductID(*sC.ChildAID, AssetTableID)
 	if !success {
 		return nil, true
 	}
 
 	var ParentUID uint32
-	ParentUID, success = GetLatestParentUniqueProductID(sC.ParentAID, AssetTableID)
+	ParentUID, success = GetLatestParentUniqueProductID(*sC.ParentAID, AssetTableID)
 	if !success {
 		return nil, true
 	}
