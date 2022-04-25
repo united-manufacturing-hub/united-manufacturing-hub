@@ -133,7 +133,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 			}
 			AssetTableID, success := GetAssetTableID(parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
 			if !success {
-				zap.S().Errorf("Error getting asset table id: %s for %s %s %s", err.Error(), parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
+				zap.S().Errorf("Error getting asset table id for %s %s %s", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
 				putBackMsg = append(putBackMsg, message)
 				continue
 			}
