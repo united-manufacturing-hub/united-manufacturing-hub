@@ -12,7 +12,7 @@ import (
 type ScrapUniqueProduct struct{}
 
 type scrapUniqueProduct struct {
-	UID uint32 `json:"UID"`
+	UID *uint32 `json:"UID"`
 }
 
 // ProcessMessages processes a ScrapUniqueProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -36,6 +36,10 @@ func (c ScrapUniqueProduct) ProcessMessages(msg ParsedMessage) (err error, putba
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
+	}
+	if !internal.IsValidStruct(sC, []string{}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {

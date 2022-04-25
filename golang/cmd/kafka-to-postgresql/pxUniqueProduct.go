@@ -12,11 +12,11 @@ import (
 type UniqueProduct struct{}
 
 type uniqueProduct struct {
-	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64  `json:"end_timestamp_ms"`
-	ProductId                  string `json:"product_id"`
-	IsScrap                    bool   `json:"is_scrap"`
-	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
+	BeginTimestampMs           *uint64 `json:"begin_timestamp_ms"`
+	EndTimestampMs             *int64  `json:"end_timestamp_ms"`
+	ProductId                  *string `json:"product_id"`
+	IsScrap                    *bool   `json:"isScrap"`
+	UniqueProductAlternativeID *string `json:"uniqueProductAlternativeID"`
 }
 
 // ProcessMessages processes a UniqueProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -41,13 +41,17 @@ func (c UniqueProduct) ProcessMessages(msg ParsedMessage) (err error, putback bo
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
 	}
+	if !internal.IsValidStruct(sC, []string{"EndTimestampMs"}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
+	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		return nil, true
 	}
 
 	var ProductTableId uint32
-	ProductTableId, success = GetProductTableId(sC.ProductId, AssetTableID)
+	ProductTableId, success = GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
 		return nil, true
 	}
@@ -63,7 +67,7 @@ func (c UniqueProduct) ProcessMessages(msg ParsedMessage) (err error, putback bo
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
-	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimestampMs, NewNullInt64(sC.EndTimestampMs), ProductTableId, sC.IsScrap, sC.UniqueProductAlternativeID)
+	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimestampMs, NewNullInt64(*sC.EndTimestampMs), ProductTableId, sC.IsScrap, sC.UniqueProductAlternativeID)
 	if err != nil {
 		return err, true
 	}

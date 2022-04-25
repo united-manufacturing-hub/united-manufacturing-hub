@@ -12,9 +12,9 @@ import (
 type AddOrder struct{}
 
 type addOrder struct {
-	ProductId   string `json:"product_id"`
-	OrderId     string `json:"order_id"`
-	TargetUnits uint64 `json:"target_units"`
+	ProductId   *string `json:"product_id"`
+	OrderId     *string `json:"order_id"`
+	TargetUnits *uint64 `json:"target_units"`
 }
 
 // ProcessMessages processes a AddOrder kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -39,12 +39,16 @@ func (c AddOrder) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
 	}
+	if !internal.IsValidStruct(sC, []string{}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
+	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		return nil, true
 	}
 
-	ProductTableID, success := GetProductTableId(sC.ProductId, AssetTableID)
+	ProductTableID, success := GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
 		return nil, true
 	}

@@ -12,11 +12,11 @@ import (
 type ProductTag struct{}
 
 type productTag struct {
-	AID  string `json:"AID"`
-	Name string `json:"name"`
+	AID  *string `json:"AID"`
+	Name *string `json:"name"`
 	// TODO: Value is not correctly defined in the docs, i assume float64 just to be safe
-	Value       float64 `json:"value"`
-	TimestampMs uint64  `json:"timestamp_ms"`
+	Value       *float64 `json:"value"`
+	TimestampMs *uint64  `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a ProductTag kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -41,13 +41,17 @@ func (c ProductTag) ProcessMessages(msg ParsedMessage) (err error, putback bool)
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
 	}
+	if !internal.IsValidStruct(sC, []string{}) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
+	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		return nil, true
 	}
 
 	var ProductTableId uint32
-	ProductTableId, success = GetUniqueProductID(sC.AID, AssetTableID)
+	ProductTableId, success = GetUniqueProductID(*sC.AID, AssetTableID)
 	if !success {
 		return nil, true
 	}
