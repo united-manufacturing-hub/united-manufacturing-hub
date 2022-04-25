@@ -30,6 +30,7 @@ var messagecache *freecache.Cache
 
 // InitCache initializes the cache with the given sizes in byte
 func InitCache(DBcacheSizeBytes int, messageCacheSizeBytes int) {
+	zap.S().Infof("Initializing cache with DB cache size %d bytes and message cache size %d bytes", DBcacheSizeBytes, messageCacheSizeBytes)
 	dbcache = freecache.NewCache(DBcacheSizeBytes)
 	messagecache = freecache.NewCache(messageCacheSizeBytes)
 }

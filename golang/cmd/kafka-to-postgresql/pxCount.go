@@ -61,21 +61,21 @@ func (c Count) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.Count, sC.Scrap, sC.TimestampMs)
 	if err != nil {
-		//zap.S().Debugf("Error inserting into count table: %s", err.Error())
+		zap.S().Debugf("Error inserting into count table: %s", err.Error())
 		return err, true
 	}
 
 	// And this marker
 
 	if isDryRun {
-		//zap.S().Debugf("Dry run: not committing transaction")
+		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
 			zap.S().Errorf("Error rolling back transaction: %s", err.Error())
 			return err, true
 		}
 	} else {
-		//zap.S().Debugf("Committing transaction")
+		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
 			zap.S().Errorf("Error committing transaction: %s", err.Error())
@@ -83,6 +83,6 @@ func (c Count) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 		}
 	}
 
-	//zap.S().Debugf("Successfully processed count message: %v", msg)
+	zap.S().Debugf("Successfully processed count message: %v", msg)
 	return err, false
 }
