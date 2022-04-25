@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -72,9 +71,12 @@ func main() {
 
 	zap.S().Debugf("Starting queue processor")
 	KafkaTopicMap := os.Getenv("KAFKA_TOPIC_MAP")
+	if KafkaTopicMap == "" {
+		zap.S().Fatal("Kafka topic map is not set")
+	}
 	topicMap, err := UnmarshalTopicMap([]byte(KafkaTopicMap))
 	if err != nil {
-		panic(fmt.Sprintf("Failed to unmarshal topic map: %v", err))
+		zap.S().Fatal("Failed to unmarshal topic map: %v", err)
 	}
 
 	LocalKafkaBootstrapServers = os.Getenv("LOCAL_KAFKA_BOOTSTRAP_SERVER")

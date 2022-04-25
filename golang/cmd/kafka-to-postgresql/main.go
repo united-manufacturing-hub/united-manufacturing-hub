@@ -203,6 +203,7 @@ func main() {
 			if m.Alloc > allowed {
 				zap.S().Errorf("Memory usage is too high: %d bytes, slowing ingress !", m.TotalAlloc)
 				nearMemoryLimit = true
+				runtime.GC()
 				time.Sleep(internal.FiveSeconds)
 			} else {
 				nearMemoryLimit = false
