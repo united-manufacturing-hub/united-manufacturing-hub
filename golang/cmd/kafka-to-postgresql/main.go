@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
 	"os"
@@ -124,8 +125,17 @@ func main() {
 		})
 	}
 
+	cacheMemorySize := 1073741824 // 1GB
+	if os.Getenv("MEMORY_REQUEST") != "" {
+		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
+		i, b := memoryRequest.AsInt64()
+		if b {
+			cacheMemorySize = int(i) //truncated !
+		}
+	}
+
 	// InitCache is initialized with 1Gb of memory for each cache
-	InitCache(1073741824, 1073741824)
+	InitCache(cacheMemorySize/4, cacheMemorySize/4)
 
 	zap.S().Debugf("Starting queue processor")
 
