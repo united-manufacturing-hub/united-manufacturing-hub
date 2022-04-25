@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -113,4 +114,16 @@ func Divmod(numerator, denominator int64) (quotient, remainder int64) {
 	quotient = numerator / denominator // integer division, decimals are truncated
 	remainder = numerator % denominator
 	return
+}
+
+func IsValidStruct(testStruct interface{}) bool {
+	v := reflect.ValueOf(testStruct)
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Pointer() == 0 {
+			zap.S().Warnf("%s is nil, check for typing errors !\n", v.Type().Field(i).Name)
+			return false
+		}
+	}
+	return true
 }

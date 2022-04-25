@@ -38,6 +38,10 @@ func (c AddShift) ProcessMessages(msg ParsedMessage) (err error, putback bool) {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
 	}
+	if !internal.IsValidStruct(sC) {
+		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		return nil, false
+	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		return nil, true
