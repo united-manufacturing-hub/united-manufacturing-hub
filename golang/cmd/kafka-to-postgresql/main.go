@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -23,6 +24,8 @@ var HighIntegrityEnabled = false
 
 // HighThroughputEnabled is true, when a high throughput topic has been configured (KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC)
 var HighThroughputEnabled = false
+
+var nearMemoryLimit = false
 
 func main() {
 	// Setup logger and set as global
@@ -125,17 +128,18 @@ func main() {
 		})
 	}
 
-	cacheMemorySize := 1073741824 // 1GB
+	allowedMemorySize := 1073741824 // 1GB
 	if os.Getenv("MEMORY_REQUEST") != "" {
 		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
 		i, b := memoryRequest.AsInt64()
 		if b {
-			cacheMemorySize = int(i) //truncated !
+			allowedMemorySize = int(i) //truncated !
 		}
 	}
+	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
-	InitCache(cacheMemorySize/4, cacheMemorySize/4)
+	InitCache(allowedMemorySize/4, allowedMemorySize/4)
 
 	zap.S().Debugf("Starting queue processor")
 
@@ -189,6 +193,22 @@ func main() {
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
 
+	}()
+
+	go func() {
+		for {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			allowed := float64(allowedMemorySize) * 0.9
+			if m.Alloc > uint64(allowed) {
+				zap.S().Errorf("Memory usage is too high: %d bytes, slowing ingress !", m.TotalAlloc)
+				nearMemoryLimit = true
+				time.Sleep(time.Second * 10)
+			} else {
+				nearMemoryLimit = false
+				time.Sleep(time.Second * 1)
+			}
+		}
 	}()
 
 	go PerformanceReport()

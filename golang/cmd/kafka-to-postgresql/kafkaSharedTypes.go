@@ -45,6 +45,11 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 			continue
 		}
 
+		if nearMemoryLimit {
+			time.Sleep(internal.OneSecond)
+			continue
+		}
+
 		var msg *kafka.Message
 		// Wait for new messages
 		// This has a timeout, allowing ShuttingDown to be checked
