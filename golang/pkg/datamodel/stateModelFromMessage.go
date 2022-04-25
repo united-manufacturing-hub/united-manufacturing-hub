@@ -80,6 +80,7 @@ type modelStateRegistry struct {
 	MaxState                           string
 }
 
+// GetStateFromString returns the state number from its string representation
 func GetStateFromString(stateString string) uint64 {
 
 	stateMap := map[string]uint64{
