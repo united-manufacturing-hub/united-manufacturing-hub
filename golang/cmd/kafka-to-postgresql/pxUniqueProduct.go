@@ -15,7 +15,7 @@ type uniqueProduct struct {
 	BeginTimestampMs           *uint64 `json:"begin_timestamp_ms"`
 	EndTimestampMs             *int64  `json:"end_timestamp_ms"`
 	ProductId                  *string `json:"product_id"`
-	IsScrap                    *bool   `json:"is_scrap"`
+	IsScrap                    *bool   `json:"isScrap"`
 	UniqueProductAlternativeID *string `json:"uniqueProductAlternativeID"`
 }
 
