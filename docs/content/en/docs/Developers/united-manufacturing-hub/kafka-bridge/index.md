@@ -204,6 +204,24 @@ This map would sync every non processValue topic from both brokers.
 
 It will also send the processValue messages to the remote broker.
 
+# Kubernetes usage
+
+Inside kubernetes values.yaml you can use a normal YAML map to do the configuration.
+
+```yaml
+  kafkaBridge:
+    enabled: true
+    remotebootstrapServer: ""
+    topicmap:
+      - name: HighIntegrity
+        topic: "^ia\\..+\\..+\\..+\\.(?!processValue).+$"
+        bidirectional: true
+      - name: HighThroughput
+        topic: "^ia\\..+\\..+\\..+\\.(processValue).*$"
+        bidirectional: false
+        send_direction: to_remote
+```
+
 # Guarantees
 
 This microservice provides at-least-once guarantees, by manually committing the offset of the message that was processed.

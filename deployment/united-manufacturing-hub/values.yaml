@@ -184,7 +184,16 @@ _000_commonConfig:
   kafkaBridge:
     enabled: false
     remotebootstrapServer: ""
-    topicmap: ""
+    topicmap:
+# Example topic map
+#      - name: HighIntegrity
+#        topic: "^ia\\..+\\..+\\..+\\.(?!processValue).+$"
+#        bidirectional: true
+#      - name: HighThroughput
+#        topic: "^ia\\..+\\..+\\..+\\.(processValue).*$"
+#        bidirectional: false
+#        send_direction: to_remote
+
 
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
@@ -260,7 +269,8 @@ cameraconnect:
 ### cameraconnect ###
 kafkabridge:
   image:
-    repository: unitedmanufacturinghub/kafkabridge
+    repository: unitedmanufacturinghub/kafka-bridge
+    pullPolicy: IfNotPresent
   # tag: development
 
 
