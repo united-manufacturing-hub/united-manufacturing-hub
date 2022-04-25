@@ -196,11 +196,11 @@ func main() {
 	}()
 
 	go func() {
+		allowed := uint64(float64(allowedMemorySize) * 0.9)
 		for {
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
-			allowed := float64(allowedMemorySize) * 0.9
-			if m.Alloc > uint64(allowed) {
+			if m.Alloc > allowed {
 				zap.S().Errorf("Memory usage is too high: %d bytes, slowing ingress !", m.TotalAlloc)
 				nearMemoryLimit = true
 				time.Sleep(internal.FiveSeconds)
