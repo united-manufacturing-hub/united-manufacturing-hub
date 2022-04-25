@@ -41,7 +41,7 @@ func (c ProductTag) ProcessMessages(msg ParsedMessage) (err error, putback bool)
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return err, false
 	}
-	if !internal.IsValidStruct(sC) {
+	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
 		return nil, false
 	}

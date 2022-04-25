@@ -116,14 +116,26 @@ func Divmod(numerator, denominator int64) (quotient, remainder int64) {
 	return
 }
 
-func IsValidStruct(testStruct interface{}) bool {
+func IsValidStruct(testStruct interface{}, allowedNilFields []string) (sucess bool) {
+	sucess = false
 	v := reflect.ValueOf(testStruct)
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		if field.Pointer() == 0 {
+			if contains(allowedNilFields, v.Type().Field(i).Name) {
+				continue
+			}
 			zap.S().Warnf("%s is nil, check for typing errors !\n", v.Type().Field(i).Name)
-			return false
+			sucess = false
 		}
 	}
-	return true
+	return
+}
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }

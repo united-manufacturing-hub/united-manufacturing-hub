@@ -138,7 +138,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 				zap.S().Debugf("[HT][PV] Could not parse message: %s", err.Error())
 				continue
 			}
-			if !internal.IsValidStruct(sC) {
+			if !internal.IsValidStruct(sC, []string{}) {
 				zap.S().Warnf("Invalid message: %s, discarding !", string(parsedMessage.Payload))
 				continue
 			}

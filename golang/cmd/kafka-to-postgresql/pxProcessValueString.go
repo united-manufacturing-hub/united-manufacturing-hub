@@ -142,7 +142,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 				zap.S().Errorf("Error unmarshalling message: %s", err.Error())
 				continue
 			}
-			if !internal.IsValidStruct(sC) {
+			if !internal.IsValidStruct(sC, []string{}) {
 				zap.S().Warnf("Invalid message: %s, discarding !", string(parsedMessage.Payload))
 				continue
 			}
