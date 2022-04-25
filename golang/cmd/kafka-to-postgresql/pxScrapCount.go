@@ -12,8 +12,8 @@ import (
 type ScrapCount struct{}
 
 type scrapCount struct {
-	Scrap       uint32 `json:"scrapCount"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	Scrap       *uint32 `json:"scrapCount"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a ScrapCount kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting

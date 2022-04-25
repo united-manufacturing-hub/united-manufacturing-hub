@@ -12,7 +12,7 @@ import (
 type ScrapUniqueProduct struct{}
 
 type scrapUniqueProduct struct {
-	UID uint32 `json:"UID"`
+	UID *uint32 `json:"UID"`
 }
 
 // ProcessMessages processes a ScrapUniqueProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting

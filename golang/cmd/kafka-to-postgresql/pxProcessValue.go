@@ -5,7 +5,6 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -136,10 +135,6 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 			if err != nil {
 
 				zap.S().Debugf("[HT][PV] Could not parse message: %s", err.Error())
-				continue
-			}
-			if !internal.IsValidStruct(sC, []string{}) {
-				zap.S().Warnf("Invalid message: %s, discarding !", string(parsedMessage.Payload))
 				continue
 			}
 			AssetTableID, success := GetAssetTableID(parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)

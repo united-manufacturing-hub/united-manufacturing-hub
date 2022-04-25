@@ -12,8 +12,8 @@ import (
 type AddShift struct{}
 
 type addShift struct {
-	TimestampMsEnd uint64 `json:"timestamp_ms_end"`
-	TimestampMs    uint64 `json:"timestamp_ms"`
+	TimestampMsEnd *uint64 `json:"timestamp_ms_end"`
+	TimestampMs    *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a AddShift kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting

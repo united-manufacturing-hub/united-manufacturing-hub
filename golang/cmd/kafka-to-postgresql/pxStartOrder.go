@@ -12,8 +12,8 @@ import (
 type StartOrder struct{}
 
 type startOrder struct {
-	OrderId     string `json:"order_id"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	OrderId     *string `json:"order_id"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a StartOrder kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting

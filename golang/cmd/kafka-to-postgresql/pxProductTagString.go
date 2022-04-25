@@ -12,10 +12,10 @@ import (
 type ProductTagString struct{}
 
 type productTagString struct {
-	AID         string `json:"AID"`
-	Name        string `json:"name"`
-	Value       string `json:"value"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	AID         *string `json:"AID"`
+	Name        *string `json:"name"`
+	Value       *string `json:"value"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a ProductTagString kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -50,7 +50,7 @@ func (c ProductTagString) ProcessMessages(msg ParsedMessage) (err error, putback
 	}
 
 	var ProductTableId uint32
-	ProductTableId, success = GetUniqueProductID(sC.AID, AssetTableID)
+	ProductTableId, success = GetUniqueProductID(*sC.AID, AssetTableID)
 	if !success {
 		return nil, true
 	}

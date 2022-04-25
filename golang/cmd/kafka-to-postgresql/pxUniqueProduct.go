@@ -12,11 +12,11 @@ import (
 type UniqueProduct struct{}
 
 type uniqueProduct struct {
-	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64  `json:"end_timestamp_ms"`
-	ProductId                  string `json:"product_id"`
-	IsScrap                    bool   `json:"is_scrap"`
-	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
+	BeginTimestampMs           *uint64 `json:"begin_timestamp_ms"`
+	EndTimestampMs             int64   `json:"end_timestamp_ms"`
+	ProductId                  *string `json:"product_id"`
+	IsScrap                    bool    `json:"is_scrap"`
+	UniqueProductAlternativeID *string `json:"uniqueProductAlternativeID"`
 }
 
 // ProcessMessages processes a UniqueProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
@@ -51,7 +51,7 @@ func (c UniqueProduct) ProcessMessages(msg ParsedMessage) (err error, putback bo
 	}
 
 	var ProductTableId uint32
-	ProductTableId, success = GetProductTableId(sC.ProductId, AssetTableID)
+	ProductTableId, success = GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
 		return nil, true
 	}

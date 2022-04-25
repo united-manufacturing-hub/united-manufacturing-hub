@@ -12,8 +12,8 @@ import (
 type AddProduct struct{}
 
 type addProduct struct {
-	ProductId            string  `json:"product_id"`
-	TimePerUnitInSeconds float64 `json:"time_per_unit_in_seconds"`
+	ProductId            string   `json:"product_id"`
+	TimePerUnitInSeconds *float64 `json:"time_per_unit_in_seconds"`
 }
 
 // ProcessMessages processes a AddProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting

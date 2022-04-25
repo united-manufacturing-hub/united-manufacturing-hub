@@ -12,8 +12,8 @@ import (
 type State struct{}
 
 type state struct {
-	State       uint32 `json:"state"`
-	TimestampMs uint64 `json:"timestamp_ms"`
+	State       *uint32 `json:"state"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a State kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
