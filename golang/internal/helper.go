@@ -116,8 +116,8 @@ func Divmod(numerator, denominator int64) (quotient, remainder int64) {
 	return
 }
 
-func IsValidStruct(testStruct interface{}, allowedNilFields []string) (sucess bool) {
-	sucess = false
+func IsValidStruct(testStruct interface{}, allowedNilFields []string) (success bool) {
+	success = true
 	v := reflect.ValueOf(testStruct)
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
@@ -126,7 +126,7 @@ func IsValidStruct(testStruct interface{}, allowedNilFields []string) (sucess bo
 				continue
 			}
 			zap.S().Warnf("%s is nil, check for typing errors !\n", v.Type().Field(i).Name)
-			sucess = false
+			success = false
 		}
 	}
 	return
