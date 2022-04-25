@@ -16,7 +16,7 @@ type productTag struct {
 	Name *string `json:"name"`
 	// TODO: Value is not correctly defined in the docs, i assume float64 just to be safe
 	Value       *float64 `json:"value"`
-	TimestampMs uint64   `json:"timestamp_ms"`
+	TimestampMs *uint64  `json:"timestamp_ms"`
 }
 
 // ProcessMessages processes a ProductTag kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting

@@ -13,9 +13,9 @@ type UniqueProduct struct{}
 
 type uniqueProduct struct {
 	BeginTimestampMs           *uint64 `json:"begin_timestamp_ms"`
-	EndTimestampMs             int64   `json:"end_timestamp_ms"`
+	EndTimestampMs             *int64  `json:"end_timestamp_ms"`
 	ProductId                  *string `json:"product_id"`
-	IsScrap                    bool    `json:"is_scrap"`
+	IsScrap                    *bool   `json:"is_scrap"`
 	UniqueProductAlternativeID *string `json:"uniqueProductAlternativeID"`
 }
 
@@ -67,7 +67,7 @@ func (c UniqueProduct) ProcessMessages(msg ParsedMessage) (err error, putback bo
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
-	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimestampMs, NewNullInt64(sC.EndTimestampMs), ProductTableId, sC.IsScrap, sC.UniqueProductAlternativeID)
+	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimestampMs, NewNullInt64(*sC.EndTimestampMs), ProductTableId, sC.IsScrap, sC.UniqueProductAlternativeID)
 	if err != nil {
 		return err, true
 	}
