@@ -76,6 +76,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 // startPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the reason and error.
 func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer) {
+	zap.S().Debugf("%s Starting putback processor", identifier)
 	// Loops until the shutdown signal is received and the channel is empty
 	for !ShutdownPutback {
 		select {
@@ -171,7 +172,7 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 // startCommitProcessor starts the commit processor.
 // It will commit messages to the kafka queue.
 func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer) {
-	zap.S().Infof("%s Starting commit processor", identifier)
+	zap.S().Debugf("%s Starting commit processor", identifier)
 	for !ShuttingDown || len(commitChannel) > 0 {
 		select {
 		case msg := <-commitChannel:
@@ -188,10 +189,11 @@ func startCommitProcessor(identifier string, commitChannel chan *kafka.Message, 
 			}
 		}
 	}
-	zap.S().Infof("%s Stopped commit processor", identifier)
+	zap.S().Debugf("%s Stopped commit processor", identifier)
 }
 
 func startEventHandler(identifier string, events chan kafka.Event, backChan chan PutBackChanMsg) {
+	zap.S().Debugf("%s Starting event handler", identifier)
 	for !ShuttingDown || len(events) > 0 {
 		select {
 		case event := <-events:
@@ -217,4 +219,5 @@ func startEventHandler(identifier string, events chan kafka.Event, backChan chan
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
+	zap.S().Debugf("%s Stopped event handler", identifier)
 }

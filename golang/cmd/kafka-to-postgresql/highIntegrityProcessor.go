@@ -124,7 +124,8 @@ func startHighIntegrityQueueProcessor() {
 			}
 		} else {
 			if putback {
-				zap.S().Errorf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, parsedMessage.Payload)
+				payloadStr := string(parsedMessage.Payload)
+				zap.S().Errorf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr)
 				highIntegrityPutBackChannel <- PutBackChanMsg{msg: msg, reason: "Other", errorString: nil}
 			} else {
 				highIntegrityCommitChannel <- msg

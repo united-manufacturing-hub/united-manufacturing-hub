@@ -26,12 +26,13 @@ var HighThroughputEnabled = false
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
-	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
-		logger, _ = zap.NewDevelopment()
-	} else {
 
-		logger, _ = zap.NewProduction()
-	}
+	//if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
+	logger, _ = zap.NewDevelopment()
+	//} else {
+
+	//	logger, _ = zap.NewProduction()
+	//}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -81,6 +82,7 @@ func main() {
 	} else {
 		HighIntegrityEnabled = true
 		HITopic = strings.ReplaceAll(HITopic, `\\`, `\`)
+		zap.S().Infof("High integrity topic is set to %s", HITopic)
 	}
 	HTTopic := os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
 	if HTTopic == "" {
@@ -88,6 +90,7 @@ func main() {
 	} else {
 		HighThroughputEnabled = true
 		HTTopic = strings.ReplaceAll(HTTopic, `\\`, `\`)
+		zap.S().Infof("High throughput topic is set to %s", HTTopic)
 	}
 
 	// If neither high-integrity nor high-throughput topic is configured, panic
@@ -128,6 +131,7 @@ func main() {
 
 	// Start HI related processors
 	if HighIntegrityEnabled {
+		zap.S().Debugf("Starting HI queue processor")
 		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
 		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
@@ -137,10 +141,12 @@ func main() {
 		go startCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
 		go startEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
+		zap.S().Debugf("Started HI queue processor")
 	}
 
 	// Start HT related processors
 	if HighThroughputEnabled {
+		zap.S().Debugf("Starting HT queue processor")
 		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
 		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
 		highThroughputEventChannel := HIKafkaProducer.Events()
@@ -152,6 +158,7 @@ func main() {
 
 		go startProcessValueQueueAggregator()
 		go startProcessValueStringQueueAggregator()
+		zap.S().Debugf("Started HT queue processor")
 	}
 
 	// Allow graceful shutdown

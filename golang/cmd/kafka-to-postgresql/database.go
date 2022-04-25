@@ -91,6 +91,9 @@ const (
 
 //GetPostgresErrorRecoveryOptions checks if the error is recoverable
 func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
+	if err == nil {
+		return Other
+	}
 
 	// Why go allows returning errors, that are not exported is still beyond me
 	errorString := err.Error()
