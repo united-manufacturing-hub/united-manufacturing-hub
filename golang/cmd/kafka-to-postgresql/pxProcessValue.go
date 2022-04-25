@@ -30,11 +30,14 @@ func startProcessValueQueueAggregator() {
 				messages = append(messages, msg)
 				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= 5000 {
-					//zap.S().Debugf("[HT][PV][AA] Messages length: %d", len(messages))
+					zap.S().Debugf("[HT][PV][AA] Messages length: %d", len(messages))
 					putBackMsg, err, putback, reason := writeProcessValueToDatabase(messages)
 					if putback {
 						for _, message := range putBackMsg {
-							errStr := err.Error()
+							var errStr string
+							if err != nil {
+								errStr = err.Error()
+							}
 							highThroughputPutBackChannel <- PutBackChanMsg{
 								msg:         message,
 								reason:      reason,
@@ -49,14 +52,17 @@ func startProcessValueQueueAggregator() {
 			}
 		case <-writeToDbTimer.C:
 			{
-				//zap.S().Debugf("[HT][PV] Messages length: %d", len(messages))
+				zap.S().Debugf("[HT][PV] Messages length: %d", len(messages))
 				if len(messages) == 0 {
 					continue
 				}
 				putBackMsg, err, putback, reason := writeProcessValueToDatabase(messages)
 				if putback {
 					for _, message := range putBackMsg {
-						errStr := err.Error()
+						var errStr string
+						if err != nil {
+							errStr = err.Error()
+						}
 						highThroughputPutBackChannel <- PutBackChanMsg{
 							msg:         message,
 							reason:      reason,
@@ -80,7 +86,7 @@ func startProcessValueQueueAggregator() {
 }
 
 func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka.Message, err error, putback bool, reason string) {
-	//zap.S().Debugf("[HT][PV] Writing %d messages to database", len(messages))
+	zap.S().Debugf("[HT][PV] Writing %d messages to database", len(messages))
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
@@ -88,7 +94,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		return messages, err, true, "Error starting transaction"
 	}
 
-	//zap.S().Debugf("[HT][PV] 1")
+	zap.S().Debugf("[HT][PV] 1")
 	{
 		stmt := txn.Stmt(statement.CreateTmpProcessValueTable64)
 
@@ -103,7 +109,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 	// toCommit is used for stats only, it just increments, whenever a message was added to the transaction.
 	// at the end, this count is added to the global Commit counter
 	toCommit := float64(0)
-	//zap.S().Debugf("[HT][PV] 2")
+	zap.S().Debugf("[HT][PV] 2")
 	{
 
 		var stmtCopy *sql.Stmt
@@ -113,12 +119,12 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 			return messages, err, true, "Error preparing copy statement"
 		}
 
-		//zap.S().Debugf("[HT][PV] 3 %d", len(messages))
+		zap.S().Debugf("[HT][PV] 3 %d", len(messages))
 		// Copy into the temporary table
 		for _, message := range messages {
 			couldParse, parsedMessage := ParseMessage(message)
 			if !couldParse {
-				//zap.S().Debugf("[HT][PV] Could not parse message: %s", message.String())
+				zap.S().Debugf("[HT][PV] Could not parse message: %s", message.String())
 
 				continue
 			}
@@ -128,30 +134,30 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 			err = jsoniter.Unmarshal(parsedMessage.Payload, &sC)
 			if err != nil {
 
-				//zap.S().Debugf("[HT][PV] Could not parse message: %s", err.Error())
+				zap.S().Debugf("[HT][PV] Could not parse message: %s", err.Error())
 				continue
 			}
 			AssetTableID, success := GetAssetTableID(parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
 			if !success {
-				zap.S().Errorf("Error getting asset table id: %s for %s %s %s", err.Error(), parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
+				zap.S().Errorf("Error getting asset table id for %s %s %s", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
 				putBackMsg = append(putBackMsg, message)
 				continue
 			}
 			timestampString, timestampInParsedMessagePayload := sC["timestamp_ms"]
 			if !timestampInParsedMessagePayload {
 
-				//zap.S().Debugf("[HT][PV] Timestamp not in parsed message payload")
+				zap.S().Debugf("[HT][PV] Timestamp not in parsed message payload")
 				continue
 			}
 			var tsF64 float64
 			tsF64, err = getFloat(timestampString)
 			if err != nil {
-				//zap.S().Debugf("[HT][PV] Could not parse timestamp: %s", err.Error())
+				zap.S().Debugf("[HT][PV] Could not parse timestamp: %s", err.Error())
 				continue
 			}
 
 			timestampMs := uint64(tsF64)
-			////zap.S().Debugf("[HT][PV] Timestamp: %d", timestampMs)
+			//zap.S().Debugf("[HT][PV] Timestamp: %d", timestampMs)
 			for k, v := range sC {
 				switch k {
 				case "timestamp_ms":
@@ -161,11 +167,11 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 				case "serial_number":
 					break
 				default:
-					////zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
+					//zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
 					value, valueIsFloat64 := v.(float64)
 					if !valueIsFloat64 {
 
-						////zap.S().Debugf("[HT][PV] Value is not a float64")
+						//zap.S().Debugf("[HT][PV] Value is not a float64")
 						// Value is malformed, skip to next key
 						continue
 					}
@@ -173,7 +179,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 					// This coversion is necessary for postgres
 					timestamp := time.Unix(0, int64(timestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
 
-					////zap.S().Debugf("[HT][PV] Inserting %d, %s, %f, %s", AssetTableID, timestamp, value, k)
+					//zap.S().Debugf("[HT][PV] Inserting %d, %s, %f, %s", AssetTableID, timestamp, value, k)
 					_, err = stmtCopy.Exec(timestamp, AssetTableID, value, k)
 					if err != nil {
 						zap.S().Errorf("Error inserting into temporary table: %s", err.Error())
@@ -184,43 +190,43 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 				}
 			}
 		}
-		//zap.S().Debugf("Pre copy closed")
+		zap.S().Debugf("Pre copy closed")
 		err = stmtCopy.Close()
-		//zap.S().Debugf("Post copy closed")
+		zap.S().Debugf("Post copy closed")
 		if err != nil {
 			txn.Rollback()
 			return messages, err, true, "Failed to close copy statement"
 		}
 	}
-	//zap.S().Debugf("pre insert prepare")
+	zap.S().Debugf("pre insert prepare")
 	var stmtCopyToPVT *sql.Stmt
 	stmtCopyToPVT, err = txn.Prepare(`
 			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
 		`)
-	//zap.S().Debugf("post insert prepare")
+	zap.S().Debugf("post insert prepare")
 	if err != nil {
 		txn.Rollback()
 		zap.S().Errorf("Error preparing copy to process value table statement: %s", err.Error())
 		return messages, err, true, "Error preparing copy to process value table statement"
 	}
 
-	//zap.S().Debugf("pre exec")
+	zap.S().Debugf("pre exec")
 	_, err = stmtCopyToPVT.Exec()
-	//zap.S().Debugf("post exec")
+	zap.S().Debugf("post exec")
 	if err != nil {
 		txn.Rollback()
 		zap.S().Errorf("Error copying to process value table: %s", err.Error())
 		return messages, err, true, "Error copying to process value table"
 	}
 
-	//zap.S().Debugf("pre close")
+	zap.S().Debugf("pre close")
 	err = stmtCopyToPVT.Close()
 	if err != nil {
 		txn.Rollback()
 		zap.S().Errorf("Error closing stmtCopytoPVT: %s", err.Error())
 		return messages, err, true, "Error closing stmtCopytoPVT"
 	}
-	//zap.S().Debugf("post close")
+	zap.S().Debugf("post close")
 
 	if isDryRun {
 		err = txn.Rollback()
@@ -229,12 +235,12 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		}
 		return putBackMsg, nil, true, "AssetID not found"
 	} else {
-		//zap.S().Debugf("Pre-commit to process value table: %d", toCommit)
+		zap.S().Debugf("Pre-commit to process value table: %d", toCommit)
 		err = txn.Commit()
 		if err != nil {
 			return messages, err, true, "Failed to commit"
 		}
-		//zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
+		zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
 		if len(putBackMsg) > 0 {
 			return putBackMsg, nil, true, "AssetID not found"
 		}

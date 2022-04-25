@@ -91,6 +91,9 @@ const (
 
 //GetPostgresErrorRecoveryOptions checks if the error is recoverable
 func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
+	if err == nil {
+		return Other
+	}
 
 	// Why go allows returning errors, that are not exported is still beyond me
 	errorString := err.Error()
@@ -128,6 +131,13 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 	err := statement.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.QueryRow(assetID, location, customerID).Scan(&AssetTableID)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
+		// This can potentially lead to race conditions, if another thread adds the same asset too
+		err = AddAsset(assetID, location, customerID)
+		if err != nil {
+			return 0, false
+		} else {
+			return GetAssetTableID(customerID, location, assetID)
+		}
 	} else if err != nil {
 		zap.S().Debugf("[GetAssetTableID] Error: %s", err)
 		switch GetPostgresErrorRecoveryOptions(err) {
@@ -149,6 +159,29 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 	return
 }
 
+// AddAsset adds an asset to the database
+func AddAsset(assetID string, location string, customerID string) (err error) {
+	var txn *sql.Tx = nil
+	txn, err = db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt := txn.Stmt(statement.InsertIntoAssetTable)
+
+	_, err = stmt.Exec(assetID, location, customerID)
+	if err != nil {
+		return err
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
 // GetProductTableId gets the productID from the database using the productname and AssetTableId
 func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId uint32, success bool) {
 	success = false
@@ -163,6 +196,7 @@ func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId 
 	err := statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(AssetTableId, productName).Scan(&ProductTableId)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d", productName, AssetTableId)
+		return 0, false
 	} else if err != nil {
 		zap.S().Debugf("[GetProductTableId] Error: %s", err)
 		switch GetPostgresErrorRecoveryOptions(err) {
@@ -201,6 +235,8 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(UniqueProductAlternativeId, AssetTableId).Scan(&UniqueProductTableId)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d", UniqueProductAlternativeId, AssetTableId)
+
+		return 0, false
 	} else if err != nil {
 		zap.S().Debugf("[GetUniqueProductID] Error: %s", err)
 		switch GetPostgresErrorRecoveryOptions(err) {
@@ -224,6 +260,8 @@ func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (Latestpa
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(ParentID, DBAssetID).Scan(&LatestparentUniqueProductId)
 	if err == sql.ErrNoRows {
 		zap.S().Errorf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
+
+		return 0, false
 	} else if err != nil {
 		zap.S().Debugf("[GetUniqueProductID] Error: %s", err)
 		switch GetPostgresErrorRecoveryOptions(err) {
