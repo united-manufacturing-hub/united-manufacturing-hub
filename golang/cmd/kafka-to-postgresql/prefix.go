@@ -6,35 +6,35 @@ func newPrefixRegistry() *prefixRegistry {
 
 	return &prefixRegistry{
 		// Undocumented
-		AddMaintenanceActivity: "addMaintenanceActivity",
-		AddOrder:               "addOrder",
-		AddParentToChild:       "addParentToChild",
-		AddProduct:             "addProduct",
-		AddShift:               "addShift",
+		AddMaintenanceActivity: "addmaintenanceactivity",
+		AddOrder:               "addorder",
+		AddParentToChild:       "addparenttochild",
+		AddProduct:             "addproduct",
+		AddShift:               "addshift",
 		Count:                  "count",
 		// Undocumented
-		DeleteShiftByAssetIdAndBeginTimestamp: "deleteShiftByAssetIdAndBeginTimestamp",
+		DeleteShiftByAssetIdAndBeginTimestamp: "deleteshiftbyassetidandbegintimestamp",
 		// Undocumented
-		DeleteShiftById: "deleteShiftById",
-		EndOrder:        "endOrder",
+		DeleteShiftById: "deleteshiftbyid",
+		EndOrder:        "endorder",
 		// Undocumented
-		ModifyProducesPieces: "modifyProducedPieces",
+		ModifyProducesPieces: "modifyproducedpieces",
 		// Undocumented
-		ModifyState:  "modifyState",
-		ProcessValue: "processValue",
+		ModifyState:  "modifystate",
+		ProcessValue: "processvalue",
 		// Digital shadow
-		ProcessValueFloat64: "processValueFloat64",
+		ProcessValueFloat64: "processvaluefloat64",
 		// Digital shadow
-		ProcessValueString: "processValueString",
-		ProductTag:         "productTag",
-		ProductTagString:   "productTagString",
+		ProcessValueString: "processvaluestring",
+		ProductTag:         "producttag",
+		ProductTagString:   "producttagstring",
 		// Undocumented
 		Recommendation:     "recommendation",
-		ScrapCount:         "scrapCount",
-		StartOrder:         "startOrder",
+		ScrapCount:         "scrapcount",
+		StartOrder:         "startorder",
 		State:              "state",
-		UniqueProduct:      "uniqueProduct",
-		ScrapUniqueProduct: "scrapUniqueProduct",
+		UniqueProduct:      "uniqueproduct",
+		ScrapUniqueProduct: "scrapuniqueproduct",
 	}
 }
 
