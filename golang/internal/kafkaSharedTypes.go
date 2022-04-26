@@ -22,6 +22,9 @@ var KafkaPutBacks = float64(0)
 // KafkaConfirmed is a counter for the number of messages confirmed to kafka, this is used for stats only
 var KafkaConfirmed = float64(0)
 
+// NearMemoryLimit is set to true if 90% of the allowed memory is allocated
+var NearMemoryLimit = false
+
 type KafkaKey struct {
 	Putback *KafkaPutback `json:"KafkaPutback,omitempty"`
 }
@@ -63,8 +66,8 @@ func KafkaProcessQueue(identifier string, topic string, processorChannel chan *k
 			continue
 		}
 
-		if nearMemoryLimit {
-			time.Sleep(internal.OneSecond)
+		if NearMemoryLimit {
+			time.Sleep(OneSecond)
 			continue
 		}
 

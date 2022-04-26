@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/coocood/freecache"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 )
 
 // dbcache is a cache of database entries (for example database asset id's)
@@ -11,7 +12,7 @@ var dbcache *freecache.Cache
 
 // InitCache initializes the cache with the given sizes in byte
 func InitCache(DBcacheSizeBytes int) {
-	zap.S().Infof("Initializing cache with DB cache size %d bytes and message cache size %d bytes", DBcacheSizeBytes, messageCacheSizeBytes)
+	zap.S().Infof("Initializing cache with DB cache size %d bytes", DBcacheSizeBytes)
 	dbcache = freecache.NewCache(DBcacheSizeBytes)
 }
 

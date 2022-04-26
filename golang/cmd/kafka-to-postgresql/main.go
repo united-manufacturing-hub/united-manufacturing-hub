@@ -26,8 +26,6 @@ var HighIntegrityEnabled = false
 // HighThroughputEnabled is true, when a high throughput topic has been configured (KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC)
 var HighThroughputEnabled = false
 
-var nearMemoryLimit = false
-
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
@@ -139,7 +137,7 @@ func main() {
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
-	InitCache(allowedMemorySize/4, allowedMemorySize/4)
+	InitCache(allowedMemorySize / 4)
 
 	zap.S().Debugf("Starting queue processor")
 
@@ -205,17 +203,17 @@ func main() {
 			runtime.ReadMemStats(&m)
 			if m.Alloc > allowedNintyPerc {
 				zap.S().Errorf("Memory usage is too high: %d bytes, slowing ingress !", m.TotalAlloc)
-				nearMemoryLimit = true
+				internal.NearMemoryLimit = true
 				debug.FreeOSMemory()
 				time.Sleep(internal.FiveSeconds)
 			}
 			if m.Alloc > allowedSeventyFivePerc {
 				zap.S().Errorf("Memory usage is high: %d bytes !", m.TotalAlloc)
-				nearMemoryLimit = false
+				internal.NearMemoryLimit = false
 				runtime.GC()
 				time.Sleep(internal.FiveSeconds)
 			} else {
-				nearMemoryLimit = false
+				internal.NearMemoryLimit = false
 				time.Sleep(internal.OneSecond)
 			}
 		}

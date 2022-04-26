@@ -66,6 +66,8 @@ func CloseActivityKafka() {
 	ActivityKafkaAdminClient.Close()
 }
 
+var lastStateWasActivity = true
+
 func startActivityProcessor() {
 	for !ShuttingDown {
 		var msg *kafka.Message
@@ -92,9 +94,17 @@ func startActivityProcessor() {
 
 		var stateMessage datamodel.State
 		if activityMessage.Activity {
+			if lastStateWasActivity {
+				continue
+			}
 			stateMessage.State = datamodel.ProducingAtFullSpeedState
+			lastStateWasActivity = true
 		} else {
+			if !lastStateWasActivity {
+				continue
+			}
 			stateMessage.State = datamodel.UnspecifiedStopState
+			lastStateWasActivity = false
 		}
 
 		jsonStateMessage, err := jsoniter.Marshal(stateMessage)
