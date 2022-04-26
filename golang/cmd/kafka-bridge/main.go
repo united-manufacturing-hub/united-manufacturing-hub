@@ -116,15 +116,24 @@ var ShutdownPutback bool
 var ShutdownChannel chan bool
 var ShutdownsRequired int
 
-// ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
+// ShutdownApplicationGraceful shutdown the Kafka consumers and producers, then itself.
 func ShutdownApplicationGraceful() {
+	if ShuttingDown {
+		return
+	}
+
 	ShutdownChannel = make(chan bool, ShutdownsRequired)
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	for ShutdownsRequired != len(ShutdownChannel) {
-		zap.S().Debugf("Waiting for %d shutdowns", ShutdownsRequired-len(ShutdownChannel))
-		time.Sleep(time.Second)
+	zap.S().Infof("Awaiting %d shutdowns", ShutdownsRequired)
+	for i := 0; i < 10; i++ {
+		if ShutdownsRequired != len(ShutdownChannel) {
+			zap.S().Infof("Waiting for %d shutdowns", ShutdownsRequired-len(ShutdownChannel))
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
 	}
 
 	ShutdownPutback = true
