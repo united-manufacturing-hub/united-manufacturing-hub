@@ -8,6 +8,7 @@ import (
 	"github.com/coocood/freecache"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
+	"strings"
 )
 
 // AsXXHash returns the XXHash128 of the given data.
@@ -110,7 +111,7 @@ func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, messag
 	customerID := res[1]
 	location := res[2]
 	assetID := res[3]
-	payloadType := res[4]
+	payloadType := strings.ToLower(res[4])
 	payload := msg.Value
 	pm := ParsedMessage{
 		AssetId:     assetID,
