@@ -10,11 +10,12 @@ var rp = regexp.MustCompile(`ia\.([\w]*)\.([\w]*)\.([\w]*)\.([\w]*)`)
 
 // ParsedMessage is a struct that contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
 type ParsedMessage struct {
-	AssetId     string
-	Location    string
-	CustomerId  string
-	PayloadType string
-	Payload     []byte
+	AssetId             string
+	Location            string
+	CustomerId          string
+	PayloadType         string
+	Payload             []byte
+	PayloadTypeOriginal string
 }
 
 // ParseMessage parses a kafka message and returns a ParsedMessage struct or false if the message is not a valid message
