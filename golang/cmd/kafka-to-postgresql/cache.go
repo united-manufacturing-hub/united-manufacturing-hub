@@ -107,9 +107,9 @@ func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, messag
 		return false, ParsedMessage{}
 	}
 
-	assetID := res[1]
+	customerID := res[1]
 	location := res[2]
-	customerID := res[3]
+	assetID := res[3]
 	payloadType := res[4]
 	payload := msg.Value
 	pm := ParsedMessage{
