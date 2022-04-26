@@ -214,10 +214,10 @@ Inside kubernetes values.yaml you can use a normal YAML map to do the configurat
     remotebootstrapServer: ""
     topicmap:
       - name: HighIntegrity
-        topic: "^ia\\..+\\..+\\..+\\.(?!processValue).+$"
+        topic: '^ia\..+\..+\..+\.(addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct).+$'
         bidirectional: true
       - name: HighThroughput
-        topic: "^ia\\..+\\..+\\..+\\.(processValue).*$"
+        topic: '^ia\\..+\\..+\\..+\\.(processValue).*$'
         bidirectional: false
         send_direction: to_remote
 ```
