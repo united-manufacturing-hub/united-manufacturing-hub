@@ -22,7 +22,7 @@ var mqttOutGoingQueue *goque.Queue
 var buildtime string
 
 func main() {
-	logger, _ := zap.NewDevelopment()
+	logger, _ := zap.NewProduction()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
