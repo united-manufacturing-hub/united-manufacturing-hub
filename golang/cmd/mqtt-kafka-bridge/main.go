@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -22,7 +23,7 @@ var mqttOutGoingQueue *goque.Queue
 var buildtime string
 
 func main() {
-	logger, _ := zap.NewDevelopment()
+	logger, _ := zap.NewProduction()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -127,15 +128,21 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
+var validKafkaTopicRegex, _ = regexp.Compile(`^[a-zA-Z\d\._\-]+$`)
+
 func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
-	if strings.Contains(MqttTopicName, ".") {
-		zap.S().Errorf("Illegal MQTT Topic name received: %s", MqttTopicName)
+
+	MqttTopicName = strings.TrimSpace(MqttTopicName)
+	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
+	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
+		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
 	}
-	return strings.ReplaceAll(MqttTopicName, "/", ".")
+	return MqttTopicName
 }
 func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
 	if strings.Contains(KafkaTopicName, "/") {
-		zap.S().Errorf("Illegal Kafka Topic name received: %s", KafkaTopicName)
+		zap.S().Errorf("Illegal MQTT->Kafka Topic name: %s", KafkaTopicName)
 	}
+	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
 	return strings.ReplaceAll(KafkaTopicName, ".", "/")
 }
