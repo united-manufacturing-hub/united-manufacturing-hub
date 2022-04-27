@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -50,6 +51,8 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		msg, err = kafkaConsumer.ReadMessage(5000)
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+				// Sleep to reduce CPU usage
+				time.Sleep(internal.OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				// This will occur when no topic for the regex is available !

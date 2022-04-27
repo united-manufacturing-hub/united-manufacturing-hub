@@ -35,6 +35,31 @@ spec:
                   matchLabels:
                     name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
                 topologyKey: "kubernetes.io/hostname"
+      initContainers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-local
+          {{if .Values.kafkabridge.image.tag}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
+          {{- else}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: KAFKA_TOPICS
+              value: {{.Values._000_commonConfig.kafkaBridge.topicCreationLocalList}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-remote
+          {{if .Values.kafkabridge.image.tag}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
+          {{- else}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{.Values._000_commonConfig.kafkaBridge.remotebootstrapServer}}
+            - name: KAFKA_TOPICS
+              value: {{.Values._000_commonConfig.kafkaBridge.topicCreationRemoteList}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
           {{if .Values.kafkabridge.image.tag}}

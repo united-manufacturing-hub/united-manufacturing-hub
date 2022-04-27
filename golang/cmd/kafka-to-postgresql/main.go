@@ -32,12 +32,11 @@ func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
 
-	//if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
-	logger, _ = zap.NewDevelopment()
-	//} else {
-
-	//	logger, _ = zap.NewProduction()
-	//}
+	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
+		logger, _ = zap.NewDevelopment()
+	} else {
+		logger, _ = zap.NewProduction()
+	}
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -151,7 +150,7 @@ func main() {
 		highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
 		highIntegrityEventChannel := HIKafkaProducer.Events()
-		go startPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer)
+		go startPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel)
 		go processKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
 		go startCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
@@ -166,7 +165,7 @@ func main() {
 		highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
 		highThroughputEventChannel := HIKafkaProducer.Events()
 		// HT has no commit channel, it uses auto commit
-		go startPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer)
+		go startPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil)
 		go processKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
 		go startHighThroughputQueueProcessor()
 		go startEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
