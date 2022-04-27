@@ -44,6 +44,8 @@ func CreateTopicMapProcessors(tp TopicMap) {
 // CreateTopicMapElementProcessor create uni/bidirectional transfer channels between the local and remote Kafka brokers.
 func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafka.ConfigMap, remoteConfigMap kafka.ConfigMap) {
 	zap.S().Debugf("Creating TopicMapProcessor for topic %v", element)
+	zap.S().Infof("Starting Processor with local configmap: %v", localConfigMap)
+	zap.S().Infof("Starting Processor with remote configmap: %v", remoteConfigMap)
 
 	if element.Bidirectional {
 		var localConsumer, err = kafka.NewConsumer(&localConfigMap)
