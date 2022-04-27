@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
 	//"encoding/base64"
 	"fmt"
@@ -55,7 +56,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				return
 			}
 
-			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), jsonString, GenerateKafkaKey(currentDeviceInformation))
+			go SendKafkaMessage(internal.MqttTopicToKafka(mqttRawTopic), jsonString, GenerateKafkaKey(currentDeviceInformation))
 			go SendMQTTMessage(mqttRawTopic, jsonString)
 		case 2: // digital output
 			// Todo
@@ -134,7 +135,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				zap.S().Errorf("Error converting payload to json: %s", err.Error())
 				return
 			}
-			go SendKafkaMessage(MqttTopicToKafka(mqttRawTopic), jsonString, GenerateKafkaKey(currentDeviceInformation))
+			go SendKafkaMessage(internal.MqttTopicToKafka(mqttRawTopic), jsonString, GenerateKafkaKey(currentDeviceInformation))
 			go SendMQTTMessage(mqttRawTopic, jsonString)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue

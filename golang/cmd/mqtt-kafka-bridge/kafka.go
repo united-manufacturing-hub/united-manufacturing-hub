@@ -27,7 +27,7 @@ func processIncomingMessages() {
 		}
 
 		//Setup Topic if not exist
-		kafkaTopicName := MqttTopicToKafka(object.Topic)
+		kafkaTopicName := internal.MqttTopicToKafka(object.Topic)
 		err = internal.CreateTopicIfNotExists(kafkaTopicName)
 		if err != nil {
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
@@ -77,7 +77,7 @@ func kafkaToQueue(topic string) {
 		payload := msg.Value
 		if json.Valid(payload) {
 			kafkaTopic := msg.TopicPartition.Topic
-			mqttTopic := KafkaTopicToMqtt(*kafkaTopic)
+			mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
 
 			go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
 			zap.S().Debugf("kafkaToQueue", topic, payload)
