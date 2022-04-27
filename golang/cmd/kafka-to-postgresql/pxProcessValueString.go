@@ -33,7 +33,7 @@ func startProcessValueStringQueueAggregator() {
 				messages = append(messages, msg)
 				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= 5000 {
-					zap.S().Debugf("[HT][PVS] Messages length: %d", len(messages))
+					//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 					putBackMsg, err, putback, reason := writeProcessValueStringToDatabase(messages)
 					if putback {
 						for _, message := range putBackMsg {
@@ -55,7 +55,7 @@ func startProcessValueStringQueueAggregator() {
 			}
 		case <-writeToDbTimer.C: // Commit data into db
 			{
-				zap.S().Debugf("[HT][PVS] Messages length: %d", len(messages))
+				//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 				if len(messages) == 0 {
 
 					continue
@@ -82,6 +82,7 @@ func startProcessValueStringQueueAggregator() {
 	}
 	for _, message := range messages {
 		highThroughputPutBackChannel <- internal.PutBackChanMsg{
+
 			Msg:    message,
 			Reason: "Shutting down",
 		}
@@ -132,7 +133,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		zap.S().Debugf("[HT][PVS] Copying %d messages to temporary table", len(messages))
 		// Copy into the temporary table
 		for _, message := range messages {
-			couldParse, parsedMessage := ParseMessage(message)
+			couldParse, parsedMessage := internal.ParseMessage(message)
 			if !couldParse {
 
 				//zap.S().Debugf("Could not parse ! %v", message)
