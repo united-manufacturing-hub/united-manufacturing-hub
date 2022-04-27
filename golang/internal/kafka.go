@@ -103,7 +103,8 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		}
 	}()
 	topicSpecification := kafka.TopicSpecification{
-		Topic: kafkaTopicName,
+		Topic:         kafkaTopicName,
+		NumPartitions: 6,
 	}
 	var maxExecutionTime = time.Duration(5) * time.Second
 	d := time.Now().Add(maxExecutionTime)
