@@ -83,7 +83,6 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 		panic(err)
 	}
 
-
 	for !ShuttingDownKafka {
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
@@ -126,7 +125,6 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 	}
 	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
 }
-
 
 // StartPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the Reason and error.
@@ -258,19 +256,25 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 				KafkaPutBacks += 1
 			} else {
 				zap.S().Warnf("%s Channel to drain is closed", identifier)
-				ShutdownChannel <- false
+				if ShutdownChannel != nil {
+					ShutdownChannel <- false
+				}
 				return false
 			}
 		default:
 			{
 				zap.S().Debugf("%s Channel to drain is empty", identifier)
-				ShutdownChannel <- true
+				if ShutdownChannel != nil {
+					ShutdownChannel <- true
+				}
 				return true
 			}
 		}
 	}
 	zap.S().Debugf("%s channel drained", identifier)
-	ShutdownChannel <- true
+	if ShutdownChannel != nil {
+		ShutdownChannel <- true
+	}
 	return true
 }
 
@@ -290,7 +294,6 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 	}
 	return false
 }
-
 
 // StartCommitProcessor starts the commit processor.
 // It will commit messages to the kafka queue.
