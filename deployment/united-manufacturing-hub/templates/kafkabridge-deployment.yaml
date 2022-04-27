@@ -78,6 +78,9 @@ spec:
             - name: KAFKA_TOPIC_MAP
               value: {{.Values._000_commonConfig.kafkaBridge.topicmap | toJson | quote}}
 
+            - name: KAFKA_GROUP_ID_SUFFIX
+              value: {{.Values._000_commonConfig.serialNumber}}
+
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
