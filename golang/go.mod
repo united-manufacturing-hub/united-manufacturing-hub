@@ -9,10 +9,10 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/coocood/freecache v1.2.1
 	github.com/eclipse/paho.mqtt.golang v1.3.5
-	github.com/gammazero/deque v0.1.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
-	github.com/go-redis/redis/v8 v8.11.4
+	github.com/go-playground/assert/v2 v2.0.1
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/json-iterator/go v1.1.12
