@@ -248,9 +248,17 @@ func ShutdownApplicationGraceful() {
 
 		time.Sleep(internal.OneSecond)
 
+		maxAttempts := 50
+		attempt := 0
+
 		for len(highIntegrityPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
 			time.Sleep(internal.OneSecond)
+			attempt++
+			if attempt > maxAttempts {
+				zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
+				break
+			}
 		}
 	}
 
@@ -269,9 +277,17 @@ func ShutdownApplicationGraceful() {
 
 		time.Sleep(internal.OneSecond)
 
+		maxAttempts := 50
+		attempt := 0
+
 		for len(highThroughputPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
 			time.Sleep(internal.OneSecond)
+			attempt++
+			if attempt > maxAttempts {
+				zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
+				break
+			}
 		}
 	}
 	ShutdownPutback = true
