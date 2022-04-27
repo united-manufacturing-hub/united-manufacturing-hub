@@ -80,7 +80,7 @@ func KafkaProcessQueue(identifier string, topic string, processorChannel chan *k
 			// This is fine, and expected behaviour
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				// Sleep to reduce CPU usage
-				time.Sleep(internal.OneSecond)
+				time.Sleep(OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				// This will occur when no topic for the regex is available !
@@ -104,7 +104,7 @@ func KafkaProcessQueue(identifier string, topic string, processorChannel chan *k
 
 // KafkaStartPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the reason and error.
-func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer) {
+func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer, commitChan chan *kafka.Message) {
 	// Loops until the shutdown signal is received and the channel is empty
 	for !KafkaShutdownPutback {
 		select {
@@ -148,8 +148,8 @@ func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackCh
 						kafkaKey.Putback.Reason = reason
 						if kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000 {
 							topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
-							if commitChannel != nil {
-								commitChannel <- msg
+							if commitChan != nil {
+								commitChan <- msg
 							}
 						}
 					}
