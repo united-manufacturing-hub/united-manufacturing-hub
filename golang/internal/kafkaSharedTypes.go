@@ -8,6 +8,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
+
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -82,6 +83,7 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 		panic(err)
 	}
 
+
 	for !ShuttingDownKafka {
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
@@ -108,6 +110,7 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				// This will occur when no topic for the regex is available !
 				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
+
 				gracefulShutdown()
 				return
 			} else {
@@ -119,11 +122,11 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 		// Insert received message into the processor channel
 		processorChannel <- msg
 		// This is for stats only, it counts the number of messages received
-		// Defined in go
 		KafkaMessages += 1
 	}
 	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
 }
+
 
 // StartPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the Reason and error.
@@ -193,6 +196,7 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 						kafkaKey.Putback.Reason = reason
 						if kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000 {
 							topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
+
 							if commitChannel != nil {
 								commitChannel <- msg
 							}
@@ -237,7 +241,6 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString}
 				}
 				// This is for stats only and counts the amount of messages put back
-				// Defined in go
 				KafkaPutBacks += 1
 			}
 		}
@@ -288,6 +291,7 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 	return false
 }
 
+
 // StartCommitProcessor starts the commit processor.
 // It will commit messages to the kafka queue.
 func StartCommitProcessor(identifier string, commitChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer) {
@@ -302,7 +306,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *kafka.Message, 
 					commitChannel <- msg
 				} else {
 					// This is for stats only, and counts the amounts of commits done to the kafka queue
-					// Defined in go
+
 					KafkaCommits += 1
 				}
 			}
@@ -329,7 +333,7 @@ func StartEventHandler(identifier string, events chan kafka.Event, backChan chan
 						}
 					} else {
 						// This is for stats only, and counts the amount of confirmed processed messages
-						// Defined in go
+
 						KafkaConfirmed += 1
 					}
 				}

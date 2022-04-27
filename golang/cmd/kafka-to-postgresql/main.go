@@ -28,10 +28,10 @@ var HighThroughputEnabled = false
 func main() {
 	// Setup logger and set as global
 	var logger *zap.Logger
-
 	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
 		logger, _ = zap.NewDevelopment()
 	} else {
+
 		logger, _ = zap.NewProduction()
 	}
 	zap.ReplaceGlobals(logger)
@@ -136,7 +136,8 @@ func main() {
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
-	InitCache(allowedMemorySize/4, allowedMemorySize/4)
+	InitCache(allowedMemorySize / 4)
+	internal.InitMessageCache(allowedMemorySize / 4)
 
 	zap.S().Debugf("Starting queue processor")
 
@@ -147,9 +148,11 @@ func main() {
 		highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
 		highIntegrityEventChannel := HIKafkaProducer.Events()
+
 		go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel)
 		go internal.ProcessKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel, ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
+
 		go startHighIntegrityQueueProcessor()
 		go internal.StartEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
 		zap.S().Debugf("Started HI queue processor")
@@ -162,8 +165,10 @@ func main() {
 		highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highThroughputEventChannel := HIKafkaProducer.Events()
 		// HT has no commit channel, it uses auto commit
+
 		go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil)
 		go internal.ProcessKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel, nil)
+
 		go startHighThroughputQueueProcessor()
 		go internal.StartEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
 
@@ -194,10 +199,17 @@ func main() {
 
 	// The following code keeps the memory usage low
 	debug.SetGCPercent(10)
+
 	go internal.MemoryLimiter(allowedMemorySize)
 
+
 	go PerformanceReport()
-	select {} // block forever
+	select {
+	case <-internal.ShutdownMainChan:
+		zap.S().Info("Shutdown signal received from kafka")
+		ShutdownApplicationGraceful()
+		return
+	} // block forever
 }
 
 var ShuttingDown bool
@@ -211,13 +223,17 @@ func ShutdownApplicationGraceful() {
 
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
+
 	internal.ShuttingDownKafka = true
+
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
+
 		if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+
 			time.Sleep(internal.FiveSeconds)
 		}
 
@@ -240,6 +256,7 @@ func ShutdownApplicationGraceful() {
 	// This is behind HI to allow a higher chance of a clean shutdown
 	if HighThroughputEnabled {
 		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
+
 		if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
@@ -247,6 +264,7 @@ func ShutdownApplicationGraceful() {
 			time.Sleep(internal.FiveSeconds)
 		}
 		if !internal.DrainChannelSimple(processValueStringChannel, highThroughputPutBackChannel) {
+
 			time.Sleep(internal.FiveSeconds)
 		}
 
@@ -265,7 +283,9 @@ func ShutdownApplicationGraceful() {
 			}
 		}
 	}
+
 	internal.ShutdownPutback = true
+
 
 	time.Sleep(internal.OneSecond)
 
@@ -323,7 +343,7 @@ func PerformanceReport() {
 			len(highIntegrityProcessorChannel),
 			len(highIntegrityPutBackChannel),
 			len(highIntegrityCommitChannel),
-			messagecache.HitRate(),
+			internal.Messagecache.HitRate(),
 			dbcache.HitRate(),
 			len(processValueChannel),
 			len(processValueStringChannel),
