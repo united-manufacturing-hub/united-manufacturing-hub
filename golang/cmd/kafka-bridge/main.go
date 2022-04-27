@@ -86,7 +86,9 @@ func main() {
 		panic("LocalKafkaBootstrapServers and RemoteKafkaBootstrapServers must be set")
 	}
 
-	CreateTopicMapProcessors(topicMap)
+	GroupIdSuffic := os.Getenv("KAFKA_GROUP_ID_SUFFIX")
+
+	CreateTopicMapProcessors(topicMap, GroupIdSuffic)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
