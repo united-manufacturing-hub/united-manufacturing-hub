@@ -10,6 +10,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
+	"os"
 	"time"
 )
 
@@ -74,7 +75,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		localMsgChan := make(chan *kafka.Message, 100)
 		localPutBackChan := make(chan internal.PutBackChanMsg, 100)
 		localCommitChan := make(chan *kafka.Message, 100)
-		localIdentifier := fmt.Sprintf("%s-local", element.Name)
+		localIdentifier := fmt.Sprintf("%s-local-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
 		go internal.ProcessKafkaQueue(localIdentifier, element.Topic, localMsgChan, localConsumer, localPutBackChan, nil)
 		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan)
 		go internal.StartCommitProcessor(localIdentifier, localCommitChan, localConsumer)
@@ -82,7 +83,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		remoteMsgChan := make(chan *kafka.Message, 100)
 		remotePutBackChan := make(chan internal.PutBackChanMsg, 100)
 		remoteCommitChan := make(chan *kafka.Message, 100)
-		remoteIdentifier := fmt.Sprintf("%s-remote", element.Name)
+		remoteIdentifier := fmt.Sprintf("%s-remote-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
 		go internal.ProcessKafkaQueue(remoteIdentifier, element.Topic, remoteMsgChan, remoteConsumer, remotePutBackChan, nil)
 		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan)
 		go internal.StartCommitProcessor(remoteIdentifier, remoteCommitChan, remoteConsumer)
