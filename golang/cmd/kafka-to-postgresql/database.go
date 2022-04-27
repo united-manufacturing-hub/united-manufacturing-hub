@@ -130,7 +130,7 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 
 	err := statement.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.QueryRow(assetID, location, customerID).Scan(&AssetTableID)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
+		zap.S().Debugf("[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
 		// This can potentially lead to race conditions, if another thread adds the same asset too
 		err = AddAsset(assetID, location, customerID)
 		if err != nil {
@@ -195,7 +195,7 @@ func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId 
 
 	err := statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(AssetTableId, productName).Scan(&ProductTableId)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d", productName, AssetTableId)
+		zap.S().Debugf("[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d", productName, AssetTableId)
 		return 0, false
 	} else if err != nil {
 		zap.S().Debugf("[GetProductTableId] Error: %s", err)
@@ -234,7 +234,7 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(UniqueProductAlternativeId, AssetTableId).Scan(&UniqueProductTableId)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d", UniqueProductAlternativeId, AssetTableId)
+		zap.S().Debugf("[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d", UniqueProductAlternativeId, AssetTableId)
 
 		return 0, false
 	} else if err != nil {
@@ -259,7 +259,7 @@ func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (Latestpa
 
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(ParentID, DBAssetID).Scan(&LatestparentUniqueProductId)
 	if err == sql.ErrNoRows {
-		zap.S().Errorf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
+		zap.S().Debugf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
 
 		return 0, false
 	} else if err != nil {

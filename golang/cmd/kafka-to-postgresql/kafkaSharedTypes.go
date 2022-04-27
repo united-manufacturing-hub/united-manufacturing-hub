@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -55,8 +56,10 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 		// This has a timeout, allowing ShuttingDown to be checked
 		msg, err = kafkaConsumer.ReadMessage(5000)
 		if err != nil {
+			// This is fine, and expected behaviour
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
-				// This is fine, and expected behaviour
+				// Sleep to reduce CPU usage
+				time.Sleep(internal.OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				// This will occur when no topic for the regex is available !
@@ -80,7 +83,7 @@ func processKafkaQueue(identifier string, topic string, processorChannel chan *k
 
 // startPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the reason and error.
-func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer) {
+func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer, commitChannel chan *kafka.Message) {
 	zap.S().Debugf("%s Starting putback processor", identifier)
 	// Loops until the shutdown signal is received and the channel is empty
 	for !ShutdownPutback {
@@ -123,8 +126,11 @@ func startPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 						kafkaKey.Putback.LastTsMS = current
 						kafkaKey.Putback.Amount += 1
 						kafkaKey.Putback.Reason = reason
-						if kafkaKey.Putback.Amount >= 50 {
-							topic = "putback-error"
+						if kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000 {
+							topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
+							if commitChannel != nil {
+								commitChannel <- msg
+							}
 						}
 					}
 				}
