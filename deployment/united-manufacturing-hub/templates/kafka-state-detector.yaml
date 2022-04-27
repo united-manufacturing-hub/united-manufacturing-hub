@@ -1,0 +1,55 @@
+---
+{{if or .Values.kafkastatedetector.enabled .Values._000_commonConfig.kafkaStateDetector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 4}}
+  {{if .Values.kafkastatedetector.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkastatedetector.annotations | nindent 4}}
+  {{end}}
+spec:
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+        {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+          {{if .Values.kafkastatedetector.image.tag}}
+          image: {{.Values.kafkastatedetector.image.repository}}:{{.Values.kafkastatedetector.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkastatedetector.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkastatedetector.image.pullPolicy}}
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          resources: {}
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+

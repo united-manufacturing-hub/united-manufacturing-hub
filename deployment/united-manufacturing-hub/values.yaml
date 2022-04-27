@@ -197,11 +197,21 @@ _000_commonConfig:
 #        send_direction: to_remote
 
 
+  kafkaStateDetector:
+    enabled: true
+
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
 serviceAccount:
   create: true
+
+### kafkastatedetector ###
+kafkastatedetector:
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/kafkastatedetector
+    pullPolicy: IfNotPresent
 
 ### mqttbridge ###
 mqttbridge:
@@ -641,7 +651,7 @@ kafkatopostgresql:
     repository: unitedmanufacturinghub/kafka-to-postgresql
     pullPolicy: IfNotPresent
     #tag: latest
-  replicas: 1
+  replicas: 3
   storageRequest: 1Gi
   listenTopic:
     # All topics except processValue
@@ -2053,6 +2063,7 @@ kafka:
   logRetentionHours: 168
   logSegmentBytes: _10485760 # 10MiB
   logRetentionBytes: _26214400 # 25MiB
+  numPartitions: 6
 
 ##### CONFIG FOR REDIS #####
 redis:
