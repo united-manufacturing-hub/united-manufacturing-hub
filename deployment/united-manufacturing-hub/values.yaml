@@ -212,6 +212,8 @@ kafkastatedetector:
   image:
     repository: unitedmanufacturinghub/kafkastatedetector
     pullPolicy: IfNotPresent
+  activityEnabled: true
+  anomalyEnabled: true
 
 ### mqttbridge ###
 mqttbridge:
