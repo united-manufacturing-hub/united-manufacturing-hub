@@ -251,7 +251,7 @@ func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *k
 						Reason:      "Produce failed",
 						ErrorString: &errS,
 					}
-					zap.S().Warnf("Failed to produce message: %v", err)
+					zap.S().Warnf("[%s] Failed to produce message: %v | %v", identifier, err, msgX)
 					time.Sleep(1 * time.Second)
 
 				} else {
