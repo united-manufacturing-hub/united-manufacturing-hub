@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel/attribute"
-	oteltrace "go.opentelemetry.io/otel/trace"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -272,8 +270,8 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, stateArray []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "addNoShiftsToStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[addNoShiftsToStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	processedShifts := cleanRawShiftData(rawShifts, from, to, configuration)

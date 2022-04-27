@@ -116,6 +116,8 @@ func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackCh
 					continue
 				}
 
+				topic := *msg.TopicPartition.Topic
+
 				var kafkaKey KafkaKey
 				if msg.Key == nil {
 					kafkaKey = KafkaKey{
@@ -141,6 +143,9 @@ func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackCh
 						kafkaKey.Putback.LastTsMS = current
 						kafkaKey.Putback.Amount += 1
 						kafkaKey.Putback.Reason = reason
+						if kafkaKey.Putback.Amount >= 50 {
+							topic = "putback-error"
+						}
 					}
 				}
 
@@ -157,7 +162,7 @@ func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackCh
 
 				msgx := kafka.Message{
 					TopicPartition: kafka.TopicPartition{
-						Topic:     msg.TopicPartition.Topic,
+						Topic:     &topic,
 						Partition: msg.TopicPartition.Partition,
 					},
 					Value: msg.Value,

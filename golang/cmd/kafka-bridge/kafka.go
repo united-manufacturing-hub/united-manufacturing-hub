@@ -155,7 +155,7 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 				channelToDrainTo <- PutBackChanMsg{msg, fmt.Sprintf("%s Shutting down", identifier), nil}
 				PutBacks += 1
 			} else {
-				zap.S().Debugf("%s Channel to drain is closed", identifier)
+				zap.S().Warnf("%s Channel to drain is closed", identifier)
 				ShutdownChannel <- false
 				return false
 			}
