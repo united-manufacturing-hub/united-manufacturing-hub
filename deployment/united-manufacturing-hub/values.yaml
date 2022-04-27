@@ -2047,7 +2047,7 @@ kafka:
       memory: 250Mi
   logRetentionHours: 168
   logSegmentBytes: _10485760 # 10MiB
-  logRetentionBytes: _1073741824 # 1GiB
+  logRetentionBytes: _524288000 # 500MiB
 
 ##### CONFIG FOR REDIS #####
 redis:
