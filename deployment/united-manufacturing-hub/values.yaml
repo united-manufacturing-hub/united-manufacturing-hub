@@ -198,7 +198,7 @@ _000_commonConfig:
 
 
   kafkaStateDetector:
-    enabled: true
+    enabled: false
 
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
