@@ -9,6 +9,8 @@ func initKafkaTopics(topics string) {
 	topiclist := strings.Split(topics, ";")
 	for _, topic := range topiclist {
 		err := internal.CreateTopicIfNotExists(topic)
-		panic(err)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
