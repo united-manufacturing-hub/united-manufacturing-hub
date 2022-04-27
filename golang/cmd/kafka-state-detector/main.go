@@ -76,6 +76,7 @@ func main() {
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
 	}
+	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
 
 	if AnomalyEnabled {
 		SetupAnomalyKafka(kafka.ConfigMap{
