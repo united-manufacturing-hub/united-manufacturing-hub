@@ -5,6 +5,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -38,6 +39,19 @@ func main() {
 	if KafkaBoostrapServer == "" {
 		panic("KAFKA_BOOSTRAP_SERVER not set")
 	}
+
+	allowedMemorySize := 1073741824 // 1GB
+	if os.Getenv("MEMORY_REQUEST") != "" {
+		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
+		i, b := memoryRequest.AsInt64()
+		if b {
+			allowedMemorySize = int(i) //truncated !
+		}
+	}
+	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
+
+	// InitCache is initialized with 1Gb of memory for each cache
+	internal.InitMessageCache(allowedMemorySize / 4)
 
 	ActivityEnabled = os.Getenv("ACTIVITY_ENABLED") == "true"
 

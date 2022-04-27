@@ -10,6 +10,7 @@ import (
 	"github.com/coocood/freecache"
 	"go.uber.org/zap"
 	"regexp"
+	"strings"
 )
 
 // This regexp is used to extract the topic name from the message key
@@ -63,10 +64,10 @@ func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, messag
 		return false, ParsedMessage{}
 	}
 
-	assetID := res[1]
+	customerID := res[1]
 	location := res[2]
-	customerID := res[3]
-	payloadType := res[4]
+	assetID := res[3]
+	payloadType := strings.ToLower(res[4])
 	payload := msg.Value
 	pm := ParsedMessage{
 		AssetId:     assetID,

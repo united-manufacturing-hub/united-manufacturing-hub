@@ -5,7 +5,6 @@ import (
 	"github.com/coocood/freecache"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"strings"
 )
 
 // dbcache is a cache of database entries (for example database asset id's)
@@ -67,67 +66,4 @@ func PutCacheProductTableId(customerID string, AssetTableId uint32, productTable
 // GetCacheProductTableId looks up the db cache for the customerId, locationId, productId and returns the product table id if found
 func GetCacheProductTableId(customerID string, AssetTableId uint32) (uint32, bool) {
 	return GetUint32DB(internal.AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
-}
-
-// PutCacheKafkaMessageAsParsedMessage tries to parse the kafka message and put it into the message cache, returning the parsed message if successful
-func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, message ParsedMessage) {
-	valid = false
-	if msg == nil || msg.TopicPartition.Topic == nil {
-		return
-	}
-	res := rp.FindStringSubmatch(*msg.TopicPartition.Topic)
-	if res == nil {
-		zap.S().Errorf(" Invalid topic: %s", *msg.TopicPartition.Topic)
-		return false, ParsedMessage{}
-	}
-
-	customerID := res[1]
-	location := res[2]
-	assetID := res[3]
-	payloadType := strings.ToLower(res[4])
-	payload := msg.Value
-	pm := ParsedMessage{
-		AssetId:     assetID,
-		Location:    location,
-		CustomerId:  customerID,
-		PayloadType: payloadType,
-		Payload:     payload,
-	}
-
-	var cacheKey = AsXXHash(msg.Key, msg.Value, []byte((*msg.TopicPartition.Topic)))
-
-	var buffer bytes.Buffer
-	err := gob.NewEncoder(&buffer).Encode(pm)
-	if err != nil {
-		zap.S().Errorf("Failed to encode message: %s", err)
-	} else {
-		err = messagecache.Set(cacheKey, buffer.Bytes(), 0)
-		if err != nil {
-			zap.S().Debugf("Error putting message in cache: %s", err)
-		}
-	}
-
-	return true, pm
-}
-
-// GetCacheParsedMessage looks up the message cache for the key and returns the parsed message if found
-func GetCacheParsedMessage(msg *kafka.Message) (valid bool, found bool, message ParsedMessage) {
-	if msg == nil || msg.TopicPartition.Topic == nil {
-		return false, false, ParsedMessage{}
-	}
-
-	var cacheKey = AsXXHash(msg.Key, msg.Value, []byte((*msg.TopicPartition.Topic)))
-	get, err := messagecache.Get(cacheKey)
-	if err != nil {
-		return true, false, ParsedMessage{}
-	}
-
-	var pm ParsedMessage
-	reader := bytes.NewReader(get)
-	err = gob.NewDecoder(reader).Decode(&pm)
-	if err != nil {
-		return false, true, ParsedMessage{}
-	}
-
-	return true, true, pm
 }

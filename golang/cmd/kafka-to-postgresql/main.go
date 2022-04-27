@@ -138,6 +138,7 @@ func main() {
 
 	// InitCache is initialized with 1Gb of memory for each cache
 	InitCache(allowedMemorySize / 4)
+	internal.InitMessageCache(allowedMemorySize / 4)
 
 	zap.S().Debugf("Starting queue processor")
 
