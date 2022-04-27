@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 	"time"
@@ -69,20 +70,20 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		}
 
 		localMsgChan := make(chan *kafka.Message, 100)
-		localPutBackChan := make(chan PutBackChanMsg, 100)
+		localPutBackChan := make(chan internal.PutBackChanMsg, 100)
 		localCommitChan := make(chan *kafka.Message, 100)
 		localIdentifier := fmt.Sprintf("%s-local", element.Name)
-		go processKafkaQueue(localIdentifier, element.Topic, localMsgChan, localConsumer, localPutBackChan)
-		go startPutbackProcessor(localIdentifier, localPutBackChan, localProducer)
-		go startCommitProcessor(localIdentifier, localCommitChan, localConsumer)
+		go internal.ProcessKafkaQueue(localIdentifier, element.Topic, localMsgChan, localConsumer, localPutBackChan, nil)
+		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan)
+		go internal.StartCommitProcessor(localIdentifier, localCommitChan, localConsumer)
 
 		remoteMsgChan := make(chan *kafka.Message, 100)
-		remotePutBackChan := make(chan PutBackChanMsg, 100)
+		remotePutBackChan := make(chan internal.PutBackChanMsg, 100)
 		remoteCommitChan := make(chan *kafka.Message, 100)
 		remoteIdentifier := fmt.Sprintf("%s-remote", element.Name)
-		go processKafkaQueue(remoteIdentifier, element.Topic, remoteMsgChan, remoteConsumer, remotePutBackChan)
-		go startPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer)
-		go startCommitProcessor(remoteIdentifier, remoteCommitChan, remoteConsumer)
+		go internal.ProcessKafkaQueue(remoteIdentifier, element.Topic, remoteMsgChan, remoteConsumer, remotePutBackChan, nil)
+		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan)
+		go internal.StartCommitProcessor(remoteIdentifier, remoteCommitChan, remoteConsumer)
 
 		go startAtoBSender(localIdentifier, localMsgChan, remoteProducer, localPutBackChan, localCommitChan)
 		go startAtoBSender(remoteIdentifier, remoteMsgChan, localProducer, remotePutBackChan, remoteCommitChan)
@@ -91,8 +92,8 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		for !ShuttingDown {
 
 		}
-		DrainChannel(localIdentifier, localMsgChan, localPutBackChan)
-		DrainChannel(remoteIdentifier, remoteMsgChan, remotePutBackChan)
+		internal.DrainChannel(localIdentifier, localMsgChan, localPutBackChan, ShutdownChannel)
+		internal.DrainChannel(remoteIdentifier, remoteMsgChan, remotePutBackChan, ShutdownChannel)
 	} else {
 		var consumer *kafka.Consumer
 		var producer *kafka.Producer
@@ -131,46 +132,20 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		}
 
 		msgChan := make(chan *kafka.Message, 100)
-		putBackChan := make(chan PutBackChanMsg, 100)
+		putBackChan := make(chan internal.PutBackChanMsg, 100)
 		commitChan := make(chan *kafka.Message, 100)
 		identifier := fmt.Sprintf("%s-local", element.Name)
-		go processKafkaQueue(identifier, element.Topic, msgChan, consumer, putBackChan)
-		go startPutbackProcessor(identifier, putBackChan, putBackProducer)
-		go startCommitProcessor(identifier, commitChan, consumer)
+		go internal.ProcessKafkaQueue(identifier, element.Topic, msgChan, consumer, putBackChan, nil)
+		go internal.StartPutbackProcessor(identifier, putBackChan, putBackProducer, commitChan)
+		go internal.StartCommitProcessor(identifier, commitChan, consumer)
 		go startAtoBSender(identifier, msgChan, producer, putBackChan, commitChan)
-		go startEventHandler(identifier, producer.Events(), putBackChan)
+		go internal.StartEventHandler(identifier, producer.Events(), putBackChan)
 
 		ShutdownsRequired += 1
 		for !ShuttingDown {
 
 		}
-		DrainChannel(identifier, msgChan, putBackChan)
-	}
-}
-
-func startEventHandler(identifier string, events chan kafka.Event, backChan chan PutBackChanMsg) {
-	for !ShuttingDown || len(events) > 0 {
-		select {
-		case event := <-events:
-			switch ev := event.(type) {
-			case *kafka.Message:
-				{
-					if ev.TopicPartition.Error != nil {
-						zap.S().Errorf("Error for %s: %v", identifier, ev.TopicPartition.Error)
-						errS := ev.TopicPartition.Error.Error()
-						backChan <- PutBackChanMsg{
-							msg:         ev,
-							reason:      "Event channel error",
-							errorString: &errS,
-						}
-					} else {
-						Confirmed += 1
-					}
-				}
-			}
-		default:
-			time.Sleep(time.Millisecond * 100)
-		}
+		internal.DrainChannel(identifier, msgChan, putBackChan, ShutdownChannel)
 	}
 }
 
@@ -208,7 +183,7 @@ func (r *Bridges) Marshal() ([]byte, error) {
 	return json.Marshal(r)
 }
 
-func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *kafka.Producer, backChan chan PutBackChanMsg, commitChan chan *kafka.Message) {
+func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *kafka.Producer, backChan chan internal.PutBackChanMsg, commitChan chan *kafka.Message) {
 
 	for !ShuttingDown {
 		select {
@@ -269,10 +244,10 @@ func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *k
 				err := producer.Produce(&msgX, nil)
 				if err != nil {
 					errS := err.Error()
-					backChan <- PutBackChanMsg{
-						msg:         &msgX,
-						reason:      "Produce failed",
-						errorString: &errS,
+					backChan <- internal.PutBackChanMsg{
+						Msg:         &msgX,
+						Reason:      "Produce failed",
+						ErrorString: &errS,
 					}
 					zap.S().Warnf("Failed to produce message: %v", err)
 					time.Sleep(1 * time.Second)
