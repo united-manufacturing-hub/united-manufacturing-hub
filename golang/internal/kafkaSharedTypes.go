@@ -4,6 +4,7 @@
 package internal
 
 import (
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
@@ -76,8 +77,10 @@ func KafkaProcessQueue(identifier string, topic string, processorChannel chan *k
 		// This has a timeout, allowing KafkaShuttingDown to be checked
 		msg, err = kafkaConsumer.ReadMessage(5000)
 		if err != nil {
+			// This is fine, and expected behaviour
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
-				// This is fine, and expected behaviour
+				// Sleep to reduce CPU usage
+				time.Sleep(internal.OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				// This will occur when no topic for the regex is available !
@@ -143,8 +146,11 @@ func KafkaStartPutbackProcessor(identifier string, putBackChannel chan PutBackCh
 						kafkaKey.Putback.LastTsMS = current
 						kafkaKey.Putback.Amount += 1
 						kafkaKey.Putback.Reason = reason
-						if kafkaKey.Putback.Amount >= 50 {
-							topic = "putback-error"
+						if kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000 {
+							topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
+							if commitChannel != nil {
+								commitChannel <- msg
+							}
 						}
 					}
 				}

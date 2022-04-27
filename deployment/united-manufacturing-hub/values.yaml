@@ -184,6 +184,8 @@ _000_commonConfig:
   kafkaBridge:
     enabled: false
     remotebootstrapServer: ""
+    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
+    topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
     topicmap:
 # Example topic map
 #      - name: HighIntegrity
@@ -282,6 +284,9 @@ kafkabridge:
     repository: unitedmanufacturinghub/kafka-bridge
     pullPolicy: IfNotPresent
   # tag: development
+  initContainer:
+    repository: unitedmanufacturinghub/kafka-init
+    pullPolicy: IfNotPresent
 
 
 ### nodered ###
@@ -651,7 +656,7 @@ kafkatopostgresql:
   listenTopic:
     # All topics except processValue
     # Kafka doesn't seem to be able to do negative lookaheads
-    highIntegrity: '^ia\..+\..+\..+\.(addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct).+$'
+    highIntegrity: '^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$'
     highThroughput: '^ia\..+\..+\..+\.(process[V|v]alue).*$'
   resources:
     limits:

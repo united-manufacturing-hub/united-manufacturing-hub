@@ -149,7 +149,7 @@ func main() {
 		highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
 		highIntegrityEventChannel := HIKafkaProducer.Events()
-		go internal.KafkaStartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer)
+		go internal.KafkaStartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer,highIntegrityCommitChannel)
 		go internal.KafkaProcessQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
 		go internal.KafkaStartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 		go startHighIntegrityQueueProcessor()
@@ -164,7 +164,7 @@ func main() {
 		highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highThroughputEventChannel := HIKafkaProducer.Events()
 		// HT has no commit channel, it uses auto commit
-		go internal.KafkaStartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer)
+		go internal.KafkaStartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer,nil)
 		go internal.KafkaProcessQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
 		go startHighThroughputQueueProcessor()
 		go internal.StartEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
@@ -252,9 +252,17 @@ func ShutdownApplicationGraceful() {
 
 		time.Sleep(internal.OneSecond)
 
+		maxAttempts := 50
+		attempt := 0
+
 		for len(highIntegrityPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
 			time.Sleep(internal.OneSecond)
+			attempt++
+			if attempt > maxAttempts {
+				zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
+				break
+			}
 		}
 	}
 
@@ -273,9 +281,17 @@ func ShutdownApplicationGraceful() {
 
 		time.Sleep(internal.OneSecond)
 
+		maxAttempts := 50
+		attempt := 0
+
 		for len(highThroughputPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
 			time.Sleep(internal.OneSecond)
+			attempt++
+			if attempt > maxAttempts {
+				zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
+				break
+			}
 		}
 	}
 	internal.KafkaShutdownPutback = true
