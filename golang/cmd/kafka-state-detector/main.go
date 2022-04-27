@@ -80,6 +80,7 @@ func main() {
 
 	if AnomalyEnabled {
 		SetupAnomalyKafka(kafka.ConfigMap{
+			"bootstrap.servers":  KafkaBoostrapServer,
 			"security.protocol":  "plaintext",
 			"group.id":           fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
 			"enable.auto.commit": true,
