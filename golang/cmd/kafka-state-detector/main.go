@@ -70,9 +70,9 @@ func main() {
 		activityEventChannel := ActivityKafkaProducer.Events()
 		activityTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.KafkaStartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel)
-		go internal.KafkaProcessQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel)
-		go internal.KafkaStartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
+		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel)
+		go internal.ProcessKafkaQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel, ShutdownApplicationGraceful)
+		go internal.StartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
 	}
@@ -90,9 +90,9 @@ func main() {
 		anomalyEventChannel := AnomalyKafkaProducer.Events()
 		anomalyTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.KafkaStartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel)
-		go internal.KafkaProcessQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel)
-		go internal.KafkaStartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
+		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel)
+		go internal.ProcessKafkaQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel, ShutdownApplicationGraceful)
+		go internal.StartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
 		go internal.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)
 		go startAnomalyActivityProcessor()
 	}
@@ -121,12 +121,7 @@ func main() {
 
 	}()
 
-	select {
-	case <-internal.ShutdownMainChan:
-		zap.S().Info("Shutdown signal received from kafka")
-		ShutdownApplicationGraceful()
-		return
-	} // block forever
+	select {} // block forever
 }
 
 var ShuttingDown bool
@@ -138,12 +133,12 @@ func ShutdownApplicationGraceful() {
 	zap.S().Info("Shutting down application")
 	ShuttingDown = true
 
-	internal.KafkaShuttingDown = true
+	internal.ShuttingDownKafka = true
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
 	if ActivityEnabled {
-		if !internal.DrainChannel("[AC]", ActivityProcessorChannel, ActivityPutBackChannel) {
+		if !internal.DrainChannelSimple(ActivityProcessorChannel, ActivityPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
 		time.Sleep(internal.OneSecond)
@@ -155,7 +150,7 @@ func ShutdownApplicationGraceful() {
 	}
 
 	if AnomalyEnabled {
-		if !internal.DrainChannel("[AC]", AnomalyProcessorChannel, AnomalyPutBackChannel) {
+		if !internal.DrainChannelSimple(AnomalyProcessorChannel, AnomalyPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
 		time.Sleep(internal.OneSecond)
@@ -166,7 +161,7 @@ func ShutdownApplicationGraceful() {
 		}
 	}
 
-	internal.KafkaShutdownPutback = true
+	internal.ShutdownPutback = true
 	time.Sleep(internal.OneSecond)
 
 	if ActivityEnabled {

@@ -17,13 +17,13 @@ var messageCache *freecache.Cache
 
 // CreateTopicMapProcessors creates a new TopicMapProcessor for each topic in the map.
 // It also initialized the message cache, which prevents duplicate messages from being sent to the Kafka broker and circular messages from being processed.
-func CreateTopicMapProcessors(tp TopicMap) {
+func CreateTopicMapProcessors(tp TopicMap, kafka_group_id_suffic string) {
 	// 1Gb cache
 	messageCache = freecache.NewCache(1024 * 1024 * 1024)
 
 	localConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        LocalKafkaBootstrapServers,
-		"group.id":                 "kafka-bridge",
+		"group.id":                 fmt.Sprintf("kafka-bridge-local-%s", kafka_group_id_suffic),
 		"auto.offset.reset":        "earliest",
 		"enable.auto.commit":       true,
 		"enable.auto.offset.store": false,
@@ -31,7 +31,7 @@ func CreateTopicMapProcessors(tp TopicMap) {
 
 	remoteConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        RemoteKafkaBootstrapServers,
-		"group.id":                 "kafka-bridge",
+		"group.id":                 fmt.Sprintf("kafka-bridge-remote-%s", kafka_group_id_suffic),
 		"auto.offset.reset":        "earliest",
 		"enable.auto.commit":       true,
 		"enable.auto.offset.store": false,
