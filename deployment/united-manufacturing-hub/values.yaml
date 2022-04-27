@@ -184,6 +184,8 @@ _000_commonConfig:
   kafkaBridge:
     enabled: false
     remotebootstrapServer: ""
+    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
+    topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
     topicmap:
 # Example topic map
 #      - name: HighIntegrity
@@ -272,6 +274,9 @@ kafkabridge:
     repository: unitedmanufacturinghub/kafka-bridge
     pullPolicy: IfNotPresent
   # tag: development
+  initContainer:
+    repository: unitedmanufacturinghub/kafka-init
+    pullPolicy: IfNotPresent
 
 
 ### nodered ###
