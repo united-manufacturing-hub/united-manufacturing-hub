@@ -1,3 +1,6 @@
+//go:build kafkaALO
+// +build kafkaALO
+
 package internal
 
 import (

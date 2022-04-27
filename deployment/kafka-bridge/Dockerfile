@@ -18,7 +18,7 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/kafka-bridge
+RUN GOOS=linux go build -tags musl,kafkaALO -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/kafka-bridge
 
 FROM scratch
 COPY --from=builder /build /app/
