@@ -5,6 +5,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
@@ -40,10 +41,10 @@ func startProcessValueStringQueueAggregator() {
 							if err != nil {
 								errStr = err.Error()
 							}
-							highThroughputPutBackChannel <- PutBackChanMsg{
-								msg:         message,
-								reason:      reason,
-								errorString: &errStr,
+							highThroughputPutBackChannel <- internal.PutBackChanMsg{
+								Msg:         message,
+								Reason:      reason,
+								ErrorString: &errStr,
 							}
 						}
 					}
@@ -66,10 +67,10 @@ func startProcessValueStringQueueAggregator() {
 						if err != nil {
 							errStr = err.Error()
 						}
-						highThroughputPutBackChannel <- PutBackChanMsg{
-							msg:         message,
-							reason:      reason,
-							errorString: &errStr,
+						highThroughputPutBackChannel <- internal.PutBackChanMsg{
+							Msg:         message,
+							Reason:      reason,
+							ErrorString: &errStr,
 						}
 					}
 				}
@@ -80,10 +81,9 @@ func startProcessValueStringQueueAggregator() {
 		}
 	}
 	for _, message := range messages {
-		highThroughputPutBackChannel <- PutBackChanMsg{
-			msg:         message,
-			reason:      "Shutting down",
-			errorString: nil,
+		highThroughputPutBackChannel <- internal.PutBackChanMsg{
+			Msg:    message,
+			Reason: "Shutting down",
 		}
 	}
 }
@@ -102,7 +102,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		stmt := txn.Stmt(statement.CreateTmpProcessValueTableString)
 		_, err = stmt.Exec()
 		if err != nil {
-			txn.Rollback()
+			errR := txn.Rollback()
+			if errR != nil {
+				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+			}
 			zap.S().Errorf("Error creating temporary table: %s", err.Error())
 			return messages, err, true, "Error creating temporary table"
 		}
@@ -118,7 +121,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		var stmtCopy *sql.Stmt
 		stmtCopy, err = txn.Prepare(pq.CopyIn("tmp_processvaluestringtable", "timestamp", "asset_id", "value", "valuename"))
 		if err != nil {
-			txn.Rollback()
+			errR := txn.Rollback()
+			if errR != nil {
+				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+			}
 			zap.S().Errorf("Error preparing copy statement: %s", err.Error())
 			return messages, err, true, "Error preparing copy statement"
 		}
@@ -179,7 +185,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 						_, err = stmtCopy.Exec(timestamp, AssetTableID, value, k)
 						if err != nil {
 							zap.S().Errorf("Error inserting into temporary table: %s", err.Error())
-							txn.Rollback()
+							errR := txn.Rollback()
+							if errR != nil {
+								zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+							}
 							return messages, err, true, "Error inserting into temporary table"
 						}
 						toCommit += 1
@@ -193,7 +202,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		err = stmtCopy.Close()
 		zap.S().Debugf("[HT][PVS] Closed copy statement")
 		if err != nil {
-			txn.Rollback()
+			errR := txn.Rollback()
+			if errR != nil {
+				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+			}
 			return messages, err, true, "Failed to close copy statement"
 		}
 	}
@@ -204,7 +216,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 			INSERT INTO processvaluestringtable (SELECT * FROM tmp_processvaluestringtable) ON CONFLICT DO NOTHING;
 		`)
 	if err != nil {
-		txn.Rollback()
+		errR := txn.Rollback()
+		if errR != nil {
+			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+		}
 		zap.S().Errorf("Error preparing copy to process value table statement: %s", err.Error())
 		return messages, err, true, "Error preparing copy to process value table statement"
 	}
@@ -212,14 +227,20 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 	zap.S().Debugf("[HT][PVS] Executing insert statement")
 	_, err = stmtCopyToPVTS.Exec()
 	if err != nil {
-		txn.Rollback()
+		errR := txn.Rollback()
+		if errR != nil {
+			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+		}
 		zap.S().Errorf("Error copying to process value table: %s", err.Error())
 		return messages, err, true, "Error copying to process value table"
 	}
 
 	err = stmtCopyToPVTS.Close()
 	if err != nil {
-		txn.Rollback()
+		errR := txn.Rollback()
+		if errR != nil {
+			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+		}
 		zap.S().Errorf("Error closing stmtCopytoPVTS: %s", err.Error())
 		return messages, err, true, "Error closing stmtCopytoPVTS"
 	}
@@ -243,8 +264,8 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 		if len(putBackMsg) > 0 {
 			return putBackMsg, nil, true, "AssetID not found"
 		}
-		PutBacks += float64(len(putBackMsg))
-		Commits += toCommit
+		internal.KafkaPutBacks += float64(len(putBackMsg))
+		internal.KafkaCommits += toCommit
 	}
 
 	return putBackMsg, nil, false, ""

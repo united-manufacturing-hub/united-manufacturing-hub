@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"math"
 	"net/http"
@@ -112,7 +113,6 @@ func main() {
 }
 
 var ShuttingDown bool
-var ShutdownPutback bool
 var ShutdownChannel chan bool
 var ShutdownsRequired int
 
@@ -125,6 +125,7 @@ func ShutdownApplicationGraceful() {
 	ShutdownChannel = make(chan bool, ShutdownsRequired)
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
+	internal.ShuttingDownKafka = true
 
 	zap.S().Infof("Awaiting %d shutdowns", ShutdownsRequired)
 	for i := 0; i < 10; i++ {
@@ -136,7 +137,7 @@ func ShutdownApplicationGraceful() {
 		}
 	}
 
-	ShutdownPutback = true
+	internal.ShutdownPutback = true
 
 	time.Sleep(1 * time.Second)
 
@@ -147,11 +148,6 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
-var Commits = float64(0)
-var Messages = float64(0)
-var PutBacks = float64(0)
-var Confirmed = float64(0)
-
 func PerformanceReport() {
 	lastCommits := float64(0)
 	lastMessages := float64(0)
@@ -160,24 +156,24 @@ func PerformanceReport() {
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
-		commitsPerSecond := (Commits - lastCommits) / sleepS
-		messagesPerSecond := (Messages - lastMessages) / sleepS
-		putbacksPerSecond := (PutBacks - lastPutbacks) / sleepS
-		confirmsPerSecond := (Confirmed - lastConfirmed) / sleepS
-		lastCommits = Commits
-		lastMessages = Messages
-		lastPutbacks = PutBacks
-		lastConfirmed = Confirmed
+		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
+		messagesPerSecond := (internal.KafkaMessages - lastMessages) / sleepS
+		putbacksPerSecond := (internal.KafkaPutBacks - lastPutbacks) / sleepS
+		confirmsPerSecond := (internal.KafkaConfirmed - lastConfirmed) / sleepS
+		lastCommits = internal.KafkaCommits
+		lastMessages = internal.KafkaMessages
+		lastPutbacks = internal.KafkaPutBacks
+		lastConfirmed = internal.KafkaConfirmed
 
 		zap.S().Infof("Performance report"+
 			"\nCommits: %f, Commits/s: %f"+
 			"\nMessages: %f, Messages/s: %f"+
 			"\nPutBacks: %f, PutBacks/s: %f"+
 			"\nConfirms: %f, Confirms/s: %f",
-			Commits, commitsPerSecond,
-			Messages, messagesPerSecond,
-			PutBacks, putbacksPerSecond,
-			Confirmed, confirmsPerSecond,
+			internal.KafkaCommits, commitsPerSecond,
+			internal.KafkaMessages, messagesPerSecond,
+			internal.KafkaPutBacks, putbacksPerSecond,
+			internal.KafkaConfirmed, confirmsPerSecond,
 		)
 
 		zap.S().Infof("Cache report"+
@@ -187,26 +183,26 @@ func PerformanceReport() {
 			messageCache.EntryCount(), messageCache.HitRate(), messageCache.LookupCount(),
 		)
 
-		if Commits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
-			Commits = 0
+		if internal.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
+			internal.KafkaCommits = 0
 			lastCommits = 0
 			zap.S().Warnf("Resetting commit statistics")
 		}
 
-		if Messages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
-			Messages = 0
+		if internal.KafkaMessages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
+			internal.KafkaMessages = 0
 			lastMessages = 0
 			zap.S().Warnf("Resetting message statistics")
 		}
 
-		if PutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
-			PutBacks = 0
+		if internal.KafkaPutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
+			internal.KafkaPutBacks = 0
 			lastPutbacks = 0
 			zap.S().Warnf("Resetting putback statistics")
 		}
 
-		if Confirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
-			Confirmed = 0
+		if internal.KafkaConfirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
+			internal.KafkaConfirmed = 0
 			lastConfirmed = 0
 			zap.S().Warnf("Resetting confirmed statistics")
 		}
