@@ -2055,6 +2055,9 @@ kafka:
     requests:
       cpu: 500m
       memory: 250Mi
+  logRetentionHours: 168
+  logSegmentBytes: _10485760 # 10MiB
+  logRetentionBytes: _26214400 # 25MiB
 
 ##### CONFIG FOR REDIS #####
 redis:
