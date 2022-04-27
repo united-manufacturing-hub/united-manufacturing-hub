@@ -79,9 +79,9 @@ func startProcessValueQueueAggregator() {
 	}
 	for _, message := range messages {
 		highThroughputPutBackChannel <- internal.PutBackChanMsg{
-			Msg:         message,
-			Reason:      "Shutting down",
-			ErrorString: nil,
+
+			Msg:    message,
+			Reason: "Shutting down",
 		}
 	}
 }
@@ -101,8 +101,11 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 
 		_, err = stmt.Exec()
 		if err != nil {
-			txn.Rollback()
 			zap.S().Errorf("Error creating temporary table: %s", err.Error())
+			errR := txn.Rollback()
+			if errR != nil {
+				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+			}
 			return messages, err, true, "Error creating temporary table"
 		}
 	}
@@ -184,7 +187,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 					_, err = stmtCopy.Exec(timestamp, AssetTableID, value, k)
 					if err != nil {
 						zap.S().Errorf("Error inserting into temporary table: %s", err.Error())
-						txn.Rollback()
+						errR := txn.Rollback()
+						if errR != nil {
+							zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+						}
 						return messages, err, true, "Error inserting into temporary table"
 					}
 					toCommit += 1
@@ -195,7 +201,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		err = stmtCopy.Close()
 		zap.S().Debugf("Post copy closed")
 		if err != nil {
-			txn.Rollback()
+			errR := txn.Rollback()
+			if errR != nil {
+				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+			}
 			return messages, err, true, "Failed to close copy statement"
 		}
 	}
@@ -206,7 +215,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		`)
 	zap.S().Debugf("post insert prepare")
 	if err != nil {
-		txn.Rollback()
+		errR := txn.Rollback()
+		if errR != nil {
+			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+		}
 		zap.S().Errorf("Error preparing copy to process value table statement: %s", err.Error())
 		return messages, err, true, "Error preparing copy to process value table statement"
 	}
@@ -215,7 +227,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 	_, err = stmtCopyToPVT.Exec()
 	zap.S().Debugf("post exec")
 	if err != nil {
-		txn.Rollback()
+		errR := txn.Rollback()
+		if errR != nil {
+			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+		}
 		zap.S().Errorf("Error copying to process value table: %s", err.Error())
 		return messages, err, true, "Error copying to process value table"
 	}
@@ -223,7 +238,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 	zap.S().Debugf("pre close")
 	err = stmtCopyToPVT.Close()
 	if err != nil {
-		txn.Rollback()
+		errR := txn.Rollback()
+		if errR != nil {
+			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
+		}
 		zap.S().Errorf("Error closing stmtCopytoPVT: %s", err.Error())
 		return messages, err, true, "Error closing stmtCopytoPVT"
 	}

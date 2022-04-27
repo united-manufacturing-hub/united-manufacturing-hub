@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -149,9 +148,11 @@ func main() {
 		highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highIntegrityCommitChannel = make(chan *kafka.Message)
 		highIntegrityEventChannel := HIKafkaProducer.Events()
-		go internal.KafkaStartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer,highIntegrityCommitChannel)
-		go internal.KafkaProcessQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel)
-		go internal.KafkaStartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
+
+		go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel)
+		go internal.ProcessKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel, ShutdownApplicationGraceful)
+		go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
+
 		go startHighIntegrityQueueProcessor()
 		go internal.StartEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
 		zap.S().Debugf("Started HI queue processor")
@@ -164,8 +165,10 @@ func main() {
 		highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
 		highThroughputEventChannel := HIKafkaProducer.Events()
 		// HT has no commit channel, it uses auto commit
-		go internal.KafkaStartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer,nil)
-		go internal.KafkaProcessQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel)
+
+		go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil)
+		go internal.ProcessKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel, nil)
+
 		go startHighThroughputQueueProcessor()
 		go internal.StartEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
 
@@ -196,29 +199,9 @@ func main() {
 
 	// The following code keeps the memory usage low
 	debug.SetGCPercent(10)
-	go func() {
-		allowedSeventyFivePerc := uint64(float64(allowedMemorySize) * 0.9)
-		allowedNintyPerc := uint64(float64(allowedMemorySize) * 0.75)
-		for {
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-			if m.Alloc > allowedNintyPerc {
-				zap.S().Errorf("Memory usage is too high: %d bytes, slowing ingress !", m.TotalAlloc)
-				internal.NearMemoryLimit = true
-				debug.FreeOSMemory()
-				time.Sleep(internal.FiveSeconds)
-			}
-			if m.Alloc > allowedSeventyFivePerc {
-				zap.S().Errorf("Memory usage is high: %d bytes !", m.TotalAlloc)
-				internal.NearMemoryLimit = false
-				runtime.GC()
-				time.Sleep(internal.FiveSeconds)
-			} else {
-				internal.NearMemoryLimit = false
-				time.Sleep(internal.OneSecond)
-			}
-		}
-	}()
+
+	go internal.MemoryLimiter(allowedMemorySize)
+
 
 	go PerformanceReport()
 	select {
@@ -240,13 +223,17 @@ func ShutdownApplicationGraceful() {
 
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
-	internal.KafkaShuttingDown = true
+
+	internal.ShuttingDownKafka = true
+
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
 	if HighIntegrityEnabled {
 		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
-		if !internal.DrainChannel("[HT]", highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+
+		if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+
 			time.Sleep(internal.FiveSeconds)
 		}
 
@@ -269,13 +256,15 @@ func ShutdownApplicationGraceful() {
 	// This is behind HI to allow a higher chance of a clean shutdown
 	if HighThroughputEnabled {
 		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
-		if !internal.DrainChannel("[HIGH_THROUGHPUT]", highThroughputProcessorChannel, highThroughputPutBackChannel) {
+
+		if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
-		if !internal.DrainChannel("[HIGH_THROUGHPUT]", processValueChannel, highThroughputPutBackChannel) {
+		if !internal.DrainChannelSimple(processValueChannel, highThroughputPutBackChannel) {
 			time.Sleep(internal.FiveSeconds)
 		}
-		if !internal.DrainChannel("[HIGH_THROUGHPUT]", processValueStringChannel, highThroughputPutBackChannel) {
+		if !internal.DrainChannelSimple(processValueStringChannel, highThroughputPutBackChannel) {
+
 			time.Sleep(internal.FiveSeconds)
 		}
 
@@ -294,7 +283,9 @@ func ShutdownApplicationGraceful() {
 			}
 		}
 	}
-	internal.KafkaShutdownPutback = true
+
+	internal.ShutdownPutback = true
+
 
 	time.Sleep(internal.OneSecond)
 
@@ -332,19 +323,19 @@ func PerformanceReport() {
 		lastConfirmed = internal.KafkaConfirmed
 
 		zap.S().Infof("Performance report"+
-			"\nKafkaCommits: %f, KafkaCommits/s: %f"+
-			"\nKafkaMessages: %f, KafkaMessages/s: %f"+
-			"\nKafkaPutBacks: %f, KafkaPutBacks/s: %f"+
-			"\nKafkaConfirmed: %f, KafkaConfirmed/s: %f"+
-			"\n[HI] Processor queue length: %d"+
-			"\n[HI] PutBack queue length: %d"+
-			"\n[HI] Commit queue length: %d"+
-			"\nMessagecache hitrate %f"+
-			"\nDbcache hitrate %f"+
-			"\n[HT] ProcessValue queue lenght: %d"+
-			"\n[HT] ProcessValueString queue lenght: %d"+
-			"\n[HT] Processor queue length: %d"+
-			"\n[HT] PutBack queue length: %d",
+			"| Commits: %f, Commits/s: %f"+
+			"| Messages: %f, Messages/s: %f"+
+			"| PutBacks: %f, PutBacks/s: %f"+
+			"| Confirmed: %f, Confirmed/s: %f"+
+			"| [HI] Processor queue length: %d"+
+			"| [HI] PutBack queue length: %d"+
+			"| [HI] Commit queue length: %d"+
+			"| Messagecache hitrate %f"+
+			"| Dbcache hitrate %f"+
+			"| [HT] ProcessValue queue lenght: %d"+
+			"| [HT] ProcessValueString queue lenght: %d"+
+			"| [HT] Processor queue length: %d"+
+			"| [HT] PutBack queue length: %d",
 			internal.KafkaCommits, commitsPerSecond,
 			internal.KafkaMessages, messagesPerSecond,
 			internal.KafkaPutBacks, putbacksPerSecond,

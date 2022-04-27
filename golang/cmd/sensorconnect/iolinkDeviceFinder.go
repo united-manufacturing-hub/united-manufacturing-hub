@@ -88,8 +88,8 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	}
 	for portNumber := range portModeMap {
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, ddI.SerialNumber, portNumber)
-		kafkaTopic := MqttTopicToKafka(mqttRawTopic)
-		err := CreateTopicIfNotExists(kafkaTopic)
+		kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
+		err := internal.CreateTopicIfNotExists(kafkaTopic)
 		if err != nil {
 			zap.S().Errorf("Failed to create topic %s", err)
 			return
