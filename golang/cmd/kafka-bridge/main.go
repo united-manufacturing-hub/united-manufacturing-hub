@@ -170,10 +170,10 @@ func PerformanceReport() {
 		lastConfirmed = Confirmed
 
 		zap.S().Infof("Performance report"+
-			"\nCommits: %f, Commits/s: %f"+
-			"\nMessages: %f, Messages/s: %f"+
-			"\nPutBacks: %f, PutBacks/s: %f"+
-			"\nConfirms: %f, Confirms/s: %f",
+			"| Commits: %f, Commits/s: %f"+
+			"| Messages: %f, Messages/s: %f"+
+			"| PutBacks: %f, PutBacks/s: %f"+
+			"| Confirms: %f, Confirms/s: %f",
 			Commits, commitsPerSecond,
 			Messages, messagesPerSecond,
 			PutBacks, putbacksPerSecond,

@@ -340,19 +340,19 @@ func PerformanceReport() {
 		lastConfirmed = Confirmed
 
 		zap.S().Infof("Performance report"+
-			"\nCommits: %f, Commits/s: %f"+
-			"\nMessages: %f, Messages/s: %f"+
-			"\nPutBacks: %f, PutBacks/s: %f"+
-			"\nConfirmed: %f, Confirmed/s: %f"+
-			"\n[HI] Processor queue length: %d"+
-			"\n[HI] PutBack queue length: %d"+
-			"\n[HI] Commit queue length: %d"+
-			"\nMessagecache hitrate %f"+
-			"\nDbcache hitrate %f"+
-			"\n[HT] ProcessValue queue lenght: %d"+
-			"\n[HT] ProcessValueString queue lenght: %d"+
-			"\n[HT] Processor queue length: %d"+
-			"\n[HT] PutBack queue length: %d",
+			"| Commits: %f, Commits/s: %f"+
+			"| Messages: %f, Messages/s: %f"+
+			"| PutBacks: %f, PutBacks/s: %f"+
+			"| Confirmed: %f, Confirmed/s: %f"+
+			"| [HI] Processor queue length: %d"+
+			"| [HI] PutBack queue length: %d"+
+			"| [HI] Commit queue length: %d"+
+			"| Messagecache hitrate %f"+
+			"| Dbcache hitrate %f"+
+			"| [HT] ProcessValue queue lenght: %d"+
+			"| [HT] ProcessValueString queue lenght: %d"+
+			"| [HT] Processor queue length: %d"+
+			"| [HT] PutBack queue length: %d",
 			Commits, commitsPerSecond,
 			Messages, messagesPerSecond,
 			PutBacks, putbacksPerSecond,
