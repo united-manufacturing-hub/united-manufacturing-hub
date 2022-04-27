@@ -1,5 +1,5 @@
-//go:build kafkaALO
-// +build kafkaALO
+//go:build kafka
+// +build kafka
 
 package internal
 

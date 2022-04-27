@@ -202,14 +202,8 @@ func main() {
 
 	go internal.MemoryLimiter(allowedMemorySize)
 
-
 	go PerformanceReport()
-	select {
-	case <-internal.ShutdownMainChan:
-		zap.S().Info("Shutdown signal received from kafka")
-		ShutdownApplicationGraceful()
-		return
-	} // block forever
+	select {} // block forever
 }
 
 var ShuttingDown bool
@@ -285,7 +279,6 @@ func ShutdownApplicationGraceful() {
 	}
 
 	internal.ShutdownPutback = true
-
 
 	time.Sleep(internal.OneSecond)
 
