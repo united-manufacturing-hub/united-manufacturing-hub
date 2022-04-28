@@ -228,7 +228,7 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 				msgx := kafka.Message{
 					TopicPartition: kafka.TopicPartition{
 						Topic:     &topic,
-						Partition: msg.TopicPartition.Partition,
+						Partition: kafka.PartitionAny,
 					},
 					Value:   msg.Value,
 					Headers: msg.Headers,
