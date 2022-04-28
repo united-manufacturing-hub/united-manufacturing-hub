@@ -237,7 +237,7 @@ func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *k
 				msgX := kafka.Message{
 					TopicPartition: kafka.TopicPartition{
 						Topic:     msg.TopicPartition.Topic,
-						Partition: msg.TopicPartition.Partition,
+						Partition: kafka.PartitionAny,
 					},
 					Value:   msg.Value,
 					Key:     msg.Key,
@@ -252,7 +252,7 @@ func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *k
 						Reason:      "Produce failed",
 						ErrorString: &errS,
 					}
-					zap.S().Warnf("[%s] Failed to produce message: %v | %v", identifier, err, msgX)
+					zap.S().Warnf("[%s] Failed to produce message: %v | %#v", identifier, err, msgX)
 					time.Sleep(1 * time.Second)
 
 				} else {
