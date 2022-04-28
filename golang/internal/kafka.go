@@ -140,6 +140,9 @@ func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
 	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
 		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
 	}
+	if !IsKafkaTopicValid(MqttTopicName) {
+		zap.S().Errorf("Topic is not valid: %s, does not match %s", MqttTopicName, KafkaUMHTopicRegex)
+	}
 	return MqttTopicName
 }
 func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
