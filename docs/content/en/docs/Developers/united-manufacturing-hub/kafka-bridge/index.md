@@ -213,13 +213,14 @@ Inside kubernetes values.yaml you can use a normal YAML map to do the configurat
     enabled: true
     remotebootstrapServer: ""
     topicmap:
-      - name: HighIntegrity
-        topic: '^ia\..+\..+\..+\.(addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct).+$'
-        bidirectional: true
-      - name: HighThroughput
-        topic: '^ia\..+\..+\..+\.(processValue).*$'
-        bidirectional: false
+      - bidirectional: false
+        name: HighIntegrity
         send_direction: to_remote
+        topic: ^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
+      - bidirectional: false
+        name: HighThroughput
+        send_direction: to_remote
+        topic: ^ia\..+\..+\..+\.(processValue).*$
 ```
 
 # Guarantees

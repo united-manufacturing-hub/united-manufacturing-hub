@@ -188,14 +188,14 @@ _000_commonConfig:
     topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
     topicmap:
 # Example topic map
-#      - name: HighIntegrity
-#        topic: '^ia\..+\..+\..+\.(addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct).+$'
-#        bidirectional: true
-#      - name: HighThroughput
-#        topic: '^ia\..+\..+\..+\.(processValue).*$'
-#        bidirectional: false
-#        send_direction: to_remote
-
+#  - bidirectional: false
+#    name: HighIntegrity
+#    send_direction: to_remote
+#    topic: ^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
+#  - bidirectional: false
+#    name: HighThroughput
+#    send_direction: to_remote
+#    topic: ^ia\..+\..+\..+\.(processValue).*$
 
   kafkaStateDetector:
     enabled: false
