@@ -136,6 +136,7 @@ func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
 
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
+	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
 	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
 		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
 	}
@@ -146,6 +147,6 @@ func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
 		zap.S().Errorf("Illegal MQTT->Kafka Topic name: %s", KafkaTopicName)
 	}
 	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
-	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
+	KafkaTopicName = strings.ReplaceAll(KafkaTopicName, " ", "")
 	return strings.ReplaceAll(KafkaTopicName, ".", "/")
 }
