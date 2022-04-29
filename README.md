@@ -10,10 +10,10 @@
 
 The Open-Source toolkit to build your own reliable and secure Industrial IoT platform. It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
 
-It sets up and pre-configures multiple software packages to enable the backbone of the Industrial IoT containing:
-1. a Unified Namespace through an MQTT broker and Apache Kafka
-2. Performant and scalable data storage using relational, timeseries and blob databases
-3. Various industry-proven connectors to sensors, PLCs, cameras and other systems
+It sets up and pre-configures multiple software packages using [Helm for Kubernetes](https://helm.sh/) to enable the backbone of the Industrial IoT containing:
+1. a **Unified Namespace** through an MQTT broker and Apache Kafka
+2. **Performant and scalable data storage** using relational, timeseries and blob databases
+3. Various **industry-proven connectors** to sensors, PLCs, cameras and other systems
 4. Data models, documentation, tutorials and ready-to-use solutions
 
 ### Key benefits
