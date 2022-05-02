@@ -22,6 +22,8 @@ class LibStaticCheck(LibInterface):
         # If so, only check changed projects
         # If not check all projects
 
+        config = json.load(open(f"{Git.get_repository_root()}/.githooks/config.json"))
+
         go_projects = []
 
         if Git.has_upstream() and not force:
@@ -35,7 +37,10 @@ class LibStaticCheck(LibInterface):
                         xpath = os.path.dirname(os.path.abspath(path))
                         matches = re.search(r"golang\\cmd\\([\w|-]+)", xpath)
                         if matches is not None:
-                            go_projects.append(matches.group(1))
+                            project_name = matches.group(1)
+                        if project_name in config["gostaticcheck"]["excluded-projects"]:
+                            continue
+                        go_projects.append(project_name)
         else:
             go_files = list(Path(Git.get_repository_root()).rglob('*.go'))
             for path in go_files:
@@ -45,7 +50,10 @@ class LibStaticCheck(LibInterface):
                     xpath = os.path.dirname(os.path.abspath(path))
                     matches = re.search(r"golang\\cmd\\([\w|-]+)", xpath)
                     if matches is not None:
-                        go_projects.append(matches.group(1))
+                        project_name = matches.group(1)
+                        if project_name in config["gostaticcheck"]["excluded-projects"]:
+                            continue
+                        go_projects.append(project_name)
 
         go_projects = list(dict.fromkeys(go_projects))
         self.projects.extend(go_projects)
@@ -97,6 +105,9 @@ class LibStaticCheck(LibInterface):
                 prev_file = ""
                 for v in outcomes["message"]:
                     if v["severity"] == "error":
+                        if v["location"]["file"].endswith("_test.go"):
+                            Log.info("Skipping test {0}".format(v["location"]["file"]))
+                            continue
                         if prev_file != v["location"]["file"]:
                             prev_file = v["location"]["file"]
                             Log.info(f"\t{os.path.basename(prev_file)}")

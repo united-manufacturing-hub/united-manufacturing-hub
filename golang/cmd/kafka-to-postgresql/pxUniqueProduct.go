@@ -20,7 +20,7 @@ type uniqueProduct struct {
 }
 
 // ProcessMessages processes a UniqueProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (err error, putback bool) {
+func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -30,7 +30,7 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (err error, p
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return err, true
+		return true, err
 	}
 
 	// sC is the payload, parsed as uniqueProduct
@@ -39,21 +39,21 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (err error, p
 	if err != nil {
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return err, false
+		return false, err
 	}
 	if !internal.IsValidStruct(sC, []string{"EndTimestampMs"}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return nil, false
+		return false, nil
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	var ProductTableId uint32
 	ProductTableId, success = GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	// Changes should only be necessary between this marker
@@ -69,7 +69,7 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (err error, p
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimestampMs, NewNullInt64(*sC.EndTimestampMs), ProductTableId, sC.IsScrap, sC.UniqueProductAlternativeID)
 	if err != nil {
-		return err, true
+		return true, err
 	}
 
 	// And this marker
@@ -78,15 +78,15 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (err error, p
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
-			return err, true
+			return true, err
 		}
 	} else {
 
 		err = txn.Commit()
 		if err != nil {
-			return err, true
+			return true, err
 		}
 	}
 
-	return err, false
+	return false, err
 }

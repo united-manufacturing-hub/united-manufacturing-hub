@@ -27,7 +27,6 @@ var fileInfoSlice []os.FileInfo
 var slowDownMap sync.Map
 
 var kafkaProducerClient *kafka.Producer
-var kafkaAdminClient *kafka.AdminClient
 var transmitterId string
 
 var buildtime string
@@ -91,7 +90,7 @@ func main() {
 		zap.S().Infof("Starting with Kafka")
 		// Read environment variables for Kafka
 		KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
-		kafkaProducerClient, kafkaAdminClient = setupKafka(KafkaBoostrapServer)
+		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
 	var err error
@@ -228,8 +227,7 @@ func continuousSensorDataProcessingV2() {
 	zap.S().Debugf("Starting sensor data processing daemon v2")
 
 	// The boolean value is not used
-	var activeDevices map[string]bool
-	activeDevices = make(map[string]bool)
+	activeDevices := make(map[string]bool)
 
 	for {
 		select {
@@ -257,8 +255,7 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 	var errorCount uint64
 	// Ramp up speed
 	sleepDuration := sensorStartSpeed
-	var errChan chan error
-	errChan = make(chan error, 512)
+	errChan := make(chan error, 512)
 
 	for {
 		errorCountChange := uint64(0)
@@ -380,16 +377,17 @@ func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, por
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
 	err := DiscoverDevices(ipRange)
+	if err != nil {
+		zap.S().Errorf("Error while searching for devices: %s", err.Error())
+	}
 	zap.S().Debugf("Initial discovery completed")
 	for {
-		select {
-		case <-ticker.C:
-			zap.S().Debugf("Starting device scan..")
-			err = DiscoverDevices(ipRange)
-			if err != nil {
-				zap.S().Errorf("DiscoverDevices produced the error: %v", err)
-				continue
-			}
+		<-ticker.C
+		zap.S().Debugf("Starting device scan..")
+		err = DiscoverDevices(ipRange)
+		if err != nil {
+			zap.S().Errorf("DiscoverDevices produced the error: %v", err)
+			continue
 		}
 	}
 
@@ -400,23 +398,22 @@ func ioddDataDaemon(relativeDirectoryPath string) {
 	zap.S().Debugf("Starting iodd data daemon")
 
 	for {
-		select {
-		case ioddFilemapKey := <-updateIoddIoDeviceMapChan:
-			cacheKey := fmt.Sprintf("ioddDataDaemon%d:%d", ioddFilemapKey.DeviceId, ioddFilemapKey.VendorId)
-			// Prevents download attempt spam
-			_, found := internal.GetMemcached(cacheKey)
-			if found {
-				continue
-			}
-			internal.SetMemcached(cacheKey, nil)
-			var err error
-			zap.S().Debugf("Addining new device to iodd files and map (%v)", ioddFilemapKey)
-			_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
-			zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
-			if err != nil {
-				zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
-				continue
-			}
+		ioddFilemapKey := <-updateIoddIoDeviceMapChan
+		cacheKey := fmt.Sprintf("ioddDataDaemon%d:%d", ioddFilemapKey.DeviceId, ioddFilemapKey.VendorId)
+		// Prevents download attempt spam
+		_, found := internal.GetMemcached(cacheKey)
+		if found {
+			continue
 		}
+		internal.SetMemcached(cacheKey, nil)
+		var err error
+		zap.S().Debugf("Addining new device to iodd files and map (%v)", ioddFilemapKey)
+		_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
+		zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
+		if err != nil {
+			zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)
+			continue
+		}
+
 	}
 }

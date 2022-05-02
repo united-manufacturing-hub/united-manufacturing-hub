@@ -76,8 +76,6 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
 					zap.S().Errorf("Delivery failed: %v (%s)", ev.TopicPartition, ev.TopicPartition.Error)
-				} else {
-					//zap.S().Debugf("Delivered message to %v", ev.TopicPartition)
 				}
 			}
 		}

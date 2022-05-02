@@ -14,5 +14,11 @@
       "trailing-spaces",
       "indentation"
     ]
+  },
+  "gostaticcheck": {
+    "excluded-projects": [
+      "mqtt-to-postgresql",
+      "mqtt-bridge"
+    ]
   }
 }
