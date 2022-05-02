@@ -17,7 +17,7 @@ require (
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.4
-	github.com/minio/minio-go/v7 v7.0.21
+	github.com/minio/minio-go/v7 v7.0.24
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
