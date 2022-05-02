@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"log"
 	"math"
 	"sort"
 	"sync"
@@ -17,8 +16,8 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
-var logData bool = false
-var lock sync.Mutex
+var logData = false
+var _ sync.Mutex
 
 // ChannelResult returns the returnValue and a error code from a goroutine
 type ChannelResult struct {
@@ -27,13 +26,13 @@ type ChannelResult struct {
 }
 
 // ConvertStateToString converts a state in integer format to a human readable string
-func ConvertStateToString(c *gin.Context, state int, languageCode int, configuration datamodel.CustomerConfiguration) (stateString string) {
+func ConvertStateToString(c *gin.Context, state int, configuration datamodel.CustomerConfiguration) (stateString string) {
 	if c != nil {
 		zap.S().Infof("[ConvertStateToString] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
 
 	}
 
-	languageCode = configuration.LanguageCode
+	languageCode := configuration.LanguageCode
 
 	stateString = datamodel.ConvertStateToString(state, languageCode)
 
@@ -88,7 +87,7 @@ func ConvertActivityToString(c *gin.Context, activity int, configuration datamod
 }
 
 // calculateDurations returns an array with the duration between the states.
-func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, returnChannel chan ChannelResult) {
+func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, returnChannel chan ChannelResult) {
 	if c != nil {
 		zap.S().Infof("[calculateDurations] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
 
@@ -140,7 +139,7 @@ func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.State
 
 	// Prepare ChannelResult
 	var stateArray []int
-	var error error
+	var err error
 
 	// Loop through all datapoints
 	for _, datapoint := range temporaryDatapoints {
@@ -149,7 +148,7 @@ func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.State
 
 	// Send ChannelResult back
 	var ChannelResult ChannelResult
-	ChannelResult.err = error
+	ChannelResult.err = err
 	ChannelResult.returnValue = stateArray
 	returnChannel <- ChannelResult
 }
@@ -240,23 +239,14 @@ func getProducedPiecesFromCountSlice(countSlice []datamodel.CountEntry, from tim
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
-		var timestamp time.Time
-		var count float64
-
-		count = dataPoint.Count
-		timestamp = dataPoint.Timestamp
+		count := dataPoint.Count
+		timestamp := dataPoint.Timestamp
 
 		if isTimepointInTimerange(timestamp, TimeRange{from, to}) {
 			totalCount += count
 		}
 	}
 	return
-}
-
-// Usage: defer timeTrack(time.Now(), "getProducedPiecesFromCountSlice")
-func timeTrack(start time.Time, name string) {
-	elapsed := time.Since(start)
-	log.Printf("%s took %s", name, elapsed)
 }
 
 func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, from time.Time, to time.Time) (processedCountSlice []datamodel.CountEntry) {
@@ -381,7 +371,7 @@ func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []data
 
 	oldD := from
 
-	for d := from; d.After(to) == false; d = d.Add(time.Minute) { //timestamp is beginning of the state. d is current progress.
+	for d := from; !d.After(to); d = d.Add(time.Minute) { //timestamp is beginning of the state. d is current progress.
 		if d == oldD { //if first entry
 			continue
 		}
@@ -459,9 +449,7 @@ func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.St
 				return
 			}
 			// Add all states
-			for _, row := range rows {
-				processedStateArray = append(processedStateArray, row)
-			}
+			processedStateArray = append(processedStateArray, rows...)
 
 		} else {
 			state = dataPoint.State
@@ -599,7 +587,7 @@ func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, co
 	return
 }
 
-func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
 		zap.S().Infof("[combineAdjacentStops] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -645,7 +633,7 @@ func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, con
 	return
 }
 
-func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
 		zap.S().Infof("[specifyUnknownStopsWithFollowingStopReason] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -841,7 +829,7 @@ func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, 
 		}
 
 		// data.ColumnNames = []string{"state", "duration"}
-		stopParetos, err := CalculateStopParetos(c, processedStates, from, to, true, true, configuration)
+		stopParetos, err := CalculateStopParetos(c, processedStates, to, true, true, configuration)
 		if err != nil {
 			errReturn = err
 			return
@@ -1002,7 +990,7 @@ func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamod
 	}
 
 	// resolving issue #17 (States change depending on the zoom level during time ranges longer than a day)
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration)
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray)
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1067,7 +1055,7 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1079,7 +1067,7 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1091,13 +1079,13 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(c, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
+	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(c, processedStateArray) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
 	if err != nil {
 		zap.S().Errorf("specifyUnknownStopsWithFollowingStopReason failed", err)
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1115,7 +1103,7 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = automaticallyIdentifyChangeovers(c, processedStateArray, orderArray, from, to, configuration)
+	processedStateArray, err = automaticallyIdentifyChangeovers(c, processedStateArray, orderArray, to, configuration)
 	if err != nil {
 		zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
 		return
@@ -1133,7 +1121,7 @@ func processStates(c *gin.Context,
 	return
 }
 
-func debugCheckForUnorderedStates(states []datamodel.StateEntry) {
+func _(states []datamodel.StateEntry) {
 	// Loop through all datapoints
 	for index, dataPoint := range states {
 		if index+1 == len(states) {
@@ -1189,7 +1177,7 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 		// Add it if it is not running
 		if !datamodel.IsProducing(paretoEntry.State) {
 			paretos = append(paretos, paretoEntry)
-		} else if datamodel.IsProducing(paretoEntry.State) && includeRunning == true { // add it if includeRunning is true
+		} else if datamodel.IsProducing(paretoEntry.State) && includeRunning { // add it if includeRunning is true
 			paretos = append(paretos, paretoEntry)
 		}
 	}
@@ -1203,7 +1191,7 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 }
 
 // CalculateStopParetos calculates the paretos for a given []datamodel.StateEntry
-func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
 		zap.S().Infof("[CalculateStopParetos] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -1213,7 +1201,7 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1247,7 +1235,7 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 			fullRow := []interface{}{pareto.State, pareto.Duration}
 			data = append(data, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(c, pareto.State, 0, configuration), pareto.Duration}
+			fullRow := []interface{}{ConvertStateToString(c, pareto.State, configuration), pareto.Duration}
 			data = append(data, fullRow)
 		}
 
@@ -1257,7 +1245,7 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 }
 
 // CalculateStateHistogram calculates the histogram for a given []datamodel.StateEntry
-func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
 		zap.S().Infof("[CalculateStateHistogram] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -1269,7 +1257,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 	for _, state := range temporaryDatapoints {
 		if state.State >= len(stateOccurances) || state.State < 0 {
 			zap.S().Errorf("Invalid state", state.State)
-			error = fmt.Errorf("Invalid state: %d", state.State)
+			error = fmt.Errorf("invalid state: %d", state.State)
 			return
 		}
 		stateOccurances[int(state.State)]++
@@ -1287,7 +1275,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 			fullRow := []interface{}{index, occurances}
 			data = append(data, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(c, index, 0, configuration), occurances}
+			fullRow := []interface{}{ConvertStateToString(c, index, configuration), occurances}
 			data = append(data, fullRow)
 		}
 
@@ -1297,7 +1285,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 }
 
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
-func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
 		zap.S().Infof("[CalculateAvailability] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -1307,7 +1295,7 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1354,7 +1342,7 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 }
 
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
-func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
 		zap.S().Infof("[CalculatePerformance] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -1365,7 +1353,7 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1412,7 +1400,7 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 }
 
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
-func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data [][]interface{}, error error) {
 
 	if c != nil {
 		zap.S().Infof("[CalculatePerformance] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -1484,7 +1472,7 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1711,7 +1699,7 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 
 	} else {
 		// not possible. throw error
-		error = errors.New("More than 2 overlapping orders with one state")
+		error = errors.New("more than 2 overlapping orders with one state")
 		return
 
 	}
@@ -1720,7 +1708,7 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 }
 
 // automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
-func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
 		zap.S().Infof("[automaticallyIdentifyChangeovers] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
@@ -1762,9 +1750,7 @@ func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.Sta
 					return
 				}
 				// Add all states
-				for _, row := range rows {
-					processedStateArray = append(processedStateArray, row)
-				}
+				processedStateArray = append(processedStateArray, rows...)
 
 			} else { // if it does not overlap
 				state = dataPoint.State
@@ -1822,7 +1808,7 @@ func ConvertNewToOldStateEntryArray(stateArray []datamodel.StateEntry) (resultSt
 func SliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
 	for index, a := range slice {
 		numberFromSlice, ok := a[column].(int)
-		if ok == false {
+		if !ok {
 			zap.S().Errorf("sliceContainsInt: casting numberFromSlice to int error", index)
 		}
 		if numberFromSlice == number {
@@ -1882,7 +1868,7 @@ func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn 
 	fullRow = append(fullRow, productID)
 	fullRow = append(fullRow, isScrap)
 	fullRow = LengthenSliceToFitNames(fullRow, columnNames)
-	if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data
+	if valueName.Valid && value.Valid { //if a value is specified, add to data
 		fullRow[indexColumn] = value.Float64
 	}
 	dataOut = append(data, fullRow)

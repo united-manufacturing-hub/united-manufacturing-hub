@@ -4,7 +4,6 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
 	//"encoding/base64"
@@ -249,14 +248,12 @@ func processRecordType(payload *map[string]interface{}, recordItemArray []Record
 	// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
 	for _, element := range recordItemArray {
 		var datatypeEmpty Datatype
-		var err error
-		err = processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
+		err := processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
 		//zap.S().Debugf("Processed RecordItem = %v with datatype %v iodd information", element)
 		if err != nil {
 			zap.S().Errorf("Procession of RecordItem failed: %v", element)
 		}
 	}
-	return
 }
 
 // isEmpty determines if an field of a struct is empty of filled
@@ -292,7 +289,7 @@ func getUnixTimestampMs() (timestampMs string) {
 // extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer
 func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) (int, error) {
 	if _, ok := sensorDataMap[key]; !ok {
-		return 0, errors.New(fmt.Sprintf("Key %s not in sensorDataMap", key))
+		return 0, fmt.Errorf("key %s not in sensorDataMap", key)
 	}
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
@@ -305,10 +302,10 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 	return returnValue, nil
 }
 
-// extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer 64
-func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) (int64, error) {
+// extractInt64FromSensorDataMap uses the combination of key and tag to retreive an integer 64
+func _(key string, tag string, sensorDataMap map[string]interface{}) (int64, error) {
 	if _, ok := sensorDataMap[key]; !ok {
-		return 0, errors.New(fmt.Sprintf("Key %s not in sensorDataMap", key))
+		return 0, fmt.Errorf("key %s not in sensorDataMap", key)
 	}
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
@@ -323,7 +320,7 @@ func extractInt64FromSensorDataMap(key string, tag string, sensorDataMap map[str
 // extractIntFromSensorDataMap uses the combination of key and tag to retreive a byte slice
 func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) ([]byte, error) {
 	if _, ok := sensorDataMap[key]; !ok {
-		return nil, errors.New(fmt.Sprintf("Key %s not in sensorDataMap", key))
+		return nil, fmt.Errorf("key %s not in sensorDataMap", key)
 	}
 	element := sensorDataMap[key]
 	elementMap := element.(map[string]interface{})
@@ -400,7 +397,7 @@ func checkSingleValuesAndValueRanges(item RecordItem, valueString string, dataty
 				if err != nil {
 					return
 				}
-			return nil, checkIfValueInValueRange()
+			return checkIfValueInValueRange, nil()
 		}
 	}
 
@@ -447,7 +444,7 @@ func createDigitalInputPayload(timestampMs string, dataPin2In []byte, payload *m
 	(*payload)["type"] = "DI"
 	(*payload)["connected"] = "connected"
 	(*payload)["value"] = dataPin2In
-	return
+
 }
 
 // createDigitalInputPayload creates the upper json output body from an IoLink response to send via mqtt or kafka to the server
@@ -457,7 +454,6 @@ func createIoLinkBeginPayload(timestampMs string, payload *map[string]interface{
 	(*payload)["type"] = "Io-Link"
 	(*payload)["connected"] = "connected"
 
-	return
 }
 
 // getNameFromExternalTextCollection retreives the name correesponding to a textId from the iodd TextCollection

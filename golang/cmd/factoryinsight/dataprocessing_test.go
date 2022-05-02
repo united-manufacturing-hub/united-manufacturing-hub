@@ -335,7 +335,7 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	from, err := time.Parse(time.RFC3339, "2021-01-09T07:48:21.616Z")
+	_, err := time.Parse(time.RFC3339, "2021-01-09T07:48:21.616Z")
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -367,7 +367,7 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, from, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -386,7 +386,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	from, err := time.Parse(time.RFC3339, "2021-01-09T07:48:21.616Z")
+	_, err := time.Parse(time.RFC3339, "2021-01-09T07:48:21.616Z")
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -418,7 +418,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, from, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -437,7 +437,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	from, err := time.Parse(time.RFC3339, "2021-01-09T09:26:11.26Z")
+	_, err := time.Parse(time.RFC3339, "2021-01-09T09:26:11.26Z")
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -469,7 +469,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, from, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}

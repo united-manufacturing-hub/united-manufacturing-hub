@@ -41,7 +41,6 @@ func SetupHIKafka(configMap kafka.ConfigMap) {
 		panic(err)
 	}
 
-	return
 }
 
 // CloseHIKafka closes the HI Kafka consumer, producer and admin

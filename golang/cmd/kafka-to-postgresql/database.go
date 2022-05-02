@@ -106,8 +106,8 @@ func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 		return DatabaseDown
 	}
 
-	matchedOutOfRange, err := regexp.MatchString(`pq: value "-*\d+" is out of range for type integer`, errorString)
-	matchedTsOutOfRange, err := regexp.MatchString(`pq: timestamp out of range: .+`, errorString)
+	matchedOutOfRange, _ := regexp.MatchString(`pq: value "-*\d+" is out of range for type integer`, errorString)
+	matchedTsOutOfRange, _ := regexp.MatchString(`pq: timestamp out of range: .+`, errorString)
 
 	isRecoverableByDiscarding := matchedOutOfRange || matchedTsOutOfRange
 	if isRecoverableByDiscarding {

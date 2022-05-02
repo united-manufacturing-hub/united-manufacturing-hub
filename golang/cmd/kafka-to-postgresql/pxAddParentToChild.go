@@ -18,7 +18,7 @@ type addParentToChild struct {
 }
 
 // ProcessMessages processes a AddParentToChild kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (err error, putback bool) {
+func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -28,7 +28,7 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (err error
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return err, true
+		return true, err
 	}
 
 	// sC is the payload, parsed as addParentToChild
@@ -37,28 +37,28 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (err error
 	if err != nil {
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return err, false
+		return false, err
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return nil, false
+		return false, nil
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	// Changes should only be necessary between this marker
 	var ChildUID uint32
 	ChildUID, success = GetUniqueProductID(*sC.ChildAID, AssetTableID)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	var ParentUID uint32
 	ParentUID, success = GetLatestParentUniqueProductID(*sC.ParentAID, AssetTableID)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
@@ -72,7 +72,7 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (err error
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, ParentUID, ChildUID, sC.TimestampMs)
 	if err != nil {
-		return err, true
+		return true, err
 	}
 
 	// And this marker
@@ -81,15 +81,15 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (err error
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
-			return err, true
+			return true, err
 		}
 	} else {
 
 		err = txn.Commit()
 		if err != nil {
-			return err, true
+			return true, err
 		}
 	}
 
-	return err, false
+	return false, err
 }

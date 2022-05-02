@@ -34,7 +34,7 @@ func startProcessValueStringQueueAggregator() {
 				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= 5000 {
 					//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
-					putBackMsg, err, putback, reason := writeProcessValueStringToDatabase(messages)
+					putBackMsg, putback, reason, err := writeProcessValueStringToDatabase(messages)
 					if putback {
 						for _, message := range putBackMsg {
 							var errStr string
@@ -60,7 +60,7 @@ func startProcessValueStringQueueAggregator() {
 
 					continue
 				}
-				putBackMsg, err, putback, reason := writeProcessValueStringToDatabase(messages)
+				putBackMsg, putback, reason, err := writeProcessValueStringToDatabase(messages)
 				if putback {
 					for _, message := range putBackMsg {
 						var errStr string
@@ -89,13 +89,13 @@ func startProcessValueStringQueueAggregator() {
 	}
 }
 
-func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []*kafka.Message, err error, putback bool, reason string) {
+func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []*kafka.Message, putback bool, reason string, err error) {
 	zap.S().Debugf("[HT][PVS] Writing %d messages to database", len(messages))
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return messages, err, true, "Error starting transaction"
+		return messages, true, "Error starting transaction", err
 	}
 
 	zap.S().Debugf("[HT][PVS] Creating temporary table")
@@ -108,7 +108,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 			}
 			zap.S().Errorf("Error creating temporary table: %s", err.Error())
-			return messages, err, true, "Error creating temporary table"
+			return messages, true, "Error creating temporary table", err
 		}
 	}
 
@@ -127,7 +127,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 			}
 			zap.S().Errorf("Error preparing copy statement: %s", err.Error())
-			return messages, err, true, "Error preparing copy statement"
+			return messages, true, "Error preparing copy statement", err
 		}
 
 		zap.S().Debugf("[HT][PVS] Copying %d messages to temporary table", len(messages))
@@ -171,7 +171,6 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 					// These are here for historical reasons
 					case "measurement":
 					case "serial_number":
-						break
 					default:
 						value, valueIsString := v.(string)
 						if !valueIsString {
@@ -190,7 +189,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 							if errR != nil {
 								zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 							}
-							return messages, err, true, "Error inserting into temporary table"
+							return messages, true, "Error inserting into temporary table", err
 						}
 						toCommit += 1
 					}
@@ -207,7 +206,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 			if errR != nil {
 				zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 			}
-			return messages, err, true, "Failed to close copy statement"
+			return messages, true, "Failed to close copy statement", err
 		}
 	}
 
@@ -222,7 +221,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 		}
 		zap.S().Errorf("Error preparing copy to process value table statement: %s", err.Error())
-		return messages, err, true, "Error preparing copy to process value table statement"
+		return messages, true, "Error preparing copy to process value table statement", err
 	}
 
 	zap.S().Debugf("[HT][PVS] Executing insert statement")
@@ -233,7 +232,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 		}
 		zap.S().Errorf("Error copying to process value table: %s", err.Error())
-		return messages, err, true, "Error copying to process value table"
+		return messages, true, "Error copying to process value table", err
 	}
 
 	err = stmtCopyToPVTS.Close()
@@ -243,31 +242,31 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (putBackMsg []
 			zap.S().Errorf("Failed to rollback tx !: %s", err.Error())
 		}
 		zap.S().Errorf("Error closing stmtCopytoPVTS: %s", err.Error())
-		return messages, err, true, "Error closing stmtCopytoPVTS"
+		return messages, true, "Error closing stmtCopytoPVTS", err
 	}
 
 	if isDryRun {
 		err = txn.Rollback()
 		if err != nil {
-			return messages, err, true, "Failed to rollback"
+			return messages, true, "Failed to rollback", err
 		}
 		if len(putBackMsg) > 0 {
-			return putBackMsg, nil, true, "AssetID not found"
+			return putBackMsg, true, "AssetID not found", nil
 		}
 	} else {
 		zap.S().Debugf("[HT][PVS] Committing transaction")
 		err = txn.Commit()
 		zap.S().Debugf("[HT][PVS] Committed transaction")
 		if err != nil {
-			return messages, err, true, "Failed to commit"
+			return messages, true, "Failed to commit", err
 		}
 		//zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
 		if len(putBackMsg) > 0 {
-			return putBackMsg, nil, true, "AssetID not found"
+			return putBackMsg, true, "AssetID not found", nil
 		}
 		internal.KafkaPutBacks += float64(len(putBackMsg))
 		internal.KafkaCommits += toCommit
 	}
 
-	return putBackMsg, nil, false, ""
+	return putBackMsg, false, "", nil
 }

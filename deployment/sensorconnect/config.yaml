@@ -1,3 +1,4 @@
+---
 # See: https://github.com/cloudhut/kowl/tree/master/docs/config for reference config files.
 kafka:
   brokers:

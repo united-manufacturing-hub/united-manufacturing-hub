@@ -44,7 +44,6 @@ func SetupActivityKafka(configMap kafka.ConfigMap) {
 		panic(err)
 	}
 
-	return
 }
 
 // CloseActivityKafka closes the Activity Kafka consumer, producer and admin
@@ -70,9 +69,8 @@ var lastStateChangeTs = uint64(0)
 
 func startActivityProcessor() {
 	for !ShuttingDown {
-		var msg *kafka.Message
 		// Get next message from HI kafka consumer
-		msg = <-ActivityProcessorChannel
+		msg := <-ActivityProcessorChannel
 		if msg == nil {
 			continue
 		}
@@ -113,8 +111,7 @@ func startActivityProcessor() {
 		}
 
 		stateTopic := fmt.Sprintf("ia.%s.%s.%s.state", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
-		var msgS *kafka.Message
-		msgS = &kafka.Message{
+		msgS := &kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &stateTopic, Partition: kafka.PartitionAny},
 			Value:          jsonStateMessage,
 		}

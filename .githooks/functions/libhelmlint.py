@@ -15,9 +15,10 @@ from .ilib import LibInterface
 class LibHelmLint(LibInterface):
     lints: dict
 
-    def __init__(self):
+    def __init__(self, force):
         """
         This class executes helm lint on changed files and reports its findings
+        :param force: 
         """
         """
         Initializes config parameters and gets changed files
@@ -28,7 +29,7 @@ class LibHelmLint(LibInterface):
         # If so, only include changed Charts
         # If not check all Charts
         self.chart_files = []
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith("Chart.yaml"):
@@ -127,6 +128,7 @@ class LibHelmLint(LibInterface):
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()

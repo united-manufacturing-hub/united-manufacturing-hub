@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
@@ -13,8 +12,7 @@ func startHighThroughputQueueProcessor() {
 	}
 	zap.S().Debugf("[HT]Starting queue processor")
 	for !ShuttingDown {
-		var msg *kafka.Message
-		msg = <-highThroughputProcessorChannel
+		msg := <-highThroughputProcessorChannel
 		if msg == nil {
 			continue
 		}
@@ -28,13 +26,13 @@ func startHighThroughputQueueProcessor() {
 		switch parsedMessage.PayloadType {
 		case Prefix.ProcessValueFloat64:
 			processValueChannel <- msg
-			break
+
 		case Prefix.ProcessValue:
 			processValueChannel <- msg
-			break
+
 		case Prefix.ProcessValueString:
 			processValueStringChannel <- msg
-			break
+
 		default:
 			zap.S().Warnf("[HT] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
 			putback = true

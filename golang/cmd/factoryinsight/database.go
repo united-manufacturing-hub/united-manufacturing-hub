@@ -576,7 +576,7 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
-		fullRow := []interface{}{ConvertStateToString(c, dataPoint, 0, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{ConvertStateToString(c, dataPoint, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -618,7 +618,7 @@ func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string
 	}
 
 	if !lastTimestampPq.Valid || !firstTimestampPq.Valid {
-		error = errors.New("Asset has no states yet")
+		error = errors.New("asset has no states yet")
 		return
 	}
 
@@ -822,7 +822,7 @@ func GetProductionSpeed(c *gin.Context, customerID string, location string, asse
 		// TODO: #92 Return timestamps in RFC3339 in /productionSpeed
 
 		// gapfilling to have constant 0 in grafana
-		if previousTimestamp.IsZero() != true {
+		if !previousTimestamp.IsZero() {
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
 			if timeDifference > 60 { // bigger than one minute
@@ -910,7 +910,7 @@ func GetQualityRate(c *gin.Context, customerID string, location string, asset st
 		// TODO: Return timestamps in RFC3339 in /qualityRate
 
 		// gapfilling to have constant 0 in grafana
-		if previousTimestamp.IsZero() != true {
+		if !previousTimestamp.IsZero() {
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
 			if timeDifference > 60 { // bigger than one minute
@@ -1435,7 +1435,7 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
-		error = errors.New("Asset does not exist")
+		error = errors.New("asset does not exist")
 		return
 	} else if err != nil {
 		PQErrorHandling(c, sqlStatement, err, false)
@@ -1570,7 +1570,7 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 		} else { //if there are already rows in Data.datapoint
 			indexRow = len(data.Datapoints) - 1
 			lastUID, ok := data.Datapoints[indexRow][0].(int)
-			if ok == false {
+			if !ok {
 				zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
 				return
 			}
@@ -1933,8 +1933,6 @@ ORDER BY begin_timestamp ASC
 
 	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(countQueryBegin)/1000, float64(countQueryEnd)/1000)
 
-	defer countRows.Close()
-
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatementGetCounts, err, false)
 		return
@@ -1943,6 +1941,7 @@ ORDER BY begin_timestamp ASC
 		error = err
 		return
 	}
+	defer countRows.Close()
 
 	countMap := make([]CountStruct, 0)
 
@@ -1974,8 +1973,6 @@ ORDER BY begin_timestamp ASC
 
 	orderRows, err := db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
 
-	defer orderRows.Close()
-
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlGetRunningOrders, err, false)
 		return
@@ -1984,6 +1981,7 @@ ORDER BY begin_timestamp ASC
 		error = err
 		return
 	}
+	defer orderRows.Close()
 
 	orderMap := make([]OrderStruct, 0)
 
@@ -2014,8 +2012,6 @@ ORDER BY begin_timestamp ASC
 
 	productRows, err := db.Query(sqlGetProductsPerSec, assetID)
 
-	defer productRows.Close()
-
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
 		return
@@ -2024,6 +2020,7 @@ ORDER BY begin_timestamp ASC
 		error = err
 		return
 	}
+	defer productRows.Close()
 	productMap := make(map[int]ProductStruct, 0)
 
 	for productRows.Next() {
