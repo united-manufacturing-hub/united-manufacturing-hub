@@ -13,7 +13,7 @@ var queue *goque.Queue
 func setupQueue() (err error) {
 	queue, err = goque.OpenQueue(queuePath)
 	if err != nil {
-		zap.S().Errorf("Error opening queue", err)
+		zap.S().Errorf("Error opening queue: %v", err)
 		return
 	}
 	return
@@ -22,7 +22,7 @@ func setupQueue() (err error) {
 func closeQueue() (err error) {
 	err = queue.Close()
 	if err != nil {
-		zap.S().Errorf("Error closing queue", err)
+		zap.S().Errorf("Error closing queue: %v", err)
 		return
 	}
 	return

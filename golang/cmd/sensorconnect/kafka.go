@@ -27,7 +27,6 @@ func SendKafkaMessage(kafkaTopicName string, message []byte, key []byte) {
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
 		panic("Failed to create topic, restarting")
-		return
 	}
 
 	err = kafkaProducerClient.Produce(&kafka.Message{
@@ -76,8 +75,6 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
 					zap.S().Errorf("Delivery failed: %v (%s)", ev.TopicPartition, ev.TopicPartition.Error)
-				} else {
-					//zap.S().Debugf("Delivered message to %v", ev.TopicPartition)
 				}
 			}
 		}

@@ -8,7 +8,6 @@ package user
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -73,5 +72,5 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 		}
 		return orgs, nil
 	}
-	return Orgs{}, errors.New(fmt.Sprintf("HTTP Status incorrect: %s", resp.StatusCode))
+	return Orgs{}, fmt.Errorf("HTTP Status incorrect: %s", resp.StatusCode)
 }

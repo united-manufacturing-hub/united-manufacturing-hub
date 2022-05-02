@@ -43,7 +43,7 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 }
 
 // unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
-func unmarshalModeInformation(dataRaw []byte) (map[int]int, error) {
+func _(dataRaw []byte) (map[int]int, error) {
 	dataUnmarshaled := ModeInformation{}
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
 		return nil, err
@@ -170,7 +170,7 @@ func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceIn
 	}
 
 	if portmodesraw.Code != 200 {
-		err = errors.New(fmt.Sprintf("getusedPortsAndMode returned non 200 code: %d", portmodesraw.Code))
+		err = fmt.Errorf("getusedPortsAndMode returned non 200 code: %d", portmodesraw.Code)
 	}
 
 	portmodeusagemap = make(map[int]ConnectedDeviceInfo)
@@ -218,7 +218,7 @@ func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceIn
 				portmodeusagemap[port] = val
 			}
 		} else {
-			err = errors.New(fmt.Sprintf("Invalid data returned from IO-Link Master: %v -> %v", key, value))
+			err = fmt.Errorf("invalid data returned from IO-Link Master: %v -> %v", key, value)
 		}
 	}
 

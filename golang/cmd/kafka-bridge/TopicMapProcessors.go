@@ -93,7 +93,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 
 		ShutdownsRequired += 2
 		for !ShuttingDown {
-
+			time.Sleep(internal.OneSecond)
 		}
 		internal.DrainChannel(localIdentifier, localMsgChan, localPutBackChan, ShutdownChannel)
 		internal.DrainChannel(remoteIdentifier, remoteMsgChan, remotePutBackChan, ShutdownChannel)
@@ -146,7 +146,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 
 		ShutdownsRequired += 1
 		for !ShuttingDown {
-
+			time.Sleep(internal.OneSecond)
 		}
 		internal.DrainChannel(identifier, msgChan, putBackChan, ShutdownChannel)
 	}
@@ -166,11 +166,8 @@ func MessageAlreadyTransmitted(msg *kafka.Message) bool {
 	key := xxhasher.Sum128().Bytes()
 
 	getOrSet, _ := messageCache.GetOrSet(key[:], []byte{1}, 0)
-	if getOrSet == nil {
-		return false
-	}
 
-	return true
+	return getOrSet != nil
 
 }
 
@@ -189,76 +186,74 @@ func (r *Bridges) Marshal() ([]byte, error) {
 func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *kafka.Producer, backChan chan internal.PutBackChanMsg, commitChan chan *kafka.Message) {
 
 	for !ShuttingDown {
-		select {
-		case msg := <-msgChan:
-			{
-				if MessageAlreadyTransmitted(msg) {
-					commitChan <- msg
-					continue
-				}
+		msg := <-msgChan
 
-				var foundPreviousBridges bool
-				for i, header := range msg.Headers {
-					if header.Key == "x-bridges" {
-						bridges, err := UnmarshalBridges(header.Value)
-						if err == nil {
-							bridges = append(bridges, identifier)
-							var val []byte
-							val, err = bridges.Marshal()
-							if err == nil {
-								msg.Headers[i].Value = val
-								foundPreviousBridges = true
-							}
-						}
-						break
-					}
-				}
-				if !foundPreviousBridges {
-					bridges := Bridges{identifier}
+		if MessageAlreadyTransmitted(msg) {
+			commitChan <- msg
+			continue
+		}
+
+		var foundPreviousBridges bool
+		for i, header := range msg.Headers {
+			if header.Key == "x-bridges" {
+				bridges, err := UnmarshalBridges(header.Value)
+				if err == nil {
+					bridges = append(bridges, identifier)
 					var val []byte
-					val, err := bridges.Marshal()
+					val, err = bridges.Marshal()
 					if err == nil {
-						msg.Headers = append(msg.Headers, kafka.Header{
-							Key:   "x-bridges",
-							Value: val,
-						})
+						msg.Headers[i].Value = val
+						foundPreviousBridges = true
 					}
 				}
-
-				msg.Headers = append(msg.Headers, kafka.Header{
-					Key:   "x-last-bridge-id",
-					Value: []byte(identifier),
-				})
-				msg.Headers = append(msg.Headers, kafka.Header{
-					Key:   "x-last-bridge-time-ms",
-					Value: []byte(fmt.Sprintf("%d", time.Now().UnixMilli())),
-				})
-
-				msgX := kafka.Message{
-					TopicPartition: kafka.TopicPartition{
-						Topic:     msg.TopicPartition.Topic,
-						Partition: kafka.PartitionAny,
-					},
-					Value:   msg.Value,
-					Key:     msg.Key,
-					Headers: msg.Headers,
-				}
-
-				err := producer.Produce(&msgX, nil)
-				if err != nil {
-					errS := err.Error()
-					backChan <- internal.PutBackChanMsg{
-						Msg:         &msgX,
-						Reason:      "Produce failed",
-						ErrorString: &errS,
-					}
-					zap.S().Warnf("[%s] Failed to produce message: %v | %#v", identifier, err, msgX)
-					time.Sleep(1 * time.Second)
-
-				} else {
-					commitChan <- msg
-				}
+				break
 			}
 		}
+		if !foundPreviousBridges {
+			bridges := Bridges{identifier}
+			var val []byte
+			val, err := bridges.Marshal()
+			if err == nil {
+				msg.Headers = append(msg.Headers, kafka.Header{
+					Key:   "x-bridges",
+					Value: val,
+				})
+			}
+		}
+
+		msg.Headers = append(msg.Headers, kafka.Header{
+			Key:   "x-last-bridge-id",
+			Value: []byte(identifier),
+		})
+		msg.Headers = append(msg.Headers, kafka.Header{
+			Key:   "x-last-bridge-time-ms",
+			Value: []byte(fmt.Sprintf("%d", time.Now().UnixMilli())),
+		})
+
+		msgX := kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     msg.TopicPartition.Topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value:   msg.Value,
+			Key:     msg.Key,
+			Headers: msg.Headers,
+		}
+
+		err := producer.Produce(&msgX, nil)
+		if err != nil {
+			errS := err.Error()
+			backChan <- internal.PutBackChanMsg{
+				Msg:         &msgX,
+				Reason:      "Produce failed",
+				ErrorString: &errS,
+			}
+			zap.S().Warnf("[%s] Failed to produce message: %v | %#v", identifier, err, msgX)
+			time.Sleep(1 * time.Second)
+
+		} else {
+			commitChan <- msg
+		}
+
 	}
 }

@@ -17,7 +17,7 @@ type addShift struct {
 }
 
 // ProcessMessages processes a AddShift kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (err error, putback bool) {
+func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -27,7 +27,7 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (err error, putbac
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return err, true
+		return true, err
 	}
 
 	// sC is the payload, parsed as addShift
@@ -36,15 +36,15 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (err error, putbac
 	if err != nil {
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return err, false
+		return false, err
 	}
 	if !internal.IsValidStruct(sC, []string{"TimestampMsEnd"}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return nil, false
+		return false, nil
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	// Changes should only be necessary between this marker
@@ -60,7 +60,7 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (err error, putbac
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.TimestampMsEnd, AssetTableID, 0)
 	if err != nil {
-		return err, true
+		return true, err
 	}
 
 	// And this marker
@@ -69,15 +69,15 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (err error, putbac
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
-			return err, true
+			return true, err
 		}
 	} else {
 
 		err = txn.Commit()
 		if err != nil {
-			return err, true
+			return true, err
 		}
 	}
 
-	return err, false
+	return false, err
 }

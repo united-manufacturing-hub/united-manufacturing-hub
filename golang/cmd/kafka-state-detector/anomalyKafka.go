@@ -44,7 +44,6 @@ func SetupAnomalyKafka(configMap kafka.ConfigMap) {
 		panic(err)
 	}
 
-	return
 }
 
 // CloseAnomalyKafka closes the Anomaly Kafka consumer, producer and admin
@@ -71,9 +70,9 @@ var kmsq kafkaMessageStreamQueue
 func startAnomalyActivityProcessor() {
 	kmsq = NewKafkaMessageStreamQueue(make([]datamodel.Activity, 0))
 	for !ShuttingDown {
-		var msg *kafka.Message
+
 		// Get next message from HI kafka consumer
-		msg = <-AnomalyProcessorChannel
+		msg := <-AnomalyProcessorChannel
 		if msg == nil {
 			continue
 		}
@@ -123,8 +122,8 @@ func startAnomalyActivityProcessor() {
 				}
 
 				stateTopic := fmt.Sprintf("ia.%s.%s.%s.state", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
-				var msgS *kafka.Message
-				msgS = &kafka.Message{
+
+				msgS := &kafka.Message{
 					TopicPartition: kafka.TopicPartition{Topic: &stateTopic, Partition: kafka.PartitionAny},
 					Value:          jsonStateMessage,
 				}

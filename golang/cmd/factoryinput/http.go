@@ -12,7 +12,6 @@ import (
 	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	_ "go.opentelemetry.io/otel/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"io/ioutil"
 	"net/http"
@@ -127,7 +126,7 @@ func handleInvalidInputError(c *gin.Context, err error) {
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", fmt.Sprintf("%s", customer))))
+		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", customer)))
 		defer span.End()
 	}
 
@@ -135,7 +134,7 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
-		return fmt.Errorf("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		return fmt.Errorf("user %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil
 }
@@ -175,7 +174,7 @@ func postMQTTHandler(c *gin.Context) {
 	zap.S().Warnf("jsonData: %s", internal.SanitizeString(jsonData))
 
 	if !IsJSON(jsonData) {
-		handleInvalidInputError(c, errors.New("Input is not valid JSON"))
+		handleInvalidInputError(c, errors.New("input is not valid JSON"))
 	}
 
 	var postMQTTRequest postMQTTRequest

@@ -5,6 +5,7 @@ import json
 import os.path
 import re
 from pathlib import Path
+from threading import Thread
 
 from yamllint import linter
 from yamllint.config import YamlLintConfig
@@ -27,9 +28,10 @@ class LibYamlLint(LibInterface):
     lintstr_regex: re.Pattern
     lints: dict
 
-    def __init__(self):
+    def __init__(self, force):
         """
         Initializes config parameters and gets changed files
+        :param force: 
         """
         self.config = YamlLintConfig('extends: default')
         self.lintstr_regex = re.compile(r"\([\w|-]+\)$")
@@ -39,7 +41,7 @@ class LibYamlLint(LibInterface):
         # If so, only include changed yaml files
         # If not check all yaml files
         self.yaml_files = []
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith(".yaml"):
@@ -74,6 +76,28 @@ class LibYamlLint(LibInterface):
         _type = _type[0].replace("(", "").replace(")", "")
         return _type
 
+    def check_single(self, path, pb):
+        self.lints[path] = dict()
+        self.lints[path]["warn"] = dict()
+        self.lints[path]["error"] = dict()
+        with open(path, "r") as yfile:
+            result = list(linter.run(yfile, self.config))
+            for lint in result:
+                lint = str(lint)
+                lint_type = self.get_lint_type_from_str(lint)
+                lint = lint.replace(lint_type, "")[:-3]
+                if lint_type in self.allowed_lints:
+                    continue
+                if lint_type in self.warn_lints:
+                    if lint_type not in self.lints[path]["warn"]:
+                        self.lints[path]["warn"][lint_type] = []
+                    self.lints[path]["warn"][lint_type].append(lint)
+                else:
+                    if lint_type not in self.lints[path]["error"]:
+                        self.lints[path]["error"][lint_type] = []
+                    self.lints[path]["error"][lint_type].append(lint)
+        pb.add_progress()
+
     def check(self):
         """
         Applies yamllint to all yaml files that should be checked
@@ -88,27 +112,15 @@ class LibYamlLint(LibInterface):
 
         pb = Progressbar(ly)
 
+        threads = []
         for path in self.yaml_files:
-            self.lints[path] = dict()
-            self.lints[path]["warn"] = dict()
-            self.lints[path]["error"] = dict()
-            with open(path, "r") as yfile:
-                result = list(linter.run(yfile, self.config))
-                for lint in result:
-                    lint = str(lint)
-                    lint_type = self.get_lint_type_from_str(lint)
-                    lint = lint.replace(lint_type, "")[:-3]
-                    if lint_type in self.allowed_lints:
-                        continue
-                    if lint_type in self.warn_lints:
-                        if lint_type not in self.lints[path]["warn"]:
-                            self.lints[path]["warn"][lint_type] = []
-                        self.lints[path]["warn"][lint_type].append(lint)
-                    else:
-                        if lint_type not in self.lints[path]["error"]:
-                            self.lints[path]["error"][lint_type] = []
-                        self.lints[path]["error"][lint_type].append(lint)
-            pb.add_progress()
+            t = Thread(target=self.check_single, args=(path, pb))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
         pb.finish()
 
     def report(self) -> int:
@@ -121,18 +133,19 @@ class LibYamlLint(LibInterface):
         errors = 0
         warnings = 0
         for path, lint in self.lints.items():
-            Log.info(f"{path}")
-            for lint_type, lint_messages in lint["error"].items():
-                Log.fail(f"\t{lint_type}")
-                for lint_message in lint_messages:
-                    Log.fail(f"\t\t{lint_message}")
-                    errors += 1
+            if len(lint["error"]) > 0 or len(lint["warn"]) > 0:
+                Log.info(f"{path}")
+                for lint_type, lint_messages in lint["error"].items():
+                    Log.fail(f"\t{lint_type}")
+                    for lint_message in lint_messages:
+                        Log.fail(f"\t\t{lint_message}")
+                        errors += 1
 
-            for lint_type, lint_messages in lint["warn"].items():
-                Log.warn(f"\t{lint_type}")
-                for lint_message in lint_messages:
-                    Log.warn(f"\t\t{lint_message}")
-                    warnings += 1
+                for lint_type, lint_messages in lint["warn"].items():
+                    Log.warn(f"\t{lint_type}")
+                    for lint_message in lint_messages:
+                        Log.warn(f"\t\t{lint_message}")
+                        warnings += 1
 
         print()
         if errors > 0:
@@ -157,6 +170,7 @@ class LibYamlLint(LibInterface):
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()
