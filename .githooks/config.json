@@ -4,7 +4,8 @@
       "comments-indentation",
       "line-length",
       "syntax",
-      "empty-lines"
+      "empty-lines",
+      "new-line-at-end-of-file"
     ],
     "warn": [
       "line-length",

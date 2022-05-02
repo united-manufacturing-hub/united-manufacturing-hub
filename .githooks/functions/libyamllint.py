@@ -27,9 +27,10 @@ class LibYamlLint(LibInterface):
     lintstr_regex: re.Pattern
     lints: dict
 
-    def __init__(self):
+    def __init__(self, force):
         """
         Initializes config parameters and gets changed files
+        :param force: 
         """
         self.config = YamlLintConfig('extends: default')
         self.lintstr_regex = re.compile(r"\([\w|-]+\)$")
@@ -39,7 +40,7 @@ class LibYamlLint(LibInterface):
         # If so, only include changed yaml files
         # If not check all yaml files
         self.yaml_files = []
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 if change.endswith(".yaml"):
@@ -121,18 +122,19 @@ class LibYamlLint(LibInterface):
         errors = 0
         warnings = 0
         for path, lint in self.lints.items():
-            Log.info(f"{path}")
-            for lint_type, lint_messages in lint["error"].items():
-                Log.fail(f"\t{lint_type}")
-                for lint_message in lint_messages:
-                    Log.fail(f"\t\t{lint_message}")
-                    errors += 1
+            if len(lint["error"]) > 0 or len(lint["warn"]) > 0:
+                Log.info(f"{path}")
+                for lint_type, lint_messages in lint["error"].items():
+                    Log.fail(f"\t{lint_type}")
+                    for lint_message in lint_messages:
+                        Log.fail(f"\t\t{lint_message}")
+                        errors += 1
 
-            for lint_type, lint_messages in lint["warn"].items():
-                Log.warn(f"\t{lint_type}")
-                for lint_message in lint_messages:
-                    Log.warn(f"\t\t{lint_message}")
-                    warnings += 1
+                for lint_type, lint_messages in lint["warn"].items():
+                    Log.warn(f"\t{lint_type}")
+                    for lint_message in lint_messages:
+                        Log.warn(f"\t\t{lint_message}")
+                        warnings += 1
 
         print()
         if errors > 0:
@@ -157,6 +159,7 @@ class LibYamlLint(LibInterface):
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()

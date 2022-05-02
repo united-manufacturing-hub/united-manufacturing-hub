@@ -17,14 +17,14 @@ class LibStaticCheck(LibInterface):
     projects = []
     build_outcomes = []
 
-    def __init__(self):
+    def __init__(self, force):
         # Check if current branch has upstream
         # If so, only check changed projects
         # If not check all projects
 
         go_projects = []
 
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 path = f"{Git.get_repository_root()}/{change}"
@@ -66,7 +66,7 @@ class LibStaticCheck(LibInterface):
             if not os.path.isdir(project_path):
                 pb.add_progress()
                 continue
-            p = subprocess.Popen(['staticcheck', '-f', 'json', project_path], stdin=subprocess.PIPE,
+            p = subprocess.Popen(['staticcheck', '-f', 'json', '-tags', 'kafka', project_path], stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=f"{repo_root}/golang/")
             output, err = p.communicate()
             rc = p.returncode
@@ -119,6 +119,7 @@ class LibStaticCheck(LibInterface):
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()

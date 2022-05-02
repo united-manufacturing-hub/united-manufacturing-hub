@@ -17,7 +17,7 @@ class LibDockerLint(LibInterface):
     projects = []
     build_outcomes = []
 
-    def __init__(self):
+    def __init__(self, force):
         # Check if current branch has upstream
         # If so, only check changed projects
         # If not check all projects
@@ -25,7 +25,7 @@ class LibDockerLint(LibInterface):
         go_projects = []
         python_projects = []
 
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 path = f"{Git.get_repository_root()}/{change}"
@@ -129,6 +129,7 @@ class LibDockerLint(LibInterface):
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()

@@ -1223,17 +1223,17 @@ timescaledb-single:
           topologyKey: "kubernetes.io/hostname"
           labelSelector:
             matchLabels:
-              app: {{ template "timescaledb.fullname" . }}
-              release: {{ .Release.Name | quote }}
-              cluster-name: {{ template "clusterName" . }}
+              app: {{template "timescaledb.fullname" .}}
+              release: {{.Release.Name | quote}}
+              cluster-name: {{template "clusterName" .}}
       - weight: 50
         podAffinityTerm:
           topologyKey: failure-domain.beta.kubernetes.io/zone
           labelSelector:
             matchLabels:
-              app: {{ template "timescaledb.fullname" . }}
-              release: {{ .Release.Name | quote }}
-              cluster-name: {{ template "clusterName" . }}
+              app: {{template "timescaledb.fullname" .}}
+              release: {{.Release.Name | quote}}
+              cluster-name: {{template "clusterName" .}}
   affinity: {}
 
   ## Use an alternate scheduler, e.g. "stork".

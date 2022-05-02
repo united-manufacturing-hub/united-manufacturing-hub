@@ -60,29 +60,29 @@ spec:
               {{end}}
 
             - name: LOWER_POLLING_TIME_MS
-              value: {{.Values.sensorconnect.lowerPollingTime| quote }}
+              value: {{.Values.sensorconnect.lowerPollingTime| quote}}
             - name: UPPER_POLLING_TIME_MS
-              value: {{.Values.sensorconnect.upperPollingTime| quote }}
+              value: {{.Values.sensorconnect.upperPollingTime| quote}}
             - name: POLLING_SPEED_STEP_UP_MS
-              value: {{.Values.sensorconnect.pollingSpeedStepUpMs| quote }}
+              value: {{.Values.sensorconnect.pollingSpeedStepUpMs| quote}}
             - name: POLLING_SPEED_STEP_DOWN_MS
-              value: {{.Values.sensorconnect.pollingSpeedStepDownMs| quote }}
+              value: {{.Values.sensorconnect.pollingSpeedStepDownMs| quote}}
             - name: DEVICE_FINDER_TIME_SEC
-              value: {{.Values.sensorconnect.deviceFinderTimeSec| quote }}
+              value: {{.Values.sensorconnect.deviceFinderTimeSec| quote}}
             - name: SENSOR_INITIAL_POLLING_TIME_MS
-              value: {{.Values.sensorconnect.sensorInitialPollingTimeMs| quote }}
+              value: {{.Values.sensorconnect.sensorInitialPollingTimeMs| quote}}
             - name: MAX_SENSOR_ERROR_COUNT
-              value: {{.Values.sensorconnect.maxSensorErrorCount| quote }}
+              value: {{.Values.sensorconnect.maxSensorErrorCount| quote}}
             - name: DEVICE_FINDER_TIMEOUT_SEC
-              value: {{.Values.sensorconnect.deviceFinderTimeoutSec| quote }}
+              value: {{.Values.sensorconnect.deviceFinderTimeoutSec| quote}}
             - name: SUB_TWENTY_MS
-              value: {{.Values.sensorconnect.allowSubTwentyMs| quote }}
+              value: {{.Values.sensorconnect.allowSubTwentyMs| quote}}
             - name: ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS
-              value: {{.Values.sensorconnect.additionalSleepTimePerActivePortMs| quote }}
+              value: {{.Values.sensorconnect.additionalSleepTimePerActivePortMs| quote}}
             - name: ADDITIONAL_SLOWDOWN_MAP
-              value: {{.Values.sensorconnect.additionalSlowDownMap| quote }}
+              value: {{.Values.sensorconnect.additionalSlowDownMap| quote}}
             - name: DEBUG
-              value: {{.Values.sensorconnect.debug| quote }}
+              value: {{.Values.sensorconnect.debug| quote}}
 
             - name: MQTT_BROKER_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883

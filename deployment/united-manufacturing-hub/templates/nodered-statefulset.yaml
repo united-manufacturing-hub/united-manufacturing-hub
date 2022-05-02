@@ -24,20 +24,20 @@ spec:
         runAsUser: 1000
       initContainers:
 
-        {{ if .Values._000_commonConfig.dataprocessing.nodered.defaultFlows }}
-        - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init
+        {{if .Values._000_commonConfig.dataprocessing.nodered.defaultFlows}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-init
           image: busybox:1.28
-          command: [ 'sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null' ]
+          command: ['sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null']
           volumeMounts:
-            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
+            - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-data
               mountPath: /data
-            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-flows
+            - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
               mountPath: /data/flows.default
               subPath: nodered-flows
-        {{ end }}
+        {{end}}
 
-        {{ if .Values.nodered.pluginInstallEnabled }}
-        - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-init-plugin
+        {{if .Values.nodered.pluginInstallEnabled}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-init-plugin
           image: node:14
           command:
             - 'sh'
@@ -57,9 +57,9 @@ spec:
               exit 0;
               fi;
           volumeMounts:
-            - name: {{ include "united-manufacturing-hub.fullname" . }}-nodered-data
+            - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-data
               mountPath: /data
-        {{ end }}
+        {{end}}
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
         image: nodered/node-red:{{.Values.nodered.tag}}
