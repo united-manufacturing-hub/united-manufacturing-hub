@@ -24,7 +24,7 @@ if __name__ == '__main__':
         force = True
     failed = False
     if libyamllint.LibYamlLint(force).run() != 0:
-        # failed = True
+        failed = True
         pass
 
     if libhelmlint.LibHelmLint(force).run() != 0:

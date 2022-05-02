@@ -27,7 +27,6 @@ func SendKafkaMessage(kafkaTopicName string, message []byte, key []byte) {
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
 		panic("Failed to create topic, restarting")
-		return
 	}
 
 	err = kafkaProducerClient.Produce(&kafka.Message{

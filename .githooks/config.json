@@ -5,13 +5,13 @@
       "line-length",
       "syntax",
       "empty-lines",
-      "new-line-at-end-of-file"
+      "new-line-at-end-of-file",
+      "trailing-spaces"
     ],
     "warn": [
       "line-length",
       "comments",
       "empty-lines",
-      "trailing-spaces",
       "indentation"
     ]
   },
