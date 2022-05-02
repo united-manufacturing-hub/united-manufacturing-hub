@@ -90,6 +90,7 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, ddI.SerialNumber, portNumber)
 		validTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
 		if !validTopic {
+			zap.S().Warnf("Invalid topic %s", mqttRawTopic)
 			continue
 		}
 		err := internal.CreateTopicIfNotExists(kafkaTopic)
