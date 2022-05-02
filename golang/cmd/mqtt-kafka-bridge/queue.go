@@ -43,17 +43,16 @@ func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 }
 
 func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
-	zap.S().Infof("Stored message in queue")
+	zap.S().Debugf("Stored message in queue")
 	newElement := queueObject{
 		Topic:   topic,
 		Message: message,
 	}
 	_, err := pq.EnqueueObject(newElement)
 	if err != nil {
-		zap.S().Errorf("Error enqueuing", err)
+		zap.S().Errorf("Error enqueuing %v, %s %v", err, topic, message)
 		return
 	}
-	zap.S().Debugf("Stored message in queue", pq)
 }
 
 func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error) {

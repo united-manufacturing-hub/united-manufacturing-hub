@@ -103,7 +103,8 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		}
 	}()
 	topicSpecification := kafka.TopicSpecification{
-		Topic: kafkaTopicName,
+		Topic:         kafkaTopicName,
+		NumPartitions: 6,
 	}
 	var maxExecutionTime = time.Duration(5) * time.Second
 	d := time.Now().Add(maxExecutionTime)
@@ -135,8 +136,12 @@ func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
 
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
+	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
 	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
 		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
+	}
+	if !IsKafkaTopicValid(MqttTopicName) {
+		zap.S().Errorf("Topic is not valid: %s, does not match %s", MqttTopicName, KafkaUMHTopicRegex)
 	}
 	return MqttTopicName
 }
@@ -145,6 +150,6 @@ func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
 		zap.S().Errorf("Illegal MQTT->Kafka Topic name: %s", KafkaTopicName)
 	}
 	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
-	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
+	KafkaTopicName = strings.ReplaceAll(KafkaTopicName, " ", "")
 	return strings.ReplaceAll(KafkaTopicName, ".", "/")
 }

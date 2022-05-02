@@ -76,9 +76,11 @@ func main() {
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
 	}
+	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
 
 	if AnomalyEnabled {
 		SetupAnomalyKafka(kafka.ConfigMap{
+			"bootstrap.servers":  KafkaBoostrapServer,
 			"security.protocol":  "plaintext",
 			"group.id":           fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
 			"enable.auto.commit": true,
