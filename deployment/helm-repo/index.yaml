@@ -3,7 +3,7 @@ entries:
   factorycube-edge:
   - apiVersion: v2
     appVersion: 0.7.2
-    created: "2022-04-27T16:27:57.4266751+02:00"
+    created: "2022-04-28T19:09:27.9306023+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: b99287dead65cf872d7fb1e14860c8e5ff062f1677ca28f039607178cc1c5cc4
     home: https://www.umh.app
@@ -16,7 +16,7 @@ entries:
     version: 0.7.2
   - apiVersion: v2
     appVersion: 0.7.1
-    created: "2022-04-27T16:27:57.4246761+02:00"
+    created: "2022-04-28T19:09:27.9266022+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 45dab1f80d6eb3d687fec8cfd59547a6cf0aca9573051984e72586686a44b1f8
     home: https://www.umh.app
@@ -42,7 +42,7 @@ entries:
     version: 0.7.1-prerelease
   - apiVersion: v2
     appVersion: 0.7.0
-    created: "2022-04-27T16:27:57.4216751+02:00"
+    created: "2022-04-28T19:09:27.9163189+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 92e0a124a79778b83c88252905a8ea0ccb63986bba646f7f431e2bccd3d6e99d
     home: https://www.umh.app
@@ -55,7 +55,7 @@ entries:
     version: 0.7.0
   - apiVersion: v2
     appVersion: 0.6.1
-    created: "2022-04-27T16:27:57.4206744+02:00"
+    created: "2022-04-28T19:09:27.9044898+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 6aa8157e1ab526aa149b786964efbe097f322e2fd627688740fcaf2f90e23008
     home: https://www.umh.app
@@ -81,7 +81,7 @@ entries:
     version: 0.6.1-prerelease
   - apiVersion: v2
     appVersion: 0.6.0
-    created: "2022-04-27T16:27:57.418674+02:00"
+    created: "2022-04-28T19:09:27.8960196+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 4c0d4187617d03f4b8a679e95b7fadf2539ae75337150e40954108ff8233b698
     home: https://www.united-manufacturing-hub.com
@@ -94,7 +94,7 @@ entries:
     version: 0.6.0
   - apiVersion: v2
     appVersion: 0.5.1
-    created: "2022-04-27T16:27:57.4156736+02:00"
+    created: "2022-04-28T19:09:27.8842272+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 71083cbd6956775118510a3dc3a9ce8ea24358d60c35c19095b8205607ae859a
     home: https://www.united-manufacturing-hub.com
@@ -107,7 +107,7 @@ entries:
     version: 0.5.1
   - apiVersion: v2
     appVersion: 0.5.0
-    created: "2022-04-27T16:27:57.4146752+02:00"
+    created: "2022-04-28T19:09:27.8767129+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: a5ac1fb5ca7ec695f5db09e480f5448499028ede75e5a156605cb8b113edf127
     home: https://www.united-manufacturing-hub.com
@@ -120,7 +120,7 @@ entries:
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2022-04-27T16:27:57.4126746+02:00"
+    created: "2022-04-28T19:09:27.8723524+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: ef2fcbee0ad7e9f5f2904c5385261fb9574200c9d45709848c20359020d8d0d4
     home: https://www.united-manufacturing-hub.com
@@ -134,7 +134,7 @@ entries:
   factorycube-server:
   - apiVersion: v2
     appVersion: 0.7.2
-    created: "2022-04-27T16:27:57.5229291+02:00"
+    created: "2022-04-28T19:09:28.1073975+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -168,7 +168,7 @@ entries:
     version: 0.7.2
   - apiVersion: v2
     appVersion: 0.7.1
-    created: "2022-04-27T16:27:57.5109286+02:00"
+    created: "2022-04-28T19:09:28.0824662+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -236,7 +236,7 @@ entries:
     version: 0.7.1-prerelease
   - apiVersion: v2
     appVersion: 0.7.0
-    created: "2022-04-27T16:27:57.4993743+02:00"
+    created: "2022-04-28T19:09:28.0551806+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -270,7 +270,7 @@ entries:
     version: 0.7.0
   - apiVersion: v2
     appVersion: 0.6.1
-    created: "2022-04-27T16:27:57.4873758+02:00"
+    created: "2022-04-28T19:09:28.0296162+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -338,7 +338,7 @@ entries:
     version: 0.6.1-prerelease
   - apiVersion: v2
     appVersion: 0.6.0
-    created: "2022-04-27T16:27:57.4728259+02:00"
+    created: "2022-04-28T19:09:28.009271+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -372,7 +372,7 @@ entries:
     version: 0.6.0
   - apiVersion: v2
     appVersion: 0.5.1
-    created: "2022-04-27T16:27:57.4606734+02:00"
+    created: "2022-04-28T19:09:27.9866508+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -406,7 +406,7 @@ entries:
     version: 0.5.1
   - apiVersion: v2
     appVersion: 0.5.0
-    created: "2022-04-27T16:27:57.4486744+02:00"
+    created: "2022-04-28T19:09:27.9656501+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -440,7 +440,7 @@ entries:
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2022-04-27T16:27:57.4356742+02:00"
+    created: "2022-04-28T19:09:27.9451999+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -470,8 +470,266 @@ entries:
     version: 0.4.4
   united-manufacturing-hub:
   - apiVersion: v2
+    appVersion: 0.9.2
+    created: "2022-04-28T19:09:28.7355004+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 7ffaf386e245a6b9443b6a720cbb738c2c592d5f283333f00b51cc9cb9a61657
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.2.tgz
+    version: 0.9.2
+  - apiVersion: v2
+    appVersion: 0.9.1
+    created: "2022-04-28T19:09:28.7159892+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 9e1b17a156038fc85ceec838b3bc833d856da0ecc861d5811a21c70834cbc51a
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.1.tgz
+    version: 0.9.1
+  - apiVersion: v2
+    appVersion: 0.9.0
+    created: "2022-04-28T19:09:28.6979874+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: e84a3bbb89b529edc05ce7b1f5064cc26c9d3c74a27c88822381611a03421f3b
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0.tgz
+    version: 0.9.0
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease9
+    created: "2022-04-28T19:09:28.679251+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 17d298f2b7d5df25e4cc5650f66200c351d9376a395a08286fff08d6e6025123
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease9.tgz
+    version: 0.9.0-prerelease9
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease8
+    created: "2022-04-28T19:09:28.645963+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 71c69f393eb66236b453113ca1d7d57627f26f5e94038ffad6d67a5fc28fc190
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease8.tgz
+    version: 0.9.0-prerelease8
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease7
+    created: "2022-04-28T19:09:28.626414+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 4f63c86d3e008e6c5a452755dc23b4970917cbb5178ef673ba44afd4b656018b
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease7.tgz
+    version: 0.9.0-prerelease7
+  - apiVersion: v2
     appVersion: 0.9.0-prerelease6
-    created: "2022-04-27T16:27:57.7830189+02:00"
+    created: "2022-04-28T19:09:28.5871139+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -514,7 +772,7 @@ entries:
     version: 0.9.0-prerelease6
   - apiVersion: v2
     appVersion: 0.9.0-prerelease5
-    created: "2022-04-27T16:27:57.7640172+02:00"
+    created: "2022-04-28T19:09:28.552746+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -557,7 +815,7 @@ entries:
     version: 0.9.0-prerelease5
   - apiVersion: v2
     appVersion: 0.9.0-prerelease4
-    created: "2022-04-27T16:27:57.746504+02:00"
+    created: "2022-04-28T19:09:28.5287201+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -600,7 +858,7 @@ entries:
     version: 0.9.0-prerelease4
   - apiVersion: v2
     appVersion: 0.9.0-prerelease3
-    created: "2022-04-27T16:27:57.728991+02:00"
+    created: "2022-04-28T19:09:28.4999955+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -643,7 +901,7 @@ entries:
     version: 0.9.0-prerelease3
   - apiVersion: v2
     appVersion: 0.9.0-prerelease2
-    created: "2022-04-27T16:27:57.7109918+02:00"
+    created: "2022-04-28T19:09:28.4750572+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -685,8 +943,51 @@ entries:
     - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease2.tgz
     version: 0.9.0-prerelease2
   - apiVersion: v2
+    appVersion: 0.9.0-prerelease10
+    created: "2022-04-28T19:09:28.4447829+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 4840e648614ac32d46440b0377d1621f1d401914b16600436f9374d6814bedee
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease10.tgz
+    version: 0.9.0-prerelease10
+  - apiVersion: v2
     appVersion: 0.9.0-prerelease1
-    created: "2022-04-27T16:27:57.6929911+02:00"
+    created: "2022-04-28T19:09:28.4091865+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -729,7 +1030,7 @@ entries:
     version: 0.9.0-prerelease1
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2022-04-27T16:27:57.6749913+02:00"
+    created: "2022-04-28T19:09:28.3707601+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -772,7 +1073,7 @@ entries:
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2022-04-27T16:27:57.656992+02:00"
+    created: "2022-04-28T19:09:28.3372629+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -815,7 +1116,7 @@ entries:
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2022-04-27T16:27:57.6349838+02:00"
+    created: "2022-04-28T19:09:28.2982614+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -858,7 +1159,7 @@ entries:
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2022-04-27T16:27:57.6144652+02:00"
+    created: "2022-04-28T19:09:28.2703567+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -987,7 +1288,7 @@ entries:
     version: 0.8.4-prerelease
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2022-04-27T16:27:57.5959293+02:00"
+    created: "2022-04-28T19:09:28.235409+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1073,7 +1374,7 @@ entries:
     version: 0.8.3-prerelease1
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2022-04-27T16:27:57.5769287+02:00"
+    created: "2022-04-28T19:09:28.2107193+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1116,7 +1417,7 @@ entries:
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2022-04-27T16:27:57.5589292+02:00"
+    created: "2022-04-28T19:09:28.1702188+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1202,7 +1503,7 @@ entries:
     version: 0.8.1-prerelease
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2022-04-27T16:27:57.54093+02:00"
+    created: "2022-04-28T19:09:28.1358958+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1372,4 +1673,4 @@ entries:
     urls:
     - https://repo.umh.app/united-manufacturing-hub-0.8.0-prerelease2.tgz
     version: 0.8.0-prerelease2
-generated: "2022-04-27T16:27:57.409676+02:00"
+generated: "2022-04-28T19:09:27.8594697+02:00"

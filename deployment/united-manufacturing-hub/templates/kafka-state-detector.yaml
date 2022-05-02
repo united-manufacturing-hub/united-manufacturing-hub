@@ -48,6 +48,12 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
 
+            - name: ACTIVITY_ENABLED
+              value: "{{.Values.kafkastatedetector.activityEnabled}}"
+
+            - name: ANOMALY_ENABLED
+              value: "{{.Values.kafkastatedetector.anomalyEnabled}}"
+
           resources: {}
       serviceAccountName: ""
       restartPolicy: Always
