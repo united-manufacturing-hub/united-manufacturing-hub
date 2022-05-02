@@ -79,7 +79,7 @@ func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	}
 
 	if len(validIds) == 0 {
-		err = errors.New(fmt.Sprintf("No IODD file for vendorID [%d] and deviceID [%d]", vendorId, deviceId))
+		err = fmt.Errorf("No IODD file for vendorID [%d] and deviceID [%d]", vendorId, deviceId)
 		return
 	}
 

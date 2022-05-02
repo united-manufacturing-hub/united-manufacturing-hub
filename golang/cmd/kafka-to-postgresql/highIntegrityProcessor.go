@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
@@ -13,9 +12,8 @@ func startHighIntegrityQueueProcessor() {
 	}
 	zap.S().Debugf("[HI]Starting queue processor")
 	for !ShuttingDown {
-		var msg *kafka.Message
 		// Get next message from HI kafka consumer
-		msg = <-highIntegrityProcessorChannel
+		msg := <-highIntegrityProcessorChannel
 		if msg == nil {
 			continue
 		}
@@ -30,68 +28,50 @@ func startHighIntegrityQueueProcessor() {
 		// Switch based on topic
 		switch parsedMessage.PayloadType {
 		case Prefix.Count:
-			err, putback = Count{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = Count{}.ProcessMessages(parsedMessage)
 		case Prefix.Recommendation:
 			zap.S().Errorf("[HI]Recommendation message not implemented")
-			//err, putback = Recommendation{}.ProcessMessages(parsedMessage)
-			break
+			//putback, err = Recommendation{}.ProcessMessages(parsedMessage)
 		case Prefix.State:
-			err, putback = State{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = State{}.ProcessMessages(parsedMessage)
 		case Prefix.UniqueProduct:
-			err, putback = UniqueProduct{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = UniqueProduct{}.ProcessMessages(parsedMessage)
 		case Prefix.ScrapCount:
-			err, putback = ScrapCount{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = ScrapCount{}.ProcessMessages(parsedMessage)
 		case Prefix.AddShift:
-			err, putback = AddShift{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = AddShift{}.ProcessMessages(parsedMessage)
 		case Prefix.ScrapUniqueProduct:
-			err, putback = ScrapUniqueProduct{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = ScrapUniqueProduct{}.ProcessMessages(parsedMessage)
 		case Prefix.AddProduct:
-			err, putback = AddProduct{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = AddProduct{}.ProcessMessages(parsedMessage)
 		case Prefix.AddOrder:
-			err, putback = AddOrder{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = AddOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.StartOrder:
-			err, putback = StartOrder{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = StartOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.EndOrder:
-			err, putback = EndOrder{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = EndOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.AddMaintenanceActivity:
 			zap.S().Errorf("[HI]AddMaintenanceActivity message not implemented")
-			//err, putback = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
-			break
+			//putback, err = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
 		case Prefix.ProductTag:
-			err, putback = ProductTag{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = ProductTag{}.ProcessMessages(parsedMessage)
 		case Prefix.ProductTagString:
-			err, putback = ProductTagString{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = ProductTagString{}.ProcessMessages(parsedMessage)
 		case Prefix.AddParentToChild:
-			err, putback = AddParentToChild{}.ProcessMessages(parsedMessage)
-			break
+			putback, err = AddParentToChild{}.ProcessMessages(parsedMessage)
 		case Prefix.ModifyState:
 			zap.S().Errorf("[HI]ModifyState message not implemented")
-			//err, putback = ModifyState{}.ProcessMessages(parsedMessage)
-			break
+			//putback, err = ModifyState{}.ProcessMessages(parsedMessage)
 		case Prefix.ModifyProducesPieces:
 			zap.S().Errorf("[HI]ModifyProducesPieces message not implemented")
-			//err, putback = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
-			break
+			//putback, err = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
 		case Prefix.DeleteShiftById:
 			zap.S().Errorf("[HI]DeleteShiftById message not implemented")
-			//err, putback = DeleteShiftById{}.ProcessMessages(parsedMessage)
-			break
+			//putback, err = DeleteShiftById{}.ProcessMessages(parsedMessage)
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
 			zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp message not implemented")
-			//err, putback = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
-			break
+			//putback, err = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
+
 		default:
 			zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
 			putback = true
@@ -109,11 +89,10 @@ func startHighIntegrityQueueProcessor() {
 					zap.S().Errorf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 					highIntegrityCommitChannel <- msg
 				}
-				break
+
 			case DiscardValue:
 				zap.S().Errorf("[HI][DiscardValue] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 				highIntegrityCommitChannel <- msg
-				break
 			case Other:
 				if putback {
 
@@ -124,7 +103,6 @@ func startHighIntegrityQueueProcessor() {
 					zap.S().Errorf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 					highIntegrityCommitChannel <- msg
 				}
-				break
 			}
 		} else {
 			if putback {

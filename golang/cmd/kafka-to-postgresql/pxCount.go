@@ -18,7 +18,7 @@ type count struct {
 }
 
 // ProcessMessages processes a Count kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c Count) ProcessMessages(msg internal.ParsedMessage) (err error, putback bool) {
+func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -28,7 +28,7 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (err error, putback b
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return err, true
+		return true, err
 	}
 
 	// sC is the payload, parsed as count
@@ -37,16 +37,16 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (err error, putback b
 	if err != nil {
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return err, false
+		return false, err
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return nil, false
+		return false, nil
 	}
 
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return nil, true
+		return true, nil
 	}
 
 	// Changes should only be necessary between this marker
@@ -66,7 +66,7 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (err error, putback b
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.Count, sC.Scrap, sC.TimestampMs)
 	if err != nil {
 		zap.S().Debugf("Error inserting into count table: %s", err.Error())
-		return err, true
+		return true, err
 	}
 
 	// And this marker
@@ -76,17 +76,17 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (err error, putback b
 		err = txn.Rollback()
 		if err != nil {
 			zap.S().Errorf("Error rolling back transaction: %s", err.Error())
-			return err, true
+			return true, err
 		}
 	} else {
 		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
 			zap.S().Errorf("Error committing transaction: %s", err.Error())
-			return err, true
+			return true, err
 		}
 	}
 
 	zap.S().Debugf("Successfully processed count message: %v", msg)
-	return err, false
+	return false, err
 }
