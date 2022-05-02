@@ -27,7 +27,10 @@ func processIncomingMessages() {
 		}
 
 		//Setup Topic if not exist
-		kafkaTopicName := internal.MqttTopicToKafka(object.Topic)
+		validTopic, kafkaTopicName := internal.MqttTopicToKafka(object.Topic)
+		if !validTopic {
+			continue
+		}
 		err = internal.CreateTopicIfNotExists(kafkaTopicName)
 		if err != nil {
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
@@ -77,10 +80,12 @@ func kafkaToQueue(topic string) {
 		payload := msg.Value
 		if json.Valid(payload) {
 			kafkaTopic := msg.TopicPartition.Topic
-			mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
+			validTopic, mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
 
-			go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
-			zap.S().Debugf("kafkaToQueue", topic, payload)
+			if validTopic {
+				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
+				zap.S().Debugf("kafkaToQueue", topic, payload)
+			}
 		} else {
 			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
 		}
