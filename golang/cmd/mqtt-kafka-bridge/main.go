@@ -44,14 +44,14 @@ func main() {
 	var err error
 	mqttIncomingQueue, err = setupQueue("incoming")
 	if err != nil {
-		zap.S().Errorf("Error setting up incoming queue", err)
+		zap.S().Fatalf("Error setting up incoming queue", err)
 		return
 	}
 	defer closeQueue(mqttIncomingQueue)
 
 	mqttOutGoingQueue, err = setupQueue("outgoing")
 	if err != nil {
-		zap.S().Errorf("Error setting up outgoing queue", err)
+		zap.S().Fatalf("Error setting up outgoing queue", err)
 		return
 	}
 	defer closeQueue(mqttOutGoingQueue)
@@ -79,6 +79,7 @@ func main() {
 	}
 
 	zap.S().Debugf("Start Queue processors")
+	go internal.StartEventHandler("MQTTKafkaBridge", internal.KafkaProducer.Events(), nil)
 	go processIncomingMessages()
 	go processOutgoingMessages()
 	go kafkaToQueue(KafkaTopic)
@@ -104,6 +105,8 @@ func main() {
 
 	}()
 
+	go ReportStats()
+
 	select {} // block forever
 }
 
@@ -124,4 +127,22 @@ func ShutdownApplicationGraceful() {
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
+}
+
+func ReportStats() {
+	lastConfirmed := 0.0
+	for !ShuttingDown {
+		zap.S().Infof("Reporting stats"+
+			"| MQTT->Kafka queue lenght: %d"+
+			"| Kafka->MQTT queue length: %d"+
+			"| Produces Kafka messages: %f"+
+			"| Produces Kafka messages/s: %f",
+			mqttIncomingQueue.Length(),
+			mqttOutGoingQueue.Length(),
+			internal.KafkaConfirmed,
+			(internal.KafkaConfirmed-lastConfirmed)/5,
+		)
+		lastConfirmed = internal.KafkaConfirmed
+		time.Sleep(internal.FiveSeconds)
+	}
 }

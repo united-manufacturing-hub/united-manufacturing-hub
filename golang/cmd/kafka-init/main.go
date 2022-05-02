@@ -53,7 +53,7 @@ func main() {
 
 	}()
 
-	select {} // block forever
+	ShutdownApplicationGraceful()
 }
 
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database

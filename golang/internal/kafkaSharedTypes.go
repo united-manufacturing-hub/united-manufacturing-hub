@@ -228,7 +228,7 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 				msgx := kafka.Message{
 					TopicPartition: kafka.TopicPartition{
 						Topic:     &topic,
-						Partition: msg.TopicPartition.Partition,
+						Partition: kafka.PartitionAny,
 					},
 					Value:   msg.Value,
 					Headers: msg.Headers,
@@ -329,10 +329,12 @@ func StartEventHandler(identifier string, events chan kafka.Event, backChan chan
 					if ev.TopicPartition.Error != nil {
 						zap.S().Errorf("Error for %s: %v", identifier, ev.TopicPartition.Error)
 						errS := ev.TopicPartition.Error.Error()
-						backChan <- PutBackChanMsg{
-							Msg:         ev,
-							Reason:      "Event channel error",
-							ErrorString: &errS,
+						if backChan != nil {
+							backChan <- PutBackChanMsg{
+								Msg:         ev,
+								Reason:      "Event channel error",
+								ErrorString: &errS,
+							}
 						}
 					} else {
 						// This is for stats only, and counts the amount of confirmed processed messages

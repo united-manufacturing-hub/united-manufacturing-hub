@@ -60,7 +60,7 @@ func getOnMessageRecieved(mode string, pg *goque.Queue) func(MQTT.Client, MQTT.M
 		topic := message.Topic()
 		payload := message.Payload()
 
-		zap.S().Infof("onMessageReceived", mode, topic, payload)
+		zap.S().Debugf("onMessageReceived", mode, topic, payload)
 
 		go storeMessageIntoQueue(topic, payload, mode, pg)
 	}

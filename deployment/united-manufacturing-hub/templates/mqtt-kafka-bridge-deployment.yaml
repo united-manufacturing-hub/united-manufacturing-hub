@@ -69,6 +69,10 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
 
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber}}
+
+
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           # livenessProbe:
           #   httpGet:
