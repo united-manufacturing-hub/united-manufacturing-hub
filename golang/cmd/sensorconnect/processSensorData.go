@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha512"
-	"encoding/base64"
 	"encoding/json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
@@ -55,7 +53,11 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				return
 			}
 
-			go SendKafkaMessage(internal.MqttTopicToKafka(mqttRawTopic), jsonString, GenerateKafkaKey(currentDeviceInformation))
+			validKafkaTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
+
+			if validKafkaTopic {
+				go SendKafkaMessage(kafkaTopic, jsonString)
+			}
 			go SendMQTTMessage(mqttRawTopic, jsonString)
 		case 2: // digital output
 			// Todo
@@ -134,25 +136,16 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				zap.S().Errorf("Error converting payload to json: %s", err.Error())
 				return
 			}
-			go SendKafkaMessage(internal.MqttTopicToKafka(mqttRawTopic), jsonString, GenerateKafkaKey(currentDeviceInformation))
+			validKafkaTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
+
+			if validKafkaTopic {
+				go SendKafkaMessage(kafkaTopic, jsonString)
+			}
 			go SendMQTTMessage(mqttRawTopic, jsonString)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
 			continue
 		}
 	}
-}
-
-func GenerateKafkaKey(information DiscoveredDeviceInformation) []byte {
-	sha512hasher := sha512.New()
-	sha512hasher.Write([]byte(information.Url))
-	sha512hasher.Write([]byte(information.ProductCode))
-	sha512hasher.Write([]byte(information.SerialNumber))
-
-	sum := sha512hasher.Sum(nil)
-	buf := make([]byte, base64.StdEncoding.EncodedLen(len(sum)))
-	base64.StdEncoding.Encode(buf, sum)
-	return buf
-
 }
 
 // processData turns raw sensor data into human readable data and attaches it to the payload. It can handle the input of datatype, datatypeRef and simpleDatatype structures.

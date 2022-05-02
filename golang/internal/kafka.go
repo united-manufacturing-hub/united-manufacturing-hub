@@ -132,24 +132,27 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 
 var validKafkaTopicRegex, _ = regexp.Compile(`^[a-zA-Z\d\._\-]+$`)
 
-func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
+func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
 
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
 	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
 		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
+		return false, ""
 	}
 	if !IsKafkaTopicValid(MqttTopicName) {
 		zap.S().Errorf("Topic is not valid: %s, does not match %s", MqttTopicName, KafkaUMHTopicRegex)
+		return false, ""
 	}
-	return MqttTopicName
+	return true, MqttTopicName
 }
-func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
+func KafkaTopicToMqtt(KafkaTopicName string) (validTopic bool, MqttTopicName string) {
 	if strings.Contains(KafkaTopicName, "/") {
 		zap.S().Errorf("Illegal MQTT->Kafka Topic name: %s", KafkaTopicName)
+		return false, ""
 	}
 	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
 	KafkaTopicName = strings.ReplaceAll(KafkaTopicName, " ", "")
-	return strings.ReplaceAll(KafkaTopicName, ".", "/")
+	return true, strings.ReplaceAll(KafkaTopicName, ".", "/")
 }
