@@ -63,7 +63,7 @@ spec:
             - name: ASSET_ID
               value: {{.Values._000_commonConfig.datasources.barcodereader.machineID}}
 
-            - name: SERIAL_NUMBERs
+            - name: SERIAL_NUMBER
               value: {{.Values._000_commonConfig.serialNumber}}
 
             - name: SCAN_ONLY
