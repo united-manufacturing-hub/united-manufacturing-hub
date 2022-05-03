@@ -25,12 +25,8 @@ var memoryDataExpiration time.Duration
 var redisInitialized bool
 
 // InitCache initializes a redis cache
-func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPassword string, redisDB int, dryRun string) {
+func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPassword string, redisDB int) {
 
-	if dryRun == "True" || dryRun == "true" {
-		zap.S().Infof("Running cache in DRY_RUN mode. This means that cache will not be used") // "... and it stays nil"
-		return
-	}
 	rdb = redis.NewFailoverClient(&redis.FailoverOptions{
 		MasterName:       "mymaster",
 		SentinelAddrs:    []string{redisURI, redisURI2, redisURI3},
