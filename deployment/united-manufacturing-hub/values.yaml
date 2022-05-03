@@ -7,6 +7,15 @@ _000_commonConfig:
   datasources:
 
     # barcodereader reads out connected USB barcodereaders emulating a keyboard
+    barcodereader-python:
+      enabled: true
+      customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+      customerID: "raw"
+      location: "barcodereader"
+      machineID: "barcodereader"
+      brokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub"
+      brokerPort: 8883
+
     barcodereader:
       enabled: true
       customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
