@@ -32,9 +32,7 @@ import (
 )
 
 const (
-	EVENT_BUFFER   = 64
 	EVENT_CAPTURES = 16
-	SCANNER_DEVICE = "/dev/input/event0" // default location on the Pi
 )
 
 // InputEvent is a Go implementation of the native linux device
@@ -55,6 +53,7 @@ type KeyValues struct {
 	shift  rune
 }
 
+// KEYMAP maps evdev to unicode values
 var KEYMAP = map[int]KeyValues{
 
 	evdev.KEY_0: {

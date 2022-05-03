@@ -63,6 +63,8 @@ func main() {
 	select {}
 }
 
+// GetBarcodeReaderDevice returns the first barcode reader device found, by name or device path.
+// If no device is found, it will print all available devices and return false, nil.
 func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	// This could be /dev/input/event0, /dev/input/event1, etc.
 	devicePath := os.Getenv("INPUT_DEVICE_PATH")
@@ -117,6 +119,7 @@ type BarcodeMessage struct {
 	Barcode     string `json:"barcode"`
 }
 
+// OnScan is called when a barcode is scanned, and produces a message to be sent to Kafka.
 func OnScan(scanned string) {
 	zap.S().Infof("Scanned: %s\n", scanned)
 
@@ -148,6 +151,7 @@ func OnScan(scanned string) {
 	}
 }
 
+// OnScanError is called when an error occurs while scanning, it prints the error to stdout, then exits.
 func OnScanError(err error) {
 	zap.S().Infof("Error: %s\n", err)
 	ShutdownGracefully()
