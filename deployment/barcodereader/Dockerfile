@@ -4,6 +4,9 @@ RUN mkdir /build
 # Add build requirements for librdkafka
 RUN apk add build-base
 
+# Add requirements for evdev
+RUN apk add linux-headers
+
 # Get dependencies
 WORKDIR /build
 ADD ./golang/go.mod /build/go.mod
