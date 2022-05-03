@@ -1,3 +1,4 @@
+---
 # mqttBridgeURL points factorycube-edge to factorycube-server
 mqttBridgeURL: "ssl://factorycube-server-vernemq-local-service.factorycube-server:8883"
 mqttBridgeTopic: "ia/factoryinsight"

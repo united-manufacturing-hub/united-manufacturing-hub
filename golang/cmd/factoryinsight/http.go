@@ -444,7 +444,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 			fullRow := []interface{}{dataPoint.State, float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(c, dataPoint.State, 0, configuration), float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			fullRow := []interface{}{ConvertStateToString(c, dataPoint.State, configuration), float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
 	}
@@ -553,7 +553,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	if aggregationType == 0 { // default case. aggregate over everything
 		data.ColumnNames = []string{"state", "duration"}
 
-		data.Datapoints, err = CalculateStopParetos(c, processedStates, from, to, *includeRunning, keepStatesInteger, configuration)
+		data.Datapoints, err = CalculateStopParetos(c, processedStates, to, *includeRunning, keepStatesInteger, configuration)
 
 		if err != nil {
 			handleInternalServerError(c, err)
@@ -584,7 +584,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 			// Call CalculateStopParetos for every hour between "from" and "to" and add results to resultDatapoints
 			oldD := tempFrom
 
-			for d := tempFrom; d.After(tempTo) == false; d = d.Add(time.Hour) { //timestamp is beginning of the state. d is current progress.
+			for d := tempFrom; !d.After(tempTo); d = d.Add(time.Hour) { //timestamp is beginning of the state. d is current progress.
 				if d == oldD { //if first entry
 					continue
 				}
@@ -593,7 +593,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 				processedStatesCleaned := removeUnnecessaryElementsFromStateSlice(processedStates, oldD, d)
 
-				tempResult, err := CalculateStopParetos(c, processedStatesCleaned, oldD, d, *includeRunning, true, configuration)
+				tempResult, err := CalculateStopParetos(c, processedStatesCleaned, d, *includeRunning, true, configuration)
 				if err != nil {
 					handleInternalServerError(c, err)
 					return
@@ -717,7 +717,7 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "availability"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculateAvailability(c, processedStates, from, to, configuration)
+	data.Datapoints, err = CalculateAvailability(c, processedStates, to, configuration)
 
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -815,7 +815,7 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "performance"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculatePerformance(c, processedStates, from, to, configuration)
+	data.Datapoints, err = CalculatePerformance(c, processedStates, to, configuration)
 
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -862,7 +862,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// ### fetch necessary data from database ###
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	_, err = GetCustomerConfiguration(c, customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -880,7 +880,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "quality"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculateQuality(c, countSlice, from, to, configuration)
+	data.Datapoints, err = CalculateQuality(c, countSlice)
 
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1111,7 +1111,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"state", "occurances"}
 
-	data.Datapoints, err = CalculateStateHistogram(c, processedStates, from, to, includeRunning, keepStatesInteger, configuration)
+	data.Datapoints, err = CalculateStateHistogram(c, processedStates, includeRunning, keepStatesInteger, configuration)
 
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1336,7 +1336,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 	for _, timeBasedMaintenanceActivity := range rawData {
 		var activityString = ConvertActivityToString(c, timeBasedMaintenanceActivity.ActivityType, configuration)
 
-		if timeBasedMaintenanceActivity.DurationInDays.Valid != true || timeBasedMaintenanceActivity.LatestActivity.Valid != true || timeBasedMaintenanceActivity.NextActivity.Valid != true {
+		if !timeBasedMaintenanceActivity.DurationInDays.Valid || !timeBasedMaintenanceActivity.LatestActivity.Valid || !timeBasedMaintenanceActivity.NextActivity.Valid {
 			fullRow := []interface{}{getDataRequest.Asset, timeBasedMaintenanceActivity.ComponentName, activityString, 0, 0}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {

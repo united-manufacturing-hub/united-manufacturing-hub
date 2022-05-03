@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,7 +32,7 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 	}
 
 	if len(filemap) != filemaplen {
-		return errors.New(fmt.Sprintf("Filemap lenght invalid Have: %d Wanted: %d", len(filemap), filemaplen))
+		return fmt.Errorf("Filemap lenght invalid Have: %d Wanted: %d", len(filemap), filemaplen)
 	}
 
 	for _, file := range filemap {

@@ -101,7 +101,7 @@ func createSensorDataRequestBody(connectedDeviceInfo map[int]ConnectedDeviceInfo
 			}
 		default:
 			{
-				return nil, errors.New(fmt.Sprintf("Invalid IO-Link port mode: %d for %v", info.Mode, info))
+				return nil, fmt.Errorf("invalid IO-Link port mode: %d for %v", info.Mode, info)
 			}
 		}
 		payload = append(payload, query...)

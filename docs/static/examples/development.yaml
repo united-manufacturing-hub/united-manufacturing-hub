@@ -1,3 +1,4 @@
+---
 # See https://github.com/rancher/k3os/blob/master/README.md#configuration
 
 
@@ -188,7 +189,7 @@ write_files:
       kafkaBridge:
         enabled: false
         remotebootstrapServer: ""
-        topicmap: "
+        topicmap: ""
 
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 

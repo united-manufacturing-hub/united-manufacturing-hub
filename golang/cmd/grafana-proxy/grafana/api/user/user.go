@@ -2,7 +2,6 @@ package user
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -77,5 +76,5 @@ func GetUser(sessioncookie string) (User, error) {
 		}
 		return user, nil
 	}
-	return User{}, errors.New(fmt.Sprintf("HTTP Status incorrect: %s", resp.StatusCode))
+	return User{}, fmt.Errorf("HTTP Status incorrect: %s", resp.StatusCode)
 }

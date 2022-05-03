@@ -6,6 +6,7 @@ import os.path
 import re
 import subprocess
 from pathlib import Path
+from threading import Thread
 
 from .git import Git
 from .helper import Progressbar
@@ -17,14 +18,14 @@ class LibGoVet(LibInterface):
     projects = []
     build_outcomes = []
 
-    def __init__(self):
+    def __init__(self, force: bool = False):
         # Check if current branch has upstream
         # If so, only check changed projects
         # If not check all projects
 
         go_projects = []
 
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 path = f"{Git.get_repository_root()}/{change}"
@@ -50,6 +51,38 @@ class LibGoVet(LibInterface):
         go_projects = list(dict.fromkeys(go_projects))
         self.projects.extend(go_projects)
 
+    def check_single(self, project, repo_root, pb):
+        project_path = f"{repo_root}/golang/cmd/{project}/"
+        if not os.path.isdir(project_path):
+            pb.add_progress()
+            return
+        p = subprocess.Popen(['go', 'vet', '-json', '-tags', 'musl,kafka', project_path], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=f"{repo_root}/golang/")
+        output, err = p.communicate()
+        rc = p.returncode
+
+        sanitized_output = ""
+        for i, line in enumerate(err.decode('utf-8').splitlines()):
+            if not line.lstrip().startswith('#'):
+                sanitized_output += line
+
+        if rc == 2:
+            self.build_outcomes.append({
+                "rc": rc,
+                "message": sanitized_output,
+                "name": project
+            })
+            pb.add_progress()
+            return
+
+        self.build_outcomes.append({
+            "rc": rc,
+            "message": json.loads(sanitized_output),
+            "name": project
+        })
+
+        pb.add_progress()
+
     def check(self):
         repo_root = Git.get_repository_root()
         ly = len(self.projects)
@@ -61,37 +94,15 @@ class LibGoVet(LibInterface):
 
         pb = Progressbar(ly)
 
+        threads = []
         for project in self.projects:
-            project_path = f"{repo_root}/golang/cmd/{project}/"
-            if not os.path.isdir(project_path):
-                pb.add_progress()
-                continue
-            p = subprocess.Popen(['go', 'vet', '-json', project_path], stdin=subprocess.PIPE,
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=f"{repo_root}/golang/")
-            output, err = p.communicate()
-            rc = p.returncode
+            t = Thread(target=self.check_single, args=(project, repo_root, pb))
+            t.start()
+            threads.append(t)
 
-            sanitized_output = ""
-            for i, line in enumerate(err.decode('utf-8').splitlines()):
-                if not line.lstrip().startswith('#'):
-                    sanitized_output += line
+        for t in threads:
+            t.join()
 
-            if rc == 2:
-                self.build_outcomes.append({
-                    "rc": rc,
-                    "message": sanitized_output,
-                    "name": project
-                })
-                pb.add_progress()
-                continue
-
-            self.build_outcomes.append({
-                "rc": rc,
-                "message": json.loads(sanitized_output),
-                "name": project
-            })
-
-            pb.add_progress()
         pb.finish()
 
     def report(self):
@@ -132,6 +143,7 @@ class LibGoVet(LibInterface):
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()
