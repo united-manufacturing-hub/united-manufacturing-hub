@@ -47,8 +47,10 @@ spec:
           env:
             - name: KAFKA_BOOSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
-            - name: CUSTOM_USB_NAME
-              value: {{.Values._000_commonConfig.datasources.barcodereader.customUSBName}}
+            - name: INPUT_DEVICE_NAME
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName}}
+            - name: INPUT_DEVICE_PATH
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath}}
 
             - name: MY_POD_NAME
               valueFrom:
