@@ -61,14 +61,6 @@ updates:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/mqtt-bridge
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
   - directory: /deployment/kafka-init
     labels:
       - 'lang: docker'

@@ -63,3 +63,15 @@ docs/static/openapi/output/factory_input/markdown/.openapi-generator/
 
 sensorconnect/IoddFiles
 **/__pycache__
+
+deployment/kafka-to-postgresql/postgres_data
+
+*.pprof
+*.log
+
+# InfluxDB
+*.sqlite
+*.bolt
+
+# sensorconnect
+*.xml
