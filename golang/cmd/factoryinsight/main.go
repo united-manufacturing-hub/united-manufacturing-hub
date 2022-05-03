@@ -102,7 +102,8 @@ func main() {
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := 0 // default database
 
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB)
+	dryRun := os.Getenv("DRY_RUN")
+	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized..", redisURI)
 
