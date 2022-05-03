@@ -15,6 +15,8 @@ var serialNumber string
 
 var kafkaSendTopic string
 
+var scanOnly bool
+
 func main() {
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -35,20 +37,26 @@ func main() {
 	location := os.Getenv("LOCATION")
 	assetID := os.Getenv("ASSET_ID")
 	serialNumber = os.Getenv("SERIAL_NUMBER")
+	scanOnly = os.Getenv("SCAN_ONLY") == "true"
 
-	kafkaSendTopic = fmt.Sprintf("ia/%s/%s/%s/barcode", customerID, location, assetID)
+	if !scanOnly {
 
-	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers": KafkaBoostrapServer,
-		"security.protocol": "plaintext",
-		"group.id":          "barcodereader",
-	})
-	err = internal.CreateTopicIfNotExists(kafkaSendTopic)
-	if err != nil {
-		panic(err)
+		kafkaSendTopic = fmt.Sprintf("ia/%s/%s/%s/barcode", customerID, location, assetID)
+
+		internal.SetupKafka(kafka.ConfigMap{
+			"bootstrap.servers": KafkaBoostrapServer,
+			"security.protocol": "plaintext",
+			"group.id":          "barcodereader",
+		})
+		err = internal.CreateTopicIfNotExists(kafkaSendTopic)
+		if err != nil {
+			panic(err)
+		}
+
+		go internal.StartEventHandler("barcodereader", internal.KafkaProducer.Events(), nil)
+	} else {
+		zap.S().Infof("Scan only mode")
 	}
-
-	go internal.StartEventHandler("barcodereader", internal.KafkaProducer.Events(), nil)
 
 	go ScanForever(inputDevice, OnScan, OnScanError)
 
@@ -112,6 +120,10 @@ type BarcodeMessage struct {
 func OnScan(scanned string) {
 	zap.S().Infof("Scanned: %s\n", scanned)
 
+	if scanOnly {
+		return
+	}
+
 	message := BarcodeMessage{
 		TimestampMs: time.Now().UnixMilli(),
 		Barcode:     scanned,
@@ -142,10 +154,11 @@ func OnScanError(err error) {
 }
 
 func ShutdownGracefully() {
-	internal.ShuttingDownKafka = true
+	if !scanOnly {
+		internal.ShuttingDownKafka = true
 
-	time.Sleep(internal.FiveSeconds)
-
+		time.Sleep(internal.FiveSeconds)
+	}
 	zap.S().Infof("Successfull shutdown. Exiting.")
 
 	// Gracefully exit.
