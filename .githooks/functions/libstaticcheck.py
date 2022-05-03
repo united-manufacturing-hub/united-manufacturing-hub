@@ -6,6 +6,7 @@ import os.path
 import re
 import subprocess
 from pathlib import Path
+from threading import Thread
 
 from .git import Git
 from .helper import Progressbar
@@ -17,14 +18,16 @@ class LibStaticCheck(LibInterface):
     projects = []
     build_outcomes = []
 
-    def __init__(self):
+    def __init__(self, force):
         # Check if current branch has upstream
         # If so, only check changed projects
         # If not check all projects
 
+        config = json.load(open(f"{Git.get_repository_root()}/.githooks/config.json"))
+
         go_projects = []
 
-        if Git.has_upstream():
+        if Git.has_upstream() and not force:
             changes = Git.get_committed_changes()
             for change in changes:
                 path = f"{Git.get_repository_root()}/{change}"
@@ -35,7 +38,10 @@ class LibStaticCheck(LibInterface):
                         xpath = os.path.dirname(os.path.abspath(path))
                         matches = re.search(r"golang\\cmd\\([\w|-]+)", xpath)
                         if matches is not None:
-                            go_projects.append(matches.group(1))
+                            project_name = matches.group(1)
+                        if project_name in config["gostaticcheck"]["excluded-projects"]:
+                            continue
+                        go_projects.append(project_name)
         else:
             go_files = list(Path(Git.get_repository_root()).rglob('*.go'))
             for path in go_files:
@@ -45,10 +51,38 @@ class LibStaticCheck(LibInterface):
                     xpath = os.path.dirname(os.path.abspath(path))
                     matches = re.search(r"golang\\cmd\\([\w|-]+)", xpath)
                     if matches is not None:
-                        go_projects.append(matches.group(1))
+                        project_name = matches.group(1)
+                        if project_name in config["gostaticcheck"]["excluded-projects"]:
+                            continue
+                        go_projects.append(project_name)
 
         go_projects = list(dict.fromkeys(go_projects))
         self.projects.extend(go_projects)
+
+    def check_single(self, project, repo_root, pb):
+        project_path = f"{repo_root}/golang/cmd/{project}/"
+        if not os.path.isdir(project_path):
+            pb.add_progress()
+            return
+        p = subprocess.Popen(['staticcheck', '-f', 'json', '-tags', 'kafka', project_path], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=f"{repo_root}/golang/")
+        output, err = p.communicate()
+        rc = p.returncode
+
+        data = output.decode('utf-8')
+        data = os.linesep.join([s for s in data.splitlines() if s])
+
+        messages = []
+        for line in data.splitlines():
+            messages.append(json.loads(line))
+
+        self.build_outcomes.append({
+            "rc": rc,
+            "message": messages,
+            "name": project
+        })
+
+        pb.add_progress()
 
     def check(self):
         repo_root = Git.get_repository_root()
@@ -61,30 +95,15 @@ class LibStaticCheck(LibInterface):
 
         pb = Progressbar(ly)
 
+        threads = []
         for project in self.projects:
-            project_path = f"{repo_root}/golang/cmd/{project}/"
-            if not os.path.isdir(project_path):
-                pb.add_progress()
-                continue
-            p = subprocess.Popen(['staticcheck', '-f', 'json', project_path], stdin=subprocess.PIPE,
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=f"{repo_root}/golang/")
-            output, err = p.communicate()
-            rc = p.returncode
+            t = Thread(target=self.check_single, args=(project, repo_root, pb))
+            t.start()
+            threads.append(t)
 
-            data = output.decode('utf-8')
-            data = os.linesep.join([s for s in data.splitlines() if s])
+        for t in threads:
+            t.join()
 
-            messages = []
-            for line in data.splitlines():
-                messages.append(json.loads(line))
-
-            self.build_outcomes.append({
-                "rc": rc,
-                "message": messages,
-                "name": project
-            })
-
-            pb.add_progress()
         pb.finish()
 
     def report(self):
@@ -97,6 +116,9 @@ class LibStaticCheck(LibInterface):
                 prev_file = ""
                 for v in outcomes["message"]:
                     if v["severity"] == "error":
+                        if v["location"]["file"].endswith("_test.go"):
+                            Log.info("\t\tSkipping test {0}".format(v["location"]["file"]))
+                            continue
                         if prev_file != v["location"]["file"]:
                             prev_file = v["location"]["file"]
                             Log.info(f"\t{os.path.basename(prev_file)}")
@@ -112,13 +134,14 @@ class LibStaticCheck(LibInterface):
             Log.fail('=' * fstrlen)
         else:
             Log.ok("======================")
-            Log.ok(f"Go vet succeeded")
+            Log.ok(f"Staticcheck succeeded")
             Log.ok("======================")
         return errors
 
     def run(self):
         """
         Runs check & report
+        :param force:
         :return: reports return value
         """
         self.check()

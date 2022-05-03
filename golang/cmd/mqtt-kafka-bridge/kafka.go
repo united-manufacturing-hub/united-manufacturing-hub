@@ -27,7 +27,10 @@ func processIncomingMessages() {
 		}
 
 		//Setup Topic if not exist
-		kafkaTopicName := MqttTopicToKafka(object.Topic)
+		validTopic, kafkaTopicName := internal.MqttTopicToKafka(object.Topic)
+		if !validTopic {
+			continue
+		}
 		err = internal.CreateTopicIfNotExists(kafkaTopicName)
 		if err != nil {
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
@@ -59,7 +62,10 @@ func kafkaToQueue(topic string) {
 	for !ShuttingDown {
 		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
+			// This is fine, and expected behaviour
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+				// Sleep to reduce CPU usage
+				time.Sleep(internal.OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				time.Sleep(5 * time.Second)
@@ -74,10 +80,12 @@ func kafkaToQueue(topic string) {
 		payload := msg.Value
 		if json.Valid(payload) {
 			kafkaTopic := msg.TopicPartition.Topic
-			mqttTopic := KafkaTopicToMqtt(*kafkaTopic)
+			validTopic, mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
 
-			go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
-			zap.S().Debugf("kafkaToQueue", topic, payload)
+			if validTopic {
+				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
+				zap.S().Debugf("kafkaToQueue", topic, payload)
+			}
 		} else {
 			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
 		}

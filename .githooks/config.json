@@ -4,14 +4,21 @@
       "comments-indentation",
       "line-length",
       "syntax",
-      "empty-lines"
+      "empty-lines",
+      "new-line-at-end-of-file",
+      "trailing-spaces"
     ],
     "warn": [
       "line-length",
       "comments",
       "empty-lines",
-      "trailing-spaces",
       "indentation"
+    ]
+  },
+  "gostaticcheck": {
+    "excluded-projects": [
+      "mqtt-to-postgresql",
+      "mqtt-bridge"
     ]
   }
 }

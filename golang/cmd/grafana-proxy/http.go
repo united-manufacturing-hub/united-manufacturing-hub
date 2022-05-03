@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
@@ -16,7 +15,7 @@ import (
 	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	_ "go.opentelemetry.io/otel/trace"
+
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"io"
@@ -33,8 +32,6 @@ var FactoryInputAPIKey string
 var FactoryInputUser string
 var FactoryInputBaseURL string
 var FactoryInsightBaseUrl string
-
-const tracingContext = "tracing-context"
 
 var tracer = otel.Tracer("grafana-proxy-server")
 
@@ -327,8 +324,8 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
 	if len(s) != 7 {
-		zap.S().Warnf("String split failed", len(s))
-		handleInvalidInputError(c, errors.New(fmt.Sprintf("factoryinput url invalid: %d", len(s))))
+		zap.S().Warnf("String split failed: %d", len(s))
+		handleInvalidInputError(c, fmt.Errorf("factoryinput url invalid: %d", len(s)))
 		return
 	}
 
@@ -388,7 +385,8 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 	} else {
 
 		var req *http.Request
-		if bodyBytes != nil && len(bodyBytes) > 0 {
+		// no nil check required, len(nil slice) is 0
+		if len(bodyBytes) > 0 {
 			zap.S().Warnf("Request with body bytes: %s", internal.SanitizeByteArray(bodyBytes))
 			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
@@ -441,8 +439,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 
 	if err != nil {
 		err = c.AbortWithError(http.StatusInternalServerError, err)
-		if err != nil {
-			panic(err)
-		}
+		// err is always not nil
+		panic(err)
 	}
 }

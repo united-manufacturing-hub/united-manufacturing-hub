@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel/attribute"
-	oteltrace "go.opentelemetry.io/otel/trace"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
@@ -44,31 +42,23 @@ func ShutdownDB() {
 
 // PQErrorHandling logs and handles postgresql errors
 func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical bool) {
-	var span oteltrace.Span
-	traceID := "Failed to get traceID"
-	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "PQErrorHandling", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-		defer span.End()
-	}
 
-	if span != nil {
-		span.SetAttributes(attribute.String("DBStatement", sqlStatement))
-		span.SetAttributes(attribute.String("DBType", "sql"))
-		span.SetAttributes(attribute.String("error", err.Error()))
-		traceID = span.SpanContext().SpanID().String()
+	if c != nil {
+		zap.S().Infof("[PQErrorHandling] Error: %v Context: %v", err, c.Request.Context())
+
 	}
 
 	if e := pgerror.ConnectionException(err); e != nil {
 		zap.S().Errorw("PostgreSQL failed: ConnectionException",
 			"error", err,
 			"sqlStatement", sqlStatement,
-			"traceID", traceID)
+		)
 		isCritical = true
 	} else {
 		zap.S().Errorw("PostgreSQL failed. ",
 			"error", err,
 			"sqlStatement", sqlStatement,
-			"traceID", traceID)
+		)
 	}
 
 	if isCritical {
@@ -81,8 +71,8 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 	// OpenTelemetry tracing
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetLocations", oteltrace.WithAttributes(attribute.String("customerID", customerID)))
-		defer span.End()
+		zap.S().Infof("[GetLocations] customerID: %v Context: %v", customerID, c.Request.Context())
+
 	}
 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
@@ -122,15 +112,9 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 // GetAssets retrieves all assets for a given customer
 func GetAssets(c *gin.Context, customerID string, location string) (assets []string, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetAssets", oteltrace.WithAttributes(attribute.String("customerID", customerID), attribute.String("location", location)))
-		defer span.End()
-	}
+		zap.S().Infof("[GetAssets] customerID: %v location: %v Context: %v", customerID, c.Request.Context(), location)
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
 	}
 
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
@@ -170,14 +154,9 @@ func GetAssets(c *gin.Context, customerID string, location string) (assets []str
 // GetComponents retrieves all assets for a given customer
 func GetComponents(c *gin.Context, assetID uint32) (components []string, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetComponents", oteltrace.WithAttributes(attribute.Int("assetID", int(assetID))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetComponents] assetID: %v Context: %v", assetID, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.Int("assetID", int(assetID)))
 	}
 
 	sqlStatement := `SELECT distinct(componentname) FROM componentTable WHERE asset_id=$1;`
@@ -217,19 +196,11 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 // GetStatesRaw gets all states for a specific asset in a timerange. It returns an array of datamodel.StateEntry
 func GetStatesRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetStatesRaw")
-		defer span.End()
+		zap.S().Infof("[GetStatesRaw] Context: %v", c.Request.Context())
+
 	}
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
-	}
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
@@ -328,19 +299,11 @@ func GetStatesRaw(c *gin.Context, customerID string, location string, asset stri
 // GetShiftsRaw gets all shifts for a specific asset in a timerange in a raw format
 func GetShiftsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetShiftsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetShiftsRaw] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
-	}
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
 		error = err
@@ -471,19 +434,11 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 // GetShifts gets all shifts for a specific asset in a timerange
 func GetShifts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetShifts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetShifts] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
-	}
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "shiftName"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
@@ -521,19 +476,9 @@ func GetShifts(c *gin.Context, customerID string, location string, asset string,
 // GetProcessValue gets all data for specific valueName and for a specific asset in a timerange
 func GetProcessValue(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetProcessValue", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetProcessValue] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
-		span.SetAttributes(attribute.String("valueName", valueName))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -587,17 +532,9 @@ func GetProcessValue(c *gin.Context, customerID string, location string, asset s
 // GetCurrentState gets the latest state of an asset
 func GetCurrentState(c *gin.Context, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetCurrentState", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetCurrentState] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.Bool("keepStatesInteger", keepStatesInteger))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -639,7 +576,7 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
-		fullRow := []interface{}{ConvertStateToString(c, dataPoint, 0, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{ConvertStateToString(c, dataPoint, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -649,16 +586,9 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
 func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetDataTimeRangeForAsset", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetDataTimeRangeForAsset] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -688,7 +618,7 @@ func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string
 	}
 
 	if !lastTimestampPq.Valid || !firstTimestampPq.Valid {
-		error = errors.New("Asset has no states yet")
+		error = errors.New("asset has no states yet")
 		return
 	}
 
@@ -706,8 +636,8 @@ func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string
 func GetCountsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.CountEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetCountsRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetCountsRaw] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -779,8 +709,8 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 func GetCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetCounts] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
@@ -809,8 +739,8 @@ func GetCounts(c *gin.Context, customerID string, location string, asset string,
 func GetTotalCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetTotalCounts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetTotalCounts] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
@@ -839,19 +769,9 @@ func GetTotalCounts(c *gin.Context, customerID string, location string, asset st
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetProductionSpeed", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetProductionSpeed] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
-		span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -902,7 +822,7 @@ func GetProductionSpeed(c *gin.Context, customerID string, location string, asse
 		// TODO: #92 Return timestamps in RFC3339 in /productionSpeed
 
 		// gapfilling to have constant 0 in grafana
-		if previousTimestamp.IsZero() != true {
+		if !previousTimestamp.IsZero() {
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
 			if timeDifference > 60 { // bigger than one minute
@@ -934,19 +854,9 @@ func GetProductionSpeed(c *gin.Context, customerID string, location string, asse
 // GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
 func GetQualityRate(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetQualityRate", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetQualityRate] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
-		span.SetAttributes(attribute.Int("aggregatedInterval", aggregatedInterval))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1000,7 +910,7 @@ func GetQualityRate(c *gin.Context, customerID string, location string, asset st
 		// TODO: Return timestamps in RFC3339 in /qualityRate
 
 		// gapfilling to have constant 0 in grafana
-		if previousTimestamp.IsZero() != true {
+		if !previousTimestamp.IsZero() {
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
 			if timeDifference > 60 { // bigger than one minute
@@ -1033,8 +943,8 @@ func GetQualityRate(c *gin.Context, customerID string, location string, asset st
 func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetCustomerConfiguration", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetCustomerConfiguration] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
 	// Get from cache if possible
@@ -1105,16 +1015,9 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 // GetRecommendations gets all current recommendations for a specific asset
 func GetRecommendations(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetRecommendations", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetRecommendations] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
 	}
 
 	data.ColumnNames = []string{"timestamp", "recommendationType", "recommendationValues", "recommendationTextEN", "recommendationTextDE", "diagnoseTextEN", "diagnoseTextDE"}
@@ -1173,16 +1076,9 @@ func GetRecommendations(c *gin.Context, customerID string, location string, asse
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
 func GetMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetMaintenanceActivities] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1239,18 +1135,9 @@ func GetMaintenanceActivities(c *gin.Context, customerID string, location string
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
 func GetUniqueProducts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetUniqueProducts", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetUniqueProducts] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1328,16 +1215,9 @@ func GetUniqueProducts(c *gin.Context, customerID string, location string, asset
 // GetUpcomingTimeBasedMaintenanceActivities returns UpcomingTimeBasedMaintenanceActivities array for an asset
 func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetUpcomingTimeBasedMaintenanceActivities", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetUpcomingTimeBasedMaintenanceActivities] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1417,18 +1297,9 @@ func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
 func GetOrdersRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersRaw, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetOrdersRaw", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetOrdersRaw] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1497,16 +1368,9 @@ func GetOrdersRaw(c *gin.Context, customerID string, location string, asset stri
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
 func GetDistinctProcessValues(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetDistinctProcessValues", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetDistinctProcessValues] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1555,8 +1419,8 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
 func GetAssetID(c *gin.Context, customerID string, location string, assetID string) (DBassetID uint32, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetAssetID", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
+		zap.S().Infof("[GetAssetID] Error: %v Context: %v", error, c.Request.Context())
+
 	}
 
 	// Get from cache if possible
@@ -1571,7 +1435,7 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
-		error = errors.New("Asset does not exist")
+		error = errors.New("asset does not exist")
 		return
 	} else if err != nil {
 		PQErrorHandling(c, sqlStatement, err, false)
@@ -1590,18 +1454,9 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 func GetUniqueProductsWithTags(c *gin.Context, customerID string, location string, asset string,
 	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "GetUniqueProductsWithTags", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", error))))
-		defer span.End()
-	}
+		zap.S().Infof("[GetUniqueProductsWithTags] Error: %v Context: %v", error, c.Request.Context())
 
-	if span != nil {
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
 	}
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1715,7 +1570,7 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 		} else { //if there are already rows in Data.datapoint
 			indexRow = len(data.Datapoints) - 1
 			lastUID, ok := data.Datapoints[indexRow][0].(int)
-			if ok == false {
+			if !ok {
 				zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
 				return
 			}
@@ -1823,4 +1678,376 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 	}
 
 	return
+}
+
+type CountStruct struct {
+	timestamp time.Time
+	count     int
+	scrap     int
+}
+type OrderStruct struct {
+	orderID        int
+	productId      int
+	targetUnits    int
+	beginTimeStamp time.Time
+	endTimeStamp   sql.NullTime
+}
+
+type ProductStruct struct {
+	productId               int
+	timePerProductUnitInSec float64
+}
+
+// GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
+func GetAccumulatedProducts(c *gin.Context, customerID string, location string, asset string,
+	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+
+	if c != nil {
+		zap.S().Infof("[GetAccumulatedProducts] Error: %v", error)
+
+	}
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	zap.S().Debugf("Request ts: %d -> %d", from.UnixMilli(), to.UnixMilli())
+
+	// Selects orders outside observation range
+	sqlStatementGetOutsider := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE
+      ot.asset_id = $1
+  AND
+      ot.begin_timestamp IS NOT NULL
+AND (
+                ot.begin_timestamp <= $2
+            AND
+                ot.end_timestamp IS NULL
+        OR
+                ot.end_timestamp >= $2
+    )
+ORDER BY begin_timestamp ASC
+LIMIT 1;
+`
+	// Select orders inside observation range
+	sqlStatementGetInsiders := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE ot.asset_id = $1
+AND (
+          ot.begin_timestamp >= $2
+          AND
+          ot.begin_timestamp <= $3
+          )
+AND ot.order_id != $4
+ORDER BY begin_timestamp ASC
+;
+`
+	// Select orders inside observation range, if there are no outsiders
+	sqlStatementGetInsidersNoOutsider := `
+SELECT ot.order_id, ot.product_id, ot.begin_timestamp, ot.end_timestamp, ot.target_units, ot.asset_id FROM ordertable ot
+WHERE ot.asset_id = $1
+AND (
+          ot.begin_timestamp >= $2
+          AND
+          ot.begin_timestamp <= $3
+          )
+ORDER BY begin_timestamp ASC
+;
+`
+
+	// Get order outside observation window
+	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
+	err = row.Err()
+	if err == sql.ErrNoRows {
+		zap.S().Debugf("No outsider rows")
+		//We don't care if there is no outside order, in this case we will just select all insider orders
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
+		error = err
+		return
+	}
+
+	// Holds an order, retrieved from our DB
+	type Order struct {
+		OID            int
+		PID            int
+		timestampBegin time.Time
+		timestampEnd   sql.NullTime
+		targetUnits    sql.NullInt32
+		AID            int
+	}
+
+	// Order that has started before observation time
+	var OuterOrder Order
+
+	var OidOuter int
+	var PidOuter int
+	var timestampbeginOuter time.Time
+	var timestampendOuter sql.NullTime
+	var targetunitsOuter sql.NullInt32
+	var AidOuter int
+	foundOutsider := true
+
+	err = row.Scan(&OidOuter, &PidOuter, &timestampbeginOuter, &timestampendOuter, &targetunitsOuter, &AidOuter)
+
+	OuterOrder = Order{
+		OID:            OidOuter,
+		PID:            PidOuter,
+		timestampBegin: timestampbeginOuter,
+		timestampEnd:   timestampendOuter,
+		targetUnits:    targetunitsOuter,
+		AID:            AidOuter,
+	}
+
+	if err == sql.ErrNoRows {
+		foundOutsider = false
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
+		error = err
+		return
+	}
+
+	var insideOrderRows *sql.Rows
+	if foundOutsider {
+		// Get insiders without the outsider order
+		zap.S().Debugf("Query with outsider: ", OuterOrder)
+		insideOrderRows, err = db.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
+	} else {
+		// Get insiders
+		zap.S().Debugf("Query without outsider: ", OuterOrder)
+		insideOrderRows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
+	}
+
+	if err == sql.ErrNoRows {
+		// It is valid to have no internal rows !
+		zap.S().Debugf("No internal rows")
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
+		error = err
+		return
+	}
+
+	// List of all inside orders
+	var insideOrders []Order
+
+	foundInsider := false
+	for insideOrderRows.Next() {
+
+		var OID int
+		var PID int
+		var timestampBegin time.Time
+		var timestampEnd sql.NullTime
+		var targetUnits sql.NullInt32
+		var AID int
+		err := insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
+		if err != nil {
+			PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
+			error = err
+			return
+		}
+		foundInsider = true
+		zap.S().Debugf("Found insider: %d, %d, %s, %s, %d, %d", OID, PID, timestampBegin, timestampEnd, targetUnits, AID)
+		insideOrders = append(insideOrders, Order{
+			OID,
+			PID,
+			timestampBegin,
+			timestampEnd,
+			targetUnits,
+			AID,
+		})
+	}
+
+	var observationStart time.Time
+	var observationEnd time.Time
+
+	if !foundInsider && !foundOutsider {
+		zap.S().Debugf("No insiders or outsiders !")
+		observationStart = from
+		observationEnd = to
+	} else {
+
+		// If value before observation window, use it's begin timestamp
+		// Else iter all inside rows and select the lowest timestamp
+		if foundOutsider {
+			observationStart = OuterOrder.timestampBegin
+		} else {
+			observationStart = time.Unix(1<<16-1, 0)
+			for _, rowdatum := range insideOrders {
+				if rowdatum.timestampBegin.Before(observationStart) {
+					observationStart = rowdatum.timestampBegin
+				}
+			}
+		}
+
+		observationEnd = time.Unix(0, 0)
+		// If value inside observation window, iterate them and select the greatest time.
+		// If order has no end, assume unix max time
+		if foundInsider {
+			for _, rowdatum := range insideOrders {
+				if rowdatum.timestampEnd.Valid {
+					if rowdatum.timestampEnd.Time.After(observationEnd) {
+						observationEnd = rowdatum.timestampEnd.Time
+						zap.S().Debugf("[1992] Set observationEnd %s", observationEnd.String())
+					}
+				} else {
+					if time.Unix(1<<16-1, 0).After(observationEnd) {
+						observationEnd = time.Unix(1<<16-1, 0)
+						zap.S().Debugf("[1996] Set observationEnd %s", observationEnd.String())
+					}
+				}
+			}
+		}
+		// Check if our starting order has the largest end time
+		// Also assign unix max time, if there is still no valid value
+		if OuterOrder.timestampEnd.Valid {
+			if OuterOrder.timestampEnd.Time.After(observationEnd) {
+				observationEnd = OuterOrder.timestampEnd.Time
+				zap.S().Debugf("[2005] Set observationEnd %s", observationEnd.String())
+			}
+		} else if observationEnd.Equal(time.Unix(0, 0)) {
+			observationEnd = to
+			zap.S().Debugf("[2009] Set observationEnd %s", observationEnd.String())
+		}
+	}
+
+	if observationStart.After(observationEnd) {
+		zap.S().Warnf("observationStart > observationEnd: %s > %s", observationStart.String(), observationEnd.String())
+	}
+
+	zap.S().Debugf("Set observation start to: %s", observationStart)
+	zap.S().Debugf("Set observation end to: %s", observationEnd)
+
+	//Get all counts
+	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp <= to_timestamp($3::double precision) ORDER BY timestamp ASC;`
+
+	countQueryBegin := observationStart.UnixMilli()
+	countQueryEnd := int64(0)
+	if to.After(observationEnd) {
+		countQueryEnd = to.UnixMilli()
+	} else {
+		countQueryEnd = observationEnd.UnixMilli()
+	}
+
+	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(countQueryBegin)/1000, float64(countQueryEnd)/1000)
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatementGetCounts, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatementGetCounts, err, false)
+		error = err
+		return
+	}
+	defer countRows.Close()
+
+	countMap := make([]CountStruct, 0)
+
+	for countRows.Next() {
+		var timestamp time.Time
+		var count int
+		var scrap int
+		err := countRows.Scan(&timestamp, &count, &scrap)
+
+		if err != nil {
+			PQErrorHandling(c, sqlStatementGetCounts, err, false)
+			error = err
+			return
+		}
+
+		countMap = append(countMap, CountStruct{timestamp: timestamp, count: count, scrap: scrap})
+	}
+
+	//Get all orders in timeframe
+	sqlGetRunningOrders := `SELECT order_id, product_id, target_units, begin_timestamp, end_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision) OR end_timestamp = NULL`
+
+	orderQueryBegin := observationStart.UnixMilli()
+	orderQueryEnd := int64(0)
+	if to.After(observationEnd) {
+		orderQueryEnd = to.UnixMilli()
+	} else {
+		orderQueryEnd = observationEnd.UnixMilli()
+	}
+
+	orderRows, err := db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlGetRunningOrders, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlGetRunningOrders, err, false)
+		error = err
+		return
+	}
+	defer orderRows.Close()
+
+	orderMap := make([]OrderStruct, 0)
+
+	for orderRows.Next() {
+		var orderID int
+		var productId int
+		var targetUnits int
+		var beginTimeStamp time.Time
+		var endTimeStamp sql.NullTime
+		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
+
+		if err != nil {
+			PQErrorHandling(c, sqlGetRunningOrders, err, false)
+			error = err
+			return
+		}
+
+		orderMap = append(orderMap, OrderStruct{
+			orderID:        orderID,
+			productId:      productId,
+			targetUnits:    targetUnits,
+			beginTimeStamp: beginTimeStamp,
+			endTimeStamp:   endTimeStamp,
+		})
+	}
+
+	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
+
+	productRows, err := db.Query(sqlGetProductsPerSec, assetID)
+
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+		error = err
+		return
+	}
+	defer productRows.Close()
+	productMap := make(map[int]ProductStruct, 0)
+
+	for productRows.Next() {
+		var productId int
+		var timePerUnitInSec float64
+		err := productRows.Scan(&productId, &timePerUnitInSec)
+
+		if err != nil {
+			PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+			error = err
+			return
+		}
+
+		productMap[productId] = ProductStruct{productId: productId, timePerProductUnitInSec: timePerUnitInSec}
+	}
+
+	zap.S().Debugf("AssetID: %d", assetID)
+	data, err = CalculateAccumulatedProducts(c, to, observationStart, observationEnd, countMap, orderMap, productMap)
+	return data, err
+}
+
+// BeforeOrEqual returns if t is before or equal to u
+func BeforeOrEqual(t time.Time, u time.Time) bool {
+	return t.Before(u) || t.Equal(u)
+}
+
+// AfterOrEqual returns if t is after or equal to u
+func AfterOrEqual(t time.Time, u time.Time) bool {
+	return t.After(u) || t.Equal(u)
 }

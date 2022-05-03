@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -22,7 +21,7 @@ var mqttOutGoingQueue *goque.Queue
 var buildtime string
 
 func main() {
-	logger, _ := zap.NewDevelopment()
+	logger, _ := zap.NewProduction()
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
@@ -45,14 +44,14 @@ func main() {
 	var err error
 	mqttIncomingQueue, err = setupQueue("incoming")
 	if err != nil {
-		zap.S().Errorf("Error setting up incoming queue", err)
+		zap.S().Fatalf("Error setting up incoming queue", err)
 		return
 	}
 	defer closeQueue(mqttIncomingQueue)
 
 	mqttOutGoingQueue, err = setupQueue("outgoing")
 	if err != nil {
-		zap.S().Errorf("Error setting up outgoing queue", err)
+		zap.S().Fatalf("Error setting up outgoing queue", err)
 		return
 	}
 	defer closeQueue(mqttOutGoingQueue)
@@ -80,6 +79,7 @@ func main() {
 	}
 
 	zap.S().Debugf("Start Queue processors")
+	go internal.StartEventHandler("MQTTKafkaBridge", internal.KafkaProducer.Events(), nil)
 	go processIncomingMessages()
 	go processOutgoingMessages()
 	go kafkaToQueue(KafkaTopic)
@@ -105,6 +105,8 @@ func main() {
 
 	}()
 
+	go ReportStats()
+
 	select {} // block forever
 }
 
@@ -127,15 +129,20 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
-func MqttTopicToKafka(MqttTopicName string) (KafkaTopicName string) {
-	if strings.Contains(MqttTopicName, ".") {
-		zap.S().Errorf("Illegal MQTT Topic name received: %s", MqttTopicName)
+func ReportStats() {
+	lastConfirmed := 0.0
+	for !ShuttingDown {
+		zap.S().Infof("Reporting stats"+
+			"| MQTT->Kafka queue lenght: %d"+
+			"| Kafka->MQTT queue length: %d"+
+			"| Produces Kafka messages: %f"+
+			"| Produces Kafka messages/s: %f",
+			mqttIncomingQueue.Length(),
+			mqttOutGoingQueue.Length(),
+			internal.KafkaConfirmed,
+			(internal.KafkaConfirmed-lastConfirmed)/5,
+		)
+		lastConfirmed = internal.KafkaConfirmed
+		time.Sleep(internal.FiveSeconds)
 	}
-	return strings.ReplaceAll(MqttTopicName, "/", ".")
-}
-func KafkaTopicToMqtt(KafkaTopicName string) (MqttTopicName string) {
-	if strings.Contains(KafkaTopicName, "/") {
-		zap.S().Errorf("Illegal Kafka Topic name received: %s", KafkaTopicName)
-	}
-	return strings.ReplaceAll(KafkaTopicName, ".", "/")
 }

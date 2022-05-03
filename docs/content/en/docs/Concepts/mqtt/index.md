@@ -63,14 +63,14 @@ Data from this level are all raw data, which are not yet contextualized(i.e., as
 
 ### Topic: ia/raw/
 
-Topic structure: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>/<IOLinkSensorID>`
+Topic structure: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>`
 
 All raw data coming in via [sensorconnect].
 
 {{% alert title="Example for ia/raw/" color="primary" %}}
-Topic: `ia/raw/2020-0102/0000005898845/X01/210-156`
+Topic: `ia/raw/2020-0102/0000005898845/X01`
 
-This means that the transmitter with the serial number `2020-0102` has one ifm gateway connected to it with the serial number `0000005898845`. This gateway has the sensor `210-156` connected to the first port `X01`.
+This means that the transmitter with the serial number `2020-0102` has one ifm gateway connected to it with the serial number `0000005898845`. This gateway has the sensor connected to the first port `X01`.
 
 ```JSON
 {

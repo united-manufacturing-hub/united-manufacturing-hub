@@ -5,21 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel/attribute"
-	oteltrace "go.opentelemetry.io/otel/trace"
-	"log"
+	"math"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
-
 	"go.uber.org/zap"
+	"gonum.org/v1/gonum/stat"
 )
 
-var logData bool = false
-var lock sync.Mutex
+var logData = false
+var _ sync.Mutex
 
 // ChannelResult returns the returnValue and a error code from a goroutine
 type ChannelResult struct {
@@ -28,13 +26,13 @@ type ChannelResult struct {
 }
 
 // ConvertStateToString converts a state in integer format to a human readable string
-func ConvertStateToString(c *gin.Context, state int, languageCode int, configuration datamodel.CustomerConfiguration) (stateString string) {
+func ConvertStateToString(c *gin.Context, state int, configuration datamodel.CustomerConfiguration) (stateString string) {
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "ConvertStateToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[ConvertStateToString] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
-	languageCode = configuration.LanguageCode
+	languageCode := configuration.LanguageCode
 
 	stateString = datamodel.ConvertStateToString(state, languageCode)
 
@@ -44,21 +42,13 @@ func ConvertStateToString(c *gin.Context, state int, languageCode int, configura
 // BusinessLogicErrorHandling logs and handles errors during the business logic
 func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error, isCritical bool) {
 
-	traceID := "Failed to get traceID"
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "BusinessLogicErrorHandling", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
-
-		span.SetAttributes(attribute.String("error", err.Error()))
-
-		traceID = span.SpanContext().SpanID().String()
-
+		zap.S().Infof("[BusinessLogicErrorHandling] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
 	}
 
 	zap.S().Errorw("Error in business logic. ",
 		"operation name", operationName,
-		"error", err,
-		"traceID", traceID,
+		"error", err.Error(),
 	)
 	if isCritical {
 		ShutdownApplicationGraceful()
@@ -68,8 +58,8 @@ func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error,
 // ConvertActivityToString converts a maintenance activity in integer format to a human readable string
 func ConvertActivityToString(c *gin.Context, activity int, configuration datamodel.CustomerConfiguration) (activityString string) {
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "ConvertActivityToString", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[ConvertActivityToString] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	languageCode := configuration.LanguageCode
 
@@ -97,10 +87,10 @@ func ConvertActivityToString(c *gin.Context, activity int, configuration datamod
 }
 
 // calculateDurations returns an array with the duration between the states.
-func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, returnChannel chan ChannelResult) {
+func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, returnChannel chan ChannelResult) {
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "calculateDurations", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[calculateDurations] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Prepare ChannelResult
@@ -143,13 +133,13 @@ func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEnt
 func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, returnChannel chan ChannelResult) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "transformToStateArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[transformToStateArray] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Prepare ChannelResult
 	var stateArray []int
-	var error error
+	var err error
 
 	// Loop through all datapoints
 	for _, datapoint := range temporaryDatapoints {
@@ -158,7 +148,7 @@ func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.State
 
 	// Send ChannelResult back
 	var ChannelResult ChannelResult
-	ChannelResult.err = error
+	ChannelResult.err = err
 	ChannelResult.returnValue = stateArray
 	returnChannel <- ChannelResult
 }
@@ -166,8 +156,8 @@ func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.State
 func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArray []int, state int, returnChannel chan ChannelResult) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "getTotalDurationForState", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[getTotalDurationForState] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	// Prepare ChannelResult
 	var totalDuration float64
@@ -200,8 +190,8 @@ func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArra
 func addUnknownMicrostops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "addUnknownMicrostops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[addUnknownMicrostops] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Loop through all datapoints
@@ -249,23 +239,14 @@ func getProducedPiecesFromCountSlice(countSlice []datamodel.CountEntry, from tim
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
-		var timestamp time.Time
-		var count float64
-
-		count = dataPoint.Count
-		timestamp = dataPoint.Timestamp
+		count := dataPoint.Count
+		timestamp := dataPoint.Timestamp
 
 		if isTimepointInTimerange(timestamp, TimeRange{from, to}) {
 			totalCount += count
 		}
 	}
 	return
-}
-
-// Usage: defer timeTrack(time.Now(), "getProducedPiecesFromCountSlice")
-func timeTrack(start time.Time, name string) {
-	elapsed := time.Since(start)
-	log.Printf("%s took %s", name, elapsed)
 }
 
 func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, from time.Time, to time.Time) (processedCountSlice []datamodel.CountEntry) {
@@ -373,8 +354,8 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "calculatateLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[calculatateLowSpeedStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
@@ -390,7 +371,7 @@ func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []data
 
 	oldD := from
 
-	for d := from; d.After(to) == false; d = d.Add(time.Minute) { //timestamp is beginning of the state. d is current progress.
+	for d := from; !d.After(to); d = d.Add(time.Minute) { //timestamp is beginning of the state. d is current progress.
 		if d == oldD { //if first entry
 			continue
 		}
@@ -430,8 +411,8 @@ func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []data
 func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "addLowSpeedStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[addLowSpeedStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// actual function start
@@ -468,9 +449,7 @@ func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.St
 				return
 			}
 			// Add all states
-			for _, row := range rows {
-				processedStateArray = append(processedStateArray, row)
-			}
+			processedStateArray = append(processedStateArray, rows...)
 
 		} else {
 			state = dataPoint.State
@@ -486,8 +465,8 @@ func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.St
 func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "specifySmallNoShiftsAsBreaks", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[specifySmallNoShiftsAsBreaks] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -527,8 +506,8 @@ func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEn
 func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "removeSmallRunningStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[removeSmallRunningStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Loop through all datapoints
@@ -569,8 +548,8 @@ func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry,
 func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "removeSmallStopStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[removeSmallStopStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Loop through all datapoints
@@ -608,11 +587,11 @@ func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, co
 	return
 }
 
-func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "combineAdjacentStops", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[combineAdjacentStops] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Loop through all datapoints
@@ -654,11 +633,11 @@ func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry, con
 	return
 }
 
-func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "specifyUnknownStopsWithFollowingStopReason", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[specifyUnknownStopsWithFollowingStopReason] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -756,14 +735,7 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from time.Time, 
 func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "GetOrdersTimeline", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
-
-		span.SetAttributes(attribute.String("customerID", customerID))
-		span.SetAttributes(attribute.String("location", location))
-		span.SetAttributes(attribute.String("asset", asset))
-		span.SetAttributes(attribute.String("from", from.String()))
-		span.SetAttributes(attribute.String("to", to.String()))
+		zap.S().Infof("[GetOrdersTimeline] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
 
 	}
 
@@ -793,8 +765,8 @@ func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset
 func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "calculateOrderInformation", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[calculateOrderInformation] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	data.ColumnNames = []string{
@@ -857,7 +829,7 @@ func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, 
 		}
 
 		// data.ColumnNames = []string{"state", "duration"}
-		stopParetos, err := CalculateStopParetos(c, processedStates, from, to, true, true, configuration)
+		stopParetos, err := CalculateStopParetos(c, processedStates, to, true, true, configuration)
 		if err != nil {
 			errReturn = err
 			return
@@ -984,8 +956,8 @@ func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, 
 func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "processStatesOptimized", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[processStatesOptimized] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	var processedStatesTemp []datamodel.StateEntry
@@ -1018,7 +990,7 @@ func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamod
 	}
 
 	// resolving issue #17 (States change depending on the zoom level during time ranges longer than a day)
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration)
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray)
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1056,10 +1028,9 @@ func processStates(c *gin.Context,
 	err error,
 ) {
 
-	var span oteltrace.Span
 	if c != nil {
-		_, span = tracer.Start(c.Request.Context(), "processStates", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[processStates] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
+
 	}
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
@@ -1069,9 +1040,7 @@ func processStates(c *gin.Context,
 	processedStateArray, cacheHit = internal.GetProcessStatesFromCache(key)
 	if cacheHit {
 		//zap.S().Debugf("processStates CacheHit")
-		if span != nil {
-			span.SetAttributes(attribute.Bool("CacheHit", true))
-		}
+
 		return
 	}
 
@@ -1086,7 +1055,7 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1098,7 +1067,7 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1110,13 +1079,13 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(c, processedStateArray, configuration) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
+	processedStateArray, err = specifyUnknownStopsWithFollowingStopReason(c, processedStateArray) //sometimes the operator presses the button in the middle of a stop. Without this the time till pressing the button would be unknown stop. With this solution the entire block would be that stop.
 	if err != nil {
 		zap.S().Errorf("specifyUnknownStopsWithFollowingStopReason failed", err)
 		return
 	}
 
-	processedStateArray, err = combineAdjacentStops(c, processedStateArray, configuration) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
+	processedStateArray, err = combineAdjacentStops(c, processedStateArray) // this is required, because due to removeSmallRunningStates, specifyUnknownStopsWithFollowingStopReason we have now various stops in a row. this causes microstops longer than defined threshold
 	if err != nil {
 		zap.S().Errorf("combineAdjacentStops failed", err)
 		return
@@ -1134,7 +1103,7 @@ func processStates(c *gin.Context,
 		return
 	}
 
-	processedStateArray, err = automaticallyIdentifyChangeovers(c, processedStateArray, orderArray, from, to, configuration)
+	processedStateArray, err = automaticallyIdentifyChangeovers(c, processedStateArray, orderArray, to, configuration)
 	if err != nil {
 		zap.S().Errorf("automaticallyIdentifyChangeovers failed", err)
 		return
@@ -1152,7 +1121,7 @@ func processStates(c *gin.Context,
 	return
 }
 
-func debugCheckForUnorderedStates(states []datamodel.StateEntry) {
+func _(states []datamodel.StateEntry) {
 	// Loop through all datapoints
 	for index, dataPoint := range states {
 		if index+1 == len(states) {
@@ -1172,8 +1141,8 @@ func debugCheckForUnorderedStates(states []datamodel.StateEntry) {
 func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, includeRunning bool) (paretos []datamodel.ParetoEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "getParetoArray", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[getParetoArray] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	totalDurationChannel := make(chan ChannelResult)
 
@@ -1208,7 +1177,7 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 		// Add it if it is not running
 		if !datamodel.IsProducing(paretoEntry.State) {
 			paretos = append(paretos, paretoEntry)
-		} else if datamodel.IsProducing(paretoEntry.State) && includeRunning == true { // add it if includeRunning is true
+		} else if datamodel.IsProducing(paretoEntry.State) && includeRunning { // add it if includeRunning is true
 			paretos = append(paretos, paretoEntry)
 		}
 	}
@@ -1222,17 +1191,17 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 }
 
 // CalculateStopParetos calculates the paretos for a given []datamodel.StateEntry
-func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculateStopParetos", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculateStopParetos] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1266,7 +1235,7 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 			fullRow := []interface{}{pareto.State, pareto.Duration}
 			data = append(data, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(c, pareto.State, 0, configuration), pareto.Duration}
+			fullRow := []interface{}{ConvertStateToString(c, pareto.State, configuration), pareto.Duration}
 			data = append(data, fullRow)
 		}
 
@@ -1276,11 +1245,11 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 }
 
 // CalculateStateHistogram calculates the histogram for a given []datamodel.StateEntry
-func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculateStateHistogram", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculateStateHistogram] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	var stateOccurances [datamodel.MaxState]int //All are initialized with 0
@@ -1288,7 +1257,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 	for _, state := range temporaryDatapoints {
 		if state.State >= len(stateOccurances) || state.State < 0 {
 			zap.S().Errorf("Invalid state", state.State)
-			error = fmt.Errorf("Invalid state: %d", state.State)
+			error = fmt.Errorf("invalid state: %d", state.State)
 			return
 		}
 		stateOccurances[int(state.State)]++
@@ -1306,7 +1275,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 			fullRow := []interface{}{index, occurances}
 			data = append(data, fullRow)
 		} else {
-			fullRow := []interface{}{ConvertStateToString(c, index, 0, configuration), occurances}
+			fullRow := []interface{}{ConvertStateToString(c, index, configuration), occurances}
 			data = append(data, fullRow)
 		}
 
@@ -1316,17 +1285,17 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 }
 
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
-func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculateAvailability", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculateAvailability] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1373,18 +1342,18 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 }
 
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
-func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculatePerformance] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1431,11 +1400,11 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 }
 
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
-func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data [][]interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculatePerformance", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculatePerformance] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Loop through all datapoints and calculate good pieces and scrap
@@ -1495,15 +1464,15 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculateOEE", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculateOEE] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
 	// Execute parallel functions
-	go calculateDurations(c, temporaryDatapoints, from, to, durationArrayChannel)
+	go calculateDurations(c, temporaryDatapoints, to, durationArrayChannel)
 	go transformToStateArray(c, temporaryDatapoints, stateArrayChannel)
 
 	// Get result from calculateDurations
@@ -1557,8 +1526,8 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 func CalculateAverageStateTime(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "CalculateAverageStateTime", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[CalculateAverageStateTime] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	key := fmt.Sprintf("CalculateAverageStateTime-%s-%s-%s-%s-%d", internal.AsHash(temporaryDatapoints), from, to, internal.AsHash(configuration), targetState)
@@ -1730,7 +1699,7 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 
 	} else {
 		// not possible. throw error
-		error = errors.New("More than 2 overlapping orders with one state")
+		error = errors.New("more than 2 overlapping orders with one state")
 		return
 
 	}
@@ -1739,11 +1708,11 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 }
 
 // automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
-func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
+func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "automaticallyIdentifyChangeovers", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
+		zap.S().Infof("[automaticallyIdentifyChangeovers] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
+
 	}
 
 	// Loop through all datapoints
@@ -1781,9 +1750,7 @@ func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.Sta
 					return
 				}
 				// Add all states
-				for _, row := range rows {
-					processedStateArray = append(processedStateArray, row)
-				}
+				processedStateArray = append(processedStateArray, rows...)
 
 			} else { // if it does not overlap
 				state = dataPoint.State
@@ -1841,7 +1808,7 @@ func ConvertNewToOldStateEntryArray(stateArray []datamodel.StateEntry) (resultSt
 func SliceContainsInt(slice [][]interface{}, number int, column int) (Contains bool, Index int) {
 	for index, a := range slice {
 		numberFromSlice, ok := a[column].(int)
-		if ok == false {
+		if !ok {
 			zap.S().Errorf("sliceContainsInt: casting numberFromSlice to int error", index)
 		}
 		if numberFromSlice == number {
@@ -1901,7 +1868,7 @@ func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn 
 	fullRow = append(fullRow, productID)
 	fullRow = append(fullRow, isScrap)
 	fullRow = LengthenSliceToFitNames(fullRow, columnNames)
-	if valueName.Valid == true && value.Valid == true { //if a value is specified, add to data
+	if valueName.Valid && value.Valid { //if a value is specified, add to data
 		fullRow[indexColumn] = value.Float64
 	}
 	dataOut = append(data, fullRow)
@@ -1918,4 +1885,318 @@ func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err erro
 		}
 	}
 	return
+}
+
+func CalculateAccumulatedProducts(c *gin.Context, to time.Time, observationStart time.Time, observationEnd time.Time, countMap []CountStruct, orderMap []OrderStruct, productCache map[int]ProductStruct) (data datamodel.DataResponseAny, error error) {
+
+	if c != nil {
+		zap.S().Infof("[CalculateAccumulatedProducts] Error: %v", error)
+
+	}
+
+	var datapoints datamodel.DataResponseAny
+	datapoints.ColumnNames = []string{
+		"Target Output",
+		"Actual Output",
+		"Actual Scrap",
+		"timestamp",
+		"Internal Order ID",
+		"Ordered Units",
+		"Predicted Output",
+		"Predicted Scrap",
+		"Predicted Target",
+		"Target Output after Order End",
+		"Actual Output after Order End",
+		"Actual Scrap after Order End",
+		"Actual Good Output",
+		"Actual Good Output after Order End",
+		"Predicted Good Output",
+	}
+	// Move below to dataprocessing
+	colLen := len(datapoints.ColumnNames)
+
+	//Scale stepping based on observation range
+	observationHours := to.Sub(observationStart).Hours()
+	observationDays := int64(observationHours / 24)
+	stepping := int64(60000) // 60 sec resolution
+	if observationHours > 24 {
+		stepping *= observationDays
+	}
+
+	//Pre-allocate memory for datapoints
+	dplen := ((observationEnd.UnixMilli() - observationStart.UnixMilli()) / stepping) * 3
+	dplen = int64(math.Max(float64(dplen), 10))
+	zap.S().Debugf("Allocation for %d datapoints", dplen)
+	tmpDatapoints := make([][]interface{}, dplen)
+
+	zap.S().Debugf("Stepping %d (%f -> %d)", stepping, observationHours, observationDays)
+
+	// Create datapoint every steppint
+	dataPointIndex := 0
+
+	cts := 0
+	scp := 0
+
+	lastOrderID := 0
+	lastOrderOverhead := int64(0)
+	allOrderOverheads := int64(0)
+	lastDataPointTargetOverhead := int64(0)
+
+	// Regression data for products
+	regressionDataP := internal.Xy{
+		X: make([]float64, dplen+1),
+		Y: make([]float64, dplen+1),
+	}
+
+	// Regression data for scraps
+	regressionDataS := internal.Xy{
+		X: make([]float64, dplen+1),
+		Y: make([]float64, dplen+1),
+	}
+
+	// Regression data for targets
+	regressionDataT := internal.Xy{
+		X: make([]float64, dplen+1),
+		Y: make([]float64, dplen+1),
+	}
+
+	var step1ObservationEnd int64
+	// Step through our observation timeframe
+	for i := observationStart.UnixMilli(); i < observationEnd.UnixMilli(); i += stepping {
+		steppingEnd := i + stepping
+		step1ObservationEnd = i
+
+		counts := make([]CountStruct, 0)
+
+		for _, count := range countMap {
+			if count.timestamp.UnixMilli() >= i && count.timestamp.UnixMilli() < steppingEnd {
+				counts = append(counts, CountStruct{timestamp: count.timestamp, count: count.count, scrap: count.scrap})
+			}
+		}
+
+		var orderID int
+		var productId int
+		var targetUnits int
+		var beginTimeStamp time.Time
+		runningOrder := false
+
+		insideOrders := make([]OrderStruct, 0)
+
+		for _, order := range orderMap {
+			zap.S().Debugf("if %d < %d && ((%b && %d >= %d) || !%b)", order.beginTimeStamp.UnixMilli(), i, order.endTimeStamp.Valid, order.endTimeStamp.Time.UnixMilli(), steppingEnd, order.endTimeStamp.Valid)
+			if order.beginTimeStamp.UnixMilli() < i && ((order.endTimeStamp.Valid && order.endTimeStamp.Time.UnixMilli() >= steppingEnd) || !order.endTimeStamp.Valid) {
+				orderID = order.orderID
+				productId = order.productId
+				targetUnits = order.targetUnits
+				beginTimeStamp = order.beginTimeStamp
+				runningOrder = true
+			}
+
+			if order.beginTimeStamp.UnixMilli() >= i && order.endTimeStamp.Valid && order.endTimeStamp.Time.UnixMilli() < steppingEnd {
+				zap.S().Debugf("Found inside order ! (%d)", order.orderID)
+				insideOrders = append(insideOrders, OrderStruct{
+					orderID:        order.orderID,
+					productId:      order.productId,
+					targetUnits:    order.targetUnits,
+					beginTimeStamp: order.beginTimeStamp,
+					endTimeStamp:   order.endTimeStamp,
+				})
+			}
+		}
+
+		expectedProducedFromCurrentOrder := int64(0)
+
+		if runningOrder {
+			timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
+			product, ok := productCache[productId]
+			if !ok {
+				panic(fmt.Sprintf("Product %d not found", productId))
+			}
+
+			expectedProducedFromCurrentOrder = timeSinceStartInMilliSec / int64(product.timePerProductUnitInSec*1000)
+		} else {
+			zap.S().Debugf("No running order")
+		}
+
+		// Orders inside step
+		for _, insideOrder := range insideOrders {
+			timeSinceStartInMilliSec := i - insideOrder.beginTimeStamp.UnixMilli()
+			product, ok := productCache[insideOrder.productId]
+			if !ok {
+				panic(fmt.Sprintf("Product %d not found", productId))
+			}
+
+			expectedProducedFromCurrentOrder += timeSinceStartInMilliSec / int64(product.timePerProductUnitInSec*1000)
+		}
+
+		for _, count := range counts {
+			cts += count.count
+			scp += count.scrap
+		}
+
+		tmpDatapoints[dataPointIndex] = make([]interface{}, colLen)
+		//Should fix rounding errors
+		expT := int64(0)
+		if expectedProducedFromCurrentOrder+allOrderOverheads < lastDataPointTargetOverhead {
+			expT = lastDataPointTargetOverhead
+		} else {
+			expT = expectedProducedFromCurrentOrder + allOrderOverheads
+		}
+		// Target Output
+		tmpDatapoints[dataPointIndex][0] = expT
+		// Actual Output
+		tmpDatapoints[dataPointIndex][1] = cts
+		// Actual Scrap
+		tmpDatapoints[dataPointIndex][2] = scp
+		// timestamp
+		tmpDatapoints[dataPointIndex][3] = i
+		// Internal Order ID
+		tmpDatapoints[dataPointIndex][4] = orderID
+		// Ordered Units
+		tmpDatapoints[dataPointIndex][5] = targetUnits
+		// Predicted Output
+		tmpDatapoints[dataPointIndex][6] = nil
+		// Predicted Scrap
+		tmpDatapoints[dataPointIndex][7] = nil
+		// Predicted Target
+		tmpDatapoints[dataPointIndex][8] = nil
+		// Target Output after Order End
+		tmpDatapoints[dataPointIndex][9] = nil
+		// Actual Output after Order End
+		tmpDatapoints[dataPointIndex][10] = nil
+		// Actual Scrap after Order End
+		tmpDatapoints[dataPointIndex][11] = nil
+		// Actual Good Output
+		tmpDatapoints[dataPointIndex][12] = cts - scp
+		// Actual Good Output after Order End
+		tmpDatapoints[dataPointIndex][13] = nil
+		// Predicted Good Output
+		tmpDatapoints[dataPointIndex][14] = nil
+
+		if lastOrderID != orderID {
+			allOrderOverheads += lastOrderOverhead
+		}
+
+		dataPointIndex += 1
+		lastOrderID = orderID
+		lastOrderOverhead = expectedProducedFromCurrentOrder
+		lastDataPointTargetOverhead = expectedProducedFromCurrentOrder + allOrderOverheads
+
+		// Add current count, scrap & target to regression list
+		regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
+		regressionDataP.Y = append(regressionDataP.Y, float64(cts))
+
+		regressionDataS.X = append(regressionDataS.X, float64(dataPointIndex))
+		regressionDataS.Y = append(regressionDataS.Y, float64(scp))
+
+		regressionDataT.X = append(regressionDataT.X, float64(dataPointIndex))
+		regressionDataT.Y = append(regressionDataT.Y, float64(expT))
+
+	}
+
+	datapoints.Datapoints = make([][]interface{}, 0, dplen)
+
+	// Make sure that there are no nil entries in our datapoints
+	for _, item := range tmpDatapoints {
+		if item != nil {
+			datapoints.Datapoints = append(datapoints.Datapoints, item)
+		}
+	}
+
+	if AfterOrEqual(observationEnd, to) {
+		zap.S().Debugf("%s is AfterOrEqualTo %s", observationEnd, to)
+		// No need to predict if observationEnd is after to
+		return datapoints, nil
+	}
+
+	// Begin predictions
+	// If there is no data to predict from, just abort
+	if dataPointIndex <= 3 {
+		return datapoints, nil
+	}
+	zap.S().Debugf("Before predictions. dataPointIndex: %d", dataPointIndex)
+	dataPointIndex += 1
+	betaP, alphaP := stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
+	betaS, alphaS := stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
+	betaT, alphaT := stat.LinearRegression(regressionDataT.X, regressionDataT.Y, nil, false)
+
+	firstPValue := alphaP*float64(dataPointIndex) + betaP
+	offsetP := float64(cts) - firstPValue
+
+	firstSValue := alphaS*float64(dataPointIndex) + betaS
+	offsetS := float64(scp) - firstSValue
+
+	firstTValue := alphaT*float64(dataPointIndex) + betaT
+	offsetT := float64(lastDataPointTargetOverhead) - firstTValue
+
+	for i := step1ObservationEnd + 1; i < to.UnixMilli(); i += stepping {
+		steppingEnd := i + stepping
+		zap.S().Debugf("Prediction Step %d", i)
+		zap.S().Debugf("Stepping %d", stepping)
+		zap.S().Debugf("SteppingEnd %d", steppingEnd)
+
+		for _, count := range countMap {
+			if count.timestamp.UnixMilli() >= i && count.timestamp.UnixMilli() < steppingEnd {
+				zap.S().Debugf("Found count in timerange %d <= %d < %d (cnt: %d)", i, count.timestamp.UnixMilli(), steppingEnd, count.count)
+				cts += count.count
+				scp += count.scrap
+
+				regressionDataP.X = append(regressionDataP.X, float64(dataPointIndex))
+				regressionDataP.Y = append(regressionDataP.Y, float64(cts))
+
+				regressionDataS.X = append(regressionDataS.X, float64(dataPointIndex))
+				regressionDataS.Y = append(regressionDataS.Y, float64(scp))
+
+				betaP, alphaP = stat.LinearRegression(regressionDataP.X, regressionDataP.Y, nil, false)
+				betaS, alphaS = stat.LinearRegression(regressionDataS.X, regressionDataS.Y, nil, false)
+
+			}
+		}
+
+		pValue := alphaP*float64(dataPointIndex) + betaP
+		sValue := alphaS*float64(dataPointIndex) + betaS
+		tValue := alphaT*float64(dataPointIndex) + betaT
+
+		sVO := sValue + offsetS
+		pVO := pValue + offsetP
+
+		v := make([]interface{}, colLen)
+		// Target Output
+		v[0] = nil
+		// Actual Output
+		v[1] = nil
+		// Actual Scrap
+		v[2] = nil
+		// timestamp
+		v[3] = i
+		// Internal Order ID
+		v[4] = nil
+		// Ordered Units
+		v[5] = nil
+		// Predicted Output
+		v[6] = pVO
+		// Predicted Scrap
+		v[7] = sVO
+		// Predicted Target
+		v[8] = tValue + offsetT
+		// Target Output after Order End
+		v[9] = lastDataPointTargetOverhead
+		// Actual Output after Order End
+		v[10] = cts
+		// Actual Scrap after Order End
+		v[11] = scp
+		// Actual Good Output
+		v[12] = nil
+		// Actual Good Output after Order End
+		v[13] = cts - scp
+		// Predicted Good Output
+		v[14] = pVO - sVO
+
+		datapoints.Datapoints = append(datapoints.Datapoints, v)
+
+		dataPointIndex += 1
+	}
+
+	zap.S().Debugf("After predictions dataPointIndex: %d", dataPointIndex)
+	return datapoints, nil
 }

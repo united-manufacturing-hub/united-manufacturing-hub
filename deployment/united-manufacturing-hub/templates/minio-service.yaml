@@ -1,6 +1,6 @@
 ---
 {{if .Values._000_commonConfig.blobstorage.enabled}}
-{{ if index .Values "minio-operator" "loadBalancerEnabled" }}
+{{if index .Values "minio-operator" "loadBalancerEnabled"}}
 
 apiVersion: v1
 kind: Service

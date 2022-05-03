@@ -7,6 +7,8 @@ import (
 	"context"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -102,7 +104,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	}()
 	topicSpecification := kafka.TopicSpecification{
 		Topic:         kafkaTopicName,
-		NumPartitions: 1,
+		NumPartitions: 6,
 	}
 	var maxExecutionTime = time.Duration(5) * time.Second
 	d := time.Now().Add(maxExecutionTime)
@@ -126,4 +128,31 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		}
 	}
 	return
+}
+
+var validKafkaTopicRegex, _ = regexp.Compile(`^[a-zA-Z\d\._\-]+$`)
+
+func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
+
+	MqttTopicName = strings.TrimSpace(MqttTopicName)
+	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
+	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
+	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
+		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
+		return false, ""
+	}
+	if !IsKafkaTopicValid(MqttTopicName) {
+		zap.S().Errorf("Topic is not valid: %s, does not match %s", MqttTopicName, KafkaUMHTopicRegex)
+		return false, ""
+	}
+	return true, MqttTopicName
+}
+func KafkaTopicToMqtt(KafkaTopicName string) (validTopic bool, MqttTopicName string) {
+	if strings.Contains(KafkaTopicName, "/") {
+		zap.S().Errorf("Illegal MQTT->Kafka Topic name: %s", KafkaTopicName)
+		return false, ""
+	}
+	KafkaTopicName = strings.TrimSpace(KafkaTopicName)
+	KafkaTopicName = strings.ReplaceAll(KafkaTopicName, " ", "")
+	return true, strings.ReplaceAll(KafkaTopicName, ".", "/")
 }

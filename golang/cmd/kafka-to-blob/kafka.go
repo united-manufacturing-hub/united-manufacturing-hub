@@ -27,6 +27,8 @@ func processKafkaQueue(topic string, bucketName string) {
 		msg, err = internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+				// Sleep to reduce CPU usage
+				time.Sleep(internal.OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				time.Sleep(5 * time.Second)

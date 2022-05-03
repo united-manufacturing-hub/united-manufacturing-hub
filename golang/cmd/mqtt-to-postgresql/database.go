@@ -1036,13 +1036,13 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 		errx = txn.Rollback()
 		if errx != nil && GetPostgresErrorRecoveryOptions(errx) == Unrecoverable {
 			zap.S().Errorf("Failed to rollback tx")
-			return nil, items, errx
+			return items, nil, errx
 		}
 		var innerFaultyItems []*goque.PriorityItem
 		innerFaultyItems, errx = fnc(workingItems, recursionDepth)
 		if errx != nil {
 			faultyItems = append(faultyItems, innerFaultyItems...)
-			return nil, faultyItems, errx
+			return faultyItems, nil, errx
 		}
 	} else {
 		if isDryRun {
