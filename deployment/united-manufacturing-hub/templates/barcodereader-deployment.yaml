@@ -1,0 +1,84 @@
+---
+{{if or .Values.barcodereader.enabled .Values._000_commonConfig.kafkaStateDetector.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+  labels:
+    {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 4}}
+  {{if .Values.barcodereader.annotations}}
+  annotations:
+    {{- toYaml .Values.barcodereader.annotations | nindent 4}}
+  {{end}}
+spec:
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+        {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+          {{if .Values.barcodereader.image.tag}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Values.barcodereader.image.tag}}
+          {{- else}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.barcodereader.image.pullPolicy}}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: devs
+              mountPath: /dev/
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: CUSTOM_USB_NAME
+              value: {{.Values._000_commonConfig.datasources.barcodereader.customUSBName}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CUSTOMER_ID
+              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID}}
+            - name: LOCATION
+              value: {{.Values._000_commonConfig.datasources.barcodereader.location}}
+            - name: ASSET_ID
+              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID}}
+
+            - name: SERIAL_NUMBERs
+              value: {{.Values._000_commonConfig.serialNumber}}
+
+            - name: SCAN_ONLY
+              value: {{.Values.barcodereader.scanOnly}}
+
+          resources:
+            limits:
+              cpu: {{.Values.barcodereader.resources.limits.cpu}}
+              memory: {{.Values.barcodereader.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.barcodereader.resources.requests.cpu}}
+              memory: {{.Values.barcodereader.resources.requests.memory}}
+      serviceAccountName: ""
+      restartPolicy: Always
+      volumes:
+        - name: devs
+          hostPath:
+            path: /dev/
+{{end}}
+

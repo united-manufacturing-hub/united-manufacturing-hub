@@ -239,7 +239,9 @@ mqttbridge:
 
 ### barcodereader ###
 barcodereader:
-  image: unitedmanufacturinghub/barcodereader
+  image:
+    repository: unitedmanufacturinghub/barcodereader
+    pullPolicy: IfNotPresent
   resources:
     requests:
       cpu: "2m"
@@ -247,6 +249,7 @@ barcodereader:
     limits:
       cpu: "10m"
       memory: "60Mi"
+  scanOnly: false # Debug mode, will not send data to kafka
 
 ### sensorconnect ###
 sensorconnect:
