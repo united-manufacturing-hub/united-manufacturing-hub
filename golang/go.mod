@@ -36,5 +36,5 @@ require (
 	go.uber.org/zap v1.21.0
 	gonum.org/v1/gonum v0.11.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
-	k8s.io/apimachinery v0.23.6
+	k8s.io/apimachinery v0.24.0
 )
