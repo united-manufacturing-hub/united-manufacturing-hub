@@ -20,7 +20,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"github.com/gvalkov/golang-evdev"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -460,13 +459,13 @@ func read(dev *os.File) ([]InputEvent, error) {
 	buffer := make([]byte, EVENT_SIZE*EVENT_CAPTURES)
 	_, err := dev.Read(buffer)
 	if err != nil {
-		fmt.Printf("dev.Read failed with error: %s\n", err)
+		zap.S().Warnf("dev.Read failed with error: %s\n", err)
 		return events, err
 	}
 	b := bytes.NewBuffer(buffer)
 	err = binary.Read(b, binary.LittleEndian, &events)
 	if err != nil {
-		fmt.Printf("binary.Read failed with error: %s\n", err)
+		zap.S().Warnf("binary.Read failed with error: %s\n", err)
 		return events, err
 	}
 	// remove trailing structures
@@ -488,12 +487,15 @@ var altBuffer = make([]byte, 0)
 func decodeEvents(events []InputEvent) (string, bool) {
 	var buffer bytes.Buffer
 	for i := range events {
-		if events[i].Type == 1 && events[i].Value == 1 {
-			if events[i].Code == 28 {
+		zap.S().Debugf("Event type: %s", evdev.EV[int(events[i].Type)])
+		if events[i].Type == evdev.EV_KEY && events[i].Value == 1 {
+			if events[i].Code == 0x1c {
 				// carriage return detected: the barcode sequence ends here
+				zap.S().Debugf("Carriage return detected. AltBuff len: %d", len(altBuffer))
 				return buffer.String(), true
 			} else {
 				if events[i].Code != 0 {
+					zap.S().Infof("Processing event: %#v", events[i])
 					// this is barcode data we want to capture
 					keyCode, _, _, isModifier, altPressed := lookupKeyCode(byte(events[i].Code))
 
@@ -512,14 +514,19 @@ func decodeEvents(events []InputEvent) (string, bool) {
 							}
 						} else {
 							buffer.WriteString(string(keyCode))
+							zap.S().Debugf("Wrote %s to buffer", string(keyCode))
 						}
 					} else {
 						if altPressed {
 							altPressedState = true
 						}
 					}
+				} else {
+					zap.S().Debugf("[C0] Skipping event: %#v", events[i])
 				}
 			}
+		} else {
+			zap.S().Debugf("[T] Skipping event: %#v", events[i])
 		}
 	}
 	// return what has been collected so far,
@@ -542,11 +549,12 @@ func ScanForever(device *evdev.InputDevice, fn func(string), errFn func(error)) 
 		}
 		scannedData, endOfScan := decodeEvents(scanEvents)
 		if endOfScan {
+			scanBuffer.WriteString(scannedData)
 			// invoke the function which handles the scan result
 			fn(scanBuffer.String())
 			scanBuffer.Reset() // clear the buffer and start again
 			altPressedState = false
-			altBuffer = nil
+			altBuffer = make([]byte, 0)
 			resetKeyModifiers()
 		} else {
 			scanBuffer.WriteString(scannedData)

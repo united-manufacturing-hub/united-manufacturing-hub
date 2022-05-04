@@ -6,7 +6,7 @@ _000_commonConfig:
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
 
-    # barcodereader reads out connected USB barcodereaders emulating a keyboard
+    #barcodereader reads out connected USB barcodereaders emulating a keyboard
     barcodereader:
       enabled: true
       USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
@@ -17,7 +17,7 @@ _000_commonConfig:
 
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
-      enabled: true
+      enabled: false
       iprange: "192.168.10.1/24"  # IP Range in CIDR notation
       enableKafka: true
       enableMQTT: false
@@ -25,7 +25,7 @@ _000_commonConfig:
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
     cameraconnect:
-      enabled: true
+      enabled: false
       trigger: "MQTT"
       acquisitionDelay: "0.0"
       cycleTime: "4"
@@ -41,7 +41,7 @@ _000_commonConfig:
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
-      enabled: true
+      enabled: false
       defaultFlows: true
 
   # Infrastructure
@@ -49,7 +49,7 @@ _000_commonConfig:
 
     # vernemq
     mqtt:
-      enabled: true
+      enabled: false
       AclConfig: |-
         pattern write ia/raw/%u/#
         pattern write ia/%u/#
@@ -144,18 +144,18 @@ _000_commonConfig:
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
   # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
   datastorage:
-    enabled: true
+    enabled: false
     db_password: "changeme"
 
   # mqtt-to-blob, minio, kafka-to-blob
   # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
   blobstorage:
-    enabled: true
+    enabled: false
 
   # factoryinput, grafanaproxy
   # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
   datainput:
-    enabled: true
+    enabled: false
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
@@ -570,11 +570,11 @@ factoryinsight:
   service:
     annotations: {}
   pdb:
-    enabled: true
+    enabled: false
     annotations: {}
     minAvailable: 2
   hpa:
-    enabled: true
+    enabled: false
     minReplicas: 2
     maxReplicas: 5
   ingress:
@@ -599,7 +599,7 @@ factoryinput:
   replicas: 1
   storageRequest: 1Gi
   pdb:
-    enabled: true
+    enabled: false
     minAvailable: 1
 
 ### mqtt-to-blob ###
@@ -610,7 +610,7 @@ mqtttoblob:
     pullPolicy: IfNotPresent
   replicas: 1
   pdb:
-    enabled: true
+    enabled: false
     minAvailable: 1
 
 ### grafanaproxy ###
@@ -646,7 +646,7 @@ mqtttopostgresql:
   replicas: 1
   storageRequest: 1Gi
   pdb:
-    enabled: true
+    enabled: false
     minAvailable: 1
 
 ### kafka-to-postgresql ###
@@ -722,7 +722,7 @@ minio-operator:
       subPath: /data
       # pool secrets
       secrets:
-        enabled: true
+        enabled: false
         name: umhminio-secret
         accessKey: minio
         secretKey: minio123
@@ -1017,7 +1017,7 @@ timescaledb-single:
 
 
   readinessProbe:
-    enabled: true
+    enabled: false
     initialDelaySeconds: 5
     periodSeconds: 30
     timeoutSeconds: 5
@@ -1030,7 +1030,7 @@ timescaledb-single:
     # be done if we did not use subdirectories
     # https://www.postgresql.org/docs/current/creating-cluster.html#CREATING-CLUSTER-MOUNT-POINTS
     data:
-      enabled: true
+      enabled: false
       size: 2Gi
       ## database data Persistent Volume Storage Class
       ## If defined, storageClassName: <storageClass>
@@ -1048,7 +1048,7 @@ timescaledb-single:
     # WAL will be a subdirectory of the data volume, which means enabling a separate
     # volume for the WAL files should just work for new pods.
     wal:
-      enabled: true
+      enabled: false
       size: 1Gi
       subPath: ""
       storageClass:
@@ -1111,7 +1111,7 @@ timescaledb-single:
   # Any PostgreSQL parameter that is explicitly set in the Patroni configuration will override
   # the auto-tuned variables.
   timescaledbTune:
-    enabled: true
+    enabled: false
     # For full flexibility, we allow you to override any timescaledb-tune parameter below.
     # However, these parameters only take effect on newly scheduled pods and their settings are
     # only visibible inside those new pods.
@@ -1540,7 +1540,7 @@ grafana:
     ## If false, data ownership will not be reset at startup
     ## This allows the prometheus-server to be run with an arbitrary user
     ##
-    enabled: true
+    enabled: false
 
 
     ## initChownData resource requests and limits
@@ -1838,7 +1838,7 @@ grafana:
     ## LDAP Authentication can be enabled with the following values on grafana.ini
     ## NOTE: Grafana will fail to start if the value for ldap.toml is invalid
     # auth.ldap:
-    #   enabled: true
+    #   enabled: false
     #   allow_sign_up: true
     #   config_file: /etc/grafana/ldap.toml
 
@@ -1995,7 +1995,7 @@ grafana:
 
 ### kowl ###
 kowl:
-  enabled: false
+  enabled: true
   kowl:
     config:
       kafka:
@@ -2010,7 +2010,7 @@ mqttkafkabridge:
     repository: unitedmanufacturinghub/mqtt-kafka-bridge
     pullPolicy: IfNotPresent
   pdb:
-    enabled: true
+    enabled: false
     minAvailable: 1
 
 ### kafka-to-blob ###
@@ -2021,7 +2021,7 @@ kafkatoblob:
     pullPolicy: IfNotPresent
   replicas: 1
   pdb:
-    enabled: true
+    enabled: false
     minAvailable: 1
 
 ##### CONFIG FOR APACHE KAFKA #####
@@ -2073,14 +2073,14 @@ kafka:
 ##### CONFIG FOR REDIS #####
 redis:
   cluster:
-    enabled: true
+    enabled: false
     slaveCount: 1
   master:
     command: /run.sh
     extraFlags:
       - --maxmemory 4gb
     livenessProbe:
-      enabled: true
+      enabled: false
       failureThreshold: 5
       initialDelaySeconds: 5
       periodSeconds: 5
@@ -2089,12 +2089,12 @@ redis:
     persistence:
       accessModes:
         - ReadWriteOnce
-      enabled: true
+      enabled: false
       path: /data
       size: 8Gi
       subPath: ""
     readinessProbe:
-      enabled: true
+      enabled: false
       failureThreshold: 5
       initialDelaySeconds: 120
       periodSeconds: 5
@@ -2113,7 +2113,7 @@ redis:
         redis: 6379
       type: ClusterIP
   metrics:
-    enabled: true
+    enabled: false
     podAnnotations:
       prometheus.io/port: "9121"
       prometheus.io/scrape: "true"
@@ -2134,11 +2134,11 @@ redis:
       rules: []
   sentinel:
     downAfterMilliseconds: 1000
-    enabled: true
+    enabled: false
     failoverTimeout: 18000
     initialCheckTimeout: 5
     livenessProbe:
-      enabled: true
+      enabled: false
       failureThreshold: 5
       initialDelaySeconds: 5
       periodSeconds: 5
@@ -2151,7 +2151,7 @@ redis:
     preExecCmds: ""
     quorum: 1
     readinessProbe:
-      enabled: true
+      enabled: false
       failureThreshold: 5
       initialDelaySeconds: 120
       periodSeconds: 5
@@ -2172,7 +2172,7 @@ redis:
     create: false
   replica:
     livenessProbe:
-      enabled: true
+      enabled: false
       failureThreshold: 5
       initialDelaySeconds: 30
       periodSeconds: 10
@@ -2181,14 +2181,14 @@ redis:
     persistence:
       accessModes:
         - ReadWriteOnce
-      enabled: true
+      enabled: false
       path: /data
       size: 8Gi
       subPath: ""
     containerPorts:
       redis: 6379
     readinessProbe:
-      enabled: true
+      enabled: false
       failureThreshold: 5
       initialDelaySeconds: 120
       periodSeconds: 10
@@ -2215,7 +2215,7 @@ redis:
     authClients: true
     enabled: false
   auth:
-    enabled: true
+    enabled: false
     usePasswordFiles: false
     existingSecret: redis-secret
     existingSecretPasswordKey: redispassword

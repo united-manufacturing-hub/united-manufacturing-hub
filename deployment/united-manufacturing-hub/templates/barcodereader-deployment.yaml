@@ -1,5 +1,5 @@
 ---
-{{if or .Values.barcodereader.enabled .Values._000_commonConfig.kafkaStateDetector.enabled}}
+{{if or .Values.barcodereader.enabled .Values._000_commonConfig.datasources.barcodereader.enabled}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -48,26 +48,26 @@ spec:
             - name: KAFKA_BOOSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: INPUT_DEVICE_NAME
-              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName | quote}}
             - name: INPUT_DEVICE_PATH
-              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath | quote}}
 
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
             - name: CUSTOMER_ID
-              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID | quote}}
             - name: LOCATION
-              value: {{.Values._000_commonConfig.datasources.barcodereader.location}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.location | quote}}
             - name: ASSET_ID
-              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID | quote}}
 
             - name: SERIAL_NUMBER
-              value: {{.Values._000_commonConfig.serialNumber}}
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
 
             - name: SCAN_ONLY
-              value: {{.Values.barcodereader.scanOnly}}
+              value: {{.Values.barcodereader.scanOnly | quote}}
 
           resources:
             limits:

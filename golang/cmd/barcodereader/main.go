@@ -6,7 +6,9 @@ import (
 	"github.com/gvalkov/golang-evdev"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"os"
 	"time"
 )
@@ -16,19 +18,28 @@ var serialNumber string
 var kafkaSendTopic string
 
 var scanOnly bool
+var buildtime string
 
 func main() {
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		panic(err)
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
+	switch logLevel {
+	case "DEVELOPMENT":
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
+	default:
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
 	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
 
-	zap.S().Infof("Starting barcode reader")
+	zap.S().Infof("This is barcodereader build date: %s", buildtime)
 
 	foundDevice, inputDevice := GetBarcodeReaderDevice()
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 	if !foundDevice {
+		// Restart if no device is found
 		os.Exit(1)
 	}
 
@@ -40,15 +51,14 @@ func main() {
 	scanOnly = os.Getenv("SCAN_ONLY") == "true"
 
 	if !scanOnly {
-
-		kafkaSendTopic = fmt.Sprintf("ia/%s/%s/%s/barcode", customerID, location, assetID)
+		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
 
 		internal.SetupKafka(kafka.ConfigMap{
 			"bootstrap.servers": KafkaBoostrapServer,
 			"security.protocol": "plaintext",
 			"group.id":          "barcodereader",
 		})
-		err = internal.CreateTopicIfNotExists(kafkaSendTopic)
+		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
 		if err != nil {
 			panic(err)
 		}
@@ -114,6 +124,7 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	return true, nil
 }
 
+// BarcodeMessage is the message sent to Kafka, defined by our documentation.
 type BarcodeMessage struct {
 	TimestampMs int64  `json:"timestamp_ms"`
 	Barcode     string `json:"barcode"`
@@ -157,6 +168,7 @@ func OnScanError(err error) {
 	ShutdownGracefully()
 }
 
+// ShutdownGracefully closes kafka and then exists
 func ShutdownGracefully() {
 	if !scanOnly {
 		internal.ShuttingDownKafka = true
