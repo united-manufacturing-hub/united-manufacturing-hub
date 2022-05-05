@@ -195,6 +195,15 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkabri
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
+
+{{/*
+Labels for kafka
+*/}}
+{{- define "united-manufacturing-hub.labels.kafka" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafka
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
 {{/*
 Create the name of the service account to use
 */}}

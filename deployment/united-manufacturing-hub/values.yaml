@@ -139,8 +139,84 @@ _000_commonConfig:
     # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
+      CACert: |-
+        -----BEGIN CERTIFICATE-----
+        MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
+        BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
+        NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
+        AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
+        KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
+        qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
+        SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
+        Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
+        ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
+        BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
+        ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
+        oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
+        hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
+        xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
+        nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
+        AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
+        VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
+        zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
+        -----END CERTIFICATE-----
 
-  # timescaledb, factoryinsight, grafana, redis
+      cert: |-
+        -----BEGIN CERTIFICATE-----
+        MIIDWjCCAkKgAwIBAgIQXp8R2qIZR/darLypm2uCAjANBgkqhkiG9w0BAQsFADAW
+        MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMjA1MDUxMjE5MThaFw0yNDA4MDcx
+        MjE5MThaMBcxFTATBgNVBAMMDGthZmthLWJyb2tlcjCCASIwDQYJKoZIhvcNAQEB
+        BQADggEPADCCAQoCggEBALxAeZClFdx4GSc+lQM+BoZKvw3mXiDIueod4v0U+6p8
+        HPwEvm9rHDWpk2VlcL1pwd5SbZq8Iyp/C/wbndocfNYGpu6+CRfqOsiiWVB5k6Jp
+        xIUQ3ds0kwesMIPeHvfQfA4HSW6wI8kc9POH+27eGOklPV8fPXDYH/hPBcbRLEmM
+        G+NBOejk380yXRC4FKUsvsoZXMQkvlP+4XXk1J9RtcQLB0T+UdJu5XkDdjoaZ3SS
+        id/I4eirFk4c7ZJEFYsI1sy3TQX3gHuvfptG36M9x048T/qOlr0+9vhO8tGBsb8O
+        VOx3hK3YEZ8vrfmakRxpNrwUrnh6EuRtGXt1bX06wWECAwEAAaOBojCBnzAJBgNV
+        HRMEAjAAMB0GA1UdDgQWBBR/Y/IP5JCE+rycfYxUPItXWtpMPTBRBgNVHSMESjBI
+        gBS9b19APLUAI3uSdHECloSHcvFbv6EapBgwFjEUMBIGA1UEAwwLRWFzeS1SU0Eg
+        Q0GCFCNoneihV8P5xL/W0YVbA4czP6M5MBMGA1UdJQQMMAoGCCsGAQUFBwMCMAsG
+        A1UdDwQEAwIHgDANBgkqhkiG9w0BAQsFAAOCAQEANLvbcvqv+RuJgC1mSUKbOC4l
+        1YsT8YNVfJyDPnI4a0dhbPT7PK7uXfN86hBd1P3PHfIi2YhlSPKEg6zXHeZZQOmG
+        uIS9nQNm3ir6roRE0VKopWkne4VICENhQl6wCCCksUTcW+Sc+lnLBixj4ny0pCo5
+        GymzzwwZw8dC6AUGcDDpvKuCQvueqiYaJSQ0O0ZR9U3gvHDgYH6N0NdTlLlzDiNv
+        xl9j7pJXXoMp6mdCeC31tf/ec2KOFHDG9kuBzXcCQrXYm0UgveFpUxrKoUB6OwbG
+        W82w/RYYzUt4/5DF+v+wkt1K58TTWAtmLY6h3Rdl19bvqe6NT/JbapUZIKSrmA==
+        -----END CERTIFICATE-----
+
+      privkey: |-
+        -----BEGIN ENCRYPTED PRIVATE KEY-----
+        MIIFHDBOBgkqhkiG9w0BBQ0wQTApBgkqhkiG9w0BBQwwHAQID3GnO8gFD+ICAggA
+        MAwGCCqGSIb3DQIJBQAwFAYIKoZIhvcNAwcECC6s6XQ/bh/LBIIEyB0PzvaimYjl
+        MGIUdzxC+JBRv7khi/4tj5hN/vntGeq7BzawbDSmX7Ta++N4vKTcED7F4/7j07TD
+        AIGXIseCSLW3Cq9oo1PLabxTvc7pu4fTWRF3y/bktJATcIf1IvBGcAOKVdwYoktR
+        fmaSRR/ViK9X1VjXItQIpnLrmgxTGRuP0DS5ukQgBdnf5Q3qDK0mAtiaqHB9fYUB
+        YRd96d88hqUT0OJnOTviTLRs/Fkx3BMVwZFT5DTfdEW6G0QMz/6AKVkc00ho58MD
+        3nJLu73SYhE+dd8rvYwzzpYkuOI5VAFxG0zra8d3kZ/bT8/NiBSbLoAZt7VrR/Ak
+        8xbWtZRYPS3Bx7+mX04tAj/yNlyEpzLJxo4hFR9vapxmpd3RVGv7QQ67+pURrQSU
+        WsOICeL9o1utNzfAc2pZnsCkPM3ogo7gOIRVyTh/x+5rMZFG/x0qsN0JOH5DZpsv
+        chS65udPfUNhJrMCJqT3JHm/10B/NdqNTRK1Jr6fC8/XrG15Ay1KgVwFEgsPKbyS
+        MjAu4wN2aSsY8sgGGGeMRXrI6w9ogmaueC9p+CXuWJBUz22MAuXFXsRE7JFYnEJr
+        pWZkK5ts9IUXawwuq4BMWHQ346nwlX2uSvA3ETiINClS1NhvMbebLco86xQ3AWFf
+        JW9+xyQsVWr2zoSSOZGV5cR7nzE+I49yg12DC/KRxTHtJ4gdzkRB/DcbNLvfv9Fk
+        U3HJpI1hWsIZfHhIkPL1PkmtSU5pgaJQz3Qr9UWkEF2sBaX6mk4jtCTLWvAN71BJ
+        EAgBalZejK497XNzXn4F5b6+NGsAVyzDl4fo2dLgaDKLgrDW0H71353rf6/l5E6+
+        sIgCVCKtX5bE1OY18nBkdEiORcVVVXL7dyDD2ZKEUgc9hGSFOPZXUv1ULHW2jdzO
+        4VfX/NESrDTbA8q2gVJ4SyrYftL9e786dP5WedQCHq5AA1L2iQ1Xi5Qiog4M3x6v
+        MShEkcfFUDCj3pQdi+50rJ0eWRny2/9Z7gqm1CeyIXfDtqmXjBe1HJCnuoIgHvrm
+        8Iyj+4XijXUvGoXVzUzfDDMtIr3/+pJHkR+TFYOEHCYAty3R/+4QzIFcM7JyHuph
+        1QTfeM1Bpn1thsQIWX9QdNu+IQFWwTsKtTC1lYKE/wvCKTa4NRHZBEddNS4+mvD+
+        KKLvchifXOGXMJVSRjxoHKGfY/CwSvP0nH6w6Vxj0egv6aJpTB5RbdAwJVMMftcw
+        42cW4/sGQYQ23N4oMh3fW6tO0hwdi7LhELfYhGFRpuJfXyWwd5jPC0sATSsTqG03
+        XHO+qsz7iJfRPJm2xGRvZsJaqKBGWnli8OkVDkgcljCk5Hy6JQLREPUijbw1tSg6
+        ObktDL8sJE6rrMCHlRXa6NjIjXlDihgV6yNu6XJuWCoJnM/B0faMn35rS5itt4Mm
+        T4+mqRAkikERvCwu7Y+lirFizjRM6nnm+AoQPZ7Hu8apVo9AHXExoxtzpCA/oWGV
+        VRy/icqd5L8lz9XiGqB4M3WIrCn748cBH2klnZHIE/F3AVoo6p6pmN1vKleH6vlw
+        cvuaXqI02w0BpwXA766O7Aovb7dvnrI46HJK3cH5Pb50Hf7+rL+pCHDQ6vpUsoNe
+        CYojllR8LFajCne4eEP0pQ==
+        -----END ENCRYPTED PRIVATE KEY-----
+
+
+# timescaledb, factoryinsight, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
   # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
   datastorage:
@@ -2071,6 +2147,8 @@ kafka:
     clientProtocol: mtls
     tls:
       type: pem
+      password: "VERY_SECURE_PASSWORD"
+      existingSecrets: ["kafka-broker-secrets"]
 
 ##### CONFIG FOR REDIS #####
 redis:
