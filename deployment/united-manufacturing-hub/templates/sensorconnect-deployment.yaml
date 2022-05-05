@@ -81,8 +81,8 @@ spec:
               value: {{.Values.sensorconnect.additionalSleepTimePerActivePortMs| quote}}
             - name: ADDITIONAL_SLOWDOWN_MAP
               value: {{.Values.sensorconnect.additionalSlowDownMap| quote}}
-            - name: DEBUG
-              value: {{.Values.sensorconnect.debug| quote}}
+            - name: LOGGING_LEVEL
+              value: PRODUCTION
 
             - name: MQTT_BROKER_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
