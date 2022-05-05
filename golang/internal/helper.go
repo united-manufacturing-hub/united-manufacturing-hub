@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,6 +137,15 @@ func contains(s []string, e string) bool {
 		if a == e {
 			return true
 		}
+	}
+	return false
+}
+
+func EnvIsTrue(envVariable string) bool {
+	env := strings.ToLower(os.Getenv(envVariable))
+	switch env {
+	case "true", "1", "yes", "on", "enable", "enabled", "active":
+		return true
 	}
 	return false
 }
