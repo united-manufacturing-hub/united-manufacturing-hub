@@ -5,7 +5,9 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
@@ -26,14 +28,16 @@ var HighIntegrityEnabled = false
 var HighThroughputEnabled = false
 
 func main() {
-	// Setup logger and set as global
-	var logger *zap.Logger
-	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
-		logger, _ = zap.NewDevelopment()
-	} else {
-
-		logger, _ = zap.NewProduction()
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
+	switch logLevel {
+	case "DEVELOPMENT":
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
+	default:
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
 	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 

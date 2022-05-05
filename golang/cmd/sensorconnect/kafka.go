@@ -68,6 +68,9 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		panic(err)
 	}
 
+	internal.KafkaProducer = producer
+	internal.KafkaAdminClient = adminClient
+
 	go func() {
 		for e := range producer.Events() {
 			switch ev := e.(type) {
