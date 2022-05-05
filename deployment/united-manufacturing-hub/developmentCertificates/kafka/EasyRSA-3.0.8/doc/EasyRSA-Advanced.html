@@ -1,0 +1,105 @@
+<h1>Easy-RSA Advanced Reference</h1>
+<p>This is a technical reference for advanced users familiar with PKI processes. If
+you need a more detailed description, see the <code>EasyRSA-Readme</code> or <code>Intro-To-PKI</code>
+docs instead.</p>
+<h2>Configuration Reference</h2>
+<h4>Configuration Sources</h4>
+<p>There are 3 possible ways to perform external configuration of Easy-RSA,
+  selected in the following order where the first defined result wins:</p>
+<ol>
+<li>Command-line option</li>
+<li>Environmental variable</li>
+<li>'vars' file, if one is present (see <code>vars Autodetection</code> below)</li>
+<li>Built-in default</li>
+</ol>
+<p>Note that not every possible config option can be set everywhere, although any
+  env-var can be added to the 'vars' file even if it's not shown by default.</p>
+<h4>vars Autodetection</h4>
+<p>A 'vars' file is a file named simply <code>vars</code> (without an extension) that
+  Easy-RSA will source for configuration. This file is specifically designed
+  <em>not</em> to replace variables that have been set with a higher-priority method
+  such as CLI opts or env-vars.</p>
+<p>The following locations are checked, in this order, for a vars file. Only the
+  first one found is used:</p>
+<ol>
+<li>The file referenced by the <code>--vars</code> CLI option</li>
+<li>The file referenced by the env-var named <code>EASYRSA_VARS_FILE</code></li>
+<li>The directory referenced by the <code>EASYRSA_PKI</code> env-var</li>
+<li>The default PKI directory at <code>$PWD/pki</code></li>
+<li>The directory referenced by the <code>EASYRSA</code> env-var</li>
+<li>The directory containing the easyrsa program</li>
+</ol>
+<p>Defining the env-var <code>EASYRSA_NO_VARS</code> will override the sourcing of the vars
+  file in all cases, including defining it subsequently as a global option.</p>
+<h4>OpenSSL Config</h4>
+<p>Easy-RSA is tightly coupled to the OpenSSL config file (.cnf) for the
+  flexibility the script provides. It is required that this file be available,
+  yet it is possible to use a different OpenSSL config file for a particular
+  PKI, or even change it for a particular invocation.</p>
+<p>The OpenSSL config file is searched for in the following order:</p>
+<ol>
+<li>The env-var <code>EASYRSA_SSL_CONF</code></li>
+<li>The 'vars' file (see <code>vars Autodetection</code> above)</li>
+<li>The <code>EASYRSA_PKI</code> directory with a filename of <code>openssl-easyrsa.cnf</code></li>
+<li>The <code>EASYRSA</code> directory with a filename of <code>openssl-easyrsa.cnf</code></li>
+</ol>
+<h2>Advanced extension handling</h2>
+<p>Normally the cert extensions are selected by the cert type given on the CLI
+during signing; this causes the matching file in the x509-types subdirectory to
+be processed for OpenSSL extensions to add. This can be overridden in a
+particular PKI by placing another x509-types dir inside the <code>EASYRSA_PKI</code> dir
+which will be used instead.</p>
+<p>The file named <code>COMMON</code> in the x509-types dir is appended to every cert type;
+this is designed for CDP usage, but can be used for any extension that should
+apply to every signed cert.</p>
+<p>Additionally, the contents of the env-var <code>EASYRSA_EXTRA_EXTS</code> is appended with
+its raw text added to the OpenSSL extensions. The contents are appended as-is to
+the cert extensions; invalid OpenSSL configs will usually result in failure.</p>
+<h2>Environmental Variables Reference</h2>
+<p>A list of env-vars, any matching global option (CLI) to set/override it, and a
+possible terse description is shown below:</p>
+<ul>
+<li><code>EASYRSA</code> - should point to the Easy-RSA top-level dir, where the easyrsa
+    script is located.</li>
+<li><code>EASYRSA_OPENSSL</code> - command to invoke openssl</li>
+<li><code>EASYRSA_SSL_CONF</code> - the openssl config file to use</li>
+<li><code>EASYRSA_PKI</code> (CLI: <code>--pki-dir</code>) - dir to use to hold all PKI-specific
+    files, defaults to <code>$PWD/pki</code>.</li>
+<li><code>EASYRSA_DN</code> (CLI: <code>--dn-mode</code>) - set to the string <code>cn_only</code> or <code>org</code> to
+    alter the fields to include in the req DN</li>
+<li><code>EASYRSA_REQ_COUNTRY</code> (CLI: <code>--req-c</code>) - set the DN country with org mode</li>
+<li><code>EASYRSA_REQ_PROVINCE</code> (CLI: <code>--req-st</code>) - set the DN state/province with
+    org mode</li>
+<li><code>EASYRSA_REQ_CITY</code> (CLI: <code>--req-city</code>) - set the DN city/locality with org
+    mode</li>
+<li><code>EASYRSA_REQ_ORG</code> (CLI: <code>--req-org</code>) - set the DN organization with org mode</li>
+<li><code>EASYRSA_REQ_EMAIL</code> (CLI: <code>--req-email</code>) - set the DN email with org mode</li>
+<li><code>EASYRSA_REQ_OU</code> (CLI: <code>--req-ou</code>) - set the DN organizational unit with org
+    mode</li>
+<li><code>EASYRSA_KEY_SIZE</code> (CLI: <code>--key-size</code>) - set the key size in bits to
+    generate</li>
+<li><code>EASYRSA_ALGO</code> (CLI: <code>--use-algo</code>) - set the crypto alg to use: rsa or ec</li>
+<li><code>EASYRSA_CURVE</code> (CLI: <code>--curve</code>) - define the named EC curve to use</li>
+<li><code>EASYRSA_EC_DIR</code> - dir to store generated ecparams</li>
+<li><code>EASYRSA_CA_EXPIRE</code> (CLI: <code>--days</code>) - set the CA expiration time in days</li>
+<li><code>EASYRSA_CERT_EXPIRE</code> (CLI: <code>--days</code>) - set the issued cert expiration time
+    in days</li>
+<li><code>EASYRSA_CRL_DAYS</code> (CLI: <code>--days</code>) - set the CRL 'next publish' time in days</li>
+<li><code>EASYRSA_NS_SUPPORT</code> (CLI: <code>--ns-cert</code>) - string 'yes' or 'no' fields to
+    include the deprecated Netscape extensions</li>
+<li><code>EASYRSA_NS_COMMENT</code> (CLI: <code>--ns-comment</code>) - string comment to include when
+    using the deprecated Netscape extensions</li>
+<li><code>EASYRSA_TEMP_FILE</code> - a temp file to use when dynamically creating req/cert
+    extensions</li>
+<li><code>EASYRSA_REQ_CN</code> (CLI: <code>--req-cn</code>) - default CN, necessary to set in BATCH
+    mode</li>
+<li><code>EASYRSA_DIGEST</code> (CLI: <code>--digest</code>) - set a hash digest to use for req/cert
+    signing</li>
+<li><code>EASYRSA_BATCH</code> (CLI: <code>--batch</code>) - enable batch (no-prompt) mode; set
+    env-var to non-zero string to enable (CLI takes no options)</li>
+<li><code>EASYRSA_PASSIN</code> (CLI: <code>--passin</code>) - allows to specify a source for
+    password using any openssl password options like pass:1234 or env:var</li>
+<li><code>EASYRSA_PASSOUT</code> (CLI: <code>--passout</code>) - allows to specify a source for
+    password using any openssl password options like pass:1234 or env:var</li>
+</ul>
+<p><strong>NOTE:</strong> the global options need to be provided before the actual commands.</p>

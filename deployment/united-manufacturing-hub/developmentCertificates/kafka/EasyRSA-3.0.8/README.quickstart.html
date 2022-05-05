@@ -1,0 +1,81 @@
+<h1>Easy-RSA 3 Quickstart README</h1>
+<p>This is a quickstart guide to using Easy-RSA version 3. Detailed help on usage
+and specific commands can be found by running ./easyrsa -h.  Additional
+documentation can be found in the doc/ directory.</p>
+<p>If you're upgrading from the Easy-RSA 2.x series, there are Upgrade-Notes
+available, also under the doc/ path.</p>
+<h2>Setup and signing the first request</h2>
+<p>Here is a quick run-though of what needs to happen to start a new PKI and sign
+your first entity certificate:</p>
+<ol>
+<li>
+<p>Choose a system to act as your CA and create a new PKI and CA:</p>
+<pre><code>./easyrsa init-pki
+./easyrsa build-ca
+</code></pre>
+</li>
+<li>
+<p>On the system that is requesting a certificate, init its own PKI and generate
+   a keypair/request. Note that init-pki is used <em>only</em> when this is done on a
+   separate system (or at least a separate PKI dir.) This is the recommended
+   procedure. If you are not using this recommended procedure, skip the next
+   import-req step.</p>
+<pre><code>./easyrsa init-pki
+./easyrsa gen-req EntityName
+</code></pre>
+</li>
+<li>
+<p>Transport the request (.req file) to the CA system and import it. The name
+   given here is arbitrary and only used to name the request file.</p>
+<pre><code>./easyrsa import-req /tmp/path/to/import.req EntityName
+</code></pre>
+</li>
+<li>
+<p>Sign the request as the correct type. This example uses a client type:</p>
+<pre><code>./easyrsa sign-req client EntityName
+</code></pre>
+</li>
+<li>
+<p>Transport the newly signed certificate to the requesting entity. This entity
+   may also need the CA cert (ca.crt) unless it had a prior copy.</p>
+</li>
+<li>
+<p>The entity now has its own keypair, signed cert, and the CA.</p>
+</li>
+</ol>
+<h2>Signing subsequent requests</h2>
+<p>Follow steps 2-6 above to generate subsequent keypairs and have the CA return
+signed certificates.</p>
+<h2>Revoking certs and creating CRLs</h2>
+<p>This is a CA-specific task.</p>
+<p>To permanently revoke an issued certificate, provide the short name used during
+import:</p>
+<pre><code>    ./easyrsa revoke EntityName
+</code></pre>
+<p>To create an updated CRL that contains all revoked certs up to that point:</p>
+<pre><code>    ./easyrsa gen-crl
+</code></pre>
+<p>After generation, the CRL will need to be sent to systems that reference it.</p>
+<h2>Generating Diffie-Hellman (DH) params</h2>
+<p>After initializing a PKI, any entity can create DH params that needs them. This
+is normally only used by a TLS server. While the CA PKI can generate this, it
+makes more sense to do it on the server itself to avoid the need to send the
+files to another system after generation.</p>
+<p>DH params can be generated with:</p>
+<pre><code>    ./easyrsa gen-dh
+</code></pre>
+<h2>Showing details of requests or certs</h2>
+<p>To show the details of a request or certificate by referencing the short
+EntityName, use one of the following commands. It is an error to call these
+without a matching file.</p>
+<pre><code>    ./easyrsa show-req EntityName
+    ./easyrsa show-cert EntityName
+</code></pre>
+<h2>Changing private key passphrases</h2>
+<p>RSA and EC private keys can be re-encrypted so a new passphrase can be supplied
+with one of the following commands depending on the key type:</p>
+<pre><code>    ./easyrsa set-rsa-pass EntityName
+    ./easyrsa set-ec-pass EntityName
+</code></pre>
+<p>Optionally, the passphrase can be removed completely with the 'nopass' flag.
+Consult the command help for details.</p>

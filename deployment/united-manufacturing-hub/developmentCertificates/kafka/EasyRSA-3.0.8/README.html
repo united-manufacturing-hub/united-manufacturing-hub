@@ -1,0 +1,36 @@
+<h1>Overview</h1>
+<p>easy-rsa is a CLI utility to build and manage a PKI CA. In laymen's terms,
+this means to create a root certificate authority, and request and sign 
+certificates, including intermediate CAs and certificate revocation lists (CRL).</p>
+<h1>Downloads</h1>
+<p>If you are looking for release downloads, please see the releases section on
+GitHub. Releases are also available as source checkouts using named tags.</p>
+<h1>Documentation</h1>
+<p>For 3.x project documentation and usage, see the <a href="README.quickstart.md">README.quickstart.md</a> file or
+the more detailed docs under the doc/ directory. The .md files are in Markdown
+format and can be converted to html files as desired for release packages, or
+read as-is in plaintext.</p>
+<h1>Getting help using easy-rsa</h1>
+<p>Currently, Easy-RSA development co-exists with OpenVPN even though they are
+separate projects. The following resources are good places as of this writing to
+seek help using Easy-RSA:</p>
+<p>The <a href="https://lists.sourceforge.net/lists/listinfo/openvpn-users">openvpn-users mailing list</a>
+is a good place to post usage or help questions.</p>
+<p>You can also try IRC at Freenode/#openvpn for general support or Freenode/#easyrsa for development discussion.</p>
+<h1>Branch structure</h1>
+<p>The easy-rsa master branch is currently tracking development for the 3.x release
+cycle. Please note that, at any given time, master may be broken.  Feel free to
+create issues against master, but have patience when using the master branch.  It
+is recommended to use a release, and priority will be given to bugs identified in
+the most recent release.</p>
+<p>The prior 2.x and 1.x versions are available as release branches for
+tracking and possible back-porting of relevant fixes. Branch layout is:</p>
+<pre><code>master         &lt;- 3.x, at present
+v3.x.x            pre-release branches, used for staging branches
+release/2.x
+release/1.x
+</code></pre>
+<p>LICENSING info for 3.x is in the <a href="COPYING.md">COPYING.md</a> file</p>
+<h1>Code style, standards</h1>
+<p>We are attempting to adhere to the POSIX standard, which can be found here:</p>
+<p>https://pubs.opengroup.org/onlinepubs/9699919799/</p>
