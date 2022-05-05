@@ -110,17 +110,14 @@ func main() {
 		_, err := os.Open("/SSL_certs/tls.key")
 		if err != nil {
 			panic("SSL key file not found")
-			return
 		}
 		_, err = os.Open("/SSL_certs/tls.crt")
 		if err != nil {
 			panic("SSL cert file not found")
-			return
 		}
 		_, err = os.Open("/SSL_certs/ca.crt")
 		if err != nil {
 			panic("SSL CA cert file not found")
-			return
 		}
 	}
 
