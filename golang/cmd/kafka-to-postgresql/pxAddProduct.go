@@ -12,7 +12,7 @@ import (
 type AddProduct struct{}
 
 type addProduct struct {
-	ProductId            string   `json:"product_id"`
+	ProductId            *string  `json:"product_id"`
 	TimePerUnitInSeconds *float64 `json:"time_per_unit_in_seconds"`
 }
 
@@ -47,7 +47,7 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 		return true, nil
 	}
 
-	ProductTableId, success := GetProductTableId(sC.ProductId, AssetTableID)
+	ProductTableId, success := GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
 		return true, nil
 	}
