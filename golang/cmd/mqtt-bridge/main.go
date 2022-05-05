@@ -7,7 +7,9 @@ Important principles: stateless as much as possible
 import (
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"os"
 	"os/signal"
 	"strconv"
@@ -24,9 +26,16 @@ const localMQTTClientID = "MQTT-BRIDGE-LOCAL"
 const remoteMQTTClientID = "MQTT-BRIDGE-REMOTE"
 
 func main() {
-
-	// Setup logger and set as global
-	logger, _ := zap.NewDevelopment()
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
+	switch logLevel {
+	case "DEVELOPMENT":
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
+	default:
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
+	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 

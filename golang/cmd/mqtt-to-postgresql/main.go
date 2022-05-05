@@ -5,6 +5,8 @@ Important principles: stateless as much as possible
 */
 
 import (
+	"go.elastic.co/ecszap"
+	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
 	"os/signal"
@@ -46,15 +48,16 @@ var DebugMode = false
 var buildtime string
 
 func main() {
-	// Setup logger and set as global
-	var logger *zap.Logger
-	if os.Getenv("LOGGING_LEVEL") == "DEVELOPMENT" {
-		DebugMode = true
-		logger, _ = zap.NewDevelopment()
-	} else {
-
-		logger, _ = zap.NewProduction()
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
+	switch logLevel {
+	case "DEVELOPMENT":
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
+	default:
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
 	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
