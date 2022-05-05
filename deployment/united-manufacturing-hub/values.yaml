@@ -257,7 +257,6 @@ sensorconnect:
   additionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
                             # Example:
                             # [{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]
-  debug: 0 # Set to 1 to enable debug output
   resources:
     requests:
       cpu: "10m"

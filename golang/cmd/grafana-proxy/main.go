@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
+	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,23 +16,18 @@ import (
 var shutdownEnabled bool
 
 func main() {
-
-	// Setup logger and set as global
-	var logger *zap.Logger
 	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
 	switch logLevel {
 	case "DEVELOPMENT":
-		logger, _ = zap.NewDevelopment()
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
 	default:
-		logger, _ = zap.NewProduction()
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
 	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
-	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(logger)
+	defer logger.Sync()
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")

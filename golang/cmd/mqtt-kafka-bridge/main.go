@@ -6,7 +6,9 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +23,16 @@ var mqttOutGoingQueue *goque.Queue
 var buildtime string
 
 func main() {
-	logger, _ := zap.NewProduction()
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
+	switch logLevel {
+	case "DEVELOPMENT":
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
+	default:
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
+	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
