@@ -16,6 +16,8 @@ Then the results are bundled together and a return JSON is created.
 
 import (
 	"fmt"
+	"go.elastic.co/ecszap"
+	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,16 +35,19 @@ var buildtime string
 var shutdownEnabled bool
 
 func main() {
-	debugEnabled := os.Getenv("DEBUG_ENABLED")
-	// Setup logger and set as global
-	var logger *zap.Logger
-	if debugEnabled == "True" || debugEnabled == "true" {
-		logger, _ = zap.NewDevelopment()
-	} else {
-		logger, _ = zap.NewProduction()
+	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
+	switch logLevel {
+	case "DEVELOPMENT":
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
+	default:
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
 	}
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
 
 	PQHost := "db"
@@ -97,7 +102,8 @@ func main() {
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := 0 // default database
 
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, debugEnabled)
+	dryRun := os.Getenv("DRY_RUN")
+	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized..", redisURI)
 
