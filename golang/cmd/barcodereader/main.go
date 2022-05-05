@@ -82,7 +82,7 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	deviceName := os.Getenv("INPUT_DEVICE_NAME")
 	unset := false
 	if devicePath == "" && deviceName == "" {
-		zap.S().Infof("No device path or name specified (INPUT_DEVICE_PATH and INPUT_DEVICE_NAME)")
+		zap.S().Warnf("No device path or name specified (INPUT_DEVICE_PATH and INPUT_DEVICE_NAME)")
 		unset = true
 	}
 
@@ -93,7 +93,7 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	zap.S().Infof("Looking for device at path: %v", devicePath)
 	devices, err := evdev.ListInputDevices(devicePath)
 	if err != nil {
-		zap.L().Error("Error listing devices", zap.Error(err))
+		zap.S().Errorf("Error listing devices: %v", err)
 		return false, nil
 	}
 
@@ -164,7 +164,11 @@ func OnScan(scanned string) {
 
 // OnScanError is called when an error occurs while scanning, it prints the error to stdout, then exits.
 func OnScanError(err error) {
-	zap.S().Infof("Error: %s\n", err)
+	if err == os.ErrClosed {
+		zap.S().Errorf("Error: device has been lost :( . Restarting microservice.")
+	} else {
+		zap.S().Errorf("Fatal error: %v", err)
+	}
 	ShutdownGracefully()
 }
 
