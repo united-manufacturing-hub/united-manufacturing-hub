@@ -1,18 +1,10 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	oteltrace "go.opentelemetry.io/otel/trace"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -21,22 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
-
-var tracer = otel.Tracer("factoryinput-server")
-
-func initTracer() *sdktrace.TracerProvider {
-	exporter, err := stdout.New(stdout.WithPrettyPrint())
-	if err != nil {
-		panic(err)
-	}
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithBatcher(exporter),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	return tp
-}
 
 // SetupRestAPI initializes the REST API and starts listening
 func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaegerPort string) {
@@ -52,17 +28,6 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 	// Logs all panic to error log
 	//   - stack means whether output the stack info.
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
-
-	// Setting up the tracer
-	tp := initTracer()
-
-	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			panic(fmt.Sprintf("Error shutting down tracer provider: %v", err))
-		}
-	}()
-	// tell gin to use the middleware
-	router.Use(otelgin.Middleware("factoryinput"))
 
 	// Healthcheck
 	router.GET("/", func(c *gin.Context) {
@@ -91,44 +56,25 @@ func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaeg
 }
 
 func handleInternalServerError(c *gin.Context, err error) {
-	traceID := "Failed to get traceID"
-	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "handleInternalServerError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-		defer span.End()
-		traceID = span.SpanContext().SpanID().String()
-	}
 
 	zap.S().Errorw("Internal server error",
 		"error", internal.SanitizeString(err.Error()),
-		"trace id", traceID,
 	)
 
-	c.String(http.StatusInternalServerError, "The server had an internal error. Please mention the following trace id while contacting our support: "+traceID)
+	c.String(http.StatusInternalServerError, "The server had an internal error.")
 }
 
 func handleInvalidInputError(c *gin.Context, err error) {
 
-	traceID := "Failed to get traceID"
-	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "handleInvalidInputError", oteltrace.WithAttributes(attribute.String("error", fmt.Sprintf("%s", err))))
-		defer span.End()
-		traceID = span.SpanContext().SpanID().String()
-	}
-
 	zap.S().Errorw("Invalid input error",
 		"error", err,
-		"trace id", traceID,
 	)
 
-	c.String(400, "You have provided a wrong input. Please check your parameters and mention the following trace id while contacting our support: "+traceID)
+	c.String(400, "You have provided a wrong input. Please check your parameters")
 }
 
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
-	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "checkIfUserIsAllowed", oteltrace.WithAttributes(attribute.String("customer", customer)))
-		defer span.End()
-	}
 
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
@@ -160,10 +106,6 @@ type MQTTData struct {
 }
 
 func postMQTTHandler(c *gin.Context) {
-	if c != nil {
-		_, span := tracer.Start(c.Request.Context(), "postMQTTHandler", oteltrace.WithAttributes(attribute.String("method", c.Request.Method), attribute.String("path", c.Request.URL.Path)))
-		defer span.End()
-	}
 
 	jsonBytes, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
