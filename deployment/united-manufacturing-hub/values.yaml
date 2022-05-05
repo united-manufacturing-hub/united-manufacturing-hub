@@ -2067,6 +2067,10 @@ kafka:
   logSegmentBytes: _10485760 # 10MiB
   logRetentionBytes: _26214400 # 25MiB
   numPartitions: 6
+  auth:
+    clientProtocol: mtls
+    tls:
+      type: pem
 
 ##### CONFIG FOR REDIS #####
 redis:

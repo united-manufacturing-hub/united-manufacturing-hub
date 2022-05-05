@@ -1,0 +1,176 @@
+<h1>Easy-RSA 3 Documentation Readme</h1>
+<p>This document explains how Easy-RSA 3 and each of its assorted features work.</p>
+<p>If you are looking for a quickstart with less background or detail, an
+implementation-specific How-to or Readme may be available in this (the <code>doc/</code>)
+directory.</p>
+<h2>Easy-RSA Overview</h2>
+<p>Easy-RSA is a utility for managing X.509 PKI, or Public Key Infrastructure. A
+PKI is based on the notion of trusting a particular authority to authenticate a
+remote peer; for more background on how PKI works, see the <code>Intro-To-PKI</code>
+document.</p>
+<p>The code is written in platform-neutral POSIX shell, allowing use on a wide
+range of host systems. The official Windows release also comes bundled with the
+programs necessary to use Easy-RSA. The shell code attempts to limit the number
+of external programs it depends on. Crypto-related tasks use openssl as the
+functional backend.</p>
+<h2>Feature Highlights</h2>
+<p>Here's a non-exhaustive list of the more notable Easy-RSA features:</p>
+<ul>
+<li>Easy-RSA is able to manage multiple PKIs, each with their own independent
+    configuration, storage directory, and X.509 extension handling.</li>
+<li>Multiple Subject Name (X.509 DN field) formatting options are supported. For
+    VPNs, this means a cleaner commonName only setup can be used.</li>
+<li>A single backend is used across all supported platforms, ensuring that no
+    platform is 'left out' of the rich features. Unix-alikes (BSD, Linux, etc)
+    and Windows are all supported.</li>
+<li>Easy-RSA's X.509 support includes CRL, CDP, keyUsage/eKu attributes, and
+    additional features. The included support can be changed or extended as an
+    advanced feature.</li>
+<li>Interactive and automated (batch) modes of operation</li>
+<li>Flexible configuration: features can be enabled through command-line
+    options, environment variables, a config file, or a combination of these.</li>
+<li>Built-in defaults allow Easy-RSA to be used without first editing a config
+    file.</li>
+</ul>
+<h2>Obtaining and Using Easy-RSA</h2>
+<h4>Download and extraction (installation)</h4>
+<p>Easy-RSA's main program is a script, supported by a couple of config files. As
+  such, there is no formal "installation" required. Preparing to use Easy-RSA is
+  as simple as downloading the compressed package (.tar.gz for Linux/Unix or
+  .zip for Windows) and extract it to a location of your choosing. There is no
+  compiling or OS-dependent setup required.</p>
+<p>You should install and run Easy-RSA as a non-root (non-Administrator) account
+  as root access is not required.</p>
+<h4>Running Easy-RSA</h4>
+<p>Invoking Easy-RSA is done through your preferred shell. Under Windows, you
+  will use the <code>EasyRSA Start.bat</code> program to provide a POSIX-shell environment
+  suitable for using Easy-RSA.</p>
+<p>The basic format for running commands is:</p>
+<pre><code>./easyrsa command [ cmd-opts ]
+</code></pre>
+<p>where <code>command</code> is the name of a command to run, and <code>cmd-opts</code> are any
+  options to supply to the command. Some commands have mandatory or optional
+  cmd-opts. Note the leading <code>./</code> component of the command: this is required in
+  Unix-like environments and may be a new concept to some Windows users.</p>
+<p>General usage and command help can be shown with:</p>
+<pre><code>./easyrsa help [ command ]
+</code></pre>
+<p>When run without any command, general usage and a list of available commands
+  are shown; when a command is supplied, detailed help output for that command
+  is shown.</p>
+<h2>Configuring Easy-RSA</h2>
+<p>Easy-RSA 3 no longer needs any configuration file prior to operation, unlike
+earlier versions. However, the <code>vars.example</code> file contains many commented
+options that can be used to control non-default behavior as required. Reading
+this file will provide an idea of the basic configuration available. Note that
+a vars file must be named just <code>vars</code> (without an extension) to actively use it.</p>
+<p>Additionally, some options can be defined at runtime with options on the
+command-line. A full list can be shown with:</p>
+<pre><code>./easyrsa help options
+</code></pre>
+<p>Any of these options can appear before the command as required as shown below:</p>
+<pre><code>./easyrsa [options] command [ cmd-opts ]
+</code></pre>
+<p>For experts, additional configuration with env-vars and custom X.509 extensions
+is possible. Consult the <code>EasyRSA-Advanced</code> documentation for details.</p>
+<h2>Getting Started: The Basics</h2>
+<p>Some of the terms used here will be common to those familiar with how PKI works.
+Instead of describing PKI basics, please consult the document <code>Intro-To-PKI</code> if
+you need a more basic description of how a PKI works.</p>
+<h4>Creating an Easy-RSA PKI</h4>
+<p>In order to do something useful, Easy-RSA needs to first initialize a
+  directory for the PKI. Multiple PKIs can be managed with a single installation
+  of Easy-RSA, but the default directory is called simply "pki" unless otherwise
+  specified.</p>
+<p>To create or clear out (re-initialize) a new PKI, use the command:</p>
+<pre><code>./easyrsa init-pki
+</code></pre>
+<p>which will create a new, blank PKI structure ready to be used. Once created,
+  this PKI can be used to make a new CA or generate keypairs.</p>
+<h4>The PKI Directory Structure</h4>
+<p>An Easy-RSA PKI contains the following directory structure:</p>
+<ul>
+<li>private/ - dir with private keys generated on this host</li>
+<li>reqs/ - dir with locally generated certificate requests (for a CA imported
+    requests are stored here)</li>
+</ul>
+<p>In a clean PKI no files exist yet, just the bare directories. Commands called
+  later will create the necessary files depending on the operation.</p>
+<p>When building a CA, a number of new files are created by a combination of
+  Easy-RSA and (indirectly) openssl. The important CA files are:</p>
+<ul>
+<li><code>ca.crt</code> - This is the CA certificate</li>
+<li><code>index.txt</code> - This is the "master database" of all issued certs</li>
+<li><code>serial</code> - Stores the next serial number (serial numbers increment)</li>
+<li><code>private/ca.key</code> - This is the CA private key (security-critical)</li>
+<li><code>certs_by_serial/</code> - dir with all CA-signed certs by serial number</li>
+<li><code>issued/</code> - dir with issued certs by commonName</li>
+</ul>
+<h4>After Creating a PKI</h4>
+<p>Once you have created a PKI, the next useful step will be to either create a
+  CA, or generate keypairs for a system that needs them. Continue with the
+  relevant section below.</p>
+<h2>Using Easy-RSA as a CA</h2>
+<h4>Building the CA</h4>
+<p>In order to sign requests to produce certificates, you need a CA. To create a
+  new CA in a PKI you have created, run:</p>
+<pre><code>./easyrsa build-ca
+</code></pre>
+<p>Be sure to use a strong passphrase to protect the CA private key. Note that
+  you must supply this passphrase in the future when performing signing
+  operations with your CA, so be sure to remember it.</p>
+<p>During the creation process, you will also select a name for the CA called the
+  Common Name (CN.) This name is purely for display purposes and can be set as
+  you like.</p>
+<h4>Importing requests to the CA</h4>
+<p>Once a CA is built, the PKI is intended to be used to import requests from
+  external systems that are requesting a signed certificate from this CA. In
+  order to sign the request, it must first be imported so Easy-RSA knows about
+  it. This request file must be a standard CSR in PKCS#10 format.</p>
+<p>Regardless of the file name to import, Easy-RSA uses a "short name" defined
+  during import to refer to this request. Importing works like this:</p>
+<pre><code>./easyrsa import-req /path/to/request.req nameOfRequest
+</code></pre>
+<p>The nameOfRequest should normally refer to the system or person making the
+  request.</p>
+<h4>Signing a request</h4>
+<p>Once Easy-RSA has imported a request, it can be reviewed and signed. Every
+  certificate needs a "type" which controls what extensions the certificate gets
+  Easy-RSA ships with 3 possible types: <code>client</code>, <code>server</code>, and <code>ca</code>, described
+  below:</p>
+<ul>
+<li>client - A TLS client, suitable for a VPN user or web browser (web client)</li>
+<li>server - A TLS server, suitable for a VPN or web server</li>
+<li>
+<p>ca - A intermediate CA, used when chaining multiple CAs together</p>
+<p>./easyrsa sign-req <type> nameOfRequest</p>
+</li>
+</ul>
+<p>Additional types of certs may be defined by local sites as needed; see the
+  advanced documentation for details.</p>
+<h4>Revoking and publishing CRLs</h4>
+<p>If an issue certificate needs to be revoked, this can be done as follows:</p>
+<pre><code>./easyrsa revoke nameOfRequest
+</code></pre>
+<p>To generate a CRL suitable for publishing to systems that use it, run:</p>
+<pre><code>./easyrsa gen-crl
+</code></pre>
+<p>Note that this will need to be published or sent to systems that rely on an
+  up-to-date CRL as the certificate is still valid otherwise.</p>
+<h2>Using Easy-RSA to generate keypairs &amp; requests</h2>
+<p>Easy-RSA can generate a keypair and certificate request in PKCS#10 format. This
+request is what a CA needs in order to generate and return a signed certificate.</p>
+<p>Ideally you should never generate entity keypairs for a client or server in a
+PKI you are using for your CA. It is best to separate this process and generate
+keypairs only on the systems you plan to use them.</p>
+<p>Easy-RSA can generate a keypair and request with the following command:</p>
+<pre><code>./easyrsa gen-req nameOfRequest
+</code></pre>
+<p>You will then be given a chance to modify the Subject details of your request.
+Easy-RSA uses the short name supplied on the command-line by default, though you
+are free to change it if necessary. After providing a passphrase and Subject
+details, the keypair and request files will be shown.</p>
+<p>In order to obtain a signed certificate, the request file must be sent to the
+CA for signing; this step is obviously not required if a single PKI is used as
+both the CA and keypair/request generation as the generated request is already
+"imported."</p>
