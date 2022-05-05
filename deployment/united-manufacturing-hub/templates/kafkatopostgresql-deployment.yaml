@@ -43,6 +43,10 @@ spec:
           image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
+              mountPath: /SSL_certs
+              readOnly: true
           env:
 
             - name: POSTGRES_HOST
@@ -73,6 +77,10 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
 
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.certificates.kafkatopostgresql.useSsl | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.kafkatopostgresql.sslKeyPassword | quote}}
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
@@ -89,6 +97,10 @@ spec:
             requests:
               cpu: {{.Values.kafkatopostgresql.resources.requests.cpu}}
               memory: {{.Values.kafkatopostgresql.resources.requests.memory}}
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-secrets
 
       serviceAccountName: ""
       restartPolicy: Always
