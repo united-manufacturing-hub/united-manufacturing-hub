@@ -14,7 +14,7 @@ import (
 )
 
 // SetupRestAPI initializes the REST API and starts listening
-func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaegerPort string) {
+func SetupRestAPI(accounts gin.Accounts, version string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -378,8 +378,6 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 	to := getStatesRequest.To
 	keepStatesInteger := getStatesRequest.KeepStatesInteger
 
-	// ### jaeger addon ###
-
 	// ### fetch necessary data from database ###
 
 	assetID, err := GetAssetID(c, customer, location, asset)
@@ -661,8 +659,6 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	from := getAvailabilityRequest.From
 	to := getAvailabilityRequest.To
 
-	// ### jaeger addon ###
-
 	// ### fetch necessary data from database ###
 
 	assetID, err := GetAssetID(c, customer, location, asset)
@@ -757,8 +753,6 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	from := getPerformanceRequest.From
 	to := getPerformanceRequest.To
-
-	// ### jaeger addon ###
 
 	// ### fetch necessary data from database ###
 
@@ -856,8 +850,6 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	from := getQualityRequest.From
 	to := getQualityRequest.To
 
-	// ### jaeger addon ###
-
 	// ### fetch necessary data from database ###
 
 	// customer configuration
@@ -920,8 +912,6 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	from := getOEERequest.From
 	to := getOEERequest.To
-
-	// ### jaeger addon ###
 
 	// ### fetch necessary data from database ###
 
@@ -1054,8 +1044,6 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	to := getStateHistogramRequest.To
 	includeRunning := getStateHistogramRequest.IncludeRunning
 	keepStatesInteger := getStateHistogramRequest.KeepStatesInteger
-
-	// ### jaeger addon ###
 
 	// ### fetch necessary data from database ###
 
@@ -1619,8 +1607,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 	from := getAverageCleaningTimeRequest.From
 	to := getAverageCleaningTimeRequest.To
 
-	// ### jaeger addon ###
-
 	// ### fetch necessary data from database ###
 
 	assetID, err := GetAssetID(c, customer, location, asset)
@@ -1751,8 +1737,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 	from := getAverageChangeoverTimeRequest.From
 	to := getAverageChangeoverTimeRequest.To
-
-	// ### jaeger addon ###
 
 	// ### fetch necessary data from database ###
 

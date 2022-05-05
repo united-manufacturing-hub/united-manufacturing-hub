@@ -119,12 +119,7 @@ func main() {
 
 	zap.S().Debugf("DB initialized..", PQHost)
 
-	jaegerHost := os.Getenv("JAEGER_HOST")
-	jaegerPort := os.Getenv("JAEGER_PORT")
-
-	SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
-
-	zap.S().Debugf("Jaeger & REST API initialized..", jaegerHost, jaegerPort)
+	SetupRestAPI(accounts, version)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

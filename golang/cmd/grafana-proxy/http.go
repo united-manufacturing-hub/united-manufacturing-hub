@@ -24,7 +24,7 @@ var FactoryInputUser string
 var FactoryInputBaseURL string
 var FactoryInsightBaseUrl string
 
-func SetupRestAPI(jaegerHost string, jaegerPort string) {
+func SetupRestAPI() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 

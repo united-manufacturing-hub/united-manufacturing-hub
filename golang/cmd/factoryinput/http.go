@@ -15,7 +15,7 @@ import (
 )
 
 // SetupRestAPI initializes the REST API and starts listening
-func SetupRestAPI(accounts gin.Accounts, version string, jaegerHost string, jaegerPort string) {
+func SetupRestAPI(accounts gin.Accounts, version string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 

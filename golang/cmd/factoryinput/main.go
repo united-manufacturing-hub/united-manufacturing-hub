@@ -101,9 +101,6 @@ func main() {
 
 	zap.S().Debugf("Healthcheck initialized..")
 
-	jaegerHost := GetEnv("JAEGER_HOST")
-	jaegerPort := GetEnv("JAEGER_PORT")
-
 	//Setup queue
 	err := setupQueue()
 	if err != nil {
@@ -129,8 +126,7 @@ func main() {
 
 	//Setup rest
 	zap.S().Debugf("SetupRestAPI")
-	go SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
-	zap.S().Debugf("Jaeger & REST API initialized..", jaegerHost, jaegerPort)
+	go SetupRestAPI(accounts, version)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
