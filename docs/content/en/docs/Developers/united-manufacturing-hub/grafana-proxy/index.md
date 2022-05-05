@@ -72,19 +72,19 @@ This chapter explains all used environment variables.
 
 **Example value:**  DEVELOPMENT
 
-")
 
-")
+
+
 
 **Type:** string
 
 **Possible values:** all DNS names or IP
 
-")
 
-")
 
-")
+
+
+
 
 **Type:** string
 
@@ -94,7 +94,7 @@ This chapter explains all used environment variables.
 
 ### DISABLE_JAEGER
 
-")
+
 
 **Type:** string
 
