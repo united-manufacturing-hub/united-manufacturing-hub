@@ -19,7 +19,9 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
 	"github.com/heptiolabs/healthcheck"
+	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
 	"os/signal"
@@ -44,25 +46,20 @@ func GetEnv(variableName string) (envValue string) {
 }
 
 func main() {
-	shutdownEnabled = false
-
-	// Setup logger and set as global
-	var logger *zap.Logger
 	var logLevel = os.Getenv("LOGGING_LEVEL")
+	encoderConfig := ecszap.NewDefaultEncoderConfig()
+	var core zapcore.Core
 	switch logLevel {
 	case "DEVELOPMENT":
-		logger, _ = zap.NewDevelopment()
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
 	default:
-		logger, _ = zap.NewProduction()
+		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
 	}
-
+	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
-	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(logger)
+	defer logger.Sync()
+
+	shutdownEnabled = false
 
 	// Loading up user accounts
 	accounts := gin.Accounts{}
