@@ -6,6 +6,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
+	"os"
 )
 
 // SendKafkaMessage tries to send a message via kafka
@@ -48,14 +49,31 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 	if !useKafka {
 		return
 	}
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
 	configMap := kafka.ConfigMap{
-		"bootstrap.servers": boostrapServer,
-		"security.protocol": "plaintext",
-		"group.id":          "sensorconnect",
-		/*
-			"linger.ms":                             10,
-			"batch.size":                            16384,
-			"max.in.flight.requests.per.connection": 60,*/
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"bootstrap.servers":        boostrapServer,
+		"group.id":                 "sensorconnect",
 	}
 	producer, err := kafka.NewProducer(&configMap)
 

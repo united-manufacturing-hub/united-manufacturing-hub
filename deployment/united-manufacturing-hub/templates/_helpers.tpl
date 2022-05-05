@@ -195,6 +195,21 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkabri
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
+{{/*
+Labels for kafkadebug
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkadebug" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkadebug
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
+Labels for kafkainit
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkainit" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkainit
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
 
 {{/*
 Labels for kafka
