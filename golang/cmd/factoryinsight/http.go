@@ -50,11 +50,6 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 
 func handleInternalServerError(c *gin.Context, err error) {
 
-	if c != nil {
-		zap.S().Infof("[handleInternalServerError] Error: %v Context: %v", err, c.Request.Context())
-
-	}
-
 	zap.S().Errorw("Internal server error",
 		"error", err,
 	)
@@ -63,11 +58,6 @@ func handleInternalServerError(c *gin.Context, err error) {
 }
 
 func handleInvalidInputError(c *gin.Context, err error) {
-
-	if c != nil {
-		zap.S().Infof("[handleInvalidInputError] Error: %v Context: %v", err, c.Request.Context())
-
-	}
 
 	zap.S().Errorw("Invalid input error",
 		"error", internal.SanitizeString(err.Error()),
@@ -79,10 +69,6 @@ func handleInvalidInputError(c *gin.Context, err error) {
 // Access handler
 func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 
-	if c != nil {
-		zap.S().Infof("[checkIfUserIsAllowed] Customer: %v", customer)
-
-	}
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
@@ -99,12 +85,6 @@ type getLocationsRequest struct {
 }
 
 func getLocationsHandler(c *gin.Context) {
-	// OpenTelemetry tracing
-
-	if c != nil {
-		zap.S().Infof("[getLocationsHandler] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getLocationsRequest getLocationsRequest
 	var err error
@@ -141,11 +121,6 @@ type getAssetsRequest struct {
 
 func getAssetsHandler(c *gin.Context) {
 
-	if c != nil {
-		zap.S().Infof("[getAssetsHandler] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var getAssetsRequest getAssetsRequest
 	var err error
 	var assets []string
@@ -181,11 +156,6 @@ type getValuesRequest struct {
 }
 
 func getValuesHandler(c *gin.Context) {
-
-	if c != nil {
-		zap.S().Infof("[getValuesHandler] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getValuesRequest getValuesRequest
 
@@ -258,11 +228,6 @@ type getDataRequest struct {
 }
 
 func getDataHandler(c *gin.Context) {
-
-	if c != nil {
-		zap.S().Infof("[getDataHandler] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getDataRequest getDataRequest
 	var err error
@@ -353,11 +318,6 @@ type getStatesRequest struct {
 // processStatesRequest is responsible for fetching all required data and calculating states over time.
 // The result is usually visualized in "DiscretePanel" in Grafana.
 func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processStatesRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -463,11 +423,6 @@ type getAggregatedStatesRequest struct {
 // If the aggregationType is 0 it will aggregate over the entire time span.
 // If the aggregationType is not 0 it will aggregate over various categories, e.g. day or hour
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processAggregatedStatesRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -636,11 +591,6 @@ type getAvailabilityRequest struct {
 
 func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processAvailabilityRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
-
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
 	location := getDataRequest.Location
@@ -730,11 +680,6 @@ type getPerformanceRequest struct {
 }
 
 func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processPerformanceRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -827,11 +772,6 @@ type getQualityRequest struct {
 
 func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processQualityRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
-
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
 	location := getDataRequest.Location
@@ -889,11 +829,6 @@ type getOEERequest struct {
 }
 
 func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processOEERequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1019,11 +954,6 @@ type getStateHistogramRequest struct {
 }
 
 func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processStateHistogramRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1158,11 +1088,6 @@ type getUniqueProductsWithTagsRequest struct {
 
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processCurrentStateRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var getCurrentStateRequest getCurrentStateRequest
 	var err error
 
@@ -1183,11 +1108,6 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processCountsRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getCountsRequest getCountsRequest
 	var err error
@@ -1211,11 +1131,6 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processRecommendationRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Fetching from the database
 	recommendations, err := GetRecommendations(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1226,11 +1141,6 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 }
 
 func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processShiftsRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getShiftsRequest getShiftsRequest
 	var err error
@@ -1251,11 +1161,6 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processProcessValueRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getProcessValueRequest getProcessValueRequest
 	var err error
@@ -1281,11 +1186,6 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processTimeRangeRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Fetching from the database
 	timeRange, err := GetDataTimeRangeForAsset(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1296,11 +1196,6 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 }
 
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processUpcomingMaintenanceActivitiesRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1343,11 +1238,6 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 }
 
 func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processOrderTableRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getOrderRequest getOrderRequest
 	var err error
@@ -1414,11 +1304,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processOrderTimelineRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var getOrderRequest getOrderRequest
 	var err error
 
@@ -1442,11 +1327,6 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processMaintenanceActivitiesRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Fetching from the database
 	data, err := GetMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1458,11 +1338,6 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 }
 
 func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processUniqueProductsRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getUniqueProductsRequest getUniqueProductsRequest
 	var err error
@@ -1486,11 +1361,6 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processMaintenanceComponentsRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Fetching from the database
 	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
@@ -1508,11 +1378,6 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 }
 
 func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processProductionSpeedRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getProductionSpeedRequest getProductionSpeedRequest
 	var err error
@@ -1535,11 +1400,6 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 
 func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processQualityRateRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var getQualityRateRequest getQualityRateRequest
 	var err error
 	var counts datamodel.DataResponseAny
@@ -1561,11 +1421,6 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 func processFactoryLocationsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processFactoryLocationsRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"Location", "Metric", "Geohash"}
 
@@ -1583,11 +1438,6 @@ type getAverageCleaningTimeRequest struct {
 }
 
 func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	if c != nil {
-		zap.S().Infof("[processAverageCleaningTimeRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
@@ -1715,11 +1565,6 @@ type getAverageChangeoverTimeRequest struct {
 
 func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processAverageChangeoverTimeRequest] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
-
 	// ### store getDataRequest in proper variables ###
 	customer := getDataRequest.Customer
 	location := getDataRequest.Location
@@ -1835,11 +1680,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
-	if c != nil {
-		zap.S().Infof("[processUniqueProductsWithTagsRequest] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var getUniqueProductsWithTagsRequest getUniqueProductsWithTagsRequest
 	var err error
 
@@ -1864,10 +1704,6 @@ type getProcessAccumulatedProducts struct {
 }
 
 func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
-	if c != nil {
-		zap.S().Infof("[processAccumulatedProducts] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	var getProcessAccumulatedProducts getProcessAccumulatedProducts
 	var err error

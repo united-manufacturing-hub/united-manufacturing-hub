@@ -27,10 +27,6 @@ type ChannelResult struct {
 
 // ConvertStateToString converts a state in integer format to a human readable string
 func ConvertStateToString(c *gin.Context, state int, configuration datamodel.CustomerConfiguration) (stateString string) {
-	if c != nil {
-		zap.S().Infof("[ConvertStateToString] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	languageCode := configuration.LanguageCode
 
@@ -41,10 +37,6 @@ func ConvertStateToString(c *gin.Context, state int, configuration datamodel.Cus
 
 // BusinessLogicErrorHandling logs and handles errors during the business logic
 func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error, isCritical bool) {
-
-	if c != nil {
-		zap.S().Infof("[BusinessLogicErrorHandling] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-	}
 
 	zap.S().Errorw("Error in business logic. ",
 		"operation name", operationName,
@@ -57,10 +49,7 @@ func BusinessLogicErrorHandling(c *gin.Context, operationName string, err error,
 
 // ConvertActivityToString converts a maintenance activity in integer format to a human readable string
 func ConvertActivityToString(c *gin.Context, activity int, configuration datamodel.CustomerConfiguration) (activityString string) {
-	if c != nil {
-		zap.S().Infof("[ConvertActivityToString] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
 
-	}
 	languageCode := configuration.LanguageCode
 
 	if languageCode == 0 {
@@ -88,10 +77,6 @@ func ConvertActivityToString(c *gin.Context, activity int, configuration datamod
 
 // calculateDurations returns an array with the duration between the states.
 func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, returnChannel chan ChannelResult) {
-	if c != nil {
-		zap.S().Infof("[calculateDurations] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	// Prepare ChannelResult
 	var durations []float64
@@ -132,11 +117,6 @@ func calculateDurations(c *gin.Context, temporaryDatapoints []datamodel.StateEnt
 
 func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, returnChannel chan ChannelResult) {
 
-	if c != nil {
-		zap.S().Infof("[transformToStateArray] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Prepare ChannelResult
 	var stateArray []int
 	var err error
@@ -155,10 +135,6 @@ func transformToStateArray(c *gin.Context, temporaryDatapoints []datamodel.State
 
 func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArray []int, state int, returnChannel chan ChannelResult) {
 
-	if c != nil {
-		zap.S().Infof("[getTotalDurationForState] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	// Prepare ChannelResult
 	var totalDuration float64
 	var err error
@@ -188,11 +164,6 @@ func getTotalDurationForState(c *gin.Context, durationArray []float64, stateArra
 }
 
 func addUnknownMicrostops(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-
-	if c != nil {
-		zap.S().Infof("[addUnknownMicrostops] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -353,10 +324,6 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 // additionally it caches it results. See also cache.go
 func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[calculatateLowSpeedStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
 	if cacheHit {
@@ -410,11 +377,6 @@ func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []data
 // Note: assetID is only used for caching
 func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[addLowSpeedStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// actual function start
 	// TODO: neglecting all other states with additional information, e.g. 10556
 
@@ -464,10 +426,6 @@ func addLowSpeedStates(c *gin.Context, assetID uint32, stateArray []datamodel.St
 
 func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[specifySmallNoShiftsAsBreaks] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -504,11 +462,6 @@ func specifySmallNoShiftsAsBreaks(c *gin.Context, stateArray []datamodel.StateEn
 }
 
 func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
-
-	if c != nil {
-		zap.S().Infof("[removeSmallRunningStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -547,11 +500,6 @@ func removeSmallRunningStates(c *gin.Context, stateArray []datamodel.StateEntry,
 
 func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[removeSmallStopStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -588,11 +536,6 @@ func removeSmallStopStates(c *gin.Context, stateArray []datamodel.StateEntry, co
 }
 
 func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry) (processedStateArray []datamodel.StateEntry, error error) {
-
-	if c != nil {
-		zap.S().Infof("[combineAdjacentStops] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -635,10 +578,6 @@ func combineAdjacentStops(c *gin.Context, stateArray []datamodel.StateEntry) (pr
 
 func specifyUnknownStopsWithFollowingStopReason(c *gin.Context, stateArray []datamodel.StateEntry) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[specifyUnknownStopsWithFollowingStopReason] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 		var state int
@@ -734,11 +673,6 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from time.Time, 
 // GetOrdersTimeline gets all orders for a specific asset in a timerange for a timeline
 func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
 
-	if c != nil {
-		zap.S().Infof("[GetOrdersTimeline] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
@@ -763,11 +697,6 @@ func GetOrdersTimeline(c *gin.Context, customerID string, location string, asset
 }
 
 func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.CustomerConfiguration, location string, asset string) (data datamodel.DataResponseAny, errReturn error) {
-
-	if c != nil {
-		zap.S().Infof("[calculateOrderInformation] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	data.ColumnNames = []string{
 		"Order ID",
@@ -955,11 +884,6 @@ func calculateOrderInformation(c *gin.Context, rawOrders []datamodel.OrdersRaw, 
 // processStatesOptimized splits up arrays efficiently for better caching
 func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
-	if c != nil {
-		zap.S().Infof("[processStatesOptimized] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var processedStatesTemp []datamodel.StateEntry
 
 	for current := from; current != to; {
@@ -1027,11 +951,6 @@ func processStates(c *gin.Context,
 	processedStateArray []datamodel.StateEntry,
 	err error,
 ) {
-
-	if c != nil {
-		zap.S().Infof("[processStates] Method: %v Path: %v Context: %v", c.Request.Method, c.Request.URL.Path, c.Request.Context())
-
-	}
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
 
@@ -1140,10 +1059,6 @@ func _(states []datamodel.StateEntry) {
 
 func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, includeRunning bool) (paretos []datamodel.ParetoEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[getParetoArray] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	totalDurationChannel := make(chan ChannelResult)
 
 	uniqueStateArray := internal.UniqueInt(stateArray)
@@ -1193,10 +1108,6 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 // CalculateStopParetos calculates the paretos for a given []datamodel.StateEntry
 func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	if c != nil {
-		zap.S().Infof("[CalculateStopParetos] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
@@ -1247,11 +1158,6 @@ func CalculateStopParetos(c *gin.Context, temporaryDatapoints []datamodel.StateE
 // CalculateStateHistogram calculates the histogram for a given []datamodel.StateEntry
 func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, includeRunning bool, keepStatesInteger bool, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	if c != nil {
-		zap.S().Infof("[CalculateStateHistogram] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	var stateOccurances [datamodel.MaxState]int //All are initialized with 0
 
 	for _, state := range temporaryDatapoints {
@@ -1287,10 +1193,6 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
 func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	if c != nil {
-		zap.S().Infof("[CalculateAvailability] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
@@ -1344,11 +1246,6 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
 func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
 
-	if c != nil {
-		zap.S().Infof("[CalculatePerformance] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
@@ -1401,11 +1298,6 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
 func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data [][]interface{}, error error) {
-
-	if c != nil {
-		zap.S().Infof("[CalculatePerformance] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	// Loop through all datapoints and calculate good pieces and scrap
 	var total float64 = 0
@@ -1463,11 +1355,6 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 // CalculateOEE calculates the OEE
 func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
-	if c != nil {
-		zap.S().Infof("[CalculateOEE] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
 
@@ -1524,11 +1411,6 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
 func CalculateAverageStateTime(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
-
-	if c != nil {
-		zap.S().Infof("[CalculateAverageStateTime] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
 
 	key := fmt.Sprintf("CalculateAverageStateTime-%s-%s-%s-%s-%d", internal.AsHash(temporaryDatapoints), from, to, internal.AsHash(configuration), targetState)
 	if mutex.TryLock(key) { // is is already running?
@@ -1710,11 +1592,6 @@ func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 // automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
 func automaticallyIdentifyChangeovers(c *gin.Context, stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[automaticallyIdentifyChangeovers] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
 
@@ -1888,11 +1765,6 @@ func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err erro
 }
 
 func CalculateAccumulatedProducts(c *gin.Context, to time.Time, observationStart time.Time, observationEnd time.Time, countMap []CountStruct, orderMap []OrderStruct, productCache map[int]ProductStruct) (data datamodel.DataResponseAny, error error) {
-
-	if c != nil {
-		zap.S().Infof("[CalculateAccumulatedProducts] Error: %v", error)
-
-	}
 
 	var datapoints datamodel.DataResponseAny
 	datapoints.ColumnNames = []string{
