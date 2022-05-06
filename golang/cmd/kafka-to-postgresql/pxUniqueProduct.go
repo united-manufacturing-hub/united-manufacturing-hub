@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -47,13 +49,13 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, nil
+		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId))
 	}
 
 	var ProductTableId uint32
 	ProductTableId, success = GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		return true, nil
+		return true, errors.New(fmt.Sprintf("Failed to get ProductTableId for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID))
 	}
 
 	// Changes should only be necessary between this marker
