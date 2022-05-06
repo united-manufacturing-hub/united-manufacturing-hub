@@ -35,8 +35,11 @@ spec:
           securityContext:
             privileged: true
           volumeMounts:
-          - name: devs
-            mountPath: /dev/
+            - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader-certificates
+              mountPath: /SSL_certs
+              readOnly: true
+            - name: devs
+              mountPath: /dev/
           env:
           - name: CUSTOM_USB_NAME
             value: {{.Values._000_commonConfig.datasources.barcodereader.customUSBName}}
@@ -52,9 +55,17 @@ spec:
             value: {{.Values._000_commonConfig.datasources.barcodereader.location}}
           - name: MACHINE_ID
             value: {{.Values._000_commonConfig.datasources.barcodereader.machineID}}
+          - name: KAFKA_USE_SSL
+            value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+          - name: KAFKA_SSL_KEY_PASSWORD
+            value: {{.Values._000_commonConfig.certificates.barcodereader.sslKeyPassword | quote}}
 
       volumes:
         - name: devs
           hostPath:
             path: /dev/
+        - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-barcodereader-secrets
+
 {{end}}

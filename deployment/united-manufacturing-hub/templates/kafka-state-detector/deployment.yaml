@@ -39,6 +39,10 @@ spec:
           image: {{.Values.kafkastatedetector.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.kafkastatedetector.image.pullPolicy}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates
+              mountPath: /SSL_certs
+              readOnly: true
           env:
             - name: KAFKA_BOOSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
@@ -54,7 +58,16 @@ spec:
             - name: ANOMALY_ENABLED
               value: "{{.Values.kafkastatedetector.anomalyEnabled}}"
 
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.kafkastatedetector.sslKeyPassword | quote}}
           resources: {}
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-secrets
+
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}

@@ -45,6 +45,10 @@ spec:
           image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+              mountPath: /SSL_certs
+              readOnly: true
           env:
             - name: MQTT_BROKER_URL
               value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
@@ -72,6 +76,11 @@ spec:
             - name: SERIAL_NUMBER
               value: {{.Values._000_commonConfig.serialNumber}}
 
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
+
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           # livenessProbe:
@@ -92,6 +101,11 @@ spec:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
+
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}
