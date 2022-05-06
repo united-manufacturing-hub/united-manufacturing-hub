@@ -220,6 +220,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafka
 {{- end }}
 
 {{/*
+Labels for kowl
+*/}}
+{{- define "united-manufacturing-hub.labels.kowl" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kowl
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
