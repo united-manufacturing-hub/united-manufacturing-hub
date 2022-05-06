@@ -94,14 +94,26 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.sensorconnect.sslKeyPassword | quote}}
+
 
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values.sensorconnect.ioddfilepath}}
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
+              mountPath: /SSL_certs
+              readOnly: true
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-claim
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-secrets
+
 
       serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}
       restartPolicy: Always

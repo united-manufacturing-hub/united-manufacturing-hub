@@ -41,6 +41,13 @@ spec:
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
           {{- else}}
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
+              mountPath: /SSL_certs/local
+              readOnly: true
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
+              mountPath: /SSL_certs/remote
+              readOnly: true
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
           env:
@@ -48,6 +55,11 @@ spec:
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: KAFKA_TOPICS
               value: {{.Values._000_commonConfig.kafkaBridge.topicCreationLocalList}}
+
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordLocal | quote}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-remote
           {{if .Values.kafkabridge.image.tag}}
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
@@ -55,11 +67,23 @@ spec:
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
+              mountPath: /SSL_certs/local
+              readOnly: true
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
+              mountPath: /SSL_certs/remote
+              readOnly: true
           env:
             - name: KAFKA_BOOSTRAP_SERVER
               value: {{.Values._000_commonConfig.kafkaBridge.remotebootstrapServer}}
             - name: KAFKA_TOPICS
               value: {{.Values._000_commonConfig.kafkaBridge.topicCreationRemoteList}}
+
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordRemote | quote}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
           {{if .Values.kafkabridge.image.tag}}
@@ -86,11 +110,31 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
 
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD_LOCAL
+              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordLocal | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD_REMOTE
+              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordRemote | quote}}
           resources: {}
           volumeMounts:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
+              mountPath: /SSL_certs/local
+              readOnly: true
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
+              mountPath: /SSL_certs/remote
+              readOnly: true
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-secrets-local
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-secrets-remote
+
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}
