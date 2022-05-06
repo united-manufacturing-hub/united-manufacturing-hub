@@ -1,20 +1,29 @@
-# Use an official Python runtime as a parent image
-FROM python:alpine
-ENV PYTHONUNBUFFERED 0
+FROM golang:alpine as builder
 
-# Set the working directory to /app
+RUN mkdir /build
+# Add build requirements for librdkafka
+RUN apk add build-base
+
+# Add requirements for evdev
+RUN apk add linux-headers
+
+# Get dependencies
+WORKDIR /build
+ADD ./golang/go.mod /build/go.mod
+ADD ./golang/go.sum /build/go.sum
+RUN go mod download
+
+# Only copy relevant packages to docker container
+ADD ./golang/cmd/barcodereader /build/cmd/barcodereader
+ADD ./golang/internal /build/internal
+ADD ./golang/pkg /build/pkg
+# ADD ./golang/test/barcodereader /build/test
+
+WORKDIR /build
+
+RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/barcodereader
+
+FROM scratch
+COPY --from=builder /build /app/
 WORKDIR /app
-
-RUN apk upgrade --update-cache --available && \
-    apk add python3-dev gcc musl-dev linux-headers && \
-    rm -rf /var/cache/apk/*
-    
-# Install pyhon requirements
-COPY ./barcodereader/requirements.txt /app
-RUN pip install --trusted-host pypi.python.org -r requirements.txt --no-cache-dir
-
-# Copy source code
-COPY ./barcodereader/src/ .
-
-# Run app.py when the container launches
-CMD ["python","-u", "main.py"]
+CMD ["./mainFile"]
