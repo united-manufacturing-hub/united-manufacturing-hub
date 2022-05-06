@@ -11,4 +11,4 @@ Now use
  - APPNAME.crt from the issued folder as sslCertificatePem
  - APPNAME_pkc8.key from the private folder as sslKeyPem
 
-Don't forget to set sslKeyPassword to decrypt the key !
+Don't forget to set sslKeyPassword to decrypt the key or save the key decrypted, using the -nocrypt parameter in openssl pkcs8 !
