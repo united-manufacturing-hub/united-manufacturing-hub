@@ -113,8 +113,11 @@ class LibGoVet(LibInterface):
             if outcomes["rc"] != 0:
                 Log.info(f"{outcomes['name']}")
                 for line in outcomes['message'].splitlines():
+                    if "cdefs.go" in line:
+                        Log.info("\tSkipping cdefs.go")
+                        continue
                     Log.fail(f"\t{line}")
-                errors += 1
+                    errors += 1
             else:
                 if len(outcomes["message"]) == 0:
                     continue
