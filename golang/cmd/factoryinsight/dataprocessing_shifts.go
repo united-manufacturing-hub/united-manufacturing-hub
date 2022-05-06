@@ -269,11 +269,6 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 
 func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, stateArray []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
-	if c != nil {
-		zap.S().Infof("[addNoShiftsToStates] Context: %v, Method: %v, Path: %v", c.Request.Context(), c.Request.Method, c.FullPath())
-
-	}
-
 	processedShifts := cleanRawShiftData(rawShifts, from, to, configuration)
 	processedShifts = addNoShiftsBetweenShifts(processedShifts, configuration)
 
