@@ -27,6 +27,9 @@ spec:
         - name: kubernetes-ca
           configMap:
             name: kube-root-ca.crt
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob-secrets
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -104,10 +107,6 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob-certificates
               mountPath: /SSL_certs
               readOnly: true
-      volumes:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob-certificates
-          secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob-secrets
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}

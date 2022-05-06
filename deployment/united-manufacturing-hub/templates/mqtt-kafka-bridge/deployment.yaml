@@ -28,6 +28,9 @@ spec:
         - name: kubernetes-ca
           configMap:
             name: kube-root-ca.crt
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -101,10 +104,6 @@ spec:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
-      volumes:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
-          secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
 
       serviceAccountName: ""
       restartPolicy: Always
