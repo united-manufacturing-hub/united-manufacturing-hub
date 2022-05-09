@@ -59,10 +59,31 @@ func main() {
 
 	ActivityEnabled = os.Getenv("ACTIVITY_ENABLED") == "true"
 
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
 	if ActivityEnabled {
 		SetupActivityKafka(kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
-			"security.protocol":        "plaintext",
 			"group.id":                 "kafka-state-detector-activity",
 			"enable.auto.commit":       true,
 			"enable.auto.offset.store": false,
@@ -84,11 +105,15 @@ func main() {
 
 	if AnomalyEnabled {
 		SetupAnomalyKafka(kafka.ConfigMap{
-			"bootstrap.servers":  KafkaBoostrapServer,
-			"security.protocol":  "plaintext",
-			"group.id":           fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
-			"enable.auto.commit": true,
-			"auto.offset.reset":  "earliest",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
 		})
 
 		AnomalyProcessorChannel = make(chan *kafka.Message, 100)

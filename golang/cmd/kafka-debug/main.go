@@ -36,10 +36,32 @@ func main() {
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	zap.S().Debugf("Setting up Kafka")
 
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
+
 	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers": KafkaBoostrapServer,
-		"security.protocol": "plaintext",
-		"group.id":          "kafka-debug",
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"group.id":                 "kafka-debug",
 	})
 
 	zap.S().Debugf("Start Queue processors")
