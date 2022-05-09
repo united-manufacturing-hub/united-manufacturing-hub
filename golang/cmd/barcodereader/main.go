@@ -38,7 +38,7 @@ func main() {
 
 	foundDevice, inputDevice := GetBarcodeReaderDevice()
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
-	if !foundDevice {
+	if !foundDevice || inputDevice == nil {
 		// Restart if no device is found
 		os.Exit(1)
 	}
