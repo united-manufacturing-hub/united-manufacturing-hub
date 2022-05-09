@@ -47,11 +47,31 @@ There are two options to connect the PLC. We strongly recommend Option 1, but in
 
 ### Option 2: The PLC has a static IP, which cannot be changed
 
+#### New method
+
+> This method should be quicker
+
+1. Add a new interface for the PLC network
+2. {{< imgproc option_2_new_method_interface.png Fit "800x800">}}
+3. Add a new route with the target being the PLC IP and as gateway the automatically created gateway for the PLC (will not be shown by default, need to enter PLC_GW to be shown)
+   1. {{< imgproc option_2_new_method_route.png Fit "800x800">}}
+   2. {{< imgproc option_2_new_method_gateway.png Fit "800x800">}}
+4. Make sure to activate the gateway:
+   1. {{< imgproc option_2_new_method_gateway_activate.png Fit "800x800">}}
+5. Change NAT to "Hybrid outbound NAT rule generation" and add a NAT for PLC, Source the LAN network, Destination the PLC
+   1. {{< imgproc option_2_new_method_firewall_rule.png Fit "800x800">}}
+   2. {{< imgproc option_2_new_method_firewall_rule_2.png Fit "800x800">}}
+6. Test if the PLC is reachable
+   1. {{< imgproc option_2_new_method_test_ping.png Fit "800x800">}}
+7. That's it
+
+#### Old method
+
 1. Adding a new interface for the PLC network, e.g. "S7". {{< imgproc 1.png Fit "800x800" >}}{{< /imgproc >}}
 2. Adding a new gateway (see screenshot. Assuming 192.168.1.150 is the IP of the PLC and the above created interface is called "S7") {{< imgproc 2.png Fit "800x800" >}}{{< /imgproc >}}
 3. Adding a new route (see screenshot and assumptions of step 2) {{< imgproc 3.png Fit "800x800" >}}{{< /imgproc >}}
 4. Changing NAT to "Manual outbound NAT rule generation" (see screenshot and assumptions of step 2) {{< imgproc 4.png Fit "800x800" >}}{{< /imgproc >}}
-5. Add firewall rule to the PLC interface (see screenshot and assumptuons of step 2) {{< imgproc 5.png Fit "800x800" >}}{{< /imgproc >}}
+5. Add firewall rule to the PLC interface (see screenshot and assumptions of step 2) {{< imgproc 5.png Fit "800x800" >}}{{< /imgproc >}}
 6. Add firewall rule to LAN allowing interaction between LAN network and PLC network {{< imgproc 6.png Fit "800x800" >}}{{< /imgproc >}}
 
 If you are struggling with these steps and have bought a machineconnect from us, feel free to contact us!
