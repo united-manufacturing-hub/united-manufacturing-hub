@@ -63,6 +63,9 @@ SELECT create_hypertable('processValueTable', 'timestamp');
 -- creating an index to increase performance
 CREATE INDEX ON processValueTable (asset_id, timestamp DESC);
 
+-- creating an index to increase performance
+CREATE INDEX ON processValueTable (valueName);
+
 -------------------- TimescaleDB table for uniqueProduct --------------------
 CREATE TABLE IF NOT EXISTS uniqueProductTable
 (
@@ -228,6 +231,8 @@ SELECT create_hypertable('processValueStringTable', 'timestamp');
 -- creating an index to increase performance
 CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
 
+-- creating an index to increase performance
+CREATE INDEX ON processValueStringTable (valueName);
 
 -------------------- TimescaleDB table for components --------------------
 
