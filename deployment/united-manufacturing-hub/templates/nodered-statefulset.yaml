@@ -36,30 +36,6 @@ spec:
               subPath: nodered-flows
         {{end}}
 
-        {{if .Values.nodered.pluginInstallEnabled}}
-        - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-init-plugin
-          image: node:14
-          command:
-            - 'sh'
-            - '-c'
-          args:
-            - if ping -q -w1 -c1 google.com; then echo ONLINE; else echo OFFLINE && exit 0; fi;
-              cd /data;
-              if mkdir DO_NOT_DELETE; then
-                npm list node-red-contrib-modbus || npm install node-red-contrib-modbus;
-                npm list node-red-contrib-edge-trigger || npm install node-red-contrib-edge-trigger;
-                npm list node-red-contrib-opcua || npm install node-red-contrib-opcua;
-                npm list node-red-contrib-s7 || npm install node-red-contrib-s7;
-                npm list node-red-contrib-cron-plus || npm install node-red-contrib-cron-plus;
-                npm list node-red-contrib-kafka-manager || npm install node-red-contrib-kafka-manager;
-              else
-                echo "Initial installation already completed. Please use Node-RED UI for further package installations";
-              exit 0;
-              fi;
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-data
-              mountPath: /data
-        {{end}}
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
         image: nodered/node-red:{{.Values.nodered.tag}}
