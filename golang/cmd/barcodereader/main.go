@@ -37,11 +37,12 @@ func main() {
 	zap.S().Infof("This is barcodereader build date: %s", buildtime)
 
 	foundDevice, inputDevice := GetBarcodeReaderDevice()
-	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
-	if !foundDevice {
+	if !foundDevice || inputDevice == nil {
+		zap.S().Warnf("No barcode reader device found")
 		// Restart if no device is found
 		os.Exit(1)
 	}
+	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
 	customerID := os.Getenv("CUSTOMER_ID")
