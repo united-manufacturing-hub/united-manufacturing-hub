@@ -119,6 +119,9 @@ class LibStaticCheck(LibInterface):
                         if v["location"]["file"].endswith("_test.go"):
                             Log.info("\t\tSkipping test {0}".format(v["location"]["file"]))
                             continue
+                        if "cdefs.go" in v["location"]["file"]:
+                            Log.info("\t\tSkipping cdefs.go")
+                            continue
                         if prev_file != v["location"]["file"]:
                             prev_file = v["location"]["file"]
                             Log.info(f"\t{os.path.basename(prev_file)}")

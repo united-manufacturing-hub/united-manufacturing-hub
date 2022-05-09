@@ -9,12 +9,11 @@ _000_commonConfig:
     # barcodereader reads out connected USB barcodereaders emulating a keyboard
     barcodereader:
       enabled: true
-      customUSBName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+      USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+      USBDevicePath: "" # Linux device path, if empty, USBDeviceName is used
       customerID: "raw"
       location: "barcodereader"
       machineID: "barcodereader"
-      brokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub"
-      brokerPort: 8883
 
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
@@ -230,7 +229,10 @@ mqttbridge:
 
 ### barcodereader ###
 barcodereader:
-  image: unitedmanufacturinghub/barcodereader
+  enabled: false
+  image:
+    repository: unitedmanufacturinghub/barcodereader
+    pullPolicy: IfNotPresent
   resources:
     requests:
       cpu: "2m"
@@ -238,6 +240,7 @@ barcodereader:
     limits:
       cpu: "10m"
       memory: "60Mi"
+  scanOnly: false # Debug mode, will not send data to kafka
 
 ### sensorconnect ###
 sensorconnect:
@@ -292,7 +295,6 @@ kafkabridge:
 
 ### nodered ###
 nodered:
-  pluginInstallEnabled: true
   tag: 2.0.6
   port: 1880
   storageRequest: 1Gi
