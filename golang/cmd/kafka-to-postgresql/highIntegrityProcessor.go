@@ -98,7 +98,7 @@ func startHighIntegrityQueueProcessor() {
 
 					zap.S().Debugf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 
-					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other", ErrorString: &errStr}
+					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (Error)", ErrorString: &errStr}
 				} else {
 					zap.S().Errorf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 					highIntegrityCommitChannel <- msg
@@ -109,7 +109,7 @@ func startHighIntegrityQueueProcessor() {
 				payloadStr := string(parsedMessage.Payload)
 
 				zap.S().Debugf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr)
-				highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other"}
+				highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (No-Error)"}
 
 			} else {
 				highIntegrityCommitChannel <- msg
