@@ -69,21 +69,7 @@ func main() {
 		}
 	}()
 
-	var jaegerHost string
-	var jaegerPort string
-	if os.Getenv("DISABLE_JAEGER") == "1" || os.Getenv("DISABLE_JAEGER") == "true" {
-		jaegerHost = ""
-		jaegerPort = ""
-	} else {
-		jaegerHost = os.Getenv("JAEGER_HOST")
-		jaegerPort = os.Getenv("JAEGER_PORT")
-
-		if jaegerHost == "" || jaegerPort == "" {
-			zap.S().Warn("Jaeger not configured correctly")
-		}
-	}
-
-	SetupRestAPI(jaegerHost, jaegerPort)
+	SetupRestAPI()
 	zap.S().Infof("Ready to proxy connections")
 
 	// Allow graceful shutdown
