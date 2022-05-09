@@ -39,7 +39,7 @@ func (c TEMPLATE) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, nil
+		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId))
 	}
 
 	// Changes should only be necessary between this marker
