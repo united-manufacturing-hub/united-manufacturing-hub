@@ -295,7 +295,6 @@ kafkabridge:
 
 ### nodered ###
 nodered:
-  pluginInstallEnabled: true
   tag: 2.0.6
   port: 1880
   storageRequest: 1Gi
