@@ -1,0 +1,74 @@
+---
+{{if or .Values.kafkastatedetector.enabled .Values._000_commonConfig.kafkaStateDetector.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 4}}
+  {{if .Values.kafkastatedetector.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkastatedetector.annotations | nindent 4}}
+  {{end}}
+spec:
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+        {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+          {{if .Values.kafkastatedetector.image.tag}}
+          image: {{.Values.kafkastatedetector.image.repository}}:{{.Values.kafkastatedetector.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkastatedetector.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkastatedetector.image.pullPolicy}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates
+              mountPath: /SSL_certs
+              readOnly: true
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: ACTIVITY_ENABLED
+              value: "{{.Values.kafkastatedetector.activityEnabled}}"
+
+            - name: ANOMALY_ENABLED
+              value: "{{.Values.kafkastatedetector.anomalyEnabled}}"
+
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.kafkastatedetector.sslKeyPassword | quote}}
+          resources: {}
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-secrets
+
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+

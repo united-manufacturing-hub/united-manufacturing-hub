@@ -103,6 +103,24 @@ func main() {
 		panic("No topics enabled")
 	}
 
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
+
 	// Combining enable.auto.commit and enable.auto.offset.store
 	// leads to better performance.
 	// Processed message now will be stored locally and then automatically committed to Kafka.
@@ -110,22 +128,32 @@ func main() {
 	if HighIntegrityEnabled {
 		SetupHIKafka(kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
-			"security.protocol":        "plaintext",
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"group.id":                 "kafka-to-postgresql-hi-processor",
 			"enable.auto.commit":       true,
 			"enable.auto.offset.store": false,
 			"auto.offset.reset":        "earliest",
+			//"debug":                    "security,broker",
 		})
 	}
 
 	// HT uses enable.auto.commit=true for increased performance.
 	if HighThroughputEnabled {
 		SetupHTKafka(kafka.ConfigMap{
-			"bootstrap.servers":  KafkaBoostrapServer,
-			"security.protocol":  "plaintext",
-			"group.id":           "kafka-to-postgresql-ht-processor",
-			"enable.auto.commit": true,
-			"auto.offset.reset":  "earliest",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-postgresql-ht-processor",
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
+			//"debug":                    "security,broker",
 		})
 	}
 
