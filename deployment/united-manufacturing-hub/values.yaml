@@ -140,6 +140,7 @@ _000_commonConfig:
     kafka:
       enabled: true
       useSSL: true
+      defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
 
 
   certificates:
