@@ -4,7 +4,7 @@
 
 # This will be used as serial number as well
 # HOSTNAME DOES NOT ALLOW UNDERSCORES
-hostname: sonnlaender-server 
+hostname: development
 
 write_files:
 
