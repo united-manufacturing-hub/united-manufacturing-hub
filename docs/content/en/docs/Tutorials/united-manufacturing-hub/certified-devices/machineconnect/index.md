@@ -52,17 +52,17 @@ There are two options to connect the PLC. We strongly recommend Option 1, but in
 > This method should be quicker
 
 1. Add a new interface for the PLC network
-2. {{< imgproc option_2_new_method_interface.png Fit "800x800">}}
+2. {{< imgproc option_2_new_method_interface.png Fit "800x800">}}{{< /imgproc >}}
 3. Add a new route with the target being the PLC IP and as gateway the automatically created gateway for the PLC (will not be shown by default, need to enter PLC_GW to be shown)
-   1. {{< imgproc option_2_new_method_route.png Fit "800x800">}}
-   2. {{< imgproc option_2_new_method_gateway.png Fit "800x800">}}
+   1. {{< imgproc option_2_new_method_route.png Fit "800x800">}}{{< /imgproc >}}
+   2. {{< imgproc option_2_new_method_gateway.png Fit "800x800">}}{{< /imgproc >}}
 4. Make sure to activate the gateway:
-   1. {{< imgproc option_2_new_method_gateway_activate.png Fit "800x800">}}
+   1. {{< imgproc option_2_new_method_gateway_activate.png Fit "800x800">}}{{< /imgproc >}}
 5. Change NAT to "Hybrid outbound NAT rule generation" and add a NAT for PLC, Source the LAN network, Destination the PLC
-   1. {{< imgproc option_2_new_method_firewall_rule.png Fit "800x800">}}
-   2. {{< imgproc option_2_new_method_firewall_rule_2.png Fit "800x800">}}
+   1. {{< imgproc option_2_new_method_firewall_rule.png Fit "800x800">}}{{< /imgproc >}}
+   2. {{< imgproc option_2_new_method_firewall_rule_2.png Fit "800x800">}}{{< /imgproc >}}
 6. Test if the PLC is reachable
-   1. {{< imgproc option_2_new_method_test_ping.png Fit "800x800">}}
+   1. {{< imgproc option_2_new_method_test_ping.png Fit "800x800">}}{{< /imgproc >}}
 7. That's it
 
 #### Old method
