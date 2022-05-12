@@ -62,7 +62,7 @@ There are two options to connect the PLC. We strongly recommend Option 1, but in
    1. {{< imgproc option_2_new_method_firewall_rule.png Fit "800x800">}}{{< /imgproc >}}
    2. {{< imgproc option_2_new_method_firewall_rule_2.png Fit "800x800">}}{{< /imgproc >}}
 6. Test if the PLC is reachable
-   1. {{< imgproc option_2_new_method_test_ping.png Fit "800x800">}}{{< /imgproc >}}
+   1. {{< imgproc option_2_new_method_ping.png Fit "800x800">}}{{< /imgproc >}}
 7. That's it
 
 #### Old method
