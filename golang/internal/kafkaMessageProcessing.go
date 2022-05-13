@@ -15,7 +15,7 @@ import (
 
 // This regexp is used to extract the topic name from the message key
 // Do not use this for services using raw messages
-var rp = regexp.MustCompile(`ia\.([\w]*)\.([\w]*)\.([\w]*)\.([\w]*)`)
+var rp = regexp.MustCompile(`ia\.([\w-_\d]*)\.([\w-_\d]*)\.([\w-_\d]*)\.([\w-_\d]*)`)
 
 // ParsedMessage is a struct that contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
 type ParsedMessage struct {
