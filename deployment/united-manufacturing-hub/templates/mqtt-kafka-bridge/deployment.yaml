@@ -104,6 +104,14 @@ spec:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
+              mountPath: /SSL_certs
+              readOnly: true
+
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
 
       serviceAccountName: ""
       restartPolicy: Always
