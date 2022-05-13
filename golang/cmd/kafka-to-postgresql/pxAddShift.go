@@ -60,7 +60,7 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
-	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.TimestampMsEnd, AssetTableID, 0)
+	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.TimestampMsEnd, AssetTableID, 1)
 	if err != nil {
 		return true, err
 	}
