@@ -21,10 +21,11 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
           {{if .Values.barcodereader.tag}}
-          image: {{.Values.barcodereader.image}}:{{.Values.barcodereader.tag}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Values.barcodereader.tag}}
           {{- else}}
-          image: {{.Values.barcodereader.image}}:{{.Chart.AppVersion}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
+          imagePullPolicy: {{.Values.barcodereader.image.pullPolicy}}
           resources:
             limits:
               cpu: {{.Values.barcodereader.resources.limits.cpu}}
