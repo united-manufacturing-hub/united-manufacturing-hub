@@ -52,7 +52,7 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 
 	ProductTableID, success := GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get ProductTableID for ProductId: %s, AssetTableID: %s", *sC.ProductId, AssetTableID))
+		return true, errors.New(fmt.Sprintf("Failed to get ProductTableID for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID))
 	}
 
 	// Changes should only be necessary between this marker
