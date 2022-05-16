@@ -1501,7 +1501,7 @@ tenant:
         ## to verify TLS connections with other applications:
         ## https://github.com/minio/minio/tree/master/docs/tls/kubernetes#2-create-kubernetes-secret
         externalCaCertSecret: {}
-        ## Use this field to provide a list of Secrets with external certificates. This can be used to to configure
+        ## Use this field to provide a list of Secrets with external certificates. This can be used to configure
         ## TLS for MinIO Tenant pods. Create secrets as explained here:
         ## https://github.com/minio/minio/tree/master/docs/tls/kubernetes#2-create-kubernetes-secret
         externalCertSecret: {}
@@ -2765,7 +2765,7 @@ kowl:
         brokers:
           - united-manufacturing-hub-kafka:9092
         tls:
-          enabled: true
+          enabled: false
           caFilepath: "/SSL_certs/ca.crt"
           certFilepath: "/SSL_certs/tls.crt"
           keyFilepath: "/SSL_certs/tls.key"
@@ -2848,7 +2848,7 @@ kafka:
   logRetentionBytes: _26214400 # 25MiB
   numPartitions: 6
   auth:
-    clientProtocol: mtls
+    clientProtocol: plaintext
     tls:
       type: pem
       existingSecrets:
