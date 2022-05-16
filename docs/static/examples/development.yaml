@@ -924,7 +924,7 @@ write_files:
       # mqtt-to-blob, minio, kafka-to-blob
       # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
       blobstorage:
-        enabled: true
+        enabled: false
     
       # factoryinput, grafanaproxy
       # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
