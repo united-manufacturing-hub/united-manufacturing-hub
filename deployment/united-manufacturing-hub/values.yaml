@@ -139,7 +139,7 @@ _000_commonConfig:
     # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
-      useSSL: true
+      useSSL: false
       defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
 
 
