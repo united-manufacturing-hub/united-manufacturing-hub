@@ -51,8 +51,13 @@ dependencies:
     repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
     condition: _000_commonConfig.datastorage.enabled
 
-  - name: minio-operator
-    version: 4.3.7
+  - name: operator
+    version: 4.4.17
+    repository: https://operator.min.io/
+    condition: _000_commonConfig.blobstorage.enabled
+
+  - name: tenant
+    version: 4.4.17
     repository: https://operator.min.io/
     condition: _000_commonConfig.blobstorage.enabled
 

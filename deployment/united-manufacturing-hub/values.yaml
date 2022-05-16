@@ -1431,11 +1431,17 @@ kafkatopostgresql:
       cpu: 200m
       memory: 250Mi
 
-### minio-operator ###
-minio-operator:
-  loadBalancerEnabled: false
-  service:
-    annotations: {}
+### minio ###
+operator:
+  operator:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+        ephemeral-storage: 500Mi
+
+tenant:
   ## MinIO Tenant Definition
   tenants:
     # Tenant name
