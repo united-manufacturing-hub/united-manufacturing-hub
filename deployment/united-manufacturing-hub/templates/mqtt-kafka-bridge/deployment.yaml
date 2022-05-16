@@ -24,13 +24,6 @@ spec:
         name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
         {{- include "united-manufacturing-hub.labels.mqttkafkabridge" . | nindent 8}}
     spec:
-      volumes:
-        - name: kubernetes-ca
-          configMap:
-            name: kube-root-ca.crt
-        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
-          secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -109,6 +102,12 @@ spec:
               readOnly: true
 
       volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
