@@ -63,7 +63,7 @@ Data from this level are all raw data, which are not yet contextualized(i.e., as
 
 ### Topic: ia/raw/
 
-Topic structure: `ia/raw/<transmitterID>/<gatewaySerialNumber>/<portNumber>`
+Topic structure: `ia/raw/.+'
 
 All raw data coming in via [sensorconnect].
 
