@@ -9,13 +9,8 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
 	"go.uber.org/zap"
-	"regexp"
 	"strings"
 )
-
-// This regexp is used to extract the topic name from the message key
-// Do not use this for services using raw messages
-var rp = regexp.MustCompile(`ia\.([\w-_\d]*)\.([\w-_\d]*)\.([\w-_\d]*)\.([\w-_\d]*)`)
 
 // ParsedMessage is a struct that contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
 type ParsedMessage struct {
@@ -59,16 +54,16 @@ func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, messag
 	if msg == nil || msg.TopicPartition.Topic == nil {
 		return
 	}
-	res := rp.FindStringSubmatch(*msg.TopicPartition.Topic)
-	if res == nil {
+	topicInformation := GetTopicInformationCached(*msg.TopicPartition.Topic)
+	if topicInformation == nil {
 		zap.S().Errorf(" Invalid topic: %s", *msg.TopicPartition.Topic)
 		return false, ParsedMessage{}
 	}
 
-	customerID := res[1]
-	location := res[2]
-	assetID := res[3]
-	payloadType := strings.ToLower(res[4])
+	customerID := topicInformation.CustomerId
+	location := topicInformation.Location
+	assetID := topicInformation.AssetId
+	payloadType := strings.ToLower(topicInformation.Topic)
 	payload := msg.Value
 	pm := ParsedMessage{
 		AssetId:     assetID,
