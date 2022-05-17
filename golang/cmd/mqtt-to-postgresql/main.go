@@ -5,6 +5,7 @@ Important principles: stateless as much as possible
 */
 
 import (
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
 
@@ -108,10 +108,10 @@ func main() {
 	mqttTopic := os.Getenv("MQTT_TOPIC")
 
 	zap.S().Debugf("Setting up redis")
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
+	other.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
 	for {
-		if internal.IsRedisAvailable() {
+		if other.IsRedisAvailable() {
 			break
 		}
 		zap.S().Debugf("Redis not yet available")

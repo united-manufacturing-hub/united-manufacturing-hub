@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/go-playground/assert/v2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
 	"math/rand"
 	"testing"
 	"time"

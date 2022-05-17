@@ -4,7 +4,6 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -37,7 +36,7 @@ func main() {
 	zap.S().Debugf("Setting up Kafka")
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	if other.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -54,7 +53,7 @@ func main() {
 		}
 	}
 
-	internal.SetupKafka(kafka.ConfigMap{
+	kafka2.SetupKafka(kafka.ConfigMap{
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/tls.key",
 		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
@@ -98,7 +97,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	internal.CloseKafka()
+	kafka2.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 

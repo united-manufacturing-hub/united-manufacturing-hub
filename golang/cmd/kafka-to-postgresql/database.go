@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	_ "github.com/lib/pq"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"regexp"
 	"strings"
@@ -43,7 +43,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	db.SetMaxOpenConns(20)
 
 	// Healthcheck
-	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, internal.OneSecond))
+	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(db, other.OneSecond))
 
 	health.AddLivenessCheck("database", healthcheck.DatabasePingCheck(db, 30*time.Second))
 
@@ -54,7 +54,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 func IsPostgresSQLAvailable() (bool, error) {
 	var err error
 	if db != nil {
-		ctx, ctxClose := context.WithTimeout(context.Background(), internal.FiveSeconds)
+		ctx, ctxClose := context.WithTimeout(context.Background(), other.FiveSeconds)
 		defer ctxClose()
 		err = db.PingContext(ctx)
 		if err == nil {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -58,7 +58,7 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 func handleInternalServerError(c *gin.Context, err error) {
 
 	zap.S().Errorw("Internal server error",
-		"error", internal.SanitizeString(err.Error()),
+		"error", other.SanitizeString(err.Error()),
 	)
 
 	c.String(http.StatusInternalServerError, "The server had an internal error.")
@@ -79,8 +79,8 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
-		return fmt.Errorf("user %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		zap.S().Infof("User %s unauthorized to access %s", user, other.SanitizeString(customer))
+		return fmt.Errorf("user %s unauthorized to access %s", user, other.SanitizeString(customer))
 	}
 	return nil
 }
@@ -113,7 +113,7 @@ func postMQTTHandler(c *gin.Context) {
 	}
 
 	jsonData := string(jsonBytes)
-	zap.S().Warnf("jsonData: %s", internal.SanitizeString(jsonData))
+	zap.S().Warnf("jsonData: %s", other.SanitizeString(jsonData))
 
 	if !IsJSON(jsonData) {
 		handleInvalidInputError(c, errors.New("input is not valid JSON"))

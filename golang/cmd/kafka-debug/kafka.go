@@ -2,20 +2,20 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"time"
 )
 
 func startDebugger() {
-	internal.KafkaConsumer.Subscribe("^ia.+", nil)
+	kafka2.KafkaConsumer.Subscribe("^ia.+", nil)
 	for !ShuttingDown {
 
-		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err := kafka2.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				// Sleep to reduce CPU usage
-				time.Sleep(internal.OneSecond)
+				time.Sleep(other.OneSecond)
 				continue
 			} else {
 				zap.S().Errorf("Failed to read kafka message: %s", err)

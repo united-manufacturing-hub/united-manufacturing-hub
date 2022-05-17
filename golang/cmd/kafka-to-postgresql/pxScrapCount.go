@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"time"
 )
@@ -19,9 +20,9 @@ type scrapCount struct {
 }
 
 // ProcessMessages processes a ScrapCount kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c ScrapCount) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
+func (c ScrapCount) ProcessMessages(msg kafka2.ParsedMessage) (putback bool, err error) {
 
-	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
+	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(other.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
@@ -40,7 +41,7 @@ func (c ScrapCount) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err
 	}
-	if !internal.IsValidStruct(sC, []string{}) {
+	if !other.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
 		return false, nil
 	}
@@ -51,12 +52,12 @@ func (c ScrapCount) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 
 	// Changes should only be necessary between this marker
 
-	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
+	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(other.FiveSeconds))
 	// txnStmtCtxCl is the cancel function of the context, used in the statement creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
 	stmt := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableScrap)
-	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
+	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(other.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()

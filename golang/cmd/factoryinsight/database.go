@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"time"
 
 	"github.com/EagleChen/mapmutex"
 	"github.com/lib/pq"
 	"github.com/omeid/pgerror"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 )
 
@@ -185,13 +185,13 @@ func GetStatesRaw(c *gin.Context, customerID string, location string, asset stri
 		return
 	}
 
-	key := fmt.Sprintf("GetStatesRaw-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
+	key := fmt.Sprintf("GetStatesRaw-%d-%s-%s-%s", assetID, from, to, other.AsHash(configuration))
 	if mutex.TryLock(key) { // is is already running?
 		defer mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
-		data, cacheHit = internal.GetStatesRawFromCache(assetID, from, to, configuration)
+		data, cacheHit = other.GetStatesRawFromCache(assetID, from, to, configuration)
 		if cacheHit { // data found
 			zap.S().Debugf("GetStatesRaw cache hit")
 			return
@@ -207,7 +207,7 @@ func GetStatesRaw(c *gin.Context, customerID string, location string, asset stri
 
 		err := db.QueryRow(sqlStatement, assetID, from).Scan(&timestamp, &dataPoint)
 		if err == sql.ErrNoRows {
-			// it can happen, no need to escalate error
+			// it can happen, no need to escalate errors
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
@@ -265,7 +265,7 @@ func GetStatesRaw(c *gin.Context, customerID string, location string, asset stri
 			return
 		}
 
-		internal.StoreRawStatesToCache(assetID, from, to, configuration, data)
+		other.StoreRawStatesToCache(assetID, from, to, configuration, data)
 
 	} else {
 		zap.S().Error("Failed to get Mutex")
@@ -284,13 +284,13 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 		return
 	}
 
-	key := fmt.Sprintf("GetShiftsRaw-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
+	key := fmt.Sprintf("GetShiftsRaw-%d-%s-%s-%s", assetID, from, to, other.AsHash(configuration))
 	if mutex.TryLock(key) { // is is already running?
 		defer mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
-		data, cacheHit = internal.GetRawShiftsFromCache(assetID, from, to, configuration)
+		data, cacheHit = other.GetRawShiftsFromCache(assetID, from, to, configuration)
 		if cacheHit { // data found
 			zap.S().Debugf("GetShiftsRaw cache hit")
 			return
@@ -397,7 +397,7 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 			data = append(data, fullRow)
 		}
 
-		internal.StoreRawShiftsToCache(assetID, from, to, configuration, data)
+		other.StoreRawShiftsToCache(assetID, from, to, configuration, data)
 	} else {
 		zap.S().Error("Failed to get Mutex")
 	}
@@ -606,7 +606,7 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 
 		// Get from cache if possible
 		var cacheHit bool
-		data, cacheHit = internal.GetRawCountsFromCache(assetID, from, to)
+		data, cacheHit = other.GetRawCountsFromCache(assetID, from, to)
 		if cacheHit { // data found
 			zap.S().Debugf("GetCountsRaw cache hit")
 			return
@@ -651,7 +651,7 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 			return
 		}
 
-		internal.StoreRawCountsToCache(assetID, from, to, data)
+		other.StoreRawCountsToCache(assetID, from, to, data)
 	} else {
 		zap.S().Error("Failed to get Mutex")
 	}
@@ -883,7 +883,7 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 
 	// Get from cache if possible
 	var cacheHit bool
-	configuration, cacheHit = internal.GetCustomerConfigurationFromCache(customerID)
+	configuration, cacheHit = other.GetCustomerConfigurationFromCache(customerID)
 	if cacheHit { // data found
 		return
 	}
@@ -940,7 +940,7 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 	configuration.PerformanceLossStates = []int32(tempPerformanceLossStates)
 
 	// Store to cache if not yet existing
-	go internal.StoreCustomerConfigurationToCache(customerID, configuration)
+	go other.StoreCustomerConfigurationToCache(customerID, configuration)
 	zap.S().Debug("Stored configuration to cache")
 
 	return
@@ -1331,7 +1331,7 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 
 	// Get from cache if possible
 	var cacheHit bool
-	DBassetID, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
+	DBassetID, cacheHit = other.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
 		// zap.S().Debugf("GetAssetID cache hit")
 		return
@@ -1350,7 +1350,7 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 	}
 
 	// Store to cache if not yet existing
-	go internal.StoreAssetIDToCache(customerID, location, assetID, DBassetID)
+	go other.StoreAssetIDToCache(customerID, location, assetID, DBassetID)
 	zap.S().Debug("Stored AssetID to cache")
 
 	return
