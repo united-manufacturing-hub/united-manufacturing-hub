@@ -7,7 +7,6 @@ import (
 	"context"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -130,14 +129,12 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	return
 }
 
-var validKafkaTopicRegex, _ = regexp.Compile(`^[a-zA-Z\d\._\-]+$`)
-
 func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
 
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
-	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
+	if !IsKafkaTopicValid(MqttTopicName) {
 		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
 		return false, ""
 	}
