@@ -76,5 +76,5 @@ func GetUser(sessioncookie string) (User, error) {
 		}
 		return user, nil
 	}
-	return User{}, fmt.Errorf("HTTP Status incorrect: %s", resp.StatusCode)
+	return User{}, fmt.Errorf("hTTP Status incorrect: %s", resp.StatusCode)
 }
