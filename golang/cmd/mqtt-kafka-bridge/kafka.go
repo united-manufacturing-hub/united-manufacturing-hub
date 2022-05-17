@@ -81,7 +81,7 @@ func kafkaToQueue(topic string) {
 		payload := msg.Value
 		if json.Valid(payload) {
 			kafkaTopic := msg.TopicPartition.Topic
-			validTopic, mqttTopic := other.KafkaTopicToMqtt(*kafkaTopic)
+			validTopic, mqttTopic := kafka2.KafkaTopicToMqtt(*kafkaTopic)
 
 			if validTopic {
 				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
