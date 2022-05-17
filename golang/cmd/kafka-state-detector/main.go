@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -59,12 +60,12 @@ func main() {
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
-	internal.InitMessageCache(allowedMemorySize / 4)
+	kafka2.InitMessageCache(allowedMemorySize / 4)
 
 	ActivityEnabled = os.Getenv("ACTIVITY_ENABLED") == "true"
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	if other.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -99,10 +100,10 @@ func main() {
 		activityEventChannel := ActivityKafkaProducer.Events()
 		activityTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel)
-		go internal.ProcessKafkaQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel, ShutdownApplicationGraceful)
-		go internal.StartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
-		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
+		go kafka2.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel)
+		go kafka2.ProcessKafkaQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel, ShutdownApplicationGraceful)
+		go kafka2.StartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
+		go kafka2.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
 	}
 	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
@@ -125,10 +126,10 @@ func main() {
 		anomalyEventChannel := AnomalyKafkaProducer.Events()
 		anomalyTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel)
-		go internal.ProcessKafkaQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel, ShutdownApplicationGraceful)
-		go internal.StartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
-		go internal.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)
+		go kafka2.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel)
+		go kafka2.ProcessKafkaQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel, ShutdownApplicationGraceful)
+		go kafka2.StartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
+		go kafka2.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)
 		go startAnomalyActivityProcessor()
 	}
 
@@ -168,36 +169,36 @@ func ShutdownApplicationGraceful() {
 	zap.S().Info("Shutting down application")
 	ShuttingDown = true
 
-	internal.ShuttingDownKafka = true
+	kafka2.ShuttingDownKafka = true
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
 	if ActivityEnabled {
-		if !internal.DrainChannelSimple(ActivityProcessorChannel, ActivityPutBackChannel) {
-			time.Sleep(internal.FiveSeconds)
+		if !kafka2.DrainChannelSimple(ActivityProcessorChannel, ActivityPutBackChannel) {
+			time.Sleep(other.FiveSeconds)
 		}
-		time.Sleep(internal.OneSecond)
+		time.Sleep(other.OneSecond)
 
 		for len(ActivityPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(ActivityPutBackChannel))
-			time.Sleep(internal.OneSecond)
+			time.Sleep(other.OneSecond)
 		}
 	}
 
 	if AnomalyEnabled {
-		if !internal.DrainChannelSimple(AnomalyProcessorChannel, AnomalyPutBackChannel) {
-			time.Sleep(internal.FiveSeconds)
+		if !kafka2.DrainChannelSimple(AnomalyProcessorChannel, AnomalyPutBackChannel) {
+			time.Sleep(other.FiveSeconds)
 		}
-		time.Sleep(internal.OneSecond)
+		time.Sleep(other.OneSecond)
 
 		for len(AnomalyPutBackChannel) > 0 {
 			zap.S().Infof("Waiting for putback channel to empty: %d", len(AnomalyPutBackChannel))
-			time.Sleep(internal.OneSecond)
+			time.Sleep(other.OneSecond)
 		}
 	}
 
-	internal.ShutdownPutback = true
-	time.Sleep(internal.OneSecond)
+	kafka2.ShutdownPutback = true
+	time.Sleep(other.OneSecond)
 
 	if ActivityEnabled {
 		CloseActivityKafka()

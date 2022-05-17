@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/xml"
 	"errors"
+	"github.com/united-manufacturing-hub/umh-lib/v2/iodd"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
 
@@ -215,7 +215,7 @@ func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath st
 		return err
 	}
 	// Execute download and saving of iodd file
-	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
+	err = iodd.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
 	if err != nil {
 		zap.S().Errorf("Saving error: %s", err.Error())
 		return err

@@ -5,7 +5,8 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -52,7 +53,7 @@ func main() {
 	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
 
 	zap.S().Debugf("Setting up memorycache")
-	internal.InitMemcache()
+	other.InitMemcache()
 
 	zap.S().Debugf("Setting up Queues")
 	var err error
@@ -83,7 +84,7 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	if other.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -99,7 +100,7 @@ func main() {
 			panic("SSL CA cert file not found")
 		}
 	}
-	internal.SetupKafka(kafka.ConfigMap{
+	kafka2.SetupKafka(kafka.ConfigMap{
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/tls.key",
 		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
@@ -108,13 +109,13 @@ func main() {
 		"bootstrap.servers":        KafkaBoostrapServer,
 		"group.id":                 "mqtt-kafka-bridge",
 	})
-	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
+	err = kafka2.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
 
 	zap.S().Debugf("Start Queue processors")
-	go internal.StartEventHandler("MQTTKafkaBridge", internal.KafkaProducer.Events(), nil)
+	go kafka2.StartEventHandler("MQTTKafkaBridge", kafka2.KafkaProducer.Events(), nil)
 	go processIncomingMessages()
 	go processOutgoingMessages()
 	go kafkaToQueue(KafkaTopic)
@@ -153,7 +154,7 @@ func ShutdownApplicationGraceful() {
 	ShuttingDown = true
 	mqttClient.Disconnect(1000)
 
-	internal.CloseKafka()
+	kafka2.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
@@ -174,10 +175,10 @@ func ReportStats() {
 			"| Produces Kafka messages/s: %f",
 			mqttIncomingQueue.Length(),
 			mqttOutGoingQueue.Length(),
-			internal.KafkaConfirmed,
-			(internal.KafkaConfirmed-lastConfirmed)/5,
+			kafka2.KafkaConfirmed,
+			(kafka2.KafkaConfirmed-lastConfirmed)/5,
 		)
-		lastConfirmed = internal.KafkaConfirmed
-		time.Sleep(internal.FiveSeconds)
+		lastConfirmed = kafka2.KafkaConfirmed
+		time.Sleep(other.FiveSeconds)
 	}
 }

@@ -11,21 +11,19 @@ require (
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/assert/v2 v2.0.1
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/gvalkov/golang-evdev v0.0.0-20191114124502-287e62b94bcb
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/json-iterator/go v1.1.12
-	github.com/lib/pq v1.10.4
+	github.com/lib/pq v1.10.6
 	github.com/minio/minio-go/v7 v7.0.26
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
-	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.12.2
-	github.com/rung/go-safecast v1.0.1
 	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	github.com/zeebo/xxh3 v1.0.1
+	github.com/united-manufacturing-hub/umh-lib/v2 v2.0.1
+	github.com/zeebo/xxh3 v1.0.2
 	go.elastic.co/ecszap v1.0.1
 	go.uber.org/zap v1.21.0
 	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect

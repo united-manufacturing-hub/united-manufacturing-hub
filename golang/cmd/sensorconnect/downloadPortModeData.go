@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
@@ -27,7 +27,7 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 	var found bool
 
 	cacheKey := fmt.Sprintf("GetUsedPortsAndModeCached%s:%s:%s", currentDeviceInformation.ProductCode, currentDeviceInformation.SerialNumber, currentDeviceInformation.Url)
-	val, found = internal.GetMemcached(cacheKey)
+	val, found = other.GetMemcached(cacheKey)
 	if found {
 		modeMap = val.(map[int]ConnectedDeviceInfo)
 		return modeMap, nil
@@ -36,7 +36,7 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 	usedPortsAndModes, err := getUsedPortsAndMode(currentDeviceInformation.Url)
 
 	if err == nil {
-		internal.SetMemcachedLong(cacheKey, usedPortsAndModes, time.Second*20)
+		other.SetMemcachedLong(cacheKey, usedPortsAndModes, time.Second*20)
 	}
 
 	return modeMap, err

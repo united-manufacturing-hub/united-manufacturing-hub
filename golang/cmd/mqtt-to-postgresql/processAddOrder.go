@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/beeker1121/goque"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"time"
 )
@@ -94,7 +94,7 @@ func (r AddOrderHandler) process() {
 			loopsWithError = 0
 		}
 
-		internal.SleepBackedOff(loopsWithError, 10000*time.Nanosecond, 1000*time.Millisecond)
+		other.SleepBackedOff(loopsWithError, 10000*time.Nanosecond, 1000*time.Millisecond)
 	}
 }
 
@@ -155,7 +155,7 @@ func (r AddOrderHandler) EnqueueMQTT(customerID string, location string, assetID
 			if r.shutdown {
 				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder, recursionDepth+1)
 			} else {
-				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
+				other.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
 				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)
 			}
 		}()

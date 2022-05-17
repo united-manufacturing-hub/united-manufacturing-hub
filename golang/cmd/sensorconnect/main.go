@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -74,7 +74,7 @@ func main() {
 
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
-	internal.InitMemcache()
+	other.InitMemcache()
 	cP = sync.Map{}
 
 	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
@@ -409,11 +409,11 @@ func ioddDataDaemon(relativeDirectoryPath string) {
 		ioddFilemapKey := <-updateIoddIoDeviceMapChan
 		cacheKey := fmt.Sprintf("ioddDataDaemon%d:%d", ioddFilemapKey.DeviceId, ioddFilemapKey.VendorId)
 		// Prevents download attempt spam
-		_, found := internal.GetMemcached(cacheKey)
+		_, found := other.GetMemcached(cacheKey)
 		if found {
 			continue
 		}
-		internal.SetMemcached(cacheKey, nil)
+		other.SetMemcached(cacheKey, nil)
 		var err error
 		zap.S().Debugf("Addining new device to iodd files and map (%v)", ioddFilemapKey)
 		_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)

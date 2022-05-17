@@ -16,6 +16,7 @@ Then the results are bundled together and a return JSON is created.
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
@@ -27,7 +28,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/heptiolabs/healthcheck"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	_ "net/http/pprof"
 )
@@ -106,7 +106,7 @@ func main() {
 	redisDB := 0 // default database
 
 	dryRun := os.Getenv("DRY_RUN")
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
+	other.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized..", redisURI)
 

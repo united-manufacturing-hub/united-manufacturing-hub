@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/gvalkov/golang-evdev"
+	evdev "github.com/gvalkov/golang-evdev"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	_ "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
+
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -58,17 +61,17 @@ func main() {
 	if !scanOnly {
 		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
 
-		internal.SetupKafka(kafka.ConfigMap{
+		kafka2.SetupKafka(kafka.ConfigMap{
 			"bootstrap.servers": KafkaBoostrapServer,
 			"security.protocol": "plaintext",
 			"group.id":          "barcodereader",
 		})
-		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
+		err := kafka2.CreateTopicIfNotExists(kafkaSendTopic)
 		if err != nil {
 			panic(err)
 		}
 
-		go internal.StartEventHandler("barcodereader", internal.KafkaProducer.Events(), nil)
+		go kafka2.StartEventHandler("barcodereader", kafka2.KafkaProducer.Events(), nil)
 	} else {
 		zap.S().Infof("Scan only mode")
 	}
@@ -160,7 +163,7 @@ func OnScan(scanned string) {
 		Value:   bytes,
 		Headers: []kafka.Header{{Key: "origin", Value: []byte(serialNumber)}},
 	}
-	err = internal.KafkaProducer.Produce(&msg, nil)
+	err = kafka2.KafkaProducer.Produce(&msg, nil)
 	if err != nil {
 		zap.S().Warnf("Error producing message: %v (%v)", err, scanned)
 		return
@@ -180,9 +183,9 @@ func OnScanError(err error) {
 // ShutdownGracefully closes kafka and then exists
 func ShutdownGracefully() {
 	if !scanOnly {
-		internal.ShuttingDownKafka = true
+		kafka2.ShuttingDownKafka = true
 
-		time.Sleep(internal.FiveSeconds)
+		time.Sleep(other.FiveSeconds)
 	}
 	zap.S().Infof("Successfull shutdown. Exiting.")
 

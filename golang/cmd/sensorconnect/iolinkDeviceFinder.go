@@ -5,7 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"io/ioutil"
 	"log"
 	"net"
@@ -53,7 +54,7 @@ func DiscoverDevices(cidr string) (err error) {
 	for i := start; i <= finish; i++ {
 		wg.Add(1)
 		go GetDiscoveredDeviceInformation(&wg, i)
-		internal.SleepBackedOff(int64(i), 10*time.Nanosecond, 10*time.Millisecond)
+		other.SleepBackedOff(int64(i), 10*time.Nanosecond, 10*time.Millisecond)
 	}
 
 	wg.Wait()
@@ -89,16 +90,16 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	}
 	for portNumber := range portModeMap {
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, ddI.SerialNumber, portNumber)
-		validTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
+		validTopic, kafkaTopic := kafka2.MqttTopicToKafka(mqttRawTopic)
 		if !validTopic {
 			zap.S().Warnf("Invalid topic %s", mqttRawTopic)
 			continue
 		}
-		err := internal.CreateTopicIfNotExists(kafkaTopic)
+		err := kafka2.CreateTopicIfNotExists(kafkaTopic)
 		if err != nil {
 			zap.S().Errorf("Failed to create topic %s, this can happen during initial startup, it might take up to 5 minutes for Kafka to startup. If you encounter this error, while Kafka is already running, please investigate further", err)
-			internal.ShuttingDownKafka = true
-			time.Sleep(internal.FiveSeconds)
+			kafka2.ShuttingDownKafka = true
+			time.Sleep(other.FiveSeconds)
 			os.Exit(1)
 		}
 	}

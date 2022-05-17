@@ -5,7 +5,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -107,12 +107,12 @@ func SendMQTTMessage(topic string, message []byte) {
 	messageHash := xxh3.Hash(message)
 	cacheKey := fmt.Sprintf("SendMQTTMessage%s%d", topic, messageHash)
 
-	_, found := internal.GetMemcached(cacheKey)
+	_, found := other.GetMemcached(cacheKey)
 	if found {
 		zap.S().Debugf("Duplicate message for topic %s, you might want to increase LOWER_POLLING_TIME !", topic)
 		return
 	}
 
 	mqttClient.Publish(topic, 2, false, message)
-	internal.SetMemcached(cacheKey, nil)
+	other.SetMemcached(cacheKey, nil)
 }

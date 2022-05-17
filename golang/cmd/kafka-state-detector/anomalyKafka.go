@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 	"go.uber.org/zap"
 )
 
 var AnomalyProcessorChannel chan *kafka.Message
 var AnomalyCommitChannel chan *kafka.Message
-var AnomalyPutBackChannel chan internal.PutBackChanMsg
+var AnomalyPutBackChannel chan kafka2.PutBackChanMsg
 
 // AnomalyKafkaConsumer is a high Integrity Kafka consumer
 var AnomalyKafkaConsumer *kafka.Consumer
@@ -76,7 +76,7 @@ func startAnomalyActivityProcessor() {
 		if msg == nil {
 			continue
 		}
-		parsed, parsedMessage := internal.ParseMessage(msg)
+		parsed, parsedMessage := kafka2.ParseMessage(msg)
 		if !parsed {
 			continue
 		}
@@ -130,7 +130,7 @@ func startAnomalyActivityProcessor() {
 				err = AnomalyKafkaProducer.Produce(msgS, nil)
 				if err != nil {
 					errS := err.Error()
-					AnomalyPutBackChannel <- internal.PutBackChanMsg{
+					AnomalyPutBackChannel <- kafka2.PutBackChanMsg{
 						Msg:         msg,
 						Reason:      "Failed to produce state message",
 						ErrorString: &errS,

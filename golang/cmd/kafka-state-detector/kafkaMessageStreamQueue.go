@@ -3,7 +3,7 @@
 
 package main
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+import "github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
 
 type kafkaMessageStreamQueue struct {
 	queue []datamodel.Activity

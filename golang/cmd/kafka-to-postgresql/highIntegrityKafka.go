@@ -2,13 +2,13 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 	"go.uber.org/zap"
 )
 
 var highIntegrityProcessorChannel chan *kafka.Message
 var highIntegrityCommitChannel chan *kafka.Message
-var highIntegrityPutBackChannel chan internal.PutBackChanMsg
+var highIntegrityPutBackChannel chan kafka2.PutBackChanMsg
 
 // HIKafkaConsumer is a high Integrity Kafka consumer
 var HIKafkaConsumer *kafka.Consumer

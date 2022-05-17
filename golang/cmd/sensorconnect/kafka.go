@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 	"os"
@@ -18,13 +19,13 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	messageHash := xxh3.Hash(message)
 	cacheKey := fmt.Sprintf("SendKafkaMessage%s%d", kafkaTopicName, messageHash)
 
-	_, found := internal.GetMemcached(cacheKey)
+	_, found := other.GetMemcached(cacheKey)
 	if found {
 		zap.S().Debugf("Duplicate message for topic %s, you might want to increase LOWER_POLLING_TIME !", kafkaTopicName)
 		return
 	}
 
-	err := internal.CreateTopicIfNotExists(kafkaTopicName)
+	err := kafka2.CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
 		panic("Failed to create topic, restarting")
@@ -40,7 +41,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
 	} else {
-		internal.SetMemcached(cacheKey, nil)
+		other.SetMemcached(cacheKey, nil)
 	}
 }
 
@@ -50,7 +51,7 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		return
 	}
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	if other.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -86,8 +87,8 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		panic(err)
 	}
 
-	internal.KafkaProducer = producer
-	internal.KafkaAdminClient = adminClient
+	kafka2.KafkaProducer = producer
+	kafka2.KafkaAdminClient = adminClient
 
 	go func() {
 		for e := range producer.Events() {

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
@@ -123,7 +123,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 		HandleFactoryInsight(c, getProxyRequestPath, method, bodyBytes)
 	default:
 		{
-			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(getProxyRequestPath.Service))
+			zap.S().Warnf("getProxyRequestPath.Service: %s", other.SanitizeString(getProxyRequestPath.Service))
 			c.AbortWithStatus(http.StatusBadRequest)
 		}
 	}
@@ -132,16 +132,16 @@ func handleProxyRequest(c *gin.Context, method string) {
 func AddCorsHeaders(c *gin.Context) {
 
 	origin := c.GetHeader("Origin")
-	zap.S().Debugf("Requesting origin: %s", internal.SanitizeString(origin))
+	zap.S().Debugf("Requesting origin: %s", other.SanitizeString(origin))
 	if len(origin) == 0 {
 		zap.S().Debugf("Add cors wildcard")
 		origin = "*"
 	} else {
-		zap.S().Debugf("Set cors origin to: %s", internal.SanitizeString(origin))
+		zap.S().Debugf("Set cors origin to: %s", other.SanitizeString(origin))
 	}
 	c.Header("Access-Control-Allow-Headers", "content-type, Authorization")
 	c.Header("Access-Control-Allow-Credentials", "true")
-	c.Header("Access-Control-Allow-Origin", internal.SanitizeString(origin))
+	c.Header("Access-Control-Allow-Origin", other.SanitizeString(origin))
 	c.Header("Access-Control-Allow-Methods", "*")
 }
 
@@ -199,8 +199,8 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 	}
 
 	zap.S().Debugf("FactoryInsightBaseUrl: ", FactoryInsightBaseUrl)
-	zap.S().Debugf("proxyUrl: ", internal.SanitizeString(proxyUrl))
-	zap.S().Debugf("path: ", internal.SanitizeString(path))
+	zap.S().Debugf("proxyUrl: ", other.SanitizeString(proxyUrl))
+	zap.S().Debugf("path: ", other.SanitizeString(path))
 
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%s%s%s", FactoryInsightBaseUrl, proxyUrl, path))
@@ -246,9 +246,9 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
-	zap.S().Warnf("Proxified URL: %s", internal.SanitizeString(u.String()))
+	zap.S().Warnf("Proxified URL: %s", other.SanitizeString(u.String()))
 	if err != nil {
-		zap.S().Warnf("url.Parse failed: %s", internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
+		zap.S().Warnf("url.Parse failed: %s", other.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
 		handleInvalidInputError(c, err)
 		return
 	}
@@ -261,7 +261,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		return
 	}
 
-	zap.S().Debugf("splits: ", internal.SanitizeStringArray(s))
+	zap.S().Debugf("splits: ", other.SanitizeStringArray(s))
 
 	customer := s[3]
 
@@ -269,18 +269,18 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	// Get grafana organizations of user
 	orgas, err := user.GetOrgas(sessionCookie)
 	if err != nil {
-		zap.S().Warnf("GetOrgas failed %s, %s", err, internal.SanitizeString(sessionCookie))
+		zap.S().Warnf("GetOrgas failed %s, %s", err, other.SanitizeString(sessionCookie))
 		handleInvalidInputError(c, err)
 		return
 	}
 
 	zap.S().Warnf("My Orgas: ", orgas)
-	zap.S().Warnf("Customer: %s", internal.SanitizeString(customer))
+	zap.S().Warnf("Customer: %s", other.SanitizeString(customer))
 	// Check if user is in orga, with same name as customer
 	allowedOrg := false
 	for _, orgsElement := range orgas {
 		if orgsElement.Name == customer {
-			zap.S().Warnf("%s vs %s", internal.SanitizeString(orgsElement.Name), internal.SanitizeString(customer))
+			zap.S().Warnf("%s vs %s", other.SanitizeString(orgsElement.Name), other.SanitizeString(customer))
 			allowedOrg = true
 			break
 		}
@@ -301,7 +301,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 	// Proxy request to backend
 	client := &http.Client{}
 
-	zap.S().Debugf("Request URL: %s", internal.SanitizeString(u.String()))
+	zap.S().Debugf("Request URL: %s", other.SanitizeString(u.String()))
 	//CORS request !
 	if u.String() == "" {
 		zap.S().Debugf("CORS Answer")
@@ -316,7 +316,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 		var req *http.Request
 		// no nil check required, len(nil slice) is 0
 		if len(bodyBytes) > 0 {
-			zap.S().Warnf("Request with body bytes: %s", internal.SanitizeByteArray(bodyBytes))
+			zap.S().Warnf("Request with body bytes: %s", other.SanitizeByteArray(bodyBytes))
 			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
 			zap.S().Warnf("Request without body bytes")
@@ -329,7 +329,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 		}
 		// Add headers for backend
 		if len(sessionCookie) > 0 {
-			req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", internal.SanitizeString(sessionCookie)))
+			req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", other.SanitizeString(sessionCookie)))
 		}
 		req.Header.Set("Authorization", authorizationKey)
 

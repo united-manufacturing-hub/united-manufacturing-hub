@@ -3,7 +3,8 @@ package main
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/minio/minio-go/v7"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -53,7 +54,7 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	if other.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -69,7 +70,7 @@ func main() {
 			panic("SSL CA cert file not found")
 		}
 	}
-	internal.SetupKafka(kafka.ConfigMap{
+	kafka2.SetupKafka(kafka.ConfigMap{
 		"bootstrap.servers":        KafkaBoostrapServer,
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/tls.key",
@@ -79,7 +80,7 @@ func main() {
 		"group.id":                 "kafka-to-blob",
 	})
 
-	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
+	err := kafka2.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
 	}
@@ -122,7 +123,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	internal.CloseKafka()
+	kafka2.CloseKafka()
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 

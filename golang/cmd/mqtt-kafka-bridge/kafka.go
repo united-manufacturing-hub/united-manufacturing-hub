@@ -3,7 +3,8 @@ package main
 import (
 	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"time"
 )
@@ -27,18 +28,18 @@ func processIncomingMessages() {
 		}
 
 		//Setup Topic if not exist
-		validTopic, kafkaTopicName := internal.MqttTopicToKafka(object.Topic)
+		validTopic, kafkaTopicName := kafka2.MqttTopicToKafka(object.Topic)
 		if !validTopic {
 			continue
 		}
-		err = internal.CreateTopicIfNotExists(kafkaTopicName)
+		err = kafka2.CreateTopicIfNotExists(kafkaTopicName)
 		if err != nil {
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
 			continue
 		}
 
 		zap.S().Debugf("Sending with Topic: %s", kafkaTopicName)
-		err = internal.KafkaProducer.Produce(&kafka.Message{
+		err = kafka2.KafkaProducer.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     &kafkaTopicName,
 				Partition: kafka.PartitionAny,
@@ -54,18 +55,18 @@ func processIncomingMessages() {
 }
 
 func kafkaToQueue(topic string) {
-	err := internal.KafkaConsumer.Subscribe(topic, nil)
+	err := kafka2.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
 		panic(err)
 	}
 
 	for !ShuttingDown {
-		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err := kafka2.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			// This is fine, and expected behaviour
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				// Sleep to reduce CPU usage
-				time.Sleep(internal.OneSecond)
+				time.Sleep(other.OneSecond)
 				continue
 			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
 				time.Sleep(5 * time.Second)
@@ -80,7 +81,7 @@ func kafkaToQueue(topic string) {
 		payload := msg.Value
 		if json.Valid(payload) {
 			kafkaTopic := msg.TopicPartition.Topic
-			validTopic, mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
+			validTopic, mqttTopic := other.KafkaTopicToMqtt(*kafkaTopic)
 
 			if validTopic {
 				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)

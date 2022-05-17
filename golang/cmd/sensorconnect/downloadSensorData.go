@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
@@ -25,7 +25,7 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 
 	cacheKey := fmt.Sprintf("GetSensorDataMap%s:%s:%s", currentDeviceInformation.ProductCode, currentDeviceInformation.SerialNumber, currentDeviceInformation.Url)
 
-	val, found = internal.GetMemcached(cacheKey)
+	val, found = other.GetMemcached(cacheKey)
 	if found {
 		modeRequestBody = val.([]byte)
 	} else {
@@ -41,7 +41,7 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 		if err != nil {
 			return nil, err
 		}
-		internal.SetMemcachedLong(cacheKey, modeRequestBody, 20*time.Second)
+		other.SetMemcachedLong(cacheKey, modeRequestBody, 20*time.Second)
 	}
 
 	respBody, err := downloadSensorData(currentDeviceInformation.Url, modeRequestBody)
