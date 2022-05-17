@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 	"go.uber.org/zap"
 )
 
@@ -16,7 +16,7 @@ func startHighThroughputQueueProcessor() {
 		if msg == nil {
 			continue
 		}
-		parsed, parsedMessage := internal.ParseMessage(msg)
+		parsed, parsedMessage := kafka2.ParseMessage(msg)
 		if !parsed {
 			continue
 		}
@@ -42,7 +42,7 @@ func startHighThroughputQueueProcessor() {
 			payloadStr := string(parsedMessage.Payload)
 
 			zap.S().Debugf("[HT][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr)
-			highThroughputPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other"}
+			highThroughputPutBackChannel <- kafka2.PutBackChanMsg{Msg: msg, Reason: "Other"}
 
 		}
 	}

@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -93,7 +94,7 @@ func main() {
 	GroupIdSuffic := os.Getenv("KAFKA_GROUP_ID_SUFFIX")
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	if other.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -148,7 +149,7 @@ func ShutdownApplicationGraceful() {
 	ShutdownChannel = make(chan bool, ShutdownsRequired)
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
-	internal.ShuttingDownKafka = true
+	kafka2.ShuttingDownKafka = true
 
 	zap.S().Infof("Awaiting %d shutdowns", ShutdownsRequired)
 	for i := 0; i < 10; i++ {
@@ -160,7 +161,7 @@ func ShutdownApplicationGraceful() {
 		}
 	}
 
-	internal.ShutdownPutback = true
+	kafka2.ShutdownPutback = true
 
 	time.Sleep(1 * time.Second)
 
@@ -179,24 +180,24 @@ func PerformanceReport() {
 	sleepS := 10.0
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
-		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
-		messagesPerSecond := (internal.KafkaMessages - lastMessages) / sleepS
-		putbacksPerSecond := (internal.KafkaPutBacks - lastPutbacks) / sleepS
-		confirmsPerSecond := (internal.KafkaConfirmed - lastConfirmed) / sleepS
-		lastCommits = internal.KafkaCommits
-		lastMessages = internal.KafkaMessages
-		lastPutbacks = internal.KafkaPutBacks
-		lastConfirmed = internal.KafkaConfirmed
+		commitsPerSecond := (kafka2.KafkaCommits - lastCommits) / sleepS
+		messagesPerSecond := (kafka2.KafkaMessages - lastMessages) / sleepS
+		putbacksPerSecond := (kafka2.KafkaPutBacks - lastPutbacks) / sleepS
+		confirmsPerSecond := (kafka2.KafkaConfirmed - lastConfirmed) / sleepS
+		lastCommits = kafka2.KafkaCommits
+		lastMessages = kafka2.KafkaMessages
+		lastPutbacks = kafka2.KafkaPutBacks
+		lastConfirmed = kafka2.KafkaConfirmed
 
 		zap.S().Infof("Performance report"+
 			"| Commits: %f, Commits/s: %f"+
 			"| Messages: %f, Messages/s: %f"+
 			"| PutBacks: %f, PutBacks/s: %f"+
 			"| Confirms: %f, Confirms/s: %f",
-			internal.KafkaCommits, commitsPerSecond,
-			internal.KafkaMessages, messagesPerSecond,
-			internal.KafkaPutBacks, putbacksPerSecond,
-			internal.KafkaConfirmed, confirmsPerSecond,
+			kafka2.KafkaCommits, commitsPerSecond,
+			kafka2.KafkaMessages, messagesPerSecond,
+			kafka2.KafkaPutBacks, putbacksPerSecond,
+			kafka2.KafkaConfirmed, confirmsPerSecond,
 		)
 
 		zap.S().Infof("Cache report"+
@@ -206,26 +207,26 @@ func PerformanceReport() {
 			messageCache.EntryCount(), messageCache.HitRate(), messageCache.LookupCount(),
 		)
 
-		if internal.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
-			internal.KafkaCommits = 0
+		if kafka2.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
+			kafka2.KafkaCommits = 0
 			lastCommits = 0
 			zap.S().Warnf("Resetting commit statistics")
 		}
 
-		if internal.KafkaMessages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
-			internal.KafkaMessages = 0
+		if kafka2.KafkaMessages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
+			kafka2.KafkaMessages = 0
 			lastMessages = 0
 			zap.S().Warnf("Resetting message statistics")
 		}
 
-		if internal.KafkaPutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
-			internal.KafkaPutBacks = 0
+		if kafka2.KafkaPutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
+			kafka2.KafkaPutBacks = 0
 			lastPutbacks = 0
 			zap.S().Warnf("Resetting putback statistics")
 		}
 
-		if internal.KafkaConfirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
-			internal.KafkaConfirmed = 0
+		if kafka2.KafkaConfirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
+			kafka2.KafkaConfirmed = 0
 			lastConfirmed = 0
 			zap.S().Warnf("Resetting confirmed statistics")
 		}

@@ -1,10 +1,9 @@
 package main
 
 import (
+	"github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
 	"testing"
 	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 )
 
 func TestIsTimerangeEntirelyInTimerangeTrue(t *testing.T) {

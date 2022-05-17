@@ -2,14 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"net/http"
 	"strings"
 	"time"
 
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +59,7 @@ func handleInternalServerError(c *gin.Context, err error) {
 func handleInvalidInputError(c *gin.Context, err error) {
 
 	zap.S().Errorw("Invalid input error",
-		"error", internal.SanitizeString(err.Error()),
+		"error", other.SanitizeString(err.Error()),
 	)
 
 	c.String(400, "You have provided a wrong input. Please check your parameters.")
@@ -72,8 +71,8 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
-		return fmt.Errorf("user %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		zap.S().Infof("User %s unauthorized to access %s", user, other.SanitizeString(customer))
+		return fmt.Errorf("user %s unauthorized to access %s", user, other.SanitizeString(customer))
 	}
 	return nil
 }
@@ -199,7 +198,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "accumulatedProducts")
 	// Get from cache if possible
 	var cacheHit bool
-	processValues, cacheHit := internal.GetDistinctProcessValuesFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
+	processValues, cacheHit := other.GetDistinctProcessValuesFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
 
 	if !cacheHit { // data NOT found
 		processValues, err = GetDistinctProcessValues(c, getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
@@ -209,7 +208,7 @@ func getValuesHandler(c *gin.Context) {
 		}
 
 		// Store to cache if not yet existing
-		go internal.StoreDistinctProcessValuesToCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset, processValues)
+		go other.StoreDistinctProcessValuesToCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset, processValues)
 		zap.S().Debugf("Stored DistinctProcessValues to cache")
 	}
 

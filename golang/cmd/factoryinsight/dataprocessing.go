@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"math"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"gonum.org/v1/gonum/stat"
 )
@@ -325,7 +325,7 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (processedStateArray []datamodel.StateEntry, error error) {
 
 	// Get from cache if possible
-	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
+	processedStateArray, cacheHit := other.GetCalculatateLowSpeedStatesFromCache(from, to, assetID)
 	if cacheHit {
 		return
 	}
@@ -369,7 +369,7 @@ func calculatateLowSpeedStates(c *gin.Context, assetID uint32, countSlice []data
 	}
 
 	// Store in cache for later usage
-	internal.StoreCalculatateLowSpeedStatesToCache(from, to, assetID, processedStateArray)
+	other.StoreCalculatateLowSpeedStatesToCache(from, to, assetID, processedStateArray)
 
 	return
 }
@@ -923,14 +923,14 @@ func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamod
 	// For testing
 	loggingTimestamp := time.Now()
 	if logData {
-		internal.LogObject("processStatesOptimized", "stateArray", loggingTimestamp, stateArray)
-		internal.LogObject("processStatesOptimized", "rawShifts", loggingTimestamp, rawShifts)
-		internal.LogObject("processStatesOptimized", "countSlice", loggingTimestamp, countSlice)
-		internal.LogObject("processStatesOptimized", "orderArray", loggingTimestamp, orderArray)
-		internal.LogObject("processStatesOptimized", "from", loggingTimestamp, from)
-		internal.LogObject("processStatesOptimized", "to", loggingTimestamp, to)
-		internal.LogObject("processStatesOptimized", "configuration", loggingTimestamp, configuration)
-		internal.LogObject("processStatesOptimized", "processedStateArray", loggingTimestamp, processedStateArray)
+		other.LogObject("processStatesOptimized", "stateArray", loggingTimestamp, stateArray)
+		other.LogObject("processStatesOptimized", "rawShifts", loggingTimestamp, rawShifts)
+		other.LogObject("processStatesOptimized", "countSlice", loggingTimestamp, countSlice)
+		other.LogObject("processStatesOptimized", "orderArray", loggingTimestamp, orderArray)
+		other.LogObject("processStatesOptimized", "from", loggingTimestamp, from)
+		other.LogObject("processStatesOptimized", "to", loggingTimestamp, to)
+		other.LogObject("processStatesOptimized", "configuration", loggingTimestamp, configuration)
+		other.LogObject("processStatesOptimized", "processedStateArray", loggingTimestamp, processedStateArray)
 	}
 
 	return
@@ -952,11 +952,11 @@ func processStates(c *gin.Context,
 	err error,
 ) {
 
-	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
+	key := fmt.Sprintf("processStates-%d-%s-%s-%s", assetID, from, to, other.AsHash(configuration))
 
 	// Get from cache if possible
 	var cacheHit bool
-	processedStateArray, cacheHit = internal.GetProcessStatesFromCache(key)
+	processedStateArray, cacheHit = other.GetProcessStatesFromCache(key)
 	if cacheHit {
 		//zap.S().Debugf("processStates CacheHit")
 
@@ -1035,7 +1035,7 @@ func processStates(c *gin.Context,
 	}
 
 	// Store to cache
-	internal.StoreProcessStatesToCache(key, processedStateArray)
+	other.StoreProcessStatesToCache(key, processedStateArray)
 
 	return
 }
@@ -1061,7 +1061,7 @@ func getParetoArray(c *gin.Context, durationArray []float64, stateArray []int, i
 
 	totalDurationChannel := make(chan ChannelResult)
 
-	uniqueStateArray := internal.UniqueInt(stateArray)
+	uniqueStateArray := other.UniqueInt(stateArray)
 
 	// Loop through all datapoints and start getTotalDurationForState
 	for _, state := range uniqueStateArray {
@@ -1321,11 +1321,11 @@ func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry
 func IsPerformanceLoss(state int32, configuration datamodel.CustomerConfiguration) (IsPerformanceLoss bool) {
 
 	// Overarching categories are in the format 10000, 20000, 120000, etc.. We are checking if a value e.g. 20005 belongs to 20000
-	quotient, _ := internal.Divmod(int64(state), 10000)
+	quotient, _ := other.Divmod(int64(state), 10000)
 
-	if internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(state)) { // Check if it is directly in it
+	if other.IsInSliceInt32(configuration.PerformanceLossStates, int32(state)) { // Check if it is directly in it
 		return true
-	} else if !internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(state)) && internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(quotient)) {
+	} else if !other.IsInSliceInt32(configuration.AvailabilityLossStates, int32(state)) && other.IsInSliceInt32(configuration.PerformanceLossStates, int32(quotient)) {
 		// check whether it is not specifically in availability loss states.
 		// If it is not mentioned htere, check whether the overarching category is in it.
 		return true
@@ -1339,11 +1339,11 @@ func IsPerformanceLoss(state int32, configuration datamodel.CustomerConfiguratio
 func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfiguration) (IsPerformanceLoss bool) {
 
 	// Overarching categories are in the format 10000, 20000, 120000, etc.. We are checking if a value e.g. 20005 belongs to 20000
-	quotient, _ := internal.Divmod(int64(state), 10000)
+	quotient, _ := other.Divmod(int64(state), 10000)
 
-	if internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(state)) { // Check if it is directly in it
+	if other.IsInSliceInt32(configuration.AvailabilityLossStates, int32(state)) { // Check if it is directly in it
 		return true
-	} else if !internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(state)) && internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(quotient)*10000) {
+	} else if !other.IsInSliceInt32(configuration.PerformanceLossStates, int32(state)) && other.IsInSliceInt32(configuration.AvailabilityLossStates, int32(quotient)*10000) {
 		// check whether it is not specifically in performance loss states.
 		// If it is not mentioned htere, check whether the overarching category is in it.
 		return true
@@ -1412,13 +1412,13 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
 func CalculateAverageStateTime(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, targetState int) (data []interface{}, error error) {
 
-	key := fmt.Sprintf("CalculateAverageStateTime-%s-%s-%s-%s-%d", internal.AsHash(temporaryDatapoints), from, to, internal.AsHash(configuration), targetState)
+	key := fmt.Sprintf("CalculateAverageStateTime-%s-%s-%s-%s-%d", other.AsHash(temporaryDatapoints), from, to, other.AsHash(configuration), targetState)
 	if mutex.TryLock(key) { // is is already running?
 		defer mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
-		data, cacheHit = internal.GetAverageStateTimeFromCache(key)
+		data, cacheHit = other.GetAverageStateTimeFromCache(key)
 		if cacheHit { // data found
 			zap.S().Debugf("CalculateAverageStateTime cache hit")
 			return
@@ -1474,7 +1474,7 @@ func CalculateAverageStateTime(c *gin.Context, temporaryDatapoints []datamodel.S
 			data = nil
 		}
 
-		internal.StoreAverageStateTimeToCache(key, data)
+		other.StoreAverageStateTimeToCache(key, data)
 
 	} else {
 		zap.S().Errorf("Failed to get Mutex")
@@ -1815,19 +1815,19 @@ func CalculateAccumulatedProducts(c *gin.Context, to time.Time, observationStart
 	lastDataPointTargetOverhead := int64(0)
 
 	// Regression data for products
-	regressionDataP := internal.Xy{
+	regressionDataP := other.Xy{
 		X: make([]float64, dplen+1),
 		Y: make([]float64, dplen+1),
 	}
 
 	// Regression data for scraps
-	regressionDataS := internal.Xy{
+	regressionDataS := other.Xy{
 		X: make([]float64, dplen+1),
 		Y: make([]float64, dplen+1),
 	}
 
 	// Regression data for targets
-	regressionDataT := internal.Xy{
+	regressionDataT := other.Xy{
 		X: make([]float64, dplen+1),
 		Y: make([]float64, dplen+1),
 	}

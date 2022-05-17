@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"github.com/coocood/freecache"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 )
 
@@ -50,20 +50,20 @@ func BytesToUint32(b []byte) (a uint32) {
 
 // GetCacheAssetTableId looks up the db cache for the customerId, locationId, assetId and returns the asset table id if found
 func GetCacheAssetTableId(customerID string, locationID string, assetID string) (uint32, bool) {
-	return GetUint32DB(internal.AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)))
+	return GetUint32DB(other.AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)))
 }
 
 // PutCacheAssetTableId puts the assetTableId into the db cache, using the customerId, locationId, assetId as the key
 func PutCacheAssetTableId(customerID string, locationID string, assetID string, assetTableId uint32) {
-	PutUint32DB(internal.AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)), assetTableId)
+	PutUint32DB(other.AsXXHash([]byte(customerID), []byte(locationID), []byte(assetID)), assetTableId)
 }
 
 // PutCacheProductTableId puts the productTableId into the db cache, using the customerId, locationId, productId as the key
 func PutCacheProductTableId(customerID string, AssetTableId uint32, productTableId uint32) {
-	PutUint32DB(internal.AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)), productTableId)
+	PutUint32DB(other.AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)), productTableId)
 }
 
 // GetCacheProductTableId looks up the db cache for the customerId, locationId, productId and returns the product table id if found
 func GetCacheProductTableId(customerID string, AssetTableId uint32) (uint32, bool) {
-	return GetUint32DB(internal.AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
+	return GetUint32DB(other.AsXXHash([]byte(customerID), Uint32ToBytes(AssetTableId)))
 }

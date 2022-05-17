@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 
 	//"encoding/base64"
 	"fmt"
@@ -53,7 +53,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				return
 			}
 
-			validKafkaTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
+			validKafkaTopic, kafkaTopic := kafka2.MqttTopicToKafka(mqttRawTopic)
 
 			if validKafkaTopic {
 				go SendKafkaMessage(kafkaTopic, jsonString)
@@ -136,7 +136,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				zap.S().Errorf("Error converting payload to json: %s", err.Error())
 				return
 			}
-			validKafkaTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
+			validKafkaTopic, kafkaTopic := kafka2.MqttTopicToKafka(mqttRawTopic)
 
 			if validKafkaTopic {
 				go SendKafkaMessage(kafkaTopic, jsonString)

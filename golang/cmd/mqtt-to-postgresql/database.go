@@ -8,7 +8,7 @@ import (
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/omeid/pgerror"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"reflect"
 	"regexp"
@@ -200,7 +200,7 @@ func GetAssetID(customerID string, location string, assetID string, recursionDep
 	success = false
 	// Get from cache if possible
 	var cacheHit bool
-	DBassetID, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
+	DBassetID, cacheHit = other.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
 
 		success = true
@@ -215,7 +215,7 @@ func GetAssetID(customerID string, location string, assetID string, recursionDep
 		case Unrecoverable:
 			PGErrorHandling("GetAssetID db.QueryRow()", err)
 		case TryAgain:
-			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			other.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
 			return GetAssetID(customerID, location, assetID, recursionDepth+1)
 		case DiscardValue:
 			return 0, false
@@ -225,7 +225,7 @@ func GetAssetID(customerID string, location string, assetID string, recursionDep
 	}
 
 	// Store to cache if not yet existing
-	go internal.StoreAssetIDToCache(customerID, location, assetID, DBassetID)
+	go other.StoreAssetIDToCache(customerID, location, assetID, DBassetID)
 	zap.S().Debugf("Stored AssetID to cache")
 
 	success = true
@@ -246,7 +246,7 @@ func GetProductID(DBassetID uint32, productName string, recursionDepth int64) (p
 		case Unrecoverable:
 			PGErrorHandling("GetProductID db.QueryRow()", err)
 		case TryAgain:
-			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			other.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
 			return GetProductID(DBassetID, productName, recursionDepth+1)
 		case DiscardValue:
 			return
@@ -272,7 +272,7 @@ func GetComponentID(assetID uint32, componentName string, recursionDepth int64) 
 		case Unrecoverable:
 			PGErrorHandling("GetComponentID() db.QueryRow()", err)
 		case TryAgain:
-			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			other.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
 			return GetComponentID(assetID, componentName, recursionDepth+1)
 		case DiscardValue:
 			return 0, false
@@ -297,7 +297,7 @@ func GetUniqueProductID(aid string, DBassetID uint32, recursionDepth int64) (uid
 		case Unrecoverable:
 			PGErrorHandling("GetUniqueProductID db.QueryRow()", err)
 		case TryAgain:
-			internal.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
+			other.SleepBackedOff(recursionDepth, 10*time.Millisecond, 1*time.Second)
 			GetUniqueProductID(aid, DBassetID, recursionDepth+1)
 		case DiscardValue:
 			return 0, err, false
@@ -334,7 +334,7 @@ func GetLatestParentUniqueProductID(aid string, assetID uint32) (uid int32, succ
 }
 
 func CheckIfProductExists(productId int32, DBassetID uint32) (exists bool, err error) {
-	_, cacheHit := internal.GetProductIDFromCache(productId, DBassetID)
+	_, cacheHit := other.GetProductIDFromCache(productId, DBassetID)
 	if cacheHit {
 		return true, nil
 	}
@@ -367,7 +367,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 
 	// Get from cache if possible
 	var cacheHit bool
-	_, cacheHit = internal.GetAssetIDFromCache(customerID, location, assetID)
+	_, cacheHit = other.GetAssetIDFromCache(customerID, location, assetID)
 	if cacheHit { // data found
 
 		return
@@ -381,7 +381,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 			ShutdownApplicationGraceful()
 		case TryAgain:
 			if recursionDepth < 10 {
-				internal.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
+				other.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
 				err = nil
 				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
 			} else {
@@ -413,7 +413,7 @@ func AddAssetIfNotExisting(assetID string, location string, customerID string, r
 			ShutdownApplicationGraceful()
 		case TryAgain:
 			if recursionDepth < 10 {
-				internal.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
+				other.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
 				err = nil
 				err = AddAssetIfNotExisting(assetID, location, customerID, recursionDepth+1)
 			} else {
@@ -1065,7 +1065,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 						ShutdownApplicationGraceful()
 					case TryAgain:
 						if recursionDepth < 10 {
-							internal.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
+							other.SleepBackedOff(int64(recursionDepth), 10*time.Millisecond, 1*time.Second)
 							errx = nil
 							faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
 						}

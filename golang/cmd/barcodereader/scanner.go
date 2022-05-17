@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"github.com/gvalkov/golang-evdev"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"os"
 	"strconv"
@@ -545,7 +545,7 @@ func ScanForever(device *evdev.InputDevice, fn func(string), errFn func(error)) 
 		if scanErr != nil {
 			// invoke the function which handles scanner errors
 			errFn(scanErr)
-			time.Sleep(internal.OneSecond)
+			time.Sleep(other.OneSecond)
 		}
 		scannedData, endOfScan := decodeEvents(scanEvents)
 		if endOfScan {

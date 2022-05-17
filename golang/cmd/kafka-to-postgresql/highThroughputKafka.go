@@ -2,12 +2,12 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 	"go.uber.org/zap"
 )
 
 var highThroughputProcessorChannel chan *kafka.Message
-var highThroughputPutBackChannel chan internal.PutBackChanMsg
+var highThroughputPutBackChannel chan kafka2.PutBackChanMsg
 
 var HTKafkaConsumer *kafka.Consumer
 var HTKafkaProducer *kafka.Producer

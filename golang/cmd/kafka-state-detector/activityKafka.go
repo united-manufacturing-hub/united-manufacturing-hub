@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"github.com/united-manufacturing-hub/umh-lib/v2/datamodel"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 	"go.uber.org/zap"
 )
 
 var ActivityProcessorChannel chan *kafka.Message
 var ActivityCommitChannel chan *kafka.Message
-var ActivityPutBackChannel chan internal.PutBackChanMsg
+var ActivityPutBackChannel chan kafka2.PutBackChanMsg
 
 // ActivityKafkaConsumer is a high Integrity Kafka consumer
 var ActivityKafkaConsumer *kafka.Consumer
@@ -74,7 +74,7 @@ func startActivityProcessor() {
 		if msg == nil {
 			continue
 		}
-		parsed, parsedMessage := internal.ParseMessage(msg)
+		parsed, parsedMessage := kafka2.ParseMessage(msg)
 		if !parsed {
 			continue
 		}
@@ -118,7 +118,7 @@ func startActivityProcessor() {
 		err = ActivityKafkaProducer.Produce(msgS, nil)
 		if err != nil {
 			errS := err.Error()
-			ActivityPutBackChannel <- internal.PutBackChanMsg{
+			ActivityPutBackChannel <- kafka2.PutBackChanMsg{
 				Msg:         msg,
 				Reason:      "Failed to produce state message",
 				ErrorString: &errS,
