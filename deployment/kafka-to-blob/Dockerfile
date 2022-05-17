@@ -12,8 +12,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/kafka-to-blob /build/cmd/kafka-to-blob
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 # ADD ./golang/test/kafka-to-blob /build/test
 
 WORKDIR /build

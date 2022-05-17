@@ -10,8 +10,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/factoryinput /build/cmd/factoryinput
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 ADD ./golang/test/factoryinput /build/test/factoryinput
 
 RUN CGO_ENABLED=0 GOOS=linux go test --mod=readonly ./cmd/factoryinput
