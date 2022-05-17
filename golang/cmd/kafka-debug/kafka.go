@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
 	"github.com/united-manufacturing-hub/umh-lib/v2/other"
 	"go.uber.org/zap"
 	"time"
