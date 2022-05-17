@@ -12,8 +12,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/sensorconnect /build/cmd/sensorconnect
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 # ADD ./golang/test/sensorconnect /build/test
 
 WORKDIR /build

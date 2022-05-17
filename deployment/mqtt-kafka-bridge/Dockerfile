@@ -12,8 +12,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/mqtt-kafka-bridge /build/cmd/mqtt-kafka-bridge
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 # ADD ./golang/test/mqtt-kafka-bridge /build/test
 
 WORKDIR /build

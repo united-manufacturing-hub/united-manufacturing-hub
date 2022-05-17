@@ -15,8 +15,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/barcodereader /build/cmd/barcodereader
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 # ADD ./golang/test/barcodereader /build/test
 
 WORKDIR /build

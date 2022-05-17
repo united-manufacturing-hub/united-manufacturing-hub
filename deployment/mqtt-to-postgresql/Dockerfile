@@ -10,8 +10,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/mqtt-to-postgresql /build/cmd/mqtt-to-postgresql
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 #ADD ./golang/test/mqtt-to-postgresql /build/test
 
 WORKDIR /build
