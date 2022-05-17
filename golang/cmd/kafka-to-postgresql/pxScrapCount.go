@@ -46,7 +46,7 @@ func (c ScrapCount) ProcessMessages(msg kafka2.ParsedMessage) (putback bool, err
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, fmt.Errof("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)
+		return true, fmt.Errorf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)
 	}
 
 	// Changes should only be necessary between this marker
