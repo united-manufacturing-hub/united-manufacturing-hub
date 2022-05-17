@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
@@ -50,13 +49,13 @@ func (c ProductTag) ProcessMessages(msg kafka2.ParsedMessage) (putback bool, err
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId))
+		return true, fmt.Errof("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)
 	}
 
 	var ProductTableId uint32
 	ProductTableId, success = GetUniqueProductID(*sC.AID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get ProductTableID for AID: %s, AssetTableID: %d", *sC.AID, AssetTableID))
+		return true, fmt.Errof("Failed to get ProductTableID for AID: %s, AssetTableID: %d", *sC.AID, AssetTableID)
 	}
 
 	// Changes should only be necessary between this marker

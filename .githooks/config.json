@@ -12,7 +12,8 @@
       "line-length",
       "comments",
       "empty-lines",
-      "indentation"
+      "indentation",
+      "missing-document-start"
     ]
   },
   "gostaticcheck": {

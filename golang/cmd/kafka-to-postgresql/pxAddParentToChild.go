@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	kafka2 "github.com/united-manufacturing-hub/umh-lib/v2/kafka"
@@ -48,20 +47,20 @@ func (c AddParentToChild) ProcessMessages(msg kafka2.ParsedMessage) (putback boo
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId))
+		return true, fmt.Errof("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)
 	}
 
 	// Changes should only be necessary between this marker
 	var ChildUID uint32
 	ChildUID, success = GetUniqueProductID(*sC.ChildAID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID))
+		return true, fmt.Errof("Failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID)
 	}
 
 	var ParentUID uint32
 	ParentUID, success = GetLatestParentUniqueProductID(*sC.ParentAID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID))
+		return true, fmt.Errof("Failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID)
 	}
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(other.FiveSeconds))
