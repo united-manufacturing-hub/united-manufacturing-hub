@@ -9,8 +9,8 @@ WORKDIR /build
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/grafana-proxy /build/cmd/grafana-proxy
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 
 
 RUN CGO_ENABLED=0 GOOS=linux go test -v --mod=readonly ./cmd/grafana-proxy

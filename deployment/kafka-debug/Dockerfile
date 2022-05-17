@@ -12,8 +12,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/kafka-debug /build/cmd/kafka-debug
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 # ADD ./golang/test/kafka-debug /build/test
 
 WORKDIR /build

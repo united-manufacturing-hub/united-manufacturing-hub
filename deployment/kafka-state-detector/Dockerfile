@@ -12,8 +12,8 @@ RUN go mod download
 
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/kafka-state-detector /build/cmd/kafka-state-detector
-ADD ./golang/internal /build/internal
-ADD ./golang/pkg /build/pkg
+
+
 # ADD ./golang/test/kafka-state-detector /build/test
 
 WORKDIR /build
