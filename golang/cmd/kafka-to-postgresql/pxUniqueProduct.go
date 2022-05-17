@@ -49,13 +49,13 @@ func (c UniqueProduct) ProcessMessages(msg kafka2.ParsedMessage) (putback bool, 
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, fmt.Errof("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)
+		return true, fmt.Errorf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)
 	}
 
 	var ProductTableId uint32
 	ProductTableId, success = GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		return true, fmt.Errof("Failed to get ProductTableId for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID)
+		return true, fmt.Errorf("Failed to get ProductTableId for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID)
 	}
 
 	// Changes should only be necessary between this marker
