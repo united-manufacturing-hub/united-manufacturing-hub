@@ -13,7 +13,7 @@
       "comments",
       "empty-lines",
       "indentation",
-      "missing-document-start"
+      "document-start"
     ]
   },
   "gostaticcheck": {
