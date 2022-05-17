@@ -20,7 +20,7 @@ write_files:
     
         # barcodereader reads out connected USB barcodereaders emulating a keyboard
         barcodereader:
-          enabled: true
+          enabled: false
           USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
           USBDevicePath: "" # Linux device path, if empty, USBDeviceName is used
           customerID: "raw"
@@ -37,7 +37,7 @@ write_files:
         # Warning: unstable
         # cameraconnect searches for GenICam compatible cameras and reads out the pictures
         cameraconnect:
-          enabled: true
+          enabled: false
           trigger: "MQTT"
           acquisitionDelay: "0.0"
           cycleTime: "4"
@@ -54,7 +54,7 @@ write_files:
       dataprocessing:
         nodered:
           enabled: true
-          defaultFlows: true
+          defaultFlows: false
     
       # Infrastructure
       infrastructure:
@@ -929,7 +929,7 @@ write_files:
       # factoryinput, grafanaproxy
       # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
       datainput:
-        enabled: true
+        enabled: false
     
       # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
       mqttBridge:
