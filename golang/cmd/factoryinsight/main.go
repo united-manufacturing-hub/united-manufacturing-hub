@@ -29,12 +29,15 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var buildtime string
 var shutdownEnabled bool
 
 func main() {
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core

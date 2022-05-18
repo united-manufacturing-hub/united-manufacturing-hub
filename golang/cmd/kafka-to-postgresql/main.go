@@ -11,6 +11,7 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -28,6 +29,9 @@ var HighIntegrityEnabled = false
 var HighThroughputEnabled = false
 
 func main() {
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
+
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core

@@ -9,6 +9,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +24,8 @@ var ActivityEnabled bool
 var AnomalyEnabled bool
 
 func main() {
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core
