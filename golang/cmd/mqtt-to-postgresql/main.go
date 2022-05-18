@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var addOrderHandler AddOrderHandler
@@ -48,6 +49,8 @@ var DebugMode = false
 var buildtime string
 
 func main() {
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core

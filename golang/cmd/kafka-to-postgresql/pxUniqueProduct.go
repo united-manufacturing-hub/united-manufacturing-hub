@@ -44,8 +44,8 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 		return false, err
 	}
 	if !internal.IsValidStruct(sC, []string{"EndTimestampMs"}) {
-		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return false, nil
+		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
+		return true, nil
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {

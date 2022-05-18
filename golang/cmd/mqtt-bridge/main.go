@@ -10,6 +10,8 @@ import (
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -26,6 +28,8 @@ const localMQTTClientID = "MQTT-BRIDGE-LOCAL"
 const remoteMQTTClientID = "MQTT-BRIDGE-REMOTE"
 
 func main() {
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core

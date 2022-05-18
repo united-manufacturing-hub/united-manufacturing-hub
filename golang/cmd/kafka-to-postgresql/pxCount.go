@@ -15,7 +15,7 @@ type Count struct{}
 
 type count struct {
 	Count       *uint32 `json:"count"`
-	Scrap       *uint32 `json:"scrap:omitempty"`
+	Scrap       *uint32 `json:"scrap"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
@@ -41,9 +41,9 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err
 	}
-	if !internal.IsValidStruct(sC, []string{}) {
-		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return false, nil
+	if !internal.IsValidStruct(sC, []string{"Scrap"}) {
+		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
+		return true, nil
 	}
 
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
