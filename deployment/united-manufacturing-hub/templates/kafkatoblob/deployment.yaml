@@ -70,10 +70,10 @@ spec:
               value: 'umhminio-hl.united-manufacturing-hub.svc.cluster.local:9000'
 
             - name: MINIO_ACCESS_KEY
-              value: {{printf (index .Values "minio-operator" "tenants" 0).secrets.accessKey}}
+              value: {{printf (index .Values "tenant" "tenants" 0).secrets.accessKey}}
 
             - name: MINIO_SECRET_KEY
-              value: {{printf (index .Values "minio-operator" "tenants" 0).secrets.secretKey}}
+              value: {{printf (index .Values "tenant" "tenants" 0).secrets.secretKey}}
 
             - name: MY_POD_NAME
               valueFrom:
