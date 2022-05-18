@@ -30,8 +30,6 @@ var HighIntegrityEnabled = false
 var HighThroughputEnabled = false
 
 func main() {
-	// pprof
-	http.ListenAndServe("localhost:1337", nil)
 
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
@@ -45,8 +43,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	dryRun := os.Getenv("DRY_RUN")
 

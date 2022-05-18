@@ -16,7 +16,7 @@ ADD ./golang/cmd/mqtt-bridge /build/cmd/mqtt-bridge
 
 WORKDIR /build
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags '-extldflags "-static"' -o mainFile ./cmd/mqtt-bridge
+RUN CGO_ENABLED=0 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/mqtt-bridge
 
 FROM scratch
 COPY --from=builder /build /app/
