@@ -45,8 +45,6 @@ var LocalKafkaBootstrapServers string
 var RemoteKafkaBootstrapServers string
 
 func main() {
-	// pprof
-	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core
@@ -59,8 +57,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
+
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 
 	// Prometheus
 	metricsPath := "/metrics"

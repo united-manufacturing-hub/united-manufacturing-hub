@@ -24,6 +24,8 @@ var ActivityEnabled bool
 var AnomalyEnabled bool
 
 func main() {
+	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
+
 	// pprof
 	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
@@ -38,8 +40,6 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
-	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka

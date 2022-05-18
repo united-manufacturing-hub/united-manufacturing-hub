@@ -33,6 +33,7 @@ import (
 
 var shutdownEnabled bool
 var mqttClient MQTT.Client
+var buildtime string
 
 // GetEnv get's env variable, and also outputs warning if not set
 func GetEnv(variableName string) (envValue string) {
@@ -47,8 +48,6 @@ func GetEnv(variableName string) (envValue string) {
 }
 
 func main() {
-	// pprof
-	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core
@@ -61,6 +60,9 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+	zap.S().Infof("This is factoryinput build date: %s", buildtime)
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 
 	shutdownEnabled = false
 
