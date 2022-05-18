@@ -15,7 +15,7 @@ type Count struct{}
 
 type count struct {
 	Count       *uint32 `json:"count"`
-	Scrap       *uint32 `json:"scrap:omitempty"`
+	Scrap       *uint32 `json:"scrap"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
