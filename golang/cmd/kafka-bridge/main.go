@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,6 +45,8 @@ var LocalKafkaBootstrapServers string
 var RemoteKafkaBootstrapServers string
 
 func main() {
+	// pprof
+	http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core

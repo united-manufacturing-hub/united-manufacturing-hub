@@ -41,7 +41,7 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err
 	}
-	if !internal.IsValidStruct(sC, []string{}) {
+	if !internal.IsValidStruct(sC, []string{"Scrap"}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
 		return false, nil
 	}
