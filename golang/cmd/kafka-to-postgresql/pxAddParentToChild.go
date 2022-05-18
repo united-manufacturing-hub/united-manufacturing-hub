@@ -43,7 +43,7 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return false, nil
+		return true, nil
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
