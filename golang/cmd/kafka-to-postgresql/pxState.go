@@ -41,7 +41,7 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		return false, err
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
-		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
+		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
 		return true, nil
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
