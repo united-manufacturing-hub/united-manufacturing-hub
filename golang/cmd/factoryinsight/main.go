@@ -51,7 +51,7 @@ func main() {
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
 
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	PQHost := "db"
 	// Read environment variables

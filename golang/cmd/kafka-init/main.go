@@ -31,7 +31,7 @@ func main() {
 	zap.S().Infof("This is kafka-init build date: %s", buildtime)
 
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")

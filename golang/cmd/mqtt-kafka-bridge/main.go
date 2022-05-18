@@ -39,7 +39,7 @@ func main() {
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	// Read environment variables for MQTT
 	MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")

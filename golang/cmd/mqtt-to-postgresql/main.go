@@ -63,7 +63,7 @@ func main() {
 	defer logger.Sync()
 	zap.S().Infof("This is mqtt-to-postgresql build date: %s", buildtime)
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	// Read environment variables
 	certificateName := os.Getenv("CERTIFICATE_NAME")

@@ -72,7 +72,7 @@ func main() {
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	internal.InitMemcache()
 	cP = sync.Map{}

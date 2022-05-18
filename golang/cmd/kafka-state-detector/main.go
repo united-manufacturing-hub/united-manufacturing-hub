@@ -27,7 +27,7 @@ func main() {
 	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core

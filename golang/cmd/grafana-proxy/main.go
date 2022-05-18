@@ -33,7 +33,7 @@ func main() {
 	defer logger.Sync()
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")

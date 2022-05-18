@@ -62,7 +62,7 @@ func main() {
 	defer logger.Sync()
 	zap.S().Infof("This is factoryinput build date: %s", buildtime)
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	shutdownEnabled = false
 

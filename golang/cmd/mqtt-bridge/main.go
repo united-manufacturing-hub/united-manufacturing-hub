@@ -44,7 +44,7 @@ func main() {
 	defer logger.Sync()
 	zap.S().Infof("This is mqtt-bridge build date: %s", buildtime)
 	// pprof
-	http.ListenAndServe("localhost:1337", nil)
+	go http.ListenAndServe("localhost:1337", nil)
 
 	//dryRun := os.Getenv("DRY_RUN")
 
