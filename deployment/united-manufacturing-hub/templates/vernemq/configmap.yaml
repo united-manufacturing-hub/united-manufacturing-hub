@@ -26,4 +26,7 @@ data:
      topic write ia/#
      topic write $share/FACTORYINPUT/ia/#
 
+     user SENSORCONNECT
+     topic write ia/raw/#
+
      {{end}}
