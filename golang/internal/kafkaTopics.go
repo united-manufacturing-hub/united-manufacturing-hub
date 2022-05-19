@@ -45,9 +45,9 @@ func getTopicInformation(topic string) *TopicInformation {
 	}
 
 	submatch := KafkaUMHTopicCompiledRegex.FindSubmatch([]byte(topic))
-	assetId := string(submatch[8])
+	cId := string(submatch[8])
 	location := string(submatch[10])
-	customerId := string(submatch[12])
+	aId := string(submatch[12])
 	var baseTopic string
 	var extendedTopic []string
 	var transmitterId *string
@@ -79,9 +79,9 @@ func getTopicInformation(topic string) *TopicInformation {
 	}
 
 	return &TopicInformation{
-		AssetId:            assetId,
+		AssetId:            aId,
+		CustomerId:         cId,
 		Location:           location,
-		CustomerId:         customerId,
 		Topic:              baseTopic,
 		ExtendedTopics:     extendedTopic,
 		TransmitterId:      transmitterId,
