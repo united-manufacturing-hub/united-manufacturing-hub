@@ -285,6 +285,11 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 				continue
 			}
 
+			if info.VendorId == 0 && info.DeviceId == 0 {
+				// Digital sensor
+				continue
+			}
+
 			iofm := IoddFilemapKey{
 				VendorId: int64(info.VendorId),
 				DeviceId: int(info.DeviceId),
