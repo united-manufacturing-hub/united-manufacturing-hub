@@ -190,30 +190,32 @@ func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceIn
 				DeviceId:  0,
 				VendorId:  0,
 			}
+			zap.S().Debugf("Adding new port %d to map", port)
 			portmodeusagemap[port] = val
 		}
 		// mastercycletime_actual will return 200 for analog sensors, if they are connected
 		if strings.Contains(key, "mastercycletime_actual") {
 			if value.Code == 200 {
 				val.Connected = true
+				zap.S().Debugf("Got MasterCycleTime, connection is true for port %d", port)
 				portmodeusagemap[port] = val
 			}
 		} else if strings.Contains(key, "mode") {
 			if value.Code == 200 && value.Data != nil {
 				val.Mode = uint(*value.Data)
-				if val.Mode == 0 {
-					//Manually set to disconnected
-					val.Connected = false
-				}
+				zap.S().Debugf("Got Mode, mode is %d for port %d", val.Mode, port)
+				val.Connected = val.Mode != 0
 				portmodeusagemap[port] = val
 			}
 		} else if strings.Contains(key, "deviceid") {
 			if value.Code == 200 {
+				zap.S().Debugf("Got DeviceId, deviceid is %d for port %d", *value.Data, port)
 				val.DeviceId = uint(*value.Data)
 				portmodeusagemap[port] = val
 			}
 		} else if strings.Contains(key, "vendorid") {
 			if value.Code == 200 {
+				zap.S().Debugf("Got VendorId, vendorid is %d for port %d", *value.Data, port)
 				val.VendorId = uint(*value.Data)
 				portmodeusagemap[port] = val
 			}
