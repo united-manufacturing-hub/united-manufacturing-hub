@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -85,22 +84,8 @@ func main() {
 	if KafkaBoostrapServer == "" {
 		panic("KAFKA_BOOSTRAP_SERVER not set")
 	}
-	HITopic := os.Getenv("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC")
-	if HITopic == "" {
-		zap.S().Warnf("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC not set")
-	} else {
-		HighIntegrityEnabled = true
-		HITopic = strings.ReplaceAll(HITopic, `\\`, `\`)
-		zap.S().Infof("High integrity topic is set to %s", HITopic)
-	}
-	HTTopic := os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
-	if HTTopic == "" {
-		zap.S().Warnf("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC not set")
-	} else {
-		HighThroughputEnabled = true
-		HTTopic = strings.ReplaceAll(HTTopic, `\\`, `\`)
-		zap.S().Infof("High throughput topic is set to %s", HTTopic)
-	}
+	HITopic := `^ia\.(?!raw)(\d|-|\w|_)+\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
+	HTTopic := `^ia\.(?!raw)(\d|-|\w|_)+\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
 	// If neither high-integrity nor high-throughput topic is configured, panic
 	if !HighThroughputEnabled && !HighIntegrityEnabled {

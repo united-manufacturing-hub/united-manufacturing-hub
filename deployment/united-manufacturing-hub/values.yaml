@@ -1421,8 +1421,8 @@ kafkatopostgresql:
   listenTopic:
     # All topics except processValue
     # Kafka doesn't seem to be able to do negative lookaheads
-    highIntegrity: '^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$'
-    highThroughput: '^ia\..+\..+\..+\.(process[V|v]alue).*$'
+    #highIntegrity: '^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$'
+    #highThroughput: '^ia\..+\..+\..+\.(process[V|v]alue).*$'
   resources:
     limits:
       cpu: 1000m
