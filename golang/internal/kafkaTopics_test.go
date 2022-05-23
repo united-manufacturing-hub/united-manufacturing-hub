@@ -21,6 +21,19 @@ func TestGTICount(t *testing.T) {
 	assert.Equal(t, countGTI.MacAddressOfCamera, nil)
 }
 
+func TestGTICountLongerNames(t *testing.T) {
+	count := "ia.abc.def.gih.count"
+	countGTI := GetTopicInformationCached(count)
+	assert.NotEqual(t, countGTI, nil)
+	assert.Equal(t, countGTI.AssetId, "abc")
+	assert.Equal(t, countGTI.Location, "def")
+	assert.Equal(t, countGTI.CustomerId, "gih")
+	assert.Equal(t, countGTI.Topic, "count")
+	assert.Equal(t, len(countGTI.ExtendedTopics), 0)
+	assert.Equal(t, countGTI.TransmitterId, nil)
+	assert.Equal(t, countGTI.MacAddressOfCamera, nil)
+}
+
 func TestGTIRaw(t *testing.T) {
 	raw := "ia.raw.a"
 	rawGTI := GetTopicInformationCached(raw)

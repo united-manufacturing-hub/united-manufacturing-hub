@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var KafkaUMHTopicRegex = `^ia\.((raw\.(\d|-|\w|_|\.)+)|(rawImage\.(\d|-|\w|_)+\.(\d|-|\w|_)+)|((\d|-|\w|_)+\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((count|scrapCount|barcode|activity|detectedAnomaly|addShift|addOrder|addProduct|startOrder|endOrder|productImage|productTag|productTagString|addParentToChild|state|cycleTimeTrigger|uniqueProduct|scrapUniqueProduct|recommendations)|(processValue(\.(\d|-|\w|_)+)*))))$`
+var KafkaUMHTopicRegex = `^ia\.((raw\.(\d|-|\w|_|\.)+)|(rawImage\.(\d|-|\w|_)+\.(\d|-|\w|_)+)|(((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((count|scrapCount|barcode|activity|detectedAnomaly|addShift|addOrder|addProduct|startOrder|endOrder|productImage|productTag|productTagString|addParentToChild|state|cycleTimeTrigger|uniqueProduct|scrapUniqueProduct|recommendations)|(processValue(\.(\d|-|\w|_)+)*))))$`
 var KafkaUMHTopicCompiledRegex = regexp.MustCompile(KafkaUMHTopicRegex)
 
 func IsKafkaTopicValid(topic string) bool {
@@ -45,9 +45,9 @@ func getTopicInformation(topic string) *TopicInformation {
 	}
 
 	submatch := KafkaUMHTopicCompiledRegex.FindSubmatch([]byte(topic))
-	assetId := string(submatch[8])
-	location := string(submatch[9])
-	customerId := string(submatch[10])
+	cId := string(submatch[8])
+	location := string(submatch[10])
+	aId := string(submatch[12])
 	var baseTopic string
 	var extendedTopic []string
 	var transmitterId *string
@@ -73,15 +73,15 @@ func getTopicInformation(topic string) *TopicInformation {
 		}
 
 	} else {
-		topicSplits := strings.Split(string(submatch[11]), ".")
+		topicSplits := strings.Split(string(submatch[14]), ".")
 		baseTopic = topicSplits[0]
 		extendedTopic = topicSplits[1:]
 	}
 
 	return &TopicInformation{
-		AssetId:            assetId,
+		AssetId:            aId,
+		CustomerId:         cId,
 		Location:           location,
-		CustomerId:         customerId,
 		Topic:              baseTopic,
 		ExtendedTopics:     extendedTopic,
 		TransmitterId:      transmitterId,

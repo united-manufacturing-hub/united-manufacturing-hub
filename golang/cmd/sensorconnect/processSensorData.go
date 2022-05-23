@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
 	//"encoding/base64"
@@ -21,32 +22,27 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 
 	for portNumber, portMode := range portModeMap {
 		if !portMode.Connected {
+			zap.S().Debugf("Port %v is not connected, skipping.", portNumber)
 			continue
 		}
 		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
 		switch portMode.Mode {
 		case 1: // digital input
+			zap.S().Debugf("Processing sensor data for port %v, mode %v", portNumber, portMode.Mode)
 			// get value from sensorDataMap
 			portNumberString := strconv.Itoa(portNumber)
-			key := "/iolinkmaster/port[" + portNumberString + "]/iolinkdevice/pin2in"
+			key := "/iolinkmaster/port[" + portNumberString + "]/pin2in"
 			dataPin2In, err := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
 			if err != nil {
-				zap.S().Warnf("Current Port: %d", portNumber)
-				zap.S().Warnf("Current PortMode: %v", portMode.Mode)
-				zap.S().Warnf("Current DeviceId: %v", portMode.DeviceId)
-				zap.S().Warnf("Current VendorId: %v", portMode.VendorId)
-				zap.S().Warnf("Current Connected: %v", portMode.Connected)
-				zap.S().Warnf("CDI: %v", currentDeviceInformation)
-				zap.S().Warnf("SENSORDATAMAP: %v", sensorDataMap)
-				zap.S().Errorf("%s", err.Error())
+				zap.S().Debugf("Error with extracting dataPin2In from sensorDataMap: %v for key %s and sensorDataMap: %v", err, key, sensorDataMap)
 				continue
 			}
-
+			var jsonString []byte
 			// Payload to send
 			payload := make(map[string]interface{})
 			createDigitalInputPayload(timestampMs, dataPin2In, &payload)
-			jsonString, err := json.Marshal(payload)
+			jsonString, err = jsoniter.Marshal(payload)
 
 			if err != nil {
 				zap.S().Errorf("Error converting payload to json: %s", err.Error())
@@ -59,6 +55,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				go SendKafkaMessage(kafkaTopic, jsonString)
 			}
 			go SendMQTTMessage(mqttRawTopic, jsonString)
+
 		case 2: // digital output
 			// Todo
 			continue
@@ -80,13 +77,14 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				continue
 			}
 			if connectionCode != 200 {
+				zap.S().Warnf("Port %d is not connected", portNumber)
 				continue
 			}
 
 			rawSensorOutput, err := extractByteArrayFromSensorDataMap(keyPdin, "data", sensorDataMap)
 
 			if err != nil {
-				zap.S().Errorf("%s", err.Error())
+				zap.S().Errorf("Failed to extract byte array from sensordatamap: %s", err.Error())
 				continue
 			}
 			rawSensorOutputLength := len(rawSensorOutput)
@@ -123,7 +121,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 			var emptySimpleDatatype SimpleDatatype
 			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
 
-			//zap.S().Debugf("Starting to process port number = %v with device id = %v and raw sensor output = %v", portNumber, deviceId, string(rawSensorOutput))
+			zap.S().Debugf("Starting to process port number = %v with serialnumber = %v and raw sensor output = %v", portNumber, currentDeviceInformation.SerialNumber, string(rawSensorOutput))
 			// use the acquired info to process the raw data coming from the sensor correctly in to human readable data and attach to payload
 			err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, &payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
 			if err != nil {
@@ -436,7 +434,8 @@ func createDigitalInputPayload(timestampMs string, dataPin2In []byte, payload *m
 	(*payload)["timestamp_ms"] = timestampMs
 	(*payload)["type"] = "DI"
 	(*payload)["connected"] = "connected"
-	(*payload)["value"] = dataPin2In
+	// Interpret as int
+	(*payload)["value"] = string(dataPin2In)
 
 }
 

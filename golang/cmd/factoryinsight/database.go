@@ -629,7 +629,7 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 		for rows.Next() {
 			var timestamp time.Time
 			var dataPoint float64
-			var dataPoint2 float64
+			var dataPoint2 sql.NullFloat64
 
 			err := rows.Scan(&timestamp, &dataPoint, &dataPoint2)
 			if err != nil {
@@ -637,9 +637,15 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 				error = err
 				return
 			}
+
+			scrap := 0.0
+			if dataPoint2.Valid {
+				scrap = dataPoint2.Float64
+			}
+
 			fullRow := datamodel.CountEntry{
 				Count:     dataPoint,
-				Scrap:     dataPoint2,
+				Scrap:     scrap,
 				Timestamp: timestamp,
 			}
 			data = append(data, fullRow)
