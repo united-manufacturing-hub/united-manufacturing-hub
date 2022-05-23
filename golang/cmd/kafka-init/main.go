@@ -6,25 +6,22 @@ import (
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var buildtime string
 
 func main() {
-	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core
-	switch logLevel {
-	case "DEVELOPMENT":
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	default:
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
-	}
+	core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
@@ -35,12 +32,15 @@ func main() {
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	zap.S().Infof("KafkaBoostrapServer: %s", KafkaBoostrapServer)
 	// Semicolon seperated list of topic to create
 	KafkaTopics := os.Getenv("KAFKA_TOPICS")
+	zap.S().Infof("KafkaTopics: %s", KafkaTopics)
 
 	zap.S().Debugf("Setting up Kafka")
 	securityProtocol := "plaintext"
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		zap.S().Infof("Using SSL")
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/tls.key")
@@ -55,7 +55,19 @@ func main() {
 		if err != nil {
 			panic("SSL CA cert file not found")
 		}
+	} else {
+		zap.S().Infof("Using plaintext")
 	}
+
+	timeout := 10 * time.Second
+	conn, err := net.DialTimeout("tcp", KafkaBoostrapServer, timeout)
+	if err != nil {
+		zap.S().Errorf("site unreachable, error: %v", err)
+	} else {
+		log.Printf("Site reachable, connection: %v", conn)
+	}
+	defer conn.Close()
+
 	internal.SetupKafka(kafka.ConfigMap{
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/tls.key",
