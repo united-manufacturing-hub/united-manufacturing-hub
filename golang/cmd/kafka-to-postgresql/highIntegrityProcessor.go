@@ -7,9 +7,7 @@ import (
 
 // startHighIntegrityQueueProcessor starts the kafka processor for the high integrity queue
 func startHighIntegrityQueueProcessor() {
-	if !HighIntegrityEnabled {
-		return
-	}
+
 	zap.S().Debugf("[HI]Starting queue processor")
 	for !ShuttingDown {
 		// Get next message from HI kafka consumer

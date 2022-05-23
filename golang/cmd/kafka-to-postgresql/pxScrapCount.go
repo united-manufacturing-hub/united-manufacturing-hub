@@ -14,7 +14,7 @@ import (
 type ScrapCount struct{}
 
 type scrapCount struct {
-	Scrap       *uint32 `json:"scrapCount"`
+	Scrap       *uint32 `json:"scrap"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
