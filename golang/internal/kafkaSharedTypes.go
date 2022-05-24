@@ -193,7 +193,7 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 						kafkaKey.Putback.LastTsMS = current
 						kafkaKey.Putback.Amount += 1
 						kafkaKey.Putback.Reason = reason
-						if kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000 {
+						if msgX.ForcePutbackTopic || (kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000) {
 							topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
 
 							if commitChannel != nil {
