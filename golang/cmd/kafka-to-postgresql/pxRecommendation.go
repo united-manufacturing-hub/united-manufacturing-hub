@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
