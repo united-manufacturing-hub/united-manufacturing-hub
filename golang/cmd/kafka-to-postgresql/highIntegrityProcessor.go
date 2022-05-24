@@ -22,53 +22,54 @@ func startHighIntegrityQueueProcessor() {
 
 		var err error
 		var putback bool
+		var forcePBTopic bool
 
 		// Switch based on topic
 		switch parsedMessage.PayloadType {
 		case Prefix.Count:
-			putback, err = Count{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = Count{}.ProcessMessages(parsedMessage)
 		case Prefix.Recommendation:
 			zap.S().Errorf("[HI]Recommendation message not implemented")
-			//putback, err = Recommendation{}.ProcessMessages(parsedMessage)
+			//putback, err, forcePBTopic = Recommendation{}.ProcessMessages(parsedMessage)
 		case Prefix.State:
-			putback, err = State{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = State{}.ProcessMessages(parsedMessage)
 		case Prefix.UniqueProduct:
-			putback, err = UniqueProduct{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = UniqueProduct{}.ProcessMessages(parsedMessage)
 		case Prefix.ScrapCount:
-			putback, err = ScrapCount{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = ScrapCount{}.ProcessMessages(parsedMessage)
 		case Prefix.AddShift:
-			putback, err = AddShift{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = AddShift{}.ProcessMessages(parsedMessage)
 		case Prefix.ScrapUniqueProduct:
-			putback, err = ScrapUniqueProduct{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = ScrapUniqueProduct{}.ProcessMessages(parsedMessage)
 		case Prefix.AddProduct:
-			putback, err = AddProduct{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = AddProduct{}.ProcessMessages(parsedMessage)
 		case Prefix.AddOrder:
-			putback, err = AddOrder{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = AddOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.StartOrder:
-			putback, err = StartOrder{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = StartOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.EndOrder:
-			putback, err = EndOrder{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = EndOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.AddMaintenanceActivity:
 			zap.S().Errorf("[HI]AddMaintenanceActivity message not implemented")
-			//putback, err = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
+			//putback, err, forcePBTopic = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
 		case Prefix.ProductTag:
-			putback, err = ProductTag{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = ProductTag{}.ProcessMessages(parsedMessage)
 		case Prefix.ProductTagString:
-			putback, err = ProductTagString{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = ProductTagString{}.ProcessMessages(parsedMessage)
 		case Prefix.AddParentToChild:
-			putback, err = AddParentToChild{}.ProcessMessages(parsedMessage)
+			putback, err, forcePBTopic = AddParentToChild{}.ProcessMessages(parsedMessage)
 		case Prefix.ModifyState:
 			zap.S().Errorf("[HI]ModifyState message not implemented")
-			//putback, err = ModifyState{}.ProcessMessages(parsedMessage)
+			//putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
 		case Prefix.ModifyProducesPieces:
 			zap.S().Errorf("[HI]ModifyProducesPieces message not implemented")
-			//putback, err = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
+			//putback, err, forcePBTopic = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
 		case Prefix.DeleteShiftById:
 			zap.S().Errorf("[HI]DeleteShiftById message not implemented")
-			//putback, err = DeleteShiftById{}.ProcessMessages(parsedMessage)
+			//putback, err, forcePBTopic = DeleteShiftById{}.ProcessMessages(parsedMessage)
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
 			zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp message not implemented")
-			//putback, err = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
+			//putback, err, forcePBTopic = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
 
 		default:
 			zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
@@ -82,7 +83,7 @@ func startHighIntegrityQueueProcessor() {
 			case DatabaseDown:
 				if putback {
 					zap.S().Debugf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
-					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "DatabaseDown", ErrorString: &errStr}
+					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "DatabaseDown", ErrorString: &errStr, ForcePutbackTopic: forcePBTopic}
 				} else {
 					zap.S().Errorf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 					highIntegrityCommitChannel <- msg
@@ -96,7 +97,7 @@ func startHighIntegrityQueueProcessor() {
 
 					zap.S().Debugf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 
-					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (Error)", ErrorString: &errStr}
+					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (Error)", ErrorString: &errStr, ForcePutbackTopic: forcePBTopic}
 				} else {
 					zap.S().Errorf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 					highIntegrityCommitChannel <- msg
@@ -107,7 +108,7 @@ func startHighIntegrityQueueProcessor() {
 				payloadStr := string(parsedMessage.Payload)
 
 				zap.S().Debugf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr)
-				highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (No-Error)"}
+				highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (No-Error)", ForcePutbackTopic: forcePBTopic}
 
 			} else {
 				highIntegrityCommitChannel <- msg

@@ -27,9 +27,10 @@ type Putback struct {
 }
 
 type PutBackChanMsg struct {
-	Msg         *kafka.Message
-	Reason      string
-	ErrorString *string
+	Msg               *kafka.Message
+	Reason            string
+	ErrorString       *string
+	ForcePutbackTopic bool
 }
 
 // KafkaCommits is a counter for the number of commits done (to the db), this is used for stats only
@@ -236,7 +237,7 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 
 				err = kafkaProducer.Produce(&msgx, nil)
 				if err != nil {
-					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString}
+					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString, false}
 				}
 				// This is for stats only and counts the amount of messages put back
 				KafkaPutBacks += 1
@@ -252,7 +253,7 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 		select {
 		case msg, ok := <-channelToDrain:
 			if ok {
-				channelToDrainTo <- PutBackChanMsg{msg, fmt.Sprintf("%s Shutting down", identifier), nil}
+				channelToDrainTo <- PutBackChanMsg{msg, fmt.Sprintf("%s Shutting down", identifier), nil, false}
 				KafkaPutBacks += 1
 			} else {
 				zap.S().Warnf("%s Channel to drain is closed", identifier)
@@ -283,7 +284,7 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 	select {
 	case msg, ok := <-channelToDrain:
 		if ok {
-			channelToDrainTo <- PutBackChanMsg{msg, "Shutting down", nil}
+			channelToDrainTo <- PutBackChanMsg{msg, "Shutting down", nil, false}
 		} else {
 			return false
 		}

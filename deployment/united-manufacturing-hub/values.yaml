@@ -949,14 +949,14 @@ _000_commonConfig:
     topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
     topicmap:
 # Example topic map
-#  - bidirectional: false
-#    name: HighIntegrity
-#    send_direction: to_remote
-#    topic: ^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
-#  - bidirectional: false
-#    name: HighThroughput
-#    send_direction: to_remote
-#    topic: ^ia\..+\..+\..+\.(processValue).*$
+#      - bidirectional: false
+#        name: HighIntegrity
+#        send_direction: to_remote
+#        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
+#      - bidirectional: false
+#        name: HighThroughput
+#        send_direction: to_remote
+#        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$
 
   kafkaStateDetector:
     enabled: false

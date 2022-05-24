@@ -61,7 +61,7 @@ func IsPostgresSQLAvailable() (bool, error) {
 			return true, nil
 		}
 	}
-	return false, err
+	return false, err, false
 }
 
 // ShutdownDB closes all database connections

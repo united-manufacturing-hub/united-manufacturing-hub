@@ -19,7 +19,7 @@ type addProduct struct {
 }
 
 // ProcessMessages processes a AddProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
+func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -29,7 +29,7 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return true, err
+		return true, err, false
 	}
 
 	// sC is the payload, parsed as addProduct
@@ -38,15 +38,15 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	if err != nil {
 		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return false, err
+		return false, err, false
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
-		return true, nil
+		return true, nil, true
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId))
+		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
 	}
 
 	ProductTableId, success := GetProductTableId(*sC.ProductId, AssetTableID)
@@ -67,7 +67,7 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, ProductTableId, sC.TimePerUnitInSeconds)
 	if err != nil {
-		return true, err
+		return true, err, false
 	}
 
 	// And this marker
@@ -76,15 +76,15 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
-			return true, err
+			return true, err, false
 		}
 	} else {
 
 		err = txn.Commit()
 		if err != nil {
-			return true, err
+			return true, err, false
 		}
 	}
 
-	return false, err
+	return false, err, false
 }
