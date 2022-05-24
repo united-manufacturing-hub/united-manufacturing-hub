@@ -83,6 +83,15 @@ func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback boo
 
 	_, err = stmt.ExecContext(stmtCtx, sC.UID, sC.RecommendationType, sC.Enabled, sC.RecommendationValues, sC.RecommendationTextEN, sC.RecommendationTextDE, sC.DiagnoseTextEN, sC.DiagnoseTextDE)
 	if err != nil {
+
+		if err != nil {
+			pqErr := err.(*pq.Error)
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
+			return true, err, false
+		}
 		zap.S().Debugf("Error inserting into recommendation table: %s", err.Error())
 		return true, err, false
 	}

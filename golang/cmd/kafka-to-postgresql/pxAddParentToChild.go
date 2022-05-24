@@ -83,8 +83,11 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, ParentUID, ChildUID, sC.TimestampMs)
 	if err != nil {
-
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 

@@ -77,6 +77,15 @@ func (c DeleteShiftByAssetIdAndBeginTimestamp) ProcessMessages(msg internal.Pars
 
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimeStampMs)
 	if err != nil {
+
+		if err != nil {
+			pqErr := err.(*pq.Error)
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
+			return true, err, false
+		}
 		zap.S().Debugf("Error inserting into deleteShiftByAssetIdAndShiftTimestamp table: %s", err.Error())
 		return true, err, false
 	}

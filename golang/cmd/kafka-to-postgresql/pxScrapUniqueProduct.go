@@ -70,8 +70,11 @@ func (c ScrapUniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.UID, AssetTableID)
 	if err != nil {
-
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 

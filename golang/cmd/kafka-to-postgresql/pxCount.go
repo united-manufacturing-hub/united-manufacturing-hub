@@ -20,6 +20,7 @@ type count struct {
 
 // ProcessMessages processes a Count kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
 func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+	start := time.Now()
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -41,6 +42,8 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 			}
 		}
 	}()
+	zap.S().Debugf("Checkpoint 1 took %s", time.Since(start))
+	start = time.Now()
 
 	// sC is the payload, parsed as count
 	var sC count
@@ -49,16 +52,24 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err, true
 	}
+
+	zap.S().Debugf("Checkpoint 2 took %s", time.Since(start))
+	start = time.Now()
+
 	if !internal.IsValidStruct(sC, []string{"Scrap"}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
 		return true, nil, true
 	}
+	zap.S().Debugf("Checkpoint 3 took %s", time.Since(start))
+	start = time.Now()
 
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
 		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
+	zap.S().Debugf("Checkpoint 4 took %s", time.Since(start))
+	start = time.Now()
 
 	// Changes should only be necessary between this marker
 
@@ -67,6 +78,9 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
 
+	zap.S().Debugf("Checkpoint 5 took %s", time.Since(start))
+	start = time.Now()
+
 	stmt := txn.StmtContext(txnStmtCtx, statement.InsertIntoCountTable)
 
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
@@ -74,11 +88,26 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
 
+	zap.S().Debugf("Checkpoint 6 took %s", time.Since(start))
+	start = time.Now()
+
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.Count, sC.Scrap, sC.TimestampMs)
 	if err != nil {
+
+		if err != nil {
+			pqErr := err.(*pq.Error)
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
+			return true, err, false
+		}
 		zap.S().Debugf("Error inserting into count table: %s", err.Error())
 		return true, err, false
 	}
+
+	zap.S().Debugf("Checkpoint 7 took %s", time.Since(start))
+	start = time.Now()
 
 	// And this marker
 
@@ -98,6 +127,7 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		}
 		isCommited = true
 	}
+	zap.S().Debugf("Checkpoint 8 took %s", time.Since(start))
 
 	zap.S().Debugf("Successfully processed count message: %v", msg)
 	return false, err, false

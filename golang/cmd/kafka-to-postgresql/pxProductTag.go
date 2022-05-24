@@ -80,8 +80,11 @@ func (c ProductTag) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.Name, sC.Value, sC.TimestampMs, ProductTableId)
 	if err != nil {
-
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 

@@ -71,6 +71,15 @@ func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bo
 
 	_, err = stmt.ExecContext(stmtCtx, sC.ShiftId)
 	if err != nil {
+
+		if err != nil {
+			pqErr := err.(*pq.Error)
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
+			return true, err, false
+		}
 		zap.S().Debugf("Error inserting into deleteShiftById table: %s", err.Error())
 		return true, err, false
 	}

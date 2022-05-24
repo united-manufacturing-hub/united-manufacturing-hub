@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"time"
 )
 
 // startHighIntegrityQueueProcessor starts the kafka processor for the high integrity queue
@@ -10,6 +11,7 @@ func startHighIntegrityQueueProcessor() {
 
 	zap.S().Debugf("[HI]Starting queue processor")
 	for !ShuttingDown {
+		start := time.Now()
 		// Get next message from HI kafka consumer
 		msg := <-highIntegrityProcessorChannel
 		if msg == nil {
@@ -122,6 +124,8 @@ func startHighIntegrityQueueProcessor() {
 		if forcePBTopic {
 			highIntegrityCommitChannel <- msg
 		}
+
+		zap.S().Debugf("Iteration took %s", time.Since(start))
 	}
 
 	zap.S().Debugf("[HI]Processor shutting down")

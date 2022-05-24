@@ -64,14 +64,14 @@ func (c StartOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	// txnStmtCtxCl is the cancel function of the context, used in the statement creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
-	stmt := txn.StmtContext(txnStmtCtx, statement.UpdateOrderTableSetBeginTimestamp)
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
 
 	var val int
-	err = stmt.QueryRowContext(stmtCtx, sC.OrderId, AssetTableID).Scan(&val)
+	stmtGetOrders := txn.StmtContext(txnStmtCtx, statement.SelectOrderExists)
+	err = stmtGetOrders.QueryRowContext(stmtCtx, sC.OrderId, AssetTableID).Scan(&val)
 	if err != nil {
 		zap.S().Warnf("Failed to query OrderTable: %s", err.Error())
 		return false, err, false
@@ -81,7 +81,8 @@ func (c StartOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 		return true, fmt.Errorf("order does not yet exist: OrderId: %d, AssetId: %d", sC.OrderId, AssetTableID), false
 	}
 
-	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.OrderId, AssetTableID)
+	stmtUpdateOrderTable := txn.StmtContext(txnStmtCtx, statement.UpdateOrderTableSetBeginTimestamp)
+	_, err = stmtUpdateOrderTable.ExecContext(stmtCtx, sC.TimestampMs, sC.OrderId, AssetTableID)
 	if err != nil {
 
 		zap.S().Errorf("Error executing statement: %s", err.Error())

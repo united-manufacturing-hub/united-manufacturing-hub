@@ -71,8 +71,11 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, AssetTableID, sC.State)
 	if err != nil {
-
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 

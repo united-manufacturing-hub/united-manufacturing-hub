@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -80,7 +81,11 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.OrderId, ProductTableID, sC.TargetUnits, AssetTableID)
 	if err != nil {
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 
