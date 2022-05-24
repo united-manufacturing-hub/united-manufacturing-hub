@@ -33,13 +33,22 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 		return true, err, false
 	}
 
+	isCommited := false
+	defer func() {
+		if !isCommited && !isDryRun {
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			}
+		}
+	}()
+
 	// sC is the payload, parsed as addParentToChild
 	var sC addParentToChild
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
-		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return false, err, false
+		return false, err, true
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
@@ -47,6 +56,7 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
+		zap.S().Warnf("Failed to get AssetTableID")
 		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
 	}
 
@@ -54,13 +64,13 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	var ChildUID uint32
 	ChildUID, success = GetUniqueProductID(*sC.ChildAID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID))
+		return true, errors.New(fmt.Sprintf("Failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID)), false
 	}
 
 	var ParentUID uint32
 	ParentUID, success = GetLatestParentUniqueProductID(*sC.ParentAID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID))
+		return true, errors.New(fmt.Sprintf("Failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID)), false
 	}
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
@@ -74,6 +84,8 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, ParentUID, ChildUID, sC.TimestampMs)
 	if err != nil {
+
+		zap.S().Errorf("Error executing statement: %s", err.Error())
 		return true, err, false
 	}
 
@@ -86,11 +98,13 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 			return true, err, false
 		}
 	} else {
-
+		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
+			zap.S().Errorf("Error committing transaction: %s", err.Error())
 			return true, err, false
 		}
+		isCommited = true
 	}
 
 	return false, err, false

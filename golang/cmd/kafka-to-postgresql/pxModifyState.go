@@ -1,5 +1,9 @@
 package main
 
+/*
+	Warning:
+		This file is based on old source code, not on documentation !
+*/
 import (
 	"context"
 	"database/sql"
@@ -11,16 +15,16 @@ import (
 	"time"
 )
 
-type Count struct{}
+type ModifyState struct{}
 
-type count struct {
-	Count       *uint32 `json:"count"`
-	Scrap       *uint32 `json:"scrap"`
-	TimestampMs *uint64 `json:"timestamp_ms"`
+type modifyState struct {
+	StartTimeStampMs *uint32 `json:"start_time_stamp"`
+	EndTimeStampMs   *uint32 `json:"end_time_stamp"`
+	NewState         *uint32 `json:"new_state"`
 }
 
-// ProcessMessages processes a Count kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+// ProcessMessages processes a ModifyState kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+func (c ModifyState) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -43,14 +47,14 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		}
 	}()
 
-	// sC is the payload, parsed as count
-	var sC count
+	// sC is the payload, parsed as modifyState
+	var sC modifyState
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err, true
 	}
-	if !internal.IsValidStruct(sC, []string{"Scrap"}) {
+	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
 		return true, nil, true
 	}
@@ -68,17 +72,61 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
 
-	stmt := txn.StmtContext(txnStmtCtx, statement.InsertIntoCountTable)
+	stmtGetLastInRange := txn.StmtContext(txnStmtCtx, statement.SelectLastStateFromStateTableInRange)
+	stmtDeleteInRange := txn.StmtContext(txnStmtCtx, statement.DeleteFromStateTableByTimestampRangeAndAssetId)
+	stmtInsertNewState := txn.StmtContext(txnStmtCtx, statement.InsertIntoStateTable)
+	stmtDeleteOldState := txn.StmtContext(txnStmtCtx, statement.DeleteFromStateTableByTimestamp)
 
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
 
-	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.Count, sC.Scrap, sC.TimestampMs)
+	val, err := stmtGetLastInRange.QueryContext(stmtCtx, sC.StartTimeStampMs, AssetTableID)
 	if err != nil {
 		zap.S().Debugf("Error inserting into count table: %s", err.Error())
 		return true, err, false
+	}
+
+	if val.Next() {
+		var (
+			LastRowTimestamp    float64
+			LastRowTimestampInt int64
+			LastRowAssetId      int64
+			LastRowState        int64
+		)
+		err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
+		if err != nil {
+			zap.S().Debugf("Error scanning val: %s", err.Error())
+			return true, err, false
+		}
+		LastRowTimestampInt = int64(LastRowTimestamp)
+		err = val.Close()
+		if err != nil {
+			zap.S().Debugf("Error closing val: %s", err.Error())
+			return true, err, false
+		}
+
+		_, err = stmtDeleteInRange.ExecContext(stmtCtx, sC.StartTimeStampMs, sC.EndTimeStampMs, AssetTableID)
+		if err != nil {
+			zap.S().Debugf("Error deleting state: %s", err.Error())
+			return true, err, false
+		}
+		_, err = stmtInsertNewState.ExecContext(stmtCtx, sC.StartTimeStampMs, AssetTableID, sC.NewState)
+		if err != nil {
+			zap.S().Debugf("Error inserting new state: %s", err.Error())
+			return true, err, false
+		}
+		_, err = stmtDeleteOldState.ExecContext(stmtCtx, LastRowTimestampInt)
+		if err != nil {
+			zap.S().Debugf("Error deleting old state: %s", err.Error())
+			return true, err, false
+		}
+		_, err = stmtInsertNewState.ExecContext(stmtCtx, sC.EndTimeStampMs, AssetTableID, LastRowState)
+		if err != nil {
+			zap.S().Debugf("Error re-inserting state: %s", err.Error())
+			return true, err, false
+		}
 	}
 
 	// And this marker
@@ -100,6 +148,6 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		isCommited = true
 	}
 
-	zap.S().Debugf("Successfully processed count message: %v", msg)
+	zap.S().Debugf("Successfully processed modifyState message: %v", msg)
 	return false, err, false
 }

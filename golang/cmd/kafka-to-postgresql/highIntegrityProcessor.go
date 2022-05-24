@@ -29,8 +29,8 @@ func startHighIntegrityQueueProcessor() {
 		case Prefix.Count:
 			putback, err, forcePBTopic = Count{}.ProcessMessages(parsedMessage)
 		case Prefix.Recommendation:
-			zap.S().Errorf("[HI]Recommendation message not implemented")
-			//putback, err, forcePBTopic = Recommendation{}.ProcessMessages(parsedMessage)
+			zap.S().Errorf("[HI]Recommendation is unstable")
+			putback, err, forcePBTopic = Recommendation{}.ProcessMessages(parsedMessage)
 		case Prefix.State:
 			putback, err, forcePBTopic = State{}.ProcessMessages(parsedMessage)
 		case Prefix.UniqueProduct:
@@ -50,8 +50,8 @@ func startHighIntegrityQueueProcessor() {
 		case Prefix.EndOrder:
 			putback, err, forcePBTopic = EndOrder{}.ProcessMessages(parsedMessage)
 		case Prefix.AddMaintenanceActivity:
-			zap.S().Errorf("[HI]AddMaintenanceActivity message not implemented")
-			//putback, err, forcePBTopic = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
+			zap.S().Errorf("[HI]AddMaintenanceActivity is unstable")
+			putback, err, forcePBTopic = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
 		case Prefix.ProductTag:
 			putback, err, forcePBTopic = ProductTag{}.ProcessMessages(parsedMessage)
 		case Prefix.ProductTagString:
@@ -59,17 +59,17 @@ func startHighIntegrityQueueProcessor() {
 		case Prefix.AddParentToChild:
 			putback, err, forcePBTopic = AddParentToChild{}.ProcessMessages(parsedMessage)
 		case Prefix.ModifyState:
-			zap.S().Errorf("[HI]ModifyState message not implemented")
-			//putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
+			zap.S().Errorf("[HI]ModifyState is unstable")
+			putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
 		case Prefix.ModifyProducesPieces:
-			zap.S().Errorf("[HI]ModifyProducesPieces message not implemented")
-			//putback, err, forcePBTopic = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
+			zap.S().Errorf("[HI]ModifyProducesPieces is unstable")
+			putback, err, forcePBTopic = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
 		case Prefix.DeleteShiftById:
-			zap.S().Errorf("[HI]DeleteShiftById message not implemented")
-			//putback, err, forcePBTopic = DeleteShiftById{}.ProcessMessages(parsedMessage)
+			zap.S().Errorf("[HI]DeleteShiftById is unstable")
+			putback, err, forcePBTopic = DeleteShiftById{}.ProcessMessages(parsedMessage)
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-			zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp message not implemented")
-			//putback, err, forcePBTopic = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
+			zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp is unstable")
+			putback, err, forcePBTopic = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
 
 		default:
 			zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
@@ -107,13 +107,16 @@ func startHighIntegrityQueueProcessor() {
 			if putback {
 				payloadStr := string(parsedMessage.Payload)
 
-				zap.S().Debugf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr)
+				zap.S().Debugf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s, topic: %s, PayloadType: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, *msg.TopicPartition.Topic, parsedMessage.PayloadType)
 				highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (No-Error)", ForcePutbackTopic: forcePBTopic}
-
 			} else {
 				highIntegrityCommitChannel <- msg
 			}
 		}
+		if forcePBTopic {
+			highIntegrityCommitChannel <- msg
+		}
 	}
+
 	zap.S().Debugf("[HI]Processor shutting down")
 }

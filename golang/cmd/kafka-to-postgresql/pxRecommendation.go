@@ -1,25 +1,38 @@
 package main
 
+/*
+	Warning:
+		This file is based on old source code, not on documentation !
+*/
+
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
 
-type State struct{}
+type Recommendation struct{}
 
-type state struct {
-	State       *uint32 `json:"state"`
-	TimestampMs *uint64 `json:"timestamp_ms"`
+type recommendation struct {
+	UID                  *string
+	TimestampMs          *uint64 `json:"timestamp_ms"`
+	Customer             *string
+	Location             *string
+	Asset                *string
+	RecommendationType   *int32
+	Enabled              *bool
+	RecommendationValues *string
+	DiagnoseTextDE       *string
+	DiagnoseTextEN       *string
+	RecommendationTextDE *string
+	RecommendationTextEN *string
 }
 
-// ProcessMessages processes a State kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+// ProcessMessages processes a Recommendation kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -42,8 +55,8 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		}
 	}()
 
-	// sC is the payload, parsed as state
-	var sC state
+	// sC is the payload, parsed as recommendation
+	var sC recommendation
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
@@ -53,11 +66,6 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
 		return true, nil, true
 	}
-	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
-	if !success {
-		zap.S().Warnf("Failed to get AssetTableID")
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
-	}
 
 	// Changes should only be necessary between this marker
 
@@ -65,15 +73,17 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	// txnStmtCtxCl is the cancel function of the context, used in the statement creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
-	stmt := txn.StmtContext(txnStmtCtx, statement.InsertIntoStateTable)
+
+	stmt := txn.StmtContext(txnStmtCtx, statement.InsertIntoRecommendationTable)
+
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
-	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, AssetTableID, sC.State)
-	if err != nil {
 
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+	_, err = stmt.ExecContext(stmtCtx, sC.UID, sC.RecommendationType, sC.Enabled, sC.RecommendationValues, sC.RecommendationTextEN, sC.RecommendationTextDE, sC.DiagnoseTextEN, sC.DiagnoseTextDE)
+	if err != nil {
+		zap.S().Debugf("Error inserting into recommendation table: %s", err.Error())
 		return true, err, false
 	}
 
@@ -83,6 +93,7 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
+			zap.S().Errorf("Error rolling back transaction: %s", err.Error())
 			return true, err, false
 		}
 	} else {
@@ -95,5 +106,6 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		isCommited = true
 	}
 
+	zap.S().Debugf("Successfully processed recommendation message: %v", msg)
 	return false, err, false
 }

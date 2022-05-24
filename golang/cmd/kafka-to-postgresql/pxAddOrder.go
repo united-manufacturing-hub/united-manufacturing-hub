@@ -33,26 +33,39 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 		return true, err, false
 	}
 
+	isCommited := false
+	defer func() {
+		if !isCommited && !isDryRun {
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			}
+		}
+	}()
+
 	// sC is the payload, parsed as addOrder
 	var sC addOrder
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
-		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return false, err, false
+		return false, err, true
 	}
+
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
 		return true, nil, true
 	}
+
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
+		zap.S().Warnf("Failed to get AssetTableID")
 		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
 	}
 
 	ProductTableID, success := GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get ProductTableID for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID))
+		zap.S().Warnf("Failed to get ProductTableID")
+		return true, errors.New(fmt.Sprintf("Failed to get ProductTableID for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID)), false
 	}
 
 	// Changes should only be necessary between this marker
@@ -61,13 +74,14 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	// txnStmtCtxCl is the cancel function of the context, used in the statement creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
-	stmt := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableScrap)
+	stmt := txn.StmtContext(txnStmtCtx, statement.InsertIntoOrderTable)
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.OrderId, ProductTableID, sC.TargetUnits, AssetTableID)
 	if err != nil {
+		zap.S().Errorf("Error executing statement: %s", err.Error())
 		return true, err, false
 	}
 
@@ -80,11 +94,13 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 			return true, err, false
 		}
 	} else {
-
+		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
+			zap.S().Errorf("Error committing transaction: %s", err.Error())
 			return true, err, false
 		}
+		isCommited = true
 	}
 
 	return false, err, false

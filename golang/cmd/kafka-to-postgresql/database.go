@@ -61,7 +61,7 @@ func IsPostgresSQLAvailable() (bool, error) {
 			return true, nil
 		}
 	}
-	return false, err, false
+	return false, err
 }
 
 // ShutdownDB closes all database connections
@@ -156,6 +156,31 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 	zap.S().Debugf("Stored AssetID to cache")
 
 	success = true
+	return
+}
+
+// GetComponentID gets the componentID from the database
+func GetComponentID(assetID uint32, componentName string) (componentID int32, success bool) {
+	zap.S().Debugf("[GetComponentID] assetID: %d, componentName: %s", assetID, componentName)
+	success = false
+	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
+
+		return
+	} else if err != nil {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case DiscardValue:
+			return 0, false
+		case DatabaseDown:
+			return 0, false
+		case Other:
+			return 0, false
+		}
+		return
+	}
+	success = true
+
 	return
 }
 

@@ -35,13 +35,22 @@ func (c ProductTag) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 		return true, err, false
 	}
 
+	isCommited := false
+	defer func() {
+		if !isCommited && !isDryRun {
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			}
+		}
+	}()
+
 	// sC is the payload, parsed as productTag
 	var sC productTag
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
-		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return false, err, false
+		return false, err, true
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
@@ -49,6 +58,7 @@ func (c ProductTag) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
+		zap.S().Warnf("Failed to get AssetTableID")
 		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
 	}
 
@@ -71,6 +81,8 @@ func (c ProductTag) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.Name, sC.Value, sC.TimestampMs, ProductTableId)
 	if err != nil {
+
+		zap.S().Errorf("Error executing statement: %s", err.Error())
 		return true, err, false
 	}
 
@@ -83,11 +95,13 @@ func (c ProductTag) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 			return true, err, false
 		}
 	} else {
-
+		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
+			zap.S().Errorf("Error committing transaction: %s", err.Error())
 			return true, err, false
 		}
+		isCommited = true
 	}
 
 	return false, err, false

@@ -69,6 +69,13 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
               mountPath: /SSL_certs
               readOnly: true
+          ports:
+            - name: metrics
+              containerPort: 2112
+              protocol: TCP
+            - name: pprof
+              containerPort: 1337
+              protocol: TCP
           env:
 
             - name: POSTGRES_HOST

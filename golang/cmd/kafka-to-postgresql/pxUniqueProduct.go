@@ -35,13 +35,22 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 		return true, err, false
 	}
 
+	isCommited := false
+	defer func() {
+		if !isCommited && !isDryRun {
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			}
+		}
+	}()
+
 	// sC is the payload, parsed as uniqueProduct
 	var sC uniqueProduct
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
-		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return false, err, false
+		return false, err, true
 	}
 	if !internal.IsValidStruct(sC, []string{"EndTimestampMs"}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
@@ -49,13 +58,14 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
+		zap.S().Warnf("Failed to get AssetTableID")
 		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
 	}
 
 	var ProductTableId uint32
 	ProductTableId, success = GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get ProductTableId for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID))
+		return true, errors.New(fmt.Sprintf("Failed to get ProductTableId for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID)), false
 	}
 
 	// Changes should only be necessary between this marker
@@ -71,6 +81,8 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimestampMs, NewNullInt64(*sC.EndTimestampMs), ProductTableId, sC.IsScrap, sC.UniqueProductAlternativeID)
 	if err != nil {
+
+		zap.S().Errorf("Error executing statement: %s", err.Error())
 		return true, err, false
 	}
 
@@ -83,11 +95,13 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 			return true, err, false
 		}
 	} else {
-
+		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
+			zap.S().Errorf("Error committing transaction: %s", err.Error())
 			return true, err, false
 		}
+		isCommited = true
 	}
 
 	return false, err, false
