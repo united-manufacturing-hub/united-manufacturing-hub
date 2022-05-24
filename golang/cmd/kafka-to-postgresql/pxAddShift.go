@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -56,7 +56,7 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
+		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
 
 	// Changes should only be necessary between this marker
@@ -72,8 +72,11 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.TimestampMsEnd, AssetTableID, 1)
 	if err != nil {
-
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 

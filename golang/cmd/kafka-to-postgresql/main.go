@@ -203,7 +203,7 @@ func main() {
 	// The following code keeps the memory usage low
 	debug.SetGCPercent(10)
 
-	go internal.MemoryLimiter(allowedMemorySize)
+	//go internal.MemoryLimiter(allowedMemorySize)
 
 	go PerformanceReport()
 	select {} // block forever

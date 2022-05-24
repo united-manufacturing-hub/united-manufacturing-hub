@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -56,7 +55,7 @@ func (c EndOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
+		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
 
 	// Changes should only be necessary between this marker
@@ -70,6 +69,18 @@ func (c EndOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
+
+	var val int
+	err = stmt.QueryRowContext(stmtCtx, sC.OrderId, AssetTableID).Scan(&val)
+	if err != nil {
+		zap.S().Warnf("Failed to query OrderTable: %s", err.Error())
+		return false, err, false
+	}
+
+	if val == 0 {
+		return true, fmt.Errorf("order does not yet exist: OrderId: %d, AssetId: %d", sC.OrderId, AssetTableID), false
+	}
+
 	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.OrderId, AssetTableID)
 	if err != nil {
 

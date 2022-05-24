@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -57,20 +56,20 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
+		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
 
 	// Changes should only be necessary between this marker
 	var ChildUID uint32
 	ChildUID, success = GetUniqueProductID(*sC.ChildAID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID)), false
+		return true, fmt.Errorf("failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID), false
 	}
 
 	var ParentUID uint32
 	ParentUID, success = GetLatestParentUniqueProductID(*sC.ParentAID, AssetTableID)
 	if !success {
-		return true, errors.New(fmt.Sprintf("Failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID)), false
+		return true, fmt.Errorf("failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID), false
 	}
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))

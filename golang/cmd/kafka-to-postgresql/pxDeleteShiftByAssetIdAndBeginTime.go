@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -60,7 +59,7 @@ func (c DeleteShiftByAssetIdAndBeginTimestamp) ProcessMessages(msg internal.Pars
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, errors.New(fmt.Sprintf("Failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId)), false
+		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
 	// Changes should only be necessary between this marker
 

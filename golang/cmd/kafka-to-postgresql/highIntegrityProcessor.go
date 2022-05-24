@@ -23,57 +23,63 @@ func startHighIntegrityQueueProcessor() {
 		var err error
 		var putback bool
 		var forcePBTopic bool
+		if string(parsedMessage.Payload) != ("{}") {
 
-		// Switch based on topic
-		switch parsedMessage.PayloadType {
-		case Prefix.Count:
-			putback, err, forcePBTopic = Count{}.ProcessMessages(parsedMessage)
-		case Prefix.Recommendation:
-			zap.S().Errorf("[HI]Recommendation is unstable")
-			putback, err, forcePBTopic = Recommendation{}.ProcessMessages(parsedMessage)
-		case Prefix.State:
-			putback, err, forcePBTopic = State{}.ProcessMessages(parsedMessage)
-		case Prefix.UniqueProduct:
-			putback, err, forcePBTopic = UniqueProduct{}.ProcessMessages(parsedMessage)
-		case Prefix.ScrapCount:
-			putback, err, forcePBTopic = ScrapCount{}.ProcessMessages(parsedMessage)
-		case Prefix.AddShift:
-			putback, err, forcePBTopic = AddShift{}.ProcessMessages(parsedMessage)
-		case Prefix.ScrapUniqueProduct:
-			putback, err, forcePBTopic = ScrapUniqueProduct{}.ProcessMessages(parsedMessage)
-		case Prefix.AddProduct:
-			putback, err, forcePBTopic = AddProduct{}.ProcessMessages(parsedMessage)
-		case Prefix.AddOrder:
-			putback, err, forcePBTopic = AddOrder{}.ProcessMessages(parsedMessage)
-		case Prefix.StartOrder:
-			putback, err, forcePBTopic = StartOrder{}.ProcessMessages(parsedMessage)
-		case Prefix.EndOrder:
-			putback, err, forcePBTopic = EndOrder{}.ProcessMessages(parsedMessage)
-		case Prefix.AddMaintenanceActivity:
-			zap.S().Errorf("[HI]AddMaintenanceActivity is unstable")
-			putback, err, forcePBTopic = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
-		case Prefix.ProductTag:
-			putback, err, forcePBTopic = ProductTag{}.ProcessMessages(parsedMessage)
-		case Prefix.ProductTagString:
-			putback, err, forcePBTopic = ProductTagString{}.ProcessMessages(parsedMessage)
-		case Prefix.AddParentToChild:
-			putback, err, forcePBTopic = AddParentToChild{}.ProcessMessages(parsedMessage)
-		case Prefix.ModifyState:
-			zap.S().Errorf("[HI]ModifyState is unstable")
-			putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
-		case Prefix.ModifyProducesPieces:
-			zap.S().Errorf("[HI]ModifyProducesPieces is unstable")
-			putback, err, forcePBTopic = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
-		case Prefix.DeleteShiftById:
-			zap.S().Errorf("[HI]DeleteShiftById is unstable")
-			putback, err, forcePBTopic = DeleteShiftById{}.ProcessMessages(parsedMessage)
-		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-			zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp is unstable")
-			putback, err, forcePBTopic = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
+			// Switch based on topic
+			switch parsedMessage.PayloadType {
+			case Prefix.Count:
+				putback, err, forcePBTopic = Count{}.ProcessMessages(parsedMessage)
+			case Prefix.Recommendation:
+				zap.S().Errorf("[HI]Recommendation is unstable")
+				putback, err, forcePBTopic = Recommendation{}.ProcessMessages(parsedMessage)
+			case Prefix.State:
+				putback, err, forcePBTopic = State{}.ProcessMessages(parsedMessage)
+			case Prefix.UniqueProduct:
+				putback, err, forcePBTopic = UniqueProduct{}.ProcessMessages(parsedMessage)
+			case Prefix.ScrapCount:
+				putback, err, forcePBTopic = ScrapCount{}.ProcessMessages(parsedMessage)
+			case Prefix.AddShift:
+				putback, err, forcePBTopic = AddShift{}.ProcessMessages(parsedMessage)
+			case Prefix.ScrapUniqueProduct:
+				putback, err, forcePBTopic = ScrapUniqueProduct{}.ProcessMessages(parsedMessage)
+			case Prefix.AddProduct:
+				putback, err, forcePBTopic = AddProduct{}.ProcessMessages(parsedMessage)
+			case Prefix.AddOrder:
+				putback, err, forcePBTopic = AddOrder{}.ProcessMessages(parsedMessage)
+			case Prefix.StartOrder:
+				putback, err, forcePBTopic = StartOrder{}.ProcessMessages(parsedMessage)
+			case Prefix.EndOrder:
+				putback, err, forcePBTopic = EndOrder{}.ProcessMessages(parsedMessage)
+			case Prefix.AddMaintenanceActivity:
+				zap.S().Errorf("[HI]AddMaintenanceActivity is unstable")
+				putback, err, forcePBTopic = AddMaintenanceActivity{}.ProcessMessages(parsedMessage)
+			case Prefix.ProductTag:
+				putback, err, forcePBTopic = ProductTag{}.ProcessMessages(parsedMessage)
+			case Prefix.ProductTagString:
+				putback, err, forcePBTopic = ProductTagString{}.ProcessMessages(parsedMessage)
+			case Prefix.AddParentToChild:
+				putback, err, forcePBTopic = AddParentToChild{}.ProcessMessages(parsedMessage)
+			case Prefix.ModifyState:
+				zap.S().Errorf("[HI]ModifyState is unstable")
+				putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
+			case Prefix.ModifyProducesPieces:
+				zap.S().Errorf("[HI]ModifyProducesPieces is unstable")
+				putback, err, forcePBTopic = ModifyProducesPieces{}.ProcessMessages(parsedMessage)
+			case Prefix.DeleteShiftById:
+				zap.S().Errorf("[HI]DeleteShiftById is unstable")
+				putback, err, forcePBTopic = DeleteShiftById{}.ProcessMessages(parsedMessage)
+			case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
+				zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp is unstable")
+				putback, err, forcePBTopic = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
 
-		default:
-			zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
+			default:
+				zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
+				putback = true
+			}
+		} else {
 			putback = true
+			forcePBTopic = true
+			zap.S().Warnf("Got empty message, sending to putback topic")
 		}
 
 		if err != nil {
