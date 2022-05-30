@@ -11,16 +11,19 @@ func startHighIntegrityQueueProcessor() {
 
 	zap.S().Debugf("[HI]Starting queue processor")
 	for !ShuttingDown {
-		start := time.Now()
 		// Get next message from HI kafka consumer
 		msg := <-highIntegrityProcessorChannel
 		if msg == nil {
 			continue
 		}
+		start := time.Now()
 		parsed, parsedMessage := internal.ParseMessage(msg)
 		if !parsed {
 			continue
 		}
+
+		zap.S().Debugf("Message parsing took %s", time.Since(start))
+		start = time.Now()
 
 		var err error
 		var putback bool
@@ -83,6 +86,8 @@ func startHighIntegrityQueueProcessor() {
 			forcePBTopic = true
 			zap.S().Warnf("Got empty message, sending to putback topic")
 		}
+		zap.S().Debugf("Message processing took %s", time.Since(start))
+		start = time.Now()
 
 		if err != nil {
 			payloadStr := string(parsedMessage.Payload)
@@ -125,7 +130,7 @@ func startHighIntegrityQueueProcessor() {
 			highIntegrityCommitChannel <- msg
 		}
 
-		zap.S().Debugf("Iteration took %s", time.Since(start))
+		zap.S().Debugf("Channel inserting took %s", time.Since(start))
 	}
 
 	zap.S().Debugf("[HI]Processor shutting down")
