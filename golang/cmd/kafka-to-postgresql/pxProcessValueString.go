@@ -19,7 +19,7 @@ var processValueStringChannel chan *kafka.Message
 func startProcessValueStringQueueAggregator() {
 	// This channel is used to aggregate messages from the kafka queue, for further processing
 	// It size was chosen, to prevent timescaledb from choking on large inserts
-	processValueStringChannel = make(chan *kafka.Message, 5000)
+	processValueStringChannel = make(chan *kafka.Message, 500000)
 
 	messages := make([]*kafka.Message, 0)
 	writeToDbTimer := time.NewTicker(time.Second * 5)

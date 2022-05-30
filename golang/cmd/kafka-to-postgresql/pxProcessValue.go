@@ -19,7 +19,7 @@ var processValueChannel chan *kafka.Message
 func startProcessValueQueueAggregator() {
 	// This channel is used to aggregate messages from the kafka queue, for further processing
 	// It size was chosen, to prevent timescaledb from choking on large inserts
-	processValueChannel = make(chan *kafka.Message, 5000)
+	processValueChannel = make(chan *kafka.Message, 500000)
 
 	messages := make([]*kafka.Message, 0)
 	writeToDbTimer := time.NewTicker(time.Second * 5)
@@ -29,8 +29,8 @@ func startProcessValueQueueAggregator() {
 		case msg := <-processValueChannel:
 			{
 				messages = append(messages, msg)
-				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
-				if len(messages) >= 5000 {
+				// This checks for >= 500000, because we don't want to block the channel (see size of the processValueChannel)
+				if len(messages) >= 500000 {
 					//zap.S().Debugf("[HT][PV][AA] KafkaMessages length: %d", len(messages))
 					putBackMsg, putback, reason, err := writeProcessValueToDatabase(messages)
 					if putback {

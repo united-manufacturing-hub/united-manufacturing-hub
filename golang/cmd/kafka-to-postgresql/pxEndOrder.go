@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
+	pq "github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -83,9 +84,13 @@ func (c EndOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 
 	smtmUpdateOrderTable := txn.StmtContext(txnStmtCtx, statement.UpdateOrderTableSetEndTimestamp)
 	_, err = smtmUpdateOrderTable.ExecContext(stmtCtx, sC.TimestampMs, sC.OrderId, AssetTableID)
-	if err != nil {
 
-		zap.S().Errorf("Error executing statement: %s", err.Error())
+	if err != nil {
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
 		return true, err, false
 	}
 
