@@ -41,6 +41,8 @@ func (c DeleteShiftByAssetIdAndBeginTimestamp) ProcessMessages(msg internal.Pars
 			err = txn.Rollback()
 			if err != nil {
 				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			} else {
+				zap.S().Warnf("Rolled back transaction !")
 			}
 		}
 	}()
