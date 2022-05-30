@@ -145,21 +145,21 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 					continue
 				}
 
-				msg.TopicPartition.Partition = 0
+				var msg2 kafka.Message
+				if msg.Value != nil {
+					msg2.Value = msg.Value
+				}
+
+				msg2.TopicPartition.Partition = 0
 
 				topic := *msg.TopicPartition.Topic
 
 				var rawKafkaKey []byte
 				var putbackIndex = -1
 
-				// Check if old key based putback info is present
-				if msg.Key != nil {
-					rawKafkaKey = msg.Key
-					msg.Key = nil
-				}
-
 				// Check for new header based putback info
-				for i, header := range msg.Headers {
+				msg2.Headers = msg.Headers
+				for i, header := range msg2.Headers {
 					if header.Key == "putback" {
 						rawKafkaKey = header.Value
 						putbackIndex = i
@@ -215,12 +215,12 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 					err = nil
 				}
 				if putbackIndex == -1 {
-					msg.Headers = append(msg.Headers, kafka.Header{
+					msg2.Headers = append(msg.Headers, kafka.Header{
 						Key:   "putback",
 						Value: header,
 					})
 				} else {
-					msg.Headers[putbackIndex] = kafka.Header{
+					msg2.Headers[putbackIndex] = kafka.Header{
 						Key:   "putback",
 						Value: header,
 					}
@@ -231,16 +231,19 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 						Topic:     &topic,
 						Partition: kafka.PartitionAny,
 					},
-					Value:   msg.Value,
-					Headers: msg.Headers,
+					Value:   msg2.Value,
+					Headers: msg2.Headers,
 				}
 
 				err = kafkaProducer.Produce(&msgx, nil)
 				if err != nil {
+					zap.S().Warnf("%s Failed to produce putback message: %s", identifier, err)
 					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString, false}
 				}
 				// This is for stats only and counts the amount of messages put back
 				KafkaPutBacks += 1
+				// Commit original message, after putback duplicate has been produced !
+				commitChannel <- msg
 			}
 		}
 	}
@@ -279,7 +282,7 @@ func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channel
 	return true
 }
 
-// DrainChannelSimple empties a channel into the high Throughput putback channel
+// DrainChannelSimple empties a channel into another channel
 func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo chan PutBackChanMsg) bool {
 	select {
 	case msg, ok := <-channelToDrain:
