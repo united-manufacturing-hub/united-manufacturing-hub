@@ -8,6 +8,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
+	"syscall"
 
 	"runtime"
 	"runtime/debug"
@@ -129,7 +130,7 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 
 // StartPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the Reason and error.
-func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer, commitChannel chan *kafka.Message) {
+func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer, commitChannel chan *kafka.Message, putbackChanSize int) {
 	zap.S().Debugf("%s Starting putback processor", identifier)
 	// Loops until the shutdown signal is received and the channel is empty
 	for !ShutdownPutback {
@@ -238,6 +239,13 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 				err = kafkaProducer.Produce(&msgx, nil)
 				if err != nil {
 					zap.S().Warnf("%s Failed to produce putback message: %s", identifier, err)
+					// If the producer failed and the putback channel is full, use SIGINT to shut down !
+					if len(putBackChannel) >= putbackChanSize {
+						err = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+						if err != nil {
+							zap.S().Errorf("%s Failed to send SIGINT to process: %s", identifier, err)
+						}
+					}
 					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString, false}
 				}
 				// This is for stats only and counts the amount of messages put back
