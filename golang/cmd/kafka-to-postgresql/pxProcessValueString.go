@@ -7,6 +7,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -17,12 +19,28 @@ var processValueStringChannel chan *kafka.Message
 
 // startProcessValueChannel reads messages from the processValueStringChannel and inserts them into a temporary buffer, before committing them to the database
 func startProcessValueStringQueueAggregator() {
+	chanSize := 500_000
+	if os.Getenv("PVS_CHANNEL_SIZE") != "" {
+		atoi, err := strconv.Atoi(os.Getenv("PVS_CHANNEL_SIZE"))
+		if err != nil {
+			zap.S().Warnf("[HT][PVS] PVS_CHANNEL_SIZE is not a valid integer: %s", err.Error())
+		}
+		chanSize = atoi
+	}
+	writeToDbTimer := time.NewTicker(time.Second * 5)
+	if os.Getenv("PVS_WRITE_TO_DB_INTERVAL") != "" {
+		atoi, err := strconv.Atoi(os.Getenv("PVS_WRITE_TO_DB_INTERVAL"))
+		if err != nil {
+			zap.S().Warnf("[HT][PVS] PV_WRITE_TO_DB_INTERVAL is not a valid integer: %s", err.Error())
+		}
+		writeToDbTimer = time.NewTicker(time.Second * time.Duration(atoi))
+	}
+
 	// This channel is used to aggregate messages from the kafka queue, for further processing
 	// It size was chosen, to prevent timescaledb from choking on large inserts
-	processValueStringChannel = make(chan *kafka.Message, 5000)
+	processValueStringChannel = make(chan *kafka.Message, chanSize)
 
 	messages := make([]*kafka.Message, 0)
-	writeToDbTimer := time.NewTicker(time.Second * 5)
 
 	// Goal: 5k messages per commit and commit every 5 seconds even if there are less than 5k messages
 
@@ -32,7 +50,7 @@ func startProcessValueStringQueueAggregator() {
 			{
 				messages = append(messages, msg)
 				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
-				if len(messages) >= 5000 {
+				if len(messages) >= chanSize {
 					//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 					putBackMsg, putback, reason, err := writeProcessValueStringToDatabase(messages)
 					if putback {

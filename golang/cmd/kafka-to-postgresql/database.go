@@ -159,6 +159,31 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 	return
 }
 
+// GetComponentID gets the componentID from the database
+func GetComponentID(assetID uint32, componentName string) (componentID int32, success bool) {
+	zap.S().Debugf("[GetComponentID] assetID: %d, componentName: %s", assetID, componentName)
+	success = false
+	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
+	if err == sql.ErrNoRows {
+		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
+
+		return
+	} else if err != nil {
+		switch GetPostgresErrorRecoveryOptions(err) {
+		case DiscardValue:
+			return 0, false
+		case DatabaseDown:
+			return 0, false
+		case Other:
+			return 0, false
+		}
+		return
+	}
+	success = true
+
+	return
+}
+
 // AddAsset adds an asset to the database
 func AddAsset(assetID string, location string, customerID string) (err error) {
 	var txn *sql.Tx = nil
@@ -232,6 +257,14 @@ func NewNullInt64(i int64) sql.NullInt64 {
 func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) (UniqueProductTableId uint32, success bool) {
 	success = false
 
+	// Get from cache if possible
+	var cacheHit bool
+	UniqueProductTableId, cacheHit = GetCacheUniqueProductTableId(UniqueProductAlternativeId, AssetTableId)
+	if cacheHit {
+		success = true
+		return
+	}
+
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(UniqueProductAlternativeId, AssetTableId).Scan(&UniqueProductTableId)
 	if err == sql.ErrNoRows {
 		zap.S().Debugf("[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d", UniqueProductAlternativeId, AssetTableId)
@@ -249,6 +282,9 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 		}
 		return
 	}
+	go PutCacheUniqueProductTableId(UniqueProductAlternativeId, AssetTableId, UniqueProductTableId)
+	zap.S().Debugf("Stored ProductName to cache")
+
 	success = true
 	return
 }
@@ -256,6 +292,14 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 // GetLatestParentUniqueProductID gets the latest parent unique productID from the database using the UniqueProductAlternativeID and AssetTableId
 func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (LatestparentUniqueProductId uint32, success bool) {
 	success = false
+
+	// Get from cache if possible
+	var cacheHit bool
+	LatestparentUniqueProductId, cacheHit = GetCacheLatestParentUniqueProductID(ParentID, DBAssetID)
+	if cacheHit {
+		success = true
+		return
+	}
 
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(ParentID, DBAssetID).Scan(&LatestparentUniqueProductId)
 	if err == sql.ErrNoRows {
@@ -274,6 +318,9 @@ func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (Latestpa
 		}
 		return
 	}
+
+	go PutCacheLatestParentUniqueProductID(ParentID, DBAssetID, LatestparentUniqueProductId)
+	zap.S().Debugf("Stored ProductName to cache")
 
 	success = true
 	return

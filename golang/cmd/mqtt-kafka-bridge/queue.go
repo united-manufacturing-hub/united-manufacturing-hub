@@ -35,7 +35,7 @@ func closeQueue(pq *goque.Queue) (err error) {
 
 func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	// Prevents recursion
-	if !CheckIfNewMessageOrStore(message) {
+	if !CheckIfNewMessageOrStore(message, topic) {
 		zap.S().Debugf("Message is old !")
 		return
 	}

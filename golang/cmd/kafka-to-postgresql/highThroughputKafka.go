@@ -14,9 +14,6 @@ var HTKafkaProducer *kafka.Producer
 var HTKafkaAdminClient *kafka.AdminClient
 
 func SetupHTKafka(configMap kafka.ConfigMap) {
-	if !HighThroughputEnabled {
-		return
-	}
 
 	var err error
 	HTKafkaConsumer, err = kafka.NewConsumer(&configMap)
@@ -37,9 +34,7 @@ func SetupHTKafka(configMap kafka.ConfigMap) {
 }
 
 func CloseHTKafka() {
-	if !HighThroughputEnabled {
-		return
-	}
+
 	zap.S().Infof("[HT]Closing Kafka Consumer")
 	err := HTKafkaConsumer.Close()
 	if err != nil {

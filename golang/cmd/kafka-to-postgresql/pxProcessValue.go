@@ -7,6 +7,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -17,20 +19,35 @@ var processValueChannel chan *kafka.Message
 
 // startProcessValueChannel reads messages from the processValueChannel and inserts them into a temporary buffer, before committing them to the database
 func startProcessValueQueueAggregator() {
+	chanSize := 500_000
+	if os.Getenv("PV_CHANNEL_SIZE") != "" {
+		atoi, err := strconv.Atoi(os.Getenv("PV_CHANNEL_SIZE"))
+		if err != nil {
+			zap.S().Warnf("[HT][PV] PV_CHANNEL_SIZE is not a valid integer: %s", err.Error())
+		}
+		chanSize = atoi
+	}
+	writeToDbTimer := time.NewTicker(time.Second * 5)
+	if os.Getenv("PV_WRITE_TO_DB_INTERVAL") != "" {
+		atoi, err := strconv.Atoi(os.Getenv("PV_WRITE_TO_DB_INTERVAL"))
+		if err != nil {
+			zap.S().Warnf("[HT][PV] PV_WRITE_TO_DB_INTERVAL is not a valid integer: %s", err.Error())
+		}
+		writeToDbTimer = time.NewTicker(time.Second * time.Duration(atoi))
+	}
+
 	// This channel is used to aggregate messages from the kafka queue, for further processing
 	// It size was chosen, to prevent timescaledb from choking on large inserts
-	processValueChannel = make(chan *kafka.Message, 5000)
-
+	processValueChannel = make(chan *kafka.Message, chanSize)
 	messages := make([]*kafka.Message, 0)
-	writeToDbTimer := time.NewTicker(time.Second * 5)
 
 	for !ShuttingDown {
 		select {
 		case msg := <-processValueChannel:
 			{
 				messages = append(messages, msg)
-				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
-				if len(messages) >= 5000 {
+				// This checks for >= 500000, because we don't want to block the channel (see size of the processValueChannel)
+				if len(messages) >= chanSize {
 					//zap.S().Debugf("[HT][PV][AA] KafkaMessages length: %d", len(messages))
 					putBackMsg, putback, reason, err := writeProcessValueToDatabase(messages)
 					if putback {
