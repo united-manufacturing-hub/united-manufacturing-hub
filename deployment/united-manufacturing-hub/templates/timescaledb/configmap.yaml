@@ -315,18 +315,18 @@ data:
     INSERT INTO assetTable(assetID,location,customer) VALUES ('testMachine', 'testLocation', 'factoryinsight');
 
     -- productTable
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (1,'product107782',1,600);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (2,'product107118',1,2946);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (3,'product107793',1,7290);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (4,'product107791',1,16872);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (5,'product107119',1,1908);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (6,'product107117',1,2946);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (7,'product107829',1,478);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (8,'product107823',1,2544);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (9,'product107765',1,4098);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (10,'product107796',1,6576);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (11,'product107792',1,5112);
-    INSERT INTO productTable(product_id,product_name,asset_id,time_per_unit_in_seconds) VALUES (12,'product107799',1,4008);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107782',1,600);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107118',1,2946);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107793',1,7290);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107791',1,16872);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107119',1,1908);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107117',1,2946);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107829',1,478);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107823',1,2544);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107765',1,4098);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107796',1,6576);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107792',1,5112);
+    INSERT INTO productTable(product_name,asset_id,time_per_unit_in_seconds) VALUES ('product107799',1,4008);
 
     -- orderTable
     INSERT INTO orderTable(order_name,product_id,target_units,asset_id,begin_timestamp,end_timestamp) VALUES (107117,6,1,1,'2020-11-23 00:05:43+00','2020-11-23 01:25:11+00');

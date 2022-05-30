@@ -42,6 +42,8 @@ func (c ModifyState) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 			err = txn.Rollback()
 			if err != nil {
 				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			} else {
+				zap.S().Warnf("Rolled back transaction !")
 			}
 		}
 	}()

@@ -20,7 +20,7 @@ type addProduct struct {
 
 // ProcessMessages processes a AddProduct kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
 func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
-
+	zap.S().Infof("Processing AddProduct message: %s", string(msg.Payload))
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
@@ -38,6 +38,8 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 			err = txn.Rollback()
 			if err != nil {
 				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			} else {
+				zap.S().Warnf("Rolled back transaction !")
 			}
 		}
 	}()
@@ -98,5 +100,6 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 		isCommited = true
 	}
 
+	zap.S().Infof("Added addProduct message: %s (%v)", string(msg.Payload), isCommited)
 	return false, err, false
 }

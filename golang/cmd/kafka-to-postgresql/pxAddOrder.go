@@ -39,6 +39,8 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 			err = txn.Rollback()
 			if err != nil {
 				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			} else {
+				zap.S().Warnf("Rolled back transaction !")
 			}
 		}
 	}()
@@ -64,7 +66,7 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 
 	ProductTableID, success := GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		zap.S().Warnf("Failed to get ProductTableID")
+		zap.S().Warnf("Failed to get ProductTableID for ProductId: %s and AssetTableId: %d", *sC.ProductId, AssetTableID)
 		return true, fmt.Errorf("failed to get ProductTableID for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID), false
 	}
 
