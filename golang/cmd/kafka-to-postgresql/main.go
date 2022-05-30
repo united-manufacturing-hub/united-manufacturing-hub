@@ -116,6 +116,7 @@ func main() {
 		"enable.auto.offset.store": false,
 		"auto.offset.reset":        "earliest",
 		//"debug":                    "security,broker",
+		"topic.metadata.refresh.interval.ms": "30000",
 	})
 
 	// HT uses enable.auto.commit=true for increased performance.
@@ -130,6 +131,7 @@ func main() {
 		"enable.auto.commit":       true,
 		"auto.offset.reset":        "earliest",
 		//"debug":                    "security,broker",
+		"topic.metadata.refresh.interval.ms": "30000",
 	})
 
 	allowedMemorySize := 1073741824 // 1GB
