@@ -155,7 +155,7 @@ func main() {
 	highIntegrityCommitChannel = make(chan *kafka.Message)
 	highIntegrityEventChannel := HIKafkaProducer.Events()
 
-	go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel)
+	go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel, 200)
 	go internal.ProcessKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel, ShutdownApplicationGraceful)
 	go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 
@@ -170,7 +170,7 @@ func main() {
 	highThroughputEventChannel := HIKafkaProducer.Events()
 	// HT has no commit channel, it uses auto commit
 
-	go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil)
+	go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil, 200)
 	go internal.ProcessKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel, nil)
 
 	go startHighThroughputQueueProcessor()

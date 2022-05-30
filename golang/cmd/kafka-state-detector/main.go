@@ -99,7 +99,8 @@ func main() {
 		activityEventChannel := ActivityKafkaProducer.Events()
 		activityTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel)
+		ActivityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
+		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel, 200)
 		go internal.ProcessKafkaQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel, ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
@@ -125,7 +126,8 @@ func main() {
 		anomalyEventChannel := AnomalyKafkaProducer.Events()
 		anomalyTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel)
+		AnomalyPutBackChannel = make(chan internal.PutBackChanMsg, 200)
+		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel, 200)
 		go internal.ProcessKafkaQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel, ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
 		go internal.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)
