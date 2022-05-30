@@ -1,5 +1,9 @@
 package main
 
+/*
+	Warning:
+		This file is based on old source code, not on documentation !
+*/
 import (
 	"context"
 	"database/sql"
@@ -11,15 +15,14 @@ import (
 	"time"
 )
 
-type AddShift struct{}
+type DeleteShiftByAssetIdAndBeginTimestamp struct{}
 
-type addShift struct {
-	TimestampMsEnd *uint64 `json:"timestamp_ms_end"`
-	TimestampMs    *uint64 `json:"timestamp_ms"`
+type deleteShiftByAssetIdAndShiftTimestamp struct {
+	BeginTimeStampMs uint32 `json:"begin_time_stamp"`
 }
 
-// ProcessMessages processes a AddShift kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+// ProcessMessages processes a DeleteShiftByAssetIdAndBeginTimestamp kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+func (c DeleteShiftByAssetIdAndBeginTimestamp) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -42,41 +45,49 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 		}
 	}()
 
-	// sC is the payload, parsed as addShift
-	var sC addShift
+	// sC is the payload, parsed as deleteShiftByAssetIdAndShiftTimestamp
+	var sC deleteShiftByAssetIdAndShiftTimestamp
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err, true
 	}
-	if !internal.IsValidStruct(sC, []string{"TimestampMsEnd"}) {
+	if !internal.IsValidStruct(sC, []string{"Scrap"}) {
 		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
 		return true, nil, true
 	}
+
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
 		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
-
 	// Changes should only be necessary between this marker
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnStmtCtxCl is the cancel function of the context, used in the statement creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
-	stmt := txn.StmtContext(txnStmtCtx, statement.InsertIntoShiftTable)
+
+	stmt := txn.StmtContext(txnStmtCtx, statement.DeleteFromShiftTableByAssetIDAndBeginTimestamp)
+
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
-	_, err = stmt.ExecContext(stmtCtx, sC.TimestampMs, sC.TimestampMsEnd, AssetTableID, 1)
+
+	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.BeginTimeStampMs)
 	if err != nil {
-		pqErr := err.(*pq.Error)
-		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-		if pqErr.Code == "23P01" {
-			return true, err, true
+
+		if err != nil {
+			pqErr := err.(*pq.Error)
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
+			return true, err, false
 		}
+		zap.S().Debugf("Error inserting into deleteShiftByAssetIdAndShiftTimestamp table: %s", err.Error())
 		return true, err, false
 	}
 
@@ -86,6 +97,7 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
+			zap.S().Errorf("Error rolling back transaction: %s", err.Error())
 			return true, err, false
 		}
 	} else {
@@ -98,5 +110,6 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 		isCommited = true
 	}
 
+	zap.S().Debugf("Successfully processed deleteShiftByAssetIdAndShiftTimestamp message: %v", msg)
 	return false, err, false
 }

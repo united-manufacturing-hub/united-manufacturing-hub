@@ -87,7 +87,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		localCommitChan := make(chan *kafka.Message, 100)
 		localIdentifier := fmt.Sprintf("%s-local-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
 		go internal.ProcessKafkaQueue(localIdentifier, element.Topic, localMsgChan, localConsumer, localPutBackChan, nil)
-		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan)
+		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan, 100)
 		go internal.StartCommitProcessor(localIdentifier, localCommitChan, localConsumer)
 
 		remoteMsgChan := make(chan *kafka.Message, 100)
@@ -95,7 +95,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		remoteCommitChan := make(chan *kafka.Message, 100)
 		remoteIdentifier := fmt.Sprintf("%s-remote-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
 		go internal.ProcessKafkaQueue(remoteIdentifier, element.Topic, remoteMsgChan, remoteConsumer, remotePutBackChan, nil)
-		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan)
+		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan, 100)
 		go internal.StartCommitProcessor(remoteIdentifier, remoteCommitChan, remoteConsumer)
 
 		go startAtoBSender(localIdentifier, localMsgChan, remoteProducer, localPutBackChan, localCommitChan)
@@ -149,7 +149,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		commitChan := make(chan *kafka.Message, 100)
 		identifier := fmt.Sprintf("%s-local", element.Name)
 		go internal.ProcessKafkaQueue(identifier, element.Topic, msgChan, consumer, putBackChan, nil)
-		go internal.StartPutbackProcessor(identifier, putBackChan, putBackProducer, commitChan)
+		go internal.StartPutbackProcessor(identifier, putBackChan, putBackProducer, commitChan, 100)
 		go internal.StartCommitProcessor(identifier, commitChan, consumer)
 		go startAtoBSender(identifier, msgChan, producer, putBackChan, commitChan)
 		go internal.StartEventHandler(identifier, producer.Events(), putBackChan)

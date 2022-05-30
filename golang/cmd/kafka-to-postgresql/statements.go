@@ -71,6 +71,7 @@ type StatementRegistry struct {
 	SelectProductExists                                                                  *sql.Stmt
 
 	InsertIntoCountTable *sql.Stmt
+	SelectOrderExists    *sql.Stmt
 }
 
 func (r StatementRegistry) Shutdown() (err error) {
@@ -145,6 +146,7 @@ func (r StatementRegistry) Shutdown() (err error) {
 
 	_ = r.InsertIntoCountTable.Close()
 
+	_ = r.SelectOrderExists.Close()
 	return
 }
 
@@ -243,6 +245,8 @@ func NewStatementRegistry() *StatementRegistry {
 		SET end_timestamp = to_timestamp($1 / 1000.0) 
 		WHERE order_name=$2 
 			AND asset_id = $3;`),
+
+		SelectOrderExists: prep(`SELECT count(1) FROM orderTable WHERE order_name=$1 AND asset_id=$2;`),
 
 		InsertIntoMaintenanceActivities: prep(`INSERT INTO maintenanceactivities (component_id, activitytype, timestamp) 
 	VALUES ($1, $2, to_timestamp($3 / 1000.0)) 

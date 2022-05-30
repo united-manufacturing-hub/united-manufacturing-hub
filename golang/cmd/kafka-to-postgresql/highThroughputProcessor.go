@@ -7,9 +7,7 @@ import (
 
 // startHighThroughputQueueProcessor starts the kafka processor for the high integrity queue
 func startHighThroughputQueueProcessor() {
-	if !HighThroughputEnabled {
-		return
-	}
+
 	zap.S().Debugf("[HT]Starting queue processor")
 	for !ShuttingDown {
 		msg := <-highThroughputProcessorChannel
