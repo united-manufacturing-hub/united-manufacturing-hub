@@ -74,9 +74,9 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	if KafkaBoostrapServer == "" {
-		panic("KAFKA_BOOSTRAP_SERVER not set")
+		panic("KAFKA_BOOTSTRAP_SERVER not set")
 	}
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`

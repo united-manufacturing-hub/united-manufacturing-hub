@@ -39,7 +39,7 @@ func main() {
 	go http.ListenAndServe("localhost:1337", nil)
 
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
 	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
 

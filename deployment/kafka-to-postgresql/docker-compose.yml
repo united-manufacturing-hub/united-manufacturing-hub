@@ -60,7 +60,7 @@ services:
 #    restart: always
 #    environment:
 #      - DRY_RUN=true
-#      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+#      - KAFKA_BOOTSTRAP_SERVER=kafka:9092
 #      - KAFKA_LISTEN_TOPIC=^ia.+
 #      - POSTGRES_HOST=postgres
 #      - POSTGRES_PORT=5432
