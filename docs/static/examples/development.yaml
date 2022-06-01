@@ -9,7 +9,7 @@ hostname: development
 write_files:
 
 # Write Helm values file
-- content: |
+- content:
     ---
     # Please adjust the following lines
     # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
@@ -972,7 +972,9 @@ write_files:
     
       kafkaStateDetector:
         enabled: false
-
+    kafkatopostgresql:
+      image:
+        tag: "latest"
 
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
