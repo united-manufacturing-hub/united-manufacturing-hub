@@ -13,7 +13,7 @@ jobs:
         with:
           go-version: '1.18'
       - name: Run coverage
-        run: go test ./... -race -coverprofile coverage.out -covermode=atomic
+        run: go test ./... -tags kafka -race -coverprofile coverage.out -covermode=atomic
         working-directory: ./golang
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v2
