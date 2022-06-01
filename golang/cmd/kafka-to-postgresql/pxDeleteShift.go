@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -14,14 +15,14 @@ import (
 	"time"
 )
 
-type DeleteShiftById struct{}
+type DeleteShift struct{}
 
-type deleteShiftById struct {
-	ShiftId *uint32 `json:"shift_id"`
+type deleteShift struct {
+	TimeStampMs uint32 `json:"timestamp_ms"`
 }
 
-// ProcessMessages processes a DeleteShiftById kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+// ProcessMessages processes a DeleteShift kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+func (c DeleteShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -46,8 +47,8 @@ func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bo
 		}
 	}()
 
-	// sC is the payload, parsed as deleteShiftById
-	var sC deleteShiftById
+	// sC is the payload, parsed as deleteShift
+	var sC deleteShift
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
@@ -58,6 +59,11 @@ func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bo
 		return true, nil, true
 	}
 
+	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
+	if !success {
+		zap.S().Warnf("Failed to get AssetTableID")
+		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+	}
 	// Changes should only be necessary between this marker
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
@@ -65,14 +71,14 @@ func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bo
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
 
-	stmt := txn.StmtContext(txnStmtCtx, statement.DeleteFromShiftTableById)
+	stmt := txn.StmtContext(txnStmtCtx, statement.DeleteFromShiftTableByAssetIDAndBeginTimestamp)
 
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
 
-	_, err = stmt.ExecContext(stmtCtx, sC.ShiftId)
+	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.TimeStampMs)
 	if err != nil {
 
 		if err != nil {
@@ -83,7 +89,7 @@ func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bo
 			}
 			return true, err, false
 		}
-		zap.S().Debugf("Error inserting into deleteShiftById table: %s", err.Error())
+		zap.S().Debugf("Error inserting into deleteShift table: %s", err.Error())
 		return true, err, false
 	}
 
@@ -106,6 +112,6 @@ func (c DeleteShiftById) ProcessMessages(msg internal.ParsedMessage) (putback bo
 		isCommited = true
 	}
 
-	zap.S().Debugf("Successfully processed deleteShiftById message: %v", msg)
+	zap.S().Debugf("Successfully processed deleteShift message: %v", msg)
 	return false, err, false
 }
