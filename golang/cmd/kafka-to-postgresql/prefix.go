@@ -13,7 +13,7 @@ func newPrefixRegistry() *prefixRegistry {
 		AddShift:               "addshift",
 		Count:                  "count",
 		// Undocumented
-		DeleteShiftByAssetIdAndBeginTimestamp: "deleteshiftbyassetidandbegintimestamp",
+		DeleteShift: "deleteshift",
 		// Undocumented
 		EndOrder: "endorder",
 		// Undocumented
@@ -38,25 +38,25 @@ func newPrefixRegistry() *prefixRegistry {
 }
 
 type prefixRegistry struct {
-	AddMaintenanceActivity                string
-	AddOrder                              string
-	AddParentToChild                      string
-	AddProduct                            string
-	AddShift                              string
-	Count                                 string
-	DeleteShiftByAssetIdAndBeginTimestamp string
-	EndOrder                              string
-	ModifyProducesPieces                  string
-	ModifyState                           string
-	ProcessValue                          string
-	ProcessValueFloat64                   string
-	ProcessValueString                    string
-	ProductTag                            string
-	ProductTagString                      string
-	Recommendation                        string
-	ScrapCount                            string
-	StartOrder                            string
-	State                                 string
-	UniqueProduct                         string
-	ScrapUniqueProduct                    string
+	AddMaintenanceActivity string
+	AddOrder               string
+	AddParentToChild       string
+	AddProduct             string
+	AddShift               string
+	Count                  string
+	DeleteShift            string
+	EndOrder               string
+	ModifyProducesPieces   string
+	ModifyState            string
+	ProcessValue           string
+	ProcessValueFloat64    string
+	ProcessValueString     string
+	ProductTag             string
+	ProductTagString       string
+	Recommendation         string
+	ScrapCount             string
+	StartOrder             string
+	State                  string
+	UniqueProduct          string
+	ScrapUniqueProduct     string
 }

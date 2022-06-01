@@ -23,7 +23,7 @@ type DeleteShiftByAssetIdAndBeginTimestampHandler struct {
 }
 
 func NewDeleteShiftByAssetIdAndBeginTimestampHandler() (handler *DeleteShiftByAssetIdAndBeginTimestampHandler) {
-	const queuePathDB = "/data/DeleteShiftByAssetIdAndBeginTimestamp"
+	const queuePathDB = "/data/DeleteShift"
 	var priorityQueue *goque.PriorityQueue
 	var err error
 	priorityQueue, err = SetupQueue(queuePathDB)
