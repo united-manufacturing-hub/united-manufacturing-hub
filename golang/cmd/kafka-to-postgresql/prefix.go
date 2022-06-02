@@ -18,7 +18,7 @@ func newPrefixRegistry() *prefixRegistry {
 		DeleteShiftById: "deleteshiftbyid",
 		EndOrder:        "endorder",
 		// Undocumented
-		ModifyProducesPieces: "modifyproducedpieces",
+		ModifyProducedPieces: "modifyproducedpieces",
 		// Undocumented
 		ModifyState:  "modifystate",
 		ProcessValue: "processvalue",
@@ -48,7 +48,7 @@ type prefixRegistry struct {
 	DeleteShiftByAssetIdAndBeginTimestamp string
 	DeleteShiftById                       string
 	EndOrder                              string
-	ModifyProducesPieces                  string
+	ModifyProducedPieces                  string
 	ModifyState                           string
 	ProcessValue                          string
 	ProcessValueFloat64                   string
