@@ -30,9 +30,9 @@ data:
     CREATE TABLE IF NOT EXISTS assetTable
     (
         id SERIAL PRIMARY KEY,
-        assetID VARCHAR(20) NOT NULL,
-        location VARCHAR(20) NOT NULL,
-        customer VARCHAR(20) NOT NULL,
+        assetID TEXT NOT NULL,
+        location TEXT NOT NULL,
+        customer TEXT NOT NULL,
         unique (assetID, location, customer)
     );
 
@@ -136,7 +136,7 @@ data:
     CREATE TABLE IF NOT EXISTS productTable
     (
         product_id SERIAL PRIMARY KEY,
-        product_name VARCHAR(40) NOT NULL,
+        product_name TEXT NOT NULL,
     	asset_id SERIAL REFERENCES assetTable (id),
         time_per_unit_in_seconds REAL NOT NULL,
     	UNIQUE(product_name, asset_id),
@@ -147,7 +147,7 @@ data:
     CREATE TABLE IF NOT EXISTS orderTable
     (
         order_id SERIAL PRIMARY KEY,
-        order_name VARCHAR(40) NOT NULL,
+        order_name TEXT NOT NULL,
         product_id SERIAL REFERENCES productTable (product_id),
         begin_timestamp TIMESTAMPTZ,
         end_timestamp TIMESTAMPTZ,
@@ -162,7 +162,7 @@ data:
     -------------------- TimescaleDB table for configuration --------------------
     CREATE TABLE IF NOT EXISTS configurationTable
     (
-        customer VARCHAR(20) PRIMARY KEY,
+        customer TEXT PRIMARY KEY,
         MicrostopDurationInSeconds INTEGER DEFAULT 60*2,
         IgnoreMicrostopUnderThisDurationInSeconds INTEGER DEFAULT -1, --do not apply
         MinimumRunningTimeInSeconds INTEGER DEFAULT 0, --do not apply
@@ -257,7 +257,7 @@ data:
     (
     id                          SERIAL                              PRIMARY KEY ,
     asset_id                    SERIAL,
-    componentname               varchar(20)                         NOT NULL,
+    componentname               TEXT                         NOT NULL,
     CONSTRAINT componenttable_asset_id_componentname_key UNIQUE (asset_id, componentname),
     CONSTRAINT componenttable_asset_id_fkey FOREIGN KEY (asset_id)
     REFERENCES public.assettable (id) MATCH SIMPLE
