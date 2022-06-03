@@ -972,9 +972,6 @@ write_files:
     
       kafkaStateDetector:
         enabled: false
-    kafkatopostgresql:
-      image:
-        tag: "latest"
 
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
