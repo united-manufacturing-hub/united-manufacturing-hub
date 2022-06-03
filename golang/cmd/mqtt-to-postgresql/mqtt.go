@@ -156,7 +156,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 		case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
 			deleteShiftByAssetIdAndBeginTimestampHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
-		case Prefix.ModifyProducesPieces:
+		case Prefix.ModifyProducedPieces:
 			modifyProducedPieceHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 
 		default:
