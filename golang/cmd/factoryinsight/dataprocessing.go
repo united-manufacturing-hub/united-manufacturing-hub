@@ -221,6 +221,9 @@ func getProducedPiecesFromCountSlice(countSlice []datamodel.CountEntry, from tim
 }
 
 func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, from time.Time, to time.Time) (processedCountSlice []datamodel.CountEntry) {
+	if len(countSlice) == 0 {
+		return
+	}
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
 		if isTimepointInTimerange(dataPoint.Timestamp, TimeRange{from, to}) {
@@ -231,6 +234,9 @@ func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, 
 }
 
 func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, from time.Time, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
+	if len(orderArray) == 0 {
+		return
+	}
 	// Loop through all datapoints
 	for _, dataPoint := range orderArray {
 		if isTimepointInTimerange(dataPoint.BeginTimestamp, TimeRange{from, to}) || isTimepointInTimerange(dataPoint.EndTimestamp, TimeRange{from, to}) {
@@ -241,6 +247,9 @@ func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, f
 }
 
 func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from time.Time, to time.Time) (processedStates []datamodel.StateEntry) {
+	if len(processedStatesRaw) == 0 {
+		return
+	}
 	firstSelectedTimestampIndex := -1
 	// Loop through all datapoints
 	for index, dataPoint := range processedStatesRaw {
@@ -891,6 +900,7 @@ func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamod
 		currentTo := current.AddDate(0, 0, 1)
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+			zap.S().Debugf("[processStatesOptimized] currentTo (%d) is after to (%d)", currentTo.Unix(), to.Unix())
 			processedStatesTemp, err = processStates(c, assetID, stateArray, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
@@ -898,6 +908,7 @@ func processStatesOptimized(c *gin.Context, assetID uint32, stateArray []datamod
 			}
 			current = to
 		} else { //otherwise, calculate for entire time range
+			zap.S().Debugf("[processStatesOptimized] currentTo (%d) is before to (%d)", currentTo.Unix(), to.Unix())
 			processedStatesTemp, err = processStates(c, assetID, stateArray, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				zap.S().Errorf("processStates failed", err)
