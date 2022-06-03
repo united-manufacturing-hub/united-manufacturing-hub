@@ -318,7 +318,7 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 
 			// First entry is always noShift
 			fullRow := datamodel.ShiftEntry{
-				TimestampBegin: time.Time{},
+				TimestampBegin: internal.UnixEpoch,
 				TimestampEnd:   from,
 				ShiftType:      0,
 			}
@@ -330,7 +330,7 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 		} else {
 			// First entry is always noShift
 			fullRow := datamodel.ShiftEntry{
-				TimestampBegin: time.Time{},
+				TimestampBegin: internal.UnixEpoch,
 				TimestampEnd:   timestampStart, //.Add(time.Duration(-1) * time.Millisecond)
 				ShiftType:      0,
 			}
