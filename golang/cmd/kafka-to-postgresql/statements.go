@@ -53,10 +53,10 @@ type StatementRegistry struct {
 
 	InsertIntoAssetTable *sql.Stmt
 
-	UpdateCountTableSetCountAndScrapByAssetId *sql.Stmt
+	UpdateCountTableSetCountAndScrapByAssetIdAndTs *sql.Stmt
 
-	UpdateCountTableSetCountByAssetId *sql.Stmt
-	UpdateCountTableSetScrapByAssetId *sql.Stmt
+	UpdateCountTableSetCountByAssetIdAndTs *sql.Stmt
+	UpdateCountTableSetScrapByAssetIdAndTs *sql.Stmt
 
 	SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId *sql.Stmt
 
@@ -124,11 +124,11 @@ func (r StatementRegistry) Shutdown() (err error) {
 
 	_ = r.InsertIntoAssetTable.Close()
 
-	_ = r.UpdateCountTableSetCountAndScrapByAssetId.Close()
+	_ = r.UpdateCountTableSetCountAndScrapByAssetIdAndTs.Close()
 
-	_ = r.UpdateCountTableSetCountByAssetId.Close()
+	_ = r.UpdateCountTableSetCountByAssetIdAndTs.Close()
 
-	_ = r.UpdateCountTableSetScrapByAssetId.Close()
+	_ = r.UpdateCountTableSetScrapByAssetIdAndTs.Close()
 
 	_ = r.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.Close()
 
@@ -267,11 +267,11 @@ func NewStatementRegistry() *StatementRegistry {
 		VALUES ($1,$2,$3) 
 		ON CONFLICT DO NOTHING;`),
 
-		UpdateCountTableSetCountAndScrapByAssetId: prep(`UPDATE counttable SET count = $1, scrap = $2 WHERE asset_id = $3`),
+		UpdateCountTableSetCountAndScrapByAssetIdAndTs: prep(`UPDATE counttable SET count = $1, scrap = $2 WHERE asset_id = $3 AND timestamp = to_timestamp($4 / 1000.0);`),
 
-		UpdateCountTableSetCountByAssetId: prep(`UPDATE counttable SET count = $1 WHERE asset_id = $2`),
+		UpdateCountTableSetCountByAssetIdAndTs: prep(`UPDATE counttable SET count = $1 WHERE asset_id = $2 AND timestamp = to_timestamp($3 / 1000.0);`),
 
-		UpdateCountTableSetScrapByAssetId: prep(`UPDATE counttable SET scrap = $1 WHERE asset_id = $2`),
+		UpdateCountTableSetScrapByAssetIdAndTs: prep(`UPDATE counttable SET scrap = $1 WHERE asset_id = $2 AND timestamp = to_timestamp($3 / 1000.0);`),
 
 		SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId: prep(`SELECT id FROM assetTable WHERE assetid=$1 AND location=$2 AND customer=$3;`),
 
