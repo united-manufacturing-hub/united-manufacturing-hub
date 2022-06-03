@@ -14,17 +14,18 @@ import (
 	"time"
 )
 
-type ModifyProducesPieces struct{}
+type ModifyProducedPieces struct{}
 
-type modifyProducesPieces struct {
+type modifyProducedPieces struct {
 	// Has to be int32 to allow transmission of "not changed" value (value < 0)
 	Count *int32 `json:"count"`
 	// Has to be int32 to allow transmission of "not changed" value (value < 0)
-	Scrap *int32 `json:"scrap"`
+	Scrap       *int32  `json:"scrap"`
+	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
-// ProcessMessages processes a ModifyProducesPieces kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c ModifyProducesPieces) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+// ProcessMessages processes a ModifyProducedPieces kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+func (c ModifyProducedPieces) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -49,8 +50,8 @@ func (c ModifyProducesPieces) ProcessMessages(msg internal.ParsedMessage) (putba
 		}
 	}()
 
-	// sC is the payload, parsed as modifyProducesPieces
-	var sC modifyProducesPieces
+	// sC is the payload, parsed as modifyProducedPieces
+	var sC modifyProducedPieces
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
@@ -74,9 +75,9 @@ func (c ModifyProducesPieces) ProcessMessages(msg internal.ParsedMessage) (putba
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnStmtCtxCl()
 
-	stmtUpdateCAndS := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableSetCountAndScrapByAssetId)
-	stmtUpdateC := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableSetCountByAssetId)
-	stmtUpdateS := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableSetScrapByAssetId)
+	stmtUpdateCAndS := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableSetCountAndScrapByAssetIdAndTs)
+	stmtUpdateC := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableSetCountByAssetIdAndTs)
+	stmtUpdateS := txn.StmtContext(txnStmtCtx, statement.UpdateCountTableSetScrapByAssetIdAndTs)
 
 	stmtCtx, stmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// stmtCtxCl is the cancel function of the context, used in the transactions execution creation.
@@ -85,20 +86,20 @@ func (c ModifyProducesPieces) ProcessMessages(msg internal.ParsedMessage) (putba
 
 	if sC.Count != nil && *sC.Count >= 0 {
 		if sC.Scrap != nil && *sC.Scrap >= 0 {
-			_, err = stmtUpdateCAndS.ExecContext(stmtCtx, *sC.Count, *sC.Scrap, AssetTableID)
+			_, err = stmtUpdateCAndS.ExecContext(stmtCtx, *sC.Count, *sC.Scrap, AssetTableID, *sC.TimestampMs)
 			if err != nil {
 				zap.S().Errorf("Failed to update count and scrap: %s", err.Error())
 				return true, err, false
 			}
 		} else {
-			_, err = stmtUpdateC.ExecContext(stmtCtx, *sC.Count, AssetTableID)
+			_, err = stmtUpdateC.ExecContext(stmtCtx, *sC.Count, AssetTableID, *sC.TimestampMs)
 			if err != nil {
 				zap.S().Errorf("Failed to update count: %s", err.Error())
 				return true, err, false
 			}
 		}
 	} else if sC.Scrap != nil && *sC.Scrap >= 0 {
-		_, err = stmtUpdateS.ExecContext(stmtCtx, *sC.Scrap, AssetTableID)
+		_, err = stmtUpdateS.ExecContext(stmtCtx, *sC.Scrap, AssetTableID, *sC.TimestampMs)
 		if err != nil {
 			zap.S().Errorf("Failed to update scrap: %s", err.Error())
 			return true, err, false
@@ -123,6 +124,6 @@ func (c ModifyProducesPieces) ProcessMessages(msg internal.ParsedMessage) (putba
 		isCommited = true
 	}
 
-	zap.S().Debugf("Successfully processed modifyProducesPieces message: %v", msg)
+	zap.S().Debugf("Successfully processed modifyProducedPieces message: %v", msg)
 	return false, err, false
 }
