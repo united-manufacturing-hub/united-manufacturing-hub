@@ -17,7 +17,7 @@ func newPrefixRegistry() *prefixRegistry {
 		// Undocumented
 		EndOrder: "endorder",
 		// Undocumented
-		ModifyProducesPieces: "modifyproducedpieces",
+		ModifyProducedPieces: "modifyproducedpieces",
 		// Undocumented
 		ModifyState:  "modifystate",
 		ProcessValue: "processvalue",
@@ -46,7 +46,7 @@ type prefixRegistry struct {
 	Count                  string
 	DeleteShift            string
 	EndOrder               string
-	ModifyProducesPieces   string
+	ModifyProducedPieces   string
 	ModifyState            string
 	ProcessValue           string
 	ProcessValueFloat64    string

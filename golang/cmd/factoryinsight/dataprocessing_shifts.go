@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -142,7 +143,7 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 		}
 
 		// set timestampBegin and timestampEnd if not set yet
-		if timestampBegin == (time.Time{}) || timestampEnd == (time.Time{}) {
+		if timestampBegin == (internal.UnixEpoch) || timestampEnd == (internal.UnixEpoch) {
 			timestampBegin = dataPoint.TimestampBegin
 			timestampEnd = dataPoint.TimestampEnd
 		}
@@ -173,14 +174,14 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 				processedShifts = append(processedShifts, fullRow)
 
 				// reset timestampBegin and timestampEnd
-				timestampBegin = (time.Time{})
-				timestampEnd = (time.Time{})
+				timestampBegin = (internal.UnixEpoch)
+				timestampEnd = (internal.UnixEpoch)
 			}
 
 		} else { // if last entry
 
 			// add ongoing shift
-			if timestampBegin != (time.Time{}) || timestampEnd != (time.Time{}) {
+			if timestampBegin != (internal.UnixEpoch) || timestampEnd != (internal.UnixEpoch) {
 				// add no shift at the end
 				fullRow := datamodel.ShiftEntry{
 					TimestampBegin: timestampBegin,
