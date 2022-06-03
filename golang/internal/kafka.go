@@ -137,7 +137,9 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 }
 
 func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
-
+	if strings.Contains(MqttTopicName, ".") {
+		return false, ""
+	}
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
