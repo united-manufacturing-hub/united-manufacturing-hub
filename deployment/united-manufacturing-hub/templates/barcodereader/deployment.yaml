@@ -1,31 +1,74 @@
 ---
-{{if .Values._000_commonConfig.datasources.barcodereader.enabled}}
-
+{{if or .Values.barcodereader.enabled .Values._000_commonConfig.datasources.barcodereader.enabled}}
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
   labels:
     {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 4}}
+  {{if .Values.barcodereader.annotations}}
+  annotations:
+    {{- toYaml .Values.barcodereader.annotations | nindent 4}}
+  {{end}}
 spec:
-  serviceName: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
-  replicas: 1
   selector:
     matchLabels:
-      {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 6}}
+      name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+  strategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
         {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 8}}
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+                topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
-          {{if .Values.barcodereader.tag}}
-          image: {{.Values.barcodereader.image.repository}}:{{.Values.barcodereader.tag}}
+          {{if .Values.barcodereader.image.tag}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Values.barcodereader.image.tag}}
           {{- else}}
           image: {{.Values.barcodereader.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.barcodereader.image.pullPolicy}}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: devs
+              mountPath: /dev/
+          env:
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: INPUT_DEVICE_NAME
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName | quote}}
+            - name: INPUT_DEVICE_PATH
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath | quote}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CUSTOMER_ID
+              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID | quote}}
+            - name: LOCATION
+              value: {{.Values._000_commonConfig.datasources.barcodereader.location | quote}}
+            - name: ASSET_ID
+              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID | quote}}
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
+
+            - name: SCAN_ONLY
+              value: {{.Values.barcodereader.scanOnly | quote}}
+
           resources:
             limits:
               cpu: {{.Values.barcodereader.resources.limits.cpu}}
@@ -33,40 +76,11 @@ spec:
             requests:
               cpu: {{.Values.barcodereader.resources.requests.cpu}}
               memory: {{.Values.barcodereader.resources.requests.memory}}
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader-certificates
-              mountPath: /SSL_certs
-              readOnly: true
-            - name: devs
-              mountPath: /dev/
-          env:
-          - name: CUSTOM_USB_NAME
-            value: {{.Values._000_commonConfig.datasources.barcodereader.customUSBName}}
-          - name: MQTT_CLIENT_ID
-            value: {{.Values._000_commonConfig.serialNumber}}-barcodereader
-          - name: BROKER_URL
-            value: {{.Values._000_commonConfig.datasources.barcodereader.brokerURL}}
-          - name: BROKER_PORT
-            value: {{.Values._000_commonConfig.datasources.barcodereader.brokerPort | quote}}
-          - name: CUSTOMER_ID
-            value: {{.Values._000_commonConfig.datasources.barcodereader.customerID}}
-          - name: LOCATION
-            value: {{.Values._000_commonConfig.datasources.barcodereader.location}}
-          - name: MACHINE_ID
-            value: {{.Values._000_commonConfig.datasources.barcodereader.machineID}}
-          - name: KAFKA_USE_SSL
-            value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
-          - name: KAFKA_SSL_KEY_PASSWORD
-            value: {{.Values._000_commonConfig.certificates.barcodereader.sslKeyPassword | quote}}
-
+      serviceAccountName: ""
+      restartPolicy: Always
       volumes:
         - name: devs
           hostPath:
             path: /dev/
-        - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader-certificates
-          secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-barcodereader-secrets
-
 {{end}}
+
