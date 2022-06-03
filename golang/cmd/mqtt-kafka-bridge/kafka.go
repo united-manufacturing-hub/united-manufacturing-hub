@@ -59,7 +59,23 @@ func kafkaToQueue(topic string) {
 		panic(err)
 	}
 
+	stuck := 0
+
 	for !ShuttingDown {
+		if mqttOutGoingQueue.Length() >= 100 {
+			// MQTT can't keep up with Kafka
+			time.Sleep(internal.OneSecond)
+			stuck += 1
+
+			// If we are stuck for more than 60 seconds, then we need to shut down
+			if stuck > 60 {
+				// MQTT seems down, restart app
+				ShutdownApplicationGraceful()
+				return
+			}
+			continue
+		}
+		stuck = 0
 		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			// This is fine, and expected behaviour
