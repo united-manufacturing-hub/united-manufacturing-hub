@@ -77,7 +77,7 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 				continue
 			}
 			if connectionCode != 200 {
-				zap.S().Warnf("Port %d is not connected", portNumber)
+				zap.S().Debugf("Port %d is not connected", portNumber)
 				continue
 			}
 
