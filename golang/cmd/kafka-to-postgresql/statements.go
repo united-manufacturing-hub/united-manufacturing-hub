@@ -47,8 +47,6 @@ type StatementRegistry struct {
 
 	DeleteFromStateTableByTimestamp *sql.Stmt
 
-	DeleteFromShiftTableById *sql.Stmt
-
 	DeleteFromShiftTableByAssetIDAndBeginTimestamp *sql.Stmt
 
 	InsertIntoAssetTable *sql.Stmt
@@ -117,8 +115,6 @@ func (r StatementRegistry) Shutdown() (err error) {
 	_ = r.DeleteFromStateTableByTimestampRangeAndAssetId.Close()
 
 	_ = r.DeleteFromStateTableByTimestamp.Close()
-
-	_ = r.DeleteFromShiftTableById.Close()
 
 	_ = r.DeleteFromShiftTableByAssetIDAndBeginTimestamp.Close()
 
@@ -257,8 +253,6 @@ func NewStatementRegistry() *StatementRegistry {
 		DeleteFromStateTableByTimestampRangeAndAssetId: prep(`DELETE FROM statetable WHERE timestamp >= to_timestamp($1 / 1000.0) AND timestamp <= to_timestamp($2 / 1000.0) AND asset_id = $3;`),
 
 		DeleteFromStateTableByTimestamp: prep(`DELETE FROM statetable WHERE timestamp = to_timestamp($1 / 1000.0);`),
-
-		DeleteFromShiftTableById: prep(`DELETE FROM shifttable WHERE id = $1;`),
 
 		DeleteFromShiftTableByAssetIDAndBeginTimestamp: prep(`DELETE FROM shifttable WHERE asset_id = $1 AND begin_timestamp = to_timestamp($2 / 1000.0);`),
 
