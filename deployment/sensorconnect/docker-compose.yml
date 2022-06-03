@@ -59,7 +59,7 @@ services:
       - ./ioddfiles/:/ioddfiles/
     environment:
       - IP_RANGE=192.168.10.0/24
-      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+      - KAFKA_BOOTSTRAP_SERVER=kafka:9092
       - TRANSMITTERID=12345
       - IODD_FILE_PATH=/ioddfiles
       - USE_KAFKA=1

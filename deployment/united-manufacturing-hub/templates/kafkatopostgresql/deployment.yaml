@@ -48,7 +48,7 @@ spec:
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
           env:
-            - name: KAFKA_BOOSTRAP_SERVER
+            - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: KAFKA_TOPICS
               value: {{.Values._000_commonConfig.infrastructure.kafka.defaultTopics}}
@@ -90,7 +90,7 @@ spec:
             - name: LOGGING_LEVEL
               value: PRODUCTION
 
-            - name: KAFKA_BOOSTRAP_SERVER
+            - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: MEMORY_REQUEST
               value: {{.Values.kafkatopostgresql.resources.requests.memory}}
