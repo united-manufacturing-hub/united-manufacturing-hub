@@ -17,8 +17,8 @@ import (
 type ModifyState struct{}
 
 type modifyState struct {
-	StartTimeStampMs *uint32 `json:"start_time_stamp"`
-	EndTimeStampMs   *uint32 `json:"end_time_stamp"`
+	StartTimeStampMs *uint32 `json:"timestamp_ms"`
+	EndTimeStampMs   *uint32 `json:"timestamp_ms_end"`
 	NewState         *uint32 `json:"new_state"`
 }
 

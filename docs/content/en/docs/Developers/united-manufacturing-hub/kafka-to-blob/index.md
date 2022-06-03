@@ -15,7 +15,7 @@ This is currently used in combination with cameraconnect.
 
 | Variable              | Type    | Description                                              |
 |-----------------------|---------|----------------------------------------------------------|
-| KAFKA_BOOSTRAP_SERVER | String  | The kafka bootstrap server.                              |
+| KAFKA_BOOTSTRAP_SERVER | String  | The kafka bootstrap server.                              |
 | KAFKA_LISTEN_TOPIC    | String  | The kafka topic to listen to.                            |
 | KAFKA_BASE_TOPIC      | String  | Set this, if you want to automatically create the topic. |
 | MINIO_URL             | String  | The url of the minio server.                             |
