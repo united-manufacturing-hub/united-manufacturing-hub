@@ -32,7 +32,7 @@ The following environment variables are used by the microservice:
 | POSTGRES_PASSWORD                  | String  | The password to use for PostgreSQL connections.                                     |
 | POSTGRES_DATABASE                  | String  | The name of the PostgreSQL database.                                                |
 | POSTGRES_SSLMODE                   | Boolean | If set to true, the PostgreSQL connection will use SSL.                             |
-| KAFKA_BOOSTRAP_SERVERS             | String  | The kafka server to connect to.                                                     |
+| KAFKA_BOOTSTRAP_SERVERS             | String  | The kafka server to connect to.                                                     |
 | KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC  | String  | The kafka topic to listen to for high integrity messages. (This can be a regex)     |
 | KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC | String  | The kafka topic to listen to for high throughput messages. (This can be a regex)    |
 

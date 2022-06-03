@@ -37,7 +37,7 @@ spec:
             - name: TRANSMITTERID
               value: {{.Values._000_commonConfig.serialNumber | quote}}
 
-            - name: KAFKA_BOOSTRAP_SERVER
+            - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
 
             - name: IP_RANGE

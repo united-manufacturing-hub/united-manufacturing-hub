@@ -43,9 +43,9 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	if KafkaBoostrapServer == "" {
-		panic("KAFKA_BOOSTRAP_SERVER not set")
+		panic("KAFKA_BOOTSTRAP_SERVER not set")
 	}
 
 	allowedMemorySize := 1073741824 // 1GB
