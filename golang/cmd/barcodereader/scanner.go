@@ -507,8 +507,7 @@ func decodeEvents(events []InputEvent) (string, bool) {
 								if err != nil {
 									zap.S().Warnf("Error converting alt buffer to int: %s", err)
 								}
-								//goland:noinspection ALL
-								buffer.WriteString(string(bufNum))
+								buffer.WriteString(strconv.Itoa(bufNum))
 								altBuffer = nil
 								altPressedState = false
 							}
