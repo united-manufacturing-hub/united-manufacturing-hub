@@ -142,10 +142,6 @@ func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName str
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
 	if !IsKafkaTopicValid(MqttTopicName) {
-		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
-		return false, ""
-	}
-	if !IsKafkaTopicValid(MqttTopicName) {
 		zap.S().Errorf("Topic is not valid: %s, does not match %s", MqttTopicName, KafkaUMHTopicRegex)
 		return false, ""
 	}
