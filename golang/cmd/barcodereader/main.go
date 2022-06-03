@@ -48,7 +48,7 @@ func main() {
 	}
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOSTRAP_SERVER")
+	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	customerID := os.Getenv("CUSTOMER_ID")
 	location := os.Getenv("LOCATION")
 	assetID := os.Getenv("ASSET_ID")

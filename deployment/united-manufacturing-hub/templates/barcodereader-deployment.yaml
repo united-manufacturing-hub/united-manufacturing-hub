@@ -45,7 +45,7 @@ spec:
             - name: devs
               mountPath: /dev/
           env:
-            - name: KAFKA_BOOSTRAP_SERVER
+            - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: INPUT_DEVICE_NAME
               value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName | quote}}
