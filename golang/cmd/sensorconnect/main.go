@@ -9,6 +9,8 @@ import (
 	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -67,8 +69,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	internal.InitMemcache()
 	cP = sync.Map{}
@@ -278,6 +282,11 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 		hasIFMK := true
 		for port, info := range portModeMap {
 			if !info.Connected {
+				continue
+			}
+
+			if info.VendorId == 0 && info.DeviceId == 0 {
+				// Digital sensor
 				continue
 			}
 

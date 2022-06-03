@@ -72,19 +72,19 @@ This chapter explains all used environment variables.
 
 **Example value:**  DEVELOPMENT
 
-### JAEGER_HOST
 
-**Description:** Optional variable, Jaeger tracing host
+
+
 
 **Type:** string
 
 **Possible values:** all DNS names or IP
 
-**Example value:**  http://jaeger.localhost
 
-### JAEGER_PORT
 
-**Description:** Optional variable, Port for Jaeger tracing
+
+
+
 
 **Type:** string
 
@@ -94,7 +94,7 @@ This chapter explains all used environment variables.
 
 ### DISABLE_JAEGER
 
-**Description:** Optional variable, disables Jaeger if set to 1 or true
+
 
 **Type:** string
 

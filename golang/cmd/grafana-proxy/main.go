@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,6 +15,8 @@ import (
 )
 
 var shutdownEnabled bool
+
+var buildtime string
 
 func main() {
 	var logLevel = os.Getenv("LOGGING_LEVEL")
@@ -28,6 +31,9 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")
@@ -69,21 +75,7 @@ func main() {
 		}
 	}()
 
-	var jaegerHost string
-	var jaegerPort string
-	if os.Getenv("DISABLE_JAEGER") == "1" || os.Getenv("DISABLE_JAEGER") == "true" {
-		jaegerHost = ""
-		jaegerPort = ""
-	} else {
-		jaegerHost = os.Getenv("JAEGER_HOST")
-		jaegerPort = os.Getenv("JAEGER_PORT")
-
-		if jaegerHost == "" || jaegerPort == "" {
-			zap.S().Warn("Jaeger not configured correctly")
-		}
-	}
-
-	SetupRestAPI(jaegerHost, jaegerPort)
+	SetupRestAPI()
 	zap.S().Infof("Ready to proxy connections")
 
 	// Allow graceful shutdown

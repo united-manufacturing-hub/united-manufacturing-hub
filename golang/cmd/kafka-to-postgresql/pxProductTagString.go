@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -19,7 +21,7 @@ type productTagString struct {
 }
 
 // ProcessMessages processes a ProductTagString kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
-func (c ProductTagString) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error) {
+func (c ProductTagString) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
@@ -29,30 +31,42 @@ func (c ProductTagString) ProcessMessages(msg internal.ParsedMessage) (putback b
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
-		return true, err
+		return true, err, false
 	}
+
+	isCommited := false
+	defer func() {
+		if !isCommited && !isDryRun {
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Error rolling back transaction: %s", err.Error())
+			} else {
+				zap.S().Warnf("Rolled back transaction !")
+			}
+		}
+	}()
 
 	// sC is the payload, parsed as productTagString
 	var sC productTagString
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
-		// Ignore malformed messages
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
-		return false, err
+		return false, err, true
 	}
 	if !internal.IsValidStruct(sC, []string{}) {
-		zap.S().Warnf("Invalid message: %s, discarding !", string(msg.Payload))
-		return false, nil
+		zap.S().Warnf("Invalid message: %s, inserting into putback !", string(msg.Payload))
+		return true, nil, true
 	}
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
-		return true, nil
+		zap.S().Warnf("Failed to get AssetTableID")
+		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
 	}
 
 	var ProductTableId uint32
 	ProductTableId, success = GetUniqueProductID(*sC.AID, AssetTableID)
 	if !success {
-		return true, nil
+		return true, fmt.Errorf("failed to get ProductTableID for AID: %s, AssetTableID: %d", *sC.AID, AssetTableID), false
 	}
 
 	// Changes should only be necessary between this marker
@@ -68,7 +82,12 @@ func (c ProductTagString) ProcessMessages(msg internal.ParsedMessage) (putback b
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.Name, sC.Value, sC.TimestampMs, ProductTableId)
 	if err != nil {
-		return true, err
+		pqErr := err.(*pq.Error)
+		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+		if pqErr.Code == "23P01" {
+			return true, err, true
+		}
+		return true, err, false
 	}
 
 	// And this marker
@@ -77,15 +96,17 @@ func (c ProductTagString) ProcessMessages(msg internal.ParsedMessage) (putback b
 		zap.S().Debugf("Dry run: not committing transaction")
 		err = txn.Rollback()
 		if err != nil {
-			return true, err
+			return true, err, false
 		}
 	} else {
-
+		zap.S().Debugf("Committing transaction")
 		err = txn.Commit()
 		if err != nil {
-			return true, err
+			zap.S().Errorf("Error committing transaction: %s", err.Error())
+			return true, err, false
 		}
+		isCommited = true
 	}
 
-	return false, err
+	return false, err, false
 }

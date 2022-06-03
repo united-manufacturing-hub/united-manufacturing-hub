@@ -482,7 +482,7 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = rdb.Set(ctx, key, b, 5*time.Minute).Err()
 	if err != nil {
 		zap.S().Errorf("redis failed")
 		return

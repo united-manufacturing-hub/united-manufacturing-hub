@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -56,8 +57,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -92,7 +95,24 @@ func main() {
 
 	GroupIdSuffic := os.Getenv("KAFKA_GROUP_ID_SUFFIX")
 
-	CreateTopicMapProcessors(topicMap, GroupIdSuffic)
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
+	CreateTopicMapProcessors(topicMap, GroupIdSuffic, securityProtocol)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

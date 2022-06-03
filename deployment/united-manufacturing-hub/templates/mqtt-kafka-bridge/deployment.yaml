@@ -1,0 +1,115 @@
+---
+{{if or .Values.mqttkafkabridge.enabled .Values._000_commonConfig.infrastructure.kafka.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+  labels:
+    {{- include "united-manufacturing-hub.labels.mqttkafkabridge" . | nindent 4}}
+  {{if .Values.mqttkafkabridge.annotations}}
+  annotations:
+    {{- toYaml .Values.mqttkafkabridge.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.mqttkafkabridge.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+        {{- include "united-manufacturing-hub.labels.mqttkafkabridge" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
+          {{if .Values.mqttkafkabridge.image.tag}}
+          image: {{.Values.mqttkafkabridge.image.repository}}:{{.Values.mqttkafkabridge.image.tag}}
+          {{- else}}
+          image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
+          volumeMounts:
+            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+              mountPath: /SSL_certs
+              readOnly: true
+          env:
+            - name: MQTT_BROKER_URL
+              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+
+            - name: MQTT_CERTIFICATE_NAME
+              value: "NO_CERT"
+
+            - name: MQTT_TOPIC
+              value: "ia/#"
+
+            - name: KAFKA_BOOSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+
+            - name: KAFKA_LISTEN_TOPIC
+              value: "^ia.+"
+
+            - name: KAFKA_BASE_TOPIC
+              value: "ia"
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber}}
+
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
+
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          # livenessProbe:
+          #   httpGet:
+          #     path: /live
+          #     port: 8086
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 5
+
+          # define a readiness probe that checks every 5 seconds
+          #readinessProbe:
+          #  httpGet:
+          #    path: /ready
+          #    port: 8086
+          #  periodSeconds: 5
+          resources: {}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+              mountPath: /SSL_certs
+              readOnly: true
+
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
+
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+

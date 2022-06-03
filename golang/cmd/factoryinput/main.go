@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 
 var shutdownEnabled bool
 var mqttClient MQTT.Client
+var buildtime string
 
 // GetEnv get's env variable, and also outputs warning if not set
 func GetEnv(variableName string) (envValue string) {
@@ -58,6 +60,9 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+	zap.S().Infof("This is factoryinput build date: %s", buildtime)
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	shutdownEnabled = false
 
@@ -101,9 +106,6 @@ func main() {
 
 	zap.S().Debugf("Healthcheck initialized..")
 
-	jaegerHost := GetEnv("JAEGER_HOST")
-	jaegerPort := GetEnv("JAEGER_PORT")
-
 	//Setup queue
 	err := setupQueue()
 	if err != nil {
@@ -129,8 +131,7 @@ func main() {
 
 	//Setup rest
 	zap.S().Debugf("SetupRestAPI")
-	go SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
-	zap.S().Debugf("Jaeger & REST API initialized..", jaegerHost, jaegerPort)
+	go SetupRestAPI(accounts, version)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

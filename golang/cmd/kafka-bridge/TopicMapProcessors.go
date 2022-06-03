@@ -18,13 +18,18 @@ var messageCache *freecache.Cache
 
 // CreateTopicMapProcessors creates a new TopicMapProcessor for each topic in the map.
 // It also initialized the message cache, which prevents duplicate messages from being sent to the Kafka broker and circular messages from being processed.
-func CreateTopicMapProcessors(tp TopicMap, kafka_group_id_suffic string) {
+func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityProtocol string) {
 	// 1Gb cache
 	messageCache = freecache.NewCache(1024 * 1024 * 1024)
 
 	localConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        LocalKafkaBootstrapServers,
-		"group.id":                 fmt.Sprintf("kafka-bridge-local-%s", kafka_group_id_suffic),
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"group.id":                 fmt.Sprintf("kafka-bridge-local-%s", kafkaGroupIdSuffic),
 		"auto.offset.reset":        "earliest",
 		"enable.auto.commit":       true,
 		"enable.auto.offset.store": false,
@@ -32,7 +37,12 @@ func CreateTopicMapProcessors(tp TopicMap, kafka_group_id_suffic string) {
 
 	remoteConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        RemoteKafkaBootstrapServers,
-		"group.id":                 fmt.Sprintf("kafka-bridge-remote-%s", kafka_group_id_suffic),
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"group.id":                 fmt.Sprintf("kafka-bridge-remote-%s", kafkaGroupIdSuffic),
 		"auto.offset.reset":        "earliest",
 		"enable.auto.commit":       true,
 		"enable.auto.offset.store": false,
@@ -77,7 +87,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		localCommitChan := make(chan *kafka.Message, 100)
 		localIdentifier := fmt.Sprintf("%s-local-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
 		go internal.ProcessKafkaQueue(localIdentifier, element.Topic, localMsgChan, localConsumer, localPutBackChan, nil)
-		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan)
+		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan, 100)
 		go internal.StartCommitProcessor(localIdentifier, localCommitChan, localConsumer)
 
 		remoteMsgChan := make(chan *kafka.Message, 100)
@@ -85,7 +95,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		remoteCommitChan := make(chan *kafka.Message, 100)
 		remoteIdentifier := fmt.Sprintf("%s-remote-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
 		go internal.ProcessKafkaQueue(remoteIdentifier, element.Topic, remoteMsgChan, remoteConsumer, remotePutBackChan, nil)
-		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan)
+		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan, 100)
 		go internal.StartCommitProcessor(remoteIdentifier, remoteCommitChan, remoteConsumer)
 
 		go startAtoBSender(localIdentifier, localMsgChan, remoteProducer, localPutBackChan, localCommitChan)
@@ -139,7 +149,7 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		commitChan := make(chan *kafka.Message, 100)
 		identifier := fmt.Sprintf("%s-local", element.Name)
 		go internal.ProcessKafkaQueue(identifier, element.Topic, msgChan, consumer, putBackChan, nil)
-		go internal.StartPutbackProcessor(identifier, putBackChan, putBackProducer, commitChan)
+		go internal.StartPutbackProcessor(identifier, putBackChan, putBackProducer, commitChan, 100)
 		go internal.StartCommitProcessor(identifier, commitChan, consumer)
 		go startAtoBSender(identifier, msgChan, producer, putBackChan, commitChan)
 		go internal.StartEventHandler(identifier, producer.Events(), putBackChan)

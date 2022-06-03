@@ -7,7 +7,6 @@ import (
 	"context"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -17,6 +16,7 @@ var KafkaProducer *kafka.Producer
 var KafkaAdminClient *kafka.AdminClient
 
 func SetupKafka(configMap kafka.ConfigMap) {
+	zap.S().Debugf("Configmap: %v", configMap)
 
 	var err error
 	KafkaConsumer, err = kafka.NewConsumer(&configMap)
@@ -33,6 +33,9 @@ func SetupKafka(configMap kafka.ConfigMap) {
 	if err != nil {
 		panic(err)
 	}
+	zap.S().Debugf("KafkaConsumer: %+v", KafkaConsumer)
+	zap.S().Debugf("KafkaProducer: %+v", KafkaProducer)
+	zap.S().Debugf("KafkaAdminClient: %+v", KafkaAdminClient)
 
 	return
 }
@@ -57,6 +60,7 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 		// Get initial map of metadata
 		lastMetaData, err = GetMetaData()
 		if err != nil {
+			zap.S().Errorf("Failed to get Kafka metadata: %s", err)
 			return false, err
 		}
 	}
@@ -70,6 +74,7 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 	//Metadata cache did not have topic, try with fresh metadata
 	lastMetaData, err = GetMetaData()
 	if err != nil {
+		zap.S().Errorf("Failed to get Kafka metadata: %s", err)
 		return false, err
 	}
 
@@ -82,7 +87,7 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 }
 
 func GetMetaData() (metadata *kafka.Metadata, err error) {
-	metadata, err = KafkaAdminClient.GetMetadata(nil, true, 1*1000)
+	metadata, err = KafkaAdminClient.GetMetadata(nil, true, 10*1000)
 	return
 }
 
@@ -90,6 +95,7 @@ func GetMetaData() (metadata *kafka.Metadata, err error) {
 func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	exists, err := TopicExists(kafkaTopicName)
 	if err != nil {
+		zap.S().Debugf("Failed to check if topic %s exists: %s", kafkaTopicName, err)
 		return err
 	}
 	if exists {
@@ -130,14 +136,12 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	return
 }
 
-var validKafkaTopicRegex, _ = regexp.Compile(`^[a-zA-Z\d\._\-]+$`)
-
 func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
 
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
-	if !validKafkaTopicRegex.Match([]byte(MqttTopicName)) {
+	if !IsKafkaTopicValid(MqttTopicName) {
 		zap.S().Errorf("Invalid MQTT->Kafka topic name: %s", MqttTopicName)
 		return false, ""
 	}

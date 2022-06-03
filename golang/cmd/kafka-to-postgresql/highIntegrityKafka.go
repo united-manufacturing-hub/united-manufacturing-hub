@@ -21,9 +21,6 @@ var HIKafkaAdminClient *kafka.AdminClient
 
 // SetupHIKafka sets up the HI Kafka consumer, producer and admin
 func SetupHIKafka(configMap kafka.ConfigMap) {
-	if !HighIntegrityEnabled {
-		return
-	}
 
 	var err error
 	HIKafkaConsumer, err = kafka.NewConsumer(&configMap)
@@ -45,9 +42,7 @@ func SetupHIKafka(configMap kafka.ConfigMap) {
 
 // CloseHIKafka closes the HI Kafka consumer, producer and admin
 func CloseHIKafka() {
-	if !HighIntegrityEnabled {
-		return
-	}
+
 	zap.S().Infof("[HI]Closing Kafka Consumer")
 	err := HIKafkaConsumer.Close()
 	if err != nil {

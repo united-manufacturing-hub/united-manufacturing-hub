@@ -29,6 +29,7 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var buildtime string
@@ -47,8 +48,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	PQHost := "db"
 	// Read environment variables
@@ -119,12 +122,7 @@ func main() {
 
 	zap.S().Debugf("DB initialized..", PQHost)
 
-	jaegerHost := os.Getenv("JAEGER_HOST")
-	jaegerPort := os.Getenv("JAEGER_PORT")
-
-	SetupRestAPI(accounts, version, jaegerHost, jaegerPort)
-
-	zap.S().Debugf("Jaeger & REST API initialized..", jaegerHost, jaegerPort)
+	SetupRestAPI(accounts, version)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

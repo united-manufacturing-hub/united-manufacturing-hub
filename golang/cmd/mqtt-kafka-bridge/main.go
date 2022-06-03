@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -35,8 +36,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	// Read environment variables for MQTT
 	MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
@@ -79,10 +82,31 @@ func main() {
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
 	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers": KafkaBoostrapServer,
-		"security.protocol": "plaintext",
-		"group.id":          "mqtt-kafka-bridge",
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"group.id":                 "mqtt-kafka-bridge",
 	})
 	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {

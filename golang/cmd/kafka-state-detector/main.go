@@ -9,6 +9,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +24,10 @@ var ActivityEnabled bool
 var AnomalyEnabled bool
 
 func main() {
+	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core
@@ -34,8 +40,6 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
-	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
@@ -59,10 +63,31 @@ func main() {
 
 	ActivityEnabled = os.Getenv("ACTIVITY_ENABLED") == "true"
 
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
+	}
 	if ActivityEnabled {
 		SetupActivityKafka(kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
-			"security.protocol":        "plaintext",
 			"group.id":                 "kafka-state-detector-activity",
 			"enable.auto.commit":       true,
 			"enable.auto.offset.store": false,
@@ -74,7 +99,8 @@ func main() {
 		activityEventChannel := ActivityKafkaProducer.Events()
 		activityTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel)
+		ActivityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
+		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel, 200)
 		go internal.ProcessKafkaQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel, ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
@@ -84,11 +110,15 @@ func main() {
 
 	if AnomalyEnabled {
 		SetupAnomalyKafka(kafka.ConfigMap{
-			"bootstrap.servers":  KafkaBoostrapServer,
-			"security.protocol":  "plaintext",
-			"group.id":           fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
-			"enable.auto.commit": true,
-			"auto.offset.reset":  "earliest",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
 		})
 
 		AnomalyProcessorChannel = make(chan *kafka.Message, 100)
@@ -96,7 +126,8 @@ func main() {
 		anomalyEventChannel := AnomalyKafkaProducer.Events()
 		anomalyTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
-		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel)
+		AnomalyPutBackChannel = make(chan internal.PutBackChanMsg, 200)
+		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel, 200)
 		go internal.ProcessKafkaQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel, ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
 		go internal.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)

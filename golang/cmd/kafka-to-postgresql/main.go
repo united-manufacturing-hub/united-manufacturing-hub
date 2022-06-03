@@ -11,23 +11,18 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
 	"syscall"
 	"time"
 )
 
 var buildtime string
 
-// HighIntegrityEnabled is true, when a high integrity topic has been configured (KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC)
-var HighIntegrityEnabled = false
-
-// HighThroughputEnabled is true, when a high throughput topic has been configured (KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC)
-var HighThroughputEnabled = false
-
 func main() {
+
 	var logLevel = os.Getenv("LOGGING_LEVEL")
 	encoderConfig := ecszap.NewDefaultEncoderConfig()
 	var core zapcore.Core
@@ -40,8 +35,10 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
-
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
+
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	dryRun := os.Getenv("DRY_RUN")
 
@@ -81,53 +78,61 @@ func main() {
 	if KafkaBoostrapServer == "" {
 		panic("KAFKA_BOOSTRAP_SERVER not set")
 	}
-	HITopic := os.Getenv("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC")
-	if HITopic == "" {
-		zap.S().Warnf("KAFKA_HIGH_INTEGRITY_LISTEN_TOPIC not set")
-	} else {
-		HighIntegrityEnabled = true
-		HITopic = strings.ReplaceAll(HITopic, `\\`, `\`)
-		zap.S().Infof("High integrity topic is set to %s", HITopic)
-	}
-	HTTopic := os.Getenv("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC")
-	if HTTopic == "" {
-		zap.S().Warnf("KAFKA_HIGH_THROUGHPUT_LISTEN_TOPIC not set")
-	} else {
-		HighThroughputEnabled = true
-		HTTopic = strings.ReplaceAll(HTTopic, `\\`, `\`)
-		zap.S().Infof("High throughput topic is set to %s", HTTopic)
-	}
+	// Customer Name cannot begin with raw
+	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
+	HTTopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
-	// If neither high-integrity nor high-throughput topic is configured, panic
-	if !HighThroughputEnabled && !HighIntegrityEnabled {
-		panic("No topics enabled")
+	securityProtocol := "plaintext"
+	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+		securityProtocol = "ssl"
+
+		_, err := os.Open("/SSL_certs/tls.key")
+		if err != nil {
+			panic("SSL key file not found")
+		}
+		_, err = os.Open("/SSL_certs/tls.crt")
+		if err != nil {
+			panic("SSL cert file not found")
+		}
+		_, err = os.Open("/SSL_certs/ca.crt")
+		if err != nil {
+			panic("SSL CA cert file not found")
+		}
 	}
 
 	// Combining enable.auto.commit and enable.auto.offset.store
 	// leads to better performance.
 	// Processed message now will be stored locally and then automatically committed to Kafka.
 	// This still provides the at-least-once guarantee.
-	if HighIntegrityEnabled {
-		SetupHIKafka(kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBoostrapServer,
-			"security.protocol":        "plaintext",
-			"group.id":                 "kafka-to-postgresql-hi-processor",
-			"enable.auto.commit":       true,
-			"enable.auto.offset.store": false,
-			"auto.offset.reset":        "earliest",
-		})
-	}
+	SetupHIKafka(kafka.ConfigMap{
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"group.id":                 "kafka-to-postgresql-hi-processor",
+		"enable.auto.commit":       true,
+		"enable.auto.offset.store": false,
+		"auto.offset.reset":        "earliest",
+		//"debug":                    "security,broker",
+		"topic.metadata.refresh.interval.ms": "30000",
+	})
 
 	// HT uses enable.auto.commit=true for increased performance.
-	if HighThroughputEnabled {
-		SetupHTKafka(kafka.ConfigMap{
-			"bootstrap.servers":  KafkaBoostrapServer,
-			"security.protocol":  "plaintext",
-			"group.id":           "kafka-to-postgresql-ht-processor",
-			"enable.auto.commit": true,
-			"auto.offset.reset":  "earliest",
-		})
-	}
+	SetupHTKafka(kafka.ConfigMap{
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"group.id":                 "kafka-to-postgresql-ht-processor",
+		"enable.auto.commit":       true,
+		"auto.offset.reset":        "earliest",
+		//"debug":                    "security,broker",
+		"topic.metadata.refresh.interval.ms": "30000",
+	})
 
 	allowedMemorySize := 1073741824 // 1GB
 	if os.Getenv("MEMORY_REQUEST") != "" {
@@ -146,40 +151,36 @@ func main() {
 	zap.S().Debugf("Starting queue processor")
 
 	// Start HI related processors
-	if HighIntegrityEnabled {
-		zap.S().Debugf("Starting HI queue processor")
-		highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
-		highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
-		highIntegrityCommitChannel = make(chan *kafka.Message)
-		highIntegrityEventChannel := HIKafkaProducer.Events()
+	zap.S().Debugf("Starting HI queue processor")
+	highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
+	highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
+	highIntegrityCommitChannel = make(chan *kafka.Message)
+	highIntegrityEventChannel := HIKafkaProducer.Events()
 
-		go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel)
-		go internal.ProcessKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel, ShutdownApplicationGraceful)
-		go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
+	go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel, 200)
+	go internal.ProcessKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel, ShutdownApplicationGraceful)
+	go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 
-		go startHighIntegrityQueueProcessor()
-		go internal.StartEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
-		zap.S().Debugf("Started HI queue processor")
-	}
+	go startHighIntegrityQueueProcessor()
+	go internal.StartEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
+	zap.S().Debugf("Started HI queue processor")
 
 	// Start HT related processors
-	if HighThroughputEnabled {
-		zap.S().Debugf("Starting HT queue processor")
-		highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
-		highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
-		highThroughputEventChannel := HIKafkaProducer.Events()
-		// HT has no commit channel, it uses auto commit
+	zap.S().Debugf("Starting HT queue processor")
+	highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
+	highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
+	highThroughputEventChannel := HIKafkaProducer.Events()
+	// HT has no commit channel, it uses auto commit
 
-		go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil)
-		go internal.ProcessKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel, nil)
+	go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil, 200)
+	go internal.ProcessKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel, nil)
 
-		go startHighThroughputQueueProcessor()
-		go internal.StartEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
+	go startHighThroughputQueueProcessor()
+	go internal.StartEventHandler("[HI]", highThroughputEventChannel, highIntegrityPutBackChannel)
 
-		go startProcessValueQueueAggregator()
-		go startProcessValueStringQueueAggregator()
-		zap.S().Debugf("Started HT queue processor")
-	}
+	go startProcessValueQueueAggregator()
+	go startProcessValueStringQueueAggregator()
+	zap.S().Debugf("Started HT queue processor")
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
@@ -204,7 +205,7 @@ func main() {
 	// The following code keeps the memory usage low
 	debug.SetGCPercent(10)
 
-	go internal.MemoryLimiter(allowedMemorySize)
+	//go internal.MemoryLimiter(allowedMemorySize)
 
 	go PerformanceReport()
 	select {} // block forever
@@ -227,58 +228,51 @@ func ShutdownApplicationGraceful() {
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
-	if HighIntegrityEnabled {
-		zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
+	zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
 
-		if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+	if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 
-			time.Sleep(internal.FiveSeconds)
-		}
+		time.Sleep(internal.FiveSeconds)
+	}
 
+	time.Sleep(internal.OneSecond)
+
+	maxAttempts := 50
+	attempt := 0
+
+	for len(highIntegrityPutBackChannel) > 0 {
+		zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
 		time.Sleep(internal.OneSecond)
-
-		maxAttempts := 50
-		attempt := 0
-
-		for len(highIntegrityPutBackChannel) > 0 {
-			zap.S().Infof("Waiting for putback channel to empty: %d", len(highIntegrityPutBackChannel))
-			time.Sleep(internal.OneSecond)
-			attempt++
-			if attempt > maxAttempts {
-				zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
-				break
-			}
+		attempt++
+		if attempt > maxAttempts {
+			zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
+			break
 		}
 	}
 
 	// This is behind HI to allow a higher chance of a clean shutdown
-	if HighThroughputEnabled {
-		zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
+	zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
 
-		if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
-			time.Sleep(internal.FiveSeconds)
-		}
-		if !internal.DrainChannelSimple(processValueChannel, highThroughputPutBackChannel) {
-			time.Sleep(internal.FiveSeconds)
-		}
-		if !internal.DrainChannelSimple(processValueStringChannel, highThroughputPutBackChannel) {
+	if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
+		time.Sleep(internal.FiveSeconds)
+	}
+	if !internal.DrainChannelSimple(processValueChannel, highThroughputPutBackChannel) {
+		time.Sleep(internal.FiveSeconds)
+	}
+	if !internal.DrainChannelSimple(processValueStringChannel, highThroughputPutBackChannel) {
 
-			time.Sleep(internal.FiveSeconds)
-		}
+		time.Sleep(internal.FiveSeconds)
+	}
 
+	time.Sleep(internal.OneSecond)
+
+	for len(highThroughputPutBackChannel) > 0 {
+		zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
 		time.Sleep(internal.OneSecond)
-
-		maxAttempts := 50
-		attempt := 0
-
-		for len(highThroughputPutBackChannel) > 0 {
-			zap.S().Infof("Waiting for putback channel to empty: %d", len(highThroughputPutBackChannel))
-			time.Sleep(internal.OneSecond)
-			attempt++
-			if attempt > maxAttempts {
-				zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
-				break
-			}
+		attempt++
+		if attempt > maxAttempts {
+			zap.S().Errorf("Putback channel is not empty after %d attempts, exiting", maxAttempts)
+			break
 		}
 	}
 
@@ -286,12 +280,9 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(internal.OneSecond)
 
-	if HighIntegrityEnabled {
-		CloseHIKafka()
-	}
-	if HighThroughputEnabled {
-		CloseHTKafka()
-	}
+	CloseHIKafka()
+
+	CloseHTKafka()
 
 	ShutdownDB()
 

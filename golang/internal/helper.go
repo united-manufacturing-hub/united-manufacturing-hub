@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -122,10 +123,11 @@ func IsValidStruct(testStruct interface{}, allowedNilFields []string) (success b
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		if field.Pointer() == 0 {
-			if contains(allowedNilFields, v.Type().Field(i).Name) {
+			fieldName := v.Type().Field(i).Name
+			if contains(allowedNilFields, fieldName) {
 				continue
 			}
-			zap.S().Warnf("%s is nil, check for typing errors !\n", v.Type().Field(i).Name)
+			zap.S().Warnf("%s is nil, check for typing errors !\n", fieldName)
 			success = false
 		}
 	}
@@ -136,6 +138,15 @@ func contains(s []string, e string) bool {
 		if a == e {
 			return true
 		}
+	}
+	return false
+}
+
+func EnvIsTrue(envVariable string) bool {
+	env := strings.ToLower(os.Getenv(envVariable))
+	switch env {
+	case "true", "1", "yes", "on", "enable", "enabled", "active":
+		return true
 	}
 	return false
 }

@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -93,10 +94,14 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 			zap.S().Warnf("Invalid topic %s", mqttRawTopic)
 			continue
 		}
-		err := internal.CreateTopicIfNotExists(kafkaTopic)
-		if err != nil {
-			zap.S().Errorf("Failed to create topic %s", err)
-			return
+		if useKafka {
+			err := internal.CreateTopicIfNotExists(kafkaTopic)
+			if err != nil {
+				zap.S().Errorf("Failed to create topic %s, this can happen during initial startup, it might take up to 5 minutes for Kafka to startup. If you encounter this error, while Kafka is already running, please investigate further", err)
+				internal.ShuttingDownKafka = true
+				time.Sleep(internal.FiveSeconds)
+				os.Exit(1)
+			}
 		}
 	}
 

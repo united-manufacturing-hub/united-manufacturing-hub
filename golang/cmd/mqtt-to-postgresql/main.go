@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var addOrderHandler AddOrderHandler
@@ -60,6 +61,9 @@ func main() {
 	logger := zap.New(core, zap.AddCaller())
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
+	zap.S().Infof("This is mqtt-to-postgresql build date: %s", buildtime)
+	// pprof
+	go http.ListenAndServe("localhost:1337", nil)
 
 	// Read environment variables
 	certificateName := os.Getenv("CERTIFICATE_NAME")
@@ -72,8 +76,6 @@ func main() {
 	PWDBName := os.Getenv("POSTGRES_DATABASE")
 
 	zap.S().Debugf("######################################################################################## Starting program..", PQHost, PQUser, PWDBName)
-
-	zap.S().Infof("This is mqtt-to-postgresql build date: %s", buildtime)
 
 	// Prometheus
 	metricsPath := "/metrics"
