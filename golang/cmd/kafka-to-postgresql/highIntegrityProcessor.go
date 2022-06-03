@@ -67,7 +67,7 @@ func startHighIntegrityQueueProcessor() {
 			case Prefix.ModifyState:
 				zap.S().Errorf("[HI]ModifyState is unstable")
 				putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
-			case Prefix.ModifyProducesPieces:
+			case Prefix.ModifyProducedPieces:
 				zap.S().Errorf("[HI]ModifyProducedPieces is unstable")
 				putback, err, forcePBTopic = ModifyProducedPieces{}.ProcessMessages(parsedMessage)
 			case Prefix.DeleteShift:
