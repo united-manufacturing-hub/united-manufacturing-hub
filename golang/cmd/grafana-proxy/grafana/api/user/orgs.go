@@ -72,5 +72,5 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 		}
 		return orgs, nil
 	}
-	return Orgs{}, fmt.Errorf("HTTP Status incorrect: %s", resp.StatusCode)
+	return Orgs{}, fmt.Errorf("HTTP Status incorrect: %d", resp.StatusCode)
 }
