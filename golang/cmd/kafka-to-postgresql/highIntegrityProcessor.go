@@ -67,15 +67,12 @@ func startHighIntegrityQueueProcessor() {
 			case Prefix.ModifyState:
 				zap.S().Errorf("[HI]ModifyState is unstable")
 				putback, err, forcePBTopic = ModifyState{}.ProcessMessages(parsedMessage)
-			case Prefix.ModifyProducedPieces:
+			case Prefix.ModifyProducesPieces:
 				zap.S().Errorf("[HI]ModifyProducedPieces is unstable")
 				putback, err, forcePBTopic = ModifyProducedPieces{}.ProcessMessages(parsedMessage)
-			case Prefix.DeleteShiftById:
-				zap.S().Errorf("[HI]DeleteShiftById is unstable")
-				putback, err, forcePBTopic = DeleteShiftById{}.ProcessMessages(parsedMessage)
-			case Prefix.DeleteShiftByAssetIdAndBeginTimestamp:
-				zap.S().Errorf("[HI]DeleteShiftByAssetIdAndBeginTimestamp is unstable")
-				putback, err, forcePBTopic = DeleteShiftByAssetIdAndBeginTimestamp{}.ProcessMessages(parsedMessage)
+			case Prefix.DeleteShift:
+				zap.S().Errorf("[HI]DeleteShift is unstable")
+				putback, err, forcePBTopic = DeleteShift{}.ProcessMessages(parsedMessage)
 
 			default:
 				zap.S().Warnf("[HI] Prefix not allowed: %s, putting back", parsedMessage.PayloadType)
