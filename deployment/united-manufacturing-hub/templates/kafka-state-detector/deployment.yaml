@@ -44,7 +44,7 @@ spec:
               mountPath: /SSL_certs
               readOnly: true
           env:
-            - name: KAFKA_BOOSTRAP_SERVER
+            - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
 
             - name: MY_POD_NAME

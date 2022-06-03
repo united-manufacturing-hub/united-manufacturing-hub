@@ -52,7 +52,7 @@ This chapter explains all used environment variables.
 
 
 
-### KAFKA_BOOSTRAP_SERVER
+### KAFKA_BOOTSTRAP_SERVER
 
 **Description:** The Kafka broker URL
 
