@@ -138,6 +138,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 
 func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
 	if strings.Contains(MqttTopicName, ".") {
+		zap.S().Errorf("MQTT topic name %s contains illegal character (.)", MqttTopicName)
 		return false, ""
 	}
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
