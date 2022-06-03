@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 )
 
 func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
+	internal.InitMemcache()
 	// first remove all files from specified path
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	err := removeFilesFromDirectory(relativeDirectoryPath)
@@ -43,6 +45,7 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 }
 
 func TestRequestSaveIoddFile(t *testing.T) {
+	internal.InitMemcache()
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
@@ -62,6 +65,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 }
 
 func TestReadIoddFiles(t *testing.T) {
+	internal.InitMemcache()
 	var fileInfoSlice []os.FileInfo
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
@@ -111,6 +115,7 @@ func removeFilesFromDirectory(relativeDirectoryPath string) error {
 }
 
 func TestUnmarshalIoddFiles(t *testing.T) {
+	internal.InitMemcache()
 	// first remove all files from specified path
 	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	err := removeFilesFromDirectory(relativeDirectoryPath)
