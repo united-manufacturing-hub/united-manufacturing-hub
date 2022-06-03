@@ -1249,20 +1249,24 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// Fetch data from database
+	zap.S().Debugf("Fetching order table for customer %s, location %s, asset %s, value: %v", getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getDataRequest.Value)
 
 	// customer configuration
+	zap.S().Debugf("GetCustomerConfiguration")
 	configuration, err := GetCustomerConfiguration(c, getDataRequest.Customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
+	zap.S().Debugf("GetAssetID")
 	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
+	zap.S().Debugf("GetOrdersRaw")
 	rawOrders, err := GetOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1270,6 +1274,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// get counts for actual units calculation
+	zap.S().Debugf("GetCountsRaw")
 	countSlice, err := GetCountsRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1277,6 +1282,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// raw states from database
+	zap.S().Debugf("GetStatesRaw")
 	rawStates, err := GetStatesRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1284,6 +1290,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// get shifts for noShift detection
+	zap.S().Debugf("GetShiftsRaw")
 	rawShifts, err := GetShiftsRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1293,6 +1300,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// TODO: #98 Return timestamps in RFC3339 in /orderTable
 
 	// Process data
+	//zap.S().Debugf("calculateOrderInformation: rawOrders: %v, countSlice: %v, assetID: %v, rawStates: %v, rawShifts: %v, configuration: %v, Location: %v, Asset: %v", rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	data, err := calculateOrderInformation(c, rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
