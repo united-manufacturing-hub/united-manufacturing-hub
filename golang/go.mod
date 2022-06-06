@@ -7,7 +7,7 @@ require (
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/coocood/freecache v1.2.1
-	github.com/eclipse/paho.mqtt.golang v1.3.5
+	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.0
 	github.com/go-playground/assert/v2 v2.0.1
