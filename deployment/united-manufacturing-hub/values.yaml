@@ -979,7 +979,8 @@ kafkastatedetector:
 ### mqttbridge ###
 mqttbridge:
   enabled: false
-  image: unitedmanufacturinghub/mqtt-bridge
+  image:
+    repository: unitedmanufacturinghub/mqtt-bridge
   storageRequest: 1Gi
   resources:
     requests:
@@ -1007,7 +1008,8 @@ barcodereader:
 ### sensorconnect ###
 sensorconnect:
   storageRequest: 1Gi
-  image: unitedmanufacturinghub/sensorconnect
+  image:
+    repository: unitedmanufacturinghub/sensorconnect
   ioddfilepath: "/ioddfiles"
   lowerPollingTime: 20 # Fastest time, sensors should be requested to serve data
   upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
@@ -1032,7 +1034,8 @@ sensorconnect:
 
 ### cameraconnect ###
 cameraconnect:
-  image: unitedmanufacturinghub/cameraconnect
+  image:
+    repository: unitedmanufacturinghub/cameraconnect
   # tag: development
   loggingLevel: "INFO"
   resources:

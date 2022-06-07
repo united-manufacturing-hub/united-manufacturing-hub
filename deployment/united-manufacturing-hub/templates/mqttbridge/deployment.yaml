@@ -21,9 +21,9 @@ spec:
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
         {{if .Values.mqttbridge.tag}}
-        image: {{.Values.mqttbridge.image}}:{{.Values.mqttbridge.tag}}
+        image: {{.Values.mqttbridge.image.repository}}:{{.Values.mqttbridge.tag}}
         {{- else}}
-        image: {{.Values.mqttbridge.image}}:{{.Chart.AppVersion}}
+        image: {{.Values.mqttbridge.image.repository}}:{{.Chart.AppVersion}}
         {{end}}
         volumeMounts:
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data

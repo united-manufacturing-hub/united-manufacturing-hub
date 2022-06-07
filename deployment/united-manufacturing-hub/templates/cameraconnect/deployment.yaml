@@ -45,9 +45,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-cameraconnect
           {{if .Values.cameraconnect.tag}}
-          image: {{.Values.cameraconnect.image}}:{{.Values.cameraconnect.tag}}
+          image: {{.Values.cameraconnect.image.repository}}:{{.Values.cameraconnect.tag}}
           {{- else}}
-          image: {{.Values.cameraconnect.image}}:{{.Chart.AppVersion}}
+          image: {{.Values.cameraconnect.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           resources:
             limits:

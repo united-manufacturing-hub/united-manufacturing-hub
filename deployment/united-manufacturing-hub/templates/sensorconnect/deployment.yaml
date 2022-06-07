@@ -22,9 +22,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
           {{if .Values.sensorconnect.tag}}
-          image: {{.Values.sensorconnect.image}}:{{.Values.sensorconnect.tag}}
+          image: {{.Values.sensorconnect.image.repository}}:{{.Values.sensorconnect.tag}}
           {{- else}}
-          image: {{.Values.sensorconnect.image}}:{{.Chart.AppVersion}}
+          image: {{.Values.sensorconnect.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           resources:
             limits:
