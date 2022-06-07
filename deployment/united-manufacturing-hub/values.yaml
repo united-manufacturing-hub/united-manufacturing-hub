@@ -1415,7 +1415,7 @@ kafkatopostgresql:
   image:
     repository: unitedmanufacturinghub/kafka-to-postgresql
     pullPolicy: Always
-    #tag: latest
+    # tag: latest
   replicas: 3
   storageRequest: 1Gi
   listenTopic:
