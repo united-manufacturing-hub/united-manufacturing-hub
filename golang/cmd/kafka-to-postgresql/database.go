@@ -134,6 +134,7 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 		// This can potentially lead to race conditions, if another thread adds the same asset too
 		err = AddAsset(assetID, location, customerID)
 		if err != nil {
+			zap.S().Errorf("Failed to add new Asset: %s", err.Error())
 			return 0, false
 		} else {
 			return GetAssetTableID(customerID, location, assetID)

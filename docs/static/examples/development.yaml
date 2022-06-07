@@ -973,7 +973,6 @@ write_files:
       kafkaStateDetector:
         enabled: false
 
-
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
 - content: |

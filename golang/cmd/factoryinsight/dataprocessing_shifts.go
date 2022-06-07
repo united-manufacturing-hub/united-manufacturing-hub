@@ -129,6 +129,8 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 	var timestampBegin time.Time
 	var timestampEnd time.Time
 	var shiftType int
+	timestampBegin = internal.UnixEpoch
+	timestampEnd = internal.UnixEpoch
 
 	for index, dataPoint := range shiftArray {
 		// first and last shift are always of type noShift. Therefore, ignore them here
@@ -143,7 +145,7 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 		}
 
 		// set timestampBegin and timestampEnd if not set yet
-		if timestampBegin == (internal.UnixEpoch) || timestampEnd == (internal.UnixEpoch) {
+		if timestampBegin == internal.UnixEpoch || timestampEnd == internal.UnixEpoch {
 			timestampBegin = dataPoint.TimestampBegin
 			timestampEnd = dataPoint.TimestampEnd
 		}
@@ -174,14 +176,14 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 				processedShifts = append(processedShifts, fullRow)
 
 				// reset timestampBegin and timestampEnd
-				timestampBegin = (internal.UnixEpoch)
-				timestampEnd = (internal.UnixEpoch)
+				timestampBegin = internal.UnixEpoch
+				timestampEnd = internal.UnixEpoch
 			}
 
 		} else { // if last entry
 
 			// add ongoing shift
-			if timestampBegin != (internal.UnixEpoch) || timestampEnd != (internal.UnixEpoch) {
+			if timestampBegin != internal.UnixEpoch || timestampEnd != internal.UnixEpoch {
 				// add no shift at the end
 				fullRow := datamodel.ShiftEntry{
 					TimestampBegin: timestampBegin,
