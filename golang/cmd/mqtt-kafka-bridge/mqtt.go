@@ -145,11 +145,17 @@ func checkConnected(c MQTT.Client) healthcheck.Check {
 func processOutgoingMessages() {
 	var err error
 
-	for !ShuttingDown && mqttClient.IsConnected() {
+	for !ShuttingDown {
 		if mqttOutGoingQueue.Length() == 0 {
 			//Skip if empty
 			time.Sleep(10 * time.Millisecond)
 			continue
+		}
+
+		if !mqttClient.IsConnected() {
+			zap.S().Warnf("MQTT not connected, restarting service")
+			ShutdownApplicationGraceful()
+			return
 		}
 
 		var mqttData queueObject
