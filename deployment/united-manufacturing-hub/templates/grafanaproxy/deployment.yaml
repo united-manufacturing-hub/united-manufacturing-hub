@@ -82,8 +82,13 @@ spec:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 30
             periodSeconds: 1
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 10
+            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
 
           # define a readiness probe that checks every 15 seconds
           readinessProbe:
