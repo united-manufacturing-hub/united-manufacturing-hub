@@ -2808,6 +2808,7 @@ kafka:
     failureThreshold: 10
     timeoutSeconds: 10
   startupProbe:
+    enabled: true
     failureThreshold: 600
     periodSeconds: 10
     timeoutSeconds: 10
