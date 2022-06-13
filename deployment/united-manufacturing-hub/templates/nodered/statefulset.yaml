@@ -42,6 +42,12 @@ spec:
         ports:
         - containerPort: 1880
           name: nodered-ui
+        startupProbe:
+          periodSeconds: 10
+          failureThreshold: 30 # 30*periodSeconds (10) -> 300 seconds max startup time
+          httpGet:
+            path: /nodered
+            port: 1880
         livenessProbe:
           httpGet:
             path: /nodered
