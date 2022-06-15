@@ -628,24 +628,24 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 
 		for rows.Next() {
 			var timestamp time.Time
-			var dataPoint float64
-			var dataPoint2 sql.NullFloat64
+			var count int32
+			var scrapN sql.NullInt32
 
-			err := rows.Scan(&timestamp, &dataPoint, &dataPoint2)
+			err := rows.Scan(&timestamp, &count, &scrapN)
 			if err != nil {
 				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
 				return
 			}
 
-			scrap := 0.0
-			if dataPoint2.Valid {
-				scrap = dataPoint2.Float64
+			var scrap int32
+			if scrapN.Valid {
+				scrap = scrapN.Int32
 			}
 
 			fullRow := datamodel.CountEntry{
-				Count:     dataPoint,
-				Scrap:     scrap,
+				Count:     float64(count),
+				Scrap:     float64(scrap),
 				Timestamp: timestamp,
 			}
 			data = append(data, fullRow)
@@ -1347,6 +1347,7 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
+		zap.S().Warnf("[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v", customerID, location, assetID)
 		error = errors.New("asset does not exist")
 		return
 	} else if err != nil {
@@ -1850,9 +1851,9 @@ ORDER BY begin_timestamp ASC
 
 	for countRows.Next() {
 		var timestamp time.Time
-		var count int
-		var scrap int
-		err := countRows.Scan(&timestamp, &count, &scrap)
+		var count int32
+		var scrapN sql.NullInt32
+		err := countRows.Scan(&timestamp, &count, &scrapN)
 
 		if err != nil {
 			PQErrorHandling(c, sqlStatementGetCounts, err, false)
@@ -1860,7 +1861,12 @@ ORDER BY begin_timestamp ASC
 			return
 		}
 
-		countMap = append(countMap, CountStruct{timestamp: timestamp, count: count, scrap: scrap})
+		var scrap int32
+		if scrapN.Valid {
+			scrap = scrapN.Int32
+		}
+
+		countMap = append(countMap, CountStruct{timestamp: timestamp, count: int(count), scrap: int(scrap)})
 	}
 
 	//Get all orders in timeframe
