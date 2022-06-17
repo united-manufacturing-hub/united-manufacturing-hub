@@ -7,13 +7,13 @@ description: >
 ---
 
 There are three options to setup a development environment:
-1. using a seperate device in combination with k3OS and our installation script (preferred). This requires an external device and is a fully automated installation.
+1. using a separate device in combination with k3OS and our installation script (preferred). This requires an external device and is a fully automated installation.
 2. using [minikube](https://kubernetes.io/de/docs/setup/minikube/) (recommended for developers working on the core functionalities of the stack). This method allows you to install the stack on your device and is semi-automated.
 3. manual installation (recommended for production environments, if you want to have fine grained control over the installation steps). This can be executed either on an external device or on your device.
 
 **The focus of this article is to provide all necessary information to install it in a compressed tutorial. There are footnotes providing additional information on certain steps, that might be new to certain user groups.**
 
-## Option 1: using a seperate device in combination with k3OS and our installation script
+## Option 1: using a separate device in combination with k3OS and our installation script
 
 Note: this content is also available in a presence workshop with an experienced facilitator guiding the participants through the installation and answering questions. Contact us for more information!
  
