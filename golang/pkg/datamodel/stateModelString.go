@@ -144,7 +144,7 @@ func ConvertStateToString(state int, languageCode int) (stateString string) {
 		case TechnicalOtherStop:
 			stateString = "Other technical issue"
 		default:
-			stateString = fmt.Sprintf("Unbekannter state %d", state)
+			stateString = fmt.Sprintf("Unknown state %d", state)
 		}
 	}
 
