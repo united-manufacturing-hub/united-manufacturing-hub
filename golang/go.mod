@@ -30,5 +30,5 @@ require (
 	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
 	gonum.org/v1/gonum v0.11.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
-	k8s.io/apimachinery v0.24.1
+	k8s.io/apimachinery v0.24.2
 )
