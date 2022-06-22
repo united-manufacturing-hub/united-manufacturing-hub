@@ -1,4 +1,5 @@
 {{range $i, $value := .Values._001_customMicroservices | default dict}}
+{{if $value.statefulEnabled}}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -12,4 +13,5 @@ spec:
   resources:
     requests:
       storage: 1Gi
+{{end}}
 {{end}}

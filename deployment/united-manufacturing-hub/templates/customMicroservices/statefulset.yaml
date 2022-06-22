@@ -31,26 +31,28 @@ spec:
               value: {{$env_value.value}}
             {{end}}
 
+  {{if $value.statefulEnabled}}
           volumeMounts:
             - name: united-manufacturing-hub-cm-{{$value.name}}-data
               mountPath: /data
-
+  {{end}}
           livenessProbe:
             httpGet:
               path: /health
-              port: {{$value.port}}
+              port: {{$value.probePort}}
             periodSeconds: {{$value.livenessProbe}}
           startupProbe:
             httpGet:
               path: /health
-              port: {{$value.port}}
+              port: {{$value.probePort}}
             periodSeconds: {{$value.startupProbe}}
 
+  {{if $value.statefulEnabled}}
       volumes:
         - name: united-manufacturing-hub-cm-{{$value.name}}-data
           persistentVolumeClaim:
             claimName: united-manufacturing-hub-cm-{{$value.name}}-claim
-
+  {{end}}
       restartPolicy: Always
 
 {{end}}
