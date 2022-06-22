@@ -30,7 +30,7 @@ type CustomerConfiguration struct {
 	PerformanceLossStates                        []int32
 	LowSpeedThresholdInPcsPerHour                float64
 	AutomaticallyIdentifyChangeovers             bool
-	LanguageCode                                 int
+	LanguageCode                                 LanguageCode
 }
 
 // DataResponseAny is the format of the returned JSON.
