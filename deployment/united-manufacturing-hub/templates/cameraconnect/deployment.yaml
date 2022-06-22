@@ -51,44 +51,60 @@ spec:
           {{end}}
           resources:
             limits:
-              cpu: {{.Values.cameraconnect.resources.limits.cpu}}
-              memory: {{.Values.cameraconnect.resources.limits.memory}}
+              cpu: {{if .Values.cameraconnect.resources.limits}}
+              {{.Values.cameraconnect.resources.limits.cpu | default "100m"}}
+              {{else}}
+              100m
+              {{end}}
+              memory: {{if .Values.cameraconnect.resources.limits}}
+              {{.Values.cameraconnect.resources.limits.memory | default "100Mi"}}
+              {{else}}
+              100Mi
+              {{end}}
             requests:
-              cpu: {{.Values.cameraconnect.resources.requests.cpu}}
-              memory: {{.Values.cameraconnect.resources.requests.memory}}
+              cpu: {{if .Values.cameraconnect.resources.requests}}
+              {{.Values.cameraconnect.resources.requests.cpu | default "10m"}}
+              {{else}}
+              10m
+              {{end}}
+              memory: {{if .Values.cameraconnect.resources.requests}}
+              {{.Values.cameraconnect.resources.requests.memory | default "25Mi"}}
+              {{else}}
+              25Mi
+              {{end}}
           volumeMounts:
             - mountPath: /app/assets
               name: storage
           env:
             - name: CUBE_TRANSMITTERID
-              value: {{.Values._000_commonConfig.serialNumber | quote}}
+              value: {{.Values._000_commonConfig.serialNumber | default "default" | quote}}
             - name: BROKER_URL
-              value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerURL}}
+              value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerURL | default "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"}}
             - name: BROKER_PORT #TODO: remove this !
             - name: TRIGGER
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.trigger | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.trigger | default "MQTT" | quote}}
             - name: ACQUISITION_DELAY
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.acquisitionDelay | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.acquisitionDelay | default "0.0" | quote}}
             - name: CYCLE_TIME
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.cycleTime | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.cycleTime | default "4" | quote}}
             - name: CAMERA_INTERFACE
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.cameraInterface | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.cameraInterface | default "GenICam" | quote}}
             - name: IMAGE_WIDTH
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageWidth | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageWidth | default "800" | quote}}
             - name: IMAGE_HEIGHT
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageHeight | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageHeight | default "800" | quote}}
             - name: IMAGE_CHANNELS
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageChannels | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.imageChannels | default "3" | quote}}
             - name: MAC_ADDRESS
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.macAddress | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.macAddress | default "02-2625A-09849" | quote}}
             - name: EXPOSURE_TIME
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.exposureTime | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.exposureTime | default "1000" | quote}}
             - name: EXPOSURE_AUTO
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.exposureAuto | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.exposureAuto | default "Off" | quote}}
             - name: PIXEL_FORMAT
-              value: {{.Values._000_commonConfig.datasources.cameraconnect.pixelFormat | quote}}
+              value: {{.Values._000_commonConfig.datasources.cameraconnect.pixelFormat | default "Mono8" | quote}}
             - name: LOGGING_LEVEL
-              value: {{.Values.cameraconnect.loggingLevel | quote}}
+              value: {{.Values.cameraconnect.loggingLevel | default "INFO" | quote}}
             - name: DEFAULT_GENTL_PRODUCER_PATH
               value: "/app/assets/producer_files"
       serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}

@@ -24,7 +24,7 @@ spec:
         runAsUser: 1000
       initContainers:
 
-        {{if .Values._000_commonConfig.dataprocessing.nodered.defaultFlows}}
+        {{if (.Values._000_commonConfig.dataprocessing.nodered.defaultFlows | default true)}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-init
           image: busybox:1.28
           command: ['sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null']

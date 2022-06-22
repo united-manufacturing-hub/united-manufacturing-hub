@@ -1,6 +1,6 @@
 ---
 {{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
-{{if .Values.factoryinsight.hpa.enabled}}
+{{if .Values.factoryinsight.hpa.enabled | default true}}
 
 apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
@@ -17,8 +17,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-deployment
-  minReplicas: {{.Values.factoryinsight.hpa.minReplicas}}
-  maxReplicas: {{.Values.factoryinsight.hpa.maxReplicas}}
+  minReplicas: {{.Values.factoryinsight.hpa.minReplicas | default 2}}
+  maxReplicas: {{.Values.factoryinsight.hpa.maxReplicas | default 5}}
   metrics:
   - type: Resource
     resource:

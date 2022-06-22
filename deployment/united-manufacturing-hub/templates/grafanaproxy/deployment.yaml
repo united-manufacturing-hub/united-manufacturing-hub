@@ -11,7 +11,7 @@ metadata:
     {{- toYaml .Values.grafanaproxy.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.grafanaproxy.replicas}}
+  replicas: {{.Values.grafanaproxy.replicas | default 1}}
   selector:
     matchLabels:
      {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 6}}
@@ -39,16 +39,24 @@ spec:
           {{- else}}
           image: {{.Values.grafanaproxy.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.grafanaproxy.image.pullPolicy}}
+          imagePullPolicy: {{.Values.grafanaproxy.image.pullPolicy | default "IfNotPresent"}}
           ports:
               - name: http
                 containerPort: 80
                 protocol: TCP
           resources:
             limits:
-              cpu: {{.Values.grafanaproxy.resources.limits.cpu}}
+              cpu: {{if .Values.grafanaproxy.resources.limits}}
+              {{.Values.grafanaproxy.resources.limits.cpu | default "1000m"}}
+              {{else}}
+              1000m
+              {{end}}
             requests:
-              cpu: {{.Values.grafanaproxy.resources.requests.cpu}}
+              cpu: {{if .Values.grafanaproxy.resources.requests}}
+              {{.Values.grafanaproxy.resources.requests.cpu | default "200m"}}
+              {{else}}
+              200m
+              {{end}}
           env:
             - name: FACTORYINPUT_KEY
               valueFrom:

@@ -28,59 +28,75 @@ spec:
           {{end}}
           resources:
             limits:
-              cpu: {{.Values.sensorconnect.resources.limits.cpu}}
-              memory: {{.Values.sensorconnect.resources.limits.memory}}
+              cpu: {{if .Values.sensorconnect.resources.limits}}
+              {{.Values.sensorconnect.resources.limits.cpu | default "100m"}}
+              {{else}}
+                100m
+                {{end}}
+              memory: {{if .Values.sensorconnect.resources.limits}}
+              {{.Values.sensorconnect.resources.limits.memory | default "200Mi"}}
+              {{else}}
+              200Mi
+              {{end}}
             requests:
-              cpu: {{.Values.sensorconnect.resources.requests.cpu}}
-              memory: {{.Values.sensorconnect.resources.requests.memory}}
+              cpu: {{if .Values.sensorconnect.resources.requests}}
+              {{.Values.sensorconnect.resources.requests.cpu | default "10m"}}
+              {{else}}
+              10m
+              {{end}}
+              memory: {{if .Values.sensorconnect.resources.requests}}
+              {{.Values.sensorconnect.resources.requests.memory | default "75Mi"}}
+              {{else}}
+              75Mi
+              {{end}}
           env:
             - name: TRANSMITTERID
-              value: {{.Values._000_commonConfig.serialNumber | quote}}
+              value: {{.Values._000_commonConfig.serialNumber | default "default" | quote}}
 
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
 
             - name: IP_RANGE
-              value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | quote}}
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.iprange | default "192.168.10.1/24" | quote}}
 
             - name: IODD_FILE_PATH
-              value: {{.Values.sensorconnect.ioddfilepath | quote}}
+              value: {{.Values.sensorconnect.ioddfilepath | default "/ioddfiles" | quote}}
 
             - name: USE_KAFKA
-              {{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datasources.sensorconnect.enableKafka}}
+              {{if and .Values._000_commonConfig.infrastructure.kafka.enabled (.Values._000_commonConfig.datasources.sensorconnect.enableKafka | default true)}}
               value: "true"
               {{else}}
               value: "false"
               {{end}}
             - name: USE_MQTT
-              {{if and .Values._000_commonConfig.infrastructure.mqtt.enabled .Values._000_commonConfig.datasources.sensorconnect.enableMQTT}}
+              {{if and .Values._000_commonConfig.infrastructure.mqtt.enabled (.Values._000_commonConfig.datasources.sensorconnect.enableMQTT | default false)}}
               value: "true"
               {{else}}
               value: "false"
               {{end}}
 
             - name: LOWER_POLLING_TIME_MS
-              value: {{.Values.sensorconnect.lowerPollingTime| quote}}
+              value: {{.Values.sensorconnect.lowerPollingTime | default 20 | quote}}
             - name: UPPER_POLLING_TIME_MS
-              value: {{.Values.sensorconnect.upperPollingTime| quote}}
+              value: {{.Values.sensorconnect.upperPollingTime | default 1000 | quote}}
             - name: POLLING_SPEED_STEP_UP_MS
-              value: {{.Values.sensorconnect.pollingSpeedStepUpMs| quote}}
+              value: {{.Values.sensorconnect.pollingSpeedStepUpMs | default 20 | quote}}
             - name: POLLING_SPEED_STEP_DOWN_MS
-              value: {{.Values.sensorconnect.pollingSpeedStepDownMs| quote}}
+              value: {{.Values.sensorconnect.pollingSpeedStepDownMs | default 1 | quote}}
             - name: DEVICE_FINDER_TIME_SEC
-              value: {{.Values.sensorconnect.deviceFinderTimeSec| quote}}
+              value: {{.Values.sensorconnect.deviceFinderTimeSec | default 20 | quote}}
             - name: SENSOR_INITIAL_POLLING_TIME_MS
-              value: {{.Values.sensorconnect.sensorInitialPollingTimeMs| quote}}
+              value: {{.Values.sensorconnect.sensorInitialPollingTimeMs | default 100 | quote}}
             - name: MAX_SENSOR_ERROR_COUNT
-              value: {{.Values.sensorconnect.maxSensorErrorCount| quote}}
+              value: {{.Values.sensorconnect.maxSensorErrorCount | default 50 | quote}}
             - name: DEVICE_FINDER_TIMEOUT_SEC
-              value: {{.Values.sensorconnect.deviceFinderTimeoutSec| quote}}
+              value: {{.Values.sensorconnect.deviceFinderTimeoutSec | default 1 | quote}}
             - name: SUB_TWENTY_MS
-              value: {{.Values.sensorconnect.allowSubTwentyMs| quote}}
+              value: {{.Values.sensorconnect.allowSubTwentyMs | default 0 | quote}}
             - name: ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS
-              value: {{.Values.sensorconnect.additionalSleepTimePerActivePortMs| quote}}
+              value: {{.Values.sensorconnect.additionalSleepTimePerActivePortMs | default 0.0 | quote}}
             - name: ADDITIONAL_SLOWDOWN_MAP
-              value: {{.Values.sensorconnect.additionalSlowDownMap| quote}}
+              value: {{.Values.sensorconnect.additionalSlowDownMap | default "[]" | quote}}
             - name: LOGGING_LEVEL
               value: PRODUCTION
 
@@ -95,14 +111,14 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default false | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.sensorconnect.sslKeyPassword | quote}}
 
 
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
-              mountPath: {{.Values.sensorconnect.ioddfilepath}}
+              mountPath: {{.Values.sensorconnect.ioddfilepath | default "/ioddfiles"}}
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
               mountPath: /SSL_certs
               readOnly: true

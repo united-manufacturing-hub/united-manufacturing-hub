@@ -38,7 +38,7 @@ spec:
           {{- else}}
           image: {{.Values.barcodereader.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.barcodereader.image.pullPolicy}}
+          imagePullPolicy: {{.Values.barcodereader.image.pullPolicy | default "IfNotPresent"}}
           securityContext:
             privileged: true
           volumeMounts:
@@ -48,34 +48,50 @@ spec:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: INPUT_DEVICE_NAME
-              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName | quote}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName | default "Datalogic ADC, Inc. Handheld Barcode Scanner" | quote}}
             - name: INPUT_DEVICE_PATH
-              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath | quote}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath | default "" | quote}}
 
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
             - name: CUSTOMER_ID
-              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID | quote}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID | default "raw" | quote}}
             - name: LOCATION
-              value: {{.Values._000_commonConfig.datasources.barcodereader.location | quote}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.location | default "barcodereader" | quote}}
             - name: ASSET_ID
-              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID | quote}}
+              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID | default "barcodereader" | quote}}
 
             - name: SERIAL_NUMBER
-              value: {{.Values._000_commonConfig.serialNumber | quote}}
+              value: {{.Values._000_commonConfig.serialNumber | default "default" | quote}}
 
             - name: SCAN_ONLY
-              value: {{.Values.barcodereader.scanOnly | quote}}
+              value: {{.Values.barcodereader.scanOnly | default "false" | quote}}
 
           resources:
             limits:
-              cpu: {{.Values.barcodereader.resources.limits.cpu}}
-              memory: {{.Values.barcodereader.resources.limits.memory}}
+              cpu: {{if .Values.barcodereader.resources.limits}}
+              {{.Values.barcodereader.resources.limits.cpu | default "10m"}}
+              {{else}}
+              10m
+              {{end}}
+              memory: {{if .Values.barcodereader.resources.limits}}
+              {{.Values.barcodereader.resources.limits.memory | default "60Mi"}}
+              {{else}}
+              60Mi
+              {{end}}
             requests:
-              cpu: {{.Values.barcodereader.resources.requests.cpu}}
-              memory: {{.Values.barcodereader.resources.requests.memory}}
+              cpu: {{if .Values.barcodereader.resources.requests}}
+              {{.Values.barcodereader.resources.requests.cpu | default "2m"}}
+              {{else}}
+              2m
+              {{end}}
+              memory: {{if .Values.barcodereader.resources.requests}}
+              {{.Values.barcodereader.resources.requests.memory | default "30Mi"}}
+              {{else}}
+              30Mi
+              {{end}}
       serviceAccountName: ""
       restartPolicy: Always
       volumes:

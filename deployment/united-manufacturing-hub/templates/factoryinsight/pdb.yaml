@@ -1,6 +1,6 @@
 ---
 {{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
-{{if .Values.factoryinsight.pdb.enabled}}
+{{if .Values.factoryinsight.pdb.enabled | default true}}
 
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -13,7 +13,7 @@ metadata:
     {{- toYaml .Values.factoryinsight.pdb.annotations | nindent 4}}
   {{end}}
 spec:
-  minAvailable: {{.Values.factoryinsight.pdb.minAvailable}}
+  minAvailable: {{.Values.factoryinsight.pdb.minAvailable | default 2}}
   selector:
     matchLabels:
      {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}

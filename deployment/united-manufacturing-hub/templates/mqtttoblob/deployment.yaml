@@ -12,7 +12,7 @@ metadata:
     {{- toYaml .Values.mqtttoblob.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.mqtttoblob.replicas}}
+  replicas: {{.Values.mqtttoblob.replicas | default 1}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-mqtttoblob
@@ -44,7 +44,7 @@ spec:
           {{- else}}
           image: {{.Values.mqtttoblob.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.mqtttoblob.image.pullPolicy}}
+          imagePullPolicy: {{.Values.mqtttoblob.image.pullPolicy | default "IfNotPresent"}}
           env:
             - name: CERTIFICATE_NAME
               value: NO_CERT

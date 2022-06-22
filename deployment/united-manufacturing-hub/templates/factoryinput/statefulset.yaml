@@ -12,7 +12,7 @@ metadata:
   {{- toYaml .Values.factoryinput.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.factoryinput.replicas}}
+  replicas: {{.Values.factoryinput.replicas | default 1}}
   serviceName: factoryinput
   volumeClaimTemplates:
     - metadata:
@@ -24,7 +24,7 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: {{.Values.factoryinput.storageRequest}}
+            storage: {{.Values.factoryinput.storageRequest | default "1Gi"}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
@@ -55,7 +55,7 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
-          imagePullPolicy: {{.Values.factoryinput.image.pullPolicy}}
+          imagePullPolicy: {{.Values.factoryinput.image.pullPolicy | default "IfNotPresent"}}
           env:
             - name: CERTIFICATE_NAME
               value: NO_CERT

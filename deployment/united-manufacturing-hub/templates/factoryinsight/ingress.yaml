@@ -15,10 +15,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - {{.Values.factoryinsight.ingress.publicHost}}
-    secretName: {{.Values.factoryinsight.ingress.publicHostSecretName}}
+    - {{.Values.factoryinsight.ingress.publicHost | default ""}}
+    secretName: {{.Values.factoryinsight.ingress.publicHostSecretName | default ""}}
   rules:
-    - host: {{.Values.factoryinsight.ingress.publicHost}}
+    - host: {{.Values.factoryinsight.ingress.publicHost | default ""}}
       http:
         paths:
           - path: /

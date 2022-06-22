@@ -33,34 +33,50 @@ spec:
           readOnly: true
         resources:
           limits:
-            cpu: {{.Values.mqttbridge.resources.limits.cpu}}
-            memory: {{.Values.mqttbridge.resources.limits.memory}}
+            cpu: {{if .Values.mqttbridge.resources.limits}}
+            {{.Values.mqttbridge.resources.limits.cpu | default "200m"}}
+            {{else}}
+            200m
+            {{end}}
+            memory: {{if .Values.mqttbridge.resources.limits}}
+            {{.Values.mqttbridge.resources.limits.memory | default "100Mi"}}
+            {{else}}
+            100Mi
+            {{end}}
           requests:
-            cpu: {{.Values.mqttbridge.resources.requests.cpu}}
-            memory: {{.Values.mqttbridge.resources.requests.memory}}
+            cpu: {{if .Values.mqttbridge.resources.requests}}
+            {{.Values.mqttbridge.resources.requests.cpu | default "100m"}}
+            {{else}}
+            100m
+            {{end}}
+            memory: {{if .Values.mqttbridge.resources.requests}}
+            {{.Values.mqttbridge.resources.requests.memory | default "20Mi"}}
+            {{else}}
+            20Mi
+            {{end}}
         env:
         - name: REMOTE_CERTIFICATE_NAME
-          value: {{.Values._000_commonConfig.serialNumber}}
+          value: {{.Values._000_commonConfig.serialNumber | default "default"}}
         - name: REMOTE_BROKER_URL
-          value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerURL}}
+          value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerURL | default "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"}}
         - name: REMOTE_SUB_TOPIC
-          value: {{.Values._000_commonConfig.mqttBridge.remoteSubTopic | quote}}
+          value: {{.Values._000_commonConfig.mqttBridge.remoteSubTopic | default "ia" | quote}}
         - name: REMOTE_PUB_TOPIC
-          value: {{.Values._000_commonConfig.mqttBridge.remotePubTopic}}
+          value: {{.Values._000_commonConfig.mqttBridge.remotePubTopic | default "ia/factoryinsight"}}
         - name: REMOTE_BROKER_SSL_ENABLED
-          value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerSSLEnabled | quote}}
+          value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerSSLEnabled | default true | quote}}
         - name: LOCAL_CERTIFICATE_NAME
-          value: {{.Values._000_commonConfig.mqttBridge.localCertificateName}}
+          value: {{.Values._000_commonConfig.mqttBridge.localCertificateName | default "LOCAL"}}
         - name: LOCAL_BROKER_URL
           value: 'mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq:1883'
         - name: LOCAL_SUB_TOPIC
-          value: {{.Values._000_commonConfig.mqttBridge.localSubTopic}}
+          value: {{.Values._000_commonConfig.mqttBridge.localSubTopic | default "ia/factoryinsight"}}
         - name: LOCAL_PUB_TOPIC
-          value: {{.Values._000_commonConfig.mqttBridge.localPubTopic | quote}}
+          value: {{.Values._000_commonConfig.mqttBridge.localPubTopic | default "ia" | quote}}
         - name: LOCAL_BROKER_SSL_ENABLED
-          value: {{.Values._000_commonConfig.mqttBridge.localBrokerSSLEnabled | quote}}
+          value: {{.Values._000_commonConfig.mqttBridge.localBrokerSSLEnabled | default false | quote}}
         - name: BRIDGE_ONE_WAY
-          value: {{.Values._000_commonConfig.mqttBridge.oneWay | quote}}
+          value: {{.Values._000_commonConfig.mqttBridge.oneWay | default true | quote}}
       volumes:
       - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
         persistentVolumeClaim:

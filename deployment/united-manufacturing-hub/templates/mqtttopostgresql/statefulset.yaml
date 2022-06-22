@@ -11,7 +11,7 @@ metadata:
     {{- toYaml .Values.mqtttopostgresql.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.mqtttopostgresql.replicas}}
+  replicas: {{.Values.mqtttopostgresql.replicas | default 1}}
   serviceName: mqtt-to-postgresql
   volumeClaimTemplates:
     - metadata:
@@ -23,7 +23,7 @@ spec:
           - ReadWriteOnce
         resources:
          requests:
-            storage: {{.Values.mqtttopostgresql.storageRequest}}
+            storage: {{.Values.mqtttopostgresql.storageRequest | default "1Gi"}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-mqtttopostgresql
@@ -57,17 +57,17 @@ spec:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          imagePullPolicy: {{.Values.mqtttopostgresql.image.pullPolicy}}
+          imagePullPolicy: {{.Values.mqtttopostgresql.image.pullPolicy | default "IfNotPresent"}}
           env:
           #
             - name: POSTGRES_HOST
-              value: {{.Values.factoryinsight.db_host}}
+              value: {{.Values.factoryinsight.db_host | default "united-manufacturing-hub"}}
             - name: POSTGRES_DATABASE
-              value: {{.Values.factoryinsight.db_database}}
+              value: {{.Values.factoryinsight.db_database | default "factoryinsight"}}
             - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
+              value: {{.Values.factoryinsight.db_user | default "factoryinsight"}}
             - name: POSTGRES_PASSWORD
-              value: {{.Values._000_commonConfig.datastorage.db_password}}
+              value: {{.Values._000_commonConfig.datastorage.db_password | default "changeme"}}
 
             - name: CERTIFICATE_NAME
               value: NO_CERT
@@ -79,11 +79,11 @@ spec:
               value: tcp://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
 
             - name: REDIS_URI
-              value: {{.Values.factoryinsight.redis.URI1}}
+              value: {{.Values.factoryinsight.redis.URI1 | default "united-manufacturing-hub-redis-node-0.united-manufacturing-hub-redis-headless:26379"}}
             - name: REDIS_URI2
-              value: {{.Values.factoryinsight.redis.URI2}}
+              value: {{.Values.factoryinsight.redis.URI2 | default "united-manufacturing-hub-redis-node-1.united-manufacturing-hub-redis-headless:26379"}}
             - name: REDIS_URI3
-              value: {{.Values.factoryinsight.redis.URI3}}
+              value: {{.Values.factoryinsight.redis.URI3 | default "united-manufacturing-hub-redis-node-2.united-manufacturing-hub-redis-headless:26379"}}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:

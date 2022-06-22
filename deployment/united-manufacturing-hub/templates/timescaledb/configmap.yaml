@@ -17,11 +17,11 @@ data:
     \c {{index .Values "grafana" "grafana.ini" "database" "name"}}
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{index .Values "grafana" "grafana.ini" "database" "user"}};
 
-    CREATE USER {{.Values.factoryinsight.db_user}};
-    CREATE DATABASE {{.Values.factoryinsight.db_database}} OWNER {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON DATABASE {{.Values.factoryinsight.db_database}} TO {{.Values.factoryinsight.db_user}};
+    CREATE USER {{.Values.factoryinsight.db_user | default "factoryinsight"}};
+    CREATE DATABASE {{.Values.factoryinsight.db_database | default "factoryinsight"}} OWNER {{.Values.factoryinsight.db_user | default "factoryinsight"}};
+    GRANT ALL PRIVILEGES ON DATABASE {{.Values.factoryinsight.db_database | default "factoryinsight"}} TO {{.Values.factoryinsight.db_user | default "factoryinsight"}};
 
-    \c {{.Values.factoryinsight.db_database}}
+    \c {{.Values.factoryinsight.db_database | default "factoryinsight"}}
 
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -307,8 +307,8 @@ data:
     -- creating an index to increase performance
     CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
 
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user | default "factoryinsight"}};
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user | default "factoryinsight"}};
 
     -- TEST DATA
     -- assetTable

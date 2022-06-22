@@ -12,7 +12,7 @@ metadata:
     {{- toYaml .Values.kafkatopostgresql.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.kafkatopostgresql.replicas}}
+  replicas: {{.Values.kafkatopostgresql.replicas | default 3}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
@@ -46,15 +46,15 @@ spec:
               mountPath: /SSL_certs
               readOnly: true
           {{end}}
-          imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy | default "IfNotPresent"}}
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: KAFKA_TOPICS
-              value: {{.Values._000_commonConfig.infrastructure.kafka.defaultTopics}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.defaultTopics | default "ia.test.test.test.processValue;ia.test.test.test.count"}}
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default false | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.kafkatopostgresql.sslKeyPassword | quote}}
       containers:
@@ -64,7 +64,7 @@ spec:
           {{- else}}
           image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy | default "IfNotPresent"}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
               mountPath: /SSL_certs
@@ -79,13 +79,13 @@ spec:
           env:
 
             - name: POSTGRES_HOST
-              value: {{.Values.factoryinsight.db_host}}
+              value: {{.Values.factoryinsight.db_host | default "united-manufacturing-hub"}}
             - name: POSTGRES_DATABASE
-              value: {{.Values.factoryinsight.db_database}}
+              value: {{.Values.factoryinsight.db_database | default "factoryinsight"}}
             - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
+              value: {{.Values.factoryinsight.db_user | default "factoryinsight"}}
             - name: POSTGRES_PASSWORD
-              value: {{.Values._000_commonConfig.datastorage.db_password}}
+              value: {{.Values._000_commonConfig.datastorage.db_password | default "changeme"}}
 
             - name: LOGGING_LEVEL
               value: PRODUCTION
@@ -101,7 +101,7 @@ spec:
                   fieldPath: metadata.name
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default false | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.kafkatopostgresql.sslKeyPassword | quote}}
 
@@ -121,11 +121,27 @@ spec:
 
           resources:
             limits:
-              cpu: {{.Values.kafkatopostgresql.resources.limits.cpu}}
-              memory: {{.Values.kafkatopostgresql.resources.limits.memory}}
+              cpu: {{if .Values.kafkatopostgresql.resources.limits}}
+              {{.Values.kafkatopostgresql.resources.limits.cpu | default "1000m"}}
+              {{else}}
+              1000m
+              {{end}}
+              memory: {{if .Values.kafkatopostgresql.resources.limits}}
+              {{.Values.kafkatopostgresql.resources.limits.memory | default "1Gi"}}
+              {{else}}
+              1Gi
+              {{end}}
             requests:
-              cpu: {{.Values.kafkatopostgresql.resources.requests.cpu}}
-              memory: {{.Values.kafkatopostgresql.resources.requests.memory}}
+              cpu: {{if .Values.kafkatopostgresql.resources.requests}}
+              {{.Values.kafkatopostgresql.resources.requests.cpu | default "200m"}}
+              {{else}}
+              200m
+              {{end}}
+              memory: {{if .Values.kafkatopostgresql.resources.requests}}
+              {{.Values.kafkatopostgresql.resources.requests.memory | default "250Mi"}}
+              {{else}}
+              250Mi
+              {{end}}
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
           secret:

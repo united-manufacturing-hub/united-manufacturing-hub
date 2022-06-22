@@ -7,7 +7,7 @@ kind: PodDisruptionBudget
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-pdb
 spec:
-  minAvailable: {{.Values.factoryinput.pdb.minAvailable}}
+  minAvailable: {{.Values.factoryinput.pdb.minAvailable | default 1}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput

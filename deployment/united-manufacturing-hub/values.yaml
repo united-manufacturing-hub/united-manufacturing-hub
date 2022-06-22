@@ -2,47 +2,47 @@
 # Please adjust the following lines
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
 _000_commonConfig:
-  serialNumber: "default"  # usually the hostname
+  #serialNumber: "default"  # usually the hostname
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
 
     # barcodereader reads out connected USB barcodereaders emulating a keyboard
     barcodereader:
       enabled: true
-      USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
-      USBDevicePath: "" # Linux device path, if empty, USBDeviceName is used
-      customerID: "raw"
-      location: "barcodereader"
-      machineID: "barcodereader"
+      #USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
+      #USBDevicePath: "" # Linux device path, if empty, USBDeviceName is used
+      #customerID: "raw"
+      #location: "barcodereader"
+      #machineID: "barcodereader"
 
     # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
     sensorconnect:
       enabled: true
-      iprange: "192.168.10.1/24"  # IP Range in CIDR notation
-      enableKafka: true
-      enableMQTT: false
+      #iprange: "192.168.10.1/24"  # IP Range in CIDR notation
+      #enableKafka: true
+      #enableMQTT: false
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
     cameraconnect:
       enabled: true
-      trigger: "MQTT"
-      acquisitionDelay: "0.0"
-      cycleTime: "4"
-      cameraInterface: "GenICam"
-      imageWidth: "800"
-      imageHeight: "800"
-      imageChannels: "3"
-      macAddress: "02-2625A-09849"
-      exposureTime: "1000"
-      exposureAuto: "Off"
-      pixelFormat: "Mono8"
+      #trigger: "MQTT"
+      #acquisitionDelay: "0.0"
+      #cycleTime: "4"
+      #cameraInterface: "GenICam"
+      #imageWidth: "800"
+      #imageHeight: "800"
+      #imageChannels: "3"
+      #macAddress: "02-2625A-09849"
+      #exposureTime: "1000"
+      #exposureAuto: "Off"
+      #pixelFormat: "Mono8"
 
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
       enabled: true
-      defaultFlows: true
+      #defaultFlows: true
 
   # Infrastructure
   infrastructure:
@@ -139,8 +139,8 @@ _000_commonConfig:
     # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
-      useSSL: false
-      defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
+      #useSSL: false
+      #defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
 
 
   certificates:
@@ -907,7 +907,7 @@ _000_commonConfig:
   # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
   datastorage:
     enabled: true
-    db_password: "changeme"
+    #db_password: "changeme"
 
   # mqtt-to-blob, minio, kafka-to-blob
   # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
@@ -922,15 +922,15 @@ _000_commonConfig:
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
     enabled: false
-    remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
-    localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
-    oneWay: true
-    localBrokerSSLEnabled: false
-    localPubTopic: "ia"
-    localCertificateName: "LOCAL"
-    remoteBrokerSSLEnabled: true
-    remoteSubTopic: "ia"
-    remotePubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    #remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
+    #localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    #oneWay: true
+    #localBrokerSSLEnabled: false
+    #localPubTopic: "ia"
+    #localCertificateName: "LOCAL"
+    #remoteBrokerSSLEnabled: true
+    #remoteSubTopic: "ia"
+    #remotePubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
 
     CAcert: |
       -----BEGIN CERTIFICATE-----
@@ -944,9 +944,9 @@ _000_commonConfig:
 
   kafkaBridge:
     enabled: false
-    remotebootstrapServer: ""
-    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
-    topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
+    #remotebootstrapServer: ""
+    #topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
+    #topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
     topicmap:
 # Example topic map
 #      - bidirectional: false
@@ -973,86 +973,86 @@ kafkastatedetector:
   image:
     repository: unitedmanufacturinghub/kafkastatedetector
     pullPolicy: IfNotPresent
-  activityEnabled: true
-  anomalyEnabled: true
+  #activityEnabled: true
+  #anomalyEnabled: true
 
 ### mqttbridge ###
 mqttbridge:
   enabled: false
   image: unitedmanufacturinghub/mqtt-bridge
-  storageRequest: 1Gi
+  #storageRequest: 1Gi
   resources:
     requests:
-      cpu: "100m"
-      memory: "20Mi"
+      #cpu: "100m"
+      #memory: "20Mi"
     limits:
-      cpu: "200m"
-      memory: "100Mi"
+      #cpu: "200m"
+      #memory: "100Mi"
 
 ### barcodereader ###
 barcodereader:
   enabled: false
   image:
     repository: unitedmanufacturinghub/barcodereader
-    pullPolicy: IfNotPresent
+    #pullPolicy: IfNotPresent
   resources:
     requests:
-      cpu: "2m"
-      memory: "30Mi"
+      #cpu: "2m"
+      #memory: "30Mi"
     limits:
-      cpu: "10m"
-      memory: "60Mi"
-  scanOnly: false # Debug mode, will not send data to kafka
+      #cpu: "10m"
+      #memory: "60Mi"
+  #scanOnly: false # Debug mode, will not send data to kafka
 
 ### sensorconnect ###
 sensorconnect:
-  storageRequest: 1Gi
+  #storageRequest: 1Gi
   image: unitedmanufacturinghub/sensorconnect
-  ioddfilepath: "/ioddfiles"
-  lowerPollingTime: 20 # Fastest time, sensors should be requested to serve data
-  upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
-  pollingSpeedStepUpMs: 20 # Time to add to actual stepping in case of failure
-  pollingSpeedStepDownMs: 1 # Time to add to actual stepping in case of no-failure
-  sensorInitialPollingTimeMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
-  deviceFinderTimeSec: 20 # Time in sec, before finding new devices
-  deviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
-  maxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
-  allowSubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
-  additionalSleepTimePerActivePortMs: 0.0 # Additional time to add to sleep time, based on active ports (especially helpful if you mix devices with 1-2 sensors and devices with 8 sensors)
-  additionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
+  #ioddfilepath: "/ioddfiles"
+  #lowerPollingTime: 20 # Fastest time, sensors should be requested to serve data
+  #upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
+  #pollingSpeedStepUpMs: 20 # Time to add to actual stepping in case of failure
+  #pollingSpeedStepDownMs: 1 # Time to add to actual stepping in case of no-failure
+  #sensorInitialPollingTimeMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
+  #deviceFinderTimeSec: 20 # Time in sec, before finding new devices
+  #deviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
+  #maxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
+  #allowSubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
+  #additionalSleepTimePerActivePortMs: 0.0 # Additional time to add to sleep time, based on active ports (especially helpful if you mix devices with 1-2 sensors and devices with 8 sensors)
+  #additionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
                             # Example:
                             # [{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]
   resources:
     requests:
-      cpu: "10m"
-      memory: "75Mi"
+      #cpu: "10m"
+      #memory: "75Mi"
     limits:
-      cpu: "100m"
-      memory: "200Mi"
+      #cpu: "100m"
+      #memory: "200Mi"
 
 ### cameraconnect ###
 cameraconnect:
   image: unitedmanufacturinghub/cameraconnect
   # tag: development
-  loggingLevel: "INFO"
+  #loggingLevel: "INFO"
   resources:
     requests:
-      cpu: "10m"
-      memory: "25Mi"
+      #cpu: "10m"
+      #memory: "25Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      #cpu: "100m"
+      #memory: "100Mi"
 
 
 ### cameraconnect ###
 kafkabridge:
   image:
     repository: unitedmanufacturinghub/kafka-bridge
-    pullPolicy: IfNotPresent
+    #pullPolicy: IfNotPresent
   # tag: development
   initContainer:
     repository: unitedmanufacturinghub/kafka-init
-    pullPolicy: IfNotPresent
+    #pullPolicy: IfNotPresent
 
 
 ### nodered ###
@@ -1314,122 +1314,115 @@ factoryinsight:
   enabled: false
   image:
     repository: unitedmanufacturinghub/factoryinsight
-    pullPolicy: IfNotPresent
+    #pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
   # tag: 0.3.2
-  replicas: 2
-  user: "factoryinsight"
+  #replicas: 2
+  #user: "factoryinsight"
   # Password will be generated automatically
-  db_host: "united-manufacturing-hub"
-  db_database: "factoryinsight"
-  db_user: "factoryinsight"
+  #db_host: "united-manufacturing-hub"
+  #db_database: "factoryinsight"
+  #db_user: "factoryinsight"
+  #db_port: 5432
   redis:
-    URI1: united-manufacturing-hub-redis-node-0.united-manufacturing-hub-redis-headless:26379
-    URI2: united-manufacturing-hub-redis-node-1.united-manufacturing-hub-redis-headless:26379
-    URI3: united-manufacturing-hub-redis-node-2.united-manufacturing-hub-redis-headless:26379
+    #URI1: united-manufacturing-hub-redis-node-0.united-manufacturing-hub-redis-headless:26379
+    #URI2: united-manufacturing-hub-redis-node-1.united-manufacturing-hub-redis-headless:26379
+    #URI3: united-manufacturing-hub-redis-node-2.united-manufacturing-hub-redis-headless:26379
   service:
     annotations: {}
   pdb:
-    enabled: true
+    #enabled: true
     annotations: {}
-    minAvailable: 2
+    #minAvailable: 2
   hpa:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 5
+    #enabled: true
+    #minReplicas: 2
+    #maxReplicas: 5
   ingress:
     enabled: false
-    publicHost: ""
-    publicHostSecretName: ""
+    #publicHost: ""
+    #publicHostSecretName: ""
   resources:
     limits:
-      cpu: 1000m
+      #cpu: 1000m
     requests:
-      cpu: 200m
+      #cpu: 200m
 
 ### factoryinput ###
 factoryinput:
   enabled: false
-  user: factoryinsight
+  #user: factoryinsight
   service:
     annotations: {}
   image:
     repository: unitedmanufacturinghub/factoryinput
-    pullPolicy: IfNotPresent
-  replicas: 1
-  storageRequest: 1Gi
+    #pullPolicy: IfNotPresent
+  #replicas: 1
+  #storageRequest: 1Gi
   pdb:
     enabled: true
-    minAvailable: 1
+    #minAvailable: 1
 
 ### mqtt-to-blob ###
 mqtttoblob:
   enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-blob
-    pullPolicy: IfNotPresent
-  replicas: 1
+    #pullPolicy: IfNotPresent
+  #replicas: 1
   pdb:
-    enabled: true
-    minAvailable: 1
+    #enabled: true
+    #minAvailable: 1
 
 ### grafanaproxy ###
 grafanaproxy:
   enabled: false
   image:
     repository: unitedmanufacturinghub/grafana-proxy
-    pullPolicy: IfNotPresent
-  replicas: 1
+    #pullPolicy: IfNotPresent
+  #replicas: 1
   service:
     annotations: {}
-    type: LoadBalancer
-    port: 2096
-    targetPort: 80
-    protocol: TCP
-    labels: {}
-    portName: service
-    name: http
+    #type: LoadBalancer
+    #port: 2096
+    #targetPort: 80
+    #protocol: TCP
+    #name: http
   resources:
     limits:
-      cpu: 1000m
+      #cpu: 1000m
     requests:
-      cpu: 200m
+      #cpu: 200m
 
 ### mqtt-to-postresql ###
 mqtttopostgresql:
   enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-to-postgresql
-    pullPolicy: IfNotPresent
+    #pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
   # tag: 0.3.2
-  replicas: 1
-  storageRequest: 1Gi
+  #replicas: 1
+  #storageRequest: 1Gi
   pdb:
-    enabled: true
-    minAvailable: 1
+    #enabled: true
+    #minAvailable: 1
 
 ### kafka-to-postgresql ###
 kafkatopostgresql:
   enabled: false
   image:
     repository: unitedmanufacturinghub/kafka-to-postgresql
-    pullPolicy: Always
+    #pullPolicy: IfNotPresent
     # tag: latest
-  replicas: 3
-  storageRequest: 1Gi
-  listenTopic:
-    # All topics except processValue
-    # Kafka doesn't seem to be able to do negative lookaheads
-    #highIntegrity: '^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$'
-    #highThroughput: '^ia\..+\..+\..+\.(process[V|v]alue).*$'
+  #replicas: 3
   resources:
     limits:
-      cpu: 1000m
-      memory: 1Gi
+      #cpu: 1000m
+      #memory: 1Gi
     requests:
-      cpu: 200m
-      memory: 250Mi
+      #cpu: 200m
+      #memory: 250Mi
 
 ### minio ###
 operator:
@@ -2786,21 +2779,21 @@ mqttkafkabridge:
   enabled: false
   image:
     repository: unitedmanufacturinghub/mqtt-kafka-bridge
-    pullPolicy: IfNotPresent
+    #pullPolicy: IfNotPresent
   pdb:
-    enabled: true
-    minAvailable: 1
+    #enabled: true
+    #minAvailable: 1
 
 ### kafka-to-blob ###
 kafkatoblob:
   enabled: false
   image:
     repository: unitedmanufacturinghub/kafka-to-blob
-    pullPolicy: IfNotPresent
-  replicas: 1
+    #pullPolicy: IfNotPresent
+  #replicas: 1
   pdb:
-    enabled: true
-    minAvailable: 1
+    #enabled: true
+    #minAvailable: 1
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:

@@ -40,7 +40,7 @@ spec:
           {{- else}}
           image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
+          imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy | default "IfNotPresent"}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
               mountPath: /SSL_certs
@@ -70,10 +70,10 @@ spec:
                   fieldPath: metadata.name
 
             - name: SERIAL_NUMBER
-              value: {{.Values._000_commonConfig.serialNumber}}
+              value: {{.Values._000_commonConfig.serialNumber | default "default"}}
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default false | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
 

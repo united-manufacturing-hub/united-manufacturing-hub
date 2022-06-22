@@ -11,7 +11,7 @@ metadata:
     {{- toYaml .Values.kafkatoblob.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.kafkatoblob.replicas}}
+  replicas: {{.Values.kafkatoblob.replicas | default 1}}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" .}}-kafkatoblob
@@ -46,7 +46,7 @@ spec:
           {{- else}}
           image: {{.Values.kafkatoblob.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.kafkatoblob.image.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkatoblob.image.pullPolicy | default "IfNotPresent"}}
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
@@ -81,7 +81,7 @@ spec:
                   fieldPath: metadata.name
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default false | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.kafkatoblob.sslKeyPassword | quote}}
 
