@@ -2805,8 +2805,12 @@ kafkatoblob:
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
   livenessProbe:
-    initialDelaySeconds: 600
     failureThreshold: 10
+    timeoutSeconds: 10
+  startupProbe:
+    enabled: true
+    failureThreshold: 600
+    periodSeconds: 10
     timeoutSeconds: 10
   replicas: 1
   storageRequest: 1Gi
