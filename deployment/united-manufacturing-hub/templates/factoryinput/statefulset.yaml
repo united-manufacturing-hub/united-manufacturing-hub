@@ -101,13 +101,19 @@ spec:
               # - name: secret-volume
               #   mountPath: /SSL_certs
 
-          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+
           livenessProbe:
             httpGet:
               path: /live
               port: 8086
-            initialDelaySeconds: 30
             periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 10
+            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
+
 
           # define a readiness probe that checks every 5 seconds
           #readinessProbe:

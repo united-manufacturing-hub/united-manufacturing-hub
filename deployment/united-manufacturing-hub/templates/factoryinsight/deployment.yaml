@@ -96,13 +96,17 @@ spec:
             - name: VERSION
               value: "1"
 
-          # define a liveness probe that checks every 1 seconds, starting after 30 seconds
           livenessProbe:
             httpGet:
               path: /live
               port: 8086
-            initialDelaySeconds: 30
-            periodSeconds: 1
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 10
+            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
 
           # define a readiness probe that checks every 15 seconds
           readinessProbe:
