@@ -934,7 +934,7 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 		configuration.AutomaticallyIdentifyChangeovers = true
 		configuration.AvailabilityLossStates = append(configuration.AvailabilityLossStates, 40000, 180000, 190000, 200000, 210000, 220000)
 		configuration.PerformanceLossStates = append(configuration.PerformanceLossStates, 20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000)
-		configuration.LanguageCode = 1 // English
+		configuration.LanguageCode = datamodel.LanguageEnglish // English
 		zap.S().Warnf("No configuration stored for customer %s, using default !", customerID)
 		return
 	} else if err != nil {
