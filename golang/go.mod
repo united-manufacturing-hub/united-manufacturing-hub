@@ -5,7 +5,7 @@ go 1.15
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 	github.com/beeker1121/goque v2.1.0+incompatible
-	github.com/confluentinc/confluent-kafka-go v1.8.2
+	github.com/confluentinc/confluent-kafka-go v1.9.0
 	github.com/coocood/freecache v1.2.1
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gin-contrib/zap v0.0.2
