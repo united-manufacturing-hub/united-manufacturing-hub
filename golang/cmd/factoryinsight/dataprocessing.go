@@ -4,11 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -1202,7 +1203,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 }
 
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
-func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1247,15 +1248,19 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 			stopTime += pareto.Duration
 		}
 	}
+	// TODO: fix next line. it needs to be (planned time - stopTime) / planned time
 
-	fullRow := []interface{}{runningTime / (runningTime + stopTime)}
-	data = append(data, fullRow)
-
+	// Preventing NaN
+	if runningTime+stopTime > 0 {
+		data = []interface{}{runningTime / (runningTime + stopTime), from}
+	} else {
+		data = nil
+	}
 	return
 }
 
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
-func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1301,14 +1306,21 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 		}
 	}
 
-	fullRow := []interface{}{runningTime / (runningTime + stopTime)}
-	data = append(data, fullRow)
+	// TODO: add speed losses here
+
+	// get all completed orders in timeframe and calculate speed loss by substracting planned run time with actual run time. this is speedLossTime
+
+	// final formula is: performance = runningTime / (runningTime + stopTime) - (runningTime - speedLossTime) / runningTime
+
+	// also change this in OEE calculation
+
+	data = []interface{}{runningTime / (runningTime + stopTime), from}
 
 	return
 }
 
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
-func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data [][]interface{}, error error) {
+func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data []interface{}, error error) {
 
 	// Loop through all datapoints and calculate good pieces and scrap
 	var total float64 = 0
@@ -1321,8 +1333,7 @@ func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry
 
 	good := total - scrap
 
-	fullRow := []interface{}{good / total}
-	data = append(data, fullRow)
+	data = []interface{}{good / total}
 
 	return
 }
@@ -1409,6 +1420,8 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 			stopTime += pareto.Duration
 		}
 	}
+	// TODO: add speed losses here
+	// TODO: multiply with quality rate
 
 	// Preventing NaN
 	if runningTime+stopTime > 0 {
@@ -2082,4 +2095,15 @@ func CalculateAccumulatedProducts(c *gin.Context, to time.Time, observationStart
 
 	zap.S().Debugf("After predictions dataPointIndex: %d", dataPointIndex)
 	return datapoints, nil
+}
+
+// SplitCountSlice returns a slice of counts with the time being between from and to
+func SplitCountSlice(counts []datamodel.CountEntry, from time.Time, to time.Time) []datamodel.CountEntry {
+	var result []datamodel.CountEntry
+	for _, count := range counts {
+		if count.Timestamp.UnixMilli() >= from.UnixMilli() && count.Timestamp.UnixMilli() < to.UnixMilli() {
+			result = append(result, count)
+		}
+	}
+	return result
 }

@@ -651,25 +651,59 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
-	}
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
-	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "availability"
-	data.ColumnNames = []string{JSONColumnName}
+	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
+	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	data.Datapoints, err = CalculateAvailability(c, processedStates, to, configuration)
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
 
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
+	// TODO: create JSON and calculate in the same paragraph
+	for current := from; current != to; {
+		var tempDatapoints []interface{}
+
+		currentTo := current.AddDate(0, 0, 1)
+
+		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculateAvailability(c, processedStates, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = to
+		} else { //otherwise, calculate for entire time range
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculateAvailability(c, processedStates, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = currentTo
+		}
+		// only add it if there is a valid datapoint. do not add areas with no state times
+		if tempDatapoints != nil {
+			data.Datapoints = append(data.Datapoints, tempDatapoints)
+		}
 	}
 
 	c.JSON(http.StatusOK, data)
+
 }
 
 // ---------------------- getPerformance ----------------------
@@ -742,22 +776,55 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
-	}
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
-	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "performance"
-	data.ColumnNames = []string{JSONColumnName}
+	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
+	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	data.Datapoints, err = CalculatePerformance(c, processedStates, to, configuration)
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
 
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
+	// TODO: create JSON and calculate in the same paragraph
+	for current := from; current != to; {
+		var tempDatapoints []interface{}
+
+		currentTo := current.AddDate(0, 0, 1)
+
+		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculatePerformance(c, processedStates, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = to
+		} else { //otherwise, calculate for entire time range
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculatePerformance(c, processedStates, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = currentTo
+		}
+		// only add it if there is a valid datapoint. do not add areas with no state times
+		if tempDatapoints != nil {
+			data.Datapoints = append(data.Datapoints, tempDatapoints)
+		}
 	}
 
 	c.JSON(http.StatusOK, data)
@@ -806,16 +873,49 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// ### calculate (only one function allowed here) ###
+
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "quality"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculateQuality(c, countSlice)
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
 
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
+	// TODO: create JSON and calculate in the same paragraph
+	for current := from; current != to; {
+		var tempDatapoints []interface{}
+
+		currentTo := current.AddDate(0, 0, 1)
+
+		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+			// split up countslice that it contains only counts between current and to
+			countSliceSplit, err := SplitCountSlice(c, countSlice, current, to)
+
+			// calculatequality(c,countslice)
+			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = to
+		} else { //otherwise, calculate for entire time range
+			// split up countslice that it contains only counts between current and to
+			countSliceSplit, err := SplitCountSlice(c, countSlice, current, currentTo)
+
+			// calculatequality(c,countslice)
+			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+			current = currentTo
+		}
+		// only add it if there is a valid datapoint. do not add areas with no state times
+		if tempDatapoints != nil {
+			data.Datapoints = append(data.Datapoints, tempDatapoints)
+		}
 	}
 
 	c.JSON(http.StatusOK, data)
