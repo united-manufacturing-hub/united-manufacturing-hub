@@ -961,6 +961,57 @@ _000_commonConfig:
   kafkaStateDetector:
     enabled: false
 
+_001_customMicroservices:
+  -
+      name: example
+      image: hello-world:latest
+
+      # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
+      imagePullPolicy: Always
+
+      # these will be passed as environment variables
+      env:
+        - name: LOGGING_LEVEL
+          value: PRODUCTION
+
+      # this will expose port 80 on the host on port 8080
+      port: 80
+      externalPort: 8080
+
+      # startupProbe, livenessProbe, check whether port 9090 "/health" is accessible.
+      # If not (e.g., due to container stuck), the container will be restarted
+      # startupProbe: 100
+      # livenessProbe: 50
+      # probePort: 9090
+
+      # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
+      # Recommendation is to turn it off
+      statefulEnabled: true
+  -
+      name: example2
+      image: hello-world:latest
+
+      # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
+      imagePullPolicy: Always
+
+      # these will be passed as environment variables
+      env:
+        - name: LOGGING_LEVEL
+          value: PRODUCTION
+
+      # this will expose port 81 on the host on port 8081
+      port: 81
+      externalPort: 8081
+
+      # startupProbe, livenessProbe, check whether port 9091 "/health" is accessible.
+      # If not (e.g., due to container stuck), the container will be restarted
+      startupProbe: 200
+      livenessProbe: 500
+      probePort: 9091
+
+      # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
+      # Recommendation is to turn it off
+      statefulEnabled: false
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
