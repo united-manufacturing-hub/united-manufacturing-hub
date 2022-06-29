@@ -1296,7 +1296,25 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
 		return
 	}
 
-	sqlStatement := "SELECT distinct valueName FROM processValueTable WHERE asset_id=$1;"
+	sqlStatement := `WITH RECURSIVE cte AS (
+   (
+   SELECT valuename
+   FROM   processvaluetable
+   ORDER  BY 1
+   LIMIT  1
+   )
+   UNION ALL
+   SELECT l.*
+   FROM   cte c
+   CROSS  JOIN LATERAL (
+      SELECT valuename
+      FROM   processvaluetable t
+      WHERE  t.valuename > c.valuename AND asset_id=$1
+      ORDER  BY 1
+      LIMIT  1
+      ) l
+   )
+TABLE  cte;`
 	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
