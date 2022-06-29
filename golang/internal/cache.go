@@ -126,7 +126,7 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 
 	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -246,7 +246,7 @@ func StoreRawStatesToCache(assetID uint32, from time.Time, to time.Time, configu
 
 	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -306,7 +306,7 @@ func StoreRawShiftsToCache(assetID uint32, from time.Time, to time.Time, configu
 
 	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -366,7 +366,7 @@ func StoreRawCountsToCache(assetID uint32, from time.Time, to time.Time, data []
 
 	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -423,7 +423,7 @@ func StoreAverageStateTimeToCache(key string, data []interface{}) {
 
 	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -484,7 +484,7 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 
 	err = rdb.Set(ctx, key, b, 5*time.Minute).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -540,7 +540,7 @@ func StoreCustomerConfigurationToCache(customerID string, data datamodel.Custome
 
 	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -603,7 +603,7 @@ func StoreAssetIDToCache(customerID string, location string, assetID string, DBa
 
 	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -666,7 +666,7 @@ func StoreUniqueProductIDToCache(aid string, DBassetID uint32, uid uint32) {
 
 	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
@@ -729,7 +729,7 @@ func StoreProductIDToCache(productName int32, DBassetID uint32, DBProductId uint
 
 	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
 	if err != nil {
-		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
 }
