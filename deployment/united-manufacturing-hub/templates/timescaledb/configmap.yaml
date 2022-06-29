@@ -153,7 +153,7 @@ data:
         end_timestamp TIMESTAMPTZ,
         target_units INTEGER,
         asset_id SERIAL REFERENCES assetTable (id),
-        unique (asset_id, order_id),
+        unique (asset_id, order_name),
         CHECK (begin_timestamp < end_timestamp),
     	CHECK (target_units > 0),
         EXCLUDE USING gist (asset_id WITH =, tstzrange(begin_timestamp, end_timestamp) WITH &&) WHERE (begin_timestamp IS NOT NULL AND end_timestamp IS NOT NULL)
