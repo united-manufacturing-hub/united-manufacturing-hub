@@ -79,3 +79,4 @@ deployment/kafka-to-postgresql/postgres_data
 # Hide internal test files
 values_*.yaml
 development_*.yaml
+test.yaml
