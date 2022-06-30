@@ -1238,9 +1238,11 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 	}
 
 	// Loop through all datapoints and calculate running and stop time
+	timeRange := to.Sub(from).Seconds()
+
 	var runningTime float64 = 0
 	var stopTime float64 = 0
-	var plannedTime float64 = 0
+	var plannedTime float64 = timeRange // it starts with the full duration and then all idle times are substracted from it
 
 	for _, pareto := range paretoArray {
 		if datamodel.IsProducingFullSpeed(pareto.State) {
@@ -1248,7 +1250,7 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 		} else if IsAvailabilityLoss(int32(pareto.State), configuration) {
 			stopTime += pareto.Duration
 		} else if IsExcludedFromOEE(int32(pareto.State), configuration) {
-			plannedTime += pareto.Duration
+			plannedTime -= pareto.Duration
 		}
 	}
 	// TODO: fix next line. it needs to be (planned time - stopTime) / planned time
