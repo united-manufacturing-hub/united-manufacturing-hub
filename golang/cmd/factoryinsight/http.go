@@ -197,6 +197,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "orderTimeline")
 	values = append(values, "uniqueProductsWithTags")
 	values = append(values, "accumulatedProducts")
+	values = append(values, "unstartedOrderTable")
 	// Get from cache if possible
 	var cacheHit bool
 	processValues, cacheHit := internal.GetDistinctProcessValuesFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
@@ -295,6 +296,8 @@ func getDataHandler(c *gin.Context) {
 		processUniqueProductsWithTagsRequest(c, getDataRequest)
 	case "accumulatedProducts":
 		processAccumulatedProducts(c, getDataRequest)
+	case "unstartedOrderTable":
+		processUnstartedOrderTableRequest(c, getDataRequest)
 	default:
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
@@ -1232,6 +1235,36 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 			fullRow := []interface{}{getDataRequest.Asset, timeBasedMaintenanceActivity.ComponentName, activityString, timeBasedMaintenanceActivity.DurationInDays.Float64, status}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
+
+	var getOrderRequest getOrderRequest
+	var err error
+
+	err = c.BindQuery(&getOrderRequest)
+	if err != nil {
+		handleInvalidInputError(c, err)
+		return
+	}
+
+	// Fetch data from database
+	zap.S().Debugf("Fetching order table for customer %s, location %s, asset %s, value: %v", getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getDataRequest.Value)
+
+	zap.S().Debugf("GetUnstartedOrdersRaw")
+	rawOrders, err := GetUnstartedOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
+	if err != nil {
+		handleInternalServerError(c, err)
+		return
+	}
+
+	data := datamodel.DataResponseAny{}
+	data.ColumnNames = []string{"OrderName", "ProductName", "TargetUnits", "TimePerUnitInSeconds"}
+	for _, order := range rawOrders {
+		data.Datapoints = append(data.Datapoints, []interface{}{order.OrderName, order.ProductName, order.TargetUnits, order.TimePerUnitInSeconds})
 	}
 
 	c.JSON(http.StatusOK, data)
