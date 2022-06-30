@@ -1240,22 +1240,22 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 	// Loop through all datapoints and calculate running and stop time
 	var runningTime float64 = 0
 	var stopTime float64 = 0
-	var totalTime float64 = 0 // total time is running time and (availability) stop time. Not included are unplanned shifts, therefore, total time is planned time
+	var plannedTime float64 = 0
 
 	for _, pareto := range paretoArray {
 		if datamodel.IsProducingFullSpeed(pareto.State) {
 			runningTime += pareto.Duration
-			totalTime += pareto.Duration
 		} else if IsAvailabilityLoss(int32(pareto.State), configuration) {
 			stopTime += pareto.Duration
-			totalTime += pareto.Duration
+		} else if IsExcludedFromOEE(int32(pareto.State), configuration) {
+			plannedTime += pareto.Duration
 		}
 	}
 	// TODO: fix next line. it needs to be (planned time - stopTime) / planned time
 
 	// Preventing NaN
-	if totalTime > 0 {
-		data = []interface{}{(totalTime - stopTime) / totalTime, from}
+	if plannedTime > 0 {
+		data = []interface{}{(plannedTime - stopTime) / plannedTime, from}
 	} else {
 		data = nil
 	}
@@ -1384,6 +1384,26 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 	}
 
 	return
+}
+
+// IsExcludedFromOEE checks whether a state is neither a performance loss or availability loss, therefore, it needs to be taken out
+// e.g., some companies remove noShift from the calculation
+// A state is excluded, when it is neither in the performacne nor in the availability bucket section in the configuration
+func IsExcludedFromOEE(state int32, configuration datamodel.CustomerConfiguration) (IsExcluded bool) {
+
+	// Overarching categories are in the format 10000, 20000, 120000, etc.. We are checking if a value e.g. 20005 belongs to 20000
+	quotient, _ := internal.Divmod(int64(state), 10000)
+
+	if internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(state)) { // Check if it is directly in it
+		return false // if it is in availability, it is not excluded
+	} else if internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(state)) {
+		return false // if it is in performance losses, then it cannot be excluded
+	} else if internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(quotient)*10000) || internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(quotient)*10000) {
+		// if the overarching category in availability or performance loss states, then it cannot be excluded
+		return false
+	}
+	// otherwise it is excluded
+	return true
 }
 
 // CalculateOEE calculates the OEE
