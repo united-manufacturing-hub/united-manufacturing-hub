@@ -890,7 +890,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 			// split up countslice that it contains only counts between current and to
-			countSliceSplit, err := SplitCountSlice(c, countSlice, current, to)
+			countSliceSplit := SplitCountSlice(countSlice, current, to)
 
 			// calculatequality(c,countslice)
 			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
@@ -902,7 +902,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 			current = to
 		} else { //otherwise, calculate for entire time range
 			// split up countslice that it contains only counts between current and to
-			countSliceSplit, err := SplitCountSlice(c, countSlice, current, currentTo)
+			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
 
 			// calculatequality(c,countslice)
 			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
