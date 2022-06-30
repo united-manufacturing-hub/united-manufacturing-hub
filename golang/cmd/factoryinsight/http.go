@@ -1006,13 +1006,15 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
+			countSliceSplit := SplitCountSlice(countSlice, current, to)
+
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(c, processedStates, current, to, configuration)
+			tempDatapoints, err = CalculateOEE(c, processedStates, countSliceSplit, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -1021,13 +1023,15 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			current = to
 		} else { //otherwise, calculate for entire time range
 
+			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
+
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(c, processedStates, current, currentTo, configuration)
+			tempDatapoints, err = CalculateOEE(c, processedStates, countSliceSplit, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return

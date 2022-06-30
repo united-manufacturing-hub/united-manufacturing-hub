@@ -1384,7 +1384,7 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 }
 
 // CalculateOEE calculates the OEE
-func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
+func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1429,12 +1429,20 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 			stopTime += pareto.Duration
 		}
 	}
+
+	// Calculate Quality
+	quality, err := CalculateQuality(c, countSlice)
+
 	// TODO: add speed losses here
 	// TODO: multiply with quality rate
+	availabilityAndPerformanceRate := runningTime / (runningTime + stopTime)
+	qualityRate := quality[0].(float64)
+
+	finalOEE := availabilityAndPerformanceRate * qualityRate
 
 	// Preventing NaN
 	if runningTime+stopTime > 0 {
-		data = []interface{}{runningTime / (runningTime + stopTime), from}
+		data = []interface{}{finalOEE, from}
 	} else {
 		data = nil
 	}
