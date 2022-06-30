@@ -1240,19 +1240,22 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 	// Loop through all datapoints and calculate running and stop time
 	var runningTime float64 = 0
 	var stopTime float64 = 0
+	var totalTime float64 = 0 // total time is running time and (availability) stop time. Not included are unplanned shifts, therefore, total time is planned time
 
 	for _, pareto := range paretoArray {
 		if datamodel.IsProducingFullSpeed(pareto.State) {
-			runningTime = pareto.Duration
+			runningTime += pareto.Duration
+			totalTime += pareto.Duration
 		} else if IsAvailabilityLoss(int32(pareto.State), configuration) {
 			stopTime += pareto.Duration
+			totalTime += pareto.Duration
 		}
 	}
 	// TODO: fix next line. it needs to be (planned time - stopTime) / planned time
 
 	// Preventing NaN
-	if runningTime+stopTime > 0 {
-		data = []interface{}{runningTime / (runningTime + stopTime), from}
+	if totalTime > 0 {
+		data = []interface{}{(totalTime - stopTime) / totalTime, from}
 	} else {
 		data = nil
 	}
@@ -1300,7 +1303,7 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 
 	for _, pareto := range paretoArray {
 		if datamodel.IsProducingFullSpeed(pareto.State) {
-			runningTime = pareto.Duration
+			runningTime += pareto.Duration
 		} else if IsPerformanceLoss(int32(pareto.State), configuration) {
 			stopTime += pareto.Duration
 		}
