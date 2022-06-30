@@ -1314,7 +1314,12 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 
 	// also change this in OEE calculation
 
-	data = []interface{}{runningTime / (runningTime + stopTime), from}
+	// Preventing NaN
+	if runningTime+stopTime > 0 {
+		data = []interface{}{runningTime / (runningTime + stopTime), from}
+	} else {
+		data = nil
+	}
 
 	return
 }
@@ -1333,8 +1338,12 @@ func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry
 
 	good := total - scrap
 
-	data = []interface{}{good / total}
-
+	// Preventing NaN
+	if total > 0 {
+		data = []interface{}{good / total}
+	} else {
+		data = nil
+	}
 	return
 }
 
