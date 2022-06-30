@@ -1255,7 +1255,7 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 	zap.S().Debugf("Fetching order table for customer %s, location %s, asset %s, value: %v", getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getDataRequest.Value)
 
 	zap.S().Debugf("GetUnstartedOrdersRaw")
-	rawOrders, err := GetUnstartedOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getOrderRequest.From, getOrderRequest.To)
+	rawOrders, err := GetUnstartedOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return

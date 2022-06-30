@@ -1288,8 +1288,8 @@ func GetOrdersRaw(c *gin.Context, customerID string, location string, asset stri
 }
 
 // GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
-func GetUnstartedOrdersRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersUnstartedRaw, error error) {
-	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetUnstartedOrdersRaw(c *gin.Context, customerID string, location string, asset string) (data []datamodel.OrdersUnstartedRaw, error error) {
+	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1306,7 +1306,7 @@ func GetUnstartedOrdersRaw(c *gin.Context, customerID string, location string, a
 			AND end_timestamp IS NULL 
 			AND orderTable.asset_id = $1;`
 
-	rows, err := db.Query(sqlStatement, assetID, from, to)
+	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
