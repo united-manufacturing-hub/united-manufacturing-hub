@@ -1457,12 +1457,15 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, co
 
 	// Calculate Quality
 	quality, err := CalculateQuality(c, countSlice)
-
+	var qualityRate float64
 	// TODO: add speed losses here
 	// TODO: multiply with quality rate
 	availabilityAndPerformanceRate := runningTime / (runningTime + stopTime)
-	qualityRate := quality[0].(float64)
-
+	if len(quality) > 0 {
+		qualityRate = quality[0].(float64)
+	} else {
+		qualityRate = 1.0
+	}
 	finalOEE := availabilityAndPerformanceRate * qualityRate
 
 	// Preventing NaN
