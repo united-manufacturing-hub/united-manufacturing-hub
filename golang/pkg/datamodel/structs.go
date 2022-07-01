@@ -81,3 +81,12 @@ type OrdersRaw struct {
 	ProductName          string
 	TimePerUnitInSeconds float64
 }
+
+// OrdersUnstartedRaw contains information about orders including their products
+type OrdersUnstartedRaw struct {
+	OrderName   string
+	TargetUnits int
+
+	ProductName          string
+	TimePerUnitInSeconds float64
+}
