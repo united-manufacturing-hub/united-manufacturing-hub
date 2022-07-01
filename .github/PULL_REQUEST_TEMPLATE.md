@@ -27,12 +27,14 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 
 # Checklist:
 
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published in downstream modules
-- [ ] I have checked that my issue complies with the [Contributing guidelines](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/main/CONTRIBUTING.md)
+- [ ] I have made corresponding changes to the changelog (if needed).
+- [ ] I have made corresponding notices to the upgrade instructions (if needed)
+
+# Changelog changes
+
+Enter here your text for the changelog (or fill it out directly in Notion if you are internal)
+
+# Upgrade instructions
+
+Enter here your tutorial for upgrading from a previous version (or fill it out directly in Notion if you are internal). This can include changing the values.yaml, database migrations or other manual changes that are not automatically handled by the PR
