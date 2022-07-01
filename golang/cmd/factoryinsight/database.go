@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/EagleChen/mapmutex"
 	"github.com/lib/pq"
@@ -1221,7 +1222,7 @@ func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string
 
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
 func GetOrdersRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersRaw, error error) {
-	zap.S().Infof("[GetUniqueProducts] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+	zap.S().Infof("[GetOrdersRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1278,6 +1279,62 @@ func GetOrdersRaw(c *gin.Context, customerID string, location string, asset stri
 			TargetUnits:          targetUnits,
 			BeginTimestamp:       beginTimestamp,
 			EndTimestamp:         endTimestamp,
+			ProductName:          productName,
+			TimePerUnitInSeconds: timePerUnitInSeconds,
+		}
+		data = append(data, fullRow)
+	}
+	return
+}
+
+// GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
+func GetUnstartedOrdersRaw(c *gin.Context, customerID string, location string, asset string) (data []datamodel.OrdersUnstartedRaw, error error) {
+	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v", customerID, location, asset)
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	sqlStatement := `
+		SELECT order_name, target_units, productTable.product_name, productTable.time_per_unit_in_seconds
+		FROM orderTable 
+		FULL JOIN productTable ON productTable.product_id = orderTable.product_id
+		WHERE 
+			begin_timestamp IS NULL 
+			AND end_timestamp IS NULL 
+			AND orderTable.asset_id = $1;`
+
+	rows, err := db.Query(sqlStatement, assetID)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+
+		var orderName string
+		var targetUnits int
+
+		var productName string
+		var timePerUnitInSeconds float64
+
+		err := rows.Scan(&orderName, &targetUnits, &productName, &timePerUnitInSeconds)
+		if err != nil {
+			PQErrorHandling(c, sqlStatement, err, false)
+			error = err
+			return
+		}
+		fullRow := datamodel.OrdersUnstartedRaw{
+			OrderName:            orderName,
+			TargetUnits:          targetUnits,
 			ProductName:          productName,
 			TimePerUnitInSeconds: timePerUnitInSeconds,
 		}
