@@ -4,11 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -1202,7 +1203,7 @@ func CalculateStateHistogram(c *gin.Context, temporaryDatapoints []datamodel.Sta
 }
 
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
-func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1237,25 +1238,33 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 	}
 
 	// Loop through all datapoints and calculate running and stop time
+	timeRange := to.Sub(from).Seconds()
+
 	var runningTime float64 = 0
 	var stopTime float64 = 0
+	var plannedTime float64 = timeRange // it starts with the full duration and then all idle times are substracted from it
 
 	for _, pareto := range paretoArray {
 		if datamodel.IsProducingFullSpeed(pareto.State) {
-			runningTime = pareto.Duration
+			runningTime += pareto.Duration
 		} else if IsAvailabilityLoss(int32(pareto.State), configuration) {
 			stopTime += pareto.Duration
+		} else if IsExcludedFromOEE(int32(pareto.State), configuration) {
+			plannedTime -= pareto.Duration
 		}
 	}
 
-	fullRow := []interface{}{runningTime / (runningTime + stopTime)}
-	data = append(data, fullRow)
-
+	// Preventing NaN
+	if plannedTime > 0 {
+		data = []interface{}{(plannedTime - stopTime) / plannedTime, from}
+	} else {
+		data = nil
+	}
 	return
 }
 
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
-func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, to time.Time, configuration datamodel.CustomerConfiguration) (data [][]interface{}, error error) {
+func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1295,20 +1304,32 @@ func CalculatePerformance(c *gin.Context, temporaryDatapoints []datamodel.StateE
 
 	for _, pareto := range paretoArray {
 		if datamodel.IsProducingFullSpeed(pareto.State) {
-			runningTime = pareto.Duration
+			runningTime += pareto.Duration
 		} else if IsPerformanceLoss(int32(pareto.State), configuration) {
 			stopTime += pareto.Duration
 		}
 	}
 
-	fullRow := []interface{}{runningTime / (runningTime + stopTime)}
-	data = append(data, fullRow)
+	// TODO: add speed losses here
+
+	// get all completed orders in timeframe and calculate speed loss by substracting planned run time with actual run time. this is speedLossTime
+
+	// final formula is: performance = runningTime / (runningTime + stopTime) - (runningTime - speedLossTime) / runningTime
+
+	// also change this in OEE calculation
+
+	// Preventing NaN
+	if runningTime+stopTime > 0 {
+		data = []interface{}{runningTime / (runningTime + stopTime), from}
+	} else {
+		data = nil
+	}
 
 	return
 }
 
 // CalculateQuality calculates the quality for a given []datamodel.CountEntry
-func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data [][]interface{}, error error) {
+func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry) (data []interface{}, error error) {
 
 	// Loop through all datapoints and calculate good pieces and scrap
 	var total float64 = 0
@@ -1321,9 +1342,12 @@ func CalculateQuality(c *gin.Context, temporaryDatapoints []datamodel.CountEntry
 
 	good := total - scrap
 
-	fullRow := []interface{}{good / total}
-	data = append(data, fullRow)
-
+	// Preventing NaN
+	if total > 0 {
+		data = []interface{}{good / total}
+	} else {
+		data = nil
+	}
 	return
 }
 
@@ -1363,8 +1387,28 @@ func IsAvailabilityLoss(state int32, configuration datamodel.CustomerConfigurati
 	return
 }
 
+// IsExcludedFromOEE checks whether a state is neither a performance loss or availability loss, therefore, it needs to be taken out
+// e.g., some companies remove noShift from the calculation
+// A state is excluded, when it is neither in the performacne nor in the availability bucket section in the configuration
+func IsExcludedFromOEE(state int32, configuration datamodel.CustomerConfiguration) (IsExcluded bool) {
+
+	// Overarching categories are in the format 10000, 20000, 120000, etc.. We are checking if a value e.g. 20005 belongs to 20000
+	quotient, _ := internal.Divmod(int64(state), 10000)
+
+	if internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(state)) { // Check if it is directly in it
+		return false // if it is in availability, it is not excluded
+	} else if internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(state)) {
+		return false // if it is in performance losses, then it cannot be excluded
+	} else if internal.IsInSliceInt32(configuration.AvailabilityLossStates, int32(quotient)*10000) || internal.IsInSliceInt32(configuration.PerformanceLossStates, int32(quotient)*10000) {
+		// if the overarching category in availability or performance loss states, then it cannot be excluded
+		return false
+	}
+	// otherwise it is excluded
+	return true
+}
+
 // CalculateOEE calculates the OEE
-func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
+func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, countSlice []datamodel.CountEntry, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []interface{}, error error) {
 
 	durationArrayChannel := make(chan ChannelResult)
 	stateArrayChannel := make(chan ChannelResult)
@@ -1410,9 +1454,21 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, fr
 		}
 	}
 
+	// Calculate Quality
+	quality, err := CalculateQuality(c, countSlice)
+	var qualityRate float64
+	// TODO: add speed losses here
+	availabilityAndPerformanceRate := runningTime / (runningTime + stopTime)
+	if len(quality) > 0 {
+		qualityRate = quality[0].(float64)
+	} else {
+		qualityRate = 1.0
+	}
+	finalOEE := availabilityAndPerformanceRate * qualityRate
+
 	// Preventing NaN
 	if runningTime+stopTime > 0 {
-		data = []interface{}{runningTime / (runningTime + stopTime), from}
+		data = []interface{}{finalOEE, from}
 	} else {
 		data = nil
 	}
@@ -2082,4 +2138,15 @@ func CalculateAccumulatedProducts(c *gin.Context, to time.Time, observationStart
 
 	zap.S().Debugf("After predictions dataPointIndex: %d", dataPointIndex)
 	return datapoints, nil
+}
+
+// SplitCountSlice returns a slice of counts with the time being between from and to
+func SplitCountSlice(counts []datamodel.CountEntry, from time.Time, to time.Time) []datamodel.CountEntry {
+	var result []datamodel.CountEntry
+	for _, count := range counts {
+		if count.Timestamp.UnixMilli() >= from.UnixMilli() && count.Timestamp.UnixMilli() < to.UnixMilli() {
+			result = append(result, count)
+		}
+	}
+	return result
 }
