@@ -1253,7 +1253,6 @@ func CalculateAvailability(c *gin.Context, temporaryDatapoints []datamodel.State
 			plannedTime -= pareto.Duration
 		}
 	}
-	// TODO: fix next line. it needs to be (planned time - stopTime) / planned time
 
 	// Preventing NaN
 	if plannedTime > 0 {
@@ -1459,7 +1458,6 @@ func CalculateOEE(c *gin.Context, temporaryDatapoints []datamodel.StateEntry, co
 	quality, err := CalculateQuality(c, countSlice)
 	var qualityRate float64
 	// TODO: add speed losses here
-	// TODO: multiply with quality rate
 	availabilityAndPerformanceRate := runningTime / (runningTime + stopTime)
 	if len(quality) > 0 {
 		qualityRate = quality[0].(float64)
