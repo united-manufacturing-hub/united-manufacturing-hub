@@ -1014,7 +1014,7 @@ _001_customMicroservices:
       statefulEnabled: false
   -
     name: cmtester
-    image: united-manufacturing-hub/custom-microservice-tester:latest
+    image: unitedmanufacturinghub/custom-microservice-tester:latest
 
     # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
     imagePullPolicy: Always
