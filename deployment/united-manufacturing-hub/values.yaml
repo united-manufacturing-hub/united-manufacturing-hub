@@ -988,7 +988,7 @@ _001_customMicroservices:
       # Recommendation is to turn it off
       statefulEnabled: true
   -
-      name: example2
+      name: example1
       image: hello-world:latest
 
       # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
@@ -1013,7 +1013,7 @@ _001_customMicroservices:
       # Recommendation is to turn it off
       statefulEnabled: false
   -
-    name: cm-tester
+    name: cmtester
     image: united-manufacturing-hub/custom-microservice-tester:latest
 
     # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
