@@ -1012,6 +1012,31 @@ _001_customMicroservices:
       # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
       # Recommendation is to turn it off
       statefulEnabled: false
+  -
+    name: custom-microservice-tester
+    image: united-manufacturing-hub/custom-microservice-tester:latest
+
+    # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
+    imagePullPolicy: Always
+
+    # these will be passed as environment variables
+    env:
+      - name: LOGGING_LEVEL
+        value: PRODUCTION
+
+    # this will expose port 81 on the host on port 8081
+    port: 81
+    externalPort: 8081
+
+    # startupProbe, livenessProbe, check whether port 9091 "/health" is accessible.
+    # If not (e.g., due to container stuck), the container will be restarted
+    startupProbe: 200
+    livenessProbe: 500
+    probePort: 9091
+
+    # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
+    # Recommendation is to turn it off
+    statefulEnabled: true
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
