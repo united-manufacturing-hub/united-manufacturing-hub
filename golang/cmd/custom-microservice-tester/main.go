@@ -31,8 +31,8 @@ func main() {
 	zap.S().Infof("This is custom-microservice-tester build date: %s", buildtime)
 
 	// pprof for port testing
-	zap.S().Debugf("Starting pprof server on port 8080")
-	go http.ListenAndServe(":8080", nil)
+	zap.S().Debugf("Starting pprof server on port 81")
+	go http.ListenAndServe(":81", nil)
 
 	// Print all env variables
 	zap.S().Debugf("Printing all env variables")

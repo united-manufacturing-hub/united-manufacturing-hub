@@ -1026,7 +1026,7 @@ _001_customMicroservices:
 
     # this will expose port 81 on the host on port 8081
     port: 81
-    externalPort: 8081
+    externalPort: 8082
 
     # startupProbe, livenessProbe, check whether port 9091 "/health" is accessible.
     # If not (e.g., due to container stuck), the container will be restarted
