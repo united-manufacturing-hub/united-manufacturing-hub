@@ -1,4 +1,4 @@
-harvesters==1.3.2
+harvesters==1.4.0
 numpy==1.19.5
 opencv-python==4.5.5.62
 paho-mqtt==1.6.1
