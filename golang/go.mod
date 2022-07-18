@@ -5,14 +5,13 @@ go 1.15
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 	github.com/beeker1121/goque v2.1.0+incompatible
-	github.com/confluentinc/confluent-kafka-go v1.9.0
+	github.com/confluentinc/confluent-kafka-go v1.9.1
 	github.com/coocood/freecache v1.2.1
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-playground/assert/v2 v2.0.1
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/golang/snappy v0.0.3 // indirect
 	github.com/gvalkov/golang-evdev v0.0.0-20191114124502-287e62b94bcb
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
