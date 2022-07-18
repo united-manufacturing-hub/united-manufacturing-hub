@@ -44,11 +44,11 @@ func main() {
 	zap.S().Debugf("Writing to stateful storage")
 
 	// Check if hello-world file exists
-	if _, err := os.Stat("/tmp/hello-world"); os.IsNotExist(err) {
+	if _, err := os.Stat("/data/hello-world"); os.IsNotExist(err) {
 		zap.S().Debugf("hello-world file does not exist")
 		// Create hello-world file
 		zap.S().Debugf("Creating hello-world file")
-		err := ioutil.WriteFile("/tmp/hello-world", []byte("Hello World"), 0644)
+		err := ioutil.WriteFile("/data/hello-world", []byte("Hello World"), 0644)
 		if err != nil {
 			panic(err)
 		}
