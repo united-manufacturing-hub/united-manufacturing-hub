@@ -1,4 +1,5 @@
 {{range $i, $value := .Values._001_customMicroservices | default dict}}
+{{if and $value.externalPort $value.port}}
 ---
 
 apiVersion: v1
@@ -14,4 +15,5 @@ spec:
       protocol: TCP
       name: http
 
+{{end}}
 {{end}}

@@ -20,32 +20,40 @@ spec:
       containers:
         - name: united-manufacturing-hub-cm-{{$value.name}}
           image: {{$value.image}}
+          {{if and $value.externalPort $value.port}}
           ports:
             - name: http
               containerPort: {{$value.port}}
               protocol: TCP
-          imagePullPolicy: {{$value.imagePullPolicy}}
+          {{ end }}
+          imagePullPolicy: {{$value.imagePullPolicy | default "Always"}}
+          {{ if $value.env}}
           env:
             {{range $ii, $env_value := $value.env}}
             - name: {{$env_value.name}}
               value: {{$env_value.value}}
             {{end}}
+          {{end}}
 
   {{if $value.statefulEnabled}}
           volumeMounts:
             - name: united-manufacturing-hub-cm-{{$value.name}}-data
               mountPath: /data
   {{end}}
+  {{if $value.livenessProbe}}
           livenessProbe:
             httpGet:
               path: /health
               port: {{$value.probePort}}
             periodSeconds: {{$value.livenessProbe}}
+  {{end}}
+  {{if $value.startupProbe}}
           startupProbe:
             httpGet:
               path: /health
               port: {{$value.probePort}}
             periodSeconds: {{$value.startupProbe}}
+    {{end}}
 
   {{if $value.statefulEnabled}}
       volumes:
