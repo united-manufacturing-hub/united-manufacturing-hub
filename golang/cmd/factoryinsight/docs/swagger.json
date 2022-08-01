@@ -1,0 +1,1751 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is the API annotation for the microservice factoryinsight, which reads out TimescaleDB to import into Grafana",
+        "title": "United Manufacturing Hub factoryinsight API",
+        "contact": {
+            "url": "https://www.umh.app",
+            "email": "support@umh.app"
+        },
+        "license": {
+            "name": "GNU Affero General Public License v3.0",
+            "url": "https://fsf.org"
+        },
+        "version": "1.0"
+    },
+    "basePath": "/api/v1",
+    "paths": {
+        "/{customer}": {
+            "get": {
+                "description": "Checks for User authorization, then reads out the location and returns it",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Fetches the Location for the Message topic",
+                "operationId": "get-locations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose locations are requested",
+                        "name": "getLocationsRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/": {
+            "get": {
+                "description": "Checks for User authorization, then reads out the assets and returns them",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Fetches the assets for the message topic",
+                "operationId": "get-assets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getAssetsRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose assets are requested",
+                        "name": "getAssetsRequest.Location",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}": {
+            "get": {
+                "description": "Checks for User authorization, then reads out the values and returns them in an array of strings",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Fetches the values for a certain asset",
+                "operationId": "get-values",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getValuesRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getValuesRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose values are requested",
+                        "name": "getValuesRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/accumulatedProducts": {
+            "get": {
+                "summary": "calculates the accumulated count of all products of the asset in the specified time frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getProcessAccumulatedProducts.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getProcessAccumulatedProducts.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/aggregatedStates": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Gets all states, can be used to calculate availability.",
+                "operationId": "process-aggregated-states-request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Time point of the start of the time frame",
+                        "name": "getAggregatedStatesRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Time point of the end of the time frame",
+                        "name": "getAggregatedStatesRequest.To",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Includes running states if true",
+                        "name": "getAggregatedStatesRequest.IncludeRunning",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Collects states as integer codes if true and as string if false",
+                        "name": "getAggregatedStatesRequest.KeepStatesInteger",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Aggregationtype: 0 for entire time span, 1 for hours in days",
+                        "name": "getAggregatedStatesRequest.AggregationType",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/availability": {
+            "get": {
+                "summary": "Returns availability in the given time frame as oee values for every day of the time frame",
+                "operationId": "process-availability-request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getAvailabilityRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getAvailabilityRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/averageChangeoverTime": {
+            "get": {
+                "summary": "calculates the average changeover time per day in the given time frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getAverageChangeoverTimeRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getAverageChangeoverTimeRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/averageCleaningTime": {
+            "get": {
+                "summary": "calculates the average cleaning time per day in the given time frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getAverageCleaningTimeRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getAverageCleaningTimeRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/count": {
+            "get": {
+                "summary": "fetches count of the asset within the time frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getCountRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getCountRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/currentState": {
+            "get": {
+                "summary": "fetches current state of the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "true if you want to keep states as integers, false if you want them as strings",
+                        "name": "getCurrentStateRequest.KeepStatesInteger",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/maintenanceActivities": {
+            "get": {
+                "summary": "Gets all maintenance activities for an asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getOrderRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getOrderRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/maintenanceComponents": {
+            "get": {
+                "summary": "Fetches all components for an asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/oee": {
+            "get": {
+                "summary": "calculates daily OEE values for asset in the given time frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getOEERequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getOEERequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/orderTable": {
+            "get": {
+                "summary": "Fetches order data of the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getOrderRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getOrderRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/orderTimeline": {
+            "get": {
+                "summary": "Fetches all orders in a timeline in the time frame of the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getOrderRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getOrderRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/performance": {
+            "get": {
+                "summary": "calculates the pareto performances for a given timeframe",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getPerformanceRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getPerformanceRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/productionSpeed": {
+            "get": {
+                "summary": "Fetches production speed in a selected interval in minutes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getProductionSpeedRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getProductionSpeedRequest.To",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "interval in minutes",
+                        "name": "getProductionSpeedRequest.AggregationInterval",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/quality": {
+            "get": {
+                "summary": "calculates Quality metric for OEE calculation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getQualityRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getQualityRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/qualityRate": {
+            "get": {
+                "summary": "Fetches quality rate in a selected interval in minutes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getQualityRateRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getQualityRateRequest.To",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "interval in minutes",
+                        "name": "getQualityRateRequest.AggregationInterval",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/recommendation": {
+            "get": {
+                "summary": "Gets action recommendations for the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/shifts": {
+            "get": {
+                "summary": "Gets action recommendations for the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getShiftsRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getShiftsRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/state": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "processes data for state Requests from one time-point to another of the asset",
+                "operationId": "process-states-request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Time point of the start of the time frame",
+                        "name": "getStatesRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Time point of the end of the time frame",
+                        "name": "getStatesRequest.To",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Collects states as integer codes if true and as string if false",
+                        "name": "getStatesRequest.KeepStatesInteger",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/stateHistogram": {
+            "get": {
+                "summary": "calculates a state histogram for a data state entry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getStateHistogramRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getStateHistogramRequest.To",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true if it should include running",
+                        "name": "getStateHistogramRequest.IncludeRunning",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true if you want to keep states as integers, false if you want them as strings",
+                        "name": "getStateHistogramRequest.KeepStatesInteger",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/timeRange": {
+            "get": {
+                "summary": "Fetches data from first time stamp to last one, e.g. for recommendations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/uniqueProducts": {
+            "get": {
+                "summary": "Gets all maintenance activities for an asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getUniqueProductsRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getUniqueProductsRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/uniqueProductsWithTags": {
+            "get": {
+                "summary": "fetches all unique products with tags during the specified time frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getUniqueProductsWithTagsRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getUniqueProductsWithTagsRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/unstartedOrderTable": {
+            "get": {
+                "summary": "Fetches unstarted orders of the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getOrderRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getOrderRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/upcomingMaintenanceActivities": {
+            "get": {
+                "summary": "Fetches data about upcoming maintenance activities of the asset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/{process}": {
+            "get": {
+                "description": "The values needs to be named with the prefix \"process_\"",
+                "summary": "Fetches custom process values from the asset within the timeframe",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "getProcessValueRequest.From",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "getProcessValueRequest.To",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{customer}/{location}/{asset}/{value}": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Fetches the data of the requested value",
+                "operationId": "get-data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name of customer whose location is accessed",
+                        "name": "getDataRequest.Customer",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of location whose asset is accessed",
+                        "name": "getDataRequest.Location",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of asset whose value is accessed",
+                        "name": "getDataRequest.Asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of value whose data is requested",
+                        "name": "getDataRequest.Value",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

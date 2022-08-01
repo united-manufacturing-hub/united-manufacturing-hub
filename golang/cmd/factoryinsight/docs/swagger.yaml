@@ -1,0 +1,1194 @@
+basePath: /api/v1
+info:
+  contact:
+    email: support@umh.app
+    url: https://www.umh.app
+  description: This is the API annotation for the microservice factoryinsight, which
+    reads out TimescaleDB to import into Grafana
+  license:
+    name: GNU Affero General Public License v3.0
+    url: https://fsf.org
+  title: United Manufacturing Hub factoryinsight API
+  version: "1.0"
+paths:
+  /{customer}:
+    get:
+      consumes:
+      - application/json
+      description: Checks for User authorization, then reads out the location and
+        returns it
+      operationId: get-locations
+      parameters:
+      - description: Name of customer whose locations are requested
+        in: path
+        name: getLocationsRequest.Customer
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches the Location for the Message topic
+  /{customer}/{location}/:
+    get:
+      consumes:
+      - application/json
+      description: Checks for User authorization, then reads out the assets and returns
+        them
+      operationId: get-assets
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getAssetsRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose assets are requested
+        in: path
+        name: getAssetsRequest.Location
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches the assets for the message topic
+  /{customer}/{location}/{asset}:
+    get:
+      consumes:
+      - application/json
+      description: Checks for User authorization, then reads out the values and returns
+        them in an array of strings
+      operationId: get-values
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getValuesRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getValuesRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose values are requested
+        in: path
+        name: getValuesRequest.Asset
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches the values for a certain asset
+  /{customer}/{location}/{asset}/{process}:
+    get:
+      description: The values needs to be named with the prefix "process_"
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getProcessValueRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getProcessValueRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches custom process values from the asset within the timeframe
+  /{customer}/{location}/{asset}/{value}:
+    get:
+      consumes:
+      - application/json
+      operationId: get-data
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: Name of value whose data is requested
+        in: path
+        name: getDataRequest.Value
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches the data of the requested value
+  /{customer}/{location}/{asset}/accumulatedProducts:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getProcessAccumulatedProducts.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getProcessAccumulatedProducts.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates the accumulated count of all products of the asset in the
+        specified time frame
+  /{customer}/{location}/{asset}/aggregatedStates:
+    get:
+      consumes:
+      - application/json
+      operationId: process-aggregated-states-request
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: Time point of the start of the time frame
+        in: query
+        name: getAggregatedStatesRequest.From
+        required: true
+        type: integer
+      - description: Time point of the end of the time frame
+        in: query
+        name: getAggregatedStatesRequest.To
+        required: true
+        type: integer
+      - description: Includes running states if true
+        in: query
+        name: getAggregatedStatesRequest.IncludeRunning
+        required: true
+        type: boolean
+      - description: Collects states as integer codes if true and as string if false
+        in: query
+        name: getAggregatedStatesRequest.KeepStatesInteger
+        type: boolean
+      - description: 'Aggregationtype: 0 for entire time span, 1 for hours in days'
+        in: query
+        name: getAggregatedStatesRequest.AggregationType
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Gets all states, can be used to calculate availability.
+  /{customer}/{location}/{asset}/availability:
+    get:
+      operationId: process-availability-request
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getAvailabilityRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getAvailabilityRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Returns availability in the given time frame as oee values for every
+        day of the time frame
+  /{customer}/{location}/{asset}/averageChangeoverTime:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getAverageChangeoverTimeRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getAverageChangeoverTimeRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates the average changeover time per day in the given time frame
+  /{customer}/{location}/{asset}/averageCleaningTime:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getAverageCleaningTimeRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getAverageCleaningTimeRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates the average cleaning time per day in the given time frame
+  /{customer}/{location}/{asset}/count:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getCountRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getCountRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: fetches count of the asset within the time frame
+  /{customer}/{location}/{asset}/currentState:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: true if you want to keep states as integers, false if you want
+          them as strings
+        in: query
+        name: getCurrentStateRequest.KeepStatesInteger
+        type: string
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: fetches current state of the asset
+  /{customer}/{location}/{asset}/maintenanceActivities:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getOrderRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getOrderRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Gets all maintenance activities for an asset
+  /{customer}/{location}/{asset}/maintenanceComponents:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches all components for an asset
+  /{customer}/{location}/{asset}/oee:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getOEERequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getOEERequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates daily OEE values for asset in the given time frame
+  /{customer}/{location}/{asset}/orderTable:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getOrderRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getOrderRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches order data of the asset
+  /{customer}/{location}/{asset}/orderTimeline:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getOrderRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getOrderRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches all orders in a timeline in the time frame of the asset
+  /{customer}/{location}/{asset}/performance:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getPerformanceRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getPerformanceRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates the pareto performances for a given timeframe
+  /{customer}/{location}/{asset}/productionSpeed:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getProductionSpeedRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getProductionSpeedRequest.To
+        required: true
+        type: integer
+      - description: interval in minutes
+        in: query
+        name: getProductionSpeedRequest.AggregationInterval
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches production speed in a selected interval in minutes
+  /{customer}/{location}/{asset}/quality:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getQualityRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getQualityRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates Quality metric for OEE calculation
+  /{customer}/{location}/{asset}/qualityRate:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getQualityRateRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getQualityRateRequest.To
+        required: true
+        type: integer
+      - description: interval in minutes
+        in: query
+        name: getQualityRateRequest.AggregationInterval
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches quality rate in a selected interval in minutes
+  /{customer}/{location}/{asset}/recommendation:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Gets action recommendations for the asset
+  /{customer}/{location}/{asset}/shifts:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getShiftsRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getShiftsRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Gets action recommendations for the asset
+  /{customer}/{location}/{asset}/state:
+    get:
+      consumes:
+      - application/json
+      operationId: process-states-request
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: Time point of the start of the time frame
+        in: query
+        name: getStatesRequest.From
+        required: true
+        type: integer
+      - description: Time point of the end of the time frame
+        in: query
+        name: getStatesRequest.To
+        required: true
+        type: integer
+      - description: Collects states as integer codes if true and as string if false
+        in: query
+        name: getStatesRequest.KeepStatesInteger
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: processes data for state Requests from one time-point to another of
+        the asset
+  /{customer}/{location}/{asset}/stateHistogram:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getStateHistogramRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getStateHistogramRequest.To
+        required: true
+        type: integer
+      - description: true if it should include running
+        in: query
+        name: getStateHistogramRequest.IncludeRunning
+        type: boolean
+      - description: true if you want to keep states as integers, false if you want
+          them as strings
+        in: query
+        name: getStateHistogramRequest.KeepStatesInteger
+        type: boolean
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: calculates a state histogram for a data state entry
+  /{customer}/{location}/{asset}/timeRange:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches data from first time stamp to last one, e.g. for recommendations
+  /{customer}/{location}/{asset}/uniqueProducts:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getUniqueProductsRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getUniqueProductsRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Gets all maintenance activities for an asset
+  /{customer}/{location}/{asset}/uniqueProductsWithTags:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getUniqueProductsWithTagsRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getUniqueProductsWithTagsRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: fetches all unique products with tags during the specified time frame
+  /{customer}/{location}/{asset}/unstartedOrderTable:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      - description: start of the given time frame
+        in: query
+        name: getOrderRequest.From
+        required: true
+        type: integer
+      - description: end of the given time frame
+        in: query
+        name: getOrderRequest.To
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches unstarted orders of the asset
+  /{customer}/{location}/{asset}/upcomingMaintenanceActivities:
+    get:
+      parameters:
+      - description: Name of customer whose location is accessed
+        in: path
+        name: getDataRequest.Customer
+        required: true
+        type: string
+      - description: Name of location whose asset is accessed
+        in: path
+        name: getDataRequest.Location
+        required: true
+        type: string
+      - description: Name of asset whose value is accessed
+        in: path
+        name: getDataRequest.Asset
+        required: true
+        type: string
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+      summary: Fetches data about upcoming maintenance activities of the asset
+swagger: "2.0"

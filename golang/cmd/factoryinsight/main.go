@@ -14,16 +14,29 @@ There is one function for that specific call. It parses the parameters and execu
 Then the results are bundled together and a return JSON is created.
 */
 
+// @title United Manufacturing Hub factoryinsight API
+// @version 1.0
+// @description This is the API annotation for the microservice factoryinsight, which reads out TimescaleDB to import into Grafana
+// @contact.url https://www.umh.app
+// @contact.email support@umh.app
+// @license.name GNU Affero General Public License v3.0
+// @license.url https://fsf.org
+// @BasePath /api/v1
+
 import (
 	"fmt"
-	"go.elastic.co/ecszap"
-	"go.uber.org/zap/zapcore"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/docs"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
+
+	"go.elastic.co/ecszap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/gin-gonic/gin"
 	"github.com/heptiolabs/healthcheck"
@@ -145,6 +158,10 @@ func main() {
 
 	}()
 
+	r := gin.Default()
+	docs.SwaggerInfo.BasePath = "/api/v1"
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	r.Run(":8080")
 	select {} // block forever
 }
 

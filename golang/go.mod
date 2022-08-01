@@ -23,6 +23,9 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rung/go-safecast v1.0.1
+	github.com/swaggo/files v0.0.0-20220610200504-28940afbdbfe
+	github.com/swaggo/gin-swagger v1.5.1
+	github.com/swaggo/swag v1.8.3
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/zeebo/xxh3 v1.0.1
 	go.elastic.co/ecszap v1.0.1

@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/docs"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +17,9 @@ import (
 )
 
 // SetupRestAPI initializes the REST API and starts listening
+// @Summary Initializes the REST API and starts listening
+// @Description sets up REST API via Gin and uses ginzap for logging
+// @ID setup-rest-api
 func SetupRestAPI(accounts gin.Accounts, version string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -44,6 +50,7 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 		v1.GET("/:customer/:location/:asset", getValuesHandler)
 		v1.GET("/:customer/:location/:asset/:value", getDataHandler)
 	}
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.Run(":80")
 }
@@ -84,6 +91,16 @@ type getLocationsRequest struct {
 	Customer string `uri:"customer" binding:"required"`
 }
 
+// getLocationsHandler
+// @Summary Fetches the Location for the Message topic
+// @Description Checks for User authorization, then reads out the location and returns it
+// @ID get-locations
+// @Accept json
+// @Produce json
+// @Param type getLocationsRequest.Customer path string true "Name of customer whose locations are requested"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer} [GET]
 func getLocationsHandler(c *gin.Context) {
 
 	var getLocationsRequest getLocationsRequest
@@ -119,6 +136,17 @@ type getAssetsRequest struct {
 	Location string `uri:"location" binding:"required"`
 }
 
+// getAssetsHandler
+// @Summary Fetches the assets for the message topic
+// @Description Checks for User authorization, then reads out the assets and returns them
+// @ID get-assets
+// @Accept json
+// @Produce json
+// @Param getAssetsRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getAssetsRequest.Location path string true "Name of location whose assets are requested"
+// @Success 200	{array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/ [GET]
 func getAssetsHandler(c *gin.Context) {
 
 	var getAssetsRequest getAssetsRequest
@@ -155,6 +183,18 @@ type getValuesRequest struct {
 	Asset    string `uri:"asset" binding:"required"`
 }
 
+// getValuesRequest
+// @Summary Fetches the values for a certain asset
+// @Description Checks for User authorization, then reads out the values and returns them in an array of strings
+// @ID get-values
+// @Accept json
+// @Produce json
+// @Param getValuesRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getValuesRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getValuesRequest.Asset path string true "Name of asset whose values are requested"
+// @Success 200	{array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset} [GET]
 func getValuesHandler(c *gin.Context) {
 
 	var getValuesRequest getValuesRequest
@@ -228,6 +268,18 @@ type getDataRequest struct {
 	Value    string `uri:"value" binding:"required"`
 }
 
+//getDataHandler
+// @Summary Fetches the data of the requested value
+// @ID get-data
+// @Accept json
+// @Produce json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getDataRequest.Value path string true "Name of value whose data is requested"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/{value} [GET]
 func getDataHandler(c *gin.Context) {
 
 	var getDataRequest getDataRequest
@@ -320,6 +372,21 @@ type getStatesRequest struct {
 
 // processStatesRequest is responsible for fetching all required data and calculating states over time.
 // The result is usually visualized in "DiscretePanel" in Grafana.
+
+//processStatesRequest
+// @Summary processes data for state Requests from one time-point to another of the asset
+// @ID process-states-request
+// @Accept json
+// @Produce json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getStatesRequest.From query int true "Time point of the start of the time frame"
+// @Param getStatesRequest.To query int true "Time point of the end of the time frame"
+// @Param getStatesRequest.KeepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/state [GET]
 func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -425,6 +492,23 @@ type getAggregatedStatesRequest struct {
 // processAggregatedStatesRequest gets all states (including running). This can be used to calculate availability.
 // If the aggregationType is 0 it will aggregate over the entire time span.
 // If the aggregationType is not 0 it will aggregate over various categories, e.g. day or hour
+
+//processAggregatedStatesRequest
+// @Summary Gets all states, can be used to calculate availability.
+// @ID process-aggregated-states-request
+// @Accept json
+// @Produce json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getAggregatedStatesRequest.From query int true "Time point of the start of the time frame"
+// @Param getAggregatedStatesRequest.To query int true "Time point of the end of the time frame"
+// @Param getAggregatedStatesRequest.IncludeRunning query bool true "Includes running states if true"
+// @Param getAggregatedStatesRequest.KeepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
+// @Param getAggregatedStatesRequest.AggregationType query int false "Aggregationtype: 0 for entire time span, 1 for hours in days"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/aggregatedStates [GET]
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -592,6 +676,19 @@ type getAvailabilityRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processAvailabilityRequest
+// @Summary Returns availability in the given time frame as oee values for every day of the time frame
+// @ID process-availability-request
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getAvailabilityRequest.From query int true "start of the given time frame"
+// @Param getAvailabilityRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/availability [GET]
 func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -715,6 +812,18 @@ type getPerformanceRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processPerformanceRequest
+// @Summary calculates the pareto performances for a given timeframe
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getPerformanceRequest.From query int true "start of the given time frame"
+// @Param getPerformanceRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/performance [GET]
 func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -838,6 +947,18 @@ type getQualityRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processQualityRequest
+// @Summary calculates Quality metric for OEE calculation
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getQualityRequest.From query int true "start of the given time frame"
+// @Param getQualityRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/quality [GET]
 func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -929,6 +1050,18 @@ type getOEERequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processOEERequest
+// @Summary calculates daily OEE values for asset in the given time frame
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getOEERequest.From query int true "start of the given time frame"
+// @Param getOEERequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/oee [GET]
 func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1058,6 +1191,20 @@ type getStateHistogramRequest struct {
 	KeepStatesInteger bool      `form:"keepStatesInteger"`
 }
 
+//processStateHistogramRequest
+// @Summary calculates a state histogram for a data state entry
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getStateHistogramRequest.From query int true "start of the given time frame"
+// @Param getStateHistogramRequest.To query int true "end of the given time frame"
+// @Param getStateHistogramRequest.IncludeRunning query bool false "true if it should include running"
+// @Param getStateHistogramRequest.KeepStatesInteger query bool false "true if you want to keep states as integers, false if you want them as strings"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/stateHistogram [GET]
 func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1191,6 +1338,17 @@ type getUniqueProductsWithTagsRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processCurrentStateRequest
+// @Summary fetches current state of the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getCurrentStateRequest.KeepStatesInteger query string false "true if you want to keep states as integers, false if you want them as strings"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/currentState [GET]
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getCurrentStateRequest getCurrentStateRequest
@@ -1212,6 +1370,18 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, state)
 }
 
+//processCountRequest
+// @Summary fetches count of the asset within the time frame
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getCountRequest.From query int true "start of the given time frame"
+// @Param getCountRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/count [GET]
 func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getCountsRequest getCountsRequest
@@ -1234,6 +1404,16 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, counts)
 }
 
+//processRecommendationRequest
+// @Summary Gets action recommendations for the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/recommendation [GET]
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1245,6 +1425,18 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 	c.JSON(http.StatusOK, recommendations)
 }
 
+//processShiftsRequest
+// @Summary Gets action recommendations for the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getShiftsRequest.From query int true "start of the given time frame"
+// @Param getShiftsRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/shifts [GET]
 func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getShiftsRequest getShiftsRequest
@@ -1265,6 +1457,19 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, shifts)
 }
 
+//processProcessValueRequest
+// @Summary Fetches custom process values from the asset within the timeframe
+// @Description The values needs to be named with the prefix "process_"
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getProcessValueRequest.From query int true "start of the given time frame"
+// @Param getProcessValueRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/{process} [GET]
 func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProcessValueRequest getProcessValueRequest
@@ -1289,6 +1494,16 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, processValues)
 }
 
+//processTimeRangeRequest
+// @Summary Fetches data from first time stamp to last one, e.g. for recommendations
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/timeRange [GET]
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1300,6 +1515,16 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, timeRange)
 }
 
+//processUpcomingMaintenanceActivitiesRequest
+// @Summary Fetches data about upcoming maintenance activities of the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/upcomingMaintenanceActivities [GET]
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
@@ -1342,6 +1567,18 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 	c.JSON(http.StatusOK, data)
 }
 
+//processUnstartedOrderTableRequest
+// @Summary Fetches unstarted orders of the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getOrderRequest.From query int true "start of the given time frame"
+// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/unstartedOrderTable [GET]
 func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getOrderRequest getOrderRequest
@@ -1372,6 +1609,18 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 	c.JSON(http.StatusOK, data)
 }
 
+//processOrderTableRequest
+// @Summary Fetches order data of the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getOrderRequest.From query int true "start of the given time frame"
+// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/orderTable [GET]
 func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getOrderRequest getOrderRequest
@@ -1445,6 +1694,18 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, data)
 }
 
+//processOrderTimelineRequest
+// @Summary Fetches all orders in a timeline in the time frame of the asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getOrderRequest.From query int true "start of the given time frame"
+// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/orderTimeline [GET]
 func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getOrderRequest getOrderRequest
@@ -1468,6 +1729,18 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 	c.JSON(http.StatusOK, data)
 }
 
+//processMaintenanceActivitiesRequest
+// @Summary Gets all maintenance activities for an asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getOrderRequest.From query int true "start of the given time frame"
+// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/maintenanceActivities [GET]
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1480,6 +1753,18 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 	c.JSON(http.StatusOK, data)
 }
 
+//processUniqueProductsRequest
+// @Summary Gets all maintenance activities for an asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getUniqueProductsRequest.From query int true "start of the given time frame"
+// @Param getUniqueProductsRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/uniqueProducts [GET]
 func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getUniqueProductsRequest getUniqueProductsRequest
@@ -1502,6 +1787,16 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 	c.JSON(http.StatusOK, uniqueProducts)
 }
 
+//processMaintenanceComponentsRequest
+// @Summary Fetches all components for an asset
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/maintenanceComponents [GET]
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1520,6 +1815,19 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 	c.JSON(http.StatusOK, data)
 }
 
+//processProductionSpeedRequest
+// @Summary Fetches production speed in a selected interval in minutes
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getProductionSpeedRequest.From query int true "start of the given time frame"
+// @Param getProductionSpeedRequest.To query int true "end of the given time frame"
+// @Param getProductionSpeedRequest.AggregationInterval query int false "interval in minutes"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/productionSpeed [GET]
 func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProductionSpeedRequest getProductionSpeedRequest
@@ -1541,6 +1849,19 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 	c.JSON(http.StatusOK, counts)
 }
 
+//processQualityRateRequest
+// @Summary Fetches quality rate in a selected interval in minutes
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getQualityRateRequest.From query int true "start of the given time frame"
+// @Param getQualityRateRequest.To query int true "end of the given time frame"
+// @Param getQualityRateRequest.AggregationInterval query int false "interval in minutes"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/qualityRate [GET]
 func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getQualityRateRequest getQualityRateRequest
@@ -1562,6 +1883,7 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, counts)
 }
 
+//no annotation yet because dysfunctional
 func processFactoryLocationsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var data datamodel.DataResponseAny
@@ -1580,6 +1902,18 @@ type getAverageCleaningTimeRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processAverageCleaningTimeRequest
+// @Summary calculates the average cleaning time per day in the given time frame
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getAverageCleaningTimeRequest.From query int true "start of the given time frame"
+// @Param getAverageCleaningTimeRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/averageCleaningTime [GET]
 func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1706,6 +2040,18 @@ type getAverageChangeoverTimeRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processAverageChangeoverTimeRequest
+// @Summary calculates the average changeover time per day in the given time frame
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getAverageChangeoverTimeRequest.From query int true "start of the given time frame"
+// @Param getAverageChangeoverTimeRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/averageChangeoverTime [GET]
 func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1821,6 +2167,18 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 	c.JSON(http.StatusOK, data)
 }
 
+//processUniqueProductsWithTagsRequest
+// @Summary fetches all unique products with tags during the specified time frame
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getUniqueProductsWithTagsRequest.From query int true "start of the given time frame"
+// @Param getUniqueProductsWithTagsRequest.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/uniqueProductsWithTags [GET]
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getUniqueProductsWithTagsRequest getUniqueProductsWithTagsRequest
@@ -1846,6 +2204,18 @@ type getProcessAccumulatedProducts struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+//processAccumulatedProducts
+// @Summary calculates the accumulated count of all products of the asset in the specified time frame
+// @Accepts json
+// @Produces json
+// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
+// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
+// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param getProcessAccumulatedProducts.From query int true "start of the given time frame"
+// @Param getProcessAccumulatedProducts.To query int true "end of the given time frame"
+// @Success 200 {array} string "ok"
+// @Failure 500 {string} string "Internal Error"
+// @Router /{customer}/{location}/{asset}/accumulatedProducts [GET]
 func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProcessAccumulatedProducts getProcessAccumulatedProducts
