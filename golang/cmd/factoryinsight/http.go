@@ -97,8 +97,9 @@ type getLocationsRequest struct {
 // @ID get-locations
 // @Accept json
 // @Produce json
-// @Param type getLocationsRequest.Customer path string true "Name of customer whose locations are requested"
+// @Param customer path string true "Name of customer whose locations are requested"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer} [GET]
 func getLocationsHandler(c *gin.Context) {
@@ -142,9 +143,10 @@ type getAssetsRequest struct {
 // @ID get-assets
 // @Accept json
 // @Produce json
-// @Param getAssetsRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getAssetsRequest.Location path string true "Name of location whose assets are requested"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose assets are requested"
 // @Success 200	{array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/ [GET]
 func getAssetsHandler(c *gin.Context) {
@@ -183,16 +185,17 @@ type getValuesRequest struct {
 	Asset    string `uri:"asset" binding:"required"`
 }
 
-// getValuesRequest
+// getValuesHandler
 // @Summary Fetches the values for a certain asset
 // @Description Checks for User authorization, then reads out the values and returns them in an array of strings
 // @ID get-values
 // @Accept json
 // @Produce json
-// @Param getValuesRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getValuesRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getValuesRequest.Asset path string true "Name of asset whose values are requested"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose values are requested"
 // @Success 200	{array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset} [GET]
 func getValuesHandler(c *gin.Context) {
@@ -273,11 +276,12 @@ type getDataRequest struct {
 // @ID get-data
 // @Accept json
 // @Produce json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getDataRequest.Value path string true "Name of value whose data is requested"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param value path string true "Name of value whose data is requested"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/{value} [GET]
 func getDataHandler(c *gin.Context) {
@@ -326,8 +330,6 @@ func getDataHandler(c *gin.Context) {
 		processShiftsRequest(c, getDataRequest)
 	case "stateHistogram":
 		processStateHistogramRequest(c, getDataRequest)
-	case "factoryLocations":
-		processFactoryLocationsRequest(c, getDataRequest)
 	case "averageCleaningTime":
 		processAverageCleaningTimeRequest(c, getDataRequest)
 	case "averageChangeoverTime":
@@ -378,13 +380,14 @@ type getStatesRequest struct {
 // @ID process-states-request
 // @Accept json
 // @Produce json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getStatesRequest.From query int true "Time point of the start of the time frame"
-// @Param getStatesRequest.To query int true "Time point of the end of the time frame"
-// @Param getStatesRequest.KeepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "Time point of the start of the time frame"
+// @Param to query int true "Time point of the end of the time frame"
+// @Param keepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/state [GET]
 func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -498,15 +501,16 @@ type getAggregatedStatesRequest struct {
 // @ID process-aggregated-states-request
 // @Accept json
 // @Produce json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getAggregatedStatesRequest.From query int true "Time point of the start of the time frame"
-// @Param getAggregatedStatesRequest.To query int true "Time point of the end of the time frame"
-// @Param getAggregatedStatesRequest.IncludeRunning query bool true "Includes running states if true"
-// @Param getAggregatedStatesRequest.KeepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
-// @Param getAggregatedStatesRequest.AggregationType query int false "Aggregationtype: 0 for entire time span, 1 for hours in days"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "Time point of the start of the time frame"
+// @Param to query int true "Time point of the end of the time frame"
+// @Param includeRunning query bool true "Includes running states if true"
+// @Param keepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
+// @Param aggregationType query int false "Aggregationtype: 0 for entire time span, 1 for hours in days"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/aggregatedStates [GET]
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -681,12 +685,13 @@ type getAvailabilityRequest struct {
 // @ID process-availability-request
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getAvailabilityRequest.From query int true "start of the given time frame"
-// @Param getAvailabilityRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/availability [GET]
 func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -816,12 +821,13 @@ type getPerformanceRequest struct {
 // @Summary calculates the pareto performances for a given timeframe
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getPerformanceRequest.From query int true "start of the given time frame"
-// @Param getPerformanceRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/performance [GET]
 func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -951,12 +957,13 @@ type getQualityRequest struct {
 // @Summary calculates Quality metric for OEE calculation
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getQualityRequest.From query int true "start of the given time frame"
-// @Param getQualityRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/quality [GET]
 func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1054,12 +1061,13 @@ type getOEERequest struct {
 // @Summary calculates daily OEE values for asset in the given time frame
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getOEERequest.From query int true "start of the given time frame"
-// @Param getOEERequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/oee [GET]
 func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1195,14 +1203,15 @@ type getStateHistogramRequest struct {
 // @Summary calculates a state histogram for a data state entry
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getStateHistogramRequest.From query int true "start of the given time frame"
-// @Param getStateHistogramRequest.To query int true "end of the given time frame"
-// @Param getStateHistogramRequest.IncludeRunning query bool false "true if it should include running"
-// @Param getStateHistogramRequest.KeepStatesInteger query bool false "true if you want to keep states as integers, false if you want them as strings"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
+// @Param includeRunning query bool false "true if it should include running"
+// @Param keepStatesInteger query bool false "true if you want to keep states as integers, false if you want them as strings"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/stateHistogram [GET]
 func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1342,11 +1351,12 @@ type getUniqueProductsWithTagsRequest struct {
 // @Summary fetches current state of the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getCurrentStateRequest.KeepStatesInteger query string false "true if you want to keep states as integers, false if you want them as strings"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param keepStatesInteger query string false "true if you want to keep states as integers, false if you want them as strings"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/currentState [GET]
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1374,12 +1384,13 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary fetches count of the asset within the time frame
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getCountRequest.From query int true "start of the given time frame"
-// @Param getCountRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/count [GET]
 func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1408,10 +1419,11 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Gets action recommendations for the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/recommendation [GET]
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1429,12 +1441,13 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 // @Summary Gets action recommendations for the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getShiftsRequest.From query int true "start of the given time frame"
-// @Param getShiftsRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/shifts [GET]
 func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1462,14 +1475,16 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Description The values needs to be named with the prefix "process_"
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getProcessValueRequest.From query int true "start of the given time frame"
-// @Param getProcessValueRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param value path string true "Name of the value, needs to start with `process_`"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
-// @Router /{customer}/{location}/{asset}/{process} [GET]
+// @Router /{customer}/{location}/{asset}/{value} [GET]
 func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProcessValueRequest getProcessValueRequest
@@ -1498,10 +1513,11 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Fetches data from first time stamp to last one, e.g. for recommendations
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/timeRange [GET]
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1519,10 +1535,11 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Fetches data about upcoming maintenance activities of the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/upcomingMaintenanceActivities [GET]
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1571,12 +1588,13 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 // @Summary Fetches unstarted orders of the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getOrderRequest.From query int true "start of the given time frame"
-// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/unstartedOrderTable [GET]
 func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1613,12 +1631,13 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 // @Summary Fetches order data of the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getOrderRequest.From query int true "start of the given time frame"
-// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/orderTable [GET]
 func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1698,12 +1717,13 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Fetches all orders in a timeline in the time frame of the asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getOrderRequest.From query int true "start of the given time frame"
-// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/orderTimeline [GET]
 func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1733,12 +1753,13 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 // @Summary Gets all maintenance activities for an asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getOrderRequest.From query int true "start of the given time frame"
-// @Param getOrderRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/maintenanceActivities [GET]
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1757,12 +1778,13 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 // @Summary Gets all maintenance activities for an asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getUniqueProductsRequest.From query int true "start of the given time frame"
-// @Param getUniqueProductsRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/uniqueProducts [GET]
 func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1791,10 +1813,11 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 // @Summary Fetches all components for an asset
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/maintenanceComponents [GET]
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1819,13 +1842,14 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 // @Summary Fetches production speed in a selected interval in minutes
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getProductionSpeedRequest.From query int true "start of the given time frame"
-// @Param getProductionSpeedRequest.To query int true "end of the given time frame"
-// @Param getProductionSpeedRequest.AggregationInterval query int false "interval in minutes"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
+// @Param aggregationInterval query int false "interval in minutes"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/productionSpeed [GET]
 func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1853,13 +1877,14 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 // @Summary Fetches quality rate in a selected interval in minutes
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getQualityRateRequest.From query int true "start of the given time frame"
-// @Param getQualityRateRequest.To query int true "end of the given time frame"
-// @Param getQualityRateRequest.AggregationInterval query int false "interval in minutes"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
+// @Param aggregationInterval query int false "interval in minutes"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/qualityRate [GET]
 func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -1883,18 +1908,6 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, counts)
 }
 
-//no annotation yet because dysfunctional
-func processFactoryLocationsRequest(c *gin.Context, getDataRequest getDataRequest) {
-
-	var data datamodel.DataResponseAny
-	data.ColumnNames = []string{"Location", "Metric", "Geohash"}
-
-	fullRow := []interface{}{"Aachen", 80, "u1h2fe"}
-	data.Datapoints = append(data.Datapoints, fullRow)
-
-	c.JSON(http.StatusOK, data)
-}
-
 // ---------------------- getAverageCleaningTime ----------------------
 
 type getAverageCleaningTimeRequest struct {
@@ -1906,12 +1919,13 @@ type getAverageCleaningTimeRequest struct {
 // @Summary calculates the average cleaning time per day in the given time frame
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getAverageCleaningTimeRequest.From query int true "start of the given time frame"
-// @Param getAverageCleaningTimeRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/averageCleaningTime [GET]
 func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -2044,12 +2058,13 @@ type getAverageChangeoverTimeRequest struct {
 // @Summary calculates the average changeover time per day in the given time frame
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getAverageChangeoverTimeRequest.From query int true "start of the given time frame"
-// @Param getAverageChangeoverTimeRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/averageChangeoverTime [GET]
 func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -2171,12 +2186,13 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 // @Summary fetches all unique products with tags during the specified time frame
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getUniqueProductsWithTagsRequest.From query int true "start of the given time frame"
-// @Param getUniqueProductsWithTagsRequest.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/uniqueProductsWithTags [GET]
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
@@ -2208,12 +2224,13 @@ type getProcessAccumulatedProducts struct {
 // @Summary calculates the accumulated count of all products of the asset in the specified time frame
 // @Accepts json
 // @Produces json
-// @Param getDataRequest.Customer path string true "Name of customer whose location is accessed"
-// @Param getDataRequest.Location path string true "Name of location whose asset is accessed"
-// @Param getDataRequest.Asset path string true "Name of asset whose value is accessed"
-// @Param getProcessAccumulatedProducts.From query int true "start of the given time frame"
-// @Param getProcessAccumulatedProducts.To query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed"
+// @Param location path string true "Name of location whose asset is accessed"
+// @Param asset path string true "Name of asset whose value is accessed"
+// @Param from query int true "start of the given time frame"
+// @Param to query int true "end of the given time frame"
 // @Success 200 {array} string "ok"
+// @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/accumulatedProducts [GET]
 func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {

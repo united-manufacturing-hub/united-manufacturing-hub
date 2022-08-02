@@ -21,7 +21,7 @@ paths:
       parameters:
       - description: Name of customer whose locations are requested
         in: path
-        name: getLocationsRequest.Customer
+        name: customer
         required: true
         type: string
       produces:
@@ -33,6 +33,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -48,12 +52,12 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getAssetsRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose assets are requested
         in: path
-        name: getAssetsRequest.Location
+        name: location
         required: true
         type: string
       produces:
@@ -65,6 +69,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -80,17 +88,17 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getValuesRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getValuesRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose values are requested
         in: path
-        name: getValuesRequest.Asset
+        name: asset
         required: true
         type: string
       produces:
@@ -102,38 +110,47 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
             type: string
       summary: Fetches the values for a certain asset
-  /{customer}/{location}/{asset}/{process}:
+  /{customer}/{location}/{asset}/{value}:
     get:
       description: The values needs to be named with the prefix "process_"
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
+        required: true
+        type: string
+      - description: Name of the value, needs to start with `process_`
+        in: path
+        name: value
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getProcessValueRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getProcessValueRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -143,77 +160,41 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
             type: string
       summary: Fetches custom process values from the asset within the timeframe
-  /{customer}/{location}/{asset}/{value}:
-    get:
-      consumes:
-      - application/json
-      operationId: get-data
-      parameters:
-      - description: Name of customer whose location is accessed
-        in: path
-        name: getDataRequest.Customer
-        required: true
-        type: string
-      - description: Name of location whose asset is accessed
-        in: path
-        name: getDataRequest.Location
-        required: true
-        type: string
-      - description: Name of asset whose value is accessed
-        in: path
-        name: getDataRequest.Asset
-        required: true
-        type: string
-      - description: Name of value whose data is requested
-        in: path
-        name: getDataRequest.Value
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ok
-          schema:
-            items:
-              type: string
-            type: array
-        "500":
-          description: Internal Error
-          schema:
-            type: string
-      summary: Fetches the data of the requested value
   /{customer}/{location}/{asset}/accumulatedProducts:
     get:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getProcessAccumulatedProducts.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getProcessAccumulatedProducts.To
+        name: to
         required: true
         type: integer
       responses:
@@ -223,6 +204,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -237,41 +222,41 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: Time point of the start of the time frame
         in: query
-        name: getAggregatedStatesRequest.From
+        name: from
         required: true
         type: integer
       - description: Time point of the end of the time frame
         in: query
-        name: getAggregatedStatesRequest.To
+        name: to
         required: true
         type: integer
       - description: Includes running states if true
         in: query
-        name: getAggregatedStatesRequest.IncludeRunning
+        name: includeRunning
         required: true
         type: boolean
       - description: Collects states as integer codes if true and as string if false
         in: query
-        name: getAggregatedStatesRequest.KeepStatesInteger
+        name: keepStatesInteger
         type: boolean
       - description: 'Aggregationtype: 0 for entire time span, 1 for hours in days'
         in: query
-        name: getAggregatedStatesRequest.AggregationType
+        name: aggregationType
         type: integer
       produces:
       - application/json
@@ -282,6 +267,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -293,27 +282,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getAvailabilityRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getAvailabilityRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -323,6 +312,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -334,27 +327,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getAverageChangeoverTimeRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getAverageChangeoverTimeRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -364,6 +357,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -374,27 +371,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getAverageCleaningTimeRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getAverageCleaningTimeRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -404,6 +401,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -414,27 +415,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getCountRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getCountRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -444,6 +445,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -454,23 +459,23 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: true if you want to keep states as integers, false if you want
           them as strings
         in: query
-        name: getCurrentStateRequest.KeepStatesInteger
+        name: keepStatesInteger
         type: string
       responses:
         "200":
@@ -479,6 +484,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -489,27 +498,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getOrderRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getOrderRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -519,6 +528,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -529,17 +542,17 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       responses:
@@ -549,6 +562,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -559,27 +576,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getOEERequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getOEERequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -589,6 +606,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -599,27 +620,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getOrderRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getOrderRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -629,6 +650,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -639,27 +664,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getOrderRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getOrderRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -669,6 +694,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -679,27 +708,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getPerformanceRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getPerformanceRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -709,6 +738,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -719,32 +752,32 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getProductionSpeedRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getProductionSpeedRequest.To
+        name: to
         required: true
         type: integer
       - description: interval in minutes
         in: query
-        name: getProductionSpeedRequest.AggregationInterval
+        name: aggregationInterval
         type: integer
       responses:
         "200":
@@ -753,6 +786,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -763,27 +800,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getQualityRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getQualityRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -793,6 +830,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -803,32 +844,32 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getQualityRateRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getQualityRateRequest.To
+        name: to
         required: true
         type: integer
       - description: interval in minutes
         in: query
-        name: getQualityRateRequest.AggregationInterval
+        name: aggregationInterval
         type: integer
       responses:
         "200":
@@ -837,6 +878,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -847,17 +892,17 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       responses:
@@ -867,6 +912,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -877,27 +926,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getShiftsRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getShiftsRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -907,6 +956,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -920,32 +973,32 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: Time point of the start of the time frame
         in: query
-        name: getStatesRequest.From
+        name: from
         required: true
         type: integer
       - description: Time point of the end of the time frame
         in: query
-        name: getStatesRequest.To
+        name: to
         required: true
         type: integer
       - description: Collects states as integer codes if true and as string if false
         in: query
-        name: getStatesRequest.KeepStatesInteger
+        name: keepStatesInteger
         type: boolean
       produces:
       - application/json
@@ -956,6 +1009,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -967,37 +1024,37 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getStateHistogramRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getStateHistogramRequest.To
+        name: to
         required: true
         type: integer
       - description: true if it should include running
         in: query
-        name: getStateHistogramRequest.IncludeRunning
+        name: includeRunning
         type: boolean
       - description: true if you want to keep states as integers, false if you want
           them as strings
         in: query
-        name: getStateHistogramRequest.KeepStatesInteger
+        name: keepStatesInteger
         type: boolean
       responses:
         "200":
@@ -1006,6 +1063,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -1016,17 +1077,17 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       responses:
@@ -1036,6 +1097,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -1046,27 +1111,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getUniqueProductsRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getUniqueProductsRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -1076,6 +1141,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -1086,27 +1155,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getUniqueProductsWithTagsRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getUniqueProductsWithTagsRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -1116,6 +1185,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -1126,27 +1199,27 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       - description: start of the given time frame
         in: query
-        name: getOrderRequest.From
+        name: from
         required: true
         type: integer
       - description: end of the given time frame
         in: query
-        name: getOrderRequest.To
+        name: to
         required: true
         type: integer
       responses:
@@ -1156,6 +1229,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:
@@ -1166,17 +1243,17 @@ paths:
       parameters:
       - description: Name of customer whose location is accessed
         in: path
-        name: getDataRequest.Customer
+        name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
         in: path
-        name: getDataRequest.Location
+        name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
         in: path
-        name: getDataRequest.Asset
+        name: asset
         required: true
         type: string
       responses:
@@ -1186,6 +1263,10 @@ paths:
             items:
               type: string
             type: array
+        "400":
+          description: You have provided a wrong input. Please check your parameters.
+          schema:
+            type: string
         "500":
           description: Internal Error
           schema:

@@ -38,7 +38,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose locations are requested",
-                        "name": "getLocationsRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     }
@@ -51,6 +51,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -77,14 +83,14 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getAssetsRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose assets are requested",
-                        "name": "getAssetsRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     }
@@ -97,6 +103,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -123,21 +135,21 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getValuesRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getValuesRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose values are requested",
-                        "name": "getValuesRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     }
@@ -150,6 +162,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -168,35 +186,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getProcessAccumulatedProducts.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getProcessAccumulatedProducts.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -209,6 +227,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -234,55 +258,55 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "Time point of the start of the time frame",
-                        "name": "getAggregatedStatesRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "Time point of the end of the time frame",
-                        "name": "getAggregatedStatesRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "boolean",
                         "description": "Includes running states if true",
-                        "name": "getAggregatedStatesRequest.IncludeRunning",
+                        "name": "includeRunning",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "boolean",
                         "description": "Collects states as integer codes if true and as string if false",
-                        "name": "getAggregatedStatesRequest.KeepStatesInteger",
+                        "name": "keepStatesInteger",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "description": "Aggregationtype: 0 for entire time span, 1 for hours in days",
-                        "name": "getAggregatedStatesRequest.AggregationType",
+                        "name": "aggregationType",
                         "in": "query"
                     }
                 ],
@@ -294,6 +318,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -313,35 +343,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getAvailabilityRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getAvailabilityRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -354,6 +384,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -372,35 +408,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getAverageChangeoverTimeRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getAverageChangeoverTimeRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -413,6 +449,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -431,35 +473,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getAverageCleaningTimeRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getAverageCleaningTimeRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -472,6 +514,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -490,35 +538,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getCountRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getCountRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -531,6 +579,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -549,28 +603,28 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "true if you want to keep states as integers, false if you want them as strings",
-                        "name": "getCurrentStateRequest.KeepStatesInteger",
+                        "name": "keepStatesInteger",
                         "in": "query"
                     }
                 ],
@@ -582,6 +636,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -600,35 +660,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getOrderRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getOrderRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -641,6 +701,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -659,21 +725,21 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     }
@@ -686,6 +752,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -704,35 +776,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getOEERequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getOEERequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -745,6 +817,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -763,35 +841,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getOrderRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getOrderRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -804,6 +882,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -822,35 +906,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getOrderRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getOrderRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -863,6 +947,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -881,35 +971,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getPerformanceRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getPerformanceRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -922,6 +1012,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -940,42 +1036,42 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getProductionSpeedRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getProductionSpeedRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "interval in minutes",
-                        "name": "getProductionSpeedRequest.AggregationInterval",
+                        "name": "aggregationInterval",
                         "in": "query"
                     }
                 ],
@@ -987,6 +1083,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1005,35 +1107,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getQualityRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getQualityRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -1046,6 +1148,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1064,42 +1172,42 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getQualityRateRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getQualityRateRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "interval in minutes",
-                        "name": "getQualityRateRequest.AggregationInterval",
+                        "name": "aggregationInterval",
                         "in": "query"
                     }
                 ],
@@ -1111,6 +1219,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1129,21 +1243,21 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     }
@@ -1156,6 +1270,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1174,35 +1294,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getShiftsRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getShiftsRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -1215,6 +1335,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1240,42 +1366,42 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "Time point of the start of the time frame",
-                        "name": "getStatesRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "Time point of the end of the time frame",
-                        "name": "getStatesRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "boolean",
                         "description": "Collects states as integer codes if true and as string if false",
-                        "name": "getStatesRequest.KeepStatesInteger",
+                        "name": "keepStatesInteger",
                         "in": "query"
                     }
                 ],
@@ -1287,6 +1413,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1305,48 +1437,48 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getStateHistogramRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getStateHistogramRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "boolean",
                         "description": "true if it should include running",
-                        "name": "getStateHistogramRequest.IncludeRunning",
+                        "name": "includeRunning",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
                         "description": "true if you want to keep states as integers, false if you want them as strings",
-                        "name": "getStateHistogramRequest.KeepStatesInteger",
+                        "name": "keepStatesInteger",
                         "in": "query"
                     }
                 ],
@@ -1358,6 +1490,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1376,21 +1514,21 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     }
@@ -1403,6 +1541,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1421,35 +1565,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getUniqueProductsRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getUniqueProductsRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -1462,6 +1606,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1480,35 +1630,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getUniqueProductsWithTagsRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getUniqueProductsWithTagsRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -1521,6 +1671,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1539,35 +1695,35 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "start of the given time frame",
-                        "name": "getOrderRequest.From",
+                        "name": "from",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "integer",
                         "description": "end of the given time frame",
-                        "name": "getOrderRequest.To",
+                        "name": "to",
                         "in": "query",
                         "required": true
                     }
@@ -1580,6 +1736,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
@@ -1598,21 +1760,21 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     }
@@ -1627,64 +1789,10 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "500": {
-                        "description": "Internal Error",
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
                         "schema": {
                             "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/{customer}/{location}/{asset}/{process}": {
-            "get": {
-                "description": "The values needs to be named with the prefix \"process_\"",
-                "summary": "Fetches custom process values from the asset within the timeframe",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "start of the given time frame",
-                        "name": "getProcessValueRequest.From",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "end of the given time frame",
-                        "name": "getProcessValueRequest.To",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "ok",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
                         }
                     },
                     "500": {
@@ -1698,41 +1806,49 @@ const docTemplate = `{
         },
         "/{customer}/{location}/{asset}/{value}": {
             "get": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "summary": "Fetches the data of the requested value",
-                "operationId": "get-data",
+                "description": "The values needs to be named with the prefix \"process_\"",
+                "summary": "Fetches custom process values from the asset within the timeframe",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "Name of customer whose location is accessed",
-                        "name": "getDataRequest.Customer",
+                        "name": "customer",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of location whose asset is accessed",
-                        "name": "getDataRequest.Location",
+                        "name": "location",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Name of asset whose value is accessed",
-                        "name": "getDataRequest.Asset",
+                        "name": "asset",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Name of value whose data is requested",
-                        "name": "getDataRequest.Value",
+                        "description": "Name of the value, needs to start with ` + "`" + `process_` + "`" + `",
+                        "name": "value",
                         "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "start of the given time frame",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "end of the given time frame",
+                        "name": "to",
+                        "in": "query",
                         "required": true
                     }
                 ],
@@ -1744,6 +1860,12 @@ const docTemplate = `{
                             "items": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "You have provided a wrong input. Please check your parameters.",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "500": {
