@@ -153,7 +153,7 @@ func main() {
 		ShutdownApplicationGraceful()
 
 	}()
-
+	select {} // block forever
 }
 
 func isShutdownEnabled() healthcheck.Check {
