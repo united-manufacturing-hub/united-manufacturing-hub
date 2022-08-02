@@ -22,6 +22,7 @@ Then the results are bundled together and a return JSON is created.
 // @license.name GNU Affero General Public License v3.0
 // @license.url https://fsf.org
 // @BasePath /api/v1
+// @securityDefinitions.basic BasicAuth
 import (
 	"fmt"
 	"net/http"

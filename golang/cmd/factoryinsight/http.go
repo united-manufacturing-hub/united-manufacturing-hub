@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/docs"
 	"net/http"
 	"strings"
@@ -50,7 +48,6 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 		v1.GET("/:customer/:location/:asset", getValuesHandler)
 		v1.GET("/:customer/:location/:asset/:value", getDataHandler)
 	}
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.Run(":80")
 }
@@ -102,6 +99,7 @@ type getLocationsRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer} [GET]
+// @securityDefinitions.basic BasicAuth
 func getLocationsHandler(c *gin.Context) {
 
 	var getLocationsRequest getLocationsRequest
@@ -149,6 +147,7 @@ type getAssetsRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/ [GET]
+// @securityDefinitions.basic BasicAuth
 func getAssetsHandler(c *gin.Context) {
 
 	var getAssetsRequest getAssetsRequest
@@ -198,6 +197,7 @@ type getValuesRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset} [GET]
+// @securityDefinitions.basic BasicAuth
 func getValuesHandler(c *gin.Context) {
 
 	var getValuesRequest getValuesRequest
@@ -284,6 +284,7 @@ type getDataRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/{value} [GET]
+// @securityDefinitions.basic BasicAuth
 func getDataHandler(c *gin.Context) {
 
 	var getDataRequest getDataRequest
@@ -390,6 +391,7 @@ type getStatesRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/state [GET]
+// @securityDefinitions.basic BasicAuth
 func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -513,6 +515,7 @@ type getAggregatedStatesRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/aggregatedStates [GET]
+// @securityDefinitions.basic BasicAuth
 func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -694,6 +697,7 @@ type getAvailabilityRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/availability [GET]
+// @securityDefinitions.basic BasicAuth
 func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -830,6 +834,7 @@ type getPerformanceRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/performance [GET]
+// @securityDefinitions.basic BasicAuth
 func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -966,6 +971,7 @@ type getQualityRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/quality [GET]
+// @securityDefinitions.basic BasicAuth
 func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1070,6 +1076,7 @@ type getOEERequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/oee [GET]
+// @securityDefinitions.basic BasicAuth
 func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1214,6 +1221,7 @@ type getStateHistogramRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/stateHistogram [GET]
+// @securityDefinitions.basic BasicAuth
 func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -1359,6 +1367,7 @@ type getUniqueProductsWithTagsRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/currentState [GET]
+// @securityDefinitions.basic BasicAuth
 func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getCurrentStateRequest getCurrentStateRequest
@@ -1393,6 +1402,7 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/count [GET]
+// @securityDefinitions.basic BasicAuth
 func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getCountsRequest getCountsRequest
@@ -1426,6 +1436,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/recommendation [GET]
+// @securityDefinitions.basic BasicAuth
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1450,6 +1461,7 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/shifts [GET]
+// @securityDefinitions.basic BasicAuth
 func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getShiftsRequest getShiftsRequest
@@ -1485,6 +1497,7 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/{value} [GET]
+// @securityDefinitions.basic BasicAuth
 func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProcessValueRequest getProcessValueRequest
@@ -1520,6 +1533,7 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/timeRange [GET]
+// @securityDefinitions.basic BasicAuth
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1542,6 +1556,7 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/upcomingMaintenanceActivities [GET]
+// @securityDefinitions.basic BasicAuth
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
@@ -1597,6 +1612,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/unstartedOrderTable [GET]
+// @securityDefinitions.basic BasicAuth
 func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getOrderRequest getOrderRequest
@@ -1640,6 +1656,7 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/orderTable [GET]
+// @securityDefinitions.basic BasicAuth
 func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getOrderRequest getOrderRequest
@@ -1726,6 +1743,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/orderTimeline [GET]
+// @securityDefinitions.basic BasicAuth
 func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getOrderRequest getOrderRequest
@@ -1762,6 +1780,7 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/maintenanceActivities [GET]
+// @securityDefinitions.basic BasicAuth
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1787,6 +1806,7 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/uniqueProducts [GET]
+// @securityDefinitions.basic BasicAuth
 func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getUniqueProductsRequest getUniqueProductsRequest
@@ -1820,6 +1840,7 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/maintenanceComponents [GET]
+// @securityDefinitions.basic BasicAuth
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1852,6 +1873,7 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/productionSpeed [GET]
+// @securityDefinitions.basic BasicAuth
 func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProductionSpeedRequest getProductionSpeedRequest
@@ -1887,6 +1909,7 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/qualityRate [GET]
+// @securityDefinitions.basic BasicAuth
 func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getQualityRateRequest getQualityRateRequest
@@ -1928,6 +1951,7 @@ type getAverageCleaningTimeRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/averageCleaningTime [GET]
+// @securityDefinitions.basic BasicAuth
 func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -2067,6 +2091,7 @@ type getAverageChangeoverTimeRequest struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/averageChangeoverTime [GET]
+// @securityDefinitions.basic BasicAuth
 func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### store getDataRequest in proper variables ###
@@ -2195,6 +2220,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/uniqueProductsWithTags [GET]
+// @securityDefinitions.basic BasicAuth
 func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getUniqueProductsWithTagsRequest getUniqueProductsWithTagsRequest
@@ -2233,6 +2259,7 @@ type getProcessAccumulatedProducts struct {
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
 // @Router /{customer}/{location}/{asset}/accumulatedProducts [GET]
+// @securityDefinitions.basic BasicAuth
 func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
 
 	var getProcessAccumulatedProducts getProcessAccumulatedProducts

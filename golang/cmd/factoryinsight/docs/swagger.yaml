@@ -1272,4 +1272,7 @@ paths:
           schema:
             type: string
       summary: Fetches data about upcoming maintenance activities of the asset
+securityDefinitions:
+  BasicAuth:
+    type: basic
 swagger: "2.0"
