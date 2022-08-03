@@ -18,7 +18,7 @@ require (
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.6
-	github.com/minio/minio-go/v7 v7.0.29
+	github.com/minio/minio-go/v7 v7.0.34
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.12.2
@@ -27,7 +27,6 @@ require (
 	github.com/zeebo/xxh3 v1.0.1
 	go.elastic.co/ecszap v1.0.1
 	go.uber.org/zap v1.21.0
-	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
 	gonum.org/v1/gonum v0.11.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	k8s.io/apimachinery v0.24.3

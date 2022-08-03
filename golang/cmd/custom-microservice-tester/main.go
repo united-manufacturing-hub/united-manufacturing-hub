@@ -30,10 +30,6 @@ func main() {
 
 	zap.S().Infof("This is custom-microservice-tester build date: %s", buildtime)
 
-	// pprof for port testing
-	zap.S().Debugf("Starting pprof server on port 8080")
-	go http.ListenAndServe(":8080", nil)
-
 	// Print all env variables
 	zap.S().Debugf("Printing all env variables")
 	for _, v := range os.Environ() {
@@ -44,11 +40,11 @@ func main() {
 	zap.S().Debugf("Writing to stateful storage")
 
 	// Check if hello-world file exists
-	if _, err := os.Stat("/tmp/hello-world"); os.IsNotExist(err) {
+	if _, err := os.Stat("/data/hello-world"); os.IsNotExist(err) {
 		zap.S().Debugf("hello-world file does not exist")
 		// Create hello-world file
 		zap.S().Debugf("Creating hello-world file")
-		err := ioutil.WriteFile("/tmp/hello-world", []byte("Hello World"), 0644)
+		err := ioutil.WriteFile("/data/hello-world", []byte("Hello World"), 0644)
 		if err != nil {
 			panic(err)
 		}
@@ -56,6 +52,7 @@ func main() {
 		zap.S().Debugf("hello-world file exists")
 	}
 
+	go sampleWebServer()
 	go livenessServer()
 
 	// Wait forever
@@ -76,8 +73,15 @@ func livenessHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func livenessServer() {
-	http.HandleFunc("/health", livenessHandler)
-	http.ListenAndServe(":9091", nil)
+	serverMuxA := http.NewServeMux()
+	serverMuxA.HandleFunc("/health", livenessHandler)
+	http.ListenAndServe(":9091", serverMuxA)
+}
+
+func sampleWebServer() {
+	serverMuxB := http.NewServeMux()
+	serverMuxB.HandleFunc("/health", livenessHandler)
+	http.ListenAndServe(":81", serverMuxB)
 }
 
 // Random bool generation (https://stackoverflow.com/questions/45030618/generate-a-random-bool-in-go)
