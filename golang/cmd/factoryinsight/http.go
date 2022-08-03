@@ -90,11 +90,11 @@ type getLocationsRequest struct {
 
 // getLocationsHandler
 // @Summary Fetches the Location for the Message topic
-// @Description Checks for User authorization, then reads out the location and returns it
+// @Description Checks for User authorization, then reads out the locations of the customer and returns it
 // @ID get-locations
 // @Accept json
 // @Produce json
-// @Param customer path string true "Name of customer whose locations are requested"
+// @Param customer path string true "Name of customer whose locations are requested" example(DCCAachen)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -141,8 +141,8 @@ type getAssetsRequest struct {
 // @ID get-assets
 // @Accept json
 // @Produce json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose assets are requested"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose assets are requested" example(AachenPlant)
 // @Success 200	{array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -190,9 +190,9 @@ type getValuesRequest struct {
 // @ID get-values
 // @Accept json
 // @Produce json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose values are requested"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose values are requested" example(WeavingMachine)
 // @Success 200	{array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -276,10 +276,10 @@ type getDataRequest struct {
 // @ID get-data
 // @Accept json
 // @Produce json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param value path string true "Name of value whose data is requested"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param value path string true "Name of value whose data is requested" example(state)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -381,12 +381,12 @@ type getStatesRequest struct {
 // @ID process-states-request
 // @Accept json
 // @Produce json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "Time point of the start of the time frame"
-// @Param to query int true "Time point of the end of the time frame"
-// @Param keepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "Time point of the start of the time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "Time point of the end of the time frame" example("2020-11-10T00:00:00.000Z")
+// @Param keepStatesInteger	query bool false "Collects states as integer codes if true and as string if false" example(true)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -503,14 +503,14 @@ type getAggregatedStatesRequest struct {
 // @ID process-aggregated-states-request
 // @Accept json
 // @Produce json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "Time point of the start of the time frame"
-// @Param to query int true "Time point of the end of the time frame"
-// @Param includeRunning query bool true "Includes running states if true"
-// @Param keepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"
-// @Param aggregationType query int false "Aggregationtype: 0 for entire time span, 1 for hours in days"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "Time point of the start of the time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "Time point of the end of the time frame" example("2020-11-10T00:00:00.000Z")
+// @Param includeRunning query bool true "Includes running states if true"  example(true)
+// @Param keepStatesInteger	query bool false "Collects states as integer codes if true and as string if false"  example(true)
+// @Param aggregationType query int false "Aggregationtype: 0 for entire time span, 1 for hours in days" example(1)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -688,11 +688,11 @@ type getAvailabilityRequest struct {
 // @ID process-availability-request
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -825,11 +825,11 @@ type getPerformanceRequest struct {
 // @Summary calculates the pareto performances for a given timeframe
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -962,11 +962,11 @@ type getQualityRequest struct {
 // @Summary calculates Quality metric for OEE calculation
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1067,11 +1067,11 @@ type getOEERequest struct {
 // @Summary calculates daily OEE values for asset in the given time frame
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1210,13 +1210,13 @@ type getStateHistogramRequest struct {
 // @Summary calculates a state histogram for a data state entry
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
-// @Param includeRunning query bool false "true if it should include running"
-// @Param keepStatesInteger query bool false "true if you want to keep states as integers, false if you want them as strings"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param includeRunning query bool false "true if it should include running"  example(true)
+// @Param keepStatesInteger query bool false "true if you want to keep states as integers, false if you want them as strings" example(true)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1359,10 +1359,10 @@ type getUniqueProductsWithTagsRequest struct {
 // @Summary fetches current state of the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param keepStatesInteger query string false "true if you want to keep states as integers, false if you want them as strings"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param keepStatesInteger query string false "true if you want to keep states as integers, false if you want them as strings"  example(true)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1393,11 +1393,11 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary fetches count of the asset within the time frame
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1429,9 +1429,9 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Gets action recommendations for the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1452,11 +1452,11 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 // @Summary Gets action recommendations for the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1487,12 +1487,12 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Description The values needs to be named with the prefix "process_"
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param value path string true "Name of the value, needs to start with `process_`"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param value path string true "Name of the value, needs to start with `process_`" example (process_value1)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1526,9 +1526,9 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Fetches data from first time stamp to last one, e.g. for recommendations
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1549,9 +1549,9 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Fetches data about upcoming maintenance activities of the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1603,11 +1603,11 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 // @Summary Fetches unstarted orders of the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1647,11 +1647,11 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 // @Summary Fetches order data of the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1734,11 +1734,11 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 // @Summary Fetches all orders in a timeline in the time frame of the asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1771,11 +1771,11 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 // @Summary Gets all maintenance activities for an asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1797,11 +1797,11 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 // @Summary Gets all maintenance activities for an asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1833,9 +1833,9 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 // @Summary Fetches all components for an asset
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1863,12 +1863,12 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 // @Summary Fetches production speed in a selected interval in minutes
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
-// @Param aggregationInterval query int false "interval in minutes"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param aggregationInterval query int false "interval in minutes" example(60)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1899,12 +1899,12 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 // @Summary Fetches quality rate in a selected interval in minutes
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
-// @Param aggregationInterval query int false "interval in minutes"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param aggregationInterval query int false "interval in minutes" example(60)
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -1942,11 +1942,11 @@ type getAverageCleaningTimeRequest struct {
 // @Summary calculates the average cleaning time per day in the given time frame
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -2082,11 +2082,11 @@ type getAverageChangeoverTimeRequest struct {
 // @Summary calculates the average changeover time per day in the given time frame
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -2211,11 +2211,11 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 // @Summary fetches all unique products with tags during the specified time frame
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"
@@ -2250,11 +2250,11 @@ type getProcessAccumulatedProducts struct {
 // @Summary calculates the accumulated count of all products of the asset in the specified time frame
 // @Accepts json
 // @Produces json
-// @Param customer path string true "Name of customer whose location is accessed"
-// @Param location path string true "Name of location whose asset is accessed"
-// @Param asset path string true "Name of asset whose value is accessed"
-// @Param from query int true "start of the given time frame"
-// @Param to query int true "end of the given time frame"
+// @Param customer path string true "Name of customer whose location is accessed" example(DCCAachen)
+// @Param location path string true "Name of location whose asset is accessed" example(AachenPlant)
+// @Param asset path string true "Name of asset whose value is accessed" example(WeavingMachine)
+// @Param from query int true "start of the given time frame" example("2020-11-10T00:00:00.000Z")
+// @Param to query int true "end of the given time frame" example("2020-11-10T00:00:00.000Z")
 // @Success 200 {array} string "ok"
 // @Failure 400 {string} string "You have provided a wrong input. Please check your parameters."
 // @Failure 500 {string} string "Internal Error"

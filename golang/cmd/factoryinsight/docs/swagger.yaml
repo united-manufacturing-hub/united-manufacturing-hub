@@ -15,11 +15,12 @@ paths:
     get:
       consumes:
       - application/json
-      description: Checks for User authorization, then reads out the location and
-        returns it
+      description: Checks for User authorization, then reads out the locations of
+        the customer and returns it
       operationId: get-locations
       parameters:
       - description: Name of customer whose locations are requested
+        example: DCCAachen
         in: path
         name: customer
         required: true
@@ -51,11 +52,13 @@ paths:
       operationId: get-assets
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose assets are requested
+        example: AachenPlant
         in: path
         name: location
         required: true
@@ -87,16 +90,19 @@ paths:
       operationId: get-values
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose values are requested
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -124,16 +130,19 @@ paths:
       description: The values needs to be named with the prefix "process_"
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -173,16 +182,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -221,16 +233,19 @@ paths:
       operationId: process-aggregated-states-request
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -246,15 +261,18 @@ paths:
         required: true
         type: integer
       - description: Includes running states if true
+        example: true
         in: query
         name: includeRunning
         required: true
         type: boolean
       - description: Collects states as integer codes if true and as string if false
+        example: true
         in: query
         name: keepStatesInteger
         type: boolean
       - description: 'Aggregationtype: 0 for entire time span, 1 for hours in days'
+        example: 1
         in: query
         name: aggregationType
         type: integer
@@ -281,16 +299,19 @@ paths:
       operationId: process-availability-request
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -326,16 +347,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -370,16 +394,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -414,16 +441,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -458,22 +488,26 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
         type: string
       - description: true if you want to keep states as integers, false if you want
           them as strings
+        example: "true"
         in: query
         name: keepStatesInteger
         type: string
@@ -497,16 +531,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -541,16 +578,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -575,16 +615,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -619,16 +662,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -663,16 +709,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -707,16 +756,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -751,16 +803,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -776,6 +831,7 @@ paths:
         required: true
         type: integer
       - description: interval in minutes
+        example: 60
         in: query
         name: aggregationInterval
         type: integer
@@ -799,16 +855,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -843,16 +902,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -868,6 +930,7 @@ paths:
         required: true
         type: integer
       - description: interval in minutes
+        example: 60
         in: query
         name: aggregationInterval
         type: integer
@@ -891,16 +954,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -925,16 +991,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -972,16 +1041,19 @@ paths:
       operationId: process-states-request
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -997,6 +1069,7 @@ paths:
         required: true
         type: integer
       - description: Collects states as integer codes if true and as string if false
+        example: true
         in: query
         name: keepStatesInteger
         type: boolean
@@ -1023,16 +1096,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -1048,11 +1124,13 @@ paths:
         required: true
         type: integer
       - description: true if it should include running
+        example: true
         in: query
         name: includeRunning
         type: boolean
       - description: true if you want to keep states as integers, false if you want
           them as strings
+        example: true
         in: query
         name: keepStatesInteger
         type: boolean
@@ -1076,16 +1154,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -1110,16 +1191,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -1154,16 +1238,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -1198,16 +1285,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true
@@ -1242,16 +1332,19 @@ paths:
     get:
       parameters:
       - description: Name of customer whose location is accessed
+        example: DCCAachen
         in: path
         name: customer
         required: true
         type: string
       - description: Name of location whose asset is accessed
+        example: AachenPlant
         in: path
         name: location
         required: true
         type: string
       - description: Name of asset whose value is accessed
+        example: WeavingMachine
         in: path
         name: asset
         required: true

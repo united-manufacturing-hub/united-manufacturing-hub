@@ -25,7 +25,7 @@ const docTemplate = `{
     "paths": {
         "/{customer}": {
             "get": {
-                "description": "Checks for User authorization, then reads out the location and returns it",
+                "description": "Checks for User authorization, then reads out the locations of the customer and returns it",
                 "consumes": [
                     "application/json"
                 ],
@@ -37,6 +37,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose locations are requested",
                         "name": "customer",
                         "in": "path",
@@ -82,6 +83,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -89,6 +91,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose assets are requested",
                         "name": "location",
                         "in": "path",
@@ -134,6 +137,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -141,6 +145,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -148,6 +153,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose values are requested",
                         "name": "asset",
                         "in": "path",
@@ -185,6 +191,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -192,6 +199,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -199,6 +207,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -257,6 +266,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -264,6 +274,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -271,6 +282,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -292,6 +304,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
+                        "example": true,
                         "description": "Includes running states if true",
                         "name": "includeRunning",
                         "in": "query",
@@ -299,12 +312,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
+                        "example": true,
                         "description": "Collects states as integer codes if true and as string if false",
                         "name": "keepStatesInteger",
                         "in": "query"
                     },
                     {
                         "type": "integer",
+                        "example": 1,
                         "description": "Aggregationtype: 0 for entire time span, 1 for hours in days",
                         "name": "aggregationType",
                         "in": "query"
@@ -342,6 +357,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -349,6 +365,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -356,6 +373,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -407,6 +425,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -414,6 +433,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -421,6 +441,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -472,6 +493,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -479,6 +501,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -486,6 +509,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -537,6 +561,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -544,6 +569,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -551,6 +577,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -602,6 +629,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -609,6 +637,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -616,6 +645,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -623,6 +653,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "true",
                         "description": "true if you want to keep states as integers, false if you want them as strings",
                         "name": "keepStatesInteger",
                         "in": "query"
@@ -659,6 +690,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -666,6 +698,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -673,6 +706,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -724,6 +758,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -731,6 +766,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -738,6 +774,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -775,6 +812,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -782,6 +820,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -789,6 +828,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -840,6 +880,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -847,6 +888,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -854,6 +896,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -905,6 +948,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -912,6 +956,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -919,6 +964,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -970,6 +1016,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -977,6 +1024,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -984,6 +1032,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1035,6 +1084,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1042,6 +1092,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1049,6 +1100,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1070,6 +1122,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "example": 60,
                         "description": "interval in minutes",
                         "name": "aggregationInterval",
                         "in": "query"
@@ -1106,6 +1159,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1113,6 +1167,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1120,6 +1175,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1171,6 +1227,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1178,6 +1235,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1185,6 +1243,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1206,6 +1265,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "example": 60,
                         "description": "interval in minutes",
                         "name": "aggregationInterval",
                         "in": "query"
@@ -1242,6 +1302,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1249,6 +1310,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1256,6 +1318,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1293,6 +1356,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1300,6 +1364,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1307,6 +1372,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1365,6 +1431,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1372,6 +1439,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1379,6 +1447,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1400,6 +1469,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
+                        "example": true,
                         "description": "Collects states as integer codes if true and as string if false",
                         "name": "keepStatesInteger",
                         "in": "query"
@@ -1436,6 +1506,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1443,6 +1514,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1450,6 +1522,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1471,12 +1544,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
+                        "example": true,
                         "description": "true if it should include running",
                         "name": "includeRunning",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
+                        "example": true,
                         "description": "true if you want to keep states as integers, false if you want them as strings",
                         "name": "keepStatesInteger",
                         "in": "query"
@@ -1513,6 +1588,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1520,6 +1596,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1527,6 +1604,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1564,6 +1642,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1571,6 +1650,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1578,6 +1658,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1629,6 +1710,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1636,6 +1718,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1643,6 +1726,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1694,6 +1778,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1701,6 +1786,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1708,6 +1794,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1759,6 +1846,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1766,6 +1854,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1773,6 +1862,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
@@ -1811,6 +1901,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "DCCAachen",
                         "description": "Name of customer whose location is accessed",
                         "name": "customer",
                         "in": "path",
@@ -1818,6 +1909,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "AachenPlant",
                         "description": "Name of location whose asset is accessed",
                         "name": "location",
                         "in": "path",
@@ -1825,6 +1917,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "WeavingMachine",
                         "description": "Name of asset whose value is accessed",
                         "name": "asset",
                         "in": "path",
