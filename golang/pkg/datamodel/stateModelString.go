@@ -90,6 +90,79 @@ func ConvertStateToString(state int, languageCode LanguageCode) (stateString str
 		default:
 			stateString = fmt.Sprintf("Unbekannter Zustand %d", state)
 		}
+	} else if languageCode == 1 { // TURKISH
+		switch state {
+		case ProducingAtFullSpeedState:
+			stateString = "Makine Çalışıyor"
+		case ProducingAtLowerThanFullSpeedState:
+			stateString = "Makine Düşük Hızda Çalışıyor"
+		case UnknownState:
+			stateString = "Veri Yok"
+		case IdleState:
+			stateString = "Hazır"
+		case OperatorInteractionState:
+			stateString = "Operatör Müdahalesi"
+		case UnspecifiedStopState:
+			stateString = "Bilinmeyen Duruş"
+		case MicrostopState:
+			stateString = "Kısa Duruş"
+		case InletJamState:
+			stateString = "Mangel am Einlauf"
+		case OutletJamState:
+			stateString = "Mangel am Auslauf"
+		case CongestionBypassState:
+			stateString = "Yarı Mamül Eksikliği"
+		case MissingBottleCapsRinneState:
+			stateString = "Mangel an Kronkorken (Rinne)"
+		case MissingBottleCapsUebergabeState:
+			stateString = "Mangel an Kronkorken (Übergabe)"
+		case MaterialIssueOtherState:
+			stateString = "Diğer Hammadde Sorunları"
+		case ChangeoverState:
+			stateString = "Model Değişimi"
+		case ChangeoverPreparationState:
+			stateString = "Model Değişim Hazırlık"
+		case ChangeoverPostprocessingState:
+			stateString = "Model Değişim Son Kontrol"
+		case CleaningState:
+			stateString = "Temizlik"
+		case EmptyingState:
+			stateString = "Boşaltma"
+		case SettingUpState:
+			stateString = "Hazırlama"
+		case OperatorNotAtMachineState:
+			stateString = "Operatör Makinede Değil"
+		case OperatorBreakState:
+			stateString = "Mola"
+		case NoShiftState:
+			stateString = "Vardiya Yok"
+		case NoOrderState:
+			stateString = "Sipariş Yok"
+		case EquipmentFailureState:
+			stateString = "Makine Arızası"
+		case EquipmentFailureStateWelder:
+			stateString = "Makine Arızası - Kaynak"
+		case EquipmentFailureStateExpender:
+			stateString = "Makine Arızası - Tutucu"
+		case EquipmentFailureStatePalletizer:
+			stateString = "Makine Arızası - Palet"
+		case EquipmentFailureStateUnderbody:
+			stateString = "Makine Arızası - Gövde"
+		case EquipmentFailureStateTopcover:
+			stateString = "Makine Arızası - Üst Taraf"
+		case ExternalFailureState:
+			stateString = "Harici Arıza"
+		case ExternalInterferenceState:
+			stateString = "Dış Müdahale"
+		case CraneNotAvailableState:
+			stateString = "Vinç Mevcut Değil"
+		case PreventiveMaintenanceStop:
+			stateString = "Bakım"
+		case TechnicalOtherStop:
+			stateString = "Diğer Teknik Arızalar"
+		default:
+			stateString = fmt.Sprintf("Bilinmeyen Durum %d", state)
+		}
 	} else { //ENGLISH
 		switch state {
 		case ProducingAtFullSpeedState:
