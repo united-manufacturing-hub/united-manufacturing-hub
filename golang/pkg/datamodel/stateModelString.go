@@ -9,7 +9,8 @@ type LanguageCode int
 
 const (
 	LanguageGerman  LanguageCode = 0
-	LanguageEnglish LanguageCode = 1
+	LanguageTurkish  LanguageCode = 1
+	LanguageEnglish LanguageCode = 2
 )
 
 // ConvertStateToString converts a state in integer format to a human readable string
