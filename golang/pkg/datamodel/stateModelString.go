@@ -9,8 +9,8 @@ type LanguageCode int
 
 const (
 	LanguageGerman  LanguageCode = 0
-	LanguageTurkish  LanguageCode = 1
-	LanguageEnglish LanguageCode = 2
+	LanguageEnglish LanguageCode = 1
+	LanguageTurkish  LanguageCode = 2
 )
 
 // ConvertStateToString converts a state in integer format to a human readable string
@@ -91,7 +91,7 @@ func ConvertStateToString(state int, languageCode LanguageCode) (stateString str
 		default:
 			stateString = fmt.Sprintf("Unbekannter Zustand %d", state)
 		}
-	} else if languageCode == 1 { // TURKISH
+	} else if languageCode == 2 { // TURKISH
 		switch state {
 		case ProducingAtFullSpeedState:
 			stateString = "Makine Çalışıyor"
