@@ -26,7 +26,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/zeebo/xxh3 v1.0.1
 	go.elastic.co/ecszap v1.0.1
-	go.uber.org/zap v1.21.0
+	go.uber.org/zap v1.22.0
 	gonum.org/v1/gonum v0.11.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	k8s.io/apimachinery v0.24.4
