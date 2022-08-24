@@ -1,5 +1,5 @@
 {{range $i, $value := .Values._001_customMicroservices | default dict}}
-{{if $value.statefulEnabled}}
+{{if and $value.statefulEnabled $value.enabled}}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
