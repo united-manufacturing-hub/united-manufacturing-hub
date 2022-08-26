@@ -965,6 +965,7 @@ _001_customMicroservices:
   -
       name: example
       image: hello-world:latest
+      enabled: false
 
       # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
       imagePullPolicy: Always
@@ -990,6 +991,7 @@ _001_customMicroservices:
   -
       name: example1
       image: hello-world:latest
+      enabled: false
 
       # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
       imagePullPolicy: Always
@@ -1015,6 +1017,7 @@ _001_customMicroservices:
   -
     name: cmtester
     image: unitedmanufacturinghub/custom-microservice-tester:latest
+    enabled: false
 
     # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
     imagePullPolicy: Always
