@@ -103,7 +103,11 @@ func startProcessValueQueueAggregator() {
 	}
 }
 
-func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka.Message, putback bool, reason string, err error) {
+func writeProcessValueToDatabase(messages []*kafka.Message) (
+	putBackMsg []*kafka.Message,
+	putback bool,
+	reason string,
+	err error) {
 	zap.S().Debugf("[HT][PV] Writing %d messages to database", len(messages))
 	var txn *sql.Tx = nil
 	txn, err = db.Begin()
@@ -145,8 +149,8 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		for _, message := range messages {
 			couldParse, parsedMessage := internal.ParseMessage(message)
 			if !couldParse {
-				zap.S().Debugf("[HT][PV] Could not parse message: %s", message.String())
-
+				zap.S().Errorf("[HT][PV] Could not parse message: %s", message.String())
+				putBackMsg = append(putBackMsg, message)
 				continue
 			}
 
@@ -154,13 +158,20 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 			var sC processValue
 			err = jsoniter.Unmarshal(parsedMessage.Payload, &sC)
 			if err != nil {
-
-				zap.S().Debugf("[HT][PV] Could not parse message: %s", err.Error())
+				zap.S().Errorf("[HT][PV] Could not unmarshal message: %s", err.Error())
+				putBackMsg = append(putBackMsg, message)
 				continue
 			}
-			AssetTableID, success := GetAssetTableID(parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
+			AssetTableID, success := GetAssetTableID(
+				parsedMessage.CustomerId,
+				parsedMessage.Location,
+				parsedMessage.AssetId)
 			if !success {
-				zap.S().Errorf("Error getting asset table id for %s %s %s", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
+				zap.S().Errorf(
+					"Error getting asset table id for %s %s %s",
+					parsedMessage.CustomerId,
+					parsedMessage.Location,
+					parsedMessage.AssetId)
 				putBackMsg = append(putBackMsg, message)
 				continue
 			}
@@ -226,7 +237,8 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 	}
 	zap.S().Debugf("pre insert prepare")
 	var stmtCopyToPVT *sql.Stmt
-	stmtCopyToPVT, err = txn.Prepare(`
+	stmtCopyToPVT, err = txn.Prepare(
+		`
 			INSERT INTO processvaluetable (SELECT * FROM tmp_processvaluetable64) ON CONFLICT DO NOTHING;
 		`)
 	zap.S().Debugf("post insert prepare")
@@ -275,7 +287,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (putBackMsg []*kafka
 		if err != nil {
 			return messages, true, "Failed to commit", err
 		}
-		zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
+		zap.S().Debugf(
+			"Committed %d messages, putting back %d messages",
+			len(messages)-len(putBackMsg),
+			len(putBackMsg))
 		if len(putBackMsg) > 0 {
 			return putBackMsg, true, "AssetID not found", nil
 		}
