@@ -1,5 +1,5 @@
 {{range $i, $value := .Values._001_customMicroservices | default dict}}
-{{if and $value.externalPort $value.port}}
+{{if and $value.externalPort $value.port $value.enabled}}
 ---
 
 apiVersion: v1

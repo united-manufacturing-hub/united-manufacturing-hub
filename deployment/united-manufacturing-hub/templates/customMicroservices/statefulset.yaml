@@ -1,4 +1,5 @@
 {{range $i, $value := .Values._001_customMicroservices | default dict}}
+{{if $value.enabled}}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -62,5 +63,5 @@ spec:
             claimName: united-manufacturing-hub-cm-{{$value.name}}-claim
   {{end}}
       restartPolicy: Always
-
+{{end}}
 {{end}}
