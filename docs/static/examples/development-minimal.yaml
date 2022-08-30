@@ -75,7 +75,10 @@ write_files:
     # custom changes for minimal version
     factoryinsight:
       replicas: 1
-
+      hpa:
+        enabled: false
+      pdb:
+        enabled: false
       resources:
         limits:
           cpu: 200m
