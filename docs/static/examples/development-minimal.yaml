@@ -1,7 +1,10 @@
 ---
 # See https://github.com/rancher/k3os/blob/master/README.md#configuration
 
-
+# TODO: SET ZOOKEEPER HEAP_SIZE to 128
+# TODO: SET KAFKA_HEAP to 500
+  # - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
+  #   value: "50mb"
 # This will be used as serial number as well
 # HOSTNAME DOES NOT ALLOW UNDERSCORES
 hostname: development-minimal
@@ -33,6 +36,9 @@ write_files:
           iprange: "192.168.10.1/24"  # IP Range in CIDR notation
           enableKafka: true
           enableMQTT: false
+
+        cameraconnect:
+          enabled: false
     
       # dataprocessing involves microservices, whose main purpose is to process the data
       dataprocessing:
@@ -62,6 +68,10 @@ write_files:
         enabled: true
         db_password: "changeme"
     
+      # factoryinput, grafanaproxy
+      datainput:
+        enabled: false
+
     # custom changes for minimal version
     factoryinsight:
       replicas: 1
@@ -83,28 +93,49 @@ write_files:
           cpu: 50m
           memory: 50Mi
     kafka:
+      heapOpts: -Xmx500m -Xms500m
+      zookeeper:
+        heapSize: 128
       resources:
         limits:
           cpu: 1000m
-          memory: 500Mi
+          memory: 1Gi
         requests:
           cpu: 100m
           memory: 250Mi
     redis:
-      replicas: 1
-      resources:
-        limits:
-          cpu: 200m
-          memory: 200Mi
-        requests:
-          cpu: 100m
-          memory: 100Mi
+      replica:
+        replicaCount: 1
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+      master:
+        extraFlags:
+          - --maxmemory 200mb
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
     vernemq:
       replicas: 1
+      additionalEnv:
+        - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
+          value: "50mb"
+        - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
+          value: "1000"
+        - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
+          value: "1000"
       resources:
         limits:
-          cpu: 200m
-          memory: 200Mi
+          cpu: 500m
+          memory: 500Mi
         requests:
           cpu: 100m
           memory: 100Mi
