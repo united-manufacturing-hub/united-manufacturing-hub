@@ -61,7 +61,53 @@ write_files:
       datastorage:
         enabled: true
         db_password: "changeme"
+    
+    # custom changes for minimal version
+    factoryinsight:
+      replicas: 1
 
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+    kafkatopostgresql:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+    kafka:
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 500Mi
+        requests:
+          cpu: 100m
+          memory: 250Mi
+    redis:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 100m
+          memory: 100Mi
+    vernemq:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 100m
+          memory: 100Mi
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
 - content: |
