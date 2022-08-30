@@ -126,12 +126,34 @@ write_files:
     vernemq:
       replicas: 1
       additionalEnv:
-        - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
-          value: "50mb"
+        - name: DOCKER_VERNEMQ_ALLOW_REGISTER_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_PUBLISH_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_SUBSCRIBE_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_UNSUBSCRIBE_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
+          value: "on"
         - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
           value: "1000"
         - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
           value: "1000"
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__CAFILE
+          value: /etc/ssl/vernemq/ca.crt
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__CERTFILE
+          value: /etc/ssl/vernemq/tls.crt
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__KEYFILE
+          value: /etc/ssl/vernemq/tls.key
+        - name: DOCKER_VERNEMQ_ACCEPT_EULA
+          value: "yes"
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__USE_IDENTITY_AS_USERNAME
+          value: "on"
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
+          value: "on"
+        - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
+          value: "50mb"
       resources:
         limits:
           cpu: 500m
