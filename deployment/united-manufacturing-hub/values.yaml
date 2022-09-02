@@ -38,6 +38,11 @@ _000_commonConfig:
       exposureAuto: "Off"
       pixelFormat: "Mono8"
 
+    # iotsensorsmqtt simulates IoT sensor data and publishes it over MQTT.
+    # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsMQTT
+    iotsensorsmqtt:
+      enabled: true
+
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
@@ -1122,8 +1127,20 @@ cameraconnect:
       cpu: "100m"
       memory: "100Mi"
 
+### iotsensorsmqtt ###
+iotsensorsmqtt:
+  image: amineamaach/sensors-mqtt
+  tag: v1.0.0
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
 
-### cameraconnect ###
+
+### kafkabridge ###
 kafkabridge:
   image:
     repository: unitedmanufacturinghub/kafka-bridge
@@ -3119,6 +3136,8 @@ vernemq:
       value: "on"
     - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
       value: "on"
+    - name: DOCKER_VERNEMQ_LISTENER__TCP__ALLOWED_PROTOCOL_VERSIONS
+      value: 3,4,5
   extraVolumeMounts:
     - mountPath: /vernemq/etc/vmq.acl
       name: vernemq-acl
