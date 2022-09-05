@@ -1,18 +1,18 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
-	"strconv"
-	"time"
-
-	"context"
 	"github.com/go-redis/redis/v8"
 	"github.com/patrickmn/go-cache"
+	_ "github.com/patrickmn/go-cache"
 	"github.com/rung/go-safecast"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
+	"hash/crc32"
+	"strconv"
+	"time"
 )
 
 var rdb *redis.Client
@@ -319,7 +319,6 @@ func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data [
 	}
 
 	key := fmt.Sprintf("getRawCountsFromCache-%d-%s-%s", assetID, from, to)
-
 	value, err := rdb.Get(ctx, key).Result()
 
 	if err == redis.Nil { // if no value, then return nothing
@@ -461,6 +460,90 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 	return
 }
 
+// GetDistinctProcessValuesFromCache gets distinct process values from cache
+func GetDistinctProcessValuesStringFromCache(customerID string, location string, assetID string) (data []string, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getDistinctProcessValuesString-%s-%s-%s", customerID, location, assetID)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if err == redis.Nil { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("error getting key from redis", key, err)
+		return
+	} else if value == "null" {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
+		b := []byte(value)
+		err = json.Unmarshal(b, &data)
+		if err != nil {
+			zap.S().Errorf("json Unmarshal", b)
+			return
+		}
+
+		cacheHit = true
+	}
+
+	return
+}
+
+// StoreDistinctProcessValuesToCache stores distinct process values to cache
+func StoreDistinctProcessValuesStringToCache(customerID string, location string, assetID string, data []string) {
+
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getDistinctProcessValuesString-%s-%s-%s", customerID, location, assetID)
+
+	if data == nil {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b, err := json.Marshal(&data)
+	if err != nil {
+		zap.S().Errorf("json marshall")
+		return
+	}
+
+	err = rdb.Set(ctx, key, b, 5*time.Minute).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+func StoreCustomerConfigurationToCache(customerID string, data datamodel.CustomerConfiguration) {
+
+	if rdb == nil { // only the case during tests
+		//zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("GetCustomerConfigurationFromCache-%s", customerID)
+
+	b, err := json.Marshal(&data)
+	if err != nil {
+		zap.S().Errorf("json marshall")
+		return
+	}
+
+	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
 // StoreDistinctProcessValuesToCache stores distinct process values to cache
 func StoreDistinctProcessValuesToCache(customerID string, location string, assetID string, data []string) {
 
@@ -520,29 +603,6 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 	}
 
 	return
-}
-
-// StoreCustomerConfigurationToCache stores customer configuration to cache
-func StoreCustomerConfigurationToCache(customerID string, data datamodel.CustomerConfiguration) {
-
-	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
-		return
-	}
-
-	key := fmt.Sprintf("GetCustomerConfigurationFromCache-%s", customerID)
-
-	b, err := json.Marshal(&data)
-	if err != nil {
-		zap.S().Errorf("json marshall")
-		return
-	}
-
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
-	if err != nil {
-		zap.S().Errorf("redis failed: %#v", err)
-		return
-	}
 }
 
 // GetAssetIDFromCache gets asset id from cache
@@ -774,12 +834,12 @@ func SetTiered(key string, value interface{}, redisExpiration time.Duration) {
 	rdb.Set(ctx, key, value, redisExpiration)
 }
 
-//SetTieredLongTerm is an helper, that calls SetTiered with default redis expiration
+// SetTieredLongTerm is an helper, that calls SetTiered with default redis expiration
 func SetTieredLongTerm(key string, value interface{}) {
 	SetTiered(key, value, redisDataExpiration)
 }
 
-//SetTieredShortTerm is an helper, that calls SetTiered with default memory expiration
+// SetTieredShortTerm is an helper, that calls SetTiered with default memory expiration
 func SetTieredShortTerm(key string, value interface{}) {
 	SetTiered(key, value, memoryDataExpiration)
 }

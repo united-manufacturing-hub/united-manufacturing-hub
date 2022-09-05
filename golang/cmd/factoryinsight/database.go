@@ -496,6 +496,57 @@ func GetProcessValue(c *gin.Context, customerID string, location string, asset s
 
 }
 
+func GetProcessValueString(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof("[GetProcessValueString] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v", customerID, location, asset, from, to, valueName)
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + valueName
+
+	data.ColumnNames = []string{"timestamp", JSONColumnName}
+
+	sqlStatement := `SELECT timestamp, value FROM ProcessValueStringTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
+	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+
+		var timestamp time.Time
+		var dataPoint string
+
+		err := rows.Scan(&timestamp, &dataPoint)
+		if err != nil {
+			PQErrorHandling(c, sqlStatement, err, false)
+			error = err
+			return
+		}
+		fullRow := []interface{}{float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), dataPoint}
+		data.Datapoints = append(data.Datapoints, fullRow)
+	}
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	return
+
+}
+
 // GetCurrentState gets the latest state of an asset
 func GetCurrentState(c *gin.Context, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
 	zap.S().Infof("[GetCurrentState] customerID: %v, location: %v, asset: %v keepStatesInteger: %v", customerID, location, asset, keepStatesInteger)
@@ -1395,6 +1446,69 @@ TABLE  cte;`
 		}
 
 		data = append(data, "process_"+currentString)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	return
+}
+
+func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
+	zap.S().Infof("[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v", customerID, location, asset)
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	sqlStatement := `WITH RECURSIVE cte AS (
+   (
+   SELECT valuename
+   FROM   processvaluestringtable
+   ORDER  BY 1
+   LIMIT  1
+   )
+   UNION ALL
+   SELECT l.*
+   FROM   cte c
+   CROSS  JOIN LATERAL (
+      SELECT valuename
+      FROM   processvaluestringtable t
+      WHERE  t.valuename > c.valuename AND asset_id=$1
+      ORDER  BY 1
+      LIMIT  1
+      ) l
+   )
+TABLE  cte;`
+	rows, err := db.Query(sqlStatement, assetID)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var currentString string
+
+		err := rows.Scan(&currentString)
+		if err != nil {
+			PQErrorHandling(c, sqlStatement, err, false)
+			error = err
+			return
+		}
+
+		data = append(data, "processString_"+currentString)
 	}
 
 	err = rows.Err()
