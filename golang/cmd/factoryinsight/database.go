@@ -496,6 +496,57 @@ func GetProcessValue(c *gin.Context, customerID string, location string, asset s
 
 }
 
+func GetProcessValueString(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof("[GetProcessValueString] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v", customerID, location, asset, from, to, valueName)
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + valueName
+
+	data.ColumnNames = []string{"timestamp", JSONColumnName}
+
+	sqlStatement := `SELECT timestamp, value FROM ProcessValueStringTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
+	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+
+		var timestamp time.Time
+		var dataPoint string
+
+		err := rows.Scan(&timestamp, &dataPoint)
+		if err != nil {
+			PQErrorHandling(c, sqlStatement, err, false)
+			error = err
+			return
+		}
+		fullRow := []interface{}{float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), dataPoint}
+		data.Datapoints = append(data.Datapoints, fullRow)
+	}
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	return
+
+}
+
 // GetCurrentState gets the latest state of an asset
 func GetCurrentState(c *gin.Context, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
 	zap.S().Infof("[GetCurrentState] customerID: %v, location: %v, asset: %v keepStatesInteger: %v", customerID, location, asset, keepStatesInteger)
@@ -1407,7 +1458,7 @@ TABLE  cte;`
 	return
 }
 
-func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (data []string, error error){
+func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
 	zap.S().Infof("[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1468,7 +1519,6 @@ TABLE  cte;`
 	}
 
 	return
-}
 }
 
 // GetAssetID gets the assetID from the database

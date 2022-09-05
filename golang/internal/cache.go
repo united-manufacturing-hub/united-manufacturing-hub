@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
+	"github.com/patrickmn/go-cache"
 	_ "github.com/patrickmn/go-cache"
 	"github.com/rung/go-safecast"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -520,37 +521,27 @@ func StoreDistinctProcessValuesStringToCache(customerID string, location string,
 	}
 }
 
-// GetDistinctProcessValuesFromCache gets distinct process values from cache
-func GetDistinctProcessValuesStringFromCache(customerID string, location string, assetID string) (data []string, cacheHit bool) {
+func StoreCustomerConfigurationToCache(customerID string, data datamodel.CustomerConfiguration) {
+
 	if rdb == nil { // only the case during tests
 		//zap.S().Errorf("rdb == nil")
 		return
 	}
 
-	key := fmt.Sprintf("getDistinctProcessValuesString-%s-%s-%s", customerID, location, assetID)
+	key := fmt.Sprintf("GetCustomerConfigurationFromCache-%s", customerID)
 
-	value, err := rdb.Get(ctx, key).Result()
-
-	if err == redis.Nil { // if no value, then return nothing
+	b, err := json.Marshal(&data)
+	if err != nil {
+		zap.S().Errorf("json marshall")
 		return
-	} else if err != nil {
-		zap.S().Errorf("error getting key from redis", key, err)
-		return
-	} else if value == "null" {
-		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
-	} else {
-		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
-		b := []byte(value)
-		err = json.Unmarshal(b, &data)
-		if err != nil {
-			zap.S().Errorf("json Unmarshal", b)
-			return
-		}
-
-		cacheHit = true
 	}
 
-	return
+	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
 }
 
 // StoreDistinctProcessValuesToCache stores distinct process values to cache

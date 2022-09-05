@@ -224,11 +224,12 @@ func getValuesHandler(c *gin.Context) {
 		}
 
 		// Store to cache if not yet existing
-		go internal.StoreDistinctProcessValuesStringToCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset, processValues)
+		go internal.StoreDistinctProcessValuesStringToCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset, processValuesString)
 		zap.S().Debugf("Stored DistinctProcessValuesString to cache")
 	}
 
-	values = append(values, processValues, processValuesString...)
+	values = append(values, processValues...)
+	values = append(values, processValuesString...)
 
 	c.JSON(http.StatusOK, values)
 }
@@ -1323,10 +1324,11 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 
 	valueName := strings.TrimPrefix(getDataRequest.Value, "processString_")
 
+	zap.S().Debugf("%s", valueName)
 	// TODO: #96 Return timestamps in RFC3339 in /processValueString
 
 	// Fetching from the database
-	processValuesString, err := GetProcessValue(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueStringRequest.From, getProcessValueStringRequest.To, valueName)
+	processValuesString, err := GetProcessValueString(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueStringRequest.From, getProcessValueStringRequest.To, valueName)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1342,6 +1344,7 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 		handleInternalServerError(c, err)
 		return
 	}
+
 	c.JSON(http.StatusOK, timeRange)
 }
 
