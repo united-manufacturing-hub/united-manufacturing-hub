@@ -214,7 +214,21 @@ func getValuesHandler(c *gin.Context) {
 		zap.S().Debugf("Stored DistinctProcessValues to cache")
 	}
 
-	values = append(values, processValues...)
+	processValuesString, cacheHit := internal.GetDistinctProcessValuesStringFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
+
+	if !cacheHit { // data NOT found
+		processValuesString, err = GetDistinctProcessValuesString(c, getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
+		if err != nil {
+			handleInternalServerError(c, err)
+			return
+		}
+
+		// Store to cache if not yet existing
+		go internal.StoreDistinctProcessValuesStringToCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset, processValues)
+		zap.S().Debugf("Stored DistinctProcessValuesString to cache")
+	}
+
+	values = append(values, processValues, processValuesString...)
 
 	c.JSON(http.StatusOK, values)
 }
@@ -301,6 +315,9 @@ func getDataHandler(c *gin.Context) {
 	default:
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
+		} else if strings.HasPrefix(getDataRequest.Value, "processString_") {
+			processProcessValueStringRequest(c, getDataRequest)
+
 		} else {
 			handleInvalidInputError(c, err)
 			return
@@ -1164,6 +1181,11 @@ type getProcessValueRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+type getProcessValueStringRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
 type getOrderRequest struct {
 	From time.Time `form:"from" binding:"required"`
 	To   time.Time `form:"to" binding:"required"`
@@ -1287,6 +1309,29 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 	c.JSON(http.StatusOK, processValues)
+}
+
+func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequest) {
+	var getProcessValueStringRequest getProcessValueStringRequest
+	var err error
+
+	err = c.BindQuery(&getProcessValueStringRequest)
+	if err != nil {
+		handleInvalidInputError(c, err)
+		return
+	}
+
+	valueName := strings.TrimPrefix(getDataRequest.Value, "processString_")
+
+	// TODO: #96 Return timestamps in RFC3339 in /processValueString
+
+	// Fetching from the database
+	processValuesString, err := GetProcessValue(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueStringRequest.From, getProcessValueStringRequest.To, valueName)
+	if err != nil {
+		handleInternalServerError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, processValuesString)
 }
 
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {

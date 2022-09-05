@@ -1407,6 +1407,70 @@ TABLE  cte;`
 	return
 }
 
+func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (data []string, error error){
+	zap.S().Infof("[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v", customerID, location, asset)
+
+	assetID, err := GetAssetID(c, customerID, location, asset)
+	if err != nil {
+		error = err
+		return
+	}
+
+	sqlStatement := `WITH RECURSIVE cte AS (
+   (
+   SELECT valuename
+   FROM   processvaluestringtable
+   ORDER  BY 1
+   LIMIT  1
+   )
+   UNION ALL
+   SELECT l.*
+   FROM   cte c
+   CROSS  JOIN LATERAL (
+      SELECT valuename
+      FROM   processvaluestringtable t
+      WHERE  t.valuename > c.valuename AND asset_id=$1
+      ORDER  BY 1
+      LIMIT  1
+      ) l
+   )
+TABLE  cte;`
+	rows, err := db.Query(sqlStatement, assetID)
+	if err == sql.ErrNoRows {
+		PQErrorHandling(c, sqlStatement, err, false)
+		return
+	} else if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var currentString string
+
+		err := rows.Scan(&currentString)
+		if err != nil {
+			PQErrorHandling(c, sqlStatement, err, false)
+			error = err
+			return
+		}
+
+		data = append(data, "processString_"+currentString)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		PQErrorHandling(c, sqlStatement, err, false)
+		error = err
+		return
+	}
+
+	return
+}
+}
+
 // GetAssetID gets the assetID from the database
 func GetAssetID(c *gin.Context, customerID string, location string, assetID string) (DBassetID uint32, error error) {
 	zap.S().Infof("[GetAssetID] customerID: %v, location: %v, assetID: %v", customerID, location, assetID)
