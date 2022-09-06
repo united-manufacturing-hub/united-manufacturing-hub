@@ -10,7 +10,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
-	github.com/go-playground/assert/v2 v2.0.1
+	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/gvalkov/golang-evdev v0.0.0-20191114124502-287e62b94bcb
@@ -27,7 +27,6 @@ require (
 	github.com/zeebo/xxh3 v1.0.1
 	go.elastic.co/ecszap v1.0.1
 	go.uber.org/zap v1.23.0
-	gonum.org/v1/gonum v0.11.0
 	gonum.org/v1/gonum v0.12.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	k8s.io/apimachinery v0.25.0
