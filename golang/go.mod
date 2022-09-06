@@ -27,7 +27,6 @@ require (
 	github.com/zeebo/xxh3 v1.0.1
 	go.elastic.co/ecszap v1.0.1
 	go.uber.org/zap v1.23.0
-	gonum.org/v1/gonum v0.11.0
 	gonum.org/v1/gonum v0.12.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	k8s.io/apimachinery v0.25.0
