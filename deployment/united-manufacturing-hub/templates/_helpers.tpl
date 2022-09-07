@@ -154,6 +154,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-cameraco
 {{- end }}
 
 {{/*
+Labels for iotsensorsmqtt
+*/}}
+{{- define "united-manufacturing-hub.labels.iotsensorsmqtt" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-iotsensorsmqtt
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Labels for vernemq
 */}}
 {{- define "united-manufacturing-hub.labels.vernemq" -}}

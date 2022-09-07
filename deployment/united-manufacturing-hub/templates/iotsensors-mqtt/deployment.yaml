@@ -1,0 +1,47 @@
+---
+{{if .Values._000_commonConfig.datasources.iotsensorsmqtt.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-iotsensorsmqtt
+  labels:
+    {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 4}}
+    app.kubernetes.io/component: "iotsensorsmqtt"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 6}}
+      app.kubernetes.io/component: "iotsensorsmqtt"
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 8}}
+        app.kubernetes.io/component: "iotsensorsmqtt"
+    spec:
+      volumes:
+        - name: iotsensors-mqtt-config
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-iotsensors-mqtt
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-iotsensorsmqtt
+          {{if .Values.iotsensorsmqtt.tag}}
+          image: {{.Values.iotsensorsmqtt.image}}:{{.Values.iotsensorsmqtt.tag}}
+          {{- else}}
+          image: {{.Values.iotsensorsmqtt.image}}:latest
+          {{end}}
+          resources:
+            limits:
+              cpu: {{.Values.iotsensorsmqtt.resources.limits.cpu}}
+              memory: {{.Values.iotsensorsmqtt.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.iotsensorsmqtt.resources.requests.cpu}}
+              memory: {{.Values.iotsensorsmqtt.resources.requests.memory}}
+          volumeMounts:
+            - mountPath: /configs
+              name: iotsensors-mqtt-config
+
+{{end}}
