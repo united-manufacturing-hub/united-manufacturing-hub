@@ -5,8 +5,7 @@ Important principles: stateless as much as possible
 */
 
 import (
-	"go.elastic.co/ecszap"
-	"go.uber.org/zap/zapcore"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"net/http"
 	"os"
 	"os/signal"
@@ -49,18 +48,15 @@ var DebugMode = false
 var buildtime string
 
 func main() {
-	var logLevel = os.Getenv("LOGGING_LEVEL")
-	encoderConfig := ecszap.NewDefaultEncoderConfig()
-	var core zapcore.Core
-	switch logLevel {
-	case "DEVELOPMENT":
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	default:
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
-	}
-	logger := zap.New(core, zap.AddCaller())
-	zap.ReplaceGlobals(logger)
-	defer logger.Sync()
+	// Initialize zap logging
+	log := logger.New("LOGGING_LEVEL")
+	defer func(logger *zap.SugaredLogger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(log)
+
 	zap.S().Infof("This is mqtt-to-postgresql build date: %s", buildtime)
 	// pprof
 	go http.ListenAndServe("localhost:1337", nil)
