@@ -64,7 +64,7 @@ func main() {
 	if err != nil {
 		zap.S().Errorf("site unreachable, error: %v", err)
 	} else {
-		log.Printf("Site reachable, connection: %v", conn)
+		zap.S().Infof("Site reachable, connection: %v", conn)
 	}
 	defer conn.Close()
 
