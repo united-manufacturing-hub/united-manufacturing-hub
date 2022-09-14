@@ -103,6 +103,7 @@ func main() {
 		"ssl.ca.location":          "/SSL_certs/ca.crt",
 		"bootstrap.servers":        KafkaBoostrapServer,
 		"group.id":                 "mqtt-kafka-bridge",
+		"metadata.max.age.ms":      180000,
 	})
 	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {

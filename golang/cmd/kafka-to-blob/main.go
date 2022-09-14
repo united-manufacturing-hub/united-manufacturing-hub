@@ -73,6 +73,7 @@ func main() {
 		"ssl.certificate.location": "/SSL_certs/tls.crt",
 		"ssl.ca.location":          "/SSL_certs/ca.crt",
 		"group.id":                 "kafka-to-blob",
+		"metadata.max.age.ms":      180000,
 	})
 
 	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
