@@ -6,9 +6,9 @@ package internal
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 	"strings"
 )
@@ -127,7 +127,7 @@ func StartTopicProbeQueueProcessor(topicProbeProcessorChannel chan *kafka.Messag
 		}
 
 		var topicProbeMessage TopicProbeMessage
-		err := json.Unmarshal(msg.Value, &topicProbeMessage)
+		err := jsoniter.Unmarshal(msg.Value, &topicProbeMessage)
 		if err != nil {
 			zap.S().Errorf("[TP] Failed to unmarshal topic probe message: %s", err)
 			continue
