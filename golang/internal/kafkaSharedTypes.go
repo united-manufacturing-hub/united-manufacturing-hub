@@ -98,27 +98,12 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 			continue
 		}
 
-		var msg *kafka.Message
-		// Wait for new messages
-		// This has a timeout, allowing ShuttingDownKafka to be checked
-		msg, err = kafkaConsumer.ReadMessage(5000)
-		if err != nil {
-			// This is fine, and expected behaviour
-			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
-				// Sleep to reduce CPU usage
-				time.Sleep(OneSecond)
-				continue
-			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
-				// This will occur when no topic for the regex is available !
-				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
-
-				gracefulShutdown()
-				return
-			} else {
-				zap.S().Warnf("%s Failed to read kafka message: %s: %s", identifier, err, err.(kafka.Error).Code())
-				gracefulShutdown()
+		msg, isShuttingDown := waitNewMessages(identifier, kafkaConsumer, gracefulShutdown)
+		if msg == nil {
+			if isShuttingDown {
 				return
 			}
+			continue
 		}
 		// Insert received message into the processor channel
 		processorChannel <- msg
@@ -126,6 +111,51 @@ func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *k
 		KafkaMessages += 1
 	}
 	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
+}
+
+// ProcessKafkaTopicProbeQueue processes the kafka queue and sends the messages to the processorChannel.
+// It only subscribes to the topic used to announce a new topic.
+func ProcessKafkaTopicProbeQueue(identifier string, processorChannel chan *kafka.Message, gracefulShutdown func()) {
+	for !ShuttingDownKafka {
+		msg, isShuttingDown := waitNewMessages(identifier, KafkaTopicProbeConsumer, gracefulShutdown)
+		if msg == nil {
+			if isShuttingDown {
+				return
+			}
+			continue
+		}
+		// Insert received message into the processor channel
+		processorChannel <- msg
+		// This is for stats only, it counts the number of messages received
+		KafkaMessages += 1
+	}
+	zap.S().Debugf("%s Shutting down Kafka Topic Probe consumer", identifier)
+}
+
+// waitNewMessages waits for new messages on the kafka consumer and checks for errors
+func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulShutdown func()) (msg *kafka.Message, isShuttingDown bool) {
+	// Wait for new messages
+	// This has a timeout, allowing ShuttingDownKafka to be checked
+	msg, err := kafkaConsumer.ReadMessage(5000)
+	if err != nil {
+		switch err.(kafka.Error).Code() {
+		// This is fine, and expected behaviour
+		case kafka.ErrTimedOut:
+			// Sleep to reduce CPU usage
+			time.Sleep(OneSecond)
+			return nil, false
+		// This will occur when no topic for the regex is available !
+		case kafka.ErrUnknownTopicOrPart:
+			zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
+			gracefulShutdown()
+			return nil, true
+		default:
+			zap.S().Warnf("%s Failed to read kafka message: %s: %s", identifier, err, err.(kafka.Error).Code())
+			gracefulShutdown()
+			return nil, true
+		}
+	}
+	return msg, false
 }
 
 // StartPutbackProcessor starts the putback processor.
