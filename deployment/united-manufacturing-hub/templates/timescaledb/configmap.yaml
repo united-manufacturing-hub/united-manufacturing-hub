@@ -82,6 +82,9 @@ data:
     -- creating an index to increase performance
     CREATE INDEX ON processValueTable (valuename);
 
+    -- create an index to increase performance
+    CREATE INDEX ON processvaluetable(valuename, asset_id) WITH (timescaledb.transaction_per_chunk);
+
     -------------------- TimescaleDB table for uniqueProduct --------------------
     CREATE TABLE IF NOT EXISTS uniqueProductTable
     (
