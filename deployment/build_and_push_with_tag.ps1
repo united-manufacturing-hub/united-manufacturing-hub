@@ -72,8 +72,7 @@ if ([string]::IsNullOrEmpty($repo_owner)) {
 $docker_tag = Read-Host "Enter the tag to use: "
 if ([string]::IsNullOrEmpty($docker_tag))
 {
-    Write-Host -ForegroundColor Red "Tag cannot be empty"
-    exit
+    $docker_tag = "latest"
 }
 
 $git_root = git rev-parse --show-toplevel
