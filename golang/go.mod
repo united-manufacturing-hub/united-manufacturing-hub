@@ -24,7 +24,7 @@ require (
 	github.com/lib/pq v1.10.7
 	github.com/magefile/mage v1.13.0 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
-	github.com/minio/minio-go/v7 v7.0.36
+	github.com/minio/minio-go/v7 v7.0.37
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
@@ -43,5 +43,5 @@ require (
 	gonum.org/v1/gonum v0.12.0
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	k8s.io/apimachinery v0.25.0
+	k8s.io/apimachinery v0.25.1
 )
