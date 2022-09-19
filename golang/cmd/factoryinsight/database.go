@@ -23,14 +23,25 @@ var mutex *mapmutex.Mutex
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int) {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require", PQHost, PQPort, PQUser, PQPassword, PWDBName)
+	psqlInfo := fmt.Sprintf(
+		"host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require",
+		PQHost,
+		PQPort,
+		PQUser,
+		PQPassword,
+		PWDBName)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
 
-	mutex = mapmutex.NewCustomizedMapMutex(800, 100000000, 10, 1.1, 0.2) // default configs: maxDelay:  100000000, // 0.1 second baseDelay: 10,        // 10 nanosecond
+	mutex = mapmutex.NewCustomizedMapMutex(
+		800,
+		100000000,
+		10,
+		1.1,
+		0.2) // default configs: maxDelay:  100000000, // 0.1 second baseDelay: 10,        // 10 nanosecond
 }
 
 // ShutdownDB closes all database connections
@@ -45,13 +56,15 @@ func ShutdownDB() {
 func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical bool) {
 
 	if e := pgerror.ConnectionException(err); e != nil {
-		zap.S().Errorw("PostgreSQL failed: ConnectionException",
+		zap.S().Errorw(
+			"PostgreSQL failed: ConnectionException",
 			"error", err,
 			"sqlStatement", sqlStatement,
 		)
 		isCritical = true
 	} else {
-		zap.S().Errorw("PostgreSQL failed. ",
+		zap.S().Errorw(
+			"PostgreSQL failed. ",
 			"error", err,
 			"sqlStatement", sqlStatement,
 		)
@@ -177,8 +190,22 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 }
 
 // GetStatesRaw gets all states for a specific asset in a timerange. It returns an array of datamodel.StateEntry
-func GetStatesRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
-	zap.S().Infof("[GetStatesRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, configuration: %v", customerID, location, asset, from, to, configuration)
+func GetStatesRaw(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
+	zap.S().Infof(
+		"[GetStatesRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, configuration: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to,
+		configuration)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -276,8 +303,22 @@ func GetStatesRaw(c *gin.Context, customerID string, location string, asset stri
 }
 
 // GetShiftsRaw gets all shifts for a specific asset in a timerange in a raw format
-func GetShiftsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
-	zap.S().Infof("[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, configuration: %v", customerID, location, asset, from, to, configuration)
+func GetShiftsRaw(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
+	zap.S().Infof(
+		"[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, configuration: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to,
+		configuration)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -407,15 +448,28 @@ func GetShiftsRaw(c *gin.Context, customerID string, location string, asset stri
 }
 
 // GetShifts gets all shifts for a specific asset in a timerange
-func GetShifts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v", customerID, location, asset, from, to)
+func GetShifts(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "shiftName"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	configuration, err := GetCustomerConfiguration(c, customerID)
 	if err != nil {
-		zap.S().Errorw("GetCustomerConfiguration failed",
+		zap.S().Errorw(
+			"GetCustomerConfiguration failed",
 			"error", err,
 		)
 		error = err
@@ -424,7 +478,8 @@ func GetShifts(c *gin.Context, customerID string, location string, asset string,
 
 	rawShifts, err := GetShiftsRaw(c, customerID, location, asset, from, to, configuration)
 	if err != nil {
-		zap.S().Errorw("GetShiftsRaw failed",
+		zap.S().Errorw(
+			"GetShiftsRaw failed",
 			"error", err,
 		)
 		error = err
@@ -437,7 +492,9 @@ func GetShifts(c *gin.Context, customerID string, location string, asset string,
 	// Loop through all datapoints
 	for _, dataPoint := range processedShifts {
 		// TODO: #86 Return timestamps in RFC3339 in /shifts
-		fullRow := []interface{}{float64(dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), dataPoint.ShiftType}
+		fullRow := []interface{}{
+			float64(dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			dataPoint.ShiftType}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	return
@@ -445,8 +502,22 @@ func GetShifts(c *gin.Context, customerID string, location string, asset string,
 }
 
 // GetProcessValue gets all data for specific valueName and for a specific asset in a timerange
-func GetProcessValue(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v", customerID, location, asset, from, to, valueName)
+func GetProcessValue(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time,
+	valueName string) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to,
+		valueName)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -482,7 +553,9 @@ func GetProcessValue(c *gin.Context, customerID string, location string, asset s
 			error = err
 			return
 		}
-		fullRow := []interface{}{float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), dataPoint}
+		fullRow := []interface{}{
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			dataPoint}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rows.Err()
@@ -496,8 +569,22 @@ func GetProcessValue(c *gin.Context, customerID string, location string, asset s
 
 }
 
-func GetProcessValueString(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, valueName string) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetProcessValueString] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v", customerID, location, asset, from, to, valueName)
+func GetProcessValueString(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time,
+	valueName string) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetProcessValueString] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to,
+		valueName)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -533,7 +620,9 @@ func GetProcessValueString(c *gin.Context, customerID string, location string, a
 			error = err
 			return
 		}
-		fullRow := []interface{}{float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), dataPoint}
+		fullRow := []interface{}{
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			dataPoint}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rows.Err()
@@ -548,8 +637,18 @@ func GetProcessValueString(c *gin.Context, customerID string, location string, a
 }
 
 // GetCurrentState gets the latest state of an asset
-func GetCurrentState(c *gin.Context, customerID string, location string, asset string, keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetCurrentState] customerID: %v, location: %v, asset: %v keepStatesInteger: %v", customerID, location, asset, keepStatesInteger)
+func GetCurrentState(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetCurrentState] customerID: %v, location: %v, asset: %v keepStatesInteger: %v",
+		customerID,
+		location,
+		asset,
+		keepStatesInteger)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -562,7 +661,8 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 
 	configuration, err := GetCustomerConfiguration(c, customerID)
 	if err != nil {
-		zap.S().Errorw("GetCustomerConfiguration failed",
+		zap.S().Errorw(
+			"GetCustomerConfiguration failed",
 			"error", err,
 		)
 		error = err
@@ -587,10 +687,14 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 	dataPoint = datamodel.ConvertOldToNew(dataPoint)
 
 	if keepStatesInteger {
-		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{
+			dataPoint,
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
-		fullRow := []interface{}{ConvertStateToString(c, dataPoint, configuration), float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{
+			ConvertStateToString(c, dataPoint, configuration),
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -598,7 +702,11 @@ func GetCurrentState(c *gin.Context, customerID string, location string, asset s
 }
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
-func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
+func GetDataTimeRangeForAsset(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string) (data datamodel.DataResponseAny, error error) {
 	zap.S().Infof("[GetDataTimeRangeForAsset] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -643,8 +751,20 @@ func GetDataTimeRangeForAsset(c *gin.Context, customerID string, location string
 }
 
 // GetCountsRaw gets all states for a specific asset in a timerange
-func GetCountsRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.CountEntry, error error) {
-	zap.S().Infof("[GetCountsRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetCountsRaw(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data []datamodel.CountEntry, error error) {
+	zap.S().Infof(
+		"[GetCountsRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -718,8 +838,20 @@ func GetCountsRaw(c *gin.Context, customerID string, location string, asset stri
 }
 
 // GetCounts gets all states for a specific asset in a timerange
-func GetCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetCounts] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetCounts(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetCounts] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	JSONColumnName2 := customerID + "-" + location + "-" + asset + "-" + "scrap"
@@ -734,7 +866,10 @@ func GetCounts(c *gin.Context, customerID string, location string, asset string,
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
-		fullRow := []interface{}{dataPoint.Count, dataPoint.Scrap, float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{
+			dataPoint.Count,
+			dataPoint.Scrap,
+			float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -744,8 +879,20 @@ func GetCounts(c *gin.Context, customerID string, location string, asset string,
 //TODO test GetTotalCounts
 
 // GetTotalCounts gets the sum of produced units for a specific asset in a timerange
-func GetTotalCounts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetTotalCounts] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetTotalCounts(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetTotalCounts] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
@@ -771,8 +918,22 @@ func GetTotalCounts(c *gin.Context, customerID string, location string, asset st
 }
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
-func GetProductionSpeed(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetProductionSpeed] customerID: %v, location: %v, asset: %v from: %v, to: %v, aggregatedInterval: %v", customerID, location, asset, from, to, aggregatedInterval)
+func GetProductionSpeed(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time,
+	aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetProductionSpeed] customerID: %v, location: %v, asset: %v from: %v, to: %v, aggregatedInterval: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to,
+		aggregatedInterval)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -827,16 +988,22 @@ func GetProductionSpeed(c *gin.Context, customerID string, location string, asse
 
 			if timeDifference > 60 { // bigger than one minute
 				// add zero speed one minute after previous timestamp
-				fullRow := []interface{}{0, float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
+				fullRow := []interface{}{
+					0,
+					float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
 				data.Datapoints = append(data.Datapoints, fullRow)
 
 				// add zero speed one ms before timestamp
-				fullRow = []interface{}{0, float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
+				fullRow = []interface{}{
+					0,
+					float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
 				data.Datapoints = append(data.Datapoints, fullRow)
 			}
 		}
 		// add datapoint
-		fullRow := []interface{}{dataPoint * 60, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))} // *60 to get the production speed per hour
+		fullRow := []interface{}{
+			dataPoint * 60,
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))} // *60 to get the production speed per hour
 		data.Datapoints = append(data.Datapoints, fullRow)
 
 		previousTimestamp = timestamp
@@ -852,8 +1019,22 @@ func GetProductionSpeed(c *gin.Context, customerID string, location string, asse
 }
 
 // GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
-func GetQualityRate(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetQualityRate] customerID: %v, location: %v, asset: %v from: %v, to: %v, aggregatedInterval: %v", customerID, location, asset, from, to, aggregatedInterval)
+func GetQualityRate(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time,
+	aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetQualityRate] customerID: %v, location: %v, asset: %v from: %v, to: %v, aggregatedInterval: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to,
+		aggregatedInterval)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -911,16 +1092,22 @@ func GetQualityRate(c *gin.Context, customerID string, location string, asset st
 
 			if timeDifference > 60 { // bigger than one minute
 				// add 100% quality one minute after previous timestamp
-				fullRow := []interface{}{1, float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
+				fullRow := []interface{}{
+					1,
+					float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
 				data.Datapoints = append(data.Datapoints, fullRow)
 
 				// add 100% one ms before timestamp
-				fullRow = []interface{}{1, float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
+				fullRow = []interface{}{
+					1,
+					float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
 				data.Datapoints = append(data.Datapoints, fullRow)
 			}
 		}
 		// add datapoint
-		fullRow := []interface{}{dataPoint, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{
+			dataPoint,
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 
 		previousTimestamp = timestamp
@@ -936,7 +1123,9 @@ func GetQualityRate(c *gin.Context, customerID string, location string, asset st
 }
 
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
-func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration datamodel.CustomerConfiguration, error error) {
+func GetCustomerConfiguration(c *gin.Context, customerID string) (
+	configuration datamodel.CustomerConfiguration,
+	error error) {
 	zap.S().Infof("[GetCustomerConfiguration] customerID: %v", customerID)
 
 	// Get from cache if possible
@@ -984,8 +1173,28 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 		configuration.ThresholdForNoShiftsConsideredBreakInSeconds = 60 * 35
 		configuration.LowSpeedThresholdInPcsPerHour = -1 // do not apply by default
 		configuration.AutomaticallyIdentifyChangeovers = true
-		configuration.AvailabilityLossStates = append(configuration.AvailabilityLossStates, 40000, 180000, 190000, 200000, 210000, 220000)
-		configuration.PerformanceLossStates = append(configuration.PerformanceLossStates, 20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000)
+		configuration.AvailabilityLossStates = append(
+			configuration.AvailabilityLossStates,
+			40000,
+			180000,
+			190000,
+			200000,
+			210000,
+			220000)
+		configuration.PerformanceLossStates = append(
+			configuration.PerformanceLossStates,
+			20000,
+			50000,
+			60000,
+			70000,
+			80000,
+			90000,
+			100000,
+			110000,
+			120000,
+			130000,
+			140000,
+			150000)
 		configuration.LanguageCode = datamodel.LanguageEnglish // English
 		zap.S().Warnf("No configuration stored for customer %s, using default !", customerID)
 		return
@@ -1006,10 +1215,21 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (configuration 
 }
 
 // GetRecommendations gets all current recommendations for a specific asset
-func GetRecommendations(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
+func GetRecommendations(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string) (data datamodel.DataResponseAny, error error) {
 	zap.S().Infof("[GetRecommendations] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
-	data.ColumnNames = []string{"timestamp", "recommendationType", "recommendationValues", "recommendationTextEN", "recommendationTextDE", "diagnoseTextEN", "diagnoseTextDE"}
+	data.ColumnNames = []string{
+		"timestamp",
+		"recommendationType",
+		"recommendationValues",
+		"recommendationTextEN",
+		"recommendationTextDE",
+		"diagnoseTextEN",
+		"diagnoseTextDE"}
 
 	var likeString string = customerID + "-" + location + "-" + asset + "-%"
 	sqlStatement := `
@@ -1041,7 +1261,14 @@ func GetRecommendations(c *gin.Context, customerID string, location string, asse
 		var recommendationTextEN string
 		var recommendationTextDE string
 
-		err := rows.Scan(&timestamp, &recommendationType, &recommendationValues, &recommendationTextEN, &recommendationTextDE, &diagnoseTextEN, &diagnoseTextDE)
+		err := rows.Scan(
+			&timestamp,
+			&recommendationType,
+			&recommendationValues,
+			&recommendationTextEN,
+			&recommendationTextDE,
+			&diagnoseTextEN,
+			&diagnoseTextDE)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1049,7 +1276,14 @@ func GetRecommendations(c *gin.Context, customerID string, location string, asse
 		}
 
 		// TODO: #87 Return timestamps in RFC3339 in /recommendations
-		fullRow := []interface{}{float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), recommendationType, recommendationValues, recommendationTextEN, recommendationTextDE, diagnoseTextEN, diagnoseTextDE}
+		fullRow := []interface{}{
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			recommendationType,
+			recommendationValues,
+			recommendationTextEN,
+			recommendationTextDE,
+			diagnoseTextEN,
+			diagnoseTextDE}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rows.Err()
@@ -1063,7 +1297,11 @@ func GetRecommendations(c *gin.Context, customerID string, location string, asse
 }
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
-func GetMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data datamodel.DataResponseAny, error error) {
+func GetMaintenanceActivities(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string) (data datamodel.DataResponseAny, error error) {
 	zap.S().Infof("[GetMaintenanceActivities] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1104,7 +1342,10 @@ func GetMaintenanceActivities(c *gin.Context, customerID string, location string
 			error = err
 			return
 		}
-		fullRow := []interface{}{componentName, activityType, float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+		fullRow := []interface{}{
+			componentName,
+			activityType,
+			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	err = rows.Err()
@@ -1118,8 +1359,20 @@ func GetMaintenanceActivities(c *gin.Context, customerID string, location string
 }
 
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
-func GetUniqueProducts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetUniqueProducts] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetUniqueProducts(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetUniqueProducts] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1168,7 +1421,9 @@ func GetUniqueProducts(c *gin.Context, customerID string, location string, asset
 		fullRow = append(fullRow, AID)
 		fullRow = append(fullRow, float64(timestampBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 		if timestampEnd.Valid {
-			fullRow = append(fullRow, float64(timestampEnd.Time.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+			fullRow = append(
+				fullRow,
+				float64(timestampEnd.Time.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 		} else {
 			fullRow = append(fullRow, nil)
 		}
@@ -1194,8 +1449,16 @@ func GetUniqueProducts(c *gin.Context, customerID string, location string, asset
 }
 
 // GetUpcomingTimeBasedMaintenanceActivities returns UpcomingTimeBasedMaintenanceActivities array for an asset
-func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string, location string, asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
-	zap.S().Infof("[GetUpcomingTimeBasedMaintenanceActivities] customerID: %v, location: %v, asset: %v", customerID, location, asset)
+func GetUpcomingTimeBasedMaintenanceActivities(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
+	zap.S().Infof(
+		"[GetUpcomingTimeBasedMaintenanceActivities] customerID: %v, location: %v, asset: %v",
+		customerID,
+		location,
+		asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1272,8 +1535,20 @@ func GetUpcomingTimeBasedMaintenanceActivities(c *gin.Context, customerID string
 }
 
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
-func GetOrdersRaw(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data []datamodel.OrdersRaw, error error) {
-	zap.S().Infof("[GetOrdersRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetOrdersRaw(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data []datamodel.OrdersRaw, error error) {
+	zap.S().Infof(
+		"[GetOrdersRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1339,7 +1614,11 @@ func GetOrdersRaw(c *gin.Context, customerID string, location string, asset stri
 }
 
 // GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
-func GetUnstartedOrdersRaw(c *gin.Context, customerID string, location string, asset string) (data []datamodel.OrdersUnstartedRaw, error error) {
+func GetUnstartedOrdersRaw(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string) (data []datamodel.OrdersUnstartedRaw, error error) {
 	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1395,7 +1674,9 @@ func GetUnstartedOrdersRaw(c *gin.Context, customerID string, location string, a
 }
 
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
-func GetDistinctProcessValues(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
+func GetDistinctProcessValues(c *gin.Context, customerID string, location string, asset string) (
+	data []string,
+	error error) {
 	zap.S().Infof("[GetDistinctProcessValues] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
@@ -1440,8 +1721,14 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
 	return
 }
 
-func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (data []string, error error) {
-	zap.S().Infof("[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v", customerID, location, asset)
+func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (
+	data []string,
+	error error) {
+	zap.S().Infof(
+		"[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v",
+		customerID,
+		location,
+		asset)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1449,25 +1736,7 @@ func GetDistinctProcessValuesString(c *gin.Context, customerID string, location 
 		return
 	}
 
-	sqlStatement := `WITH RECURSIVE cte AS (
-   (
-   SELECT valuename
-   FROM   processvaluestringtable
-   ORDER  BY 1
-   LIMIT  1
-   )
-   UNION ALL
-   SELECT l.*
-   FROM   cte c
-   CROSS  JOIN LATERAL (
-      SELECT valuename
-      FROM   processvaluestringtable t
-      WHERE  t.valuename > c.valuename AND asset_id=$1
-      ORDER  BY 1
-      LIMIT  1
-      ) l
-   )
-TABLE  cte;`
+	sqlStatement := `SELECT distinct valueName FROM processvaluestringtable WHERE asset_id=$1;`
 	rows, err := db.Query(sqlStatement, assetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
@@ -1519,7 +1788,11 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatement, err, false)
-		zap.S().Warnf("[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v", customerID, location, assetID)
+		zap.S().Warnf(
+			"[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v",
+			customerID,
+			location,
+			assetID)
 		error = errors.New("asset does not exist")
 		return
 	} else if err != nil {
@@ -1536,9 +1809,16 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 }
 
 // GetUniqueProductsWithTags gets all unique products with tags and parents for a specific asset in a specific time range
-func GetUniqueProductsWithTags(c *gin.Context, customerID string, location string, asset string,
+func GetUniqueProductsWithTags(
+	c *gin.Context, customerID string, location string, asset string,
 	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetUniqueProductsWithTags] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+	zap.S().Infof(
+		"[GetUniqueProductsWithTags] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1642,11 +1922,15 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 		//if productTag valueName not in data.ColumnNames yet (because the valueName of productTag comes up for the first time
 		//in the current row), add valueName to data.ColumnNames, store index of column for data.DataPoints and extend slice
 		if valueName.Valid {
-			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
+			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(
+				data.Datapoints,
+				data.ColumnNames,
+				valueName.String)
 		}
 
 		if data.Datapoints == nil { //if no row in data.Datapoints, create new row
-			data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
+			data.Datapoints = CreateNewRowInData(
+				data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
 				timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 		} else { //if there are already rows in Data.datapoint
 			indexRow = len(data.Datapoints) - 1
@@ -1661,10 +1945,14 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 			if UID == lastUID && value.Valid && valueName.Valid {
 				data.Datapoints[indexRow][indexColumn] = value.Float64
 			} else if UID == lastUID && (!value.Valid || !valueName.Valid) { //if there are multiple lines with the same UID, each line should have a correct productTag
-				zap.S().Errorf("GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't", UID, timestampBegin)
+				zap.S().Errorf(
+					"GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't",
+					UID,
+					timestampBegin)
 				return
 			} else if UID != lastUID { //create new row in tempDataPoints
-				data.Datapoints = CreateNewRowInData(data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
+				data.Datapoints = CreateNewRowInData(
+					data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
 					timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 			} else {
 				zap.S().Errorf("GetUniqueProductsWithTags: logic error", UID, timestampBegin)
@@ -1696,11 +1984,17 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 		//Because of the inner join and the not null constraints of productTagString information in the postgresDB, both
 		//valueName and value should be valid
 		if !valueName.Valid || !value.Valid {
-			zap.S().Errorf("GetUniqueProductsWithTags: valueName or value for productTagString not valid", UID, timestampBegin)
+			zap.S().Errorf(
+				"GetUniqueProductsWithTags: valueName or value for productTagString not valid",
+				UID,
+				timestampBegin)
 			return
 		}
 		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
-		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, valueName.String)
+		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(
+			data.Datapoints,
+			data.ColumnNames,
+			valueName.String)
 		var contains bool //indicates, if the UID is already contained in the data.Datpoints slice or not
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
@@ -1733,7 +2027,10 @@ func GetUniqueProductsWithTags(c *gin.Context, customerID string, location strin
 		}
 
 		//if productName (describing type of product) not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
-		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(data.Datapoints, data.ColumnNames, productName)
+		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(
+			data.Datapoints,
+			data.ColumnNames,
+			productName)
 		var contains bool
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
@@ -1780,8 +2077,20 @@ type ProductStruct struct {
 }
 
 // GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
-func GetAccumulatedProducts(c *gin.Context, customerID string, location string, asset string, from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
-	zap.S().Infof("[GetUniqueProductsWithTags] customerID: %v, location: %v, asset: %v from: %v, to: %v", customerID, location, asset, from, to)
+func GetAccumulatedProducts(
+	c *gin.Context,
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data datamodel.DataResponseAny, error error) {
+	zap.S().Infof(
+		"[GetUniqueProductsWithTags] customerID: %v, location: %v, asset: %v from: %v, to: %v",
+		customerID,
+		location,
+		asset,
+		from,
+		to)
 
 	assetID, err := GetAssetID(c, customerID, location, asset)
 	if err != nil {
@@ -1925,15 +2234,23 @@ ORDER BY begin_timestamp ASC
 			return
 		}
 		foundInsider = true
-		zap.S().Debugf("Found insider: %d, %d, %s, %s, %d, %d", OID, PID, timestampBegin, timestampEnd, targetUnits, AID)
-		insideOrders = append(insideOrders, Order{
+		zap.S().Debugf(
+			"Found insider: %d, %d, %s, %s, %d, %d",
 			OID,
 			PID,
 			timestampBegin,
 			timestampEnd,
 			targetUnits,
-			AID,
-		})
+			AID)
+		insideOrders = append(
+			insideOrders, Order{
+				OID,
+				PID,
+				timestampBegin,
+				timestampEnd,
+				targetUnits,
+				AID,
+			})
 	}
 
 	var observationStart time.Time
@@ -2007,7 +2324,11 @@ ORDER BY begin_timestamp ASC
 		countQueryEnd = observationEnd.UnixMilli()
 	}
 
-	countRows, err := db.Query(sqlStatementGetCounts, assetID, float64(countQueryBegin)/1000, float64(countQueryEnd)/1000)
+	countRows, err := db.Query(
+		sqlStatementGetCounts,
+		assetID,
+		float64(countQueryBegin)/1000,
+		float64(countQueryEnd)/1000)
 
 	if err == sql.ErrNoRows {
 		PQErrorHandling(c, sqlStatementGetCounts, err, false)
@@ -2080,13 +2401,14 @@ ORDER BY begin_timestamp ASC
 			return
 		}
 
-		orderMap = append(orderMap, OrderStruct{
-			orderID:        orderID,
-			productId:      productId,
-			targetUnits:    targetUnits,
-			beginTimeStamp: beginTimeStamp,
-			endTimeStamp:   endTimeStamp,
-		})
+		orderMap = append(
+			orderMap, OrderStruct{
+				orderID:        orderID,
+				productId:      productId,
+				targetUnits:    targetUnits,
+				beginTimeStamp: beginTimeStamp,
+				endTimeStamp:   endTimeStamp,
+			})
 	}
 
 	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
