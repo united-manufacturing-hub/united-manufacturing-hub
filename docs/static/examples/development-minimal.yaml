@@ -1,10 +1,6 @@
 ---
 # See https://github.com/rancher/k3os/blob/master/README.md#configuration
 
-# TODO: SET ZOOKEEPER HEAP_SIZE to 128
-# TODO: SET KAFKA_HEAP to 500
-  # - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
-  #   value: "50mb"
 # This will be used as serial number as well
 # HOSTNAME DOES NOT ALLOW UNDERSCORES
 hostname: development-minimal
