@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
@@ -77,7 +78,9 @@ func (c ScrapUniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.UID, AssetTableID)
 	if err != nil {
-		pqErr, ok := err.(*pq.Error)
+		var pqErr *pq.Error
+		ok := errors.As(err, &pqErr)
+
 		if ok {
 			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
 		} else {

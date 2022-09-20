@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	jsoniter "github.com/json-iterator/go"
@@ -86,7 +87,7 @@ func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.Stat
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -149,7 +150,7 @@ func GetCalculatateLowSpeedStatesFromCache(
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -220,7 +221,7 @@ func GetStatesRawFromCache(
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -292,7 +293,7 @@ func GetRawShiftsFromCache(
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -359,7 +360,7 @@ func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data [
 	key := fmt.Sprintf("getRawCountsFromCache-%d-%s-%s", assetID, from, to)
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -420,7 +421,7 @@ func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -484,7 +485,7 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -521,7 +522,7 @@ func GetDistinctProcessValuesStringFromCache(customerID string, location string,
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -638,7 +639,7 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -673,7 +674,7 @@ func GetAssetIDFromCache(customerID string, location string, assetID string) (DB
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -736,7 +737,7 @@ func GetUniqueProductIDFromCache(aid string, DBassetID uint32) (uid uint32, cach
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
@@ -799,7 +800,7 @@ func GetProductIDFromCache(productName int32, DBassetID uint32) (DBProductId uin
 
 	value, err := rdb.Get(ctx, key).Result()
 
-	if err == redis.Nil { // if no value, then return nothing
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
 		return
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)

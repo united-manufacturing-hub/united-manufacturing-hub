@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
@@ -93,7 +94,9 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.OrderId, ProductTableID, sC.TargetUnits, AssetTableID)
 	if err != nil {
-		pqErr, ok := err.(*pq.Error)
+		var pqErr *pq.Error
+		ok := errors.As(err, &pqErr)
+
 		if ok {
 			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
 		} else {

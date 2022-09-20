@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -80,11 +81,13 @@ func kafkaToQueue(topic string) {
 		msg, err := internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			// This is fine, and expected behaviour
-			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+			var kafkaError kafka.Error
+			ok := errors.As(err, &kafkaError)
+			if ok && kafkaError.Code() == kafka.ErrTimedOut {
 				// Sleep to reduce CPU usage
 				time.Sleep(internal.OneSecond)
 				continue
-			} else if err.(kafka.Error).Code() == kafka.ErrUnknownTopicOrPart {
+			} else if ok && kafkaError.Code() == kafka.ErrUnknownTopicOrPart {
 				time.Sleep(5 * time.Second)
 				continue
 			} else {

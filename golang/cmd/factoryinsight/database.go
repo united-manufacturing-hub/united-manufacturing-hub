@@ -82,7 +82,7 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
 	rows, err := db.Query(sqlStatement, customerID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -120,7 +120,7 @@ func GetAssets(c *gin.Context, customerID string, location string) (assets []str
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
 	rows, err := db.Query(sqlStatement, customerID, location)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -158,7 +158,7 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 	sqlStatement := `SELECT distinct(componentname) FROM componentTable WHERE asset_id=$1;`
 
 	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -234,7 +234,7 @@ func GetStatesRaw(
 		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
 
 		err := db.QueryRow(sqlStatement, assetID, from).Scan(&timestamp, &dataPoint)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
@@ -256,7 +256,7 @@ func GetStatesRaw(
 		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 
 		rows, err := db.Query(sqlStatement, assetID, from, to)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			PQErrorHandling(c, sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -354,7 +354,7 @@ func GetShiftsRaw(
 		`
 
 		err := db.QueryRow(sqlStatement, assetID, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 
@@ -396,7 +396,7 @@ func GetShiftsRaw(
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
 		rows, err := db.Query(sqlStatement, assetID, from, to) // OFFSET to prevent entering first result twice
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			PQErrorHandling(c, sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -531,7 +531,7 @@ func GetProcessValue(
 
 	sqlStatement := `SELECT timestamp, value FROM processValueTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
 	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -598,7 +598,7 @@ func GetProcessValueString(
 
 	sqlStatement := `SELECT timestamp, value FROM ProcessValueStringTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
 	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -674,7 +674,7 @@ func GetCurrentState(
 
 	sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 ORDER BY timestamp DESC LIMIT 1;`
 	err = db.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -726,7 +726,7 @@ func GetDataTimeRangeForAsset(
 	sqlStatement := `SELECT MAX(timestamp),MIN(timestamp) FROM stateTable WHERE asset_id=$1;`
 
 	err = db.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -787,7 +787,7 @@ func GetCountsRaw(
 		// no data in cache
 		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 		rows, err := db.Query(sqlStatement, assetID, from, to)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			PQErrorHandling(c, sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -957,7 +957,7 @@ func GetProductionSpeed(
 
 	rows, err := db.Query(sqlStatement, assetID, from, to)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1061,7 +1061,7 @@ func GetQualityRate(
 
 	rows, err := db.Query(sqlStatement, assetID, from, to)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1168,7 +1168,7 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (
 		&tempPerformanceLossStates,
 	)
 
-	if err == sql.ErrNoRows { // default values if no configuration is stored yet
+	if errors.Is(err, sql.ErrNoRows) { // default values if no configuration is stored yet
 		configuration.MicrostopDurationInSeconds = 60 * 2
 		configuration.IgnoreMicrostopUnderThisDurationInSeconds = -1 // do not apply
 		configuration.MinimumRunningTimeInSeconds = 0
@@ -1243,7 +1243,7 @@ func GetRecommendations(
 	ORDER BY timestamp DESC;`
 	// AND (timestamp=) used to only get the recommendations from the latest calculation batch (avoid showing old ones)
 	rows, err := db.Query(sqlStatement, likeString)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1321,7 +1321,7 @@ func GetMaintenanceActivities(
 	WHERE component_id IN (SELECT component_id FROM componentTable WHERE asset_id = $1);`
 
 	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1392,7 +1392,7 @@ func GetUniqueProducts(
 	ORDER BY begin_timestamp_ms ASC;`
 
 	rows, err := db.Query(sqlStatement, assetID, from, to)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1495,7 +1495,7 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 	`
 
 	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1574,7 +1574,7 @@ func GetOrdersRaw(
 	`
 
 	rows, err := db.Query(sqlStatement, assetID, from, to)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1639,7 +1639,7 @@ func GetUnstartedOrdersRaw(
 			AND orderTable.asset_id = $1;`
 
 	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1707,7 +1707,7 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
    )
 TABLE  cte;`
 	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1776,7 +1776,7 @@ func GetDistinctProcessValuesString(c *gin.Context, customerID string, location 
    )
 TABLE  cte;`
 	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		return
 	} else if err != nil {
@@ -1824,7 +1824,7 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 
 	sqlStatement := "SELECT id FROM assetTable WHERE assetid=$1 AND location=$2 AND customer=$3;"
 	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatement, err, false)
 		zap.S().Warnf(
 			"[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v",
@@ -1897,7 +1897,7 @@ func GetUniqueProductsWithTags(
 	ORDER BY unProdTab.uniqueProductID ASC;`
 
 	rows, err := db.Query(sqlStatementData, assetID, from, to)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatementData, err, false)
 		return
 	} else if err != nil {
@@ -1909,7 +1909,7 @@ func GetUniqueProductsWithTags(
 	defer rows.Close()
 
 	rowsStrings, err := db.Query(sqlStatementDataStrings, assetID, from, to)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatementDataStrings, err, false)
 		return
 	} else if err != nil {
@@ -1921,7 +1921,7 @@ func GetUniqueProductsWithTags(
 	defer rowsStrings.Close()
 
 	rowsInheritance, err := db.Query(sqlStatementDataInheritance, assetID, from, to)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
 		return
 	} else if err != nil {
@@ -2184,7 +2184,7 @@ ORDER BY begin_timestamp ASC
 	// Get order outside observation window
 	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
 	err = row.Err()
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf("No outsider rows")
 		// We don't care if there is no outside order, in this case we will just select all insider orders
 	} else if err != nil {
@@ -2225,7 +2225,7 @@ ORDER BY begin_timestamp ASC
 		AID:            AidOuter,
 	}
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		foundOutsider = false
 	} else if err != nil {
 		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
@@ -2244,7 +2244,7 @@ ORDER BY begin_timestamp ASC
 		insideOrderRows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
 	}
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		// It is valid to have no internal rows !
 		zap.S().Debugf("No internal rows")
 	} else if err != nil {
@@ -2368,7 +2368,7 @@ ORDER BY begin_timestamp ASC
 		float64(countQueryBegin)/1000,
 		float64(countQueryEnd)/1000)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlStatementGetCounts, err, false)
 		return
 	} else if err != nil {
@@ -2413,7 +2413,7 @@ ORDER BY begin_timestamp ASC
 
 	orderRows, err := db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
@@ -2453,7 +2453,7 @@ ORDER BY begin_timestamp ASC
 
 	productRows, err := db.Query(sqlGetProductsPerSec, assetID)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
 		return
 	} else if err != nil {

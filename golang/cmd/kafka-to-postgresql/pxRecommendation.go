@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -97,7 +98,9 @@ func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback boo
 	if err != nil {
 
 		if err != nil {
-			pqErr, ok := err.(*pq.Error)
+			var pqErr *pq.Error
+			ok := errors.As(err, &pqErr)
+
 			if ok {
 				zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
 				return false, err, false

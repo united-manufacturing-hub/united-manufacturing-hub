@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
@@ -141,22 +142,32 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulS
 	// This has a timeout, allowing ShuttingDownKafka to be checked
 	msg, err := kafkaConsumer.ReadMessage(5000)
 	if err != nil {
-		switch err.(kafka.Error).Code() {
-		// This is fine, and expected behaviour
-		case kafka.ErrTimedOut:
-			// Sleep to reduce CPU usage
-			time.Sleep(OneSecond)
-			return nil, false
-		// This will occur when no topic for the regex is available !
-		case kafka.ErrUnknownTopicOrPart:
-			zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
-			gracefulShutdown()
-			return nil, true
-		default:
-			zap.S().Warnf("%s Failed to read kafka message: %s: %s", identifier, err, err.(kafka.Error).Code())
+		var kafkaError kafka.Error
+		ok := errors.As(err, &kafkaError)
+		if ok {
+
+			switch kafkaError.Code() {
+			// This is fine, and expected behaviour
+			case kafka.ErrTimedOut:
+				// Sleep to reduce CPU usage
+				time.Sleep(OneSecond)
+				return nil, false
+			// This will occur when no topic for the regex is available !
+			case kafka.ErrUnknownTopicOrPart:
+				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
+				gracefulShutdown()
+				return nil, true
+			default:
+				zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
+				gracefulShutdown()
+				return nil, true
+			}
+		} else {
+			zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
 			gracefulShutdown()
 			return nil, true
 		}
+
 	}
 	return msg, false
 }

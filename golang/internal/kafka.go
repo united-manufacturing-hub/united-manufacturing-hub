@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
@@ -167,7 +168,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		return
 	case <-ctx.Done():
 		err = ctx.Err()
-		if err != nil && err != context.DeadlineExceeded {
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			zap.S().Errorf("Failed to await deadline: %s", err)
 			return
 		}

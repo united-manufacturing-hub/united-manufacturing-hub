@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	_ "github.com/lib/pq"
@@ -150,7 +151,7 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 		assetID,
 		location,
 		customerID).Scan(&AssetTableID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf(
 			"[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s",
 			assetID,
@@ -192,7 +193,7 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(
 		assetID,
 		componentName).Scan(&componentID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
 
 		return
@@ -249,7 +250,7 @@ func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId 
 	err := statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(
 		AssetTableId,
 		productName).Scan(&ProductTableId)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf(
 			"[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d",
 			productName,
@@ -303,7 +304,7 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(
 		UniqueProductAlternativeId,
 		AssetTableId).Scan(&UniqueProductTableId)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf(
 			"[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d",
 			UniqueProductAlternativeId,
@@ -346,7 +347,7 @@ func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (
 	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(
 		ParentID,
 		DBAssetID).Scan(&LatestparentUniqueProductId)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
 
 		return 0, false
