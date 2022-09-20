@@ -10,6 +10,8 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"

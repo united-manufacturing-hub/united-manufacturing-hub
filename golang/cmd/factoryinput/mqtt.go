@@ -36,6 +36,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,

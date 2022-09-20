@@ -9,6 +9,8 @@ import (
 	"go.uber.org/zap"
 	"math"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"

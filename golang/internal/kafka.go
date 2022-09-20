@@ -58,8 +58,8 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 }
 
 func CloseKafka() {
-	err := KafkaConsumer.Close()
-	if err != nil {
+
+	if err := KafkaConsumer.Close(); err != nil {
 		panic("Failed do close KafkaConsumer client !")
 	}
 

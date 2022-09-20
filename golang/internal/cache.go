@@ -25,6 +25,8 @@ var memoryDataExpiration time.Duration
 
 var redisInitialized bool
 
+const NullStr = "null"
+
 // InitCache initializes a redis cache
 func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPassword string, redisDB int, dryRun string) {
 
@@ -92,7 +94,7 @@ func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.Stat
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -155,7 +157,7 @@ func GetCalculatateLowSpeedStatesFromCache(
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -226,7 +228,7 @@ func GetStatesRawFromCache(
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -298,7 +300,7 @@ func GetRawShiftsFromCache(
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -365,7 +367,7 @@ func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data [
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -426,7 +428,7 @@ func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -490,7 +492,7 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -527,7 +529,7 @@ func GetDistinctProcessValuesStringFromCache(customerID string, location string,
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -644,7 +646,7 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
@@ -679,7 +681,7 @@ func GetAssetIDFromCache(customerID string, location string, assetID string) (DB
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		var RawDBassetID int
@@ -742,7 +744,7 @@ func GetUniqueProductIDFromCache(aid string, DBassetID uint32) (uid uint32, cach
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		var RawUID int
@@ -805,7 +807,7 @@ func GetProductIDFromCache(productName int32, DBassetID uint32) (DBProductId uin
 	} else if err != nil {
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
-	} else if value == "null" {
+	} else if value == NullStr {
 		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		var RawUID int

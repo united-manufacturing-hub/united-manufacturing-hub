@@ -112,7 +112,7 @@ func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (
 				return false, err, false
 			}
 			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-			if pqErr.Code == "23P01" {
+			if pqErr.Code == Sql23p01ExclusionViolation {
 				return true, err, true
 			}
 			return true, err, false

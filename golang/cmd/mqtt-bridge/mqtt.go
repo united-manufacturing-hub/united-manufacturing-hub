@@ -35,6 +35,7 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -79,7 +80,14 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // setupMQTT setups MQTT and connect to the broker
-func setupMQTT(clientID string, mode string, mqttBrokerURL string, subMQTTTopic string, SSLEnabled bool, pg *goque.Queue, subscribeToTopic bool) (MQTTClient MQTT.Client) {
+func setupMQTT(
+	clientID string,
+	mode string,
+	mqttBrokerURL string,
+	subMQTTTopic string,
+	SSLEnabled bool,
+	pg *goque.Queue,
+	subscribeToTopic bool) (MQTTClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -108,7 +116,10 @@ func setupMQTT(clientID string, mode string, mqttBrokerURL string, subMQTTTopic 
 
 		zap.S().Infof("MQTT subscribed", mode, subMQTTTopic)
 		// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-		if token := MQTTClient.Subscribe(subMQTTTopic+"/#", 2, getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
+		if token := MQTTClient.Subscribe(
+			subMQTTTopic+"/#",
+			2,
+			getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
 			panic(token.Error())
 		}
 	}

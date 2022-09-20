@@ -49,7 +49,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 	}
 
 	// save iodd file
-	err = ioutil.WriteFile(absoluteFilePath, filemap[index].File, 0644)
+	err = ioutil.WriteFile(absoluteFilePath, filemap[index].File, 0600)
 	if err != nil {
 		zap.S().Errorf("Unable to write file: %v", err)
 		return err
@@ -174,6 +174,7 @@ func getUrl(url string) (body []byte, err error, status int) {
 	time.Sleep(GetBackoffTime(int64(globalSleepTimer), 10*time.Millisecond, 1*time.Second))
 	globalSleepTimer += 1
 	var resp *http.Response
+	/* #nosec G107 -- This function should contact arbitrary urls */
 	resp, err = http.Get(url)
 	if err != nil {
 		zap.S().Errorf("%s", err.Error())

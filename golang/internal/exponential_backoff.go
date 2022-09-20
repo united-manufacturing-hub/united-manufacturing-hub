@@ -25,6 +25,7 @@ func GetBackoffTime(retries int64, slotTime time.Duration, maximum time.Duration
 		return maximum
 	}
 	max := int64(umax)
+	/* #nosec G404 -- This doesn't need to by crypto secure */
 	n := rand.Int63n(max)
 
 	// Prevents overflow

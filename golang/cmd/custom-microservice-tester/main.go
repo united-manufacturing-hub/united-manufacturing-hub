@@ -39,7 +39,7 @@ func main() {
 		zap.S().Debugf("hello-world file does not exist")
 		// Create hello-world file
 		zap.S().Debugf("Creating hello-world file")
-		err := ioutil.WriteFile("/data/hello-world", []byte("Hello World"), 0644)
+		err := ioutil.WriteFile("/data/hello-world", []byte("Hello World"), 0600)
 		if err != nil {
 			panic(err)
 		}

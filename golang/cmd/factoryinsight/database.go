@@ -46,8 +46,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 
 // ShutdownDB closes all database connections
 func ShutdownDB() {
-	err := db.Close()
-	if err != nil {
+	if err := db.Close(); err != nil {
 		panic(err)
 	}
 }

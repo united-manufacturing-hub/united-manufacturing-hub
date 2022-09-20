@@ -9,6 +9,8 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -122,6 +124,7 @@ func main() {
 	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
 
 	if AnomalyEnabled {
+		/* #nosec G404 -- This doesn't have to be crypto random */
 		SetupAnomalyKafka(
 			kafka.ConfigMap{
 				"bootstrap.servers":        KafkaBoostrapServer,

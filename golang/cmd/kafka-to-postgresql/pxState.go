@@ -86,7 +86,7 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
 		} else {
 			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-			if pqErr.Code == "23P01" {
+			if pqErr.Code == Sql23p01ExclusionViolation {
 				return true, err, true
 			}
 		}

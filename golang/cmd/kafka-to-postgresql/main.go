@@ -10,6 +10,8 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"

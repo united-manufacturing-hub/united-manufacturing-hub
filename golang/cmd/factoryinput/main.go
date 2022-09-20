@@ -22,6 +22,8 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -201,8 +203,8 @@ func ShutdownApplicationGraceful() {
 	}
 
 	// Close queue
-	err := closeQueue()
-	if err != nil {
+
+	if err := closeQueue(); err != nil {
 		zap.S().Errorf("Failed to shutdown queue", err)
 	}
 

@@ -418,7 +418,7 @@ func calculatateLowSpeedStates(
 				lastState = datamodel.ProducingAtFullSpeedState
 				processedStateArray = append(processedStateArray, fullRow)
 			}
-		} else { // if this minute is "LowSpeed"
+		} else {                                                     // if this minute is "LowSpeed"
 			if !datamodel.IsProducingLowerThanFullSpeed(lastState) { // if the state is not already LowSpeed, create new state
 				fullRow := datamodel.StateEntry{
 					State:     datamodel.ProducingAtLowerThanFullSpeedState,
@@ -1076,8 +1076,9 @@ func processStatesOptimized(
 	}
 
 	// For testing
-	loggingTimestamp := time.Now()
+
 	if logData {
+		loggingTimestamp := time.Now()
 		internal.LogObject("processStatesOptimized", "stateArray", loggingTimestamp, stateArray)
 		internal.LogObject("processStatesOptimized", "rawShifts", loggingTimestamp, rawShifts)
 		internal.LogObject("processStatesOptimized", "countSlice", loggingTimestamp, countSlice)
@@ -2062,10 +2063,11 @@ func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnN
 // LengthenSliceToFitNames receives an interface slice and checks if it is as long as the names slice, if not it adds nil entries.
 func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput []interface{}) {
 	lengthNames := len(names)
-	if len(slice) == lengthNames {
+	lengthSlice := len(slice)
+	if lengthSlice == lengthNames {
 		return slice
-	} else if len(slice) < lengthNames {
-		for len(slice) < lengthNames {
+	} else if lengthSlice < lengthNames {
+		for lengthSlice < lengthNames {
 			slice = append(slice, nil)
 		}
 		return slice

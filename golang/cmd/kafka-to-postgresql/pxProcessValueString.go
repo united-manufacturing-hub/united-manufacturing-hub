@@ -287,7 +287,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 			return messages, true, "Failed to rollback", err
 		}
 		if len(putBackMsg) > 0 {
-			return putBackMsg, true, "AssetID not found", nil
+			return putBackMsg, true, AssetIDnotFound, nil
 		}
 	} else {
 		zap.S().Debugf("[HT][PVS] Committing transaction")
@@ -298,7 +298,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 		}
 		// zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
 		if len(putBackMsg) > 0 {
-			return putBackMsg, true, "AssetID not found", nil
+			return putBackMsg, true, AssetIDnotFound, nil
 		}
 		internal.KafkaPutBacks += float64(len(putBackMsg))
 		internal.KafkaCommits += toCommit
