@@ -1,23 +1,23 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
 
 type addMaintenanceActivityQueue struct {
-	DBAssetID     uint32
-	TimestampMs   uint64
 	ComponentName string
+	TimestampMs   uint64
+	DBAssetID     uint32
 	Activity      int32
 	ComponentID   int32
 }
 type addMaintenanceActivity struct {
-	TimestampMs   uint64 `json:"timestamp_ms"`
 	ComponentName string `json:"component"`
+	TimestampMs   uint64 `json:"timestamp_ms"`
 	Activity      int32  `json:"activity"`
 }
 
@@ -132,9 +132,16 @@ func (r MaintenanceActivityHandler) Shutdown() (err error) {
 	return
 }
 
-func (r MaintenanceActivityHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, recursionDepth int64) {
+func (r MaintenanceActivityHandler) EnqueueMQTT(
+	customerID string,
+	location string,
+	assetID string,
+	payload []byte,
+	recursionDepth int64) {
 	zap.S().Debugf("[MaintenanceActivityHandler]")
 	var parsedPayload addMaintenanceActivity
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -146,7 +153,13 @@ func (r MaintenanceActivityHandler) EnqueueMQTT(customerID string, location stri
 	if !success {
 		go func() {
 			if r.shutdown {
-				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder, recursionDepth+1)
+				storedRawMQTTHandler.EnqueueMQTT(
+					customerID,
+					location,
+					assetID,
+					payload,
+					Prefix.AddOrder,
+					recursionDepth+1)
 			} else {
 				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
 				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)
@@ -172,6 +185,7 @@ func (r MaintenanceActivityHandler) EnqueueMQTT(customerID string, location stri
 		zap.S().Errorf("Failed to validate struct of type addMaintenanceActivityQueue", newObject)
 		return
 	}
+
 	marshal, err := json.Marshal(newObject)
 	if err != nil {
 		return

@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -16,17 +16,23 @@ import (
 )
 
 type ModeInformation struct {
-	Cid      int                    `json:"cid"`
 	ModeData map[string]interface{} `json:"data"`
+	Cid      int                    `json:"cid"`
 }
 
 // GetUsedPortsAndModeCached returns a map of one IO-Link-Master with the port number as key and the port mode as value
-func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformation) (map[int]ConnectedDeviceInfo, error) {
+func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformation) (
+	map[int]ConnectedDeviceInfo,
+	error) {
 	var modeMap map[int]ConnectedDeviceInfo
 	var val interface{}
 	var found bool
 
-	cacheKey := fmt.Sprintf("GetUsedPortsAndModeCached%s:%s:%s", currentDeviceInformation.ProductCode, currentDeviceInformation.SerialNumber, currentDeviceInformation.Url)
+	cacheKey := fmt.Sprintf(
+		"GetUsedPortsAndModeCached%s:%s:%s",
+		currentDeviceInformation.ProductCode,
+		currentDeviceInformation.SerialNumber,
+		currentDeviceInformation.Url)
 	val, found = internal.GetMemcached(cacheKey)
 	if found {
 		modeMap = val.(map[int]ConnectedDeviceInfo)
@@ -45,6 +51,8 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 // unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
 func _(dataRaw []byte) (map[int]int, error) {
 	dataUnmarshaled := ModeInformation{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
 		return nil, err
 	}
@@ -68,23 +76,27 @@ func _(dataRaw []byte) (map[int]int, error) {
 
 func UnmarshalUsedPortsAndMode(data []byte) (RawUsedPortsAndMode, error) {
 	var r RawUsedPortsAndMode
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *RawUsedPortsAndMode) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
 type RawUsedPortsAndMode struct {
-	Cid  int64                `json:"cid"`
 	Data map[string]UPAMDatum `json:"data"`
+	Cid  int64                `json:"cid"`
 	Code int64                `json:"code"`
 }
 
 type UPAMDatum struct {
-	Code int64  `json:"code"`
 	Data *int64 `json:"data,omitempty"`
+	Code int64  `json:"code"`
 }
 
 type ConnectedDeviceInfo struct {
@@ -97,7 +109,7 @@ type ConnectedDeviceInfo struct {
 // getUsedPortsAndMode returns which ports have sensors connected, by querying there mastercycletime & mode
 func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceInfo, err error) {
 
-	//cid can be any number
+	// cid can be any number
 	var payload = []byte(`{
     "code":"request",
     "cid":42,

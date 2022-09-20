@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 	"time"
 )
@@ -126,11 +126,17 @@ type mqttMessage struct {
 	CustomerID string
 	Location   string
 	AssetID    string
-	Payload    []byte
 	Prefix     string
+	Payload    []byte
 }
 
-func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, prefix string, recursionDepth int64) {
+func (r StoredRawMQTTHandler) EnqueueMQTT(
+	customerID string,
+	location string,
+	assetID string,
+	payload []byte,
+	prefix string,
+	recursionDepth int64) {
 	zap.S().Debugf("[StoredRawMQTTHandler]")
 	var marshal []byte
 
@@ -145,6 +151,8 @@ func (r StoredRawMQTTHandler) EnqueueMQTT(customerID string, location string, as
 		zap.S().Errorf("Failed to validate struct of type mqttMessage", newObject)
 		return
 	}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	marshal, err := json.Marshal(newObject)
 	if err != nil {
 		return

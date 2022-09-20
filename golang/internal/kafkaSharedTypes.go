@@ -1,6 +1,3 @@
-//go:build kafka
-// +build kafka
-
 package internal
 
 import (
@@ -8,8 +5,6 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
-	"syscall"
-
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -20,17 +15,17 @@ type KafkaKey struct {
 }
 
 type Putback struct {
+	Reason    string `json:"Reason,omitempty"`
+	Error     string `json:"Error,omitempty"`
 	FirstTsMS int64  `json:"FirstTsMs"`
 	LastTsMS  int64  `json:"LastTsMs"`
 	Amount    int64  `json:"Amount"`
-	Reason    string `json:"Reason,omitempty"`
-	Error     string `json:"Error,omitempty"`
 }
 
 type PutBackChanMsg struct {
 	Msg               *kafka.Message
-	Reason            string
 	ErrorString       *string
+	Reason            string
 	ForcePutbackTopic bool
 }
 
@@ -77,7 +72,13 @@ func MemoryLimiter(allowedMemorySize int) {
 // ProcessKafkaQueue processes the kafka queue and sends the messages to the processorChannel.
 // It uses topic as regex for subscribing to kafka topics.
 // If the putback channel is full, it will block until the channel is free.
-func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer, putBackChannel chan PutBackChanMsg, gracefulShutdown func()) {
+func ProcessKafkaQueue(
+	identifier string,
+	topic string,
+	processorChannel chan *kafka.Message,
+	kafkaConsumer *kafka.Consumer,
+	putBackChannel chan PutBackChanMsg,
+	gracefulShutdown func()) {
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
 	err := kafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
@@ -133,7 +134,9 @@ func ProcessKafkaTopicProbeQueue(identifier string, processorChannel chan *kafka
 }
 
 // waitNewMessages waits for new messages on the kafka consumer and checks for errors
-func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulShutdown func()) (msg *kafka.Message, isShuttingDown bool) {
+func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulShutdown func()) (
+	msg *kafka.Message,
+	isShuttingDown bool) {
 	// Wait for new messages
 	// This has a timeout, allowing ShuttingDownKafka to be checked
 	msg, err := kafkaConsumer.ReadMessage(5000)
@@ -160,7 +163,12 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulS
 
 // StartPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the Reason and error.
-func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer, commitChannel chan *kafka.Message, putbackChanSize int) {
+func StartPutbackProcessor(
+	identifier string,
+	putBackChannel chan PutBackChanMsg,
+	kafkaProducer *kafka.Producer,
+	commitChannel chan *kafka.Message,
+	putbackChanSize int) {
 	zap.S().Debugf("%s Starting putback processor", identifier)
 	// Loops until the shutdown signal is received and the channel is empty
 	for !ShutdownPutback {
@@ -246,10 +254,11 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 					err = nil
 				}
 				if putbackIndex == -1 {
-					msg2.Headers = append(msg.Headers, kafka.Header{
-						Key:   "putback",
-						Value: header,
-					})
+					msg2.Headers = append(
+						msg.Headers, kafka.Header{
+							Key:   "putback",
+							Value: header,
+						})
 				} else {
 					msg2.Headers[putbackIndex] = kafka.Header{
 						Key:   "putback",
@@ -269,14 +278,11 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 				err = kafkaProducer.Produce(&msgx, nil)
 				if err != nil {
 					zap.S().Warnf("%s Failed to produce putback message: %s", identifier, err)
-					// If the producer failed and the putback channel is full, use SIGINT to shut down !
 					if len(putBackChannel) >= putbackChanSize {
-						err = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-						if err != nil {
-							zap.S().Errorf("%s Failed to send SIGINT to process: %s", identifier, err)
-						}
+						// This don't have to be graceful, as putback is already broken
+						panic(fmt.Errorf("putback channel full, shutting down"))
 					}
-					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString, false}
+					putBackChannel <- PutBackChanMsg{&msgx, errorString, reason, false}
 				}
 				// This is for stats only and counts the amount of messages put back
 				KafkaPutBacks += 1
@@ -289,12 +295,16 @@ func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg
 }
 
 // DrainChannel empties a channel into the high Throughput putback channel
-func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channelToDrainTo chan PutBackChanMsg, ShutdownChannel chan bool) bool {
+func DrainChannel(
+	identifier string,
+	channelToDrain chan *kafka.Message,
+	channelToDrainTo chan PutBackChanMsg,
+	ShutdownChannel chan bool) bool {
 	for len(channelToDrain) > 0 {
 		select {
 		case msg, ok := <-channelToDrain:
 			if ok {
-				channelToDrainTo <- PutBackChanMsg{msg, fmt.Sprintf("%s Shutting down", identifier), nil, false}
+				channelToDrainTo <- PutBackChanMsg{msg, nil, fmt.Sprintf("%s Shutting down", identifier), false}
 				KafkaPutBacks += 1
 			} else {
 				zap.S().Warnf("%s Channel to drain is closed", identifier)
@@ -325,7 +335,7 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 	select {
 	case msg, ok := <-channelToDrain:
 		if ok {
-			channelToDrainTo <- PutBackChanMsg{msg, "Shutting down", nil, false}
+			channelToDrainTo <- PutBackChanMsg{msg, nil, "Shutting down", false}
 		} else {
 			return false
 		}
@@ -347,7 +357,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *kafka.Message, 
 			{
 				_, err := kafkaConsumer.StoreMessage(msg)
 				if err != nil {
-					zap.S().Errorf("%s Error commiting %v: %s", identifier, msg, err)
+					zap.S().Errorf("%s Error committing %v: %s", identifier, msg, err)
 					commitChannel <- msg
 				} else {
 					// This is for stats only, and counts the amounts of commits done to the kafka queue

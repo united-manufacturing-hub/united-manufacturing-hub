@@ -2,9 +2,9 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
 	_ "github.com/patrickmn/go-cache"
 	"github.com/rung/go-safecast"
@@ -31,13 +31,14 @@ func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPasswor
 		zap.S().Infof("Running cache in DRY_RUN mode. This means that cache will not be used") // "... and it stays nil"
 		return
 	}
-	rdb = redis.NewFailoverClient(&redis.FailoverOptions{
-		MasterName:       "mymaster",
-		SentinelAddrs:    []string{redisURI, redisURI2, redisURI3},
-		SentinelPassword: redisPassword,
-		Password:         redisPassword,
-		DB:               redisDB,
-	})
+	rdb = redis.NewFailoverClient(
+		&redis.FailoverOptions{
+			MasterName:       "mymaster",
+			SentinelAddrs:    []string{redisURI, redisURI2, redisURI3},
+			SentinelPassword: redisPassword,
+			Password:         redisPassword,
+			DB:               redisDB,
+		})
 
 	redisDataExpiration = 12 * time.Hour
 	memoryDataExpiration = 10 * time.Second
@@ -71,7 +72,7 @@ func IsRedisAvailable() bool {
 func AsHash(o interface{}) string {
 	h := crc32.NewIEEE() // modified for quicker hashing
 	// This cannot fail
-	_, _ = h.Write([]byte(fmt.Sprintf("%v", o)))
+	_, _ = fmt.Fprintf(h, "%v", o)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
@@ -91,10 +92,12 @@ func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.Stat
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
 	} else if value == "null" {
-		//zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &processedStateArray)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -118,6 +121,7 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&processedStateArray)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -132,7 +136,10 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 }
 
 // GetCalculatateLowSpeedStatesFromCache get low speed states from cache
-func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID uint32) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
+func GetCalculatateLowSpeedStatesFromCache(
+	from time.Time,
+	to time.Time,
+	assetID uint32) (processedStateArray []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		////zap.S().Errorf("rdb == nil")
 		return
@@ -148,10 +155,12 @@ func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
 	} else if value == "null" {
-		//zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &processedStateArray)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -165,7 +174,11 @@ func GetCalculatateLowSpeedStatesFromCache(from time.Time, to time.Time, assetID
 }
 
 // StoreCalculatateLowSpeedStatesToCache stores low speed states to cache
-func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID uint32, processedStateArray []datamodel.StateEntry) {
+func StoreCalculatateLowSpeedStatesToCache(
+	from time.Time,
+	to time.Time,
+	assetID uint32,
+	processedStateArray []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
 		////zap.S().Errorf("rdb == nil")
 		return
@@ -174,10 +187,11 @@ func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID
 	key := fmt.Sprintf("CalculatateLowSpeedStates-%s-%s-%d", from, to, assetID)
 
 	if processedStateArray == nil {
-		//zap.S().Debugf("input is empty. aborting storing into database.", key)
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&processedStateArray)
 	if err != nil {
 		zap.S().Errorf("json marshall: %+v", err)
@@ -192,7 +206,11 @@ func StoreCalculatateLowSpeedStatesToCache(from time.Time, to time.Time, assetID
 }
 
 // GetStatesRawFromCache gets raw states from cache
-func GetStatesRawFromCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, cacheHit bool) {
+func GetStatesRawFromCache(
+	assetID uint32,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
 		////zap.S().Errorf("rdb == nil")
 		return
@@ -208,10 +226,12 @@ func GetStatesRawFromCache(assetID uint32, from time.Time, to time.Time, configu
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
 	} else if value == "null" {
-		//zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -225,19 +245,25 @@ func GetStatesRawFromCache(assetID uint32, from time.Time, to time.Time, configu
 }
 
 // StoreRawStatesToCache stores raw states to cache
-func StoreRawStatesToCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.StateEntry) {
+func StoreRawStatesToCache(
+	assetID uint32,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration,
+	data []datamodel.StateEntry) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
 	key := fmt.Sprintf("getStatesRawFromCache-%d-%s-%s-%s", assetID, from, to, AsHash(configuration))
 
 	if data == nil {
-		//zap.S().Debugf("input is empty. aborting storing into database.", key)
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -252,9 +278,13 @@ func StoreRawStatesToCache(assetID uint32, from time.Time, to time.Time, configu
 }
 
 // GetRawShiftsFromCache gets raw shifts from cache
-func GetRawShiftsFromCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, cacheHit bool) {
+func GetRawShiftsFromCache(
+	assetID uint32,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -268,10 +298,12 @@ func GetRawShiftsFromCache(assetID uint32, from time.Time, to time.Time, configu
 		zap.S().Errorf("error getting key from redis", key, err)
 		return
 	} else if value == "null" {
-		//zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -285,19 +317,25 @@ func GetRawShiftsFromCache(assetID uint32, from time.Time, to time.Time, configu
 }
 
 // StoreRawShiftsToCache stores raw shifts to cache
-func StoreRawShiftsToCache(assetID uint32, from time.Time, to time.Time, configuration datamodel.CustomerConfiguration, data []datamodel.ShiftEntry) {
+func StoreRawShiftsToCache(
+	assetID uint32,
+	from time.Time,
+	to time.Time,
+	configuration datamodel.CustomerConfiguration,
+	data []datamodel.ShiftEntry) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
 	key := fmt.Sprintf("getRawShiftsFromCache-%d-%s-%s-%s", assetID, from, to, AsHash(configuration))
 
 	if data == nil {
-		//zap.S().Debugf("input is empty. aborting storing into database.", key)
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -314,7 +352,7 @@ func StoreRawShiftsToCache(assetID uint32, from time.Time, to time.Time, configu
 // GetRawCountsFromCache gets raw counts from cache
 func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data []datamodel.CountEntry, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -331,6 +369,8 @@ func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data [
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -346,17 +386,18 @@ func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data [
 // StoreRawCountsToCache stores raw counts to cache
 func StoreRawCountsToCache(assetID uint32, from time.Time, to time.Time, data []datamodel.CountEntry) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
 	key := fmt.Sprintf("getRawCountsFromCache-%d-%s-%s", assetID, from, to)
 
 	if data == nil {
-		//zap.S().Debugf("input is empty. aborting storing into database.", key)
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -373,7 +414,7 @@ func StoreRawCountsToCache(assetID uint32, from time.Time, to time.Time, data []
 // GetAverageStateTimeFromCache gets average state time from cache
 func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -389,6 +430,8 @@ func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -405,7 +448,7 @@ func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool
 func StoreAverageStateTimeToCache(key string, data []interface{}) {
 
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -414,6 +457,7 @@ func StoreAverageStateTimeToCache(key string, data []interface{}) {
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -428,9 +472,11 @@ func StoreAverageStateTimeToCache(key string, data []interface{}) {
 }
 
 // GetDistinctProcessValuesFromCache gets distinct process values from cache
-func GetDistinctProcessValuesFromCache(customerID string, location string, assetID string) (data []string, cacheHit bool) {
+func GetDistinctProcessValuesFromCache(customerID string, location string, assetID string) (
+	data []string,
+	cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -448,6 +494,8 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -461,9 +509,11 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 }
 
 // GetDistinctProcessValuesFromCache gets distinct process values from cache
-func GetDistinctProcessValuesStringFromCache(customerID string, location string, assetID string) (data []string, cacheHit bool) {
+func GetDistinctProcessValuesStringFromCache(customerID string, location string, assetID string) (
+	data []string,
+	cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -481,6 +531,8 @@ func GetDistinctProcessValuesStringFromCache(customerID string, location string,
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -497,7 +549,7 @@ func GetDistinctProcessValuesStringFromCache(customerID string, location string,
 func StoreDistinctProcessValuesStringToCache(customerID string, location string, assetID string, data []string) {
 
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -508,6 +560,7 @@ func StoreDistinctProcessValuesStringToCache(customerID string, location string,
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -524,12 +577,13 @@ func StoreDistinctProcessValuesStringToCache(customerID string, location string,
 func StoreCustomerConfigurationToCache(customerID string, data datamodel.CustomerConfiguration) {
 
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
 	key := fmt.Sprintf("GetCustomerConfigurationFromCache-%s", customerID)
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -548,7 +602,7 @@ func StoreCustomerConfigurationToCache(customerID string, data datamodel.Custome
 func StoreDistinctProcessValuesToCache(customerID string, location string, assetID string, data []string) {
 
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -559,6 +613,7 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 		return
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -575,7 +630,7 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 // GetCustomerConfigurationFromCache gets customer configuration from cache
 func GetCustomerConfigurationFromCache(customerID string) (data datamodel.CustomerConfiguration, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -593,6 +648,8 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(b, &data)
 		if err != nil {
 			zap.S().Errorf("json Unmarshal", b)
@@ -608,7 +665,7 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 // GetAssetIDFromCache gets asset id from cache
 func GetAssetIDFromCache(customerID string, location string, assetID string) (DBassetID uint32, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -648,7 +705,7 @@ func GetAssetIDFromCache(customerID string, location string, assetID string) (DB
 // StoreAssetIDToCache stores asset id to cache
 func StoreAssetIDToCache(customerID string, location string, assetID string, DBassetID uint32) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -671,7 +728,7 @@ func StoreAssetIDToCache(customerID string, location string, assetID string, DBa
 // GetUniqueProductIDFromCache gets uniqueProduct from cache
 func GetUniqueProductIDFromCache(aid string, DBassetID uint32) (uid uint32, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -711,7 +768,7 @@ func GetUniqueProductIDFromCache(aid string, DBassetID uint32) (uid uint32, cach
 // StoreUniqueProductIDToCache stores uniqueProductID to cache
 func StoreUniqueProductIDToCache(aid string, DBassetID uint32, uid uint32) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -734,7 +791,7 @@ func StoreUniqueProductIDToCache(aid string, DBassetID uint32, uid uint32) {
 // GetProductIDFromCache gets Product from cache
 func GetProductIDFromCache(productName int32, DBassetID uint32) (DBProductId uint32, cacheHit bool) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -774,7 +831,7 @@ func GetProductIDFromCache(productName int32, DBassetID uint32) (DBProductId uin
 // StoreUniqueProductIDToCache stores uniqueProductID to cache
 func StoreProductIDToCache(productName int32, DBassetID uint32, DBProductId uint32) {
 	if rdb == nil { // only the case during tests
-		//zap.S().Errorf("rdb == nil")
+		// zap.S().Errorf("rdb == nil")
 		return
 	}
 
@@ -799,7 +856,7 @@ func GetTiered(key string) (cached bool, value interface{}) {
 	if memCache == nil && rdb == nil {
 		return false, 0
 	}
-	//Check if in memCache
+	// Check if in memCache
 	value, cached = memCache.Get(key)
 	if cached {
 		zap.S().Infof("Found in memcache")
@@ -807,7 +864,7 @@ func GetTiered(key string) (cached bool, value interface{}) {
 	}
 
 	var err error
-	//Check if in redis
+	// Check if in redis
 	d := time.Now().Add(memoryDataExpiration)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	defer cancel()
@@ -820,7 +877,7 @@ func GetTiered(key string) (cached bool, value interface{}) {
 	cached = true
 	zap.S().Infof("Found in redis")
 
-	//Write back to memCache
+	// Write back to memCache
 	memCache.SetDefault(key, value)
 	return
 }

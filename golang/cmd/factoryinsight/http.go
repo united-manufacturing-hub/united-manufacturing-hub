@@ -435,7 +435,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 type getAggregatedStatesRequest struct {
 	From              time.Time `form:"from" binding:"required"`
 	To                time.Time `form:"to" binding:"required"`
-	IncludeRunning    *bool     `form:"includeRunning" binding:"required"` //*bool is required, see also https://github.com/gin-gonic/gin/issues/814
+	IncludeRunning    *bool     `form:"includeRunning" binding:"required"` // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
 	KeepStatesInteger bool      `form:"keepStatesInteger"`
 	AggregationType   int       `form:"aggregationType"`
 }
@@ -538,7 +538,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		if aggregationType == 1 { // category: hour in a day
 
 			// create resultDatapoints [][]float64. resultDatapoints[HOUR][STATE] = sum of STATE in that hour
-			var resultDatapoints [24][datamodel.MaxState]float64 //24 hours in a day, 2000 different states (0 - 1999)
+			var resultDatapoints [24][datamodel.MaxState]float64 // 24 hours in a day, 2000 different states (0 - 1999)
 
 			// round up "from" till the next full hour
 			tempFrom := time.Date(from.Year(), from.Month(), from.Day(), from.Hour()+1, 0, 0, 0, from.Location())
@@ -557,8 +557,8 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 			// Call CalculateStopParetos for every hour between "from" and "to" and add results to resultDatapoints
 			oldD := tempFrom
 
-			for d := tempFrom; !d.After(tempTo); d = d.Add(time.Hour) { //timestamp is beginning of the state. d is current progress.
-				if d == oldD { //if first entry
+			for d := tempFrom; !d.After(tempTo); d = d.Add(time.Hour) { // timestamp is beginning of the state. d is current progress.
+				if d == oldD { // if first entry
 					continue
 				}
 
@@ -700,7 +700,7 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 			}
 
 			current = to
-		} else { //otherwise, calculate for entire time range
+		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
@@ -824,7 +824,7 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 			}
 
 			current = to
-		} else { //otherwise, calculate for entire time range
+		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
@@ -919,7 +919,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 			}
 
 			current = to
-		} else { //otherwise, calculate for entire time range
+		} else { // otherwise, calculate for entire time range
 			// split up countslice that it contains only counts between current and to
 			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
 
@@ -1040,7 +1040,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			}
 
 			current = to
-		} else { //otherwise, calculate for entire time range
+		} else { // otherwise, calculate for entire time range
 
 			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
 
@@ -1149,7 +1149,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
-	data.ColumnNames = []string{"state", "occurances"}
+	data.ColumnNames = []string{"state", "occurrences"}
 
 	data.Datapoints, err = CalculateStateHistogram(c, processedStates, includeRunning, keepStatesInteger, configuration)
 
@@ -1375,7 +1375,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 			fullRow := []interface{}{getDataRequest.Asset, timeBasedMaintenanceActivity.ComponentName, activityString, 0, 0}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {
-			var status = 2                                                //green by default
+			var status = 2                                                // green by default
 			if timeBasedMaintenanceActivity.DurationInDays.Float64 <= 0 { // critical
 				status = 0
 			} else if timeBasedMaintenanceActivity.DurationInDays.Float64*24/float64(timeBasedMaintenanceActivity.IntervallInHours) < 0.3 { // under a third of the runtime we are on oragne area
@@ -1483,7 +1483,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// TODO: #98 Return timestamps in RFC3339 in /orderTable
 
 	// Process data
-	//zap.S().Debugf("calculateOrderInformation: rawOrders: %v, countSlice: %v, assetID: %v, rawStates: %v, rawShifts: %v, configuration: %v, Location: %v, Asset: %v", rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
+	// zap.S().Debugf("calculateOrderInformation: rawOrders: %v, countSlice: %v, assetID: %v, rawStates: %v, rawShifts: %v, configuration: %v, Location: %v, Asset: %v", rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	data, err := calculateOrderInformation(c, rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1720,7 +1720,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 			}
 
 			current = to
-		} else { //otherwise, calculate for entire time range
+		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
@@ -1844,7 +1844,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 			}
 
 			current = to
-		} else { //otherwise, calculate for entire time range
+		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {

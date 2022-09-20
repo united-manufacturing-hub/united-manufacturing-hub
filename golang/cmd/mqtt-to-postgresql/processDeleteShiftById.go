@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -128,9 +128,16 @@ func (r DeleteShiftByIdHandler) Shutdown() (err error) {
 	return
 }
 
-func (r DeleteShiftByIdHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, recursionDepth int64) {
+func (r DeleteShiftByIdHandler) EnqueueMQTT(
+	customerID string,
+	location string,
+	assetID string,
+	payload []byte,
+	recursionDepth int64) {
 	zap.S().Debugf("[DeleteShiftByIdHandler]")
 	var parsedPayload deleteShiftById
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -142,7 +149,13 @@ func (r DeleteShiftByIdHandler) EnqueueMQTT(customerID string, location string, 
 	if !success {
 		go func() {
 			if r.shutdown {
-				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder, recursionDepth+1)
+				storedRawMQTTHandler.EnqueueMQTT(
+					customerID,
+					location,
+					assetID,
+					payload,
+					Prefix.AddOrder,
+					recursionDepth+1)
 			} else {
 				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
 				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)

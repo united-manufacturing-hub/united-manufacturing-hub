@@ -3,9 +3,9 @@ package internal
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -30,7 +30,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 		return err
 	}
 
-	//Get latest file
+	// Get latest file
 	latest := int64(0)
 	index := 0
 	for i, file := range filemap {
@@ -60,7 +60,10 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 // GetIoddFile downloads a ioddfiles from ioddfinder and returns a list of valid files for the request (This can be multiple, if the vendor has multiple languages or versions published)
 func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	var body []byte
-	body, err = getUrlWithRetry(fmt.Sprintf("https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=%d", deviceId))
+	body, err = getUrlWithRetry(
+		fmt.Sprintf(
+			"https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=%d",
+			deviceId))
 	if err != nil {
 		return
 	}
@@ -88,7 +91,11 @@ func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 	for _, id := range validIds {
 		ioddId := ioddfinder.Content[id].IoddID
 		var ioddzip []byte
-		ioddzip, err = getUrlWithRetry(fmt.Sprintf("https://ioddfinder.io-link.com/api/vendors/%d/iodds/%d/files/zip/rated", vendorId, ioddId))
+		ioddzip, err = getUrlWithRetry(
+			fmt.Sprintf(
+				"https://ioddfinder.io-link.com/api/vendors/%d/iodds/%d/files/zip/rated",
+				vendorId,
+				ioddId))
 		if err != nil {
 			return
 		}
@@ -105,11 +112,12 @@ func GetIoddFile(vendorId int64, deviceId int) (files []IoDDFile, err error) {
 				if err != nil {
 					return
 				}
-				files = append(files, IoDDFile{
-					Name:    zipFile.Name,
-					File:    file,
-					Context: ioddfinder.Content[id],
-				})
+				files = append(
+					files, IoDDFile{
+						Name:    zipFile.Name,
+						File:    file,
+						Context: ioddfinder.Content[id],
+					})
 			}
 		}
 	}
@@ -183,38 +191,42 @@ func getUrl(url string) (body []byte, err error, status int) {
 
 func UnmarshalIoddfinder(data []byte) (Ioddfinder, error) {
 	var r Ioddfinder
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *Ioddfinder) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
 type Ioddfinder struct {
 	Content          []Content     `json:"content"`
+	Sort             []interface{} `json:"sort"`
 	Number           int64         `json:"number"`
 	Size             int64         `json:"size"`
 	NumberOfElements int64         `json:"numberOfElements"`
-	Sort             []interface{} `json:"sort"`
-	First            bool          `json:"first"`
-	Last             bool          `json:"last"`
 	TotalPages       int64         `json:"totalPages"`
 	TotalElements    int64         `json:"totalElements"`
+	First            bool          `json:"first"`
+	Last             bool          `json:"last"`
 }
 
 type Content struct {
-	HasMoreVersions    bool   `json:"hasMoreVersions"`
-	DeviceID           int64  `json:"deviceId"`
+	ProductName        string `json:"productName"`
+	IndicationOfSource string `json:"indicationOfSource"`
 	IoLinkRev          string `json:"ioLinkRev"`
 	VersionString      string `json:"versionString"`
-	IoddID             int64  `json:"ioddId"`
+	IoddStatus         string `json:"ioddStatus"`
 	ProductID          string `json:"productId"`
-	ProductVariantID   int64  `json:"productVariantId"`
-	ProductName        string `json:"productName"`
 	VendorName         string `json:"vendorName"`
+	ProductVariantID   int64  `json:"productVariantId"`
 	UploadDate         int64  `json:"uploadDate"`
 	VendorID           int64  `json:"vendorId"`
-	IoddStatus         string `json:"ioddStatus"`
-	IndicationOfSource string `json:"indicationOfSource"`
+	IoddID             int64  `json:"ioddId"`
+	DeviceID           int64  `json:"deviceId"`
+	HasMoreVersions    bool   `json:"hasMoreVersions"`
 }

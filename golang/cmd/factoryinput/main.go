@@ -101,7 +101,7 @@ func main() {
 
 	zap.S().Debugf("Healthcheck initialized..")
 
-	//Setup queue
+	// Setup queue
 	err := setupQueue()
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue", err)
@@ -118,13 +118,13 @@ func main() {
 	certificateName := GetEnv("CERTIFICATE_NAME")
 	mqttBrokerURL := GetEnv("BROKER_URL")
 
-	//Setup MQTT
+	// Setup MQTT
 	zap.S().Debugf("Setting up MQTT")
 	podName := GetEnv("MY_POD_NAME")
 	SetupMQTT(certificateName, mqttBrokerURL, podName)
 	zap.S().Debugf("Finished setting up MQTT")
 
-	//Setup rest
+	// Setup rest
 	zap.S().Debugf("SetupRestAPI")
 	go SetupRestAPI(accounts, version)
 
@@ -142,7 +142,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -181,7 +181,7 @@ func ShutdownApplicationGraceful() {
 	ShutdownMQTT()
 	time.Sleep(1000 * time.Millisecond)
 
-	//Check if MQTT client is still connected
+	// Check if MQTT client is still connected
 	for i := 0; i < 10; i++ {
 		if mqttClient.IsConnected() {
 			zap.S().Warnf("MQTT client is still connected !")
@@ -192,7 +192,7 @@ func ShutdownApplicationGraceful() {
 	}
 
 	if mqttClient.IsConnected() {
-		zap.S().Errorf("Gracefull shutdown of MQTT client failed !")
+		zap.S().Errorf("Graceful shutdown of MQTT client failed !")
 	}
 
 	// Close queue
@@ -201,7 +201,7 @@ func ShutdownApplicationGraceful() {
 		zap.S().Errorf("Failed to shutdown queue", err)
 	}
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)

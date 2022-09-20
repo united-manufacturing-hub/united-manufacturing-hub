@@ -165,7 +165,7 @@ func main() {
 	valueDataHandler.Setup()
 	valueStringHandler.Setup()
 
-	//Only try to process old messages, once redis and pg are available !
+	// Only try to process old messages, once redis and pg are available !
 	storedRawMQTTHandler.Setup()
 
 	time.Sleep(1 * time.Second)
@@ -185,7 +185,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -210,7 +210,7 @@ var shuttingDown = false
 // ShutdownApplicationGraceful shuts down the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
 	if shuttingDown {
-		//Already shutting down
+		// Already shutting down
 		return
 	}
 	shuttingDown = true
@@ -332,7 +332,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Debugf("===================================")
 	time.Sleep(15 * time.Second)
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)

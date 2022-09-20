@@ -1,24 +1,24 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
 
 type processValueQueueI32 struct {
-	DBAssetID   uint32
-	TimestampMs uint64
 	Name        string
+	TimestampMs uint64
+	DBAssetID   uint32
 	ValueInt32  int32
 }
 type processValueQueueF64 struct {
-	DBAssetID    uint32
-	TimestampMs  uint64
 	Name         string
+	TimestampMs  uint64
 	ValueFloat64 float64
+	DBAssetID    uint32
 }
 
 type ValueDataHandler struct {
@@ -202,16 +202,26 @@ func (r ValueDataHandler) enqueueF64(bytes []byte, priority uint8) {
 }
 
 func (r ValueDataHandler) Shutdown() (err error) {
-	zap.S().Warnf("[ValueDataHandler] shutting down, Queue length: F64: %d,I32: %d", r.priorityQueueF64.Length(), r.priorityQueueI32.Length())
+	zap.S().Warnf(
+		"[ValueDataHandler] shutting down, Queue length: F64: %d,I32: %d",
+		r.priorityQueueF64.Length(),
+		r.priorityQueueI32.Length())
 	r.shutdown = true
 
 	err = CloseQueue(r.priorityQueueI32)
 	return
 }
 
-func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, recursionDepth int64) {
+func (r ValueDataHandler) EnqueueMQTT(
+	customerID string,
+	location string,
+	assetID string,
+	payload []byte,
+	recursionDepth int64) {
 	zap.S().Debugf("[ValueDataHandler]")
 	var parsedPayload interface{}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -223,7 +233,13 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 	if !success {
 		go func() {
 			if r.shutdown {
-				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder, recursionDepth+1)
+				storedRawMQTTHandler.EnqueueMQTT(
+					customerID,
+					location,
+					assetID,
+					payload,
+					Prefix.AddOrder,
+					recursionDepth+1)
 			} else {
 				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
 				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)
@@ -235,7 +251,7 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 	// process unknown data structure according to https://blog.golang.org/json
 	m := parsedPayload.(map[string]interface{})
 
-	if val, ok := m["timestamp_ms"]; ok { //if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
+	if val, ok := m["timestamp_ms"]; ok { // if timestamp_ms key exists (https://stackoverflow.com/questions/2050391/how-to-check-if-a-map-contains-a-key-in-go)
 		timestampMs, ok := val.(uint64)
 		if !ok {
 			timestampMsFloat, ok2 := val.(float64)
@@ -256,13 +272,13 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 			case "timestamp_ms":
 			case "measurement":
 			case "serial_number":
-				break //ignore them
+				break // ignore them
 			default:
 				value, ok := v.(int32)
 				if !ok {
 					valueFloat64, ok2 := v.(float64)
 					if !ok2 {
-						zap.S().Errorf("Process value recieved that is not an integer nor float", k, v)
+						zap.S().Errorf("Process value received that is not an integer nor float", k, v)
 						break
 					}
 					newObject := processValueQueueF64{
@@ -271,6 +287,8 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 						Name:         k,
 						ValueFloat64: valueFloat64,
 					}
+
+					var json = jsoniter.ConfigCompatibleWithStandardLibrary
 					marshal, err := json.Marshal(newObject)
 					if err != nil {
 						return
@@ -284,6 +302,8 @@ func (r ValueDataHandler) EnqueueMQTT(customerID string, location string, assetI
 					Name:        k,
 					ValueInt32:  value,
 				}
+
+				var json = jsoniter.ConfigCompatibleWithStandardLibrary
 				marshal, err := json.Marshal(newObject)
 				if err != nil {
 					return

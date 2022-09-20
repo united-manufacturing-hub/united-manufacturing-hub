@@ -11,7 +11,7 @@ func startDebugger() {
 	internal.KafkaConsumer.Subscribe("^ia.+", nil)
 	for !ShuttingDown {
 
-		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err := internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				// Sleep to reduce CPU usage

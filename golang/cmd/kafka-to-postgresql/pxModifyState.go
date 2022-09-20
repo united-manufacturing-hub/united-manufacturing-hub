@@ -22,7 +22,7 @@ type modifyState struct {
 	NewState         *uint32 `json:"new_state"`
 }
 
-// ProcessMessages processes a ModifyState kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+// ProcessMessages processes a ModifyState kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
 func (c ModifyState) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))

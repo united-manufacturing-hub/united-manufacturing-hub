@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
+	"github.com/cristalhq/base64"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
@@ -39,9 +39,10 @@ func SetupRestAPI() {
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	// Healthcheck
-	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "online")
-	})
+	router.GET(
+		"/", func(c *gin.Context) {
+			c.String(http.StatusOK, "online")
+		})
 
 	const serviceRoute = "/:service/*data"
 	// Version of the API
@@ -67,7 +68,8 @@ func optionsCORSHAndler(c *gin.Context) {
 
 func handleInvalidInputError(c *gin.Context, err error) {
 
-	zap.S().Errorw("Invalid input error",
+	zap.S().Errorw(
+		"Invalid input error",
 		"error", err,
 	)
 
@@ -170,7 +172,7 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 
 	authHeader := c.GetHeader("authorization")
 	s := strings.Split(authHeader, " ")
-	//Basic BASE64Encoded
+	// Basic BASE64Encoded
 	if len(s) != 2 {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
@@ -248,7 +250,9 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
 	zap.S().Warnf("Proxified URL: %s", internal.SanitizeString(u.String()))
 	if err != nil {
-		zap.S().Warnf("url.Parse failed: %s", internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
+		zap.S().Warnf(
+			"url.Parse failed: %s",
+			internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
 		handleInvalidInputError(c, err)
 		return
 	}
@@ -292,21 +296,30 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
-	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
+	ak := fmt.Sprintf(
+		"Basic %s",
+		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
 	DoProxiedRequest(c, err, u, sessionCookie, ak, method, bodyBytes)
 }
 
-func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string, bodyBytes []byte) {
+func DoProxiedRequest(
+	c *gin.Context,
+	err error,
+	u *url.URL,
+	sessionCookie string,
+	authorizationKey string,
+	method string,
+	bodyBytes []byte) {
 
 	// Proxy request to backend
 	client := &http.Client{}
 
 	zap.S().Debugf("Request URL: %s", internal.SanitizeString(u.String()))
-	//CORS request !
+	// CORS request !
 	if u.String() == "" {
 		zap.S().Debugf("CORS Answer")
 		c.Status(http.StatusOK)
-		_, err := c.Writer.Write([]byte("online"))
+		_, err := c.Writer.WriteString("online")
 		if err != nil {
 			zap.S().Debugf("Failed to reply to CORS request")
 			c.AbortWithError(http.StatusInternalServerError, err)
@@ -320,7 +333,7 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
 			zap.S().Warnf("Request without body bytes")
-			req, err = http.NewRequest(method, u.String(), nil)
+			req, err = http.NewRequest(method, u.String(), http.NoBody)
 
 		}
 		if err != nil {

@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
@@ -53,7 +53,10 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 }
 
 // CreateTopicMapElementProcessor create uni/bidirectional transfer channels between the local and remote Kafka brokers.
-func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafka.ConfigMap, remoteConfigMap kafka.ConfigMap) {
+func CreateTopicMapElementProcessor(
+	element TopicMapElement,
+	localConfigMap kafka.ConfigMap,
+	remoteConfigMap kafka.ConfigMap) {
 	zap.S().Debugf("Creating TopicMapProcessor for topic %v", element)
 	zap.S().Infof("Starting Processor with local configmap: %v", localConfigMap)
 	zap.S().Infof("Starting Processor with remote configmap: %v", remoteConfigMap)
@@ -86,7 +89,13 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		localPutBackChan := make(chan internal.PutBackChanMsg, 100)
 		localCommitChan := make(chan *kafka.Message, 100)
 		localIdentifier := fmt.Sprintf("%s-local-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
-		go internal.ProcessKafkaQueue(localIdentifier, element.Topic, localMsgChan, localConsumer, localPutBackChan, nil)
+		go internal.ProcessKafkaQueue(
+			localIdentifier,
+			element.Topic,
+			localMsgChan,
+			localConsumer,
+			localPutBackChan,
+			nil)
 		go internal.StartPutbackProcessor(localIdentifier, localPutBackChan, localProducer, localCommitChan, 100)
 		go internal.StartCommitProcessor(localIdentifier, localCommitChan, localConsumer)
 
@@ -94,7 +103,13 @@ func CreateTopicMapElementProcessor(element TopicMapElement, localConfigMap kafk
 		remotePutBackChan := make(chan internal.PutBackChanMsg, 100)
 		remoteCommitChan := make(chan *kafka.Message, 100)
 		remoteIdentifier := fmt.Sprintf("%s-remote-%s", element.Name, os.Getenv("SERIAL_NUMBER"))
-		go internal.ProcessKafkaQueue(remoteIdentifier, element.Topic, remoteMsgChan, remoteConsumer, remotePutBackChan, nil)
+		go internal.ProcessKafkaQueue(
+			remoteIdentifier,
+			element.Topic,
+			remoteMsgChan,
+			remoteConsumer,
+			remotePutBackChan,
+			nil)
 		go internal.StartPutbackProcessor(remoteIdentifier, remotePutBackChan, remoteProducer, remoteCommitChan, 100)
 		go internal.StartCommitProcessor(remoteIdentifier, remoteCommitChan, remoteConsumer)
 
@@ -185,15 +200,24 @@ type Bridges []string
 
 func UnmarshalBridges(data []byte) (Bridges, error) {
 	var r Bridges
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *Bridges) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
-func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *kafka.Producer, backChan chan internal.PutBackChanMsg, commitChan chan *kafka.Message) {
+func startAtoBSender(
+	identifier string,
+	msgChan chan *kafka.Message,
+	producer *kafka.Producer,
+	backChan chan internal.PutBackChanMsg,
+	commitChan chan *kafka.Message) {
 
 	for !ShuttingDown {
 		msg := <-msgChan
@@ -224,21 +248,24 @@ func startAtoBSender(identifier string, msgChan chan *kafka.Message, producer *k
 			var val []byte
 			val, err := bridges.Marshal()
 			if err == nil {
-				msg.Headers = append(msg.Headers, kafka.Header{
-					Key:   "x-bridges",
-					Value: val,
-				})
+				msg.Headers = append(
+					msg.Headers, kafka.Header{
+						Key:   "x-bridges",
+						Value: val,
+					})
 			}
 		}
 
-		msg.Headers = append(msg.Headers, kafka.Header{
-			Key:   "x-last-bridge-id",
-			Value: []byte(identifier),
-		})
-		msg.Headers = append(msg.Headers, kafka.Header{
-			Key:   "x-last-bridge-time-ms",
-			Value: []byte(fmt.Sprintf("%d", time.Now().UnixMilli())),
-		})
+		msg.Headers = append(
+			msg.Headers, kafka.Header{
+				Key:   "x-last-bridge-id",
+				Value: []byte(identifier),
+			})
+		msg.Headers = append(
+			msg.Headers, kafka.Header{
+				Key:   "x-last-bridge-time-ms",
+				Value: []byte(fmt.Sprintf("%d", time.Now().UnixMilli())),
+			})
 
 		msgX := kafka.Message{
 			TopicPartition: kafka.TopicPartition{

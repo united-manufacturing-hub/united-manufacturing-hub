@@ -42,7 +42,7 @@ func main() {
 	// pprof
 	go http.ListenAndServe("localhost:1337", nil)
 
-	//dryRun := os.Getenv("DRY_RUN")
+	// dryRun := os.Getenv("DRY_RUN")
 
 	// Read environment variables for remote broker
 	remoteCertificateName := os.Getenv("REMOTE_CERTIFICATE_NAME")
@@ -113,7 +113,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -132,7 +132,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
@@ -165,7 +165,7 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 		// Publish element and wait for confirmation
 
 		if !strings.HasPrefix(currentMessage.Topic, subMQTTTopic) {
-			zap.S().Errorf("Recieved unexpected message", currentMessage.Topic, subMQTTTopic)
+			zap.S().Errorf("Received unexpected message", currentMessage.Topic, subMQTTTopic)
 			return
 		}
 
@@ -173,9 +173,9 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 		topic := pubMQTTTopic + strings.TrimPrefix(currentMessage.Topic, subMQTTTopic)
 
 		token := client.Publish(topic, 1, false, currentMessage.Message)
-		token.Wait() // wait indefinete amount of time (librarz will automatically resend)
+		token.Wait() // wait indefinite amount of time (librarz will automatically resend)
 
-		// if successfully recieved at broker delete from stack
+		// if successfully received at broker delete from stack
 		topElement, err = pq.Dequeue()
 		if err != nil {
 			zap.S().Fatalf("Error dequeuing element", err)

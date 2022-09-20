@@ -2,27 +2,27 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
 )
 
 type uniqueProductQueue struct {
-	DBAssetID                  uint32
+	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
 	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
-	ProductID                  int32  `json:"productID"`
-	IsScrap                    bool   `json:"isScrap"`
-	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
+	DBAssetID                  uint32
+	ProductID                  int32 `json:"productID"`
+	IsScrap                    bool  `json:"isScrap"`
 }
 type uniqueProduct struct {
+	ProductName                string `json:"productID"`
+	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
 	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
-	ProductName                string `json:"productID"`
 	IsScrap                    bool   `json:"isScrap"`
-	UniqueProductAlternativeID string `json:"uniqueProductAlternativeID"`
 }
 
 type UniqueProductHandler struct {
@@ -136,9 +136,16 @@ func (r UniqueProductHandler) Shutdown() (err error) {
 	return
 }
 
-func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, assetID string, payload []byte, recursionDepth int64) {
+func (r UniqueProductHandler) EnqueueMQTT(
+	customerID string,
+	location string,
+	assetID string,
+	payload []byte,
+	recursionDepth int64) {
 	zap.S().Debugf("[UniqueProductHandler]")
 	var parsedPayload uniqueProduct
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {
@@ -150,7 +157,13 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 	if !success {
 		go func() {
 			if r.shutdown {
-				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.AddOrder, recursionDepth+1)
+				storedRawMQTTHandler.EnqueueMQTT(
+					customerID,
+					location,
+					assetID,
+					payload,
+					Prefix.AddOrder,
+					recursionDepth+1)
 			} else {
 				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
 				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)
@@ -163,7 +176,13 @@ func (r UniqueProductHandler) EnqueueMQTT(customerID string, location string, as
 		zap.S().Errorf("Product does not exist yet", DBassetID, parsedPayload.ProductName)
 		go func() {
 			if r.shutdown {
-				storedRawMQTTHandler.EnqueueMQTT(customerID, location, assetID, payload, Prefix.UniqueProduct, recursionDepth+1)
+				storedRawMQTTHandler.EnqueueMQTT(
+					customerID,
+					location,
+					assetID,
+					payload,
+					Prefix.UniqueProduct,
+					recursionDepth+1)
 			} else {
 				internal.SleepBackedOff(recursionDepth, 10000*time.Nanosecond, 1000*time.Millisecond)
 				r.EnqueueMQTT(customerID, location, assetID, payload, recursionDepth+1)

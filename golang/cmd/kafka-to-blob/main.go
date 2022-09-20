@@ -44,7 +44,7 @@ func main() {
 	MinioAccessKey := os.Getenv("MINIO_ACCESS_KEY")
 	MinioSecretKey := os.Getenv("MINIO_SECRET_KEY")
 	MinioSecureStr := os.Getenv("MINIO_SECURE")
-	MinioSecure := MinioSecureStr == "1" || strings.ToLower(MinioSecureStr) == "true"
+	MinioSecure := MinioSecureStr == "1" || strings.EqualFold(MinioSecureStr, "true")
 	MinioBucketName := os.Getenv("BUCKET_NAME")
 
 	zap.S().Debugf("Setting up Kafka")
@@ -75,7 +75,7 @@ func main() {
 		"group.id":                 "kafka-to-blob",
 	})
 
-	// KafkaTopicProbeConsumer recieves a message when a new topic is created
+	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
 		"bootstrap.servers":        KafkaBoostrapServer,
 		"security.protocol":        securityProtocol,
@@ -86,7 +86,7 @@ func main() {
 		"group.id":                 "kafka-to-blob-topic-probe",
 		"enable.auto.commit":       true,
 		"auto.offset.reset":        "earliest",
-		//"debug":                    "security,broker",
+		// "debug":                    "security,broker",
 		"topic.metadata.refresh.interval.ms": "30000",
 	})
 
@@ -126,7 +126,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -147,7 +147,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)

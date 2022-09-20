@@ -74,7 +74,7 @@ func main() {
 	go http.ListenAndServe("0.0.0.0:8086", health)
 
 	zap.S().Debugf("Setting up MQTT")
-	//mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
+	// mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
@@ -105,7 +105,7 @@ func main() {
 		"group.id":                 "mqtt-kafka-bridge",
 	})
 
-	// KafkaTopicProbeConsumer recieves a message when a new topic is created
+	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
 		"bootstrap.servers":        KafkaBoostrapServer,
 		"security.protocol":        securityProtocol,
@@ -116,7 +116,7 @@ func main() {
 		"group.id":                 "kafka-to-blob-topic-probe",
 		"enable.auto.commit":       true,
 		"auto.offset.reset":        "earliest",
-		//"debug":                    "security,broker",
+		// "debug":                    "security,broker",
 		"topic.metadata.refresh.interval.ms": "30000",
 	})
 
@@ -155,7 +155,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -179,7 +179,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
@@ -190,7 +190,7 @@ func ReportStats() {
 	lastConfirmed := 0.0
 	for !ShuttingDown {
 		zap.S().Infof("Reporting stats"+
-			"| MQTT->Kafka queue lenght: %d"+
+			"| MQTT->Kafka queue length: %d"+
 			"| Kafka->MQTT queue length: %d"+
 			"| Produces Kafka messages: %f"+
 			"| Produces Kafka messages/s: %f",

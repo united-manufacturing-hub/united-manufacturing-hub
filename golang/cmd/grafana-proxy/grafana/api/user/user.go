@@ -1,8 +1,8 @@
 package user
 
 import (
-	"encoding/json"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"io"
 	"io/ioutil"
 	"log"
@@ -11,28 +11,32 @@ import (
 
 func UnmarshalUser(data []byte) (User, error) {
 	var r User
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *User) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
 type User struct {
-	ID             int64         `json:"id"`
+	UpdatedAt      string        `json:"updatedAt"`
 	Email          string        `json:"email"`
 	Name           string        `json:"name"`
 	Login          string        `json:"login"`
 	Theme          string        `json:"theme"`
-	OrgID          int64         `json:"orgId"`
-	IsGrafanaAdmin bool          `json:"isGrafanaAdmin"`
-	IsDisabled     bool          `json:"isDisabled"`
-	IsExternal     bool          `json:"isExternal"`
-	AuthLabels     []interface{} `json:"authLabels"`
-	UpdatedAt      string        `json:"updatedAt"`
-	CreatedAt      string        `json:"createdAt"`
 	AvatarURL      string        `json:"avatarUrl"`
+	CreatedAt      string        `json:"createdAt"`
+	AuthLabels     []interface{} `json:"authLabels"`
+	ID             int64         `json:"id"`
+	OrgID          int64         `json:"orgId"`
+	IsExternal     bool          `json:"isExternal"`
+	IsDisabled     bool          `json:"isDisabled"`
+	IsGrafanaAdmin bool          `json:"isGrafanaAdmin"`
 }
 
 const GrafanaUrl = "http://factorycube-server-grafana:8080"
@@ -41,7 +45,7 @@ func GetUser(sessioncookie string) (User, error) {
 	url := fmt.Sprintf("%s/api/user", GrafanaUrl)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, http.NoBody)
 	if err != nil {
 
 		return User{}, err

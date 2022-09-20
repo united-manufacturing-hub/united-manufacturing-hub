@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
-	//"encoding/base64"
+	// "github.com/cristalhq/base64"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -17,7 +16,10 @@ import (
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
 // The method sends one message per sensor (active port).
-func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, portModeMap map[int]ConnectedDeviceInfo, sensorDataMap map[string]interface{}) {
+func processSensorData(
+	currentDeviceInformation DiscoveredDeviceInformation,
+	portModeMap map[int]ConnectedDeviceInfo,
+	sensorDataMap map[string]interface{}) {
 	timestampMs := getUnixTimestampMs()
 
 	for portNumber, portMode := range portModeMap {
@@ -25,7 +27,11 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 			zap.S().Debugf("Port %v is not connected, skipping.", portNumber)
 			continue
 		}
-		mqttRawTopic := fmt.Sprintf("ia/raw/%v/%v/X0%v", transmitterId, currentDeviceInformation.SerialNumber, portNumber)
+		mqttRawTopic := fmt.Sprintf(
+			"ia/raw/%v/%v/X0%v",
+			transmitterId,
+			currentDeviceInformation.SerialNumber,
+			portNumber)
 		switch portMode.Mode {
 		case 1: // digital input
 			zap.S().Debugf("Processing sensor data for port %v, mode %v", portNumber, portMode.Mode)
@@ -35,7 +41,11 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 			dataPin2In, err := extractByteArrayFromSensorDataMap(key, "data", sensorDataMap)
 
 			if err != nil {
-				zap.S().Debugf("Error with extracting dataPin2In from sensorDataMap: %v for key %s and sensorDataMap: %v", err, key, sensorDataMap)
+				zap.S().Debugf(
+					"Error with extracting dataPin2In from sensorDataMap: %v for key %s and sensorDataMap: %v",
+					err,
+					key,
+					sensorDataMap)
 				continue
 			}
 			var jsonString []byte
@@ -89,27 +99,27 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 			}
 			rawSensorOutputLength := len(rawSensorOutput)
 
-			//create IoddFilemapKey
+			// create IoddFilemapKey
 			var ioddFilemapKey IoddFilemapKey
 			ioddFilemapKey.DeviceId = int(portMode.DeviceId)
 			ioddFilemapKey.VendorId = int64(portMode.VendorId)
 
 			var idm interface{}
 			var ok bool
-			//check if entry for IoddFilemapKey exists in ioddIoDeviceMap
+			// check if entry for IoddFilemapKey exists in ioddIoDeviceMap
 			if idm, ok = ioDeviceMap.Load(ioddFilemapKey); !ok {
 				zap.S().Debugf("IoddFilemapKey %v not in IodddeviceMap", ioddFilemapKey)
 				updateIoddIoDeviceMapChan <- ioddFilemapKey // send iodd filemap Key into update channel (updates can take a while, especially with bad internet -> do it concurrently)
 				return                                      // return here, other ports will face the same problem !
 			}
 
-			//prepare json Payload to send
+			// prepare json Payload to send
 			payload := make(map[string]interface{})
 			createIoLinkBeginPayload(timestampMs, &payload)
 
 			// create padded binary raw sensor output
 			outputBitLength := rawSensorOutputLength * 4
-			rawSensorOutputString := string(rawSensorOutput[:])
+			rawSensorOutputString := string(rawSensorOutput)
 			rawSensorOutputBinary := HexToBin(rawSensorOutputString)
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
@@ -121,13 +131,29 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 			var emptySimpleDatatype SimpleDatatype
 			primLangExternalTextCollection := cidm.ExternalTextCollection.PrimaryLanguage.Text
 
-			zap.S().Debugf("Starting to process port number = %v with serialnumber = %v and raw sensor output = %v", portNumber, currentDeviceInformation.SerialNumber, string(rawSensorOutput))
+			zap.S().Debugf(
+				"Starting to process port number = %v with serialnumber = %v and raw sensor output = %v",
+				portNumber,
+				currentDeviceInformation.SerialNumber,
+				string(rawSensorOutput))
 			// use the acquired info to process the raw data coming from the sensor correctly in to human readable data and attach to payload
-			err = processData(processDataIn.Datatype, processDataIn.DatatypeRef, emptySimpleDatatype, 0, &payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, processDataIn.Name.TextId, primLangExternalTextCollection)
+			err = processData(
+				processDataIn.Datatype,
+				processDataIn.DatatypeRef,
+				emptySimpleDatatype,
+				0,
+				&payload,
+				outputBitLength,
+				rawSensorOutputBinaryPadded,
+				datatypeReferenceArray,
+				processDataIn.Name.TextId,
+				primLangExternalTextCollection)
 			if err != nil {
-				payload["RawSensorOutput"] = string(rawSensorOutput[:])
+				payload["RawSensorOutput"] = string(rawSensorOutput)
 				zap.S().Errorf("Processing Sensordata failed: %v", err)
 			}
+
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 			jsonString, err := json.Marshal(payload)
 			if err != nil {
@@ -148,24 +174,47 @@ func processSensorData(currentDeviceInformation DiscoveredDeviceInformation, por
 
 // processData turns raw sensor data into human readable data and attaches it to the payload. It can handle the input of datatype, datatypeRef and simpleDatatype structures.
 // It determines which one of those was given (not empty) and delegates the processing accordingly.
-func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype SimpleDatatype, bitOffset int,
-	payload *map[string]interface{}, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype,
-	nameTextId string, primLangExternalTextCollection []Text) (err error) {
+func processData(
+	datatype Datatype,
+	datatypeRef DatatypeRef,
+	simpleDatatype SimpleDatatype,
+	bitOffset int,
+	payload *map[string]interface{},
+	outputBitLength int,
+	rawSensorOutputBinaryPadded string,
+	datatypeReferenceArray []Datatype,
+	nameTextId string,
+	primLangExternalTextCollection []Text) (err error) {
 	if !isEmpty(simpleDatatype) {
-		err = processSimpleDatatype(simpleDatatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, nameTextId, primLangExternalTextCollection)
+		err = processSimpleDatatype(
+			simpleDatatype,
+			payload,
+			outputBitLength,
+			rawSensorOutputBinaryPadded,
+			bitOffset,
+			nameTextId,
+			primLangExternalTextCollection)
 		if err != nil {
 			zap.S().Errorf("Error with processSimpleDatatype: %v", err)
 			return
 		}
-		//zap.S().Debugf("Processed simple Datatype, Payload = %v", string(payload))
+		// zap.S().Debugf("Processed simple Datatype, Payload = %v", string(payload))
 		return
 	} else if !isEmpty(datatype) {
-		err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
+		err = processDatatype(
+			datatype,
+			payload,
+			outputBitLength,
+			rawSensorOutputBinaryPadded,
+			bitOffset,
+			datatypeReferenceArray,
+			nameTextId,
+			primLangExternalTextCollection)
 		if err != nil {
 			zap.S().Errorf("Error with processDatatype: %v", err)
 			return
 		}
-		//zap.S().Debugf("Processed Datatype, Payload = %v", string(payload))
+		// zap.S().Debugf("Processed Datatype, Payload = %v", string(payload))
 		return
 	} else if !isEmpty(datatypeRef) {
 		datatype, err = getDatatypeFromDatatypeRef(datatypeRef, datatypeReferenceArray)
@@ -173,8 +222,16 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 			zap.S().Errorf("Error with getDatatypeFromDatatypeRef: %v", err)
 			return
 		}
-		//zap.S().Debugf("Processed datatypeRef, Payload = %v", string(payload))
-		err = processDatatype(datatype, payload, outputBitLength, rawSensorOutputBinaryPadded, bitOffset, datatypeReferenceArray, nameTextId, primLangExternalTextCollection)
+		// zap.S().Debugf("Processed datatypeRef, Payload = %v", string(payload))
+		err = processDatatype(
+			datatype,
+			payload,
+			outputBitLength,
+			rawSensorOutputBinaryPadded,
+			bitOffset,
+			datatypeReferenceArray,
+			nameTextId,
+			primLangExternalTextCollection)
 		return
 	} else {
 		zap.S().Errorf("Missing input, neither simpleDatatype or datatype or datatypeRef given.")
@@ -183,11 +240,13 @@ func processData(datatype Datatype, datatypeRef DatatypeRef, simpleDatatype Simp
 }
 
 // getDatatypeFromDatatypeRef uses the given datatypeReference to find the actual datatype description in the datatypeReferenceArray and returns it.
-func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray []Datatype) (datatypeOut Datatype, err error) {
+func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray []Datatype) (
+	datatypeOut Datatype,
+	err error) {
 	for _, datatypeElement := range datatypeReferenceArray {
 		if reflect.DeepEqual(datatypeElement.Id, datatypeRef.DatatypeId) {
 			datatypeOut = datatypeElement
-			//zap.S().Debugf("Found matching datatype for datatypeRef, datatype = %v", datatypeOut)
+			// zap.S().Debugf("Found matching datatype for datatypeRef, datatype = %v", datatypeOut)
 			return
 		}
 	}
@@ -197,10 +256,22 @@ func getDatatypeFromDatatypeRef(datatypeRef DatatypeRef, datatypeReferenceArray 
 }
 
 // processSimpleDatatype uses the given simple datatype information to attach the information to the payload
-func processSimpleDatatype(simpleDatatype SimpleDatatype, payload *map[string]interface{}, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int,
-	nameTextId string, primLangExternalTextCollection []Text) (err error) {
+func processSimpleDatatype(
+	simpleDatatype SimpleDatatype,
+	payload *map[string]interface{},
+	outputBitLength int,
+	rawSensorOutputBinaryPadded string,
+	bitOffset int,
+	nameTextId string,
+	primLangExternalTextCollection []Text) (err error) {
 
-	binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, simpleDatatype.Type, simpleDatatype.BitLength, simpleDatatype.FixedLength, outputBitLength, bitOffset)
+	binaryValue := extractBinaryValueFromRawSensorOutput(
+		rawSensorOutputBinaryPadded,
+		simpleDatatype.Type,
+		simpleDatatype.BitLength,
+		simpleDatatype.FixedLength,
+		outputBitLength,
+		bitOffset)
 	valueString := convertBinaryValueToString(binaryValue, simpleDatatype.Type)
 	valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
 	(*payload)[valueName] = valueString
@@ -208,25 +279,50 @@ func processSimpleDatatype(simpleDatatype SimpleDatatype, payload *map[string]in
 }
 
 // extractBinaryValueFromRawSensorOutput handles the cutting and converting of the actual raw sensor data.
-func extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded string, typeString string, bitLength uint, fixedLength uint, outputBitLength int, bitOffset int) string {
+func extractBinaryValueFromRawSensorOutput(
+	rawSensorOutputBinaryPadded string,
+	typeString string,
+	bitLength uint,
+	fixedLength uint,
+	outputBitLength int,
+	bitOffset int) string {
 	valueBitLength := determineValueBitLength(typeString, bitLength, fixedLength)
 
 	leftIndex := outputBitLength - int(valueBitLength) - bitOffset
 	rightIndex := outputBitLength - bitOffset
 	binaryValue := rawSensorOutputBinaryPadded[leftIndex:rightIndex]
-	//zap.S().Debugf("From the complete binary value %v the part %v was extracted. Left Index : %v, Right Index : %v", rawSensorOutputBinaryPadded, binaryValue, leftIndex, rightIndex)
+	// zap.S().Debugf("From the complete binary value %v the part %v was extracted. Left Index : %v, Right Index : %v", rawSensorOutputBinaryPadded, binaryValue, leftIndex, rightIndex)
 	return binaryValue
 }
 
 // processDatatype can process a Datatype structure. If the bitOffset is not given, enter zero.
-func processDatatype(datatype Datatype, payload *map[string]interface{}, outputBitLength int, rawSensorOutputBinaryPadded string, bitOffset int, datatypeReferenceArray []Datatype,
-	nameTextId string, primLangExternalTextCollection []Text) (err error) {
+func processDatatype(
+	datatype Datatype,
+	payload *map[string]interface{},
+	outputBitLength int,
+	rawSensorOutputBinaryPadded string,
+	bitOffset int,
+	datatypeReferenceArray []Datatype,
+	nameTextId string,
+	primLangExternalTextCollection []Text) (err error) {
 	if reflect.DeepEqual(datatype.Type, "RecordT") {
-		processRecordType(payload, datatype.RecordItemArray, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, primLangExternalTextCollection)
+		processRecordType(
+			payload,
+			datatype.RecordItemArray,
+			outputBitLength,
+			rawSensorOutputBinaryPadded,
+			datatypeReferenceArray,
+			primLangExternalTextCollection)
 		return
 	} else {
-		//zap.S().Debugf("Starting to process rawSensorOutputBinaryPadded = %v with datatype %v iodd information", rawSensorOutputBinaryPadded, datatype)
-		binaryValue := extractBinaryValueFromRawSensorOutput(rawSensorOutputBinaryPadded, datatype.Type, datatype.BitLength, datatype.FixedLength, outputBitLength, bitOffset)
+		// zap.S().Debugf("Starting to process rawSensorOutputBinaryPadded = %v with datatype %v iodd information", rawSensorOutputBinaryPadded, datatype)
+		binaryValue := extractBinaryValueFromRawSensorOutput(
+			rawSensorOutputBinaryPadded,
+			datatype.Type,
+			datatype.BitLength,
+			datatype.FixedLength,
+			outputBitLength,
+			bitOffset)
 		valueString := convertBinaryValueToString(binaryValue, datatype.Type)
 		valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
 		(*payload)[valueName] = valueString
@@ -235,12 +331,28 @@ func processDatatype(datatype Datatype, payload *map[string]interface{}, outputB
 }
 
 // processRecordType iterates through the given recordItemArray and calls the processData function for each RecordItem
-func processRecordType(payload *map[string]interface{}, recordItemArray []RecordItem, outputBitLength int, rawSensorOutputBinaryPadded string, datatypeReferenceArray []Datatype, primLangExternalTextCollection []Text) {
+func processRecordType(
+	payload *map[string]interface{},
+	recordItemArray []RecordItem,
+	outputBitLength int,
+	rawSensorOutputBinaryPadded string,
+	datatypeReferenceArray []Datatype,
+	primLangExternalTextCollection []Text) {
 	// iterate through RecordItems in Iodd file to extract all values from the padded binary sensor output
 	for _, element := range recordItemArray {
 		var datatypeEmpty Datatype
-		err := processData(datatypeEmpty, element.DatatypeRef, element.SimpleDatatype, element.BitOffset, payload, outputBitLength, rawSensorOutputBinaryPadded, datatypeReferenceArray, element.Name.TextId, primLangExternalTextCollection)
-		//zap.S().Debugf("Processed RecordItem = %v with datatype %v iodd information", element)
+		err := processData(
+			datatypeEmpty,
+			element.DatatypeRef,
+			element.SimpleDatatype,
+			element.BitOffset,
+			payload,
+			outputBitLength,
+			rawSensorOutputBinaryPadded,
+			datatypeReferenceArray,
+			element.Name.TextId,
+			primLangExternalTextCollection)
+		// zap.S().Debugf("Processed RecordItem = %v with datatype %v iodd information", element)
 		if err != nil {
 			zap.S().Errorf("Procession of RecordItem failed: %v", element)
 		}
@@ -249,7 +361,7 @@ func processRecordType(payload *map[string]interface{}, recordItemArray []Record
 
 // isEmpty determines if an field of a struct is empty of filled
 func isEmpty(object interface{}) bool {
-	//First check normal definitions of empty
+	// First check normal definitions of empty
 	if object == nil {
 		return true
 	} else if object == "" {
@@ -258,7 +370,7 @@ func isEmpty(object interface{}) bool {
 		return true
 	}
 
-	//Then see if it's a struct
+	// Then see if it's a struct
 	if reflect.ValueOf(object).Kind() == reflect.Struct {
 		// and create an empty copy of the struct object to compare against
 		empty := reflect.New(reflect.TypeOf(object)).Elem().Interface()
@@ -277,7 +389,7 @@ func getUnixTimestampMs() (timestampMs string) {
 	return
 }
 
-// extractIntFromSensorDataMap uses the combination of key and tag to retreive an integer
+// extractIntFromSensorDataMap uses the combination of key and tag to retrieve an integer
 func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) (int, error) {
 	if _, ok := sensorDataMap[key]; !ok {
 		return 0, fmt.Errorf("key %s not in sensorDataMap", key)
@@ -293,7 +405,7 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 	return returnValue, nil
 }
 
-// extractInt64FromSensorDataMap uses the combination of key and tag to retreive an integer 64
+// extractInt64FromSensorDataMap uses the combination of key and tag to retrieve an integer 64
 func _(key string, tag string, sensorDataMap map[string]interface{}) (int64, error) {
 	if _, ok := sensorDataMap[key]; !ok {
 		return 0, fmt.Errorf("key %s not in sensorDataMap", key)
@@ -308,7 +420,7 @@ func _(key string, tag string, sensorDataMap map[string]interface{}) (int64, err
 	return returnValue, nil
 }
 
-// extractIntFromSensorDataMap uses the combination of key and tag to retreive a byte slice
+// extractIntFromSensorDataMap uses the combination of key and tag to retrieve a byte slice
 func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map[string]interface{}) ([]byte, error) {
 	if _, ok := sensorDataMap[key]; !ok {
 		return nil, fmt.Errorf("key %s not in sensorDataMap", key)

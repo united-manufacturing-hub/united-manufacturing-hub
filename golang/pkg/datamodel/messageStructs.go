@@ -1,6 +1,3 @@
-//go:build kafka
-// +build kafka
-
 package datamodel
 
 /*
@@ -18,8 +15,8 @@ type ScrapCount struct {
 }
 
 type Barcode struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	Barcode     string `json:"barcode"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 type Activity struct {
@@ -28,8 +25,8 @@ type Activity struct {
 }
 
 type DetectedAnomaly struct {
-	TimestampMs     uint64 `json:"timestamp_ms"`
 	DetectedAnomaly string `json:"detectedAnomaly"`
+	TimestampMs     uint64 `json:"timestamp_ms"`
 }
 
 type AddShift struct {
@@ -48,18 +45,18 @@ type AddProduct struct {
 }
 
 type StartOrder struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	OrderId     string `json:"order_id"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 type EndOrder struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	OrderId     string `json:"order_id"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 type ProductImage struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	Image       Image  `json:"image"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 type Image struct {
 	ImageId       string `json:"image_id"`
@@ -70,23 +67,23 @@ type Image struct {
 }
 
 type ProductTag struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	AID         string `json:"aid"`
 	Name        string `json:"name"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 	Value       int64  `json:"value"`
 }
 
 type ProductTagString struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	AID         string `json:"aid"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 type AddParentToChild struct {
-	TimestampMs uint64 `json:"timestamp_ms"`
 	ParentAID   string `json:"parentAID"`
 	ChildAID    string `json:"childAID"`
+	TimestampMs uint64 `json:"timestamp_ms"`
 }
 
 type State struct {
@@ -95,18 +92,18 @@ type State struct {
 }
 
 type CycleTimeTrigger struct {
-	TimestampMs    uint64 `json:"timestamp_ms"`
 	CurrentStation string `json:"currentStation"`
 	LastStation    string `json:"lastStation"`
+	TimestampMs    uint64 `json:"timestamp_ms"`
 	SanityTimeInS  uint64 `json:"sanityTime_in_s"`
 }
 
 type UniqueProduct struct {
+	ProductId                  string `json:"product_id"`
+	UniqueProductAlternativeId string `json:"UniqueProductAlternativeId"`
 	BeginTimestampMs           uint64 `json:"begin_timestamp_ms"`
 	EndTimestampMs             uint64 `json:"end_timestamp_ms"`
-	ProductId                  string `json:"product_id"`
 	IsScrap                    bool   `json:"is_scrap"`
-	UniqueProductAlternativeId string `json:"UniqueProductAlternativeId"`
 }
 
 type ScrapUniqueProduct struct {
@@ -114,9 +111,9 @@ type ScrapUniqueProduct struct {
 }
 
 type Recommendations struct {
-	TimestampMs          uint64            `json:"timestamp_ms"`
+	RecommendationValues map[string]string `json:"recommendationValues"`
 	RecommendationUID    string            `json:"recommendationUID"`
 	RecommendationType   string            `json:"recommendationType"`
+	TimestampMs          uint64            `json:"timestamp_ms"`
 	Enabled              bool              `json:"enabled"`
-	RecommendationValues map[string]string `json:"recommendationValues"`
 }

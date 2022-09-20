@@ -75,9 +75,9 @@ func ConvertNewToOld(NewState int) (OldState int) {
 		OldState = 8
 	case NoShiftState:
 		OldState = 9
-	//case InletJamState:
+	// case InletJamState:
 	//	OldState = 10
-	//case NoOrderState:
+	// case NoOrderState:
 	//	OldState = 11
 	case IdleState:
 		OldState = 12

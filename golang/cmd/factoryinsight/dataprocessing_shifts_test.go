@@ -26,7 +26,7 @@ func TestIsTimerangeEntirelyInTimerangeFalse(t *testing.T) {
 }
 
 func getTestShiftPlan() (processedShifts []datamodel.ShiftEntry) {
-	beginShift := datamodel.ShiftEntry{ //first is always no shift
+	beginShift := datamodel.ShiftEntry{ // first is always no shift
 		TimestampBegin: time.Date(1900, 01, 01, 00, 00, 00, 0, time.UTC),
 		TimestampEnd:   time.Date(2000, 01, 01, 06, 00, 00, 0, time.UTC),
 		ShiftType:      0,
@@ -61,14 +61,14 @@ func getTestShiftPlan() (processedShifts []datamodel.ShiftEntry) {
 	}
 	processedShifts = append(processedShifts, thirdShift)
 
-	endShift := datamodel.ShiftEntry{ //last is always no shift
+	endShift := datamodel.ShiftEntry{ // last is always no shift
 		TimestampBegin: time.Date(2000, 01, 02, 07, 00, 00, 0, time.UTC),
 		TimestampEnd:   time.Date(2200, 01, 01, 00, 00, 00, 0, time.UTC),
 		ShiftType:      0,
 	}
 	processedShifts = append(processedShifts, endShift)
 
-	endShift2 := datamodel.ShiftEntry{ //last is always no shift
+	endShift2 := datamodel.ShiftEntry{ // last is always no shift
 		TimestampBegin: time.Date(2200, 01, 01, 00, 00, 00, 0, time.UTC),
 		TimestampEnd:   time.Date(2200, 01, 01, 16, 00, 00, 0, time.UTC),
 		ShiftType:      0,

@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -13,8 +13,8 @@ import (
 )
 
 type SensorDataInformation struct {
-	Cid        int                    `json:"cid"`
 	SensorData map[string]interface{} `json:"data"`
+	Cid        int                    `json:"cid"`
 }
 
 // GetSensorDataMap returns a map of one IO-Link-Master with the port number as key and sensor data as value
@@ -23,7 +23,11 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 	var found bool
 	var modeRequestBody []byte
 
-	cacheKey := fmt.Sprintf("GetSensorDataMap%s:%s:%s", currentDeviceInformation.ProductCode, currentDeviceInformation.SerialNumber, currentDeviceInformation.Url)
+	cacheKey := fmt.Sprintf(
+		"GetSensorDataMap%s:%s:%s",
+		currentDeviceInformation.ProductCode,
+		currentDeviceInformation.SerialNumber,
+		currentDeviceInformation.Url)
 
 	val, found = internal.GetMemcached(cacheKey)
 	if found {
@@ -55,6 +59,8 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 // unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
 func unmarshalSensorData(dataRaw []byte) (map[string]interface{}, error) {
 	dataUnmarshaled := SensorDataInformation{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
 		return nil, err
 	}
@@ -69,7 +75,7 @@ func unmarshalSensorData(dataRaw []byte) (map[string]interface{}, error) {
 // createSensorDataRequestBody creates the POST request body for ifm gateways. The body is made to simultaneously request sensordata of the ports 1 - numberOfPorts.
 func createSensorDataRequestBody(connectedDeviceInfo map[int]ConnectedDeviceInfo) (payload []byte, err error) {
 	// Payload to send to the gateways
-	//cid can be any number
+	// cid can be any number
 	payload = []byte(`{
 	"code":"request",
 	"cid":25,
@@ -109,8 +115,9 @@ func createSensorDataRequestBody(connectedDeviceInfo map[int]ConnectedDeviceInfo
 	// remove last , from payload
 	payload = payload[:len(payload)-2]
 
-	//closes datatosend, data and root object
-	payload = append(payload, []byte(`
+	// closes datatosend, data and root object
+	payload = append(
+		payload, []byte(`
 			]
 		}
 	}`)...)

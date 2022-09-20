@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
 	"log"
@@ -19,8 +19,8 @@ import (
 
 // DiscoverResponseFromDevice Structs for parsing response to discover all IO-Link Master Devices
 type DiscoverResponseFromDevice struct {
-	Cid  int  `json:"cid"`
 	Data Data `json:"data"`
+	Cid  int  `json:"cid"`
 }
 
 type Data struct {
@@ -29,8 +29,8 @@ type Data struct {
 }
 
 type StringDataPoint struct {
-	Code int    `json:"code"`
 	Data string `json:"data"`
+	Code int    `json:"code"`
 }
 
 // DiscoveredDeviceInformation Struct for relevant information of already discovered devices
@@ -69,9 +69,11 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	unmarshaledAnswer := DiscoverResponseFromDevice{}
 
 	// Unmarshal file with Unmarshal
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err = json.Unmarshal(body, &unmarshaledAnswer)
 	if err != nil {
-		//zap.S().Errorf("Unmarshal of body from url %s failed.", url)
+		// zap.S().Errorf("Unmarshal of body from url %s failed.", url)
 		return
 	}
 
@@ -97,7 +99,9 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 		if useKafka {
 			err := internal.CreateTopicIfNotExists(kafkaTopic)
 			if err != nil {
-				zap.S().Errorf("Failed to create topic %s, this can happen during initial startup, it might take up to 5 minutes for Kafka to startup. If you encounter this error, while Kafka is already running, please investigate further", err)
+				zap.S().Errorf(
+					"Failed to create topic %s, this can happen during initial startup, it might take up to 5 minutes for Kafka to startup. If you encounter this error, while Kafka is already running, please investigate further",
+					err)
 				internal.ShuttingDownKafka = true
 				time.Sleep(internal.FiveSeconds)
 				os.Exit(1)
@@ -136,7 +140,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	url = "http://" + ip.String()
 
 	// Payload to send to the gateways
-	//cid can be any number
+	// cid can be any number
 	var payload = []byte(`{
         "code":"request",
         "cid":23,
@@ -150,7 +154,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	// Create Request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		//zap.S().Warnf("Failed to create post request for url: %s", url)
+		// zap.S().Warnf("Failed to create post request for url: %s", url)
 		return
 	}
 	client := GetHTTPClient(url)
@@ -158,7 +162,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 	client.Timeout = time.Second * time.Duration(deviceFinderTimeoutInS)
 	resp, err := client.Do(req)
 	if err != nil {
-		//zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
+		// zap.S().Debugf("Client at %s did not respond. %s", url, err.Error())
 		return
 	}
 	defer resp.Body.Close()

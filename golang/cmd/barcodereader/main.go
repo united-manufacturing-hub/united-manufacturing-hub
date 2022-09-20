@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package main
 
 import (
@@ -52,11 +55,12 @@ func main() {
 	if !scanOnly {
 		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
 
-		internal.SetupKafka(kafka.ConfigMap{
-			"bootstrap.servers": KafkaBoostrapServer,
-			"security.protocol": "plaintext",
-			"group.id":          "barcodereader",
-		})
+		internal.SetupKafka(
+			kafka.ConfigMap{
+				"bootstrap.servers": KafkaBoostrapServer,
+				"security.protocol": "plaintext",
+				"group.id":          "barcodereader",
+			})
 		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
 		if err != nil {
 			panic(err)

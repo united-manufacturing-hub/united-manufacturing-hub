@@ -27,7 +27,7 @@ func newPrefixRegistry() *prefixRegistry {
 		ModifyProducedPieces:                  "modifyProducedPieces",
 		DeleteShiftById:                       "deleteShiftById",
 		DeleteShiftByAssetIdAndBeginTimestamp: "deleteShiftByAssetIdAndBeginTimestamp",
-		//For internal use only !
+		// For internal use only !
 		RawMQTTRequeue: "rawMQTTRequeue",
 	}
 }

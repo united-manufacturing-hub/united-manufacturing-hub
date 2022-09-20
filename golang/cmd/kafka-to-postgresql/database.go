@@ -50,7 +50,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	statement = NewStatementRegistry()
 }
 
-//IsPostgresSQLAvailable returns if the database is reachable by PING command
+// IsPostgresSQLAvailable returns if the database is reachable by PING command
 func IsPostgresSQLAvailable() (bool, error) {
 	var err error
 	if db != nil {
@@ -89,7 +89,7 @@ const (
 	DiscardValue RecoveryType = 2
 )
 
-//GetPostgresErrorRecoveryOptions checks if the error is recoverable
+// GetPostgresErrorRecoveryOptions checks if the error is recoverable
 func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 	if err == nil {
 		return Other

@@ -65,7 +65,7 @@ func getOverlappingShifts(state datamodel.StateEntry, followingState datamodel.S
 			// if firstTimeRange.Begin in TimeRange or firstTimeRange.End in TimeRange
 			if isTimepointInTimerange(firstTimeRange.Begin, secondTimeRange) || isTimepointInTimerange(firstTimeRange.End, secondTimeRange) { // if state begin is in time range or state end is in time range
 				overlappingShifts = append(overlappingShifts, dataPoint)
-			} else if state.Timestamp.Before(dataPoint.TimestampBegin) && followingState.Timestamp.After(dataPoint.TimestampEnd) { //if there is one single state ranging over an entire shift
+			} else if state.Timestamp.Before(dataPoint.TimestampBegin) && followingState.Timestamp.After(dataPoint.TimestampEnd) { // if there is one single state ranging over an entire shift
 				overlappingShifts = append(overlappingShifts, dataPoint)
 			}
 		}
@@ -79,7 +79,7 @@ func isStateEntirelyOutsideNoShift(state datamodel.StateEntry, followingState da
 
 	// Loop through all shifts
 	for _, dataPoint := range processedShifts {
-		if dataPoint.ShiftType != 0 { //if shift is anything else other than no shift
+		if dataPoint.ShiftType != 0 { // if shift is anything else other than no shift
 			secondTimeRange := TimeRange{dataPoint.TimestampBegin, dataPoint.TimestampEnd}
 			if isTimerangeEntirelyInTimerange(firstTimeRange, secondTimeRange) {
 				return true
@@ -95,7 +95,7 @@ func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration d
 
 	// Loop through all datapoints
 	for index, dataPoint := range shiftArray {
-		if index > 0 && shiftArray[index-1].ShiftType != 0 && dataPoint.ShiftType != 0 { //if not the first entry, add a noShift. Only add it if the previous value is not noShift or the current value is not noShoft
+		if index > 0 && shiftArray[index-1].ShiftType != 0 && dataPoint.ShiftType != 0 { // if not the first entry, add a noShift. Only add it if the previous value is not noShift or the current value is not noShoft
 
 			previousDataPoint := shiftArray[index-1]
 			timestampBegin := previousDataPoint.TimestampEnd
@@ -105,7 +105,7 @@ func addNoShiftsBetweenShifts(shiftArray []datamodel.ShiftEntry, configuration d
 				fullRow := datamodel.ShiftEntry{
 					TimestampBegin: timestampBegin,
 					TimestampEnd:   timestampEnd.Add(time.Duration(-1) * time.Millisecond),
-					ShiftType:      0, //shiftType =0 is noShift
+					ShiftType:      0, // shiftType =0 is noShift
 				}
 				processedShifts = append(processedShifts, fullRow)
 			}
@@ -138,7 +138,7 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 			fullRow := datamodel.ShiftEntry{
 				TimestampBegin: dataPoint.TimestampBegin,
 				TimestampEnd:   dataPoint.TimestampEnd,
-				ShiftType:      0, //shiftType =0 is noShift
+				ShiftType:      0, // shiftType =0 is noShift
 			}
 			processedShifts = append(processedShifts, fullRow)
 			continue
@@ -157,7 +157,7 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 			// if following shift is adjacent to currentShiftEndTimestamp
 			toleranceTimeRange := TimeRange{
 				Begin: nextShift.TimestampBegin.Add(-time.Duration(5) * time.Minute),
-				End:   nextShift.TimestampBegin.Add(time.Duration(5) * time.Minute), // should not happend as it is forbidden by the datamodel (prevent_overlap check)
+				End:   nextShift.TimestampBegin.Add(time.Duration(5) * time.Minute), // should not happened as it is forbidden by the datamodel (prevent_overlap check)
 			}
 
 			if isTimepointInTimerange(timestampEnd, toleranceTimeRange) && nextShift.ShiftType != 0 { // if its is in rimerange and the following shift is not noShift
@@ -171,7 +171,7 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 				fullRow := datamodel.ShiftEntry{
 					TimestampBegin: timestampBegin,
 					TimestampEnd:   timestampEnd,
-					ShiftType:      shiftType, //shiftType =0 is noShift
+					ShiftType:      shiftType, // shiftType =0 is noShift
 				}
 				processedShifts = append(processedShifts, fullRow)
 
@@ -188,7 +188,7 @@ func cleanRawShiftData(shiftArray []datamodel.ShiftEntry, from time.Time, to tim
 				fullRow := datamodel.ShiftEntry{
 					TimestampBegin: timestampBegin,
 					TimestampEnd:   timestampEnd,
-					ShiftType:      dataPoint.ShiftType, //shiftType =0 is noShift
+					ShiftType:      dataPoint.ShiftType, // shiftType =0 is noShift
 				}
 				processedShifts = append(processedShifts, fullRow)
 			}
@@ -225,7 +225,7 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 			state = dataPoint.State
 			fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp}
 
-			if len(overlappingShifts) == 1 { // if last seperation, abort
+			if len(overlappingShifts) == 1 { // if last separation, abort
 
 				processedStateArray = append(processedStateArray, fullRow)
 
@@ -249,7 +249,7 @@ func recursiveSplittingOfShiftsToAddNoShifts(dataPoint datamodel.StateEntry, fol
 			// we need to deep dive further in here
 			timestamp = overlappingShifts[0].TimestampEnd
 
-			if len(overlappingShifts) == 1 { // if last seperation, abort
+			if len(overlappingShifts) == 1 { // if last separation, abort
 				state = datamodel.NoShiftState
 				fullRow = datamodel.StateEntry{State: state, Timestamp: timestamp}
 				processedStateArray = append(processedStateArray, fullRow)
@@ -280,7 +280,7 @@ func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, state
 		var state int
 		var timestamp time.Time
 
-		if datamodel.IsProducing(dataPoint.State) { //if running, do not do anything
+		if datamodel.IsProducing(dataPoint.State) { // if running, do not do anything
 			fullRow := datamodel.StateEntry{
 				State:     dataPoint.State,
 				Timestamp: dataPoint.Timestamp,
@@ -291,7 +291,7 @@ func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, state
 
 		var followingDataPoint datamodel.StateEntry
 
-		if index == len(stateArray)-1 { //if last entry, ignore
+		if index == len(stateArray)-1 { // if last entry, ignore
 			followingDataPoint = datamodel.StateEntry{
 				State:     -1,
 				Timestamp: to,
@@ -303,7 +303,7 @@ func addNoShiftsToStates(c *gin.Context, rawShifts []datamodel.ShiftEntry, state
 		// TODO: parallelize and work with go and channels
 
 		if isStateEntirelyInNoShift(dataPoint, followingDataPoint, processedShifts) {
-			state = datamodel.NoShiftState //noShift
+			state = datamodel.NoShiftState // noShift
 		} else if isStateEntirelyOutsideNoShift(dataPoint, followingDataPoint, processedShifts) {
 			state = dataPoint.State
 		} else { // now we have a state that is somehow overlapping with shifts and which we need to split up

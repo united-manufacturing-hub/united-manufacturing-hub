@@ -3,9 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
+	jsoniter "github.com/json-iterator/go"
 	"io/ioutil"
 	"time"
 
@@ -56,17 +56,22 @@ func newTLSConfig(clientID string) *tls.Config {
 	}
 }
 
-// getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
+// getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is received by a specific topic
 func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
 		topic := message.Topic()
 		payload := message.Payload()
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		if json.Valid(payload) {
 			zap.S().Debugf("onMessageReceived", topic, payload)
 			go storeNewMessageIntoQueue(topic, payload, pg)
 		} else {
-			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
+			zap.S().Warnf(
+				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
+				topic,
+				payload)
 		}
 	}
 }
@@ -85,7 +90,13 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.Queue) {
+func SetupMQTT(
+	certificateName string,
+	mqttBrokerURL string,
+	mqttTopic string,
+	health healthcheck.Handler,
+	podName string,
+	pg *goque.Queue) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -147,7 +158,7 @@ func processOutgoingMessages() {
 
 	for !ShuttingDown {
 		if mqttOutGoingQueue.Length() == 0 {
-			//Skip if empty
+			// Skip if empty
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}

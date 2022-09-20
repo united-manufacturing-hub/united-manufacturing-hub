@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -10,17 +10,17 @@ import (
 
 type recommendationStruct struct {
 	UID                  string
-	TimestampMs          uint64 `json:"timestamp_ms"`
 	Customer             string
 	Location             string
 	Asset                string
-	RecommendationType   int32
-	Enabled              bool
 	RecommendationValues string
 	DiagnoseTextDE       string
 	DiagnoseTextEN       string
 	RecommendationTextDE string
 	RecommendationTextEN string
+	TimestampMs          uint64 `json:"timestamp_ms"`
+	RecommendationType   int32
+	Enabled              bool
 }
 
 type RecommendationDataHandler struct {
@@ -137,6 +137,8 @@ func (r RecommendationDataHandler) Shutdown() (err error) {
 func (r RecommendationDataHandler) EnqueueMQTT(_ string, _ string, _ string, payload []byte, recursionDepth int64) {
 	zap.S().Debugf("[RecommendationDataHandler]")
 	var parsedPayload recommendationStruct
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(payload, &parsedPayload)
 	if err != nil {

@@ -56,12 +56,12 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	statement = newStatementRegistry()
 }
 
-//ValidatePGInt validates that input is smaller than pg max int
+// ValidatePGInt validates that input is smaller than pg max int
 func ValidatePGInt(input uint32) bool {
 	return input < 2147483647 //https://www.postgresql.org/docs/current/datatype-numeric.html
 }
 
-//ValidateStruct iterates structs fields, checking all Uint32 to be inside the postgres int limit
+// ValidateStruct iterates structs fields, checking all Uint32 to be inside the postgres int limit
 func ValidateStruct(vstruct interface{}) bool {
 	v := reflect.ValueOf(vstruct)
 	for i := 0; i < v.NumField(); i++ {
@@ -75,7 +75,7 @@ func ValidateStruct(vstruct interface{}) bool {
 	return true
 }
 
-//IsPostgresSQLAvailable returns if the database is reachable by PING command
+// IsPostgresSQLAvailable returns if the database is reachable by PING command
 func IsPostgresSQLAvailable() (bool, error) {
 	var err error
 	if db != nil {
@@ -435,7 +435,7 @@ const (
 	DiscardValue  RecoveryType = 2
 )
 
-//GetPostgresErrorRecoveryOptions checks if the error is recoverable
+// GetPostgresErrorRecoveryOptions checks if the error is recoverable
 func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 
 	// Why go allows returning errors, that are not exported is beyond me
@@ -479,7 +479,7 @@ func storeItemsIntoDatabaseRecommendation(items []*goque.PriorityItem, recursion
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoRecommendationTable)
 	var workingItems []*goque.PriorityItem
 
@@ -537,7 +537,7 @@ func storeItemsIntoDatabaseProcessValueFloat64(items []*goque.PriorityItem) (fau
 	}()
 
 	// 1. Prepare statement: create temp table
-	//These statements' auto close
+	// These statements' auto close
 	{
 		stmt := txn.Stmt(statement.CreateTmpProcessValueTable64)
 		_, err = stmt.Exec()
@@ -640,7 +640,7 @@ func storeItemsIntoDatabaseProcessValueString(items []*goque.PriorityItem) (faul
 	}()
 
 	// 1. Prepare statement: create temp table
-	//These statements' auto close
+	// These statements' auto close
 	{
 		stmt := txn.Stmt(statement.CreateTmpProcessValueTableString)
 		_, err = stmt.Exec()
@@ -751,7 +751,7 @@ func storeItemsIntoDatabaseProcessValue(items []*goque.PriorityItem) (faultyItem
 	}()
 
 	// 1. Prepare statement: create temp table
-	//These statements' auto close
+	// These statements' auto close
 	{
 		stmt := txn.Stmt(statement.CreateTmpProcessValueTable)
 		_, err = stmt.Exec()
@@ -853,7 +853,7 @@ func storeItemsIntoDatabaseCount(items []*goque.PriorityItem) (faultyItems []*go
 	}()
 
 	// 1. Prepare statement: create temp table
-	//These statements' auto close
+	// These statements' auto close
 	{
 		stmt := txn.Stmt(statement.CreateTmpCountTable)
 		_, err = stmt.Exec()
@@ -945,7 +945,7 @@ func storeItemsIntoDatabaseState(items []*goque.PriorityItem, recursionDepth int
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoStateTable)
 	var workingItems []*goque.PriorityItem
 
@@ -991,7 +991,7 @@ func storeItemsIntoDatabaseScrapCount(items []*goque.PriorityItem, recursionDept
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.UpdateCountTableScrap)
 	var workingItems []*goque.PriorityItem
 
@@ -1028,7 +1028,7 @@ func GetFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
-//CommitWorking commits the transaction if there are no errors with the processable items. Otherwise, it will just try to process the items, that haven't failed.
+// CommitWorking commits the transaction if there are no errors with the processable items. Otherwise, it will just try to process the items, that haven't failed.
 func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityItem, txn *sql.Tx, workingItems []*goque.PriorityItem, fnc func(items []*goque.PriorityItem, recursionDepth int) (faultyItems []*goque.PriorityItem, err error), recursionDepth int) ([]*goque.PriorityItem, []*goque.PriorityItem, error) {
 	zap.S().Debugf("CommitWorking len: %i, faultylen: %i, workingItems: %i, depth: %i for %s", len(items), len(faultyItems), len(workingItems), recursionDepth, GetFunctionName(fnc))
 	var errx error
@@ -1070,7 +1070,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 							faultyItems, faultyItems, errx = CommitWorking(items, faultyItems, txn, workingItems, fnc, recursionDepth+1)
 						}
 					case DiscardValue:
-						//This shouldn't happen here !
+						// This shouldn't happen here !
 						ShutdownApplicationGraceful()
 					}
 
@@ -1078,7 +1078,7 @@ func CommitWorking(items []*goque.PriorityItem, faultyItems []*goque.PriorityIte
 					zap.S().Warnf("Commit failed: %s", errx)
 				}
 			} else {
-				zap.S().Debugf("Commited %i items with fnc: ", len(workingItems), GetFunctionName(fnc))
+				zap.S().Debugf("Committed %i items with fnc: ", len(workingItems), GetFunctionName(fnc))
 			}
 		}
 	}
@@ -1099,7 +1099,7 @@ func storeItemsIntoDatabaseUniqueProduct(items []*goque.PriorityItem, recursionD
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoUniqueProductTable)
 	var workingItems []*goque.PriorityItem
 	var missingItems []*goque.PriorityItem
@@ -1163,7 +1163,7 @@ func storeItemsIntoDatabaseProductTag(items []*goque.PriorityItem, recursionDept
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductTagTable)
 	var workingItems []*goque.PriorityItem
 
@@ -1218,7 +1218,7 @@ func storeItemsIntoDatabaseProductTagString(items []*goque.PriorityItem, recursi
 
 		return
 	}
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductTagStringTable)
 	var workingItems []*goque.PriorityItem
 
@@ -1275,7 +1275,7 @@ func storeItemsIntoDatabaseAddParentToChild(items []*goque.PriorityItem, recursi
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductInheritanceTable)
 	var workingItems []*goque.PriorityItem
 
@@ -1341,7 +1341,7 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem, recursionDepth int
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoShiftTable)
 	var workingItems []*goque.PriorityItem
 
@@ -1355,7 +1355,7 @@ func storeItemsIntoDatabaseShift(items []*goque.PriorityItem, recursionDepth int
 		}
 
 		// Create statement
-		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) //type is always 1 for now (0 would be no shift)
+		_, err = stmt.Exec(pt.TimestampMs, pt.TimestampMsEnd, pt.DBAssetID, 1) // type is always 1 for now (0 would be no shift)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
 			err = nil
@@ -1388,7 +1388,7 @@ func storeItemsIntoDatabaseUniqueProductScrap(items []*goque.PriorityItem, recur
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.UpdateUniqueProductTableSetIsScrap)
 	var workingItems []*goque.PriorityItem
 
@@ -1436,7 +1436,7 @@ func storeItemsIntoDatabaseAddProduct(items []*goque.PriorityItem, recursionDept
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoProductTable)
 	var workingItems []*goque.PriorityItem
 
@@ -1483,7 +1483,7 @@ func storeItemsIntoDatabaseAddOrder(items []*goque.PriorityItem, recursionDepth 
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoOrderTable)
 	var workingItems []*goque.PriorityItem
 	var missingItems []*goque.PriorityItem
@@ -1546,7 +1546,7 @@ func storeItemsIntoDatabaseStartOrder(items []*goque.PriorityItem, recursionDept
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.UpdateOrderTableSetBeginTimestamp)
 	var workingItems []*goque.PriorityItem
 
@@ -1593,7 +1593,7 @@ func storeItemsIntoDatabaseEndOrder(items []*goque.PriorityItem, recursionDepth 
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.UpdateOrderTableSetEndTimestamp)
 	var workingItems []*goque.PriorityItem
 
@@ -1640,7 +1640,7 @@ func storeItemsIntoDatabaseAddMaintenanceActivity(items []*goque.PriorityItem, r
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.InsertIntoMaintenanceActivities)
 	var workingItems []*goque.PriorityItem
 
@@ -1696,7 +1696,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 		}
 	}()
 
-	//These statements' auto close
+	// These statements' auto close
 	StmtGetLastInRange := txn.Stmt(statement.SelectLastStateFromStateTableInRange)
 	StmtDeleteInRange := txn.Stmt(statement.DeleteFromStateTableByTimestampRangeAndAssetId)
 	StmtInsertNewState := txn.Stmt(statement.InsertIntoStateTable)
@@ -1716,7 +1716,7 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 		val, err = StmtGetLastInRange.Query(pt.StartTimeStampMs, pt.DBAssetID)
 		if err != nil {
 			faultyItems = append(faultyItems, item)
-			//DONT RESET ERROR HERE
+			// DONT RESET ERROR HERE
 			continue
 		}
 
@@ -1768,28 +1768,28 @@ func modifyStateInDatabase(items []*goque.PriorityItem) (faultyItems []*goque.Pr
 			_, err = StmtDeleteInRange.Exec(pt.StartTimeStampMs, pt.EndTimeStampMs, pt.DBAssetID)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				//DONT RESET ERROR HERE
+				// DONT RESET ERROR HERE
 				continue
 			}
 
 			_, err = StmtInsertNewState.Exec(pt.StartTimeStampMs, pt.DBAssetID, pt.NewState)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				//DONT RESET ERROR HERE
+				// DONT RESET ERROR HERE
 				continue
 			}
 
 			_, err = StmtDeleteOldState.Exec(LastRowTimestampInt)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				//DONT RESET ERROR HERE
+				// DONT RESET ERROR HERE
 				continue
 			}
 
 			_, err = StmtInsertNewState.Exec(pt.EndTimeStampMs, pt.DBAssetID, LastRowState)
 			if err != nil {
 				faultyItems = append(faultyItems, item)
-				//DONT RESET ERROR HERE
+				// DONT RESET ERROR HERE
 				continue
 			}
 
@@ -1813,7 +1813,7 @@ func deleteShiftInDatabaseById(items []*goque.PriorityItem, recursionDepth int) 
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.DeleteFromShiftTableById)
 	var workingItems []*goque.PriorityItem
 
@@ -1860,7 +1860,7 @@ func deleteShiftInDatabaseByAssetIdAndTimestamp(items []*goque.PriorityItem, rec
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmt := txn.Stmt(statement.DeleteFromShiftTableByAssetIDAndBeginTimestamp)
 	var workingItems []*goque.PriorityItem
 
@@ -1907,7 +1907,7 @@ func modifyInDatabaseModifyCountAndScrap(items []*goque.PriorityItem, recursionD
 		return
 	}
 
-	//These statements' auto close
+	// These statements' auto close
 	stmtCS := txn.Stmt(statement.UpdateCountTableSetCountAndScrapByAssetId)
 	stmtC := txn.Stmt(statement.UpdateCountTableSetCountByAssetId)
 	stmtS := txn.Stmt(statement.UpdateCountTableSetScrapByAssetId)

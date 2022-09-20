@@ -7,8 +7,8 @@ package user
 //    bytes, err = user.Marshal()
 
 import (
-	"encoding/json"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"io"
 	"io/ioutil"
 	"log"
@@ -18,26 +18,30 @@ import (
 type Orgs []OrgsElement
 
 func UnmarshalOrgs(data []byte) (Orgs, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	var r Orgs
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *Orgs) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
 type OrgsElement struct {
-	OrgID int64  `json:"orgId"`
 	Name  string `json:"name"`
 	Role  string `json:"role"`
+	OrgID int64  `json:"orgId"`
 }
 
 func GetOrgas(sessioncookie string) (Orgs, error) {
 	url := fmt.Sprintf("%s/api/user/orgs", GrafanaUrl)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, http.NoBody)
 	if err != nil {
 
 		return Orgs{}, err

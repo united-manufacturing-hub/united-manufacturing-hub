@@ -1,6 +1,3 @@
-//go:build kafka
-// +build kafka
-
 package internal
 
 import (
@@ -83,7 +80,7 @@ func CloseKafkaTopicProbeConsumer() {
 var lastMetaData *kafka.Metadata
 
 func TopicExists(kafkaTopicName string) (exists bool, err error) {
-	//Check if lastMetaData was initialized
+	// Check if lastMetaData was initialized
 	if lastMetaData == nil {
 		// Get initial map of metadata
 		lastMetaData, err = GetMetaData()
@@ -93,13 +90,13 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 		}
 	}
 
-	//Check if current metadata cache has topic listed
+	// Check if current metadata cache has topic listed
 	if _, ok := lastMetaData.Topics[kafkaTopicName]; ok {
 		zap.S().Debugf("[CACHED] Topic %s exists", kafkaTopicName)
 		return true, nil
 	}
 
-	//Metadata cache did not have topic, try with fresh metadata
+	// Metadata cache did not have topic, try with fresh metadata
 	lastMetaData, err = GetMetaData()
 	if err != nil {
 		zap.S().Errorf("Failed to get Kafka metadata: %s", err)
@@ -151,7 +148,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	}
 
 	// send a message to the "umh.kafka.topic.created" topic with the new topic name
-	// to trigger the subsrciption of the other consumers to the newly created topic
+	// to trigger the subscriptions of the other consumers to the newly created topic
 	payload := make(map[string]string)
 	payload["topic"] = kafkaTopicName
 	jsonString, err := jsoniter.Marshal(payload)

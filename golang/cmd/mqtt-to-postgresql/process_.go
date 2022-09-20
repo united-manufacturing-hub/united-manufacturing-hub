@@ -44,7 +44,7 @@ func (r XHandler) Setup() {
 }
 func (r XHandler) process() {
 	for !r.shutdown {
-		//TODO
+		// TODO
 	}
 }
 

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
 	"net/http"
@@ -30,13 +30,14 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	// Healthcheck
-	router.GET("/", func(c *gin.Context) {
-		if shutdownEnabled {
-			c.String(http.StatusOK, "shutdown")
-		} else {
-			c.String(http.StatusOK, "online")
-		}
-	})
+	router.GET(
+		"/", func(c *gin.Context) {
+			if shutdownEnabled {
+				c.String(http.StatusOK, "shutdown")
+			} else {
+				c.String(http.StatusOK, "online")
+			}
+		})
 
 	apiString := fmt.Sprintf("/api/v%s", version)
 
@@ -57,7 +58,8 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 
 func handleInternalServerError(c *gin.Context, err error) {
 
-	zap.S().Errorw("Internal server error",
+	zap.S().Errorw(
+		"Internal server error",
 		"error", internal.SanitizeString(err.Error()),
 	)
 
@@ -66,7 +68,8 @@ func handleInternalServerError(c *gin.Context, err error) {
 
 func handleInvalidInputError(c *gin.Context, err error) {
 
-	zap.S().Errorw("Invalid input error",
+	zap.S().Errorw(
+		"Invalid input error",
 		"error", err,
 	)
 
@@ -86,7 +89,9 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 }
 
 func IsJSON(str string) bool {
-	var js json.RawMessage
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+	var js jsoniter.RawMessage
 	return json.Unmarshal([]byte(str), &js) == nil
 }
 
@@ -133,13 +138,14 @@ func postMQTTHandler(c *gin.Context) {
 		return
 	}
 
-	err = enqueueMQTT(MQTTData{
-		Customer: postMQTTRequest.Customer,
-		Location: postMQTTRequest.Location,
-		Asset:    postMQTTRequest.Asset,
-		Value:    postMQTTRequest.Value,
-		JSONData: jsonData,
-	})
+	err = enqueueMQTT(
+		MQTTData{
+			Customer: postMQTTRequest.Customer,
+			Location: postMQTTRequest.Location,
+			Asset:    postMQTTRequest.Asset,
+			Value:    postMQTTRequest.Value,
+			JSONData: jsonData,
+		})
 	if err != nil {
 		handleInternalServerError(c, err)
 		return

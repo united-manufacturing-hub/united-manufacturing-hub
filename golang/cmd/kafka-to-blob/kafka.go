@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/cristalhq/base64"
 	"github.com/minio/minio-go/v7"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -24,7 +24,7 @@ func processKafkaQueue(topic string, bucketName string) {
 			continue
 		}
 		var msg *kafka.Message
-		msg, err = internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err = internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
 				// Sleep to reduce CPU usage
@@ -71,17 +71,18 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 
 	if err != nil {
 		zap.S().Warnf("Failed to put item into blob-storage: %s", err)
-		internal.KafkaProducer.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{
-				Topic:     msg.TopicPartition.Topic,
-				Partition: kafka.PartitionAny,
-			},
-			Value: msg.Value,
-		}, nil)
+		internal.KafkaProducer.Produce(
+			&kafka.Message{
+				TopicPartition: kafka.TopicPartition{
+					Topic:     msg.TopicPartition.Topic,
+					Partition: kafka.PartitionAny,
+				},
+				Value: msg.Value,
+			}, nil)
 		return
 	}
 
 	elapsed := time.Since(start)
-	zap.S().Debugf("Commited to blob storage in %s", elapsed)
+	zap.S().Debugf("Committed to blob storage in %s", elapsed)
 	zap.S().Debugf("%s/%s", upinfo.Bucket, upinfo.Key)
 }

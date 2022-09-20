@@ -52,7 +52,7 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 	}
 }
 
-// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
+// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is received by a specific topic
 func getOnMessageRecieved(mode string, pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
@@ -103,7 +103,7 @@ func setupMQTT(clientID string, mode string, mqttBrokerURL string, subMQTTTopic 
 		panic(token.Error())
 	}
 
-	// Can be deactivated, e.g. if one does not want to recieve all data from remote broker
+	// Can be deactivated, e.g. if one does not want to receive all data from remote broker
 	if subscribeToTopic {
 
 		zap.S().Infof("MQTT subscribed", mode, subMQTTTopic)

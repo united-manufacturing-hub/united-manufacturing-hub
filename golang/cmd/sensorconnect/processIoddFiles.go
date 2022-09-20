@@ -14,9 +14,9 @@ import (
 
 // Parsing of Iodd File content
 type IoDevice struct {
-	ProfileBody            ProfileBody            `xml:"ProfileBody"`
-	ExternalTextCollection ExternalTextCollection `xml:"ExternalTextCollection"`
 	DocumentInfo           DocumentInfo           `xml:"DocumentInfo"`
+	ExternalTextCollection ExternalTextCollection `xml:"ExternalTextCollection"`
+	ProfileBody            ProfileBody            `xml:"ProfileBody"`
 }
 
 type DocumentInfo struct {
@@ -49,7 +49,7 @@ type Text struct {
 
 type DeviceFunction struct {
 	DatatypeCollection    DatatypeCollection    `xml:"DatatypeCollection"`
-	ProcessDataCollection ProcessDataCollection `xml:"ProcessDataCollection"` //ToDo: array?
+	ProcessDataCollection ProcessDataCollection `xml:"ProcessDataCollection"`
 }
 
 type DatatypeCollection struct {
@@ -65,19 +65,19 @@ type ProcessData struct {
 }
 
 type ProcessDataIn struct {
-	Datatype    Datatype    `xml:"Datatype"`
 	DatatypeRef DatatypeRef `xml:"DatatypeRef"`
 	Name        Name        `xml:"Name"`
+	Datatype    Datatype    `xml:"Datatype"`
 }
 
 type Datatype struct {
-	BitLength        uint          `xml:"bitLength,attr"`
-	FixedLength      uint          `xml:"fixedLength,attr"`
-	RecordItemArray  []RecordItem  `xml:"RecordItem"`
-	Type             string        `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	Type             string        `xml:"type,attr"`
 	Id               string        `xml:"id,attr"`
+	RecordItemArray  []RecordItem  `xml:"RecordItem"`
 	SingleValueArray []SingleValue `xml:"SingleValue"`
 	ValueRangeArray  []ValueRange  `xml:"ValueRange"`
+	BitLength        uint          `xml:"bitLength,attr"`
+	FixedLength      uint          `xml:"fixedLength,attr"`
 }
 
 type SingleValue struct {
@@ -92,10 +92,10 @@ type ValueRange struct {
 }
 
 type RecordItem struct {
-	BitOffset      int            `xml:"bitOffset,attr"`
-	SimpleDatatype SimpleDatatype `xml:"SimpleDatatype"`
 	Name           Name           `xml:"Name"`
 	DatatypeRef    DatatypeRef    `xml:"DatatypeRef"`
+	SimpleDatatype SimpleDatatype `xml:"SimpleDatatype"`
+	BitOffset      int            `xml:"bitOffset,attr"`
 }
 
 type Name struct {
@@ -107,11 +107,11 @@ type DatatypeRef struct {
 }
 
 type SimpleDatatype struct {
-	Type        string      `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	ValueRange  ValueRange  `xml:"ValueRange"`
+	SingleValue SingleValue `xml:"SingleValue"`
+	Type        string      `xml:"type,attr"`
 	BitLength   uint        `xml:"bitLength,attr"`
 	FixedLength uint        `xml:"fixedLength,attr"`
-	SingleValue SingleValue `xml:"SingleValue"`
-	ValueRange  ValueRange  `xml:"ValueRange"`
 }
 
 // Todo add datatyperef if not simple datatype
@@ -233,7 +233,7 @@ func contains(slice []string, entry string) bool {
 	return false
 }
 
-//getNamesOfFileInfo returns the names of files stored inside a FileInfo slice
+// getNamesOfFileInfo returns the names of files stored inside a FileInfo slice
 func getNamesOfFileInfo(fileInfoSlice []os.FileInfo) (namesSlice []string) {
 	for _, element := range fileInfoSlice {
 		namesSlice = append(namesSlice, element.Name())
@@ -241,7 +241,7 @@ func getNamesOfFileInfo(fileInfoSlice []os.FileInfo) (namesSlice []string) {
 	return
 }
 
-//currentDateEarlierThenOldDate returns if a date is earlier then another
+// currentDateEarlierThenOldDate returns if a date is earlier then another
 func currentDateEarlierThenOldDate(currentDate string, oldDate string) (bool, error) {
 	const shortDate = "2006-01-02"
 	parsedCurrentDate, err := time.Parse(shortDate, currentDate)

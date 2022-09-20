@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"time"
@@ -13,7 +13,7 @@ func processIncomingMessages() {
 
 	for !ShuttingDown {
 		if mqttIncomingQueue.Length() == 0 {
-			//Skip if empty
+			// Skip if empty
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -26,7 +26,7 @@ func processIncomingMessages() {
 			continue
 		}
 
-		//Setup Topic if not exist
+		// Setup Topic if not exist
 		validTopic, kafkaTopicName := internal.MqttTopicToKafka(object.Topic)
 		if !validTopic {
 			continue
@@ -38,13 +38,14 @@ func processIncomingMessages() {
 		}
 
 		zap.S().Debugf("Sending with Topic: %s", kafkaTopicName)
-		err = internal.KafkaProducer.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{
-				Topic:     &kafkaTopicName,
-				Partition: kafka.PartitionAny,
-			},
-			Value: object.Message,
-		}, nil)
+		err = internal.KafkaProducer.Produce(
+			&kafka.Message{
+				TopicPartition: kafka.TopicPartition{
+					Topic:     &kafkaTopicName,
+					Partition: kafka.PartitionAny,
+				},
+				Value: object.Message,
+			}, nil)
 		if err != nil {
 			zap.S().Errorf("Failed to send Kafka message: %s", err)
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
@@ -76,7 +77,7 @@ func kafkaToQueue(topic string) {
 			continue
 		}
 		stuck = 0
-		msg, err := internal.KafkaConsumer.ReadMessage(5) //No infinitive timeout to be able to cleanly shut down
+		msg, err := internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			// This is fine, and expected behaviour
 			if err.(kafka.Error).Code() == kafka.ErrTimedOut {
@@ -94,6 +95,8 @@ func kafkaToQueue(topic string) {
 		}
 
 		payload := msg.Value
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		if json.Valid(payload) {
 			kafkaTopic := msg.TopicPartition.Topic
 			validTopic, mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
@@ -103,7 +106,9 @@ func kafkaToQueue(topic string) {
 				zap.S().Debugf("kafkaToQueue", topic, payload)
 			}
 		} else {
-			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
+			zap.S().Warnf(
+				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
+				topic, payload)
 		}
 	}
 }

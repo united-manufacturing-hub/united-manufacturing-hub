@@ -544,21 +544,21 @@ func TestProcessStates_Complex_1(t *testing.T) {
 
 func Test_processStatesOptimized(t *testing.T) {
 	type args struct {
-		assetID       uint32
+		from          time.Time
+		to            time.Time
 		stateArray    []datamodel.StateEntry
 		rawShifts     []datamodel.ShiftEntry
 		countSlice    []datamodel.CountEntry
 		orderArray    []datamodel.OrdersRaw
-		from          time.Time
-		to            time.Time
 		configuration datamodel.CustomerConfiguration
+		assetID       uint32
 	}
 	tests := []struct {
 		name                    string
-		args                    args
-		wantProcessedStateArray []datamodel.StateEntry
-		wantErr                 bool
 		goldenTimestamp         string
+		wantProcessedStateArray []datamodel.StateEntry
+		args                    args
+		wantErr                 bool
 	}{
 		{
 			name:            "shifts1",
@@ -701,7 +701,7 @@ func TestChangeOutputFormat(t *testing.T) {
 	data = append(data, row2)
 	data = append(data, row3)
 
-	//Handling if inputColumnName is not new
+	// Handling if inputColumnName is not new
 	dataOutput, columnNamesOutput, columnIndex := ChangeOutputFormat(data, columnNames, "Force")
 	if !reflect.DeepEqual(dataOutput, data) {
 		t.Error()
@@ -713,7 +713,7 @@ func TestChangeOutputFormat(t *testing.T) {
 		t.Error()
 	}
 
-	//Handling if inputColumnName is new
+	// Handling if inputColumnName is new
 	columnNamesExtended := append(columnNames, "Temperature")
 	row1 = append(row1, nil)
 	row2 = append(row2, nil)
@@ -757,17 +757,17 @@ func TestLengthenSliceToFitNames(t *testing.T) {
 	sliceTooLong = append(sliceTooLong, 545)
 	sliceTooLong = append(sliceTooLong, "EntryTooMuch")
 
-	//Handling if input slice too small
+	// Handling if input slice too small
 	sliceOutput := LengthenSliceToFitNames(sliceTooSmall, columnNames)
 	if !reflect.DeepEqual(sliceOutput, sliceTooSmallExpectedOutput) {
 		t.Error()
 	}
-	//Handling if input slice correct
+	// Handling if input slice correct
 	sliceOutput = LengthenSliceToFitNames(sliceExact, columnNames)
 	if !reflect.DeepEqual(sliceOutput, sliceExact) {
 		t.Error()
 	}
-	//Handling if input slice too large
+	// Handling if input slice too large
 	sliceOutput = LengthenSliceToFitNames(sliceTooLong, columnNames)
 	fmt.Printf("%s\n", sliceOutput)
 	if !reflect.DeepEqual(sliceOutput, sliceOutput) {

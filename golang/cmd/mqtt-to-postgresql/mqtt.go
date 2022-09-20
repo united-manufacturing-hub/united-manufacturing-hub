@@ -98,7 +98,7 @@ func processMessage(customerID string, location string, assetID string, payloadT
 			stateHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
 		case Prefix.ProcessValue:
 			valueDataHandler.EnqueueMQTT(customerID, location, assetID, payload, 0)
-		//TODO is still still needed ?
+		// TODO is still still needed ?
 		case "processvalue":
 			{
 				zap.S().Warnf("Deprecated")
@@ -173,7 +173,7 @@ var rp = regexp.MustCompile(`ia/([\w]*)/([\w]*)/([\w]*)/([\w]*)`)
 // getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is received by a specific topic
 func getOnMessageReceived() func(MQTT.Client, MQTT.Message) {
 	return func(client MQTT.Client, message MQTT.Message) {
-		//Check whether topic has the correct structure
+		// Check whether topic has the correct structure
 		res := rp.FindStringSubmatch(message.Topic())
 		if res == nil {
 			return
@@ -188,7 +188,7 @@ func getOnMessageReceived() func(MQTT.Client, MQTT.Message) {
 		mqttTotal.Inc()
 
 		go func() {
-			//This is "fine" here, cause it will re-queue
+			// This is "fine" here, cause it will re-queue
 			_ = processMessage(customerID, location, assetID, payloadType, payload)
 		}()
 	}

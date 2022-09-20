@@ -9,12 +9,12 @@ import (
 
 func TestGetIoddFile(t *testing.T) {
 	InitMemcache()
-	//Siemens AG | SIRIUS ACT Electronic Module 4DI/4DQ for IO-Link
+	// Siemens AG | SIRIUS ACT Electronic Module 4DI/4DQ for IO-Link
 	err := AssertIoddFileGetter(42, 278531, 2)
 	if err != nil {
 		t.Error(err)
 	}
-	//Bosch Rexroth AG | 4WRPEH10-3X
+	// Bosch Rexroth AG | 4WRPEH10-3X
 	err = AssertIoddFileGetter(287, 2228227, 5)
 	if err != nil {
 		t.Error(err)
@@ -33,7 +33,7 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 	}
 
 	if len(filemap) != filemaplen {
-		return fmt.Errorf("Filemap lenght invalid Have: %d Wanted: %d", len(filemap), filemaplen)
+		return fmt.Errorf("Filemap length invalid Have: %d Wanted: %d", len(filemap), filemaplen)
 	}
 
 	return nil

@@ -24,7 +24,7 @@ type addMaintenanceActivity struct {
 	Activity      *int32  `json:"activity"`
 }
 
-// ProcessMessages processes a AddMaintenanceActivity kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+// ProcessMessages processes a AddMaintenanceActivity kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
 func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))

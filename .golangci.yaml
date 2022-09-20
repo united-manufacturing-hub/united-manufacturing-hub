@@ -1,0 +1,315 @@
+output:
+  # Sort results by: filepath, line and column.
+  sort-results: true
+
+
+# All available settings of specific linters.
+linters-settings:
+  govet:
+    enable-all: true
+
+  depguard:
+    # Kind of list is passed in.
+    # Allowed values: allowlist|denylist
+    # Default: denylist
+    list-type: allowlist
+
+    # Check the list against standard lib.
+    # Default: false
+    include-go-root: true
+
+    # A list of packages for the list type specified.
+    # Can accept both string prefixes and string glob patterns.
+    # Default: []
+    packages:
+      - github.com/cristalhq/base64
+      - golang.org/**/*
+      - gorm.io/gorm
+      - github.com/united-manufacturing-hub/**/*
+      - time
+      - crypto/**/*
+      - github.com/go-piv/piv-go/piv
+      - bytes
+      - fmt
+      - github.com/json-iterator/go
+      - io
+      - net/http
+      - encoding/binary
+      - testing
+      - github.com/mitchellh/mapstructure
+      - github.com/stretchr/testify/assert
+      - reflect
+      
+  errcheck:
+    # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
+    # Such cases aren't reported by default.
+    # Default: false
+    check-type-assertions: true
+
+    # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
+    # Such cases aren't reported by default.
+    # Default: false
+    check-blank: true
+
+  errchkjson:
+    # Issue on struct encoding that doesn't have exported fields.
+    # Default: false
+    report-no-exported: true
+
+  gocognit:
+    # Minimal code complexity to report
+    # Default: 30 (but we recommend 10-20)
+    min-complexity: 30
+
+  gocritic:
+    enabled-checks:
+      - appendAssign
+      - argOrder
+      - badCall
+      - badCond
+      - badLock
+      - badRegexp
+      - builtinShadowDecl
+      - caseOrder
+      - codegenComment
+      - deprecatedComment
+      - dupArg
+      - dupBranchBody
+      - dupCase
+      - dupSubExpr
+      - emptyDecl
+      - evalOrder
+      - exitAfterDefer
+      - externalErrorReassign
+      - filepathJoin
+      - flagDeref
+      - flagName
+      - mapKey
+      - nilValReturn
+      - offBy1
+      - regexpPattern
+      - returnAfterHttpError
+      - sloppyReassign
+      - sloppyTypeAssert
+      - sortSlice
+      - sprintfQuotedString
+      - sqlQuery
+      #- suspiciousSorting # NYI
+      - syncMapLoadAndDelete
+      - truncateCmp
+      - unnecessaryDefer
+      - weakCond
+      - assignOp
+      - boolExprSimplify
+      - builtinShadow
+      - captLocal
+      - commentFormatting
+      - commentedOutImport
+      - defaultCaseOrder
+      - deferUnlambda
+      - docStub
+      - dupImport
+      - elseif
+      - emptyFallthrough
+      - emptyStringTest
+      - exposedSyncMutex
+      - hexLiteral
+      - httpNoBody
+      - ifElseChain
+      - importShadow
+      - initClause
+      - ioutilDeprecated
+      - methodExprCall
+      - nestingReduce
+      - newDeref
+      - octalLiteral
+      - paramTypeCombine
+      - preferFilepathJoin
+      - ptrToRefParam
+      - redundantSprint
+      - regexpMust
+      - regexpSimplify
+      - ruleguard
+      - singleCaseSwitch
+      - sloppyLen
+      - stringConcatSimplify
+      - switchTrue
+      - timeExprSimplify
+      - tooManyResultsChecker
+      - typeAssertChain
+      - typeDefFirst
+      - typeSwitchVar
+      - typeUnparen
+      - underef
+      - unlabelStmt
+      - unlambda
+      - unnamedResult
+      - unnecessaryBlock
+      - unslice
+      - valSwap
+      - whyNoLint
+      - wrapperFunc
+      - yodaStyleExpr
+      - appendCombine
+      - equalFold
+      - hugeParam
+      - indexAlloc
+      - preferDecodeRune
+      - preferFprint
+      - preferStringWriter
+      - preferWriteByte
+      - rangeExprCopy
+      - rangeValCopy
+      - sliceClear
+      - stringXbytes
+
+
+    # Settings passed to gocritic.
+    # The settings key is the name of a supported gocritic checker.
+    # The list of supported checkers can be find in https://go-critic.github.io/overview.
+    #settings:
+      # Must be valid enabled check name.
+      #captLocal:
+        # Whether to restrict checker to params only.
+        # Default: true
+        #paramsOnly: false
+
+  gocyclo:
+    # Minimal code complexity to report.
+    # Default: 30 (but we recommend 10-20)
+    min-complexity: 30
+
+linters:
+  # Disable all linters.
+  # Default: false
+  disable-all: false
+  # Enable specific linter
+  # https://golangci-lint.run/usage/linters/#enabled-by-default-linters
+  enable:
+    - asciicheck
+    - govet
+    - makezero
+    - prealloc
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - decorder
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - ifshort
+    - lll
+    - maintidx
+    - misspell
+    - nakedret
+    - nestif
+    - noctx
+    - predeclared
+    - tenv
+    - unparam
+
+
+issues:
+  # List of regexps of issue texts to exclude.
+  #
+  # But independently of this option we use default exclude patterns,
+  # it can be disabled by `exclude-use-default: false`.
+  # To list all excluded by default patterns execute `golangci-lint run --help`
+  #
+  # Default: []
+  #exclude:
+  #  - abcdef
+
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  #exclude-rules:
+    # Exclude some linters from running on tests files.
+  #  - path: _test\.go
+  #    linters:
+  #      - gocyclo
+  #      - errcheck
+  #      - dupl
+  #      - gosec
+
+    # Exclude known linters from partially hard-vendored code,
+    # which is impossible to exclude via `nolint` comments.
+   # - path: internal/hmac/
+   #   text: "weak cryptographic primitive"
+   #   linters:
+   #     - gosec
+
+    # Exclude some `staticcheck` messages.
+   # - linters:
+   #     - staticcheck
+   #   text: "SA9003:"
+
+    # Exclude `lll` issues for long lines with `go:generate`.
+   # - linters:
+   #     - lll
+   #   source: "^//go:generate "
+
+  # Independently of option `exclude` we use default exclude patterns,
+  # it can be disabled by this option.
+  # To list all excluded by default patterns execute `golangci-lint run --help`.
+  # Default: true.
+  #exclude-use-default: false
+
+  # If set to true exclude and exclude-rules regular expressions become case-sensitive.
+  # Default: false
+  #exclude-case-sensitive: false
+
+  # The list of ids of default excludes to include or disable.
+  # Default: []
+  #include:
+  #  - EXC0002 # disable excluding of issues about comments from golint.
+
+  # Maximum issues count per one linter.
+  # Set to 0 to disable.
+  # Default: 50
+  #max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text.
+  # Set to 0 to disable.
+  # Default: 3
+  #max-same-issues: 0
+
+  # Show only new issues: if there are unstaged changes or untracked files,
+  # only those changes are analyzed, else only changes in HEAD~ are analyzed.
+  # It's a super-useful option for integration of golangci-lint into existing large codebase.
+  # It's not practical to fix all existing issues at the moment of integration:
+  # much better don't allow issues in new code.
+  #
+  # Default: false.
+  #new: true
+
+  # Show only new issues created after git revision `REV`.
+  #new-from-rev: HEAD
+
+  # Show only new issues created in git patch with set file path.
+  #new-from-patch: path/to/patch/file
+
+  # Fix found issues (if it's supported by the linter).
+  fix: true
+
+
+severity:
+  # Set the default severity for issues.
+  #
+  # If severity rules are defined and the issues do not match or no severity is provided to the rule
+  # this will be the default severity applied.
+  # Severities should match the supported severity names of the selected out format.
+  # - Code climate: https://docs.codeclimate.com/docs/issues#issue-severity
+  # - Checkstyle: https://checkstyle.sourceforge.io/property_types.html#severity
+  # - GitHub: https://help.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-error-message
+  #
+  # Default value is an empty string.
+  default-severity: error

@@ -33,7 +33,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	zap.S().Infof("KafkaBoostrapServer: %s", KafkaBoostrapServer)
-	// Semicolon seperated list of topic to create
+	// Semicolon separated list of topic to create
 	KafkaTopics := os.Getenv("KAFKA_TOPICS")
 	zap.S().Infof("KafkaTopics: %s", KafkaTopics)
 
@@ -94,7 +94,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -110,7 +110,7 @@ func ShutdownApplicationGraceful() {
 
 	internal.CloseKafka()
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
