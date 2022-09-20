@@ -76,6 +76,21 @@ func main() {
 		"metadata.max.age.ms":      180000,
 	})
 
+	// KafkaTopicProbeConsumer recieves a message when a new topic is created
+	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"group.id":                 "kafka-to-blob-topic-probe",
+		"enable.auto.commit":       true,
+		"auto.offset.reset":        "earliest",
+		//"debug":                    "security,broker",
+		"topic.metadata.refresh.interval.ms": "30000",
+	})
+
 	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
@@ -87,6 +102,16 @@ func main() {
 	zap.S().Debugf("Start Queue processors")
 	go processKafkaQueue(KafkaTopic, MinioBucketName)
 	go reconnectMinio()
+
+	// Start topic probe processor
+	zap.S().Debugf("Starting TP queue processor")
+	topicProbeProcessorChannel := make(chan *kafka.Message, 100)
+
+	go internal.ProcessKafkaTopicProbeQueue("[TP]", topicProbeProcessorChannel, nil)
+	go internal.StartEventHandler("[TP]", internal.KafkaTopicProbeConsumer.Events(), nil)
+
+	go internal.StartTopicProbeQueueProcessor(topicProbeProcessorChannel)
+	zap.S().Debugf("Started TP queue processor")
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
