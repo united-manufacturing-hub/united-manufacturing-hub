@@ -9,9 +9,8 @@ package user
 import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
-	"io"
+	"go.uber.org/zap"
 	"io/ioutil"
-	"log"
 	"net/http"
 )
 
@@ -49,24 +48,24 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
 
-	resp, err := client.Do(req)
+	var resp *http.Response
+	resp, err = client.Do(req)
 	if err != nil {
-
 		return Orgs{}, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
-
 	if resp.StatusCode == http.StatusOK {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		var bodyBytes []byte
+		bodyBytes, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
+			zap.S().Fatalf("Failed to read response body: %v", err)
+			return nil, err
+		}
 
-			log.Fatal(err)
+		err = resp.Body.Close()
+		if err != nil {
+			zap.S().Errorf("Failed to close response body: %v", err)
+			return nil, err
 		}
 
 		orgs, err := UnmarshalOrgs(bodyBytes)

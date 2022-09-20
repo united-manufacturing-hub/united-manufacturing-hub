@@ -91,7 +91,7 @@ func calculateDurations(
 	returnChannel chan ChannelResult) {
 
 	// Prepare ChannelResult
-	var durations []float64
+	durations := make([]float64, 0, len(temporaryDatapoints))
 	var err error
 
 	// Loop through all datapoints
@@ -138,7 +138,7 @@ func transformToStateArray(
 	returnChannel chan ChannelResult) {
 
 	// Prepare ChannelResult
-	var stateArray []int
+	stateArray := make([]int, 0, len(temporaryDatapoints))
 	var err error
 
 	// Loop through all datapoints

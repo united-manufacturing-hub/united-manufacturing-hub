@@ -7,7 +7,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -117,7 +116,7 @@ func ConvertCidrToIpRange(cidr string) (start uint32, finish uint32, err error) 
 	// convert string to IPNet struct
 	_, ipv4Net, err := net.ParseCIDR(cidr)
 	if err != nil {
-		log.Fatal(err)
+		zap.S().Fatalf("Failed to parse CIDR %s", cidr)
 		return
 	}
 
