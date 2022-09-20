@@ -26,7 +26,7 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -59,20 +59,30 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+		return true, fmt.Errorf(
+			"failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s",
+			msg.CustomerId,
+			msg.Location,
+			msg.AssetId), false
 	}
 
 	// Changes should only be necessary between this marker
 	var ChildUID uint32
 	ChildUID, success = GetUniqueProductID(*sC.ChildAID, AssetTableID)
 	if !success {
-		return true, fmt.Errorf("failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d", *sC.ChildAID, AssetTableID), false
+		return true, fmt.Errorf(
+			"failed to get UniqueProductID for ChildAID: %s, AssetTableID: %d",
+			*sC.ChildAID,
+			AssetTableID), false
 	}
 
 	var ParentUID uint32
 	ParentUID, success = GetLatestParentUniqueProductID(*sC.ParentAID, AssetTableID)
 	if !success {
-		return true, fmt.Errorf("failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d", *sC.ParentAID, AssetTableID), false
+		return true, fmt.Errorf(
+			"failed to get LatestParentUniqueProductID for ParentAID: %s, AssetTableID: %d",
+			*sC.ParentAID,
+			AssetTableID), false
 	}
 
 	txnStmtCtx, txnStmtCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
@@ -86,10 +96,14 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, ParentUID, ChildUID, sC.TimestampMs)
 	if err != nil {
-		pqErr := err.(*pq.Error)
-		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-		if pqErr.Code == "23P01" {
-			return true, err, true
+		pqErr, ok := err.(*pq.Error)
+		if ok {
+			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+		} else {
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
 		}
 		return true, err, false
 	}

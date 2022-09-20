@@ -29,7 +29,12 @@ func main() {
 	zap.S().Infof("This is kafka-debug build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
@@ -53,15 +58,16 @@ func main() {
 		}
 	}
 
-	internal.SetupKafka(kafka.ConfigMap{
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"group.id":                 "kafka-debug",
-	})
+	internal.SetupKafka(
+		kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"group.id":                 "kafka-debug",
+		})
 
 	zap.S().Debugf("Start Queue processors")
 	go startDebugger()

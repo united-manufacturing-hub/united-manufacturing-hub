@@ -39,7 +39,7 @@ func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback boo
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -84,11 +84,24 @@ func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback boo
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer stmtCtxCl()
 
-	_, err = stmt.ExecContext(stmtCtx, sC.UID, sC.RecommendationType, sC.Enabled, sC.RecommendationValues, sC.RecommendationTextEN, sC.RecommendationTextDE, sC.DiagnoseTextEN, sC.DiagnoseTextDE)
+	_, err = stmt.ExecContext(
+		stmtCtx,
+		sC.UID,
+		sC.RecommendationType,
+		sC.Enabled,
+		sC.RecommendationValues,
+		sC.RecommendationTextEN,
+		sC.RecommendationTextDE,
+		sC.DiagnoseTextEN,
+		sC.DiagnoseTextDE)
 	if err != nil {
 
 		if err != nil {
-			pqErr := err.(*pq.Error)
+			pqErr, ok := err.(*pq.Error)
+			if ok {
+				zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+				return false, err, false
+			}
 			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
 			if pqErr.Code == "23P01" {
 				return true, err, true

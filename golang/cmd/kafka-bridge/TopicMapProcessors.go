@@ -179,18 +179,34 @@ func CreateTopicMapElementProcessor(
 
 func MessageAlreadyTransmitted(msg *kafka.Message) bool {
 	xxhasher := xxh3.New()
-	_, _ = xxhasher.Write(msg.Value)
+	_, err := xxhasher.Write(msg.Value)
+	if err != nil {
+		zap.S().Errorf("Failed to hash message: %v", err)
+	}
 	if msg.TopicPartition.Topic != nil {
-		_, _ = xxhasher.WriteString(*msg.TopicPartition.Topic)
+		_, err = xxhasher.WriteString(*msg.TopicPartition.Topic)
+		if err != nil {
+			zap.S().Errorf("Failed to write topic to hasher: %v", err)
+		}
 	}
 	buf := new(bytes.Buffer)
 	// Can never fail
-	_ = binary.Write(buf, binary.LittleEndian, msg.TopicPartition.Partition)
-	_, _ = xxhasher.Write(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, msg.TopicPartition.Partition)
+	if err != nil {
+		zap.S().Errorf("Failed to write partition to buffer: %v", err)
+	}
+	_, err = xxhasher.Write(buf.Bytes())
+	if err != nil {
+		zap.S().Errorf("Failed to write partition to hasher: %v", err)
+	}
 
 	key := xxhasher.Sum128().Bytes()
 
-	getOrSet, _ := messageCache.GetOrSet(key[:], []byte{1}, 0)
+	getOrSet, err := messageCache.GetOrSet(key[:], []byte{1}, 0)
+	if err != nil {
+		zap.S().Errorf("Failed to get or set message cache: %v", err)
+		return false
+	}
 
 	return getOrSet != nil
 

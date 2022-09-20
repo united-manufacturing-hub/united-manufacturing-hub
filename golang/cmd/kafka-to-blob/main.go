@@ -32,7 +32,12 @@ func main() {
 	zap.S().Infof("This is kafka-to-blob build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof %v", err)
+		}
+	}()
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
@@ -65,30 +70,32 @@ func main() {
 			panic("SSL CA cert file not found")
 		}
 	}
-	internal.SetupKafka(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"group.id":                 "kafka-to-blob",
-	})
+	internal.SetupKafka(
+		kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-blob",
+		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
-	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"group.id":                 "kafka-to-blob-topic-probe",
-		"enable.auto.commit":       true,
-		"auto.offset.reset":        "earliest",
-		// "debug":                    "security,broker",
-		"topic.metadata.refresh.interval.ms": "30000",
-	})
+	internal.SetupKafkaTopicProbeConsumer(
+		kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-blob-topic-probe",
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
+			// "debug":                    "security,broker",
+			"topic.metadata.refresh.interval.ms": "30000",
+		})
 
 	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {

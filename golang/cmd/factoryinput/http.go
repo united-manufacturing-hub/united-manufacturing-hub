@@ -124,15 +124,15 @@ func postMQTTHandler(c *gin.Context) {
 		handleInvalidInputError(c, errors.New("input is not valid JSON"))
 	}
 
-	var postMQTTRequest postMQTTRequest
-	err = c.BindUri(&postMQTTRequest)
+	var postMQTTRequestInstance postMQTTRequest
+	err = c.BindUri(&postMQTTRequestInstance)
 	if err != nil {
 		handleInvalidInputError(c, err)
 		return
 	}
 
 	// Check whether user has access to that customer
-	err = checkIfUserIsAllowed(c, postMQTTRequest.Customer)
+	err = checkIfUserIsAllowed(c, postMQTTRequestInstance.Customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -140,10 +140,10 @@ func postMQTTHandler(c *gin.Context) {
 
 	err = enqueueMQTT(
 		MQTTData{
-			Customer: postMQTTRequest.Customer,
-			Location: postMQTTRequest.Location,
-			Asset:    postMQTTRequest.Asset,
-			Value:    postMQTTRequest.Value,
+			Customer: postMQTTRequestInstance.Customer,
+			Location: postMQTTRequestInstance.Location,
+			Asset:    postMQTTRequestInstance.Asset,
+			Value:    postMQTTRequestInstance.Value,
 			JSONData: jsonData,
 		})
 	if err != nil {

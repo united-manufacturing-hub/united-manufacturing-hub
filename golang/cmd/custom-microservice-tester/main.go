@@ -60,23 +60,35 @@ var bg = New()
 func livenessHandler(w http.ResponseWriter, req *http.Request) {
 	if bg.Bool() {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "OK")
+		_, err := fmt.Fprintf(w, "OK")
+		if err != nil {
+			zap.S().Errorf("Error writing response: %s", err)
+		}
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Internal Server Error")
+		_, err := fmt.Fprintf(w, "Internal Server Error")
+		if err != nil {
+			zap.S().Errorf("Error writing response: %s", err)
+		}
 	}
 }
 
 func livenessServer() {
 	serverMuxA := http.NewServeMux()
 	serverMuxA.HandleFunc("/health", livenessHandler)
-	http.ListenAndServe(":9091", serverMuxA)
+	err := http.ListenAndServe(":9091", serverMuxA)
+	if err != nil {
+		zap.S().Fatalf("Error starting web server: %s", err)
+	}
 }
 
 func sampleWebServer() {
 	serverMuxB := http.NewServeMux()
 	serverMuxB.HandleFunc("/health", livenessHandler)
-	http.ListenAndServe(":81", serverMuxB)
+	err := http.ListenAndServe(":81", serverMuxB)
+	if err != nil {
+		zap.S().Fatalf("Error starting web server: %s", err)
+	}
 }
 
 // Random bool generation (https://stackoverflow.com/questions/45030618/generate-a-random-bool-in-go)

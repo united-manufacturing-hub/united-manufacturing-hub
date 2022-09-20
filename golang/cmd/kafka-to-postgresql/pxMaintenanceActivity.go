@@ -25,13 +25,16 @@ type addMaintenanceActivity struct {
 }
 
 // ProcessMessages processes a AddMaintenanceActivity kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
-func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (
+	putback bool,
+	err error,
+	forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -65,10 +68,22 @@ func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (put
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+		return true, fmt.Errorf(
+			"failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s",
+			msg.CustomerId,
+			msg.Location,
+			msg.AssetId), false
 	}
 
-	ComponentTableId, success := GetComponentID(AssetTableID, *sC.ComponentName)
+	var ComponentTableId int32
+	ComponentTableId, success = GetComponentID(AssetTableID, *sC.ComponentName)
+	if !success {
+		zap.S().Warnf("Failed to get ComponentTableId")
+		return true, fmt.Errorf(
+			"failed to get ComponentTableId for AssetTableID: %d, ComponentName: %s",
+			AssetTableID,
+			*sC.ComponentName), false
+	}
 
 	// Changes should only be necessary between this marker
 
@@ -88,7 +103,11 @@ func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (put
 	if err != nil {
 
 		if err != nil {
-			pqErr := err.(*pq.Error)
+			pqErr, ok := err.(*pq.Error)
+			if ok {
+				zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+				return false, err, false
+			}
 			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
 			if pqErr.Code == "23P01" {
 				return true, err, true

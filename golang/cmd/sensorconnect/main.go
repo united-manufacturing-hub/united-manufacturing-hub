@@ -68,7 +68,12 @@ func main() {
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error while starting pprof: %s", err.Error())
+		}
+	}()
 
 	internal.InitMemcache()
 	cP = sync.Map{}

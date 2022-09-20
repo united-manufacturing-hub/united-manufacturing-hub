@@ -85,11 +85,11 @@ func handleProxyRequest(c *gin.Context, method string) {
 
 	zap.S().Debugf("getProxyHandler")
 
-	var getProxyRequestPath getProxyRequestPath
+	var gPPR getProxyRequestPath
 	var err error
 
 	// Failed to parse request into service name and original url
-	err = c.BindUri(&getProxyRequestPath)
+	err = c.BindUri(&gPPR)
 	if err != nil {
 		handleInvalidInputError(c, err)
 		return
@@ -104,7 +104,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 	}
 	zap.S().Warnf("Read %d bytes from original request", len(bodyBytes))
 
-	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(getProxyRequestPath.OriginalURI))
+	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(gPPR.OriginalURI))
 	if err != nil {
 		handleInvalidInputError(c, err)
 		return
@@ -118,14 +118,14 @@ func handleProxyRequest(c *gin.Context, method string) {
 	zap.S().Debugf("", c.Request)
 
 	// Switch to handle our services
-	switch getProxyRequestPath.Service {
+	switch gPPR.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, getProxyRequestPath, method, bodyBytes)
+		HandleFactoryInput(c, gPPR, method, bodyBytes)
 	case "factoryinsight":
-		HandleFactoryInsight(c, getProxyRequestPath, method, bodyBytes)
+		HandleFactoryInsight(c, gPPR, method, bodyBytes)
 	default:
 		{
-			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(getProxyRequestPath.Service))
+			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(gPPR.Service))
 			c.AbortWithStatus(http.StatusBadRequest)
 		}
 	}
@@ -319,10 +319,13 @@ func DoProxiedRequest(
 	if u.String() == "" {
 		zap.S().Debugf("CORS Answer")
 		c.Status(http.StatusOK)
-		_, err := c.Writer.WriteString("online")
+		_, err = c.Writer.WriteString("online")
 		if err != nil {
 			zap.S().Debugf("Failed to reply to CORS request")
-			c.AbortWithError(http.StatusInternalServerError, err)
+			errx := c.AbortWithError(http.StatusInternalServerError, err)
+			if errx != nil {
+				zap.S().Errorf("Failed to abort with error: %v", errx)
+			}
 		}
 	} else {
 
@@ -346,7 +349,8 @@ func DoProxiedRequest(
 		}
 		req.Header.Set("Authorization", authorizationKey)
 
-		resp, err := client.Do(req)
+		var resp *http.Response
+		resp, err = client.Do(req)
 		if err != nil {
 			zap.S().Debugf("Client.Do error: ", err)
 			c.AbortWithStatus(500)
@@ -354,28 +358,32 @@ func DoProxiedRequest(
 		}
 
 		defer func(Body io.ReadCloser) {
-			err := Body.Close()
+			err = Body.Close()
 			if err != nil {
 				panic(err)
 			}
 		}(resp.Body)
 
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		var bodyBytesRet []byte
+		bodyBytesRet, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		zap.S().Debugf("Backend answer:")
-		zap.S().Debugf(string(bodyBytes))
+		zap.S().Debugf(string(bodyBytesRet))
 
 		c.Status(resp.StatusCode)
 
 		for a, b := range resp.Header {
 			c.Header(a, b[0])
 		}
-		_, err = c.Writer.Write(bodyBytes)
+		_, err = c.Writer.Write(bodyBytesRet)
 		if err != nil {
-			c.AbortWithError(http.StatusInternalServerError, err)
+			errx := c.AbortWithError(http.StatusInternalServerError, err)
+			if errx != nil {
+				zap.S().Errorf("Failed to write response: %s", err)
+			}
 		}
 	}
 

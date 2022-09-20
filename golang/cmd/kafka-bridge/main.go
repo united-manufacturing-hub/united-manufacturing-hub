@@ -57,7 +57,12 @@ func main() {
 	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -65,14 +70,24 @@ func main() {
 	zap.S().Debugf("Setting up metrics %s %v", metricsPath, metricsPort)
 
 	http.Handle(metricsPath, promhttp.Handler())
-	go http.ListenAndServe(metricsPort, nil)
+	go func() {
+		err := http.ListenAndServe(metricsPort, nil)
+		if err != nil {
+			zap.S().Errorf("Error starting metrics: %s", err)
+		}
+	}()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
-	go http.ListenAndServe("0.0.0.0:8086", health)
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", err)
+		}
+	}()
 
 	zap.S().Debugf("Starting queue processor")
 	KafkaTopicMap := os.Getenv("KAFKA_TOPIC_MAP")

@@ -57,7 +57,12 @@ func main() {
 	}(log)
 	zap.S().Infof("This is factoryinput build date: %s", buildtime)
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Failed to start pprof", err)
+		}
+	}()
 
 	shutdownEnabled = false
 
@@ -108,7 +113,7 @@ func main() {
 		return
 	}
 	defer func() {
-		err := closeQueue()
+		err = closeQueue()
 		if err != nil {
 			zap.S().Errorf("Failed to close queue, might be corrupted !", err)
 		}

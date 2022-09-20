@@ -124,7 +124,10 @@ type IoddFilemapKey struct {
 
 // AddNewDeviceToIoddFilesAndMap uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
 // Then updates map by checking for new files, unmarhaling them und importing into map
-func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
+func AddNewDeviceToIoddFilesAndMap(
+	ioddFilemapKey IoddFilemapKey,
+	relativeDirectoryPath string,
+	fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
 	zap.S().Debugf("Requesting IoddFile %v -> %s", ioddFilemapKey, relativeDirectoryPath)
 	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
@@ -145,7 +148,10 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 	// Unmarshal file with Unmarshal
 	err := xml.Unmarshal(ioddFile, &payload)
 	if err != nil {
-		zap.S().Errorf("Unmarshaling of IoDevice %#v failed. Deleting iodd.xml file now and stopping container after that. Error: %v", ioddFile, err)
+		zap.S().Errorf(
+			"Unmarshaling of IoDevice %#v failed. Deleting iodd.xml file now and stopping container after that. Error: %v",
+			ioddFile,
+			err)
 		err = os.Remove(absoluteFilePath)
 		// If unmarshaling fails we remove the iodd.xml file and stop tze container
 		if err != nil {
@@ -158,7 +164,11 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 
 // ReadIoddFiles Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
 func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) ([]os.FileInfo, error) {
-	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
+	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
+	if err != nil {
+		zap.S().Errorf("Error in ReadIoddFiles: %s", err.Error())
+		return oldFileInfoSlice, err
+	}
 	// check for new iodd files
 	currentFileInfoSlice, err := ioutil.ReadDir(absoluteDirectoryPath)
 	if err != nil {
@@ -177,12 +187,13 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string)
 		// create path to file
 		absoluteFilePath := absoluteDirectoryPath + "/" + name
 		// read file
-		dat, err := ioutil.ReadFile(absoluteFilePath)
+		var dat []byte
+		dat, err = ioutil.ReadFile(absoluteFilePath)
 		if err != nil {
 			return oldFileInfoSlice, err
 		}
 		// Unmarshal
-		ioDevice := IoDevice{}
+		var ioDevice IoDevice
 		ioDevice, err = UnmarshalIoddFile(dat, absoluteFilePath)
 		if err != nil {
 			return oldFileInfoSlice, err
@@ -195,8 +206,11 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string)
 
 		if idm, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
 			// IoDevice is already in ioddIoDeviceMap
-			// -> replace depending on date (newest version should be used)
-			if earlier, _ := currentDateEarlierThenOldDate(ioDevice.DocumentInfo.ReleaseDate, idm.(IoDevice).DocumentInfo.ReleaseDate); earlier {
+			// -> replace depending on date (the newest version should be used)
+			var earlier bool
+			if earlier, err = currentDateEarlierThenOldDate(
+				ioDevice.DocumentInfo.ReleaseDate,
+				idm.(IoDevice).DocumentInfo.ReleaseDate); earlier && err == nil {
 				ioDeviceMap.Store(ioddFilemapKey, ioDevice)
 			}
 			continue

@@ -123,7 +123,11 @@ func processSensorData(
 			rawSensorOutputBinary := HexToBin(rawSensorOutputString)
 			rawSensorOutputBinaryPadded := zeroPadding(rawSensorOutputBinary, outputBitLength)
 
-			cidm := idm.(IoDevice)
+			cidm, ok := idm.(IoDevice)
+			if !ok {
+				zap.S().Errorf("Failed to cast idm to IoDevice")
+				continue
+			}
 
 			// Extract important IoddStruct parts for better readability
 			processDataIn := cidm.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn
@@ -395,9 +399,13 @@ func extractIntFromSensorDataMap(key string, tag string, sensorDataMap map[strin
 		return 0, fmt.Errorf("key %s not in sensorDataMap", key)
 	}
 	element := sensorDataMap[key]
-	elementMap := element.(map[string]interface{})
+	elementMap, ok := element.(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("element %v is not a map", element)
+	}
 
-	val, ok := elementMap[tag].(float64)
+	var val float64
+	val, ok = elementMap[tag].(float64)
 	if !ok {
 		zap.S().Errorf("Failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
 	}
@@ -411,10 +419,14 @@ func _(key string, tag string, sensorDataMap map[string]interface{}) (int64, err
 		return 0, fmt.Errorf("key %s not in sensorDataMap", key)
 	}
 	element := sensorDataMap[key]
-	elementMap := element.(map[string]interface{})
-	val, ok := elementMap[tag].(float64)
+	elementMap, ok := element.(map[string]interface{})
 	if !ok {
-		zap.S().Errorf("Failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
+		return 0, fmt.Errorf("element %v is not a map", element)
+	}
+	var val float64
+	val, ok = elementMap[tag].(float64)
+	if !ok {
+		return 0, fmt.Errorf("failed to cast elementMap[%s] for key %s to float64. %#v", tag, key, elementMap)
 	}
 	returnValue := int64(val)
 	return returnValue, nil
@@ -426,7 +438,10 @@ func extractByteArrayFromSensorDataMap(key string, tag string, sensorDataMap map
 		return nil, fmt.Errorf("key %s not in sensorDataMap", key)
 	}
 	element := sensorDataMap[key]
-	elementMap := element.(map[string]interface{})
+	elementMap, ok := element.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("element %v is not a map", element)
+	}
 	returnString := fmt.Sprintf("%v", elementMap[tag])
 	returnValue := []byte(returnString)
 	return returnValue, nil
@@ -535,7 +550,10 @@ func convertBinaryValueToString(binaryValue string, datatype string) (output str
 	case "OctetStringT":
 		output = BinToHex(binaryValue)
 	default:
-		outputString, _ := strconv.ParseUint(binaryValue, 2, 64)
+		outputString, err := strconv.ParseUint(binaryValue, 2, 64)
+		if err != nil {
+			zap.S().Errorf("Error while converting binary value to string: %v", err)
+		}
 		return fmt.Sprintf("%v", outputString)
 	}
 	return

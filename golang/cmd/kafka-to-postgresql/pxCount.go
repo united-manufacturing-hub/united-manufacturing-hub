@@ -27,7 +27,7 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -69,7 +69,11 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+		return true, fmt.Errorf(
+			"failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s",
+			msg.CustomerId,
+			msg.Location,
+			msg.AssetId), false
 	}
 	zap.S().Debugf("Checkpoint 4 took %s", time.Since(start))
 	start = time.Now()
@@ -97,10 +101,14 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	_, err = stmt.ExecContext(stmtCtx, AssetTableID, sC.Count, sC.Scrap, sC.TimestampMs)
 
 	if err != nil {
-		pqErr := err.(*pq.Error)
-		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-		if pqErr.Code == "23P01" {
-			return true, err, true
+		pqErr, ok := err.(*pq.Error)
+		if ok {
+			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+		} else {
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == "23P01" {
+				return true, err, true
+			}
 		}
 		return true, err, false
 	}

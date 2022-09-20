@@ -35,7 +35,12 @@ func main() {
 	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka

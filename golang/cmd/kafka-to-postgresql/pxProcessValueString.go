@@ -113,7 +113,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 	reason string,
 	err error) {
 	zap.S().Debugf("[HT][PVS] Writing %d messages to database", len(messages))
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.Begin()
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())

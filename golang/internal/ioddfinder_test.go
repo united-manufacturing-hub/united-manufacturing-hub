@@ -41,9 +41,12 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 
 func TestSaveIoddFile(t *testing.T) {
 	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
-	os.MkdirAll(filepath.Dir(relativeDirectoryPath), 0777)
+	err := os.MkdirAll(filepath.Dir(relativeDirectoryPath), 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// test if writing iodd file works
-	err := SaveIoddFile(42, 278531, relativeDirectoryPath)
+	err = SaveIoddFile(42, 278531, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +59,11 @@ func TestSaveIoddFile(t *testing.T) {
 
 	// Remove file after test again
 	relativeFilePath := "../cmd/sensorconnect/IoddFiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml"
-	absoluteFilePath, _ := filepath.Abs(relativeFilePath)
+	var absoluteFilePath string
+	absoluteFilePath, err = filepath.Abs(relativeFilePath)
+	if err != nil {
+		t.Error(err)
+	}
 	err = os.Remove(absoluteFilePath)
 	if err != nil {
 		t.Logf("file not deleted: %s", err)

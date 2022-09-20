@@ -46,7 +46,12 @@ func main() {
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	PQHost := "db"
 	// Read environment variables
@@ -109,7 +114,12 @@ func main() {
 	shutdownEnabled = false
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
-	go http.ListenAndServe("0.0.0.0:8086", health)
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", err)
+		}
+	}()
 
 	zap.S().Debugf("Healthcheck initialized..", redisURI)
 

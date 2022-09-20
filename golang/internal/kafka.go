@@ -36,7 +36,6 @@ func SetupKafka(configMap kafka.ConfigMap) {
 	zap.S().Debugf("KafkaProducer: %+v", KafkaProducer)
 	zap.S().Debugf("KafkaAdminClient: %+v", KafkaAdminClient)
 
-	return
 }
 
 // SetupKafkaTopicProbeConsumer sets up a consumer for detecting new topics
@@ -51,11 +50,10 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 
 	err = KafkaTopicProbeConsumer.Subscribe("umh.kafka.topic.created", nil)
 	if err != nil {
-		return
+		panic(err)
 	}
 
 	zap.S().Debugf("KafkaTopicProbeConsumer: %+v", KafkaTopicProbeConsumer)
-	return
 }
 
 func CloseKafka() {
@@ -127,20 +125,14 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		return
 	}
 
-	var cancel context.CancelFunc
-	defer func() {
-		if cancel != nil {
-			cancel()
-		}
-	}()
 	topicSpecification := kafka.TopicSpecification{
 		Topic:         kafkaTopicName,
 		NumPartitions: 6,
 	}
 	var maxExecutionTime = time.Duration(5) * time.Second
 	d := time.Now().Add(maxExecutionTime)
-	var ctx context.Context
-	ctx, cancel = context.WithDeadline(context.Background(), d)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
 	topics, err := KafkaAdminClient.CreateTopics(ctx, []kafka.TopicSpecification{topicSpecification})
 	if err != nil || len(topics) != 1 {
 		zap.S().Errorf("Failed to create Topic %s : %s", kafkaTopicName, err)
@@ -157,13 +149,14 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		return
 	}
 	var probeTopicName = "umh.kafka.topic.created"
-	err = KafkaProducer.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic:     &probeTopicName,
-			Partition: kafka.PartitionAny,
-		},
-		Value: jsonString,
-	}, nil)
+	err = KafkaProducer.Produce(
+		&kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     &probeTopicName,
+				Partition: kafka.PartitionAny,
+			},
+			Value: jsonString,
+		}, nil)
 	if err != nil {
 		return err
 	}

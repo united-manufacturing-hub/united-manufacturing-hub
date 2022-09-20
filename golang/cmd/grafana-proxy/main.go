@@ -28,7 +28,12 @@ func main() {
 	}(log)
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")

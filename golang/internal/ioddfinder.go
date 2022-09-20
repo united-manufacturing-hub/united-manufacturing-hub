@@ -44,7 +44,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 	zap.S().Debugf("Saving file to path: " + absoluteFilePath)
 
 	// check for existing file with same name
-	if _, err := os.Stat(absoluteFilePath); err == nil {
+	if _, err = os.Stat(absoluteFilePath); err == nil {
 		return nil
 	}
 
@@ -152,7 +152,6 @@ func getUrlWithRetry(url string) (body []byte, err error) {
 
 	zap.S().Debugf("Getting url %s", url)
 	var status int
-	status = 1
 	for i := 0; i < 10; i++ {
 		body, err, status = getUrl(url)
 		if err != nil {

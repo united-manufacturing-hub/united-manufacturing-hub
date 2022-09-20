@@ -8,7 +8,10 @@ import (
 )
 
 func startDebugger() {
-	internal.KafkaConsumer.Subscribe("^ia.+", nil)
+	err := internal.KafkaConsumer.Subscribe("^ia.+", nil)
+	if err != nil {
+		zap.S().Fatalf("Failed to subscribe to kafka topic: %s", err)
+	}
 	for !ShuttingDown {
 
 		msg, err := internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down

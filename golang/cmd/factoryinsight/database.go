@@ -95,7 +95,7 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 
 	for rows.Next() {
 		var location string
-		err := rows.Scan(&location)
+		err = rows.Scan(&location)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -133,7 +133,7 @@ func GetAssets(c *gin.Context, customerID string, location string) (assets []str
 
 	for rows.Next() {
 		var asset string
-		err := rows.Scan(&asset)
+		err = rows.Scan(&asset)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -171,7 +171,7 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 
 	for rows.Next() {
 		var component string
-		err := rows.Scan(&component)
+		err = rows.Scan(&component)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -271,7 +271,7 @@ func GetStatesRaw(
 			var timestamp time.Time
 			var dataPoint int
 
-			err := rows.Scan(&timestamp, &dataPoint)
+			err = rows.Scan(&timestamp, &dataPoint)
 			if err != nil {
 				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
@@ -409,7 +409,7 @@ func GetShiftsRaw(
 
 		for rows.Next() {
 
-			err := rows.Scan(&timestampStart, &timestampEnd, &shiftType)
+			err = rows.Scan(&timestampStart, &timestampEnd, &shiftType)
 			if err != nil {
 				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
@@ -547,7 +547,7 @@ func GetProcessValue(
 		var timestamp time.Time
 		var dataPoint float64
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -614,7 +614,7 @@ func GetProcessValueString(
 		var timestamp time.Time
 		var dataPoint string
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -803,7 +803,7 @@ func GetCountsRaw(
 			var count int32
 			var scrapN sql.NullInt32
 
-			err := rows.Scan(&timestamp, &count, &scrapN)
+			err = rows.Scan(&timestamp, &count, &scrapN)
 			if err != nil {
 				PQErrorHandling(c, sqlStatement, err, false)
 				error = err
@@ -878,6 +878,7 @@ func GetCounts(
 
 // TODO test GetTotalCounts
 
+/*
 // GetTotalCounts gets the sum of produced units for a specific asset in a timerange
 func GetTotalCounts(
 	c *gin.Context,
@@ -915,7 +916,8 @@ func GetTotalCounts(
 	data.Datapoints = append(data.Datapoints, fullRow)
 
 	return
-}
+}s
+*/
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(
@@ -973,7 +975,7 @@ func GetProductionSpeed(
 		var timestamp time.Time
 		var dataPoint float64
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1077,7 +1079,7 @@ func GetQualityRate(
 		var timestamp time.Time
 		var dataPoint float64
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1261,7 +1263,7 @@ func GetRecommendations(
 		var recommendationTextEN string
 		var recommendationTextDE string
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&timestamp,
 			&recommendationType,
 			&recommendationValues,
@@ -1336,7 +1338,7 @@ func GetMaintenanceActivities(
 		var activityType int
 		var timestamp time.Time
 
-		err := rows.Scan(&componentName, &activityType, &timestamp)
+		err = rows.Scan(&componentName, &activityType, &timestamp)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1410,7 +1412,7 @@ func GetUniqueProducts(
 		var productID int
 		var isScrap bool
 
-		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
+		err = rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1719,7 +1721,7 @@ TABLE  cte;`
 	for rows.Next() {
 		var currentString string
 
-		err := rows.Scan(&currentString)
+		err = rows.Scan(&currentString)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1788,7 +1790,7 @@ TABLE  cte;`
 	for rows.Next() {
 		var currentString string
 
-		err := rows.Scan(&currentString)
+		err = rows.Scan(&currentString)
 		if err != nil {
 			PQErrorHandling(c, sqlStatement, err, false)
 			error = err
@@ -1948,7 +1950,7 @@ func GetUniqueProductsWithTags(
 		var valueName sql.NullString
 		var value sql.NullFloat64
 
-		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		err = rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(c, sqlStatementData, err, false)
 			error = err
@@ -2011,7 +2013,7 @@ func GetUniqueProductsWithTags(
 		var valueName sql.NullString
 		var value sql.NullString
 
-		err := rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
+		err = rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
 		if err != nil {
 			PQErrorHandling(c, sqlStatementData, err, false)
 			error = err
@@ -2055,7 +2057,7 @@ func GetUniqueProductsWithTags(
 		var productName string
 		var AID string
 
-		err := rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
+		err = rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
 		if err != nil {
 			PQErrorHandling(c, sqlStatementData, err, false)
 			error = err
@@ -2263,7 +2265,7 @@ ORDER BY begin_timestamp ASC
 		var timestampEnd sql.NullTime
 		var targetUnits sql.NullInt32
 		var AID int
-		err := insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
+		err = insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
 		if err != nil {
 			PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
 			error = err
@@ -2382,7 +2384,7 @@ ORDER BY begin_timestamp ASC
 		var timestamp time.Time
 		var count int32
 		var scrapN sql.NullInt32
-		err := countRows.Scan(&timestamp, &count, &scrapN)
+		err = countRows.Scan(&timestamp, &count, &scrapN)
 
 		if err != nil {
 			PQErrorHandling(c, sqlStatementGetCounts, err, false)
@@ -2429,7 +2431,7 @@ ORDER BY begin_timestamp ASC
 		var targetUnits int
 		var beginTimeStamp time.Time
 		var endTimeStamp sql.NullTime
-		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
+		err = orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
 
 		if err != nil {
 			PQErrorHandling(c, sqlGetRunningOrders, err, false)
@@ -2465,7 +2467,7 @@ ORDER BY begin_timestamp ASC
 	for productRows.Next() {
 		var productId int
 		var timePerUnitInSec float64
-		err := productRows.Scan(&productId, &timePerUnitInSec)
+		err = productRows.Scan(&productId, &timePerUnitInSec)
 
 		if err != nil {
 			PQErrorHandling(c, sqlGetProductsPerSec, err, false)
@@ -2479,11 +2481,6 @@ ORDER BY begin_timestamp ASC
 	zap.S().Debugf("AssetID: %d", assetID)
 	data, err = CalculateAccumulatedProducts(c, to, observationStart, observationEnd, countMap, orderMap, productMap)
 	return data, err
-}
-
-// BeforeOrEqual returns if t is before or equal to u
-func BeforeOrEqual(t time.Time, u time.Time) bool {
-	return t.Before(u) || t.Equal(u)
 }
 
 // AfterOrEqual returns if t is after or equal to u

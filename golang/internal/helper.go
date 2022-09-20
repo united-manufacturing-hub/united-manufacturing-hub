@@ -72,7 +72,10 @@ func Load(path string, v interface{}) error {
 // LogObject is used to create testfiles for golden testing
 func LogObject(functionName string, objectName string, now time.Time, v interface{}) {
 	timestamp := strconv.FormatInt(now.UTC().Unix(), 10)
-	Save("/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden", v)
+	err := Save("/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden", v)
+	if err != nil {
+		zap.S().Errorf("Error while logging object: %s", err)
+	}
 
 	zap.S().Infof("Logged ", "/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden")
 }

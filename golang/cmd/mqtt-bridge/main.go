@@ -22,10 +22,6 @@ import (
 var localMQTTClient MQTT.Client
 var remoteMQTTClient MQTT.Client
 
-// this is only used if SSL is not enabled
-const localMQTTClientID = "MQTT-BRIDGE-LOCAL"
-const remoteMQTTClientID = "MQTT-BRIDGE-REMOTE"
-
 var buildtime string
 
 func main() {
@@ -40,7 +36,12 @@ func main() {
 
 	zap.S().Infof("This is mqtt-bridge build date: %s", buildtime)
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof %v", err)
+		}
+	}()
 
 	// dryRun := os.Getenv("DRY_RUN")
 
@@ -80,20 +81,44 @@ func main() {
 		zap.S().Errorf("Error setting up remote queue", err)
 		return
 	}
-	defer closeQueue(remotePg)
+	defer func(pq *goque.Queue) {
+		err = closeQueue(pq)
+		if err != nil {
+			zap.S().Errorf("Error closing remote queue", err)
+		}
+	}(remotePg)
 
 	localPg, err := setupQueue("local")
 	if err != nil {
 		zap.S().Errorf("Error setting up local queue", err)
 		return
 	}
-	defer closeQueue(localPg)
+	defer func(pq *goque.Queue) {
+		err = closeQueue(pq)
+		if err != nil {
+			zap.S().Errorf("Error closing local queue", err)
+		}
+	}(localPg)
 
 	// Setting up MQTT
 	zap.S().Debugf("Setting up MQTT")
 
-	remoteMQTTClient = setupMQTT(remoteCertificateName, "remote", remoteMQTTBrokerURL, remoteSubMQTTTopic, remoteMQTTBrokerSSLEnabled, remotePg, !BRIDGE_ONE_WAY) // make remote subscription dependent on variable
-	localMQTTClient = setupMQTT(localCertificateName, "local", localMQTTBrokerURL, localSubMQTTTopic, localMQTTBrokerSSLEnabled, localPg, true)                   // always subscribe to local
+	remoteMQTTClient = setupMQTT(
+		remoteCertificateName,
+		"remote",
+		remoteMQTTBrokerURL,
+		remoteSubMQTTTopic,
+		remoteMQTTBrokerSSLEnabled,
+		remotePg,
+		!BRIDGE_ONE_WAY) // make remote subscription dependent on variable
+	localMQTTClient = setupMQTT(
+		localCertificateName,
+		"local",
+		localMQTTBrokerURL,
+		localSubMQTTTopic,
+		localMQTTBrokerSSLEnabled,
+		localPg,
+		true) // always subscribe to local
 
 	// Setting up endless loops to send out messages
 	go publishQueueToBroker(remotePg, localMQTTClient, "local", remoteSubMQTTTopic, localPubMQTTTopic)
@@ -141,7 +166,12 @@ func ShutdownApplicationGraceful() {
 
 // publishQueueToBroker starts an endless loop and publishes the given queue element by element to the selected MQTT broker.
 // There can be multiple processes running of this function and to identify each of them a prefix is used
-func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, subMQTTTopic string, pubMQTTTopic string) {
+func publishQueueToBroker(
+	pq *goque.Queue,
+	client MQTT.Client,
+	prefix string,
+	subMQTTTopic string,
+	pubMQTTTopic string) {
 	for {
 		if pq.Length() == 0 {
 			time.Sleep(1 * time.Millisecond) // wait 1 ms to avoid high cpu usage
@@ -176,7 +206,7 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 		token.Wait() // wait indefinite amount of time (librarz will automatically resend)
 
 		// if successfully received at broker delete from stack
-		topElement, err = pq.Dequeue()
+		_, err = pq.Dequeue()
 		if err != nil {
 			zap.S().Fatalf("Error dequeuing element", err)
 			return

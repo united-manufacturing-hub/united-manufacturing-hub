@@ -172,9 +172,6 @@ func processOutgoingMessages() {
 		var mqttData queueObject
 		mqttData, err = retrieveMessageFromQueue(mqttOutGoingQueue)
 		if err != nil {
-			return
-		}
-		if err != nil {
 			zap.S().Errorf("Failed to dequeue message: %s", err)
 			time.Sleep(1 * time.Second)
 			continue

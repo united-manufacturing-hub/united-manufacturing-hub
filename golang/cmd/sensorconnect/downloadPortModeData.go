@@ -35,8 +35,11 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 		currentDeviceInformation.Url)
 	val, found = internal.GetMemcached(cacheKey)
 	if found {
-		modeMap = val.(map[int]ConnectedDeviceInfo)
-		return modeMap, nil
+		var ok bool
+		modeMap, ok = val.(map[int]ConnectedDeviceInfo)
+		if ok {
+			return modeMap, nil
+		}
 	}
 
 	usedPortsAndModes, err := getUsedPortsAndMode(currentDeviceInformation.Url)
@@ -63,7 +66,10 @@ func _(dataRaw []byte) (map[int]int, error) {
 		if err != nil {
 			continue
 		}
-		elementMap := element.(map[string]interface{})
+		elementMap, ok := element.(map[string]interface{})
+		if !ok {
+			continue
+		}
 
 		if elementMap == nil || elementMap["data"] == nil {
 			return nil, errors.New("elementMap is nil")

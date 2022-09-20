@@ -28,7 +28,12 @@ func main() {
 	zap.S().Infof("This is kafka-init build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
@@ -66,17 +71,23 @@ func main() {
 	} else {
 		zap.S().Infof("Site reachable, connection: %v", conn)
 	}
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err = conn.Close()
+		if err != nil {
+			zap.S().Errorf("Error closing connection: %s", err)
+		}
+	}(conn)
 
-	internal.SetupKafka(kafka.ConfigMap{
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"group.id":                 "kafka-init",
-	})
+	internal.SetupKafka(
+		kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"group.id":                 "kafka-init",
+		})
 
 	initKafkaTopics(KafkaTopics)
 

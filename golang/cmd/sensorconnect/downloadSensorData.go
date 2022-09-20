@@ -31,7 +31,11 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 
 	val, found = internal.GetMemcached(cacheKey)
 	if found {
-		modeRequestBody = val.([]byte)
+		var ok bool
+		modeRequestBody, ok = val.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("failed to cast %v to []byte", val)
+		}
 	} else {
 		usedPortsAndModes, err := GetUsedPortsAndModeCached(currentDeviceInformation)
 		if err != nil {
