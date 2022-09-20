@@ -22,24 +22,69 @@ linters-settings:
     # Can accept both string prefixes and string glob patterns.
     # Default: []
     packages:
-      - github.com/cristalhq/base64
-      - golang.org/**/*
-      - gorm.io/gorm
-      - github.com/united-manufacturing-hub/**/*
-      - time
-      - crypto/**/*
-      - github.com/go-piv/piv-go/piv
+      - archive/zip
       - bytes
-      - fmt
-      - github.com/json-iterator/go
-      - io
-      - net/http
+      - context
+      - crypto/tls
+      - crypto/x509
+      - database/sql
       - encoding/binary
-      - testing
-      - github.com/mitchellh/mapstructure
-      - github.com/stretchr/testify/assert
+      - encoding/gob
+      - encoding/xml
+      - errors
+      - fmt
+      - github.com/EagleChen/mapmutex
+      - github.com/beeker1121/goque
+      - github.com/confluentinc/confluent-kafka-go/kafka
+      - github.com/coocood/freecache
+      - github.com/cristalhq/base64
+      - github.com/eclipse/paho.mqtt.golang
+      - github.com/gin-contrib/zap
+      - github.com/gin-gonic/gin
+      - github.com/go-playground/assert/v2
+      - github.com/go-redis/redis/v8
+      - github.com/hashicorp/golang-lru
+      - github.com/heptiolabs/healthcheck
+      - github.com/json-iterator/go
+      - github.com/lib/pq
+      - github.com/minio/minio-go/v7
+      - github.com/minio/minio-go/v7/pkg/credentials
+      - github.com/omeid/pgerror
+      - github.com/patrickmn/go-cache
+      - github.com/prometheus/client_golang/prometheus
+      - github.com/prometheus/client_golang/prometheus/promauto
+      - github.com/prometheus/client_golang/prometheus/promhttp
+      - github.com/rung/go-safecast
+      - github.com/united-manufacturing-hub/**/*
+      - github.com/zeebo/xxh3
+      - go.uber.org/zap
+      - golang.org/**/*
+      - gonum.org/v1/gonum/stat
+      - gorm.io/gorm
+      - hash/crc32
+      - io
+      - io/ioutil
+      - k8s.io/apimachinery/pkg/api/resource
+      - math
+      - math/rand
+      - net
+      - net/http
+      - net/url
+      - os
+      - path/filepath
       - reflect
-      
+      - regexp
+      - runtime
+      - runtime/debug
+      - sort
+      - strconv
+      - strings
+      - sync
+      - syscall
+      - testing
+      - time
+      - unicode
+
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
     # Such cases aren't reported by default.
@@ -186,10 +231,16 @@ linters:
   # Enable specific linter
   # https://golangci-lint.run/usage/linters/#enabled-by-default-linters
   enable:
+    #- dupl # Disabled 20.09.2022. Should be re-enabled later !
+    #- exhaustive # Disabled 20.09.2022. Should be re-enabled later !
+    #- gocognit # Disabled 20.09.2022. Should be re-enabled later !
+    #- gocritic # Disabled 20.09.2022. Should be re-enabled later !
+    #- gocyclo # Disabled 20.09.2022. Should be re-enabled later !
+    #- lll # Disabled 20.09.2022. Should be re-enabled later !
+    #- maintidx # Disabled 20.09.2022. Should be re-enabled later !
+    #- nakedret # Disabled 20.09.2022. Should be re-enabled later !
+    #- nestif # Disabled 20.09.2022. Should be re-enabled later !
     - asciicheck
-    - govet
-    - makezero
-    - prealloc
     - bidichk
     - bodyclose
     - containedctx
@@ -197,23 +248,17 @@ linters:
     - decorder
     - depguard
     - dogsled
-    - dupl
     - errcheck
     - errchkjson
     - errorlint
-    - exhaustive
-    - gocognit
     - goconst
-    - gocritic
-    - gocyclo
     - gosec
+    - govet
     - ifshort
-    - lll
-    - maintidx
+    - makezero
     - misspell
-    - nakedret
-    - nestif
     - noctx
+    - prealloc
     - predeclared
     - tenv
     - unparam
@@ -231,11 +276,11 @@ issues:
   #  - abcdef
 
   # Excluding configuration per-path, per-linter, per-text and per-source
-  #exclude-rules:
+  exclude-rules:
     # Exclude some linters from running on tests files.
-  #  - path: _test\.go
-  #    linters:
-  #      - gocyclo
+    - path: _test\.go
+      linters:
+        - maintidx
   #      - errcheck
   #      - dupl
   #      - gosec
