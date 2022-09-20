@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
@@ -158,7 +159,7 @@ func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceIn
     }
 }`)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		zap.S().Warnf("Failed to create post request for url: %s", url)
 		return

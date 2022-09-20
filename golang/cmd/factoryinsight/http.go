@@ -109,7 +109,7 @@ func getLocationsHandler(c *gin.Context) {
 	}
 
 	// Fetching from the database
-	locations, err = GetLocations(c, getLocationsRequestInstance.Customer)
+	locations, err = GetLocations(getLocationsRequestInstance.Customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -144,7 +144,7 @@ func getAssetsHandler(c *gin.Context) {
 	}
 
 	// Fetching from the database
-	assets, err = GetAssets(c, getAssetsRequestInstance.Customer, getAssetsRequestInstance.Location)
+	assets, err = GetAssets(getAssetsRequestInstance.Customer, getAssetsRequestInstance.Location)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -213,7 +213,6 @@ func getValuesHandler(c *gin.Context) {
 
 	if !cacheHit { // data NOT found
 		processValues, err = GetDistinctProcessValues(
-			c,
 			getValuesRequestInstance.Customer,
 			getValuesRequestInstance.Location,
 			getValuesRequestInstance.Asset)
@@ -238,7 +237,6 @@ func getValuesHandler(c *gin.Context) {
 
 	if !cacheHit { // data NOT found
 		processValuesString, err = GetDistinctProcessValuesString(
-			c,
 			getValuesRequestInstance.Customer,
 			getValuesRequestInstance.Location,
 			getValuesRequestInstance.Asset)
@@ -318,7 +316,7 @@ func getDataHandler(c *gin.Context) {
 	case "stateHistogram":
 		processStateHistogramRequest(c, getDataRequestInstance)
 	case "factoryLocations":
-		processFactoryLocationsRequest(c, getDataRequestInstance)
+		processFactoryLocationsRequest(c)
 	case "averageCleaningTime":
 		processAverageCleaningTimeRequest(c, getDataRequestInstance)
 	case "averageChangeoverTime":
@@ -389,42 +387,42 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -432,7 +430,6 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### calculate (only one function allowed here) ###
 	processedStates, err := processStatesOptimized(
-		c,
 		assetID,
 		rawStates,
 		rawShifts,
@@ -462,7 +459,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {
 			fullRow := []interface{}{
-				ConvertStateToString(c, dataPoint.State, configuration),
+				ConvertStateToString(dataPoint.State, configuration),
 				float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
@@ -510,14 +507,14 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -525,28 +522,28 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	// TODO: parallelize
 
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -555,7 +552,6 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	// ### calculate (only one function allowed here) ###
 
 	processedStates, err := processStatesOptimized(
-		c,
 		assetID,
 		rawStates,
 		rawShifts,
@@ -577,7 +573,6 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		data.ColumnNames = []string{"state", "duration"}
 
 		data.Datapoints, err = CalculateStopParetos(
-			c,
 			processedStates,
 			to,
 			*includeRunning,
@@ -623,13 +618,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 				processedStatesCleaned := removeUnnecessaryElementsFromStateSlice(processedStates, oldD, d)
 
 				var tempResult [][]interface{}
-				tempResult, err = CalculateStopParetos(
-					c,
-					processedStatesCleaned,
-					d,
-					*includeRunning,
-					true,
-					configuration)
+				tempResult, err = CalculateStopParetos(processedStatesCleaned, d, *includeRunning, true, configuration)
 				if err != nil {
 					handleInternalServerError(c, err)
 					return
@@ -704,40 +693,40 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -760,7 +749,6 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -774,7 +762,7 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 				return
 			}
 
-			tempDatapoints, err = CalculateAvailability(c, processedStates, current, to, configuration)
+			tempDatapoints, err = CalculateAvailability(processedStates, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -784,7 +772,6 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -798,7 +785,7 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 				return
 			}
 
-			tempDatapoints, err = CalculateAvailability(c, processedStates, current, currentTo, configuration)
+			tempDatapoints, err = CalculateAvailability(processedStates, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -845,41 +832,41 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -902,7 +889,6 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -916,7 +902,7 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 				return
 			}
 
-			tempDatapoints, err = CalculatePerformance(c, processedStates, current, to, configuration)
+			tempDatapoints, err = CalculatePerformance(processedStates, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -926,7 +912,6 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -940,7 +925,7 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 				return
 			}
 
-			tempDatapoints, err = CalculatePerformance(c, processedStates, current, currentTo, configuration)
+			tempDatapoints, err = CalculatePerformance(processedStates, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -987,14 +972,14 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// ### fetch necessary data from database ###
 
 	// customer configuration
-	_, err = GetCustomerConfiguration(c, customer)
+	_, err = GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1020,23 +1005,14 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 			countSliceSplit := SplitCountSlice(countSlice, current, to)
 
 			// calculatequality(c,countslice)
-			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
-			if err != nil {
-				handleInternalServerError(c, err)
-				return
-			}
-
+			tempDatapoints = CalculateQuality(countSliceSplit)
 			current = to
 		} else { // otherwise, calculate for entire time range
 			// split up countslice that it contains only counts between current and to
 			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
 
 			// calculatequality(c,countslice)
-			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
-			if err != nil {
-				handleInternalServerError(c, err)
-				return
-			}
+			tempDatapoints = CalculateQuality(countSliceSplit)
 			current = currentTo
 		}
 		// only add it if there is a valid datapoint. do not add areas with no state times
@@ -1077,40 +1053,40 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1136,7 +1112,6 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			countSliceSplit := SplitCountSlice(countSlice, current, to)
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1150,7 +1125,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(c, processedStates, countSliceSplit, current, to, configuration)
+			tempDatapoints, err = CalculateOEE(processedStates, countSliceSplit, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -1162,7 +1137,6 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1176,7 +1150,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(c, processedStates, countSliceSplit, current, currentTo, configuration)
+			tempDatapoints, err = CalculateOEE(processedStates, countSliceSplit, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -1226,41 +1200,41 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1268,7 +1242,6 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// ### calculate (only one function allowed here) ###
 	processedStates, err := processStatesOptimized(
-		c,
 		assetID,
 		rawStates,
 		rawShifts,
@@ -1286,7 +1259,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"state", "occurrences"}
 
-	data.Datapoints, err = CalculateStateHistogram(c, processedStates, includeRunning, keepStatesInteger, configuration)
+	data.Datapoints, err = CalculateStateHistogram(processedStates, includeRunning, keepStatesInteger, configuration)
 
 	if err != nil {
 		handleInternalServerError(c, err)
@@ -1363,7 +1336,6 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Fetching from the database
 	// TODO: #89 Return timestamps in RFC3339 in /currentState
 	state, err := GetCurrentState(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1390,7 +1362,6 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
 	counts, err = GetCounts(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1406,11 +1377,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
-	recommendations, err := GetRecommendations(
-		c,
-		getDataRequest.Customer,
-		getDataRequest.Location,
-		getDataRequest.Asset)
+	recommendations, err := GetRecommendations(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1431,7 +1398,6 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	shifts, err := GetShifts(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1461,7 +1427,6 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	processValues, err := GetProcessValue(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1492,7 +1457,6 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 
 	// Fetching from the database
 	processValuesString, err := GetProcessValueString(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1509,11 +1473,7 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
-	timeRange, err := GetDataTimeRangeForAsset(
-		c,
-		getDataRequest.Customer,
-		getDataRequest.Location,
-		getDataRequest.Asset)
+	timeRange, err := GetDataTimeRangeForAsset(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1525,7 +1485,6 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset)
@@ -1538,7 +1497,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 	data.ColumnNames = []string{"Machine", "Component", "Activity", "Duration", "Status"}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, getDataRequest.Customer)
+	configuration, err := GetCustomerConfiguration(getDataRequest.Customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1547,7 +1506,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 	// TODO: #100 Return timestamps in RFC3339 in /maintenanceActivities
 
 	for _, timeBasedMaintenanceActivity := range rawData {
-		var activityString = ConvertActivityToString(c, timeBasedMaintenanceActivity.ActivityType, configuration)
+		var activityString = ConvertActivityToString(timeBasedMaintenanceActivity.ActivityType, configuration)
 
 		if !timeBasedMaintenanceActivity.DurationInDays.Valid || !timeBasedMaintenanceActivity.LatestActivity.Valid || !timeBasedMaintenanceActivity.NextActivity.Valid {
 			fullRow := []interface{}{
@@ -1598,7 +1557,7 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 		getDataRequest.Value)
 
 	zap.S().Debugf("GetUnstartedOrdersRaw")
-	rawOrders, err := GetUnstartedOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	rawOrders, err := GetUnstartedOrdersRaw(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1636,14 +1595,14 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// customer configuration
 	zap.S().Debugf("GetCustomerConfiguration")
-	configuration, err := GetCustomerConfiguration(c, getDataRequest.Customer)
+	configuration, err := GetCustomerConfiguration(getDataRequest.Customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	zap.S().Debugf("GetAssetID")
-	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	assetID, err := GetAssetID(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1651,7 +1610,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	zap.S().Debugf("GetOrdersRaw")
 	rawOrders, err := GetOrdersRaw(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1665,7 +1623,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// get counts for actual units calculation
 	zap.S().Debugf("GetCountsRaw")
 	countSlice, err := GetCountsRaw(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1679,7 +1636,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// raw states from database
 	zap.S().Debugf("GetStatesRaw")
 	rawStates, err := GetStatesRaw(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1694,7 +1650,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// get shifts for noShift detection
 	zap.S().Debugf("GetShiftsRaw")
 	rawShifts, err := GetShiftsRaw(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1711,7 +1666,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Process data
 	// zap.S().Debugf("calculateOrderInformation: rawOrders: %v, countSlice: %v, assetID: %v, rawStates: %v, rawShifts: %v, configuration: %v, Location: %v, Asset: %v", rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	data, err := calculateOrderInformation(
-		c,
 		rawOrders,
 		countSlice,
 		assetID,
@@ -1743,7 +1697,6 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 
 	// Process data
 	data, err := GetOrdersTimeline(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1760,7 +1713,7 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
-	data, err := GetMaintenanceActivities(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	data, err := GetMaintenanceActivities(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1784,7 +1737,6 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// Fetching from the database
 	uniqueProducts, err := GetUniqueProducts(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1800,13 +1752,13 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
-	assetID, err := GetAssetID(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	assetID, err := GetAssetID(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
-	data, err := GetComponents(c, assetID)
+	data, err := GetComponents(assetID)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1829,7 +1781,6 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 
 	// Fetching from the database
 	counts, err = GetProductionSpeed(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1857,7 +1808,6 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	counts, err = GetQualityRate(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1871,7 +1821,7 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, counts)
 }
 
-func processFactoryLocationsRequest(c *gin.Context, getDataRequest getDataRequest) {
+func processFactoryLocationsRequest(c *gin.Context) {
 
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"Location", "Metric", "Geohash"}
@@ -1911,41 +1861,41 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1969,7 +1919,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1984,7 +1933,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(
-				c,
 				processedStates,
 				current,
 				to,
@@ -1999,7 +1947,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -2013,7 +1960,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 				return
 			}
 
-			tempDatapoints, err = CalculateAverageStateTime(c, processedStates, current, currentTo, configuration, 18)
+			tempDatapoints, err = CalculateAverageStateTime(processedStates, current, currentTo, configuration, 18)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -2061,41 +2008,41 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(c, customer, location, asset)
+	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(c, customer)
+	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(c, customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(c, customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(c, customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(c, customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -2117,7 +2064,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -2132,7 +2078,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(
-				c,
 				processedStates,
 				current,
 				to,
@@ -2147,7 +2092,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-				c,
 				assetID,
 				rawStates,
 				rawShifts,
@@ -2162,7 +2106,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(
-				c,
 				processedStates,
 				current,
 				currentTo,
@@ -2197,7 +2140,6 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 
 	// Fetching from the database
 	uniqueProductsWithTags, err := GetUniqueProductsWithTags(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -2227,7 +2169,6 @@ func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	accumulatedProducts, err := GetAccumulatedProducts(
-		c,
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,

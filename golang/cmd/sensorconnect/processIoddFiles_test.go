@@ -15,7 +15,7 @@ const relativeIODDFilePath = "../sensorconnect/IoddFiles/"
 func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	internal.InitMemcache()
 	// first remove all files from specified path
-	err := removeFilesFromDirectory(relativeIODDFilePath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
 	// first remove all files from specified path
-	err := removeFilesFromDirectory(relativeIODDFilePath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		zap.S().Errorf("removeFilesFromDirectory failed: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 		t.Error(err)
 	}
 	// Remove file after test again
-	err = removeFilesFromDirectory(relativeIODDFilePath)
+	err = removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestReadIoddFiles(t *testing.T) {
 	internal.InitMemcache()
 	var fileInfoSlice []os.FileInfo
 	// first remove all files from specified path
-	err := removeFilesFromDirectory(relativeIODDFilePath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
@@ -97,15 +97,15 @@ func TestReadIoddFiles(t *testing.T) {
 		t.Error(err) // entry does not exist
 	}
 	// Remove file after test again
-	err = removeFilesFromDirectory(relativeIODDFilePath)
+	err = removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
 }
 
 // Deletes complete directory and creates new one
-func removeFilesFromDirectory(relativeDirectoryPath string) error {
-	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
+func removeFilesFromDirectory() error {
+	absoluteDirectoryPath, err := filepath.Abs(relativeIODDFilePath)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func removeFilesFromDirectory(relativeDirectoryPath string) error {
 func TestUnmarshalIoddFiles(t *testing.T) {
 	internal.InitMemcache()
 	// first remove all files from specified path
-	err := removeFilesFromDirectory(relativeIODDFilePath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}

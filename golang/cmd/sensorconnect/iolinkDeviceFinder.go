@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
@@ -151,7 +152,7 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
     }`)
 
 	// Create Request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		// zap.S().Warnf("Failed to create post request for url: %s", url)
 		return

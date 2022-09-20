@@ -84,14 +84,11 @@ func IsPostgresSQLAvailable() (bool, error) {
 func ShutdownDB() {
 
 	zap.S().Infof("Closing statement registry")
-	err := statement.Shutdown()
-	if err != nil {
-		panic(err)
-	}
+	statement.Shutdown()
 
 	zap.S().Infof("Closing database connection")
-	err = db.Close()
-	if err != nil {
+
+	if err := db.Close(); err != nil {
 		panic(err)
 	}
 }

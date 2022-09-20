@@ -3,6 +3,7 @@ package internal
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
@@ -173,13 +174,18 @@ var globalSleepTimer = 0
 func getUrl(url string) (body []byte, err error, status int) {
 	time.Sleep(GetBackoffTime(int64(globalSleepTimer), 10*time.Millisecond, 1*time.Second))
 	globalSleepTimer += 1
-	var resp *http.Response
+	var req *http.Request
 	/* #nosec G107 -- This function should contact arbitrary urls */
-	resp, err = http.Get(url)
+	req, err = http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
-		zap.S().Errorf("%s", err.Error())
-		return
+		return nil, err, 0
 	}
+	var resp *http.Response
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err, 0
+	}
+
 	defer resp.Body.Close()
 	status = resp.StatusCode
 	if status != 200 {

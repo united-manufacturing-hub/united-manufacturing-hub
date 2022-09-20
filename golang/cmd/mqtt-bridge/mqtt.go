@@ -11,7 +11,7 @@ import (
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
-func newTLSConfig(clientID string, mode string) *tls.Config {
+func newTLSConfig(mode string) *tls.Config {
 
 	// Import trusted certificates from CAfile.pem.
 	// Alternatively, manually add CA certificates to
@@ -63,7 +63,7 @@ func getOnMessageRecieved(mode string, pg *goque.Queue) func(MQTT.Client, MQTT.M
 
 		zap.S().Debugf("onMessageReceived", mode, topic, payload)
 
-		go storeMessageIntoQueue(topic, payload, mode, pg)
+		go storeMessageIntoQueue(topic, payload, pg)
 	}
 }
 
@@ -93,7 +93,7 @@ func setupMQTT(
 	opts.AddBroker(mqttBrokerURL)
 
 	if SSLEnabled {
-		tlsconfig := newTLSConfig(clientID, mode)
+		tlsconfig := newTLSConfig(mode)
 		opts.SetClientID(clientID).SetTLSConfig(tlsconfig)
 	} else {
 		opts.SetClientID(clientID)

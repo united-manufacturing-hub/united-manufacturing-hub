@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
@@ -132,7 +133,7 @@ func createSensorDataRequestBody(connectedDeviceInfo map[int]ConnectedDeviceInfo
 // downloadSensorData sends a POST request to the given url with the given payload. It returns the body and an error in case of problems.
 func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 	// Create Request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		zap.S().Warnf("Failed to create post request for url: %s", url)
 		return

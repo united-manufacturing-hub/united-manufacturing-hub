@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
@@ -44,7 +45,7 @@ func GetUser(sessioncookie string) (User, error) {
 	url := fmt.Sprintf("%s/api/user", GrafanaUrl)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, http.NoBody)
 	if err != nil {
 
 		return User{}, err

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/cristalhq/base64"
 	ginzap "github.com/gin-contrib/zap"
@@ -331,10 +332,10 @@ func DoProxiedRequest(
 		// no nil check required, len(nil slice) is 0
 		if len(bodyBytes) > 0 {
 			zap.S().Warnf("Request with body bytes: %s", internal.SanitizeByteArray(bodyBytes))
-			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
+			req, err = http.NewRequestWithContext(context.Background(), method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
 			zap.S().Warnf("Request without body bytes")
-			req, err = http.NewRequest(method, u.String(), http.NoBody)
+			req, err = http.NewRequestWithContext(context.Background(), method, u.String(), http.NoBody)
 
 		}
 		if err != nil {

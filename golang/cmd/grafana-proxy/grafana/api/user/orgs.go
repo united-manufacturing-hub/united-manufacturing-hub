@@ -7,6 +7,7 @@ package user
 //    bytes, err = user.Marshal()
 
 import (
+	"context"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
@@ -40,7 +41,7 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 	url := fmt.Sprintf("%s/api/user/orgs", GrafanaUrl)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, http.NoBody)
 	if err != nil {
 
 		return Orgs{}, err

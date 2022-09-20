@@ -57,7 +57,7 @@ func TestAddLowSpeedStates_1(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addLowSpeedStates(nil, 0, stateArray, countSlice, configuration)
+	processedStateArrayFresh := addLowSpeedStates(0, stateArray, countSlice, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -109,7 +109,7 @@ func TestAddLowSpeedStates_2(t *testing.T) { // Complex
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addLowSpeedStates(nil, 0, stateArray, countSlice, configuration)
+	processedStateArrayFresh := addLowSpeedStates(0, stateArray, countSlice, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -161,7 +161,7 @@ func TestAddLowSpeedStates_NoLowSpeed_1(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addLowSpeedStates(nil, 0, stateArray, countSlice, configuration)
+	processedStateArrayFresh := addLowSpeedStates(0, stateArray, countSlice, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -205,7 +205,7 @@ func TestAddUnknownMicrostops_OnlyMicrostops(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addUnknownMicrostops(nil, stateArray, configuration)
+	processedStateArrayFresh := addUnknownMicrostops(stateArray, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -249,7 +249,7 @@ func TestAddUnknownMicrostops_OnlyMicrostopsOneStop(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addUnknownMicrostops(nil, stateArray, configuration)
+	processedStateArrayFresh := addUnknownMicrostops(stateArray, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -292,7 +292,7 @@ func TestAddUnknownMicrostops_Complex(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addUnknownMicrostops(nil, stateArray, configuration)
+	processedStateArrayFresh := addUnknownMicrostops(stateArray, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -417,7 +417,7 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -476,7 +476,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -535,7 +535,7 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -709,7 +709,6 @@ func Test_processStatesOptimized(t *testing.T) {
 		t.Run(
 			tt.name, func(t *testing.T) {
 				gotProcessedStateArray, err := processStatesOptimized(
-					nil,
 					tt.args.assetID,
 					tt.args.stateArray,
 					tt.args.rawShifts,
