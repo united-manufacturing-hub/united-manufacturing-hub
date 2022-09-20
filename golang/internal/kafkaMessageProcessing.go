@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 	"strings"
 )
@@ -19,6 +20,10 @@ type ParsedMessage struct {
 	CustomerId  string
 	PayloadType string
 	Payload     []byte
+}
+
+type TopicProbeMessage struct {
+	Topic string
 }
 
 // ParseMessage parses a kafka message and returns a ParsedMessage struct or false if the message is not a valid message
@@ -109,4 +114,28 @@ func GetCacheParsedMessage(msg *kafka.Message) (valid bool, found bool, message 
 	}
 
 	return true, true, pm
+}
+
+// StartTopicProbeQueueProcessor processes the messages from the topic probe queue and triggeers
+// the refresh of the metadata for the consumers to discover the new created topic
+func StartTopicProbeQueueProcessor(topicProbeProcessorChannel chan *kafka.Message) {
+	zap.S().Debugf("[TP] Starting queue processor")
+	for !ShuttingDownKafka {
+		msg := <-topicProbeProcessorChannel
+		if msg == nil {
+			continue
+		}
+
+		var topicProbeMessage TopicProbeMessage
+		err := jsoniter.Unmarshal(msg.Value, &topicProbeMessage)
+		if err != nil {
+			zap.S().Errorf("[TP] Failed to unmarshal topic probe message: %s", err)
+			continue
+		}
+
+		_, err = KafkaConsumer.GetMetadata(&topicProbeMessage.Topic, false, 1000)
+		if err != nil {
+			zap.S().Errorf("[TP] Failed to get metadata for topic: %s", topicProbeMessage.Topic)
+		}
+	}
 }
