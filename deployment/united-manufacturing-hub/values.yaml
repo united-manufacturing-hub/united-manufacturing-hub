@@ -1647,6 +1647,13 @@ timescaledb-single:
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
   version:
 
+  image:
+    # Image was built from
+    # https://github.com/timescale/timescaledb-docker-ha
+    repository: timescale/timescaledb-ha
+    tag: pg13.8-ts2.8.0-p1
+    pullPolicy: Always
+
   # These secrets should exist before the Helm is used to deploy this TimescaleDB.
   # You can use generate_kustomization.sh to help in creating these secrets, or have
   # a look at kustomize/example to see how you could install them.
