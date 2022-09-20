@@ -1955,7 +1955,7 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 	if lengthSlice == lengthNames {
 		return slice
 	} else if lengthSlice < lengthNames {
-		for lengthSlice < lengthNames {
+		for len(slice) < lengthNames {
 			slice = append(slice, nil)
 		}
 		return slice

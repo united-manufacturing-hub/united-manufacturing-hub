@@ -771,6 +771,7 @@ func TestSliceContainsInt(t *testing.T) {
 
 func TestChangeOutputFormat(t *testing.T) {
 
+	t.Log("Testing ChangeOutputFormat")
 	var data [][]interface{}
 	var dataExtended [][]interface{}
 
@@ -791,6 +792,8 @@ func TestChangeOutputFormat(t *testing.T) {
 	data = append(data, row2)
 	data = append(data, row3)
 
+	t.Log("Creating extended data")
+
 	// Handling if inputColumnName is not new
 	dataOutput, columnNamesOutput, columnIndex := ChangeOutputFormat(data, columnNames, "Force")
 	if !reflect.DeepEqual(dataOutput, data) {
@@ -803,6 +806,8 @@ func TestChangeOutputFormat(t *testing.T) {
 		t.Error()
 	}
 
+	t.Log("Changed output format")
+
 	// Handling if inputColumnName is new
 	columnNamesExtended := append(columnNames, "Temperature")
 	row1 = append(row1, nil)
@@ -812,9 +817,12 @@ func TestChangeOutputFormat(t *testing.T) {
 	dataExtended = append(dataExtended, row2)
 	dataExtended = append(dataExtended, row3)
 
+	t.Log("Testing with new input column name")
+
 	dataOutput, columnNamesOutput, columnIndex = ChangeOutputFormat(data, columnNames, "Temperature")
-	fmt.Printf("%s\n", columnNamesOutput)
-	fmt.Printf("%s\n", dataOutput)
+
+	t.Log("Changed output format")
+
 	if !reflect.DeepEqual(dataOutput, dataExtended) {
 		t.Error()
 	}
@@ -824,6 +832,7 @@ func TestChangeOutputFormat(t *testing.T) {
 	if !reflect.DeepEqual(columnIndex, 3) {
 		t.Error()
 	}
+	t.Log("Finished testing ChangeOutputFormat")
 }
 
 func TestLengthenSliceToFitNames(t *testing.T) {

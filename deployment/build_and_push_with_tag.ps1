@@ -38,6 +38,12 @@ try
 
         Write-Output $docker_file_path
         docker build -f $docker_file_path -t $tag_name .
+        # Exit if the build failed
+        if ($LASTEXITCODE -ne 0)
+        {
+            Write-Error "Build failed"
+            return
+        }
         docker push $tag_name
     }
 }
