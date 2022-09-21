@@ -1,6 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub
 
-go 1.15
+go 1.19
 
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
