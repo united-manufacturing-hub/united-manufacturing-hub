@@ -6,6 +6,7 @@ package internal
 import (
 	"context"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 	"strings"
 	"time"
@@ -14,6 +15,9 @@ import (
 var KafkaConsumer *kafka.Consumer
 var KafkaProducer *kafka.Producer
 var KafkaAdminClient *kafka.AdminClient
+var KafkaTopicProbeConsumer *kafka.Consumer
+
+var probeTopicName = "umh.v1.kafka.newTopic"
 
 func SetupKafka(configMap kafka.ConfigMap) {
 	zap.S().Debugf("Configmap: %v", configMap)
@@ -40,6 +44,25 @@ func SetupKafka(configMap kafka.ConfigMap) {
 	return
 }
 
+// SetupKafkaTopicProbeConsumer sets up a consumer for detecting new topics
+func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
+	zap.S().Debugf("Configmap: %v", configMap)
+
+	var err error
+	KafkaTopicProbeConsumer, err = kafka.NewConsumer(&configMap)
+	if err != nil {
+		panic(err)
+	}
+
+	err = KafkaTopicProbeConsumer.Subscribe(probeTopicName, nil)
+	if err != nil {
+		return
+	}
+
+	zap.S().Debugf("KafkaTopicProbeConsumer: %+v", KafkaTopicProbeConsumer)
+	return
+}
+
 func CloseKafka() {
 	err := KafkaConsumer.Close()
 	if err != nil {
@@ -50,6 +73,13 @@ func CloseKafka() {
 	KafkaProducer.Close()
 
 	KafkaAdminClient.Close()
+}
+
+func CloseKafkaTopicProbeConsumer() {
+	err := KafkaTopicProbeConsumer.Close()
+	if err != nil {
+		panic("Failed do close KafkaTopicProbeConsumer client !")
+	}
 }
 
 var lastMetaData *kafka.Metadata
@@ -120,6 +150,26 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	if err != nil || len(topics) != 1 {
 		zap.S().Errorf("Failed to create Topic %s : %s", kafkaTopicName, err)
 		return
+	}
+
+	// send a message to the "umh.kafka.topic.created" topic with the new topic name
+	// to trigger the subsrciption of the other consumers to the newly created topic
+	payload := make(map[string]string)
+	payload["topic"] = kafkaTopicName
+	jsonString, err := jsoniter.Marshal(payload)
+	if err != nil {
+		zap.S().Errorf("Failed to marshal payload: %s", err)
+		return
+	}
+	err = KafkaProducer.Produce(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &probeTopicName,
+			Partition: kafka.PartitionAny,
+		},
+		Value: jsonString,
+	}, nil)
+	if err != nil {
+		return err
 	}
 
 	select {

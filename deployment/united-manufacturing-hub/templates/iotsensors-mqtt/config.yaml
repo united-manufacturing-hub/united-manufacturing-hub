@@ -1,0 +1,45 @@
+
+---
+{{if .Values._000_commonConfig.datasources.iotsensorsmqtt.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-iotsensors-mqtt
+data:
+  config.json: |
+    {
+      "MQTT_BROKER": {
+      "SERVER_URL":"mqtt://united-manufacturing-hub-vernemq-local-service:1883",
+      "SERVER_USER": "",
+      "SERVER_PWD": "",
+      "SERVER_RETAIN": "true",
+      "SERVER_QOS": 1,
+      "CLIENT_ID": "IoTSensorsMQTT-Simulator",
+      "KEEP_ALIVE": 300, 
+      "RETRY_DELAY": 10,
+      "ROOT_TOPIC": "ia/raw/development/ioTSensors",
+      "SET_DELAY_BETWEEN_MESSAGES" : 15,
+      "RANDOMIZE_DELAY_BETWEEN_MESSAGES" : "true"
+    },    
+  
+    "SIMULATORS": [
+        {
+            "Name" : "Temperature",
+            "Mean" : 50.0,
+            "StandardDeviation" : 3.5
+        },
+        {
+            "Name" : "Pressure",
+            "Mean" : 80.0,
+            "StandardDeviation" : 9.7
+        },
+        {
+            "Name" : "Humidity",
+            "Mean" : 40.0,
+            "StandardDeviation" : 2.1
+        }
+    ]
+    }
+
+{{end}}

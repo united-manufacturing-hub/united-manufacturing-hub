@@ -2,11 +2,9 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -19,12 +17,14 @@ import (
 var buildtime string
 
 func main() {
-	encoderConfig := ecszap.NewDefaultEncoderConfig()
-	var core zapcore.Core
-	core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	logger := zap.New(core, zap.AddCaller())
-	zap.ReplaceGlobals(logger)
-	defer logger.Sync()
+	// Initialize zap logging
+	log := logger.New("LOGGING_LEVEL")
+	defer func(logger *zap.SugaredLogger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(log)
 	zap.S().Infof("This is kafka-init build date: %s", buildtime)
 
 	// pprof
@@ -64,7 +64,7 @@ func main() {
 	if err != nil {
 		zap.S().Errorf("site unreachable, error: %v", err)
 	} else {
-		log.Printf("Site reachable, connection: %v", conn)
+		zap.S().Infof("Site reachable, connection: %v", conn)
 	}
 	defer conn.Close()
 

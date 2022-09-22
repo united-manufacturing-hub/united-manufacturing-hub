@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"math"
 	"net/http"
 	_ "net/http/pprof"
@@ -45,18 +44,14 @@ var LocalKafkaBootstrapServers string
 var RemoteKafkaBootstrapServers string
 
 func main() {
-	var logLevel = os.Getenv("LOGGING_LEVEL")
-	encoderConfig := ecszap.NewDefaultEncoderConfig()
-	var core zapcore.Core
-	switch logLevel {
-	case "DEVELOPMENT":
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	default:
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
-	}
-	logger := zap.New(core, zap.AddCaller())
-	zap.ReplaceGlobals(logger)
-	defer logger.Sync()
+	// Initialize zap logging
+	log := logger.New("LOGGING_LEVEL")
+	defer func(logger *zap.SugaredLogger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(log)
 	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
 
 	// pprof

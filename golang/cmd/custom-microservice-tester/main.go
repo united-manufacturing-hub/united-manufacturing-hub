@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"go.elastic.co/ecszap"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -16,17 +15,13 @@ var buildtime string
 
 func main() {
 	// Initialize zap logging
-	encoderConfig := ecszap.NewDefaultEncoderConfig()
-	var core zapcore.Core
-	core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	logger := zap.New(core, zap.AddCaller())
-	zap.ReplaceGlobals(logger)
-	defer func(logger *zap.Logger) {
+	log := logger.New("LOGGING_LEVEL")
+	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
 			panic(err)
 		}
-	}(logger)
+	}(log)
 
 	zap.S().Infof("This is custom-microservice-tester build date: %s", buildtime)
 

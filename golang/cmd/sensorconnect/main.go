@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -23,7 +22,7 @@ var mqttClient MQTT.Client
 var discoveredDeviceChannel chan DiscoveredDeviceInformation
 var forgetDeviceChannel chan DiscoveredDeviceInformation
 
-//var ioDeviceMap map[IoddFilemapKey]IoDevice
+// var ioDeviceMap map[IoddFilemapKey]IoDevice
 var ioDeviceMap sync.Map
 
 var fileInfoSlice []os.FileInfo
@@ -57,18 +56,15 @@ var subTwentyMs bool
 var additionalSleepTimePerActivePort float64
 
 func main() {
-	var logLevel = os.Getenv("LOGGING_LEVEL")
-	encoderConfig := ecszap.NewDefaultEncoderConfig()
-	var core zapcore.Core
-	switch logLevel {
-	case "DEVELOPMENT":
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	default:
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
-	}
-	logger := zap.New(core, zap.AddCaller())
-	zap.ReplaceGlobals(logger)
-	defer logger.Sync()
+	// Initialize zap logging
+	log := logger.New("LOGGING_LEVEL")
+	defer func(logger *zap.SugaredLogger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(log)
+
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	// pprof
@@ -230,7 +226,7 @@ func main() {
 	select {} // block forever
 }
 
-//continuousSensorDataProcessingV2 Spawns go routines for new devices, who will download,process and send data from sensors to Kafka/MQTT
+// continuousSensorDataProcessingV2 Spawns go routines for new devices, who will download,process and send data from sensors to Kafka/MQTT
 func continuousSensorDataProcessingV2() {
 	zap.S().Debugf("Starting sensor data processing daemon v2")
 
@@ -255,7 +251,7 @@ func continuousSensorDataProcessingV2() {
 	}
 }
 
-//continuousSensorDataProcessingDeviceDaemon Downloads sensordata, processes it and then sends it to Kafka/MQTT.
+// continuousSensorDataProcessingDeviceDaemon Downloads sensordata, processes it and then sends it to Kafka/MQTT.
 // Has a backoff mechanism to prevent overloading io-link masters
 func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInformation) {
 	zap.S().Infof("Started new daemon for device %v", deviceInfo)
@@ -374,7 +370,7 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 	}
 }
 
-//downloadSensorDataMapAndProcess downloads sensor data and processes it
+// downloadSensorDataMapAndProcess downloads sensor data and processes it
 func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, portModeMap map[int]ConnectedDeviceInfo, errChan chan error) {
 	var sensorDataMap map[string]interface{}
 	var err error
@@ -386,7 +382,7 @@ func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, por
 	go processSensorData(deviceInfo, portModeMap, sensorDataMap)
 }
 
-//continuousDeviceSearch Searches for devices everytime ticker is triggered
+// continuousDeviceSearch Searches for devices everytime ticker is triggered
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
 	err := DiscoverDevices(ipRange)
@@ -406,7 +402,7 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 
 }
 
-//ioddDataDaemon Starts a demon to download IODD files
+// ioddDataDaemon Starts a demon to download IODD files
 func ioddDataDaemon(relativeDirectoryPath string) {
 	zap.S().Debugf("Starting iodd data daemon")
 
