@@ -9,7 +9,7 @@ require (
 	github.com/coocood/freecache v1.2.2
 	github.com/cristalhq/base64 v0.1.2
 	github.com/eclipse/paho.mqtt.golang v1.4.1
-	github.com/gin-contrib/zap v0.0.2
+	github.com/gin-contrib/zap v0.1.0
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-playground/validator/v10 v10.11.0 // indirect

@@ -15,6 +15,8 @@ var KafkaProducer *kafka.Producer
 var KafkaAdminClient *kafka.AdminClient
 var KafkaTopicProbeConsumer *kafka.Consumer
 
+var probeTopicName = "umh.v1.kafka.newTopic"
+
 func SetupKafka(configMap kafka.ConfigMap) {
 	zap.S().Debugf("Configmap: %v", configMap)
 
@@ -49,7 +51,7 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 		panic(err)
 	}
 
-	err = KafkaTopicProbeConsumer.Subscribe("umh.kafka.topic.created", nil)
+	err = KafkaTopicProbeConsumer.Subscribe(probeTopicName, nil)
 	if err != nil {
 		panic(err)
 	}
