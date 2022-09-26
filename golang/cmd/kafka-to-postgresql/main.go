@@ -130,7 +130,8 @@ func main() {
 			"auto.offset.reset":        "earliest",
 			// "debug":                    "security,broker",
 			"topic.metadata.refresh.interval.ms": "30000",
-		})
+		"metadata.max.age.ms":                180000,
+	})
 
 	// HT uses enable.auto.commit=true for increased performance.
 	SetupHTKafka(
@@ -146,7 +147,8 @@ func main() {
 			"auto.offset.reset":        "earliest",
 			// "debug":                    "security,broker",
 			"topic.metadata.refresh.interval.ms": "30000",
-		})
+		"metadata.max.age.ms":                180000,
+	})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(

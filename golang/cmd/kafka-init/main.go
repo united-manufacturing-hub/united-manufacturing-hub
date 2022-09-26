@@ -89,7 +89,8 @@ func main() {
 			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"group.id":                 "kafka-init",
-		})
+		"metadata.max.age.ms":      180000,
+	})
 
 	initKafkaTopics(KafkaTopics)
 

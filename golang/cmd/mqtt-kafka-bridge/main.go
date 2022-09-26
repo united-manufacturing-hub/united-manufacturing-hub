@@ -125,7 +125,8 @@ func main() {
 			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"group.id":                 "mqtt-kafka-bridge",
-		})
+		"metadata.max.age.ms":      180000,
+	})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(
