@@ -88,6 +88,7 @@ func main() {
 			"enable.auto.commit":       true,
 			"enable.auto.offset.store": false,
 			"auto.offset.reset":        "earliest",
+			"metadata.max.age.ms":      180000,
 		})
 
 		ActivityProcessorChannel = make(chan *kafka.Message, 100)
@@ -115,6 +116,7 @@ func main() {
 			"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",
+			"metadata.max.age.ms":      180000,
 		})
 
 		AnomalyProcessorChannel = make(chan *kafka.Message, 100)
