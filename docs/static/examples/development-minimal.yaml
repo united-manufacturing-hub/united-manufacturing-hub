@@ -1,10 +1,9 @@
 ---
 # See https://github.com/rancher/k3os/blob/master/README.md#configuration
 
-
 # This will be used as serial number as well
 # HOSTNAME DOES NOT ALLOW UNDERSCORES
-hostname: development
+hostname: development-minimal
 
 write_files:
 
@@ -29,10 +28,13 @@ write_files:
     
         # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
         sensorconnect:
-          enabled: true
+          enabled: false
           iprange: "192.168.10.1/24"  # IP Range in CIDR notation
           enableKafka: true
           enableMQTT: false
+
+        cameraconnect:
+          enabled: false
     
       # dataprocessing involves microservices, whose main purpose is to process the data
       dataprocessing:
@@ -48,86 +50,12 @@ write_files:
           enabled: true
           AclConfig: |-
             pattern #
-          CACert: |-
-            -----BEGIN CERTIFICATE-----
-            MIIDSzCCAjOgAwIBAgIUI2id6KFXw/nEv9bRhVsDhzM/ozkwDQYJKoZIhvcNAQEL
-            BQAwFjEUMBIGA1UEAwwLRWFzeS1SU0EgQ0EwHhcNMjEwNDA2MDkyNDM1WhcNMzEw
-            NDA0MDkyNDM1WjAWMRQwEgYDVQQDDAtFYXN5LVJTQSBDQTCCASIwDQYJKoZIhvcN
-            AQEBBQADggEPADCCAQoCggEBALh3vJroi6hcvcm3OmpXs26MsXmRiUhBgdrNSOzZ
-            KjWpW+R9aMONu1KxoXAuj/pAwt5CkLAMQ5EI5H05OArYOKekLfMe3FRTEOUSvFU/
-            qO0hBymJRJZRhECwWu01gL1OS4AXaxdjrXwx8H4URAiKa4FhJCWrSPCikNvzX4K2
-            SSSZMbMXEddO9uoyBU83HcZdo8NX0QRUKXy6w/zVMsjyLSZCtk4BaLCmlidhcH91
-            Hggl6JDk4CuYRfkmemyblzw2bKAlWqsppv/m1nkI3hEFvwN68cpfsNnQynfYpZkL
-            ODuNnia+PIhl3XyDXkJCM2ylPObcmo0D9GV2/J0JZgu9y3ECAwEAAaOBkDCBjTAd
-            BgNVHQ4EFgQUvW9fQDy1ACN7knRxApaEh3LxW78wUQYDVR0jBEowSIAUvW9fQDy1
-            ACN7knRxApaEh3LxW7+hGqQYMBYxFDASBgNVBAMMC0Vhc3ktUlNBIENBghQjaJ3o
-            oVfD+cS/1tGFWwOHMz+jOTAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjANBgkq
-            hkiG9w0BAQsFAAOCAQEAfDsmd4FaA4R0rS84hGqileIaUdwhGE5IAlj3W8Wd2O63
-            xqThR+qN7TzO5Nki7tXNC2qCpuJmbPqrbB0CgwiobkwV+3vwF+VW8lCjSfYSpXbs
-            nUN9CXMkQVWwbx8cAc7LlmpxU9evD21cBGOvD9AjngJwcofUUYXIuwWDdd1DVOaK
-            AJ2Xc2MEjeVXdQnFZLF2FEPy/znJ0EIW/PhGgFHyQWn1inJU00FNfGQsdO8Ruloi
-            VNVYOyMINZIG0V91l29XCViuSUrR1BSvK+YG2wiFqHV0bUytbY7uuNCh3S/HZEhE
-            zC5KEddzKtihzW3yP4baMAmvu7atS0Gy7MLXWG+SRw==
-            -----END CERTIFICATE-----
-          Cert: |-
-            -----BEGIN CERTIFICATE-----
-            MIIDjzCCAnegAwIBAgIQB6OLOw2bXBVXZD3ArV2i+jANBgkqhkiG9w0BAQsFADAW
-            MRQwEgYDVQQDDAtFYXN5LVJTQSBDQTAeFw0yMTA0MDYxMTMxMDdaFw0yNDAzMjEx
-            MTMxMDdaMCUxIzAhBgNVBAMMGmZhY3RvcnljdWJlLXNlcnZlci12ZXJuZW1xMIIB
-            IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4EGKWn5ZSNtC5t3bsMjTMow3
-            usMfM/1NzM9MYAvUMy71WHdCt/10bnIzRwYLUMtjAQURvyq+dXaj1DMz7452uzCC
-            GE6r6SojReH7snAWMgrbDhE3psokW4LY6/tH5ihOBu1xfUtI1ac6rkHz4JsURpHj
-            5HAGnPkfOiQZc10AxBxPz9i558a7J58Y4FZ0M51rgKaWAr+qDMzjfdNI/MUs1JTd
-            Yn8QM0Sv2XjP4CziqWOa0Xf4MsoLgOqItZMLaYQwaUIkx0CV231D1cREZB2xbYSn
-            DyK9DbXumK0tsVwgXh8Q+EY0ofW+M/noukJUxIbL8E1OKwbnS+2smpz5clc+BQID
-            AQABo4HJMIHGMAkGA1UdEwQCMAAwHQYDVR0OBBYEFEPOUbp9SDAizKwHuiFhBPVH
-            OKaTMFEGA1UdIwRKMEiAFL1vX0A8tQAje5J0cQKWhIdy8Vu/oRqkGDAWMRQwEgYD
-            VQQDDAtFYXN5LVJTQSBDQYIUI2id6KFXw/nEv9bRhVsDhzM/ozkwEwYDVR0lBAww
-            CgYIKwYBBQUHAwEwCwYDVR0PBAQDAgWgMCUGA1UdEQQeMByCGmZhY3RvcnljdWJl
-            LXNlcnZlci12ZXJuZW1xMA0GCSqGSIb3DQEBCwUAA4IBAQANaEiAIR+nADiGNeOk
-            SSCRG5VeelFfO3X4wUiHrEKE6NkVVF+w6Wemogmtb+KB6NmjWAGiZep8p/R/7F75
-            iAGUk4LEAcXFMw6NWZhODlv5ryo6V2X1EuqMwXOfccbUwu7l9md+j2UxY45vp1Z2
-            +1eP/pjVmEt29HPUnWUT/rFeqlz605xYLauoSTsTxkGl5T8EoLwtvZOFnBIy7oGs
-            QzW42IlfFKNlYKHMYJ8I6AQ89+cUUko/zqUPeiFl+fl1WpXCOofEiRUd/4Z6R0Rw
-            moz/sNxvZ44GG47X2Gvc1Ewfc9rpgvSmyMTUgS4EP2p5LBQEDuFJz1DSW43QGOEx
-            6OoQ
-            -----END CERTIFICATE-----
-          Privkey: |-
-            -----BEGIN PRIVATE KEY-----
-            MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDgQYpafllI20Lm
-            3duwyNMyjDe6wx8z/U3Mz0xgC9QzLvVYd0K3/XRucjNHBgtQy2MBBRG/Kr51dqPU
-            MzPvjna7MIIYTqvpKiNF4fuycBYyCtsOETemyiRbgtjr+0fmKE4G7XF9S0jVpzqu
-            QfPgmxRGkePkcAac+R86JBlzXQDEHE/P2LnnxrsnnxjgVnQznWuAppYCv6oMzON9
-            00j8xSzUlN1ifxAzRK/ZeM/gLOKpY5rRd/gyyguA6oi1kwtphDBpQiTHQJXbfUPV
-            xERkHbFthKcPIr0Nte6YrS2xXCBeHxD4RjSh9b4z+ei6QlTEhsvwTU4rBudL7aya
-            nPlyVz4FAgMBAAECggEAGr62SWSYMWA08mOzN7o7teOTIerzZbfn920hprLCc/g9
-            unc+tcK8iA+GngnSf6hB/nUkULBAVrH3h+8zWnabImf+m/eF+SDVZBg3dGh5vS4e
-            Qec7w+CHxYItbLdjM8fKxni6+D5qSVDQZsfm1fqoyGHN1AioQUBUwRJdFq0Y0kp0
-            6BwZG2Kk43JQByeKX4/D2QgZEjFCgsw2Wihy8sQkX96aXbAdUO5Um7kzf7iIMXlI
-            877uarOuCuIEYJSWjwrwu4I7CQ68lEA1pGSlEMKU9ju8KtoqaQ65ELx9PgK8df3+
-            zIM8WnZzT/US0TPI+cWvsB6yYYGsohE25oGNYMnKAQKBgQD5RGOeAR4GhBm2tRR/
-            6XzLWmru0sGif/7A/rPDjzWSlnkaqkTSK29xQZkDK9WJVLG3SWCV2XnwysLgVHyF
-            J2DlPZVDnKvS5EXwGSenzpWMm6yHNZhsA1nxvSiZBXj8MPhF5NbOrnuZJVR9+xmA
-            xQTspByMa9gwD8sXkWS+aq8+kQKBgQDmUDTfY8jtCXm9kXZPPgESGtYuDmBlvyf4
-            40Gt79FmOt3ZYBr2do0BeUnyJOFwleQeUqRIneUsUHyUHj1VI/SpBuUAPWOT9w8s
-            zlrLkmYnrOArKcZpCpWQZWyKXtomxdUlZJjFJGJfipJ1zu1G2IJZNjuuFpEJY4Jz
-            xI3JO9OqNQKBgQC28UV3enRx7dP9b0sbUd7gVHz0yMOKowvy0zxWA64a5sr9Eggu
-            g+hno/BMDojLINjJn1X+xL0lR3rdL8Sv6SXJOXhqRfspbZYS0DN1ij3iE4L9PQ2g
-            AJmrvNul6wlPdhVRHtG0oQRfcrFfQMIH6xFhKFU3jhL9uymgI3pf8mapsQKBgQCV
-            6ETR1mA0sQM1eVW5dFE8GI2qAp+J+mcpH7pjXYI9eTlnQJ+sJjPXbrvLyWeXYWjO
-            t9nIjkVZl7XOrvQa08Fut1cc1dhXuep9rn74m/yz/FkYnyNOwZ3iE7IXSm/R5ti6
-            cwTg5LLHHyn/VkWo5EnLiXpE8NlMdCG3+oqTHcbCtQKBgBoQrLzRsruiha6QP4OZ
-            eCvOVIaxuH60A85QW5pgb0IlORXfX9zjA+M3v/G+tj6y5vxPOiVJaRd6iBqEDpMd
-            337jNZKFr5EaVmF45PrcM060cbEcbdq8zCTEnQ6Y+bQiDTkfdgcE5CDJDJ7ol2I2
-            MIzsw5gq+PcsyNV5g/IUX0PJ
-            -----END PRIVATE KEY-----
     
         # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
         kafka:
           enabled: true
           useSSL: false
           defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
-    
     
       # timescaledb, factoryinsight, grafana, redis
       # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
@@ -136,57 +64,102 @@ write_files:
         enabled: true
         db_password: "changeme"
     
-      # mqtt-to-blob, minio, kafka-to-blob
-      # blobstorage is the infrastructure to get image messages from MQTT and store them in a min.io blob storage (contains mqtt-to-blob, minio)
-      blobstorage:
-        enabled: false
-    
       # factoryinput, grafanaproxy
-      # datainput is the infrastructure to allow data entry via Grafana (contains factoryinput, grafanaproxy)
       datainput:
         enabled: false
-    
-      # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
-      mqttBridge:
-        enabled: false
-        remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
-        localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
-        oneWay: true
-        localBrokerSSLEnabled: false
-        localPubTopic: "ia"
-        localCertificateName: "LOCAL"
-        remoteBrokerSSLEnabled: true
-        remoteSubTopic: "ia"
-        remotePubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
-    
-        CAcert: |
-          -----BEGIN CERTIFICATE-----
-          -----END CERTIFICATE-----
-        cert: |
-          -----BEGIN CERTIFICATE-----
-          -----END CERTIFICATE-----
-        privkey: |
-          -----BEGIN PRIVATE KEY-----
-          -----END PRIVATE KEY-----
-    
-      kafkaBridge:
-        enabled: false
-        remotebootstrapServer: ""
-        topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
-        topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
-        topicmap:
-        - bidirectional: false
-          name: HighIntegrity
-          send_direction: to_remote
-          topic: ^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
-        - bidirectional: false
-          name: HighThroughput
-          send_direction: to_remote
-          topic: ^ia\..+\..+\..+\.(processValue).*$
-    
-      kafkaStateDetector:
-        enabled: false
 
+    # custom changes for minimal version
+    factoryinsight:
+      replicas: 1
+      hpa:
+        enabled: false
+      pdb:
+        enabled: false
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+    kafkatopostgresql:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+    kafka:
+      heapOpts: -Xmx500m -Xms500m
+      zookeeper:
+        heapSize: 128
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 250Mi
+    redis:
+      replica:
+        replicaCount: 1
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+      master:
+        extraFlags:
+          - --maxmemory 200mb
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+    vernemq:
+      replicas: 1
+      additionalEnv:
+        - name: DOCKER_VERNEMQ_ALLOW_REGISTER_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_PUBLISH_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_SUBSCRIBE_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_UNSUBSCRIBE_DURING_NETSPLIT
+          value: "on"
+        - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
+          value: "on"
+        - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
+          value: "1000"
+        - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
+          value: "1000"
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__CAFILE
+          value: /etc/ssl/vernemq/ca.crt
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__CERTFILE
+          value: /etc/ssl/vernemq/tls.crt
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__KEYFILE
+          value: /etc/ssl/vernemq/tls.key
+        - name: DOCKER_VERNEMQ_ACCEPT_EULA
+          value: "yes"
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__USE_IDENTITY_AS_USERNAME
+          value: "on"
+        - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
+          value: "on"
+        - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
+          value: "50mb"
+      resources:
+        limits:
+          cpu: 500m
+          memory: 500Mi
+        requests:
+          cpu: 100m
+          memory: 100Mi
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
 - content: |
