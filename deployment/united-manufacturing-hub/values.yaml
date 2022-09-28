@@ -38,6 +38,11 @@ _000_commonConfig:
       exposureAuto: "Off"
       pixelFormat: "Mono8"
 
+    # iotsensorsmqtt simulates IoT sensor data and publishes it over MQTT.
+    # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsMQTT
+    iotsensorsmqtt:
+      enabled: true
+
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
@@ -961,6 +966,85 @@ _000_commonConfig:
   kafkaStateDetector:
     enabled: false
 
+_001_customMicroservices:
+  -
+      name: example
+      image: hello-world:latest
+      enabled: false
+
+      # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
+      imagePullPolicy: Always
+
+      # these will be passed as environment variables
+      env:
+        - name: LOGGING_LEVEL
+          value: PRODUCTION
+
+      # this will expose port 80 on the host on port 8080
+      port: 80
+      externalPort: 8080
+
+      # startupProbe, livenessProbe, check whether port 9090 "/health" is accessible.
+      # If not (e.g., due to container stuck), the container will be restarted
+      # startupProbe: 100
+      # livenessProbe: 50
+      # probePort: 9090
+
+      # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
+      # Recommendation is to turn it off
+      statefulEnabled: true
+  -
+      name: example1
+      image: hello-world:latest
+      enabled: false
+
+      # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
+      imagePullPolicy: Always
+
+      # these will be passed as environment variables
+      env:
+        - name: LOGGING_LEVEL
+          value: PRODUCTION
+
+      # this will expose port 81 on the host on port 8081
+      port: 81
+      externalPort: 8081
+
+      # startupProbe, livenessProbe, check whether port 9091 "/health" is accessible.
+      # If not (e.g., due to container stuck), the container will be restarted
+      startupProbe: 200
+      livenessProbe: 500
+      probePort: 9091
+
+      # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
+      # Recommendation is to turn it off
+      statefulEnabled: false
+  -
+    name: cmtester
+    image: unitedmanufacturinghub/custom-microservice-tester:latest
+    enabled: false
+
+    # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
+    imagePullPolicy: Always
+
+    # these will be passed as environment variables
+    env:
+      - name: LOGGING_LEVEL
+        value: PRODUCTION
+
+    # this will expose port 81 on the host on port 8081
+    port: 81
+    externalPort: 8082
+
+    # startupProbe, livenessProbe, check whether port 9091 "/health" is accessible.
+    # If not (e.g., due to container stuck), the container will be restarted
+    startupProbe: 200
+    livenessProbe: 500
+    probePort: 9091
+
+    # statefulEnabled will automatically mount a volume under /data, which can be used to store data.
+    # Recommendation is to turn it off
+    statefulEnabled: true
 
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
@@ -1046,8 +1130,20 @@ cameraconnect:
       cpu: "100m"
       memory: "100Mi"
 
+### iotsensorsmqtt ###
+iotsensorsmqtt:
+  image: amineamaach/sensors-mqtt
+  tag: v1.0.0
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
 
-### cameraconnect ###
+
+### kafkabridge ###
 kafkabridge:
   image:
     repository: unitedmanufacturinghub/kafka-bridge
@@ -1553,6 +1649,13 @@ timescaledb-single:
   # The major PostgreSQL version to use, defaults to the default version of the Docker image
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
   version:
+
+  image:
+    # Image was built from
+    # https://github.com/timescale/timescaledb-docker-ha
+    repository: timescale/timescaledb-ha
+    tag: pg13.8-ts2.8.0-p1
+    pullPolicy: Always
 
   # These secrets should exist before the Helm is used to deploy this TimescaleDB.
   # You can use generate_kustomization.sh to help in creating these secrets, or have
@@ -2084,6 +2187,12 @@ grafana:
     initialDelaySeconds: 60
     timeoutSeconds: 30
     failureThreshold: 10
+
+  image:
+    repository: grafana/grafana
+    tag: 8.5.9
+    sha: ""
+    pullPolicy: IfNotPresent
 
   ## Use an alternate scheduler, e.g. "stork".
   ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
@@ -2866,6 +2975,13 @@ redis:
   cluster:
     enabled: true
     slaveCount: 1
+  commonConfiguration: |-
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+    # Backwards compatability with Redis version 6.*
+    replica-ignore-disk-write-errors yes
   master:
     command: /run.sh
     extraFlags:
@@ -2959,6 +3075,8 @@ redis:
       redisPort: 6379
       sentinelPort: 26379
       type: ClusterIP
+    startupProbe:
+      enabled: false
   serviceAccount:
     create: false
   replica:
@@ -3043,6 +3161,8 @@ vernemq:
       value: "on"
     - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
       value: "on"
+    - name: DOCKER_VERNEMQ_LISTENER__TCP__ALLOWED_PROTOCOL_VERSIONS
+      value: 3,4,5
   extraVolumeMounts:
     - mountPath: /vernemq/etc/vmq.acl
       name: vernemq-acl

@@ -1,0 +1,67 @@
+{{range $i, $value := .Values._001_customMicroservices | default dict}}
+{{if $value.enabled}}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: united-manufacturing-hub-cm-{{$value.name}}
+
+spec:
+  replicas: 1
+  serviceName: {{$value.name}}
+  selector:
+    matchLabels:
+      name: united-manufacturing-hub-cm-{{$value.name}}
+  template:
+    metadata:
+      labels:
+        name: united-manufacturing-hub-cm-{{$value.name}}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: united-manufacturing-hub-cm-{{$value.name}}
+          image: {{$value.image}}
+          {{if and $value.externalPort $value.port}}
+          ports:
+            - name: http
+              containerPort: {{$value.port}}
+              protocol: TCP
+          {{ end }}
+          imagePullPolicy: {{$value.imagePullPolicy | default "Always"}}
+          {{ if $value.env}}
+          env:
+            {{range $ii, $env_value := $value.env}}
+            - name: {{$env_value.name}}
+              value: {{$env_value.value}}
+            {{end}}
+          {{end}}
+
+  {{if $value.statefulEnabled}}
+          volumeMounts:
+            - name: united-manufacturing-hub-cm-{{$value.name}}-data
+              mountPath: /data
+  {{end}}
+  {{if $value.livenessProbe}}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{$value.probePort}}
+            periodSeconds: {{$value.livenessProbe}}
+  {{end}}
+  {{if $value.startupProbe}}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{$value.probePort}}
+            periodSeconds: {{$value.startupProbe}}
+    {{end}}
+
+  {{if $value.statefulEnabled}}
+      volumes:
+        - name: united-manufacturing-hub-cm-{{$value.name}}-data
+          persistentVolumeClaim:
+            claimName: united-manufacturing-hub-cm-{{$value.name}}-claim
+  {{end}}
+      restartPolicy: Always
+{{end}}
+{{end}}

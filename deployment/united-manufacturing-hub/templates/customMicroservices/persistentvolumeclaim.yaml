@@ -1,0 +1,17 @@
+{{range $i, $value := .Values._001_customMicroservices | default dict}}
+{{if and $value.statefulEnabled $value.enabled}}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: united-manufacturing-hub-cm-{{$value.name}}-claim
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+{{end}}
+{{end}}

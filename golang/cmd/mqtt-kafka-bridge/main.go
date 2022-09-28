@@ -5,10 +5,9 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.elastic.co/ecszap"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -24,18 +23,15 @@ var mqttOutGoingQueue *goque.Queue
 var buildtime string
 
 func main() {
-	var logLevel = os.Getenv("LOGGING_LEVEL")
-	encoderConfig := ecszap.NewDefaultEncoderConfig()
-	var core zapcore.Core
-	switch logLevel {
-	case "DEVELOPMENT":
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.DebugLevel)
-	default:
-		core = ecszap.NewCore(encoderConfig, os.Stdout, zap.InfoLevel)
-	}
-	logger := zap.New(core, zap.AddCaller())
-	zap.ReplaceGlobals(logger)
-	defer logger.Sync()
+	// Initialize zap logging
+	log := logger.New("LOGGING_LEVEL")
+	defer func(logger *zap.SugaredLogger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(log)
+
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
 	// pprof
@@ -107,7 +103,24 @@ func main() {
 		"ssl.ca.location":          "/SSL_certs/ca.crt",
 		"bootstrap.servers":        KafkaBoostrapServer,
 		"group.id":                 "mqtt-kafka-bridge",
+		"metadata.max.age.ms":      180000,
 	})
+
+	// KafkaTopicProbeConsumer recieves a message when a new topic is created
+	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
+		"bootstrap.servers":        KafkaBoostrapServer,
+		"security.protocol":        securityProtocol,
+		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.certificate.location": "/SSL_certs/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"group.id":                 "kafka-to-blob-topic-probe",
+		"enable.auto.commit":       true,
+		"auto.offset.reset":        "earliest",
+		//"debug":                    "security,broker",
+		"topic.metadata.refresh.interval.ms": "30000",
+	})
+
 	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
 		panic(err)
@@ -118,6 +131,16 @@ func main() {
 	go processIncomingMessages()
 	go processOutgoingMessages()
 	go kafkaToQueue(KafkaTopic)
+
+	// Start topic probe processor
+	zap.S().Debugf("Starting TP queue processor")
+	topicProbeProcessorChannel := make(chan *kafka.Message, 100)
+
+	go internal.ProcessKafkaTopicProbeQueue("[TP]", topicProbeProcessorChannel, nil)
+	go internal.StartEventHandler("[TP]", internal.KafkaTopicProbeConsumer.Events(), nil)
+
+	go internal.StartTopicProbeQueueProcessor(topicProbeProcessorChannel)
+	zap.S().Debugf("Started TP queue processor")
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)

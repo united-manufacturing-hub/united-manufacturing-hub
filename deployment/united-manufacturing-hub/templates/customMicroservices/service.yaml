@@ -1,0 +1,19 @@
+{{range $i, $value := .Values._001_customMicroservices | default dict}}
+{{if and $value.externalPort $value.port $value.enabled}}
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: united-manufacturing-hub-cm-{{$value.name}}
+
+spec:
+  type: NodePort
+  ports:
+    - port: {{$value.externalPort}}
+      targetPort: {{$value.port}}
+      protocol: TCP
+      name: http
+
+{{end}}
+{{end}}

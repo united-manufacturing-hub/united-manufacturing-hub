@@ -197,6 +197,7 @@ func getValuesHandler(c *gin.Context) {
 	values = append(values, "orderTimeline")
 	values = append(values, "uniqueProductsWithTags")
 	values = append(values, "accumulatedProducts")
+	values = append(values, "unstartedOrderTable")
 	// Get from cache if possible
 	var cacheHit bool
 	processValues, cacheHit := internal.GetDistinctProcessValuesFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
@@ -213,7 +214,22 @@ func getValuesHandler(c *gin.Context) {
 		zap.S().Debugf("Stored DistinctProcessValues to cache")
 	}
 
+	processValuesString, cacheHit := internal.GetDistinctProcessValuesStringFromCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
+
+	if !cacheHit { // data NOT found
+		processValuesString, err = GetDistinctProcessValuesString(c, getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset)
+		if err != nil {
+			handleInternalServerError(c, err)
+			return
+		}
+
+		// Store to cache if not yet existing
+		go internal.StoreDistinctProcessValuesStringToCache(getValuesRequest.Customer, getValuesRequest.Location, getValuesRequest.Asset, processValuesString)
+		zap.S().Debugf("Stored DistinctProcessValuesString to cache")
+	}
+
 	values = append(values, processValues...)
+	values = append(values, processValuesString...)
 
 	c.JSON(http.StatusOK, values)
 }
@@ -295,9 +311,14 @@ func getDataHandler(c *gin.Context) {
 		processUniqueProductsWithTagsRequest(c, getDataRequest)
 	case "accumulatedProducts":
 		processAccumulatedProducts(c, getDataRequest)
+	case "unstartedOrderTable":
+		processUnstartedOrderTableRequest(c, getDataRequest)
 	default:
 		if strings.HasPrefix(getDataRequest.Value, "process_") {
 			processProcessValueRequest(c, getDataRequest)
+		} else if strings.HasPrefix(getDataRequest.Value, "processString_") {
+			processProcessValueStringRequest(c, getDataRequest)
+
 		} else {
 			handleInvalidInputError(c, err)
 			return
@@ -651,25 +672,58 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
-	}
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
-	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "availability"
-	data.ColumnNames = []string{JSONColumnName}
+	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
+	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	data.Datapoints, err = CalculateAvailability(c, processedStates, to, configuration)
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
 
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
+	for current := from; current != to; {
+		var tempDatapoints []interface{}
+
+		currentTo := current.AddDate(0, 0, 1)
+
+		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculateAvailability(c, processedStates, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = to
+		} else { //otherwise, calculate for entire time range
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculateAvailability(c, processedStates, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = currentTo
+		}
+		// only add it if there is a valid datapoint. do not add areas with no state times
+		if tempDatapoints != nil {
+			data.Datapoints = append(data.Datapoints, tempDatapoints)
+		}
 	}
 
 	c.JSON(http.StatusOK, data)
+
 }
 
 // ---------------------- getPerformance ----------------------
@@ -742,22 +796,54 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(c, assetID, rawStates, rawShifts, countSlice, orderArray, from, to, configuration)
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
-	}
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
-	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "performance"
-	data.ColumnNames = []string{JSONColumnName}
+	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
+	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	data.Datapoints, err = CalculatePerformance(c, processedStates, to, configuration)
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
 
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
+	for current := from; current != to; {
+		var tempDatapoints []interface{}
+
+		currentTo := current.AddDate(0, 0, 1)
+
+		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculatePerformance(c, processedStates, current, to, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = to
+		} else { //otherwise, calculate for entire time range
+
+			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			tempDatapoints, err = CalculatePerformance(c, processedStates, current, currentTo, configuration)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = currentTo
+		}
+		// only add it if there is a valid datapoint. do not add areas with no state times
+		if tempDatapoints != nil {
+			data.Datapoints = append(data.Datapoints, tempDatapoints)
+		}
 	}
 
 	c.JSON(http.StatusOK, data)
@@ -806,16 +892,49 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		return
 	}
 
+	// ### calculate (only one function allowed here) ###
+
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "quality"
 	data.ColumnNames = []string{JSONColumnName}
 
-	data.Datapoints, err = CalculateQuality(c, countSlice)
+	// TODO: #85 Ensure that multi-day OEE is split up during multiples 00:00 instead of multiples of the from time.
 
-	if err != nil {
-		handleInternalServerError(c, err)
-		return
+	// TODO: create JSON and calculate in the same paragraph
+	for current := from; current != to; {
+		var tempDatapoints []interface{}
+
+		currentTo := current.AddDate(0, 0, 1)
+
+		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
+			// split up countslice that it contains only counts between current and to
+			countSliceSplit := SplitCountSlice(countSlice, current, to)
+
+			// calculatequality(c,countslice)
+			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+
+			current = to
+		} else { //otherwise, calculate for entire time range
+			// split up countslice that it contains only counts between current and to
+			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
+
+			// calculatequality(c,countslice)
+			tempDatapoints, err = CalculateQuality(c, countSliceSplit)
+			if err != nil {
+				handleInternalServerError(c, err)
+				return
+			}
+			current = currentTo
+		}
+		// only add it if there is a valid datapoint. do not add areas with no state times
+		if tempDatapoints != nil {
+			data.Datapoints = append(data.Datapoints, tempDatapoints)
+		}
 	}
 
 	c.JSON(http.StatusOK, data)
@@ -906,13 +1025,15 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
+			countSliceSplit := SplitCountSlice(countSlice, current, to)
+
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(c, processedStates, current, to, configuration)
+			tempDatapoints, err = CalculateOEE(c, processedStates, countSliceSplit, current, to, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -921,13 +1042,15 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			current = to
 		} else { //otherwise, calculate for entire time range
 
+			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
+
 			processedStates, err := processStates(c, assetID, rawStates, rawShifts, countSlice, orderArray, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
 			}
 
-			tempDatapoints, err = CalculateOEE(c, processedStates, current, currentTo, configuration)
+			tempDatapoints, err = CalculateOEE(c, processedStates, countSliceSplit, current, currentTo, configuration)
 			if err != nil {
 				handleInternalServerError(c, err)
 				return
@@ -1059,6 +1182,11 @@ type getProcessValueRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+type getProcessValueStringRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
 type getOrderRequest struct {
 	From time.Time `form:"from" binding:"required"`
 	To   time.Time `form:"to" binding:"required"`
@@ -1184,6 +1312,30 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 	c.JSON(http.StatusOK, processValues)
 }
 
+func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequest) {
+	var getProcessValueStringRequest getProcessValueStringRequest
+	var err error
+
+	err = c.BindQuery(&getProcessValueStringRequest)
+	if err != nil {
+		handleInvalidInputError(c, err)
+		return
+	}
+
+	valueName := strings.TrimPrefix(getDataRequest.Value, "processString_")
+
+	zap.S().Debugf("%s", valueName)
+	// TODO: #96 Return timestamps in RFC3339 in /processValueString
+
+	// Fetching from the database
+	processValuesString, err := GetProcessValueString(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getProcessValueStringRequest.From, getProcessValueStringRequest.To, valueName)
+	if err != nil {
+		handleInternalServerError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, processValuesString)
+}
+
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
@@ -1192,6 +1344,7 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 		handleInternalServerError(c, err)
 		return
 	}
+
 	c.JSON(http.StatusOK, timeRange)
 }
 
@@ -1232,6 +1385,36 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 			fullRow := []interface{}{getDataRequest.Asset, timeBasedMaintenanceActivity.ComponentName, activityString, timeBasedMaintenanceActivity.DurationInDays.Float64, status}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
+
+	var getOrderRequest getOrderRequest
+	var err error
+
+	err = c.BindQuery(&getOrderRequest)
+	if err != nil {
+		handleInvalidInputError(c, err)
+		return
+	}
+
+	// Fetch data from database
+	zap.S().Debugf("Fetching order table for customer %s, location %s, asset %s, value: %v", getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset, getDataRequest.Value)
+
+	zap.S().Debugf("GetUnstartedOrdersRaw")
+	rawOrders, err := GetUnstartedOrdersRaw(c, getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
+	if err != nil {
+		handleInternalServerError(c, err)
+		return
+	}
+
+	data := datamodel.DataResponseAny{}
+	data.ColumnNames = []string{"OrderName", "ProductName", "TargetUnits", "TimePerUnitInSeconds"}
+	for _, order := range rawOrders {
+		data.Datapoints = append(data.Datapoints, []interface{}{order.OrderName, order.ProductName, order.TargetUnits, order.TimePerUnitInSeconds})
 	}
 
 	c.JSON(http.StatusOK, data)
