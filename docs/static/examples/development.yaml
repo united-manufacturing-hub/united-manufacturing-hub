@@ -341,8 +341,6 @@ write_files:
       exit
       fi
 
-      echo "Initial setup finished! This might take now awhile..."
-
       num1=$(k3s -v | grep -o 'v1.[0-9][0-9]' | sed 's/v//g')
       num2="1.20"
       num3="1.21"
@@ -360,6 +358,9 @@ write_files:
       echo "Minimal version:     $num2"
       echo "Maximal version:     $num3"
       fi
+
+      echo "Initial setup finished! This might take now awhile..."
+      echo "You can press ENTER, to continue to the linux login screen."
 
   path: /home/rancher/initial_setup.sh
 
