@@ -1,4 +1,4 @@
-FROM python:3.6-slim-buster
+FROM golang:1.19-alpine3.16 as builder
 
 WORKDIR /app
 
