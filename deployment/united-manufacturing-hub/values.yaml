@@ -1494,20 +1494,6 @@ grafanaproxy:
     requests:
       cpu: 200m
 
-### mqtt-to-postresql ###
-mqtttopostgresql:
-  enabled: false
-  image:
-    repository: unitedmanufacturinghub/mqtt-to-postgresql
-    pullPolicy: IfNotPresent
-  # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
-  # tag: 0.3.2
-  replicas: 1
-  storageRequest: 1Gi
-  pdb:
-    enabled: true
-    minAvailable: 1
-
 ### kafka-to-postgresql ###
 kafkatopostgresql:
   enabled: false
