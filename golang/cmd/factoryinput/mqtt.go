@@ -8,7 +8,7 @@ import (
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"os"
 	"time"
 )
 
@@ -18,7 +18,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/SSL_certs/intermediate_CA.pem")
+	pemCerts, err := os.ReadFile("/SSL_certs/intermediate_CA.pem")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}

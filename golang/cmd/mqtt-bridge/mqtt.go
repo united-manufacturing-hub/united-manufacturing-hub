@@ -3,11 +3,10 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
-
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"go.uber.org/zap"
+	"os"
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
@@ -17,7 +16,7 @@ func newTLSConfig(mode string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/SSL_certs/" + mode + "/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/" + mode + "/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}

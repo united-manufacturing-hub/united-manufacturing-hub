@@ -5,7 +5,7 @@ import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -112,7 +112,7 @@ type MQTTData struct {
 
 func postMQTTHandler(c *gin.Context) {
 
-	jsonBytes, err := ioutil.ReadAll(c.Request.Body)
+	jsonBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		handleInvalidInputError(c, err)
 	}

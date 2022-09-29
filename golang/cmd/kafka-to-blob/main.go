@@ -35,6 +35,7 @@ func main() {
 
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof %v", err)
@@ -81,8 +82,8 @@ func main() {
 			"ssl.certificate.location": "/SSL_certs/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"group.id":                 "kafka-to-blob",
-		"metadata.max.age.ms":      180000,
-	})
+			"metadata.max.age.ms":      180000,
+		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(

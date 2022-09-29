@@ -37,6 +37,7 @@ func main() {
 	}(log)
 
 	// pprof
+	/* #nosec G114 */
 	go http.ListenAndServe("localhost:1337", nil)
 
 	foundDevice, inputDevice := GetBarcodeReaderDevice()
