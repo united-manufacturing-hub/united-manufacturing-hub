@@ -1,14 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"strconv"
@@ -68,7 +70,12 @@ func main() {
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error while starting pprof: %s", err.Error())
+		}
+	}()
 
 	internal.InitMemcache()
 	cP = sync.Map{}
@@ -132,13 +139,19 @@ func main() {
 
 	sensorStartSpeed, err = strconv.ParseUint(os.Getenv("SENSOR_INITIAL_POLLING_TIME_MS"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert SENSOR_INITIAL_POLLING_TIME_MS env to int, defaulting to LOWER_POLLING_TIME. err: %s", err.Error())
+		zap.S().Errorf(
+			"Couldn't convert SENSOR_INITIAL_POLLING_TIME_MS env to int, defaulting to LOWER_POLLING_TIME. err: %s",
+			err.Error())
 		sensorStartSpeed = lowestSensorTickTime
 	}
 
-	additionalSleepTimePerActivePort, err = strconv.ParseFloat(os.Getenv("ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS"), 64)
+	additionalSleepTimePerActivePort, err = strconv.ParseFloat(
+		os.Getenv("ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS"),
+		64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS env to float, defaulting to 0. err: %s", err.Error())
+		zap.S().Errorf(
+			"Couldn't convert ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS env to float, defaulting to 0. err: %s",
+			err.Error())
 		additionalSleepTimePerActivePort = 0
 	}
 
@@ -151,7 +164,9 @@ func main() {
 
 	deviceFinderTimeoutInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_TIMEOUT_SEC"), 10, 64)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec. err: %s", err.Error())
+		zap.S().Errorf(
+			"Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec. err: %s",
+			err.Error())
 		deviceFinderTimeoutInS = 1
 
 	}
@@ -168,9 +183,9 @@ func main() {
 
 	type SlowDownMapJSONElement struct {
 		Serialnumber *string `json:"serialnumber,omitempty"`
-		SlowdownMS   float64 `json:"slowdown_ms"`
 		URL          *string `json:"url,omitempty"`
 		Productcode  *string `json:"productcode,omitempty"`
+		SlowdownMS   float64 `json:"slowdown_ms"`
 	}
 	type SlowDownMapJSON []SlowDownMapJSONElement
 
@@ -178,6 +193,8 @@ func main() {
 	slowDownMap = sync.Map{}
 	if slowdownMapRaw != "" {
 		var r SlowDownMapJSON
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal([]byte(slowdownMapRaw), &r)
 		if err != nil {
 			zap.S().Errorf("Failed to convert ADDITIONAL_SLOWDOWN_MAP json to go struct. err: %s", err.Error())
@@ -185,11 +202,17 @@ func main() {
 			for _, element := range r {
 				if element.Serialnumber != nil {
 					slowDownMap.Store(fmt.Sprintf("SN_%s", *element.Serialnumber), element.SlowdownMS)
-					zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.Serialnumber, element.SlowdownMS)
+					zap.S().Debugf(
+						"Parsed additional sleep time for %s -> %f",
+						*element.Serialnumber,
+						element.SlowdownMS)
 				}
 				if element.Productcode != nil {
 					slowDownMap.Store(fmt.Sprintf("PC_%s", *element.Productcode), element.SlowdownMS)
-					zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.Productcode, element.SlowdownMS)
+					zap.S().Debugf(
+						"Parsed additional sleep time for %s -> %f",
+						*element.Productcode,
+						element.SlowdownMS)
 				}
 				if element.URL != nil {
 					slowDownMap.Store(fmt.Sprintf("URL_%s", *element.URL), element.SlowdownMS)
@@ -269,7 +292,11 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 
 		portModeMap, err = GetUsedPortsAndModeCached(deviceInfo)
 		if err != nil {
-			zap.S().Warnf("[GPMM] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, err.Error())
+			zap.S().Warnf(
+				"[GPMM] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s",
+				deviceInfo.SerialNumber,
+				deviceInfo.Url,
+				err.Error())
 			hadError = true
 			errorCount += 1
 			errorCountChange += 1
@@ -313,7 +340,11 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 				{
 					errorCount += 1
 					errorCountChange += 1
-					zap.S().Warnf("[DSDMAP] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s", deviceInfo.SerialNumber, deviceInfo.Url, ex.Error())
+					zap.S().Warnf(
+						"[DSDMAP] Sensor %s at %s couldn't keep up ! (No datapoint will be read). Error: %s",
+						deviceInfo.SerialNumber,
+						deviceInfo.Url,
+						ex.Error())
 					hadError = true
 				}
 			default:
@@ -356,7 +387,7 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 		add := time.Duration(float64(activePorts)*additionalSleepTimePerActivePort) * time.Millisecond
 		sleepTime += add
 
-		//Lookup slowdown map
+		// Lookup slowdown map
 		if value, ok := slowDownMap.Load(fmt.Sprintf("SN_%s", deviceInfo.SerialNumber)); ok {
 			sleepTime += time.Duration(value.(float64)) * time.Millisecond
 		}
@@ -371,7 +402,10 @@ func continuousSensorDataProcessingDeviceDaemon(deviceInfo DiscoveredDeviceInfor
 }
 
 // downloadSensorDataMapAndProcess downloads sensor data and processes it
-func downloadSensorDataMapAndProcess(deviceInfo DiscoveredDeviceInformation, portModeMap map[int]ConnectedDeviceInfo, errChan chan error) {
+func downloadSensorDataMapAndProcess(
+	deviceInfo DiscoveredDeviceInformation,
+	portModeMap map[int]ConnectedDeviceInfo,
+	errChan chan error) {
 	var sensorDataMap map[string]interface{}
 	var err error
 	sensorDataMap, err = GetSensorDataMap(deviceInfo)

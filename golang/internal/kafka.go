@@ -1,10 +1,8 @@
-//go:build kafka
-// +build kafka
-
 package internal
 
 import (
 	"context"
+	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
@@ -41,7 +39,6 @@ func SetupKafka(configMap kafka.ConfigMap) {
 	zap.S().Debugf("KafkaProducer: %+v", KafkaProducer)
 	zap.S().Debugf("KafkaAdminClient: %+v", KafkaAdminClient)
 
-	return
 }
 
 // SetupKafkaTopicProbeConsumer sets up a consumer for detecting new topics
@@ -56,16 +53,15 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 
 	err = KafkaTopicProbeConsumer.Subscribe(probeTopicName, nil)
 	if err != nil {
-		return
+		panic(err)
 	}
 
 	zap.S().Debugf("KafkaTopicProbeConsumer: %+v", KafkaTopicProbeConsumer)
-	return
 }
 
 func CloseKafka() {
-	err := KafkaConsumer.Close()
-	if err != nil {
+
+	if err := KafkaConsumer.Close(); err != nil {
 		panic("Failed do close KafkaConsumer client !")
 	}
 
@@ -85,7 +81,7 @@ func CloseKafkaTopicProbeConsumer() {
 var lastMetaData *kafka.Metadata
 
 func TopicExists(kafkaTopicName string) (exists bool, err error) {
-	//Check if lastMetaData was initialized
+	// Check if lastMetaData was initialized
 	if lastMetaData == nil {
 		// Get initial map of metadata
 		lastMetaData, err = GetMetaData()
@@ -95,13 +91,13 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 		}
 	}
 
-	//Check if current metadata cache has topic listed
+	// Check if current metadata cache has topic listed
 	if _, ok := lastMetaData.Topics[kafkaTopicName]; ok {
 		zap.S().Debugf("[CACHED] Topic %s exists", kafkaTopicName)
 		return true, nil
 	}
 
-	//Metadata cache did not have topic, try with fresh metadata
+	// Metadata cache did not have topic, try with fresh metadata
 	lastMetaData, err = GetMetaData()
 	if err != nil {
 		zap.S().Errorf("Failed to get Kafka metadata: %s", err)
@@ -132,20 +128,14 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		return
 	}
 
-	var cancel context.CancelFunc
-	defer func() {
-		if cancel != nil {
-			cancel()
-		}
-	}()
 	topicSpecification := kafka.TopicSpecification{
 		Topic:         kafkaTopicName,
 		NumPartitions: 6,
 	}
 	var maxExecutionTime = time.Duration(5) * time.Second
 	d := time.Now().Add(maxExecutionTime)
-	var ctx context.Context
-	ctx, cancel = context.WithDeadline(context.Background(), d)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
 	topics, err := KafkaAdminClient.CreateTopics(ctx, []kafka.TopicSpecification{topicSpecification})
 	if err != nil || len(topics) != 1 {
 		zap.S().Errorf("Failed to create Topic %s : %s", kafkaTopicName, err)
@@ -153,7 +143,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	}
 
 	// send a message to the "umh.kafka.topic.created" topic with the new topic name
-	// to trigger the subsrciption of the other consumers to the newly created topic
+	// to trigger the subscriptions of the other consumers to the newly created topic
 	payload := make(map[string]string)
 	payload["topic"] = kafkaTopicName
 	jsonString, err := jsoniter.Marshal(payload)
@@ -161,13 +151,15 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		zap.S().Errorf("Failed to marshal payload: %s", err)
 		return
 	}
-	err = KafkaProducer.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic:     &probeTopicName,
-			Partition: kafka.PartitionAny,
-		},
-		Value: jsonString,
-	}, nil)
+	var probeTopicName = "umh.kafka.topic.created"
+	err = KafkaProducer.Produce(
+		&kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     &probeTopicName,
+				Partition: kafka.PartitionAny,
+			},
+			Value: jsonString,
+		}, nil)
 	if err != nil {
 		return err
 	}
@@ -178,7 +170,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		return
 	case <-ctx.Done():
 		err = ctx.Err()
-		if err != nil && err != context.DeadlineExceeded {
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			zap.S().Errorf("Failed to await deadline: %s", err)
 			return
 		}

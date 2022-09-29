@@ -8,6 +8,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -29,7 +31,12 @@ func main() {
 	zap.S().Infof("This is kafka-debug build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
@@ -53,14 +60,15 @@ func main() {
 		}
 	}
 
-	internal.SetupKafka(kafka.ConfigMap{
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"group.id":                 "kafka-debug",
+	internal.SetupKafka(
+		kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"group.id":                 "kafka-debug",
 		"metadata.max.age.ms":      180000,
 	})
 
@@ -81,7 +89,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -102,7 +110,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)

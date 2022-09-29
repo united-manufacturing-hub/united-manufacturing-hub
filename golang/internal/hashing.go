@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/binary"
 	"github.com/zeebo/xxh3"
+	"go.uber.org/zap"
 )
 
 // AsXXHash returns the XXHash128 of the given data.
@@ -11,7 +12,10 @@ import (
 func AsXXHash(inputs ...[]byte) []byte {
 	h := xxh3.New()
 	for _, input := range inputs {
-		_, _ = h.Write(input)
+		_, err := h.Write(input)
+		if err != nil {
+			zap.S().Errorf("Unable to write to hash: %v", err)
+		}
 	}
 
 	return Uint128ToBytes(h.Sum128())

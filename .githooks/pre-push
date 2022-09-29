@@ -1,44 +1,21 @@
-#!/usr/bin/env python
-"""
-This pre-push hooks check for validity of yaml and Chart.yaml files
-It requires yamllint and helm to be installed
-"""
-import os
+#!/bin/sh
 
-import sys
+cwd=$(pwd)
 
-import functions.helper as helper
-helper.check_requirements()
+# shellcheck disable=SC2046
+cd $(git rev-parse --show-toplevel)/golang || exit 1
 
-import functions.libhelmlint as libhelmlint
-import functions.libyamllint as libyamllint
-import functions.libdockerlint as libdockerlint
-import functions.libgovet as libgovet
-import functions.libstaticcheck as libstaticcheck
-from functions.log import Log
+while true; do
+  fieldalignment -fix  ./...
+  if [ $? -eq 0 ]; then
+    break
+  fi
+done
 
-if __name__ == '__main__':
-    force = False
-    if sys.argv[1] == 'force':
-        Log.info("Force mode")
-        force = True
-    failed = False
-    if libyamllint.LibYamlLint(force).run() != 0:
-        failed = True
-        pass
+go install golang.org/x/vuln/cmd/govulncheck@latest
+govulncheck ./...
 
-    if libhelmlint.LibHelmLint(force).run() != 0:
-        failed = True
-        pass
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.1-0.20220903190357-db4955a3bb7e
+golangci-lint run ./...
 
-    if libstaticcheck.LibStaticCheck(force).run() != 0:
-        failed = True
-
-    if libdockerlint.LibDockerLint(force).run() != 0:
-        failed = True
-
-    if libgovet.LibGoVet(force).run() != 0:
-        failed = True
-
-    if failed:
-        exit(1)
+cd "$cwd" || exit 1

@@ -11,7 +11,7 @@ import (
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
-func newTLSConfig(clientID string, mode string) *tls.Config {
+func newTLSConfig(mode string) *tls.Config {
 
 	// Import trusted certificates from CAfile.pem.
 	// Alternatively, manually add CA certificates to
@@ -35,6 +35,7 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -52,7 +53,7 @@ func newTLSConfig(clientID string, mode string) *tls.Config {
 	}
 }
 
-// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
+// getOnMessageRecieved gets the function onMessageReceived, that is called everytime a message is received by a specific topic
 func getOnMessageRecieved(mode string, pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
@@ -62,7 +63,7 @@ func getOnMessageRecieved(mode string, pg *goque.Queue) func(MQTT.Client, MQTT.M
 
 		zap.S().Debugf("onMessageReceived", mode, topic, payload)
 
-		go storeMessageIntoQueue(topic, payload, mode, pg)
+		go storeMessageIntoQueue(topic, payload, pg)
 	}
 }
 
@@ -79,13 +80,20 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // setupMQTT setups MQTT and connect to the broker
-func setupMQTT(clientID string, mode string, mqttBrokerURL string, subMQTTTopic string, SSLEnabled bool, pg *goque.Queue, subscribeToTopic bool) (MQTTClient MQTT.Client) {
+func setupMQTT(
+	clientID string,
+	mode string,
+	mqttBrokerURL string,
+	subMQTTTopic string,
+	SSLEnabled bool,
+	pg *goque.Queue,
+	subscribeToTopic bool) (MQTTClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
 
 	if SSLEnabled {
-		tlsconfig := newTLSConfig(clientID, mode)
+		tlsconfig := newTLSConfig(mode)
 		opts.SetClientID(clientID).SetTLSConfig(tlsconfig)
 	} else {
 		opts.SetClientID(clientID)
@@ -103,12 +111,15 @@ func setupMQTT(clientID string, mode string, mqttBrokerURL string, subMQTTTopic 
 		panic(token.Error())
 	}
 
-	// Can be deactivated, e.g. if one does not want to recieve all data from remote broker
+	// Can be deactivated, e.g. if one does not want to receive all data from remote broker
 	if subscribeToTopic {
 
 		zap.S().Infof("MQTT subscribed", mode, subMQTTTopic)
 		// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-		if token := MQTTClient.Subscribe(subMQTTTopic+"/#", 2, getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
+		if token := MQTTClient.Subscribe(
+			subMQTTTopic+"/#",
+			2,
+			getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
 			panic(token.Error())
 		}
 	}

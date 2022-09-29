@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package main
 
 import (
@@ -9,6 +12,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"time"
@@ -52,11 +57,12 @@ func main() {
 	if !scanOnly {
 		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
 
-		internal.SetupKafka(kafka.ConfigMap{
-			"bootstrap.servers": KafkaBoostrapServer,
-			"security.protocol": "plaintext",
-			"group.id":          "barcodereader",
-		})
+		internal.SetupKafka(
+			kafka.ConfigMap{
+				"bootstrap.servers": KafkaBoostrapServer,
+				"security.protocol": "plaintext",
+				"group.id":          "barcodereader",
+			})
 		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
 		if err != nil {
 			panic(err)

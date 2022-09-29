@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	_ "github.com/lib/pq"
@@ -19,9 +20,24 @@ var statement *StatementRegistry
 var isDryRun bool
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
-func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, health healthcheck.Handler, dryRun string, sslmode string) {
+func SetupDB(
+	PQUser string,
+	PQPassword string,
+	PWDBName string,
+	PQHost string,
+	PQPort int,
+	health healthcheck.Handler,
+	dryRun string,
+	sslmode string) {
 
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PWDBName, sslmode)
+	psqlInfo := fmt.Sprintf(
+		"host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s",
+		PQHost,
+		PQPort,
+		PQUser,
+		PQPassword,
+		PWDBName,
+		sslmode)
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
@@ -50,7 +66,7 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	statement = NewStatementRegistry()
 }
 
-//IsPostgresSQLAvailable returns if the database is reachable by PING command
+// IsPostgresSQLAvailable returns if the database is reachable by PING command
 func IsPostgresSQLAvailable() (bool, error) {
 	var err error
 	if db != nil {
@@ -68,14 +84,11 @@ func IsPostgresSQLAvailable() (bool, error) {
 func ShutdownDB() {
 
 	zap.S().Infof("Closing statement registry")
-	err := statement.Shutdown()
-	if err != nil {
-		panic(err)
-	}
+	statement.Shutdown()
 
 	zap.S().Infof("Closing database connection")
-	err = db.Close()
-	if err != nil {
+
+	if err := db.Close(); err != nil {
 		panic(err)
 	}
 }
@@ -89,7 +102,7 @@ const (
 	DiscardValue RecoveryType = 2
 )
 
-//GetPostgresErrorRecoveryOptions checks if the error is recoverable
+// GetPostgresErrorRecoveryOptions checks if the error is recoverable
 func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 	if err == nil {
 		return Other
@@ -106,8 +119,11 @@ func GetPostgresErrorRecoveryOptions(err error) RecoveryType {
 		return DatabaseDown
 	}
 
-	matchedOutOfRange, _ := regexp.MatchString(`pq: value "-*\d+" is out of range for type integer`, errorString)
-	matchedTsOutOfRange, _ := regexp.MatchString(`pq: timestamp out of range: .+`, errorString)
+	var matchedOOFRegex = regexp.MustCompile(`pq: value "-*\d+" is out of range for type integer`)
+	var matchTsOORRegex = regexp.MustCompile(`pq: timestamp out of range: .+`)
+
+	matchedOutOfRange := matchedOOFRegex.MatchString(errorString)
+	matchedTsOutOfRange := matchTsOORRegex.MatchString(errorString)
 
 	isRecoverableByDiscarding := matchedOutOfRange || matchedTsOutOfRange
 	if isRecoverableByDiscarding {
@@ -128,9 +144,16 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 		return
 	}
 
-	err := statement.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.QueryRow(assetID, location, customerID).Scan(&AssetTableID)
-	if err == sql.ErrNoRows {
-		zap.S().Debugf("[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s", assetID, location, customerID)
+	err := statement.SelectIdFromAssetTableByAssetIdAndLocationIdAndCustomerId.QueryRow(
+		assetID,
+		location,
+		customerID).Scan(&AssetTableID)
+	if errors.Is(err, sql.ErrNoRows) {
+		zap.S().Debugf(
+			"[GetAssetTableID] No Results Found for assetID: %s, location: %s, customerID: %s",
+			assetID,
+			location,
+			customerID)
 		// This can potentially lead to race conditions, if another thread adds the same asset too
 		err = AddAsset(assetID, location, customerID)
 		if err != nil {
@@ -164,8 +187,10 @@ func GetAssetTableID(customerID string, location string, assetID string) (AssetT
 func GetComponentID(assetID uint32, componentName string) (componentID int32, success bool) {
 	zap.S().Debugf("[GetComponentID] assetID: %d, componentName: %s", assetID, componentName)
 	success = false
-	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(assetID, componentName).Scan(&componentID)
-	if err == sql.ErrNoRows {
+	err := statement.SelectIdFromComponentTableByAssetIdAndComponentName.QueryRow(
+		assetID,
+		componentName).Scan(&componentID)
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Errorf("No Results Found assetID: %d, componentName: %s", assetID, componentName)
 
 		return
@@ -187,7 +212,7 @@ func GetComponentID(assetID uint32, componentName string) (componentID int32, su
 
 // AddAsset adds an asset to the database
 func AddAsset(assetID string, location string, customerID string) (err error) {
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.Begin()
 	if err != nil {
 		return err
@@ -219,9 +244,14 @@ func GetProductTableId(productName string, AssetTableId uint32) (ProductTableId 
 		return
 	}
 
-	err := statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(AssetTableId, productName).Scan(&ProductTableId)
-	if err == sql.ErrNoRows {
-		zap.S().Debugf("[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d", productName, AssetTableId)
+	err := statement.SelectProductIdFromProductTableByAssetIdAndProductName.QueryRow(
+		AssetTableId,
+		productName).Scan(&ProductTableId)
+	if errors.Is(err, sql.ErrNoRows) {
+		zap.S().Debugf(
+			"[GetProductTableId] No Results Found for productName: %s, AssetTableId: %d",
+			productName,
+			AssetTableId)
 		return 0, false
 	} else if err != nil {
 		zap.S().Debugf("[GetProductTableId] Error: %s", err)
@@ -255,7 +285,9 @@ func NewNullInt64(i int64) sql.NullInt64 {
 }
 
 // GetUniqueProductID gets the unique productID from the database using the UniqueProductAlternativeID and AssetTableId
-func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) (UniqueProductTableId uint32, success bool) {
+func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) (
+	UniqueProductTableId uint32,
+	success bool) {
 	success = false
 
 	// Get from cache if possible
@@ -266,9 +298,14 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 		return
 	}
 
-	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(UniqueProductAlternativeId, AssetTableId).Scan(&UniqueProductTableId)
-	if err == sql.ErrNoRows {
-		zap.S().Debugf("[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d", UniqueProductAlternativeId, AssetTableId)
+	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndAssetIdOrderedByTimeStampDesc.QueryRow(
+		UniqueProductAlternativeId,
+		AssetTableId).Scan(&UniqueProductTableId)
+	if errors.Is(err, sql.ErrNoRows) {
+		zap.S().Debugf(
+			"[GetUniqueProductID] No Results Found for UniqueProductAlternativeId: %s, AssetTableId: %d",
+			UniqueProductAlternativeId,
+			AssetTableId)
 
 		return 0, false
 	} else if err != nil {
@@ -291,7 +328,9 @@ func GetUniqueProductID(UniqueProductAlternativeId string, AssetTableId uint32) 
 }
 
 // GetLatestParentUniqueProductID gets the latest parent unique productID from the database using the UniqueProductAlternativeID and AssetTableId
-func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (LatestparentUniqueProductId uint32, success bool) {
+func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (
+	LatestparentUniqueProductId uint32,
+	success bool) {
 	success = false
 
 	// Get from cache if possible
@@ -302,8 +341,10 @@ func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (Latestpa
 		return
 	}
 
-	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(ParentID, DBAssetID).Scan(&LatestparentUniqueProductId)
-	if err == sql.ErrNoRows {
+	err := statement.SelectUniqueProductIdFromUniqueProductTableByUniqueProductAlternativeIdAndNotAssetId.QueryRow(
+		ParentID,
+		DBAssetID).Scan(&LatestparentUniqueProductId)
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
 
 		return 0, false

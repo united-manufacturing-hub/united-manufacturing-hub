@@ -9,12 +9,12 @@ import (
 
 func TestGetIoddFile(t *testing.T) {
 	InitMemcache()
-	//Siemens AG | SIRIUS ACT Electronic Module 4DI/4DQ for IO-Link
+	// Siemens AG | SIRIUS ACT Electronic Module 4DI/4DQ for IO-Link
 	err := AssertIoddFileGetter(42, 278531, 2)
 	if err != nil {
 		t.Error(err)
 	}
-	//Bosch Rexroth AG | 4WRPEH10-3X
+	// Bosch Rexroth AG | 4WRPEH10-3X
 	err = AssertIoddFileGetter(287, 2228227, 5)
 	if err != nil {
 		t.Error(err)
@@ -33,7 +33,7 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 	}
 
 	if len(filemap) != filemaplen {
-		return fmt.Errorf("Filemap lenght invalid Have: %d Wanted: %d", len(filemap), filemaplen)
+		return fmt.Errorf("Filemap length invalid Have: %d Wanted: %d", len(filemap), filemaplen)
 	}
 
 	return nil
@@ -41,9 +41,12 @@ func AssertIoddFileGetter(vendorId int64, deviceId int, filemaplen int) error {
 
 func TestSaveIoddFile(t *testing.T) {
 	relativeDirectoryPath := "../cmd/sensorconnect/IoddFiles/"
-	os.MkdirAll(filepath.Dir(relativeDirectoryPath), 0777)
+	err := os.MkdirAll(filepath.Dir(relativeDirectoryPath), 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// test if writing iodd file works
-	err := SaveIoddFile(42, 278531, relativeDirectoryPath)
+	err = SaveIoddFile(42, 278531, relativeDirectoryPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +59,11 @@ func TestSaveIoddFile(t *testing.T) {
 
 	// Remove file after test again
 	relativeFilePath := "../cmd/sensorconnect/IoddFiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml"
-	absoluteFilePath, _ := filepath.Abs(relativeFilePath)
+	var absoluteFilePath string
+	absoluteFilePath, err = filepath.Abs(relativeFilePath)
+	if err != nil {
+		t.Error(err)
+	}
 	err = os.Remove(absoluteFilePath)
 	if err != nil {
 		t.Logf("file not deleted: %s", err)
