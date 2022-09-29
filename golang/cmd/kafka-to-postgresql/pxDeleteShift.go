@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
@@ -21,14 +22,14 @@ type deleteShift struct {
 	TimeStampMs uint32 `json:"timestamp_ms"`
 }
 
-// ProcessMessages processes a DeleteShift kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+// ProcessMessages processes a DeleteShift kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
 func (c DeleteShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -62,7 +63,11 @@ func (c DeleteShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+		return true, fmt.Errorf(
+			"failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s",
+			msg.CustomerId,
+			msg.Location,
+			msg.AssetId), false
 	}
 	// Changes should only be necessary between this marker
 
@@ -82,9 +87,16 @@ func (c DeleteShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 	if err != nil {
 
 		if err != nil {
-			pqErr := err.(*pq.Error)
+
+			var pqErr *pq.Error
+			ok := errors.As(err, &pqErr)
+
+			if ok {
+				zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+				return false, err, false
+			}
 			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-			if pqErr.Code == "23P01" {
+			if pqErr.Code == Sql23p01ExclusionViolation {
 				return true, err, true
 			}
 			return true, err, false

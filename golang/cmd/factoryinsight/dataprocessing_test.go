@@ -26,22 +26,30 @@ func TestAddLowSpeedStates_1(t *testing.T) {
 	var countSlice []datamodel.CountEntry
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601391491.golden", &stateArray)
+	err := internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601391491.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601391491.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601391491.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601391491.golden", &countSlice)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601391491.golden",
+		&countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601391491.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601391491.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -49,7 +57,7 @@ func TestAddLowSpeedStates_1(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addLowSpeedStates(nil, 0, stateArray, countSlice, configuration)
+	processedStateArrayFresh := addLowSpeedStates(0, stateArray, countSlice, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -70,22 +78,30 @@ func TestAddLowSpeedStates_2(t *testing.T) { // Complex
 	var countSlice []datamodel.CountEntry
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392511.golden", &stateArray)
+	err := internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392511.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392511.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392511.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392511.golden", &countSlice)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392511.golden",
+		&countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392511.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392511.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -93,7 +109,7 @@ func TestAddLowSpeedStates_2(t *testing.T) { // Complex
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addLowSpeedStates(nil, 0, stateArray, countSlice, configuration)
+	processedStateArrayFresh := addLowSpeedStates(0, stateArray, countSlice, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -114,22 +130,30 @@ func TestAddLowSpeedStates_NoLowSpeed_1(t *testing.T) {
 	var countSlice []datamodel.CountEntry
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392325.golden", &stateArray)
+	err := internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392325.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392325.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392325.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392325.golden", &countSlice)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392325.golden",
+		&countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392325.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392325.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -137,7 +161,7 @@ func TestAddLowSpeedStates_NoLowSpeed_1(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addLowSpeedStates(nil, 0, stateArray, countSlice, configuration)
+	processedStateArrayFresh := addLowSpeedStates(0, stateArray, countSlice, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -157,17 +181,23 @@ func TestAddUnknownMicrostops_OnlyMicrostops(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323210.golden", &stateArray)
+	err := internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323210.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323210.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323210.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323210.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323210.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -175,7 +205,7 @@ func TestAddUnknownMicrostops_OnlyMicrostops(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addUnknownMicrostops(nil, stateArray, configuration)
+	processedStateArrayFresh := addUnknownMicrostops(stateArray, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -195,17 +225,23 @@ func TestAddUnknownMicrostops_OnlyMicrostopsOneStop(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323241.golden", &stateArray)
+	err := internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323241.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323241.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323241.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323241.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323241.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -213,7 +249,7 @@ func TestAddUnknownMicrostops_OnlyMicrostopsOneStop(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addUnknownMicrostops(nil, stateArray, configuration)
+	processedStateArrayFresh := addUnknownMicrostops(stateArray, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -232,17 +268,23 @@ func TestAddUnknownMicrostops_Complex(t *testing.T) {
 	var configuration datamodel.CustomerConfiguration
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323170.golden", &stateArray)
+	err := internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323170.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323170.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323170.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323170.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323170.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -250,7 +292,7 @@ func TestAddUnknownMicrostops_Complex(t *testing.T) {
 
 	stateArray = ConvertOldToNewStateEntryArray(stateArray)
 
-	processedStateArrayFresh, err := addUnknownMicrostops(nil, stateArray, configuration)
+	processedStateArrayFresh := addUnknownMicrostops(stateArray, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -346,28 +388,36 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712.golden", &stateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712.golden", &orderArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712.golden",
+		&orderArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -397,28 +447,36 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 		t.Error()
 	}
 
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712_v2.golden", &stateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712_v2.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712_v2.golden", &orderArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712_v2.golden",
+		&orderArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712_v2.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712_v2.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712_v2.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712_v2.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -448,28 +506,36 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 		t.Error()
 	}
 
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden", &stateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden",
+		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610630858.golden", &orderArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610630858.golden",
+		&orderArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610630858.golden", &configuration)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610630858.golden",
+		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610630858.golden", &processedStateArray)
+	err = internal.Load(
+		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610630858.golden",
+		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 
-	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(nil, stateArray, orderArray, to, configuration)
+	processedStateArrayFresh, err := automaticallyIdentifyChangeovers(stateArray, orderArray, to, configuration)
 	if err != nil {
 		t.Error()
 	}
@@ -544,21 +610,21 @@ func TestProcessStates_Complex_1(t *testing.T) {
 
 func Test_processStatesOptimized(t *testing.T) {
 	type args struct {
-		assetID       uint32
+		from          time.Time
+		to            time.Time
 		stateArray    []datamodel.StateEntry
 		rawShifts     []datamodel.ShiftEntry
 		countSlice    []datamodel.CountEntry
 		orderArray    []datamodel.OrdersRaw
-		from          time.Time
-		to            time.Time
 		configuration datamodel.CustomerConfiguration
+		assetID       uint32
 	}
 	tests := []struct {
 		name                    string
-		args                    args
-		wantProcessedStateArray []datamodel.StateEntry
-		wantErr                 bool
 		goldenTimestamp         string
+		wantProcessedStateArray []datamodel.StateEntry
+		args                    args
+		wantErr                 bool
 	}{
 		{
 			name:            "shifts1",
@@ -575,67 +641,92 @@ func Test_processStatesOptimized(t *testing.T) {
 	}
 	for _, tt := range tests {
 		// loading golden files
-		err := internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_processedStateArray_"+tt.goldenTimestamp+".golden", &tt.wantProcessedStateArray)
+		err := internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_processedStateArray_"+tt.goldenTimestamp+".golden",
+			&tt.wantProcessedStateArray)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_stateArray_"+tt.goldenTimestamp+".golden", &tt.args.stateArray)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_stateArray_"+tt.goldenTimestamp+".golden",
+			&tt.args.stateArray)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_rawShifts_"+tt.goldenTimestamp+".golden", &tt.args.rawShifts)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_rawShifts_"+tt.goldenTimestamp+".golden",
+			&tt.args.rawShifts)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_countSlice_"+tt.goldenTimestamp+".golden", &tt.args.countSlice)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_countSlice_"+tt.goldenTimestamp+".golden",
+			&tt.args.countSlice)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_orderArray_"+tt.goldenTimestamp+".golden", &tt.args.orderArray)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_orderArray_"+tt.goldenTimestamp+".golden",
+			&tt.args.orderArray)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_from_"+tt.goldenTimestamp+".golden", &tt.args.from)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_from_"+tt.goldenTimestamp+".golden",
+			&tt.args.from)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_to_"+tt.goldenTimestamp+".golden", &tt.args.to)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_to_"+tt.goldenTimestamp+".golden",
+			&tt.args.to)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
-		err = internal.Load("../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_configuration_"+tt.goldenTimestamp+".golden", &tt.args.configuration)
+		err = internal.Load(
+			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_configuration_"+tt.goldenTimestamp+".golden",
+			&tt.args.configuration)
 		if err != nil {
 			fmt.Println(err)
 			t.Error()
 		}
 
 		// Executing tests
-		t.Run(tt.name, func(t *testing.T) {
-			gotProcessedStateArray, err := processStatesOptimized(nil, tt.args.assetID, tt.args.stateArray, tt.args.rawShifts, tt.args.countSlice, tt.args.orderArray, tt.args.from, tt.args.to, tt.args.configuration)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("processStatesOptimized() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotProcessedStateArray, tt.wantProcessedStateArray) {
-				t.Errorf("processStatesOptimized() got / want")
-				t.Errorf("%v", gotProcessedStateArray)
-				t.Errorf("%v", tt.wantProcessedStateArray)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				gotProcessedStateArray, err := processStatesOptimized(
+					tt.args.assetID,
+					tt.args.stateArray,
+					tt.args.rawShifts,
+					tt.args.countSlice,
+					tt.args.orderArray,
+					tt.args.from,
+					tt.args.to,
+					tt.args.configuration)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("processStatesOptimized() error = %v, wantErr %v", err, tt.wantErr)
+					return
+				}
+				if !reflect.DeepEqual(gotProcessedStateArray, tt.wantProcessedStateArray) {
+					t.Errorf("processStatesOptimized() got / want")
+					t.Errorf("%v", gotProcessedStateArray)
+					t.Errorf("%v", tt.wantProcessedStateArray)
+				}
+			})
 	}
 }
 
@@ -680,11 +771,11 @@ func TestSliceContainsInt(t *testing.T) {
 
 func TestChangeOutputFormat(t *testing.T) {
 
+	t.Log("Testing ChangeOutputFormat")
 	var data [][]interface{}
 	var dataExtended [][]interface{}
-	var columnNames []string
 
-	columnNames = []string{"uid", "aid", "Force"}
+	columnNames := []string{"uid", "aid", "Force"}
 	var row1 []interface{}
 	var row2 []interface{}
 	var row3 []interface{}
@@ -701,7 +792,9 @@ func TestChangeOutputFormat(t *testing.T) {
 	data = append(data, row2)
 	data = append(data, row3)
 
-	//Handling if inputColumnName is not new
+	t.Log("Creating extended data")
+
+	// Handling if inputColumnName is not new
 	dataOutput, columnNamesOutput, columnIndex := ChangeOutputFormat(data, columnNames, "Force")
 	if !reflect.DeepEqual(dataOutput, data) {
 		t.Error()
@@ -713,7 +806,9 @@ func TestChangeOutputFormat(t *testing.T) {
 		t.Error()
 	}
 
-	//Handling if inputColumnName is new
+	t.Log("Changed output format")
+
+	// Handling if inputColumnName is new
 	columnNamesExtended := append(columnNames, "Temperature")
 	row1 = append(row1, nil)
 	row2 = append(row2, nil)
@@ -722,9 +817,12 @@ func TestChangeOutputFormat(t *testing.T) {
 	dataExtended = append(dataExtended, row2)
 	dataExtended = append(dataExtended, row3)
 
+	t.Log("Testing with new input column name")
+
 	dataOutput, columnNamesOutput, columnIndex = ChangeOutputFormat(data, columnNames, "Temperature")
-	fmt.Printf("%s\n", columnNamesOutput)
-	fmt.Printf("%s\n", dataOutput)
+
+	t.Log("Changed output format")
+
 	if !reflect.DeepEqual(dataOutput, dataExtended) {
 		t.Error()
 	}
@@ -734,6 +832,7 @@ func TestChangeOutputFormat(t *testing.T) {
 	if !reflect.DeepEqual(columnIndex, 3) {
 		t.Error()
 	}
+	t.Log("Finished testing ChangeOutputFormat")
 }
 
 func TestLengthenSliceToFitNames(t *testing.T) {
@@ -742,8 +841,8 @@ func TestLengthenSliceToFitNames(t *testing.T) {
 	var sliceTooSmallExpectedOutput []interface{}
 	var sliceExact []interface{}
 	var sliceTooLong []interface{}
-	var columnNames []string
-	columnNames = []string{"uid", "aid", "Force"}
+
+	columnNames := []string{"uid", "aid", "Force"}
 	sliceTooSmall = append(sliceTooSmall, 1)
 	sliceTooSmall = append(sliceTooSmall, "A102")
 	sliceTooSmallExpectedOutput = append(sliceTooSmallExpectedOutput, 1)
@@ -757,18 +856,16 @@ func TestLengthenSliceToFitNames(t *testing.T) {
 	sliceTooLong = append(sliceTooLong, 545)
 	sliceTooLong = append(sliceTooLong, "EntryTooMuch")
 
-	//Handling if input slice too small
-	sliceOutput := LengthenSliceToFitNames(sliceTooSmall, columnNames)
-	if !reflect.DeepEqual(sliceOutput, sliceTooSmallExpectedOutput) {
+	// Handling if input slice too small
+	if !reflect.DeepEqual(LengthenSliceToFitNames(sliceTooSmall, columnNames), sliceTooSmallExpectedOutput) {
 		t.Error()
 	}
-	//Handling if input slice correct
-	sliceOutput = LengthenSliceToFitNames(sliceExact, columnNames)
-	if !reflect.DeepEqual(sliceOutput, sliceExact) {
+	// Handling if input slice correct
+	if !reflect.DeepEqual(LengthenSliceToFitNames(sliceExact, columnNames), sliceExact) {
 		t.Error()
 	}
-	//Handling if input slice too large
-	sliceOutput = LengthenSliceToFitNames(sliceTooLong, columnNames)
+	// Handling if input slice too large
+	sliceOutput := LengthenSliceToFitNames(sliceTooLong, columnNames)
 	fmt.Printf("%s\n", sliceOutput)
 	if !reflect.DeepEqual(sliceOutput, sliceOutput) {
 		t.Error()
@@ -800,7 +897,16 @@ func TestCreateNewRowInData(t *testing.T) {
 	value.Float64 = 1.38
 	value.Valid = true
 
-	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Torque", "Speed", "Force"}
+	columnNames = []string{
+		"UID",
+		"AID",
+		"TimestampBegin",
+		"TimestampEnd",
+		"ProductID",
+		"IsScrap",
+		"Torque",
+		"Speed",
+		"Force"}
 	var row1 []interface{}
 	var row2 []interface{}
 
@@ -832,7 +938,8 @@ func TestCreateNewRowInData(t *testing.T) {
 	data = append(data, row1)
 	data = append(data, row2)
 
-	dataOutput := CreateNewRowInData(data, columnNames, 7, UID, AID,
+	dataOutput := CreateNewRowInData(
+		data, columnNames, 7, UID, AID,
 		timestampBegin, timestampEnd, productID, isScrap, valueName, value)
 	fmt.Printf("%s\n", dataOutput)
 	if !reflect.DeepEqual(len(dataOutput), 3) {
@@ -855,9 +962,17 @@ func TestCreateNewRowInData(t *testing.T) {
 
 func TestCheckOutputDimensions(t *testing.T) {
 	var data [][]interface{}
-	var columnNames []string
 
-	columnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap", "Torque", "Speed", "Force"}
+	columnNames := []string{
+		"UID",
+		"AID",
+		"TimestampBegin",
+		"TimestampEnd",
+		"ProductID",
+		"IsScrap",
+		"Torque",
+		"Speed",
+		"Force"}
 	var row1 []interface{}
 	var row2 []interface{}
 	var rowTooShort []interface{}
@@ -890,7 +1005,9 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	rowTooShort = append(rowTooShort, 2)
 	rowTooShort = append(rowTooShort, "A103")
-	rowTooShort = append(rowTooShort, float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
+	rowTooShort = append(
+		rowTooShort,
+		float64(row2TimeBegin.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	rowTooShort = append(rowTooShort, float64(row2TimeEnd.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))))
 	rowTooShort = append(rowTooShort, 10011)
 	rowTooShort = append(rowTooShort, false)
@@ -921,7 +1038,6 @@ func TestCheckOutputDimensions(t *testing.T) {
 
 	//Case: Error because last row too short
 	data = append(data, rowTooShort)
-	err = nil
 	err = CheckOutputDimensions(data, columnNames)
 	if err == nil {
 		t.Error()
@@ -930,7 +1046,6 @@ func TestCheckOutputDimensions(t *testing.T) {
 	//Case: Error because last row too long
 	data[2] = rowTooLong
 	fmt.Printf("%s\n", data)
-	err = nil
 	err = CheckOutputDimensions(data, columnNames)
 	if err == nil {
 		t.Error()

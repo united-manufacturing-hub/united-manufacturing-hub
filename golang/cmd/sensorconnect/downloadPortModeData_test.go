@@ -4,17 +4,19 @@ import (
 	"testing"
 )
 
-/* only works with functioning test device on correct ip: http://192.168.10.17
-func TestGetPortModeMap(t *testing.T) {
-	var deviceInfo DiscoveredDeviceInformation
-	deviceInfo.ProductCode = "AL1350"
-	deviceInfo.Url = "http://192.168.10.17/"
-	sensorData, err := GetPortModeMap(deviceInfo)
-	fmt.Printf("PortModeMap: %d", sensorData) //"%+v",
-	if err != nil {
-		t.Error("Problem with GetModeStatusStruct")
+/*
+	only works with functioning test device on correct ip: http://192.168.10.17
+
+	func TestGetPortModeMap(t *testing.T) {
+		var deviceInfo DiscoveredDeviceInformation
+		deviceInfo.ProductCode = "AL1350"
+		deviceInfo.Url = "http://192.168.10.17/"
+		sensorData, err := GetPortModeMap(deviceInfo)
+		fmt.Printf("PortModeMap: %d", sensorData) //"%+v",
+		if err != nil {
+			t.Error("Problem with GetModeStatusStruct")
+		}
 	}
-}
 */
 func TestExtractIntFromString(t *testing.T) {
 	testString := "/iolinkmaster/port[23]/mode"

@@ -14,13 +14,13 @@ func IsKafkaTopicValid(topic string) bool {
 }
 
 type TopicInformation struct {
+	TransmitterId      *string
+	MacAddressOfCamera *string
 	AssetId            string
 	Location           string
 	CustomerId         string
 	Topic              string
 	ExtendedTopics     []string
-	TransmitterId      *string
-	MacAddressOfCamera *string
 }
 
 var regexLruCache, _ = lru.New(100)

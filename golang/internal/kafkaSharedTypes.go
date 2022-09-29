@@ -1,15 +1,11 @@
-//go:build kafka
-// +build kafka
-
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
-	"syscall"
-
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -20,17 +16,17 @@ type KafkaKey struct {
 }
 
 type Putback struct {
+	Reason    string `json:"Reason,omitempty"`
+	Error     string `json:"Error,omitempty"`
 	FirstTsMS int64  `json:"FirstTsMs"`
 	LastTsMS  int64  `json:"LastTsMs"`
 	Amount    int64  `json:"Amount"`
-	Reason    string `json:"Reason,omitempty"`
-	Error     string `json:"Error,omitempty"`
 }
 
 type PutBackChanMsg struct {
 	Msg               *kafka.Message
-	Reason            string
 	ErrorString       *string
+	Reason            string
 	ForcePutbackTopic bool
 }
 
@@ -77,7 +73,13 @@ func MemoryLimiter(allowedMemorySize int) {
 // ProcessKafkaQueue processes the kafka queue and sends the messages to the processorChannel.
 // It uses topic as regex for subscribing to kafka topics.
 // If the putback channel is full, it will block until the channel is free.
-func ProcessKafkaQueue(identifier string, topic string, processorChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer, putBackChannel chan PutBackChanMsg, gracefulShutdown func()) {
+func ProcessKafkaQueue(
+	identifier string,
+	topic string,
+	processorChannel chan *kafka.Message,
+	kafkaConsumer *kafka.Consumer,
+	putBackChannel chan PutBackChanMsg,
+	gracefulShutdown func()) {
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
 	err := kafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
@@ -133,168 +135,184 @@ func ProcessKafkaTopicProbeQueue(identifier string, processorChannel chan *kafka
 }
 
 // waitNewMessages waits for new messages on the kafka consumer and checks for errors
-func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulShutdown func()) (msg *kafka.Message, isShuttingDown bool) {
+func waitNewMessages(identifier string, kafkaConsumer *kafka.Consumer, gracefulShutdown func()) (
+	msg *kafka.Message,
+	isShuttingDown bool) {
 	// Wait for new messages
 	// This has a timeout, allowing ShuttingDownKafka to be checked
 	msg, err := kafkaConsumer.ReadMessage(5000)
 	if err != nil {
-		switch err.(kafka.Error).Code() {
-		// This is fine, and expected behaviour
-		case kafka.ErrTimedOut:
-			// Sleep to reduce CPU usage
-			time.Sleep(OneSecond)
-			return nil, false
-		// This will occur when no topic for the regex is available !
-		case kafka.ErrUnknownTopicOrPart:
-			zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
-			gracefulShutdown()
-			return nil, true
-		default:
-			zap.S().Warnf("%s Failed to read kafka message: %s: %s", identifier, err, err.(kafka.Error).Code())
+		var kafkaError kafka.Error
+		ok := errors.As(err, &kafkaError)
+		if ok {
+
+			switch kafkaError.Code() {
+			// This is fine, and expected behaviour
+			case kafka.ErrTimedOut:
+				// Sleep to reduce CPU usage
+				time.Sleep(OneSecond)
+				return nil, false
+			// This will occur when no topic for the regex is available !
+			case kafka.ErrUnknownTopicOrPart:
+				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
+				gracefulShutdown()
+				return nil, true
+			default:
+				zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
+				gracefulShutdown()
+				return nil, true
+			}
+		} else {
+			zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
 			gracefulShutdown()
 			return nil, true
 		}
+
 	}
 	return msg, false
 }
 
 // StartPutbackProcessor starts the putback processor.
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the Reason and error.
-func StartPutbackProcessor(identifier string, putBackChannel chan PutBackChanMsg, kafkaProducer *kafka.Producer, commitChannel chan *kafka.Message, putbackChanSize int) {
+func StartPutbackProcessor(
+	identifier string,
+	putBackChannel chan PutBackChanMsg,
+	kafkaProducer *kafka.Producer,
+	commitChannel chan *kafka.Message,
+	putbackChanSize int) {
 	zap.S().Debugf("%s Starting putback processor", identifier)
 	// Loops until the shutdown signal is received and the channel is empty
 	for !ShutdownPutback {
-		select {
-		case msgX := <-putBackChannel:
-			{
-				current := time.Now().UnixMilli()
-				var msg = msgX.Msg
-				var reason = msgX.Reason
-				var errorString = msgX.ErrorString
+		msgX := <-putBackChannel
 
-				if msg == nil {
-					continue
-				}
+		current := time.Now().UnixMilli()
+		var msg = msgX.Msg
+		var reason = msgX.Reason
+		var errorString = msgX.ErrorString
 
-				var msg2 kafka.Message
-				if msg.Value != nil {
-					msg2.Value = msg.Value
-				}
+		if msg == nil {
+			continue
+		}
 
-				msg2.TopicPartition.Partition = 0
+		var msg2 kafka.Message
+		if msg.Value != nil {
+			msg2.Value = msg.Value
+		}
 
-				topic := *msg.TopicPartition.Topic
+		msg2.TopicPartition.Partition = 0
 
-				var rawKafkaKey []byte
-				var putbackIndex = -1
+		topic := *msg.TopicPartition.Topic
 
-				// Check for new header based putback info
-				msg2.Headers = msg.Headers
-				for i, header := range msg2.Headers {
-					if header.Key == "putback" {
-						rawKafkaKey = header.Value
-						putbackIndex = i
-						break
-					}
-				}
+		var rawKafkaKey []byte
+		var putbackIndex = -1
 
-				var kafkaKey KafkaKey
-
-				if rawKafkaKey == nil {
-					kafkaKey = KafkaKey{
-						&Putback{
-							FirstTsMS: current,
-							LastTsMS:  current,
-							Amount:    1,
-							Reason:    reason,
-						},
-					}
-				} else {
-					err := jsoniter.Unmarshal(rawKafkaKey, &kafkaKey)
-					if err != nil {
-						kafkaKey = KafkaKey{
-							&Putback{
-								FirstTsMS: current,
-								LastTsMS:  current,
-								Amount:    1,
-								Reason:    reason,
-							},
-						}
-					} else {
-						kafkaKey.Putback.LastTsMS = current
-						kafkaKey.Putback.Amount += 1
-						kafkaKey.Putback.Reason = reason
-						if msgX.ForcePutbackTopic || (kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000) {
-							topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
-
-							if commitChannel != nil {
-								commitChannel <- msg
-							}
-						}
-					}
-				}
-
-				if errorString != nil && *errorString != "" {
-					kafkaKey.Putback.Error = *errorString
-				}
-
-				var err error
-				var header []byte
-				header, err = jsoniter.Marshal(kafkaKey)
-				if err != nil {
-					zap.S().Errorf("%s Failed to marshal key: %v (%s)", identifier, kafkaKey, err)
-					err = nil
-				}
-				if putbackIndex == -1 {
-					msg2.Headers = append(msg.Headers, kafka.Header{
-						Key:   "putback",
-						Value: header,
-					})
-				} else {
-					msg2.Headers[putbackIndex] = kafka.Header{
-						Key:   "putback",
-						Value: header,
-					}
-				}
-
-				msgx := kafka.Message{
-					TopicPartition: kafka.TopicPartition{
-						Topic:     &topic,
-						Partition: kafka.PartitionAny,
-					},
-					Value:   msg2.Value,
-					Headers: msg2.Headers,
-				}
-
-				err = kafkaProducer.Produce(&msgx, nil)
-				if err != nil {
-					zap.S().Warnf("%s Failed to produce putback message: %s", identifier, err)
-					// If the producer failed and the putback channel is full, use SIGINT to shut down !
-					if len(putBackChannel) >= putbackChanSize {
-						err = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-						if err != nil {
-							zap.S().Errorf("%s Failed to send SIGINT to process: %s", identifier, err)
-						}
-					}
-					putBackChannel <- PutBackChanMsg{&msgx, reason, errorString, false}
-				}
-				// This is for stats only and counts the amount of messages put back
-				KafkaPutBacks += 1
-				// Commit original message, after putback duplicate has been produced !
-				commitChannel <- msg
+		// Check for new header based putback info
+		msg2.Headers = msg.Headers
+		for i, header := range msg2.Headers {
+			if header.Key == "putback" {
+				rawKafkaKey = header.Value
+				putbackIndex = i
+				break
 			}
 		}
+
+		var kafkaKey KafkaKey
+
+		if rawKafkaKey == nil {
+			kafkaKey = KafkaKey{
+				&Putback{
+					FirstTsMS: current,
+					LastTsMS:  current,
+					Amount:    1,
+					Reason:    reason,
+				},
+			}
+		} else {
+			err := jsoniter.Unmarshal(rawKafkaKey, &kafkaKey)
+			if err != nil {
+				kafkaKey = KafkaKey{
+					&Putback{
+						FirstTsMS: current,
+						LastTsMS:  current,
+						Amount:    1,
+						Reason:    reason,
+					},
+				}
+			} else {
+				kafkaKey.Putback.LastTsMS = current
+				kafkaKey.Putback.Amount += 1
+				kafkaKey.Putback.Reason = reason
+				if msgX.ForcePutbackTopic || (kafkaKey.Putback.Amount >= 2 && kafkaKey.Putback.LastTsMS-kafkaKey.Putback.FirstTsMS > 300000) {
+					topic = fmt.Sprintf("putback-error-%s", *msg.TopicPartition.Topic)
+
+					if commitChannel != nil {
+						commitChannel <- msg
+					}
+				}
+			}
+		}
+
+		if errorString != nil && *errorString != "" {
+			kafkaKey.Putback.Error = *errorString
+		}
+
+		var err error
+		var header []byte
+		header, err = jsoniter.Marshal(kafkaKey)
+		if err != nil {
+			zap.S().Errorf("%s Failed to marshal key: %v (%s)", identifier, kafkaKey, err)
+		}
+		if putbackIndex == -1 {
+			msg2.Headers = append(
+				msg.Headers, kafka.Header{
+					Key:   "putback",
+					Value: header,
+				})
+		} else {
+			msg2.Headers[putbackIndex] = kafka.Header{
+				Key:   "putback",
+				Value: header,
+			}
+		}
+
+		msgx := kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     &topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value:   msg2.Value,
+			Headers: msg2.Headers,
+		}
+
+		err = kafkaProducer.Produce(&msgx, nil)
+		if err != nil {
+			zap.S().Warnf("%s Failed to produce putback message: %s", identifier, err)
+			if len(putBackChannel) >= putbackChanSize {
+				// This don't have to be graceful, as putback is already broken
+				panic(fmt.Errorf("putback channel full, shutting down"))
+			}
+			putBackChannel <- PutBackChanMsg{&msgx, errorString, reason, false}
+		}
+		// This is for stats only and counts the amount of messages put back
+		KafkaPutBacks += 1
+		// Commit original message, after putback duplicate has been produced !
+		commitChannel <- msg
+
 	}
 	zap.S().Infof("%s Putback processor shutting down", identifier)
 }
 
 // DrainChannel empties a channel into the high Throughput putback channel
-func DrainChannel(identifier string, channelToDrain chan *kafka.Message, channelToDrainTo chan PutBackChanMsg, ShutdownChannel chan bool) bool {
+func DrainChannel(
+	identifier string,
+	channelToDrain chan *kafka.Message,
+	channelToDrainTo chan PutBackChanMsg,
+	ShutdownChannel chan bool) bool {
 	for len(channelToDrain) > 0 {
 		select {
 		case msg, ok := <-channelToDrain:
 			if ok {
-				channelToDrainTo <- PutBackChanMsg{msg, fmt.Sprintf("%s Shutting down", identifier), nil, false}
+				channelToDrainTo <- PutBackChanMsg{msg, nil, fmt.Sprintf("%s Shutting down", identifier), false}
 				KafkaPutBacks += 1
 			} else {
 				zap.S().Warnf("%s Channel to drain is closed", identifier)
@@ -325,7 +343,7 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 	select {
 	case msg, ok := <-channelToDrain:
 		if ok {
-			channelToDrainTo <- PutBackChanMsg{msg, "Shutting down", nil, false}
+			channelToDrainTo <- PutBackChanMsg{msg, nil, "Shutting down", false}
 		} else {
 			return false
 		}
@@ -342,20 +360,18 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 func StartCommitProcessor(identifier string, commitChannel chan *kafka.Message, kafkaConsumer *kafka.Consumer) {
 	zap.S().Debugf("%s Starting commit processor", identifier)
 	for !ShuttingDownKafka || len(commitChannel) > 0 {
-		select {
-		case msg := <-commitChannel:
-			{
-				_, err := kafkaConsumer.StoreMessage(msg)
-				if err != nil {
-					zap.S().Errorf("%s Error commiting %v: %s", identifier, msg, err)
-					commitChannel <- msg
-				} else {
-					// This is for stats only, and counts the amounts of commits done to the kafka queue
+		msg := <-commitChannel
 
-					KafkaCommits += 1
-				}
-			}
+		_, err := kafkaConsumer.StoreMessage(msg)
+		if err != nil {
+			zap.S().Errorf("%s Error committing %v: %s", identifier, msg, err)
+			commitChannel <- msg
+		} else {
+			// This is for stats only, and counts the amounts of commits done to the kafka queue
+
+			KafkaCommits += 1
 		}
+
 	}
 	zap.S().Debugf("%s Stopped commit processor", identifier)
 }

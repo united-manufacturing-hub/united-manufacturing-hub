@@ -36,8 +36,8 @@ func SetupHTKafka(configMap kafka.ConfigMap) {
 func CloseHTKafka() {
 
 	zap.S().Infof("[HT]Closing Kafka Consumer")
-	err := HTKafkaConsumer.Close()
-	if err != nil {
+
+	if err := HTKafkaConsumer.Close(); err != nil {
 		panic("Failed do close HTKafkaConsumer client !")
 	}
 

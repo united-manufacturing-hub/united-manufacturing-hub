@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
@@ -35,6 +36,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -109,7 +111,7 @@ func MqttQueueHandler() {
 		mqttData, err := dequeueMQTT()
 
 		if err != nil {
-			if err == goque.ErrEmpty {
+			if errors.Is(err, goque.ErrEmpty) {
 				// Queue is empty, just sleep a bit to prevent CPU load
 				time.Sleep(1 * time.Second)
 				continue
@@ -123,7 +125,13 @@ func MqttQueueHandler() {
 			}
 		}
 
-		token := mqttClient.Publish(fmt.Sprintf("ia/%s/%s/%s/%s", mqttData.Customer, mqttData.Location, mqttData.Asset, mqttData.Value), 2, false, mqttData.JSONData)
+		token := mqttClient.Publish(
+			fmt.Sprintf(
+				"ia/%s/%s/%s/%s",
+				mqttData.Customer,
+				mqttData.Location,
+				mqttData.Asset,
+				mqttData.Value), 2, false, mqttData.JSONData)
 
 		var sendMQTT = false
 		for i := 0; i < 10; i++ {

@@ -67,17 +67,5 @@ This is based on [Semantic Versioning](https://semver.org/).
 ## Git hooks
 
 ### Requirements
- - Python 3.8 or newer
- - Go 1.17 or newer
- - [Yamllint](https://github.com/adrienverge/yamllint#installation)
-   - ```pip install yamllint```
- - [Helm](https://helm.sh/docs/intro/install/)
- - [Staticcheck](https://staticcheck.io/docs/getting-started/)
-
-Afterwards set the git hook path for this repository by opening your favorite terminal and executing:
-
+ - Go 1.19.1 or newer
 ```git config --local core.hooksPath .githooks/```
-
-If you are on linux (or use the Git Bash under Windows), you also need to execute.
-
-```chmod +x .githooks/pre-push```
