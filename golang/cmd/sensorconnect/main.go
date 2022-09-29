@@ -8,6 +8,7 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"io/fs"
 	"net/http"
 
 	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
@@ -27,7 +28,7 @@ var forgetDeviceChannel chan DiscoveredDeviceInformation
 // var ioDeviceMap map[IoddFilemapKey]IoDevice
 var ioDeviceMap sync.Map
 
-var fileInfoSlice []os.FileInfo
+var fileInfoSlice []fs.DirEntry
 
 var slowDownMap sync.Map
 
@@ -71,6 +72,7 @@ func main() {
 
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error while starting pprof: %s", err.Error())
@@ -231,7 +233,7 @@ func main() {
 
 	ioDeviceMap = sync.Map{}
 
-	fileInfoSlice = make([]os.FileInfo, 0)
+	fileInfoSlice = make([]fs.DirEntry, 0)
 
 	tickerSearchForDevices := time.NewTicker(time.Duration(deviceFinderFrequencyInS) * time.Second)
 	defer tickerSearchForDevices.Stop()

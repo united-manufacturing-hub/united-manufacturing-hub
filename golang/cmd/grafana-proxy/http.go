@@ -10,7 +10,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -95,7 +95,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 	}
 	var bodyBytes []byte
 	if c.Request.Body != nil {
-		bodyBytes, err = ioutil.ReadAll(c.Request.Body)
+		bodyBytes, err = io.ReadAll(c.Request.Body)
 		if err != nil {
 			handleInvalidInputError(c, err)
 			return
@@ -358,9 +358,9 @@ func DoProxiedRequest(
 		}
 
 		var bodyBytesRet []byte
-		bodyBytesRet, err = ioutil.ReadAll(resp.Body)
+		bodyBytesRet, err = io.ReadAll(resp.Body)
 		if err != nil {
-			zap.S().Errorf("ioutil.ReadAll error: %v", err)
+			zap.S().Errorf("io.ReadAll error: %v", err)
 			c.AbortWithStatus(500)
 			return
 		}

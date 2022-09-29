@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -50,7 +50,7 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 	}
 
 	// save iodd file
-	err = ioutil.WriteFile(absoluteFilePath, filemap[index].File, 0600)
+	err = os.WriteFile(absoluteFilePath, filemap[index].File, 0600)
 	if err != nil {
 		zap.S().Errorf("Unable to write file: %v", err)
 		return err
@@ -140,7 +140,7 @@ func readZipFile(zf *zip.File) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return ioutil.ReadAll(f)
+	return io.ReadAll(f)
 }
 
 func getUrlWithRetry(url string) (body []byte, err error) {
@@ -191,7 +191,7 @@ func getUrl(url string) (body []byte, err error, status int) {
 	if status != 200 {
 		return
 	}
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	return
 }
 
