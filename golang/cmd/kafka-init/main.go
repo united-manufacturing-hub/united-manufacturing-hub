@@ -31,6 +31,7 @@ func main() {
 
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof: %s", err)
@@ -89,8 +90,8 @@ func main() {
 			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"group.id":                 "kafka-init",
-		"metadata.max.age.ms":      180000,
-	})
+			"metadata.max.age.ms":      180000,
+		})
 
 	initKafkaTopics(KafkaTopics)
 

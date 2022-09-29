@@ -37,6 +37,7 @@ func main() {
 	}(log)
 
 	// pprof
+	/* #nosec G114 */
 	go http.ListenAndServe("localhost:1337", nil)
 
 	foundDevice, inputDevice := GetBarcodeReaderDevice()
@@ -114,7 +115,7 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	}
 
 	for _, inputDevice := range devices {
-		var stat os.FileInfo
+		var stat fs.DirEntry
 		stat, err = inputDevice.File.Stat()
 		if err != nil {
 			zap.S().Errorf("Error getting device stat: %v", err)

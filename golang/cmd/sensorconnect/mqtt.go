@@ -8,7 +8,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"os"
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
@@ -18,7 +18,7 @@ func newTLSConfig() *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/SSL_certs/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}

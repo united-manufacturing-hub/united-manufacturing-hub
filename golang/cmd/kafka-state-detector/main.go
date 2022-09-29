@@ -38,6 +38,7 @@ func main() {
 
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof: %s", err)
@@ -96,8 +97,8 @@ func main() {
 				"enable.auto.commit":       true,
 				"enable.auto.offset.store": false,
 				"auto.offset.reset":        "earliest",
-			"metadata.max.age.ms":      180000,
-		})
+				"metadata.max.age.ms":      180000,
+			})
 
 		ActivityProcessorChannel = make(chan *kafka.Message, 100)
 		ActivityCommitChannel = make(chan *kafka.Message)
@@ -137,8 +138,8 @@ func main() {
 				"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
 				"enable.auto.commit":       true,
 				"auto.offset.reset":        "earliest",
-			"metadata.max.age.ms":      180000,
-		})
+				"metadata.max.age.ms":      180000,
+			})
 
 		AnomalyProcessorChannel = make(chan *kafka.Message, 100)
 		AnomalyCommitChannel = make(chan *kafka.Message)
