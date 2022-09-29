@@ -115,7 +115,7 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	}
 
 	for _, inputDevice := range devices {
-		var stat fs.DirEntry
+		var stat os.FileInfo
 		stat, err = inputDevice.File.Stat()
 		if err != nil {
 			zap.S().Errorf("Error getting device stat: %v", err)
