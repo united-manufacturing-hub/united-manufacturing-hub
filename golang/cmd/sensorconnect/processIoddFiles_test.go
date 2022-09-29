@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,7 +22,7 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	}
 
 	// Declare Variables
-	var fileInfoSlice []os.FileInfo
+	var fileInfoSlice []fs.DirEntry
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
@@ -70,7 +71,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 
 func TestReadIoddFiles(t *testing.T) {
 	internal.InitMemcache()
-	var fileInfoSlice []os.FileInfo
+	var fileInfoSlice []fs.DirEntry
 	// first remove all files from specified path
 	err := removeFilesFromDirectory()
 	if err != nil {
@@ -128,7 +129,7 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
 	// Declare Variables
-	var fileInfoSlice []os.FileInfo
+	var fileInfoSlice []fs.DirEntry
 
 	var ioddFilemapKey_IFM IoddFilemapKey
 	ioddFilemapKey_IFM.DeviceId = 698

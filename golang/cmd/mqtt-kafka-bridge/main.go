@@ -37,6 +37,7 @@ func main() {
 
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof: %v", err)
@@ -88,6 +89,7 @@ func main() {
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go func() {
+		/* #nosec G114 */
 		err = http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Fatalf("Error starting healthcheck %v", err)
@@ -125,8 +127,8 @@ func main() {
 			"ssl.ca.location":          "/SSL_certs/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"group.id":                 "mqtt-kafka-bridge",
-		"metadata.max.age.ms":      180000,
-	})
+			"metadata.max.age.ms":      180000,
+		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(

@@ -8,7 +8,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 )
@@ -151,7 +151,7 @@ func downloadSensorData(url string, payload []byte) (body []byte, err error) {
 		zap.S().Debugf("Url was: %s", url)
 		return
 	}
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
