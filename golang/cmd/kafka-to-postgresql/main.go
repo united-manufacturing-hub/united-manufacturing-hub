@@ -10,6 +10,8 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -33,7 +35,12 @@ func main() {
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	dryRun := os.Getenv("DRY_RUN")
 
@@ -43,14 +50,24 @@ func main() {
 	zap.S().Debugf("Setting up metrics %s %v", metricsPath, metricsPort)
 
 	http.Handle(metricsPath, promhttp.Handler())
-	go http.ListenAndServe(metricsPort, nil)
+	go func() {
+		err := http.ListenAndServe(metricsPort, nil)
+		if err != nil {
+			zap.S().Errorf("Error starting metrics: %s", err)
+		}
+	}()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
-	go http.ListenAndServe("0.0.0.0:8086", health)
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", err)
+		}
+	}()
 
 	// Postgres
 	PQHost := os.Getenv("POSTGRES_HOST")
@@ -99,59 +116,62 @@ func main() {
 	// leads to better performance.
 	// Processed message now will be stored locally and then automatically committed to Kafka.
 	// This still provides the at-least-once guarantee.
-	SetupHIKafka(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"group.id":                 "kafka-to-postgresql-hi-processor",
-		"enable.auto.commit":       true,
-		"enable.auto.offset.store": false,
-		"auto.offset.reset":        "earliest",
-		//"debug":                    "security,broker",
-		"topic.metadata.refresh.interval.ms": "30000",
+	SetupHIKafka(
+		kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-postgresql-hi-processor",
+			"enable.auto.commit":       true,
+			"enable.auto.offset.store": false,
+			"auto.offset.reset":        "earliest",
+			// "debug":                    "security,broker",
+			"topic.metadata.refresh.interval.ms": "30000",
 		"metadata.max.age.ms":                180000,
 	})
 
 	// HT uses enable.auto.commit=true for increased performance.
-	SetupHTKafka(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"group.id":                 "kafka-to-postgresql-ht-processor",
-		"enable.auto.commit":       true,
-		"auto.offset.reset":        "earliest",
-		//"debug":                    "security,broker",
-		"topic.metadata.refresh.interval.ms": "30000",
+	SetupHTKafka(
+		kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-postgresql-ht-processor",
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
+			// "debug":                    "security,broker",
+			"topic.metadata.refresh.interval.ms": "30000",
 		"metadata.max.age.ms":                180000,
 	})
 
-	// KafkaTopicProbeConsumer recieves a message when a new topic is created
-	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"group.id":                 "kafka-to-postgresql-topic-probe",
-		"enable.auto.commit":       true,
-		"auto.offset.reset":        "earliest",
-		//"debug":                    "security,broker",
-		"topic.metadata.refresh.interval.ms": "30000",
-	})
+	// KafkaTopicProbeConsumer receives a message when a new topic is created
+	internal.SetupKafkaTopicProbeConsumer(
+		kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-postgresql-topic-probe",
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
+			// "debug":                    "security,broker",
+			"topic.metadata.refresh.interval.ms": "30000",
+		})
 
 	allowedMemorySize := 1073741824 // 1GB
 	if os.Getenv("MEMORY_REQUEST") != "" {
 		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
 		i, b := memoryRequest.AsInt64()
 		if b {
-			allowedMemorySize = int(i) //truncated !
+			allowedMemorySize = int(i) // truncated !
 		}
 	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
@@ -169,8 +189,19 @@ func main() {
 	highIntegrityCommitChannel = make(chan *kafka.Message)
 	highIntegrityEventChannel := HIKafkaProducer.Events()
 
-	go internal.StartPutbackProcessor("[HI]", highIntegrityPutBackChannel, HIKafkaProducer, highIntegrityCommitChannel, 200)
-	go internal.ProcessKafkaQueue("[HI]", HITopic, highIntegrityProcessorChannel, HIKafkaConsumer, highIntegrityPutBackChannel, ShutdownApplicationGraceful)
+	go internal.StartPutbackProcessor(
+		"[HI]",
+		highIntegrityPutBackChannel,
+		HIKafkaProducer,
+		highIntegrityCommitChannel,
+		200)
+	go internal.ProcessKafkaQueue(
+		"[HI]",
+		HITopic,
+		highIntegrityProcessorChannel,
+		HIKafkaConsumer,
+		highIntegrityPutBackChannel,
+		ShutdownApplicationGraceful)
 	go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
 
 	go startHighIntegrityQueueProcessor()
@@ -185,7 +216,13 @@ func main() {
 	// HT has no commit channel, it uses auto commit
 
 	go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil, 200)
-	go internal.ProcessKafkaQueue("[HT]", HTTopic, highThroughputProcessorChannel, HTKafkaConsumer, highThroughputPutBackChannel, nil)
+	go internal.ProcessKafkaQueue(
+		"[HT]",
+		HTTopic,
+		highThroughputProcessorChannel,
+		HTKafkaConsumer,
+		highThroughputPutBackChannel,
+		nil)
 
 	go startHighThroughputQueueProcessor()
 	go internal.StartEventHandler("[HT]", highThroughputEventChannel, highIntegrityPutBackChannel)
@@ -208,7 +245,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	// It's important to handle both signals, allowing Kafka to shut down gracefully !
 	// If this is not possible, it will attempt to rebalance itself, which will increase startup time
-	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigs, syscall.SIGTERM)
 
 	go func() {
 		// Kubernetes sends SIGTERM 30 seconds before
@@ -217,7 +254,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIG %v", sig)
+		zap.S().Infof("Received SIG %v", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -227,7 +264,7 @@ func main() {
 	// The following code keeps the memory usage low
 	debug.SetGCPercent(10)
 
-	//go internal.MemoryLimiter(allowedMemorySize)
+	// go internal.MemoryLimiter(allowedMemorySize)
 
 	go PerformanceReport()
 	select {} // block forever
@@ -310,7 +347,7 @@ func ShutdownApplicationGraceful() {
 
 	ShutdownDB()
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
@@ -334,20 +371,21 @@ func PerformanceReport() {
 		lastPutbacks = internal.KafkaPutBacks
 		lastConfirmed = internal.KafkaConfirmed
 
-		zap.S().Infof("Performance report"+
-			"| Commits: %f, Commits/s: %f"+
-			"| Messages: %f, Messages/s: %f"+
-			"| PutBacks: %f, PutBacks/s: %f"+
-			"| Confirmed: %f, Confirmed/s: %f"+
-			"| [HI] Processor queue length: %d"+
-			"| [HI] PutBack queue length: %d"+
-			"| [HI] Commit queue length: %d"+
-			"| Messagecache hitrate %f"+
-			"| Dbcache hitrate %f"+
-			"| [HT] ProcessValue queue lenght: %d"+
-			"| [HT] ProcessValueString queue lenght: %d"+
-			"| [HT] Processor queue length: %d"+
-			"| [HT] PutBack queue length: %d",
+		zap.S().Infof(
+			"Performance report"+
+				"| Commits: %f, Commits/s: %f"+
+				"| Messages: %f, Messages/s: %f"+
+				"| PutBacks: %f, PutBacks/s: %f"+
+				"| Confirmed: %f, Confirmed/s: %f"+
+				"| [HI] Processor queue length: %d"+
+				"| [HI] PutBack queue length: %d"+
+				"| [HI] Commit queue length: %d"+
+				"| Messagecache hitrate %f"+
+				"| Dbcache hitrate %f"+
+				"| [HT] ProcessValue queue length: %d"+
+				"| [HT] ProcessValueString queue length: %d"+
+				"| [HT] Processor queue length: %d"+
+				"| [HT] PutBack queue length: %d",
 			internal.KafkaCommits, commitsPerSecond,
 			internal.KafkaMessages, messagesPerSecond,
 			internal.KafkaPutBacks, putbacksPerSecond,

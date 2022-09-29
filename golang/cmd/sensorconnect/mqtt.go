@@ -12,7 +12,7 @@ import (
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
-func newTLSConfig(clientID string) *tls.Config {
+func newTLSConfig() *tls.Config {
 
 	// Import trusted certificates from CAfile.pem.
 	// Alternatively, manually add CA certificates to
@@ -36,6 +36,7 @@ func newTLSConfig(clientID string) *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -80,7 +81,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) {
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
 	} else {
-		tlsconfig := newTLSConfig(certificateName)
+		tlsconfig := newTLSConfig()
 		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
 
 		zap.S().Infof("Running in normal mode", certificateName)

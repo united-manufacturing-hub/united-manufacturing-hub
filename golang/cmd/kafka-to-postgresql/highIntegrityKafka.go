@@ -44,8 +44,8 @@ func SetupHIKafka(configMap kafka.ConfigMap) {
 func CloseHIKafka() {
 
 	zap.S().Infof("[HI]Closing Kafka Consumer")
-	err := HIKafkaConsumer.Close()
-	if err != nil {
+
+	if err := HIKafkaConsumer.Close(); err != nil {
 		panic("Failed do close HIKafkaConsumer client !")
 	}
 

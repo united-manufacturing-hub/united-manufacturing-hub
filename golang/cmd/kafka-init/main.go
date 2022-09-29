@@ -7,6 +7,8 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -28,12 +30,17 @@ func main() {
 	zap.S().Infof("This is kafka-init build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	zap.S().Infof("KafkaBoostrapServer: %s", KafkaBoostrapServer)
-	// Semicolon seperated list of topic to create
+	// Semicolon separated list of topic to create
 	KafkaTopics := os.Getenv("KAFKA_TOPICS")
 	zap.S().Infof("KafkaTopics: %s", KafkaTopics)
 
@@ -66,16 +73,22 @@ func main() {
 	} else {
 		zap.S().Infof("Site reachable, connection: %v", conn)
 	}
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err = conn.Close()
+		if err != nil {
+			zap.S().Errorf("Error closing connection: %s", err)
+		}
+	}(conn)
 
-	internal.SetupKafka(kafka.ConfigMap{
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"group.id":                 "kafka-init",
+	internal.SetupKafka(
+		kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"group.id":                 "kafka-init",
 		"metadata.max.age.ms":      180000,
 	})
 
@@ -95,7 +108,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -111,7 +124,7 @@ func ShutdownApplicationGraceful() {
 
 	internal.CloseKafka()
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)

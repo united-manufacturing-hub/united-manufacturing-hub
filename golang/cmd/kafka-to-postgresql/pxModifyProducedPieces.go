@@ -24,14 +24,14 @@ type modifyProducedPieces struct {
 	TimestampMs *uint64 `json:"timestamp_ms"`
 }
 
-// ProcessMessages processes a ModifyProducedPieces kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+// ProcessMessages processes a ModifyProducedPieces kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
 func (c ModifyProducedPieces) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -65,7 +65,11 @@ func (c ModifyProducedPieces) ProcessMessages(msg internal.ParsedMessage) (putba
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+		return true, fmt.Errorf(
+			"failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s",
+			msg.CustomerId,
+			msg.Location,
+			msg.AssetId), false
 	}
 
 	// Changes should only be necessary between this marker

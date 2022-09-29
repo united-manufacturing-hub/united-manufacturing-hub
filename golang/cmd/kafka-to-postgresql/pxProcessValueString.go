@@ -51,7 +51,7 @@ func startProcessValueStringQueueAggregator() {
 				messages = append(messages, msg)
 				// This checks for >= 5000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= chanSize {
-					//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
+					// zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 					putBackMsg, putback, reason, err := writeProcessValueStringToDatabase(messages)
 					if putback {
 						for _, message := range putBackMsg {
@@ -73,7 +73,7 @@ func startProcessValueStringQueueAggregator() {
 			}
 		case <-writeToDbTimer.C: // Commit data into db
 			{
-				//zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
+				// zap.S().Debugf("[HT][PVS] KafkaMessages length: %d", len(messages))
 				if len(messages) == 0 {
 
 					continue
@@ -113,7 +113,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 	reason string,
 	err error) {
 	zap.S().Debugf("[HT][PVS] Writing %d messages to database", len(messages))
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.Begin()
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -210,7 +210,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 						value, valueIsString := v.(string)
 						if !valueIsString {
 
-							//zap.S().Debugf("Value is not string")
+							// zap.S().Debugf("Value is not string")
 							// Value is malformed, skip to next key
 							continue
 						}
@@ -287,7 +287,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 			return messages, true, "Failed to rollback", err
 		}
 		if len(putBackMsg) > 0 {
-			return putBackMsg, true, "AssetID not found", nil
+			return putBackMsg, true, AssetIDnotFound, nil
 		}
 	} else {
 		zap.S().Debugf("[HT][PVS] Committing transaction")
@@ -296,9 +296,9 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 		if err != nil {
 			return messages, true, "Failed to commit", err
 		}
-		//zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
+		// zap.S().Debugf("Committed %d messages, putting back %d messages", len(messages)-len(putBackMsg), len(putBackMsg))
 		if len(putBackMsg) > 0 {
-			return putBackMsg, true, "AssetID not found", nil
+			return putBackMsg, true, AssetIDnotFound, nil
 		}
 		internal.KafkaPutBacks += float64(len(putBackMsg))
 		internal.KafkaCommits += toCommit

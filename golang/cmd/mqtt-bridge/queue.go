@@ -33,7 +33,7 @@ func closeQueue(pq *goque.Queue) (err error) {
 	return
 }
 
-func storeMessageIntoQueue(topic string, message []byte, mode string, pq *goque.Queue) {
+func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 
 	newElement := queueObject{
 		Topic:   topic,

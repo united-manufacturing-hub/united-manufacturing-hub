@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
@@ -19,14 +20,14 @@ type addOrder struct {
 	TargetUnits *uint64 `json:"target_units"`
 }
 
-// ProcessMessages processes a AddOrder kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and commiting
+// ProcessMessages processes a AddOrder kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
 func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
 	// It is deferred to automatically release the allocated resources, once the function returns
 	defer txnCtxCl()
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.BeginTx(txnCtx, nil)
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -61,13 +62,23 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	AssetTableID, success := GetAssetTableID(msg.CustomerId, msg.Location, msg.AssetId)
 	if !success {
 		zap.S().Warnf("Failed to get AssetTableID")
-		return true, fmt.Errorf("failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s", msg.CustomerId, msg.Location, msg.AssetId), false
+		return true, fmt.Errorf(
+			"failed to get AssetTableID for CustomerId: %s, Location: %s, AssetId: %s",
+			msg.CustomerId,
+			msg.Location,
+			msg.AssetId), false
 	}
 
 	ProductTableID, success := GetProductTableId(*sC.ProductId, AssetTableID)
 	if !success {
-		zap.S().Warnf("Failed to get ProductTableID for ProductId: %s and AssetTableId: %d", *sC.ProductId, AssetTableID)
-		return true, fmt.Errorf("failed to get ProductTableID for ProductId: %s, AssetTableID: %d", *sC.ProductId, AssetTableID), false
+		zap.S().Warnf(
+			"Failed to get ProductTableID for ProductId: %s and AssetTableId: %d",
+			*sC.ProductId,
+			AssetTableID)
+		return true, fmt.Errorf(
+			"failed to get ProductTableID for ProductId: %s, AssetTableID: %d",
+			*sC.ProductId,
+			AssetTableID), false
 	}
 
 	// Changes should only be necessary between this marker
@@ -83,10 +94,16 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	defer stmtCtxCl()
 	_, err = stmt.ExecContext(stmtCtx, sC.OrderId, ProductTableID, sC.TargetUnits, AssetTableID)
 	if err != nil {
-		pqErr := err.(*pq.Error)
-		zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
-		if pqErr.Code == "23P01" {
-			return true, err, true
+		var pqErr *pq.Error
+		ok := errors.As(err, &pqErr)
+
+		if ok {
+			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+		} else {
+			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
+			if pqErr.Code == Sql23p01ExclusionViolation {
+				return true, err, true
+			}
 		}
 		return true, err, false
 	}
@@ -111,3 +128,5 @@ func (c AddOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 
 	return false, err, false
 }
+
+const Sql23p01ExclusionViolation = "23P01"

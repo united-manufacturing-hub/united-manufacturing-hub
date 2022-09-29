@@ -1,105 +1,105 @@
 package datamodel
 
 // ConvertOldToNew converts a state from the old data model to the new one
-func ConvertOldToNew(OldState int) (NewState int) {
-	switch OldState {
+func ConvertOldToNew(oldState int) (newState int) {
+	switch oldState {
 	case 0:
-		NewState = ProducingAtFullSpeedState
+		newState = ProducingAtFullSpeedState
 	case 1:
-		NewState = UnspecifiedStopState
+		newState = UnspecifiedStopState
 	case 2:
-		NewState = NoShiftState
+		newState = NoShiftState
 	case 3:
-		NewState = TechnicalOtherStop
+		newState = TechnicalOtherStop
 	case 4:
-		NewState = MaterialIssueOtherState
+		newState = MaterialIssueOtherState
 	case 5:
-		NewState = PreventiveMaintenanceStop
+		newState = PreventiveMaintenanceStop
 	case 6:
-		NewState = ChangeoverState
+		newState = ChangeoverState
 	case 7:
-		NewState = MicrostopState
+		newState = MicrostopState
 	case 8:
-		NewState = OperatorBreakState
+		newState = OperatorBreakState
 	case 9:
-		NewState = NoShiftState
+		newState = NoShiftState
 	case 10:
-		NewState = InletJamState
+		newState = InletJamState
 	case 11:
-		NewState = NoOrderState
+		newState = NoOrderState
 	case 12:
-		NewState = IdleState
+		newState = IdleState
 	case 13:
-		NewState = OperatorInteractionState
+		newState = OperatorInteractionState
 	case 14:
-		NewState = ExternalInterferenceState
+		newState = ExternalInterferenceState
 	case 15:
-		NewState = InletJamState
+		newState = InletJamState
 	case 16:
-		NewState = OutletJamState
+		newState = OutletJamState
 	case 18:
-		NewState = CleaningState
+		newState = CleaningState
 	case 19:
-		NewState = ProducingAtLowerThanFullSpeedState
+		newState = ProducingAtLowerThanFullSpeedState
 	case 1001:
-		NewState = MissingBottleCapsRinneState
+		newState = MissingBottleCapsRinneState
 	case 1002:
-		NewState = MissingBottleCapsUebergabeState
+		newState = MissingBottleCapsUebergabeState
 	default:
-		NewState = OldState
+		newState = oldState
 	}
 
-	return
+	return newState
 }
 
 // ConvertNewToOld converts a state from the new data model to the old one (used to keep the old test files)
-func ConvertNewToOld(NewState int) (OldState int) {
-	switch NewState {
+func ConvertNewToOld(newState int) (oldState int) {
+	switch newState {
 	case ProducingAtFullSpeedState:
-		OldState = 0
+		oldState = 0
 	case UnspecifiedStopState:
-		OldState = 1
+		oldState = 1
 	case NoOrderState:
-		OldState = 2
+		oldState = 2
 	case TechnicalOtherStop:
-		OldState = 3
+		oldState = 3
 	case MaterialIssueOtherState:
-		OldState = 4
+		oldState = 4
 	case PreventiveMaintenanceStop:
-		OldState = 5
+		oldState = 5
 	case ChangeoverState:
-		OldState = 6
+		oldState = 6
 	case MicrostopState:
-		OldState = 7
+		oldState = 7
 	case OperatorBreakState:
-		OldState = 8
+		oldState = 8
 	case NoShiftState:
-		OldState = 9
-	//case InletJamState:
-	//	OldState = 10
-	//case NoOrderState:
-	//	OldState = 11
+		oldState = 9
+	// case InletJamState:
+	//	oldState = 10
+	// case NoOrderState:
+	//	oldState = 11
 	case IdleState:
-		OldState = 12
+		oldState = 12
 	case OperatorInteractionState:
-		OldState = 13
+		oldState = 13
 	case ExternalInterferenceState:
-		OldState = 14
+		oldState = 14
 	case InletJamState:
-		OldState = 15
+		oldState = 15
 	case OutletJamState:
-		OldState = 16
+		oldState = 16
 	case CleaningState:
-		OldState = 18
+		oldState = 18
 	case ProducingAtLowerThanFullSpeedState:
-		OldState = 19
+		oldState = 19
 	case MissingBottleCapsRinneState:
-		OldState = 1001
+		oldState = 1001
 	case MissingBottleCapsUebergabeState:
-		OldState = 1002
+		oldState = 1002
 	default:
-		OldState = NewState
+		oldState = newState
 	}
 
-	return
+	return oldState
 }

@@ -48,7 +48,7 @@ func startProcessValueQueueAggregator() {
 				messages = append(messages, msg)
 				// This checks for >= 500000, because we don't want to block the channel (see size of the processValueChannel)
 				if len(messages) >= chanSize {
-					//zap.S().Debugf("[HT][PV][AA] KafkaMessages length: %d", len(messages))
+					// zap.S().Debugf("[HT][PV][AA] KafkaMessages length: %d", len(messages))
 					putBackMsg, putback, reason, err := writeProcessValueToDatabase(messages)
 					if putback {
 						for _, message := range putBackMsg {
@@ -70,7 +70,7 @@ func startProcessValueQueueAggregator() {
 			}
 		case <-writeToDbTimer.C:
 			{
-				//zap.S().Debugf("[HT][PV] KafkaMessages length: %d", len(messages))
+				// zap.S().Debugf("[HT][PV] KafkaMessages length: %d", len(messages))
 				if len(messages) == 0 {
 					continue
 				}
@@ -109,7 +109,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 	reason string,
 	err error) {
 	zap.S().Debugf("[HT][PV] Writing %d messages to database", len(messages))
-	var txn *sql.Tx = nil
+	var txn *sql.Tx
 	txn, err = db.Begin()
 	if err != nil {
 		zap.S().Errorf("Error starting transaction: %s", err.Error())
@@ -131,9 +131,9 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		}
 	}
 	putBackMsg = make([]*kafka.Message, 0)
-	// toCommit is used for stats only, it just increments, whenever a message was added to the transaction.
+	// temporaryCommitCounterAsFloat64 is used for stats only, it just increments, whenever a message was added to the transaction.
 	// at the end, this count is added to the global Commit counter
-	toCommit := float64(0)
+	temporaryCommitCounterAsFloat64 := float64(0)
 	zap.S().Debugf("[HT][PV] 2")
 	{
 
@@ -189,7 +189,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 			}
 
 			timestampMs := uint64(tsF64)
-			//zap.S().Debugf("[HT][PV] Timestamp: %d", timestampMs)
+			// zap.S().Debugf("[HT][PV] Timestamp: %d", timestampMs)
 			for k, v := range sC {
 				switch k {
 				case "timestamp_ms":
@@ -198,11 +198,11 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 				case "measurement":
 				case "serial_number":
 				default:
-					//zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
+					// zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
 					value, valueIsFloat64 := v.(float64)
 					if !valueIsFloat64 {
 
-						//zap.S().Debugf("[HT][PV] Value is not a float64")
+						// zap.S().Debugf("[HT][PV] Value is not a float64")
 						// Value is malformed, skip to next key
 						continue
 					}
@@ -210,7 +210,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 					// This coversion is necessary for postgres
 					timestamp := time.Unix(0, int64(timestampMs*uint64(1000000))).Format("2006-01-02T15:04:05.000Z")
 
-					//zap.S().Debugf("[HT][PV] Inserting %d, %s, %f, %s", AssetTableID, timestamp, value, k)
+					// zap.S().Debugf("[HT][PV] Inserting %d, %s, %f, %s", AssetTableID, timestamp, value, k)
 					_, err = stmtCopy.Exec(timestamp, AssetTableID, value, k)
 					if err != nil {
 						zap.S().Errorf("Error inserting into temporary table: %s", err.Error())
@@ -220,7 +220,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 						}
 						return messages, true, "Error inserting into temporary table", err
 					}
-					toCommit += 1
+					temporaryCommitCounterAsFloat64 += 1
 				}
 			}
 		}
@@ -280,9 +280,9 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		if err != nil {
 			return messages, true, "Failed to rollback", err
 		}
-		return putBackMsg, true, "AssetID not found", nil
+		return putBackMsg, true, AssetIDnotFound, nil
 	} else {
-		zap.S().Debugf("Pre-commit to process value table: %d", toCommit)
+		zap.S().Debugf("Pre-commit to process value table: %d", temporaryCommitCounterAsFloat64)
 		err = txn.Commit()
 		if err != nil {
 			return messages, true, "Failed to commit", err
@@ -292,10 +292,12 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 			len(messages)-len(putBackMsg),
 			len(putBackMsg))
 		if len(putBackMsg) > 0 {
-			return putBackMsg, true, "AssetID not found", nil
+			return putBackMsg, true, AssetIDnotFound, nil
 		}
 		internal.KafkaPutBacks += float64(len(putBackMsg))
-		internal.KafkaCommits += toCommit
+		internal.KafkaCommits += temporaryCommitCounterAsFloat64
 	}
 	return putBackMsg, false, "", nil
 }
+
+const AssetIDnotFound = "AssetID not found"
