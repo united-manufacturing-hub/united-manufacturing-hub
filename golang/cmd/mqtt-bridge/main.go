@@ -39,6 +39,7 @@ func main() {
 	zap.S().Infof("This is mqtt-bridge build date: %s", buildtime)
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof %v", err)

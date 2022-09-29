@@ -31,6 +31,7 @@ func main() {
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof: %s", err)
@@ -71,6 +72,7 @@ func main() {
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			panic(err)

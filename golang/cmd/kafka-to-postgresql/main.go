@@ -36,6 +36,7 @@ func main() {
 
 	// pprof
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof: %s", err)
@@ -51,6 +52,7 @@ func main() {
 
 	http.Handle(metricsPath, promhttp.Handler())
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe(metricsPort, nil)
 		if err != nil {
 			zap.S().Errorf("Error starting metrics: %s", err)
@@ -63,6 +65,7 @@ func main() {
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Errorf("Error starting healthcheck: %s", err)
@@ -130,8 +133,8 @@ func main() {
 			"auto.offset.reset":        "earliest",
 			// "debug":                    "security,broker",
 			"topic.metadata.refresh.interval.ms": "30000",
-		"metadata.max.age.ms":                180000,
-	})
+			"metadata.max.age.ms":                180000,
+		})
 
 	// HT uses enable.auto.commit=true for increased performance.
 	SetupHTKafka(
@@ -147,8 +150,8 @@ func main() {
 			"auto.offset.reset":        "earliest",
 			// "debug":                    "security,broker",
 			"topic.metadata.refresh.interval.ms": "30000",
-		"metadata.max.age.ms":                180000,
-	})
+			"metadata.max.age.ms":                180000,
+		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(

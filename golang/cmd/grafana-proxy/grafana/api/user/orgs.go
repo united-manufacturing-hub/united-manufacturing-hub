@@ -11,7 +11,7 @@ import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -57,7 +57,7 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 
 	if resp.StatusCode == http.StatusOK {
 		var bodyBytes []byte
-		bodyBytes, err = ioutil.ReadAll(resp.Body)
+		bodyBytes, err = io.ReadAll(resp.Body)
 		if err != nil {
 			zap.S().Fatalf("Failed to read response body: %v", err)
 			return nil, err

@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"errors"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -127,7 +127,7 @@ type IoddFilemapKey struct {
 func AddNewDeviceToIoddFilesAndMap(
 	ioddFilemapKey IoddFilemapKey,
 	relativeDirectoryPath string,
-	fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
+	fileInfoSlice []fs.DirEntry) ([]fs.DirEntry, error) {
 	zap.S().Debugf("Requesting IoddFile %v -> %s", ioddFilemapKey, relativeDirectoryPath)
 	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
@@ -163,14 +163,14 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 }
 
 // ReadIoddFiles Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
-func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) ([]os.FileInfo, error) {
+func ReadIoddFiles(oldFileInfoSlice []fs.DirEntry, relativeDirectoryPath string) ([]fs.DirEntry, error) {
 	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
 	if err != nil {
 		zap.S().Errorf("Error in ReadIoddFiles: %s", err.Error())
 		return oldFileInfoSlice, err
 	}
 	// check for new iodd files
-	currentFileInfoSlice, err := ioutil.ReadDir(absoluteDirectoryPath)
+	currentFileInfoSlice, err := os.ReadDir(absoluteDirectoryPath)
 	if err != nil {
 		err = errors.New("reading of currentFileInfoSlice from specified directory failed")
 		return oldFileInfoSlice, err
@@ -188,7 +188,7 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string)
 		absoluteFilePath := absoluteDirectoryPath + "/" + name
 		// read file
 		var dat []byte
-		dat, err = ioutil.ReadFile(absoluteFilePath)
+		dat, err = os.ReadFile(absoluteFilePath)
 		if err != nil {
 			return oldFileInfoSlice, err
 		}
@@ -248,7 +248,7 @@ func contains(slice []string, entry string) bool {
 }
 
 // getNamesOfFileInfo returns the names of files stored inside a FileInfo slice
-func getNamesOfFileInfo(fileInfoSlice []os.FileInfo) (namesSlice []string) {
+func getNamesOfFileInfo(fileInfoSlice []fs.DirEntry) (namesSlice []string) {
 	for _, element := range fileInfoSlice {
 		namesSlice = append(namesSlice, element.Name())
 	}

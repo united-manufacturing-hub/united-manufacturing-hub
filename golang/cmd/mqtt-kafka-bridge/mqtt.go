@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/beeker1121/goque"
@@ -21,7 +21,7 @@ func newTLSConfig() *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/SSL_certs/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}

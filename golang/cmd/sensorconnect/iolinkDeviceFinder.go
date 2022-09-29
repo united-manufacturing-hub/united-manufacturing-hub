@@ -7,7 +7,7 @@ import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -171,9 +171,9 @@ func CheckGivenIpAddress(i uint32) (body []byte, url string, err error) {
 		zap.S().Debugf("Response status not 200 but instead: %d (URL: %s)", resp.StatusCode, url)
 		return
 	}
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
-		zap.S().Errorf("ioutil.Readall(resp.Body)  failed: %s", err)
+		zap.S().Errorf("io.ReadAll(resp.Body)  failed: %s", err)
 		return
 	}
 	return
