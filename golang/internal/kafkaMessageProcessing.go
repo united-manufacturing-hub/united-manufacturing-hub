@@ -1,6 +1,3 @@
-//go:build kafka
-// +build kafka
-
 package internal
 
 import (

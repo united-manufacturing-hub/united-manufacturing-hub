@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/beeker1121/goque"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 )
 
@@ -29,6 +29,8 @@ func closeQueue() (err error) {
 }
 
 func enqueueMQTT(mqttData MQTTData) (err error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	bytes, err := json.Marshal(mqttData)
 	if err != nil {
 		return
@@ -49,6 +51,8 @@ func dequeueMQTT() (mqttData MQTTData, err error) {
 		return
 	}
 	if item != nil {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		err = json.Unmarshal(item.Value, &mqttData)
 	}
 	return

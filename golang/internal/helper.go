@@ -2,7 +2,7 @@ package internal
 
 import (
 	"bytes"
-	"encoding/json"
+	jsoniter "github.com/json-iterator/go"
 	"io"
 	"os"
 	"reflect"
@@ -20,6 +20,8 @@ var lock2 sync.Mutex
 // io.Reader.
 // By default, it uses the JSON marshaller.
 var Marshal = func(v interface{}) (io.Reader, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	b, err := json.MarshalIndent(v, "", "\t")
 	if err != nil {
 		return nil, err
@@ -48,6 +50,8 @@ func Save(path string, v interface{}) error {
 // reader into the specified value.
 // By default, it uses the JSON unmarshaller.
 var Unmarshal = func(r io.Reader, v interface{}) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.NewDecoder(r).Decode(v)
 }
 
@@ -68,7 +72,10 @@ func Load(path string, v interface{}) error {
 // LogObject is used to create testfiles for golden testing
 func LogObject(functionName string, objectName string, now time.Time, v interface{}) {
 	timestamp := strconv.FormatInt(now.UTC().Unix(), 10)
-	Save("/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden", v)
+	err := Save("/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden", v)
+	if err != nil {
+		zap.S().Errorf("Error while logging object: %s", err)
+	}
 
 	zap.S().Infof("Logged ", "/testfiles/temp/"+functionName+"_"+objectName+"_"+timestamp+".golden")
 }

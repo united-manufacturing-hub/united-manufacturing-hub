@@ -6,6 +6,8 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -28,7 +30,12 @@ func main() {
 	}(log)
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")
@@ -87,7 +94,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -110,6 +117,6 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	shutdownEnabled = true
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 	os.Exit(0)
 }
