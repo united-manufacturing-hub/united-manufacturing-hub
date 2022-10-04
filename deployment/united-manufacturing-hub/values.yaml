@@ -57,12 +57,143 @@ _000_commonConfig:
       enabled: true
       AclConfig: |-
         pattern #
+      CACert: |
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      Cert: |
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      Privkey: |
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
 
     # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
       useSSL: false
       defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
+
+  certificates:
+    CACert: |-
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    kafka:
+      cert: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      privkey: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+    barcodereader:
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    kafkabridge:
+
+      sslKeyPasswordLocal: ""
+      sslKeyPemLocal: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePemLocal: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      sslCACertRemote: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+      sslCertificatePemRemote: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslKeyPasswordRemote: ""
+      sslKeyPemRemote: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+
+    kafkadebug:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    kafkainit:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    kafkastatedetector:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    kafkatoblob:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    kafkatopostgresql:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    kowl:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    mqttkafkabridge:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    nodered:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+    sensorconnect:
+
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+
 
   # timescaledb, factoryinsight, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
