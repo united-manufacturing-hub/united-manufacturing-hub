@@ -185,7 +185,6 @@ func GetComponents(assetID uint32) (components []string, err error) {
 
 // GetStatesRaw gets all states for a specific asset in a timerange. It returns an array of datamodel.StateEntry
 func GetStatesRaw(
-
 	customerID string,
 	location string,
 	asset string,
@@ -300,7 +299,6 @@ func GetStatesRaw(
 
 // GetShiftsRaw gets all shifts for a specific asset in a timerange in a raw format
 func GetShiftsRaw(
-
 	customerID string,
 	location string,
 	asset string,
@@ -442,7 +440,6 @@ func GetShiftsRaw(
 
 // GetShifts gets all shifts for a specific asset in a timerange
 func GetShifts(
-
 	customerID string,
 	location string,
 	asset string,
@@ -496,7 +493,6 @@ func GetShifts(
 
 // GetProcessValue gets all data for specific valueName and for a specific asset in a timerange
 func GetProcessValue(
-
 	customerID string,
 	location string,
 	asset string,
@@ -561,7 +557,6 @@ func GetProcessValue(
 }
 
 func GetProcessValueString(
-
 	customerID string,
 	location string,
 	asset string,
@@ -631,7 +626,6 @@ func GetProcessValueString(
 
 // GetCurrentState gets the latest state of an asset
 func GetCurrentState(
-
 	customerID string,
 	location string,
 	asset string,
@@ -698,7 +692,6 @@ func GetCurrentState(
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
 func GetDataTimeRangeForAsset(
-
 	customerID string,
 	location string,
 	asset string) (data datamodel.DataResponseAny, err error) {
@@ -748,7 +741,6 @@ func GetDataTimeRangeForAsset(
 
 // GetCountsRaw gets all states for a specific asset in a timerange
 func GetCountsRaw(
-
 	customerID string,
 	location string,
 	asset string,
@@ -837,7 +829,6 @@ func GetCountsRaw(
 
 // GetCounts gets all states for a specific asset in a timerange
 func GetCounts(
-
 	customerID string,
 	location string,
 	asset string,
@@ -920,7 +911,6 @@ func GetTotalCounts(
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(
-
 	customerID string,
 	location string,
 	asset string,
@@ -1023,7 +1013,6 @@ func GetProductionSpeed(
 
 // GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
 func GetQualityRate(
-
 	customerID string,
 	location string,
 	asset string,
@@ -1128,7 +1117,7 @@ func GetQualityRate(
 }
 
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
-func GetCustomerConfiguration( customerID string) (
+func GetCustomerConfiguration(customerID string) (
 	configuration datamodel.CustomerConfiguration,
 	err error) {
 	zap.S().Infof("[GetCustomerConfiguration] customerID: %v", customerID)
@@ -1221,7 +1210,6 @@ func GetCustomerConfiguration( customerID string) (
 
 // GetRecommendations gets all current recommendations for a specific asset
 func GetRecommendations(
-
 	customerID string,
 	location string,
 	asset string) (data datamodel.DataResponseAny, err error) {
@@ -1304,7 +1292,6 @@ func GetRecommendations(
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
 func GetMaintenanceActivities(
-
 	customerID string,
 	location string,
 	asset string) (data datamodel.DataResponseAny, err error) {
@@ -1368,7 +1355,6 @@ func GetMaintenanceActivities(
 
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
 func GetUniqueProducts(
-
 	customerID string,
 	location string,
 	asset string,
@@ -1460,7 +1446,6 @@ func GetUniqueProducts(
 
 // GetUpcomingTimeBasedMaintenanceActivities returns UpcomingTimeBasedMaintenanceActivities array for an asset
 func GetUpcomingTimeBasedMaintenanceActivities(
-
 	customerID string,
 	location string,
 	asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, err error) {
@@ -1548,7 +1533,6 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
 func GetOrdersRaw(
-
 	customerID string,
 	location string,
 	asset string,
@@ -1629,7 +1613,6 @@ func GetOrdersRaw(
 
 // GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
 func GetUnstartedOrdersRaw(
-
 	customerID string,
 	location string,
 	asset string) (data []datamodel.OrdersUnstartedRaw, err error) {
@@ -1690,7 +1673,7 @@ func GetUnstartedOrdersRaw(
 }
 
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
-func GetDistinctProcessValues( customerID string, location string, asset string) (
+func GetDistinctProcessValues(customerID string, location string, asset string) (
 	data []string,
 	err error) {
 	zap.S().Infof("[GetDistinctProcessValues] customerID: %v, location: %v, asset: %v", customerID, location, asset)
@@ -1739,7 +1722,7 @@ func GetDistinctProcessValues( customerID string, location string, asset string)
 	return
 }
 
-func GetDistinctProcessValuesString( customerID string, location string, asset string) (
+func GetDistinctProcessValuesString(customerID string, location string, asset string) (
 	data []string,
 	err error) {
 	zap.S().Infof(
@@ -2105,7 +2088,6 @@ type ProductStruct struct {
 
 // GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
 func GetAccumulatedProducts(
-
 	customerID string,
 	location string,
 	asset string,

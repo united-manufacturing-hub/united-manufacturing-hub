@@ -434,7 +434,6 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// ### calculate (only one function allowed here) ###
 	processedStates, err := processStatesOptimized(
-
 		assetID,
 		rawStates,
 		rawShifts,
@@ -557,7 +556,6 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	// ### calculate (only one function allowed here) ###
 
 	processedStates, err := processStatesOptimized(
-
 		assetID,
 		rawStates,
 		rawShifts,
@@ -579,7 +577,6 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		data.ColumnNames = []string{"state", "duration"}
 
 		data.Datapoints, err = CalculateStopParetos(
-
 			processedStates,
 			to,
 			*includeRunning,
@@ -626,7 +623,6 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 				var tempResult [][]interface{}
 				tempResult, err = CalculateStopParetos(
-
 					processedStatesCleaned,
 					d,
 					*includeRunning,
@@ -762,7 +758,6 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -786,7 +781,6 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -904,7 +898,6 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -928,7 +921,6 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1129,7 +1121,6 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			countSliceSplit := SplitCountSlice(countSlice, current, to)
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1155,7 +1146,6 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1261,7 +1251,6 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// ### calculate (only one function allowed here) ###
 	processedStates, err := processStatesOptimized(
-
 		assetID,
 		rawStates,
 		rawShifts,
@@ -1356,7 +1345,6 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Fetching from the database
 	// TODO: #89 Return timestamps in RFC3339 in /currentState
 	state, err := GetCurrentState(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1383,7 +1371,6 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
 	counts, err = GetCounts(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1400,7 +1387,6 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// Fetching from the database
 	recommendations, err := GetRecommendations(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset)
@@ -1424,7 +1410,6 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	shifts, err := GetShifts(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1454,7 +1439,6 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	processValues, err := GetProcessValue(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1485,7 +1469,6 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 
 	// Fetching from the database
 	processValuesString, err := GetProcessValueString(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1503,7 +1486,6 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	timeRange, err := GetDataTimeRangeForAsset(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset)
@@ -1518,7 +1500,6 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	rawData, err := GetUpcomingTimeBasedMaintenanceActivities(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset)
@@ -1644,7 +1625,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	zap.S().Debugf("GetOrdersRaw")
 	rawOrders, err := GetOrdersRaw(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1658,7 +1638,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// get counts for actual units calculation
 	zap.S().Debugf("GetCountsRaw")
 	countSlice, err := GetCountsRaw(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1672,7 +1651,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// raw states from database
 	zap.S().Debugf("GetStatesRaw")
 	rawStates, err := GetStatesRaw(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1687,7 +1665,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// get shifts for noShift detection
 	zap.S().Debugf("GetShiftsRaw")
 	rawShifts, err := GetShiftsRaw(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1704,7 +1681,6 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Process data
 	//zap.S().Debugf("calculateOrderInformation: rawOrders: %v, countSlice: %v, assetID: %v, rawStates: %v, rawShifts: %v, configuration: %v, Location: %v, Asset: %v", rawOrders, countSlice, assetID, rawStates, rawShifts, configuration, getDataRequest.Location, getDataRequest.Asset)
 	data, err := calculateOrderInformation(
-
 		rawOrders,
 		countSlice,
 		assetID,
@@ -1736,7 +1712,6 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 
 	// Process data
 	data, err := GetOrdersTimeline(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1777,7 +1752,6 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	// Fetching from the database
 	uniqueProducts, err := GetUniqueProducts(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1822,7 +1796,6 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 
 	// Fetching from the database
 	counts, err = GetProductionSpeed(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1850,7 +1823,6 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
 	counts, err = GetQualityRate(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -1962,7 +1934,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -1977,7 +1948,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(
-
 				processedStates,
 				current,
 				to,
@@ -1992,7 +1962,6 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -2110,7 +2079,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -2125,7 +2093,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(
-
 				processedStates,
 				current,
 				to,
@@ -2140,7 +2107,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 		} else { // otherwise, calculate for entire time range
 
 			processedStates, err := processStates(
-
 				assetID,
 				rawStates,
 				rawShifts,
@@ -2155,7 +2121,6 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(
-
 				processedStates,
 				current,
 				currentTo,
@@ -2190,7 +2155,6 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 
 	// Fetching from the database
 	uniqueProductsWithTags, err := GetUniqueProductsWithTags(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
@@ -2220,7 +2184,6 @@ func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
 	}
 
 	accumulatedProducts, err := GetAccumulatedProducts(
-
 		getDataRequest.Customer,
 		getDataRequest.Location,
 		getDataRequest.Asset,
