@@ -113,7 +113,7 @@ func GetCacheParsedMessage(msg *kafka.Message) (valid bool, found bool, message 
 	return true, true, pm
 }
 
-// StartTopicProbeQueueProcessor processes the messages from the topic probe queue and triggeers
+// StartTopicProbeQueueProcessor processes the messages from the topic probe queue and triggers
 // the refresh of the metadata for the consumers to discover the new created topic
 func StartTopicProbeQueueProcessor(topicProbeProcessorChannel chan *kafka.Message) {
 	zap.S().Debugf("[TP] Starting queue processor")
@@ -135,7 +135,12 @@ func StartTopicProbeQueueProcessor(topicProbeProcessorChannel chan *kafka.Messag
 			continue
 		}
 
-		_, err = KafkaConsumer.GetMetadata(&topicProbeMessage.Topic, false, 1000)
+		if KafkaTopicProbeConsumer == nil {
+			zap.S().Errorf("[TP] KafkaTopicProbeConsumer is nil")
+			continue
+		}
+
+		_, err = KafkaTopicProbeConsumer.GetMetadata(&topicProbeMessage.Topic, false, 1000)
 		if err != nil {
 			zap.S().Errorf("[TP] Failed to get metadata for topic: %s", topicProbeMessage.Topic)
 		}
