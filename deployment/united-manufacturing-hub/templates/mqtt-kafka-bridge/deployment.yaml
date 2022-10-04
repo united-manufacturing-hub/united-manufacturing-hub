@@ -33,6 +33,24 @@ spec:
                   matchLabels:
                     name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
                 topologyKey: "kubernetes.io/hostname"
+      initContainers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-init-newtopic
+          {{if .Values.mqttkafkabridge.image.tag}}
+          image: {{.Values.mqttkafkabridge.initContainer.repository}}:{{.Values.mqttkafkabridge.initContainer.tag}}
+          {{- else}}
+          image: {{.Values.mqttkafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.mqttkafkabridge.initContainer.pullPolicy}}
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: KAFKA_TOPICS
+              value: umh.v1.kafka.newTopic
+
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
           {{if .Values.mqttkafkabridge.image.tag}}

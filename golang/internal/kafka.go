@@ -151,7 +151,6 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 		zap.S().Errorf("Failed to marshal payload: %s", err)
 		return
 	}
-	var probeTopicName = "umh.kafka.topic.created"
 	err = KafkaProducer.Produce(
 		&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
