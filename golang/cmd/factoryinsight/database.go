@@ -691,7 +691,7 @@ func GetCurrentState(
 }
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
-func GetDataTimeRangeForAsset(customerID string,location string,asset string) (	
+func GetDataTimeRangeForAsset(customerID string, location string, asset string) (
 	data datamodel.DataResponseAny,
 	err error) {
 	zap.S().Infof("[GetDataTimeRangeForAsset] customerID: %v, location: %v, asset: %v", customerID, location, asset)
@@ -1206,7 +1206,7 @@ func GetCustomerConfiguration(customerID string) (configuration datamodel.Custom
 }
 
 // GetRecommendations gets all current recommendations for a specific asset
-func GetRecommendations(customerID string,location string,asset string) (	
+func GetRecommendations(customerID string, location string, asset string) (
 	data datamodel.DataResponseAny,
 	err error) {
 	zap.S().Infof("[GetRecommendations] customerID: %v, location: %v, asset: %v", customerID, location, asset)
@@ -1287,7 +1287,7 @@ func GetRecommendations(customerID string,location string,asset string) (
 }
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
-func GetMaintenanceActivities(customerID string,location string,asset string) (	
+func GetMaintenanceActivities(customerID string, location string, asset string) (
 	data datamodel.DataResponseAny,
 	err error) {
 	zap.S().Infof("[GetMaintenanceActivities] customerID: %v, location: %v, asset: %v", customerID, location, asset)
@@ -1607,7 +1607,7 @@ func GetOrdersRaw(
 }
 
 // GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
-func GetUnstartedOrdersRaw(customerID string,location string,asset string) (	
+func GetUnstartedOrdersRaw(customerID string, location string, asset string) (
 	data []datamodel.OrdersUnstartedRaw,
 	err error) {
 	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v", customerID, location, asset)
