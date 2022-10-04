@@ -25,7 +25,7 @@ _000_commonConfig:
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures
     cameraconnect:
-      enabled: true
+      enabled: false
       trigger: "MQTT"
       acquisitionDelay: "0.0"
       cycleTime: "4"
