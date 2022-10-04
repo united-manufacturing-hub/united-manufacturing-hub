@@ -39,13 +39,6 @@ spec:
           image: {{.Values.mqttkafkabridge.initContainer.repository}}:{{.Values.mqttkafkabridge.initContainer.tag}}
           {{- else}}
           image: {{.Values.mqttkafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates-local
-              mountPath: /SSL_certs/local
-              readOnly: true
-            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates-remote
-              mountPath: /SSL_certs/remote
-              readOnly: true
           {{end}}
           imagePullPolicy: {{.Values.mqttkafkabridge.initContainer.pullPolicy}}
           env:
