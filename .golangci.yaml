@@ -84,6 +84,7 @@ linters-settings:
       - testing
       - time
       - unicode
+      - github.com/gin-contrib/gzip
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.

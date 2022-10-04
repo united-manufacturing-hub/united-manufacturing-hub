@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/gzip"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -27,6 +28,9 @@ func SetupRestAPI(accounts gin.Accounts, version string) {
 	// Logs all panic to error log
 	//   - stack means whether output the stack info.
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
+
+	// Use gzip for all requests
+	router.Use(gzip.Gzip(gzip.DefaultCompression))
 
 	// Healthcheck
 	router.GET(
