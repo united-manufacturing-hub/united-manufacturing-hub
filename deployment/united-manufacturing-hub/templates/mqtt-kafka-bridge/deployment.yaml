@@ -34,7 +34,7 @@ spec:
                     name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
                 topologyKey: "kubernetes.io/hostname"
       initContainers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-init-newTopic
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-init-newtopic
           {{if .Values.mqttkafkabridge.image.tag}}
           image: {{.Values.mqttkafkabridge.initContainer.repository}}:{{.Values.mqttkafkabridge.initContainer.tag}}
           {{- else}}
