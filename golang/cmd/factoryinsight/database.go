@@ -691,10 +691,7 @@ func GetCurrentState(
 }
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
-func GetDataTimeRangeForAsset(
-	customerID string,
-	location string,
-	asset string) (data datamodel.DataResponseAny, err error) {
+func GetDataTimeRangeForAsset(customerID string,location string,asset string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetDataTimeRangeForAsset] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	var assetID uint32
@@ -1117,9 +1114,7 @@ func GetQualityRate(
 }
 
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
-func GetCustomerConfiguration(customerID string) (
-	configuration datamodel.CustomerConfiguration,
-	err error) {
+func GetCustomerConfiguration(customerID string) (configuration datamodel.CustomerConfiguration, err error) {
 	zap.S().Infof("[GetCustomerConfiguration] customerID: %v", customerID)
 
 	// Get from cache if possible
@@ -1209,10 +1204,7 @@ func GetCustomerConfiguration(customerID string) (
 }
 
 // GetRecommendations gets all current recommendations for a specific asset
-func GetRecommendations(
-	customerID string,
-	location string,
-	asset string) (data datamodel.DataResponseAny, err error) {
+func GetRecommendations(customerID string,location string,asset string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetRecommendations] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	data.ColumnNames = []string{
@@ -1291,10 +1283,7 @@ func GetRecommendations(
 }
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
-func GetMaintenanceActivities(
-	customerID string,
-	location string,
-	asset string) (data datamodel.DataResponseAny, err error) {
+func GetMaintenanceActivities(customerID string,location string,asset string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetMaintenanceActivities] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	var assetID uint32
@@ -1612,10 +1601,7 @@ func GetOrdersRaw(
 }
 
 // GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
-func GetUnstartedOrdersRaw(
-	customerID string,
-	location string,
-	asset string) (data []datamodel.OrdersUnstartedRaw, err error) {
+func GetUnstartedOrdersRaw(customerID string,location string,asset string) (data []datamodel.OrdersUnstartedRaw, err error) {
 	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	var assetID uint32
@@ -1673,9 +1659,7 @@ func GetUnstartedOrdersRaw(
 }
 
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
-func GetDistinctProcessValues(customerID string, location string, asset string) (
-	data []string,
-	err error) {
+func GetDistinctProcessValues(customerID string, location string, asset string) (data []string, err error) {
 	zap.S().Infof("[GetDistinctProcessValues] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	var assetID uint32
@@ -1722,9 +1706,7 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 	return
 }
 
-func GetDistinctProcessValuesString(customerID string, location string, asset string) (
-	data []string,
-	err error) {
+func GetDistinctProcessValuesString(customerID string, location string, asset string) (data []string,err error) {
 	zap.S().Infof(
 		"[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v",
 		customerID,
