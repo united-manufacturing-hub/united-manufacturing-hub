@@ -9,6 +9,8 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -35,7 +37,13 @@ func main() {
 	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
@@ -49,7 +57,7 @@ func main() {
 		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
 		i, b := memoryRequest.AsInt64()
 		if b {
-			allowedMemorySize = int(i) //truncated !
+			allowedMemorySize = int(i) // truncated !
 		}
 	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
@@ -77,18 +85,20 @@ func main() {
 		}
 	}
 	if ActivityEnabled {
-		SetupActivityKafka(kafka.ConfigMap{
-			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
-			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
-			"bootstrap.servers":        KafkaBoostrapServer,
-			"group.id":                 "kafka-state-detector-activity",
-			"enable.auto.commit":       true,
-			"enable.auto.offset.store": false,
-			"auto.offset.reset":        "earliest",
-		})
+		SetupActivityKafka(
+			kafka.ConfigMap{
+				"security.protocol":        securityProtocol,
+				"ssl.key.location":         "/SSL_certs/tls.key",
+				"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+				"ssl.certificate.location": "/SSL_certs/tls.crt",
+				"ssl.ca.location":          "/SSL_certs/ca.crt",
+				"bootstrap.servers":        KafkaBoostrapServer,
+				"group.id":                 "kafka-state-detector-activity",
+				"enable.auto.commit":       true,
+				"enable.auto.offset.store": false,
+				"auto.offset.reset":        "earliest",
+				"metadata.max.age.ms":      180000,
+			})
 
 		ActivityProcessorChannel = make(chan *kafka.Message, 100)
 		ActivityCommitChannel = make(chan *kafka.Message)
@@ -96,8 +106,19 @@ func main() {
 		activityTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
 		ActivityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
-		go internal.StartPutbackProcessor("[AC]", ActivityPutBackChannel, ActivityKafkaProducer, ActivityCommitChannel, 200)
-		go internal.ProcessKafkaQueue("[AC]", activityTopic, ActivityProcessorChannel, ActivityKafkaConsumer, ActivityPutBackChannel, ShutdownApplicationGraceful)
+		go internal.StartPutbackProcessor(
+			"[AC]",
+			ActivityPutBackChannel,
+			ActivityKafkaProducer,
+			ActivityCommitChannel,
+			200)
+		go internal.ProcessKafkaQueue(
+			"[AC]",
+			activityTopic,
+			ActivityProcessorChannel,
+			ActivityKafkaConsumer,
+			ActivityPutBackChannel,
+			ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[AC]", ActivityCommitChannel, ActivityKafkaConsumer)
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
@@ -105,17 +126,20 @@ func main() {
 	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
 
 	if AnomalyEnabled {
-		SetupAnomalyKafka(kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBoostrapServer,
-			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
-			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
-			"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
-			"enable.auto.commit":       true,
-			"auto.offset.reset":        "earliest",
-		})
+		/* #nosec G404 -- This doesn't have to be crypto random */
+		SetupAnomalyKafka(
+			kafka.ConfigMap{
+				"bootstrap.servers":        KafkaBoostrapServer,
+				"security.protocol":        securityProtocol,
+				"ssl.key.location":         "/SSL_certs/tls.key",
+				"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+				"ssl.certificate.location": "/SSL_certs/tls.crt",
+				"ssl.ca.location":          "/SSL_certs/ca.crt",
+				"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
+				"enable.auto.commit":       true,
+				"auto.offset.reset":        "earliest",
+				"metadata.max.age.ms":      180000,
+			})
 
 		AnomalyProcessorChannel = make(chan *kafka.Message, 100)
 		AnomalyCommitChannel = make(chan *kafka.Message)
@@ -123,8 +147,19 @@ func main() {
 		anomalyTopic := "^ia\\.\\w*\\.\\w*\\.\\w*\\.activity$"
 
 		AnomalyPutBackChannel = make(chan internal.PutBackChanMsg, 200)
-		go internal.StartPutbackProcessor("[AN]", AnomalyPutBackChannel, AnomalyKafkaProducer, ActivityCommitChannel, 200)
-		go internal.ProcessKafkaQueue("[AN]", anomalyTopic, AnomalyProcessorChannel, AnomalyKafkaConsumer, AnomalyPutBackChannel, ShutdownApplicationGraceful)
+		go internal.StartPutbackProcessor(
+			"[AN]",
+			AnomalyPutBackChannel,
+			AnomalyKafkaProducer,
+			ActivityCommitChannel,
+			200)
+		go internal.ProcessKafkaQueue(
+			"[AN]",
+			anomalyTopic,
+			AnomalyProcessorChannel,
+			AnomalyKafkaConsumer,
+			AnomalyPutBackChannel,
+			ShutdownApplicationGraceful)
 		go internal.StartCommitProcessor("[AN]", AnomalyCommitChannel, AnomalyKafkaConsumer)
 		go internal.StartEventHandler("[AN]", anomalyEventChannel, AnomalyPutBackChannel)
 		go startAnomalyActivityProcessor()
@@ -138,7 +173,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	// It's important to handle both signals, allowing Kafka to shut down gracefully !
 	// If this is not possible, it will attempt to rebalance itself, which will increase startup time
-	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigs, syscall.SIGTERM)
 
 	go func() {
 		// Kubernetes sends SIGTERM 30 seconds before
@@ -147,7 +182,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIG %v", sig)
+		zap.S().Infof("Received SIG %v", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -204,7 +239,7 @@ func ShutdownApplicationGraceful() {
 		CloseAnomalyKafka()
 	}
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)

@@ -1,14 +1,18 @@
 package main
 
-import "encoding/json"
+import jsoniter "github.com/json-iterator/go"
 
 func UnmarshalRawImage(data []byte) (RawImage, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	var r RawImage
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *RawImage) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 

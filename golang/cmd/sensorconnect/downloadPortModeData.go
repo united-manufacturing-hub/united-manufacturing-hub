@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -16,21 +17,30 @@ import (
 )
 
 type ModeInformation struct {
-	Cid      int                    `json:"cid"`
 	ModeData map[string]interface{} `json:"data"`
+	Cid      int                    `json:"cid"`
 }
 
 // GetUsedPortsAndModeCached returns a map of one IO-Link-Master with the port number as key and the port mode as value
-func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformation) (map[int]ConnectedDeviceInfo, error) {
+func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformation) (
+	map[int]ConnectedDeviceInfo,
+	error) {
 	var modeMap map[int]ConnectedDeviceInfo
 	var val interface{}
 	var found bool
 
-	cacheKey := fmt.Sprintf("GetUsedPortsAndModeCached%s:%s:%s", currentDeviceInformation.ProductCode, currentDeviceInformation.SerialNumber, currentDeviceInformation.Url)
+	cacheKey := fmt.Sprintf(
+		"GetUsedPortsAndModeCached%s:%s:%s",
+		currentDeviceInformation.ProductCode,
+		currentDeviceInformation.SerialNumber,
+		currentDeviceInformation.Url)
 	val, found = internal.GetMemcached(cacheKey)
 	if found {
-		modeMap = val.(map[int]ConnectedDeviceInfo)
-		return modeMap, nil
+		var ok bool
+		modeMap, ok = val.(map[int]ConnectedDeviceInfo)
+		if ok {
+			return modeMap, nil
+		}
 	}
 
 	usedPortsAndModes, err := getUsedPortsAndMode(currentDeviceInformation.Url)
@@ -45,6 +55,8 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 // unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
 func _(dataRaw []byte) (map[int]int, error) {
 	dataUnmarshaled := ModeInformation{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
 		return nil, err
 	}
@@ -55,7 +67,10 @@ func _(dataRaw []byte) (map[int]int, error) {
 		if err != nil {
 			continue
 		}
-		elementMap := element.(map[string]interface{})
+		elementMap, ok := element.(map[string]interface{})
+		if !ok {
+			continue
+		}
 
 		if elementMap == nil || elementMap["data"] == nil {
 			return nil, errors.New("elementMap is nil")
@@ -68,23 +83,27 @@ func _(dataRaw []byte) (map[int]int, error) {
 
 func UnmarshalUsedPortsAndMode(data []byte) (RawUsedPortsAndMode, error) {
 	var r RawUsedPortsAndMode
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *RawUsedPortsAndMode) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
 type RawUsedPortsAndMode struct {
-	Cid  int64                `json:"cid"`
 	Data map[string]UPAMDatum `json:"data"`
+	Cid  int64                `json:"cid"`
 	Code int64                `json:"code"`
 }
 
 type UPAMDatum struct {
-	Code int64  `json:"code"`
 	Data *int64 `json:"data,omitempty"`
+	Code int64  `json:"code"`
 }
 
 type ConnectedDeviceInfo struct {
@@ -97,7 +116,7 @@ type ConnectedDeviceInfo struct {
 // getUsedPortsAndMode returns which ports have sensors connected, by querying there mastercycletime & mode
 func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceInfo, err error) {
 
-	//cid can be any number
+	// cid can be any number
 	var payload = []byte(`{
     "code":"request",
     "cid":42,
@@ -140,7 +159,7 @@ func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceIn
     }
 }`)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		zap.S().Warnf("Failed to create post request for url: %s", url)
 		return
@@ -158,7 +177,7 @@ func getUsedPortsAndMode(url string) (portmodeusagemap map[int]ConnectedDeviceIn
 	}
 
 	var body []byte
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}

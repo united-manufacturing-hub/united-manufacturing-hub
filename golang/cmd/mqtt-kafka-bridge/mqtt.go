@@ -3,10 +3,10 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
-	"io/ioutil"
+	jsoniter "github.com/json-iterator/go"
+	"os"
 	"time"
 
 	"github.com/beeker1121/goque"
@@ -15,13 +15,13 @@ import (
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
-func newTLSConfig(clientID string) *tls.Config {
+func newTLSConfig() *tls.Config {
 
 	// Import trusted certificates from CAfile.pem.
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/SSL_certs/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
@@ -39,6 +39,7 @@ func newTLSConfig(clientID string) *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -56,17 +57,22 @@ func newTLSConfig(clientID string) *tls.Config {
 	}
 }
 
-// getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is recieved by a specific topic
+// getOnMessageReceived gets the function onMessageReceived, that is called everytime a message is received by a specific topic
 func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
 		topic := message.Topic()
 		payload := message.Payload()
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 		if json.Valid(payload) {
 			zap.S().Debugf("onMessageReceived", topic, payload)
 			go storeNewMessageIntoQueue(topic, payload, pg)
 		} else {
-			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON", topic, payload)
+			zap.S().Warnf(
+				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
+				topic,
+				payload)
 		}
 	}
 }
@@ -85,7 +91,13 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, health healthcheck.Handler, podName string, pg *goque.Queue) {
+func SetupMQTT(
+	certificateName string,
+	mqttBrokerURL string,
+	mqttTopic string,
+	health healthcheck.Handler,
+	podName string,
+	pg *goque.Queue) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -100,7 +112,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, mqttTopic string, h
 		zap.S().Infof("Running in Kubernetes mode", podName, mqttTopic)
 
 	} else {
-		tlsconfig := newTLSConfig(certificateName)
+		tlsconfig := newTLSConfig()
 		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
 
 		if mqttTopic == "" {
@@ -147,7 +159,7 @@ func processOutgoingMessages() {
 
 	for !ShuttingDown {
 		if mqttOutGoingQueue.Length() == 0 {
-			//Skip if empty
+			// Skip if empty
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -160,9 +172,6 @@ func processOutgoingMessages() {
 
 		var mqttData queueObject
 		mqttData, err = retrieveMessageFromQueue(mqttOutGoingQueue)
-		if err != nil {
-			return
-		}
 		if err != nil {
 			zap.S().Errorf("Failed to dequeue message: %s", err)
 			time.Sleep(1 * time.Second)

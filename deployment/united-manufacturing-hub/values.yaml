@@ -1491,20 +1491,6 @@ grafanaproxy:
     requests:
       cpu: 200m
 
-### mqtt-to-postresql ###
-mqtttopostgresql:
-  enabled: false
-  image:
-    repository: unitedmanufacturinghub/mqtt-to-postgresql
-    pullPolicy: IfNotPresent
-  # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
-  # tag: 0.3.2
-  replicas: 1
-  storageRequest: 1Gi
-  pdb:
-    enabled: true
-    minAvailable: 1
-
 ### kafka-to-postgresql ###
 kafkatopostgresql:
   enabled: false
@@ -1646,6 +1632,13 @@ timescaledb-single:
   # The major PostgreSQL version to use, defaults to the default version of the Docker image
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
   version:
+
+  image:
+    # Image was built from
+    # https://github.com/timescale/timescaledb-docker-ha
+    repository: timescale/timescaledb-ha
+    tag: pg13.8-ts2.8.0-p1
+    pullPolicy: Always
 
   # These secrets should exist before the Helm is used to deploy this TimescaleDB.
   # You can use generate_kustomization.sh to help in creating these secrets, or have
@@ -2177,6 +2170,12 @@ grafana:
     initialDelaySeconds: 60
     timeoutSeconds: 30
     failureThreshold: 10
+
+  image:
+    repository: grafana/grafana
+    tag: 8.5.9
+    sha: ""
+    pullPolicy: IfNotPresent
 
   ## Use an alternate scheduler, e.g. "stork".
   ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
@@ -2959,6 +2958,13 @@ redis:
   cluster:
     enabled: true
     slaveCount: 1
+  commonConfiguration: |-
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+    # Backwards compatability with Redis version 6.*
+    replica-ignore-disk-write-errors yes
   master:
     command: /run.sh
     extraFlags:
@@ -3052,6 +3058,8 @@ redis:
       redisPort: 6379
       sentinelPort: 26379
       type: ClusterIP
+    startupProbe:
+      enabled: false
   serviceAccount:
     create: false
   replica:

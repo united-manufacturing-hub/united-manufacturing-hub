@@ -3,29 +3,32 @@ package main
 import (
 	"fmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
+const relativeIODDFilePath = "../sensorconnect/IoddFiles/"
+
 func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	internal.InitMemcache()
 	// first remove all files from specified path
-	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
-	err := removeFilesFromDirectory(relativeDirectoryPath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
 
-	//Declare Variables
-	var fileInfoSlice []os.FileInfo
+	// Declare Variables
+	var fileInfoSlice []fs.DirEntry
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
 
 	// execute function and check for errors
-	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
+	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeIODDFilePath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
@@ -49,16 +52,18 @@ func TestRequestSaveIoddFile(t *testing.T) {
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
-	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
 	// first remove all files from specified path
-	removeFilesFromDirectory(relativeDirectoryPath)
+	err := removeFilesFromDirectory()
+	if err != nil {
+		zap.S().Errorf("removeFilesFromDirectory failed: %v", err)
+	}
 	ioDeviceMap.Delete(ioddFilemapKey)
-	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath)
 	if err != nil {
 		t.Error(err)
 	}
 	// Remove file after test again
-	err = removeFilesFromDirectory(relativeDirectoryPath)
+	err = removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
@@ -66,14 +71,13 @@ func TestRequestSaveIoddFile(t *testing.T) {
 
 func TestReadIoddFiles(t *testing.T) {
 	internal.InitMemcache()
-	var fileInfoSlice []os.FileInfo
-	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
+	var fileInfoSlice []fs.DirEntry
 	// first remove all files from specified path
-	err := removeFilesFromDirectory(relativeDirectoryPath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
-	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
+	fileInfoSlice, err = ReadIoddFiles(fileInfoSlice, relativeIODDFilePath)
 	// no changes in directory -> no new new files read
 	if err != nil {
 		t.Error(err)
@@ -83,27 +87,30 @@ func TestReadIoddFiles(t *testing.T) {
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
 	ioDeviceMap.Delete(ioddFilemapKey)
-	err = RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = ReadIoddFiles(fileInfoSlice, relativeDirectoryPath)
+	_, err = ReadIoddFiles(fileInfoSlice, relativeIODDFilePath)
 	// check if new entry exits for filemap Key
 	if _, ok := ioDeviceMap.Load(ioddFilemapKey); !ok {
 		fmt.Println(ok)
 		t.Error(err) // entry does not exist
 	}
 	// Remove file after test again
-	err = removeFilesFromDirectory(relativeDirectoryPath)
+	err = removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
 }
 
 // Deletes complete directory and creates new one
-func removeFilesFromDirectory(relativeDirectoryPath string) error {
-	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
-	err := os.RemoveAll(absoluteDirectoryPath)
+func removeFilesFromDirectory() error {
+	absoluteDirectoryPath, err := filepath.Abs(relativeIODDFilePath)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(absoluteDirectoryPath)
 	if err != nil {
 		return err
 	}
@@ -117,13 +124,12 @@ func removeFilesFromDirectory(relativeDirectoryPath string) error {
 func TestUnmarshalIoddFiles(t *testing.T) {
 	internal.InitMemcache()
 	// first remove all files from specified path
-	relativeDirectoryPath := "../sensorconnect/IoddFiles/"
-	err := removeFilesFromDirectory(relativeDirectoryPath)
+	err := removeFilesFromDirectory()
 	if err != nil {
 		t.Errorf("removeFilesFromDirectory failed: %v", err)
 	}
-	//Declare Variables
-	var fileInfoSlice []os.FileInfo
+	// Declare Variables
+	var fileInfoSlice []fs.DirEntry
 
 	var ioddFilemapKey_IFM IoddFilemapKey
 	ioddFilemapKey_IFM.DeviceId = 698
@@ -142,31 +148,38 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	ioddFilemapKey_IFMiodd.VendorId = 310
 
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeDirectoryPath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeIODDFilePath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeDirectoryPath, fileInfoSlice)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeDirectoryPath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeIODDFilePath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeDirectoryPath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeIODDFilePath, fileInfoSlice)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// execute function and check for errors
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeIODDFilePath, fileInfoSlice)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// Set io Device to ifm
-	ioDeviceInterface, _ := ioDeviceMap.Load(ioddFilemapKey_IFM)
-	ioDevice := ioDeviceInterface.(IoDevice)
+	ioDeviceInterface, ok := ioDeviceMap.Load(ioddFilemapKey_IFM)
+	if !ok {
+		t.Error("ioDeviceInterface not found")
+	}
+	var ioDevice IoDevice
+	ioDevice, ok = ioDeviceInterface.(IoDevice)
+	if !ok {
+		t.Error("ioDevice is not of type IoDevice")
+	}
 	//DeviceId: should give out 698
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 698) {
 		t.Error()
@@ -190,7 +203,9 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Id: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
@@ -199,63 +214,93 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Value: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//bitLength (Datatype): should give out 32
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength, uint(32)) {
+	// bitLength (Datatype): should give out 32
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength,
+		uint(32)) {
 		t.Error()
 	}
-	//bitLength (Datatype): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(), reflect.Uint) {
+	// bitLength (Datatype): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
-	//BitLength (of SimpleDatatype): should be 4 here
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength, uint(4)) {
+	// BitLength (of SimpleDatatype): should be 4 here
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength,
+		uint(4)) {
 		t.Error()
 	}
-	//BitLength (of SimpleDatatype): type should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(), reflect.Uint) {
+	// BitLength (of SimpleDatatype): type should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
 	//xsi:type (of SimpleDatatype): should be UIntegerT
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type, "UIntegerT") {
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type,
+		"UIntegerT") {
 		t.Error()
 	}
 	//xsi:type (of SimpleDatatype): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//TextId (of RecordItem>Name): should be TI_PD_SV_2_Name
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId, "TI_PD_SV_2_Name") {
+	// TextId (of RecordItem>Name): should be TI_PD_SV_2_Name
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId,
+		"TI_PD_SV_2_Name") {
 		t.Error()
 	}
-	//TextId (of RecordItem>Name): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(), reflect.String) {
-		t.Error()
-	}
-
-	//BitOffset (of RecordItem): should be 4
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset, 4) {
-		t.Error()
-	}
-	//BitOffset (of RecordItem): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(), reflect.Int) {
+	// TextId (of RecordItem>Name): should be string
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//Check correct length of RecordItem[] in Datatype
-	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray), 4) {
+	// BitOffset (of RecordItem): should be 4
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset,
+		4) {
+		t.Error()
+	}
+	// BitOffset (of RecordItem): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(),
+		reflect.Int) {
+		t.Error()
+	}
+
+	// Check correct length of RecordItem[] in Datatype
+	if !reflect.DeepEqual(
+		len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray),
+		4) {
 		t.Error()
 	}
 
 	// Set io Device to rexroth
-	ioDeviceInterface, _ = ioDeviceMap.Load(ioddFilemapKey_rexroth)
-	ioDevice = ioDeviceInterface.(IoDevice)
+	ioDeviceInterface, ok = ioDeviceMap.Load(ioddFilemapKey_rexroth)
+	if !ok {
+		t.Error("ioDeviceInterface not found")
+	}
+	ioDevice, ok = ioDeviceInterface.(IoDevice)
+	if !ok {
+		t.Error("ioDevice is not of type IoDevice")
+	}
 	//DeviceId: should give out 2228227
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 2228227) {
 		t.Error()
@@ -274,7 +319,7 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 
-	//Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
+	// Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
 	if !reflect.DeepEqual(len(ioDevice.ExternalTextCollection.PrimaryLanguage.Text), 98) {
 		t.Error()
 	}
@@ -283,7 +328,9 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Id: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
@@ -292,63 +339,93 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Value: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//bitLength (Datatype): should give out 16
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength, uint(16)) {
+	// bitLength (Datatype): should give out 16
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength,
+		uint(16)) {
 		t.Error()
 	}
-	//bitLength (Datatype): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(), reflect.Uint) {
+	// bitLength (Datatype): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
-	//BitLength (of SimpleDatatype): should be 0 here (zero because not given/specified in IODD file)
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength, uint(0)) {
+	// BitLength (of SimpleDatatype): should be 0 here (zero because not given/specified in IODD file)
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength,
+		uint(0)) {
 		t.Error()
 	}
-	//BitLength (of SimpleDatatype): type should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(), reflect.Uint) {
+	// BitLength (of SimpleDatatype): type should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
 	//xsi:type (of SimpleDatatype): should be BooleanT
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type, "BooleanT") {
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type,
+		"BooleanT") {
 		t.Error()
 	}
 	//xsi:type (of SimpleDatatype): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//TextId (of RecordItem>Name): should be DT_RI_Name3640Errorbit
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId, "DT_RI_Name3640Errorbit") {
+	// TextId (of RecordItem>Name): should be DT_RI_Name3640Errorbit
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId,
+		"DT_RI_Name3640Errorbit") {
 		t.Error()
 	}
-	//TextId (of RecordItem>Name): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(), reflect.String) {
-		t.Error()
-	}
-
-	//BitOffset (of RecordItem): should be 1
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset, 1) {
-		t.Error()
-	}
-	//BitOffset (of RecordItem): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(), reflect.Int) {
+	// TextId (of RecordItem>Name): should be string
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//Check correct length of RecordItem[] in Datatype
-	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray), 3) {
+	// BitOffset (of RecordItem): should be 1
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset,
+		1) {
+		t.Error()
+	}
+	// BitOffset (of RecordItem): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(),
+		reflect.Int) {
+		t.Error()
+	}
+
+	// Check correct length of RecordItem[] in Datatype
+	if !reflect.DeepEqual(
+		len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray),
+		3) {
 		t.Error()
 	}
 
 	// Set io Device to siemens
-	ioDeviceInterface, _ = ioDeviceMap.Load(ioddFilemapKey_siemens)
-	ioDevice = ioDeviceInterface.(IoDevice)
+	ioDeviceInterface, ok = ioDeviceMap.Load(ioddFilemapKey_siemens)
+	if !ok {
+		t.Error("ioDevice is not of type IoDevice")
+	}
+	ioDevice, ok = ioDeviceInterface.(IoDevice)
+	if !ok {
+		t.Error("ioDevice is not of type IoDevice")
+	}
 	//DeviceId: should give out 278531
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 278531) {
 		t.Error()
@@ -367,7 +444,7 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 
-	//Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
+	// Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
 	if !reflect.DeepEqual(len(ioDevice.ExternalTextCollection.PrimaryLanguage.Text), 137) {
 		fmt.Printf("ExternalTextCollection length: %v", len(ioDevice.ExternalTextCollection.PrimaryLanguage.Text))
 		t.Error()
@@ -377,7 +454,9 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Id: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
@@ -386,63 +465,93 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Value: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//bitLength (Datatype): should give out 16
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength, uint(16)) {
+	// bitLength (Datatype): should give out 16
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength,
+		uint(16)) {
 		t.Error()
 	}
-	//bitLength (Datatype): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(), reflect.Uint) {
+	// bitLength (Datatype): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
-	//BitLength (of SimpleDatatype): should be 0 here (zero because not given/specified in IODD file)
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength, uint(0)) {
+	// BitLength (of SimpleDatatype): should be 0 here (zero because not given/specified in IODD file)
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength,
+		uint(0)) {
 		t.Error()
 	}
-	//BitLength (of SimpleDatatype): type should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(), reflect.Uint) {
+	// BitLength (of SimpleDatatype): type should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
 	//xsi:type (of SimpleDatatype): should be "" (because of different structure: without SimpleDatatype)
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type, "") {
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type,
+		"") {
 		t.Error()
 	}
 	//xsi:type (of SimpleDatatype): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//TextId (of RecordItem>Name): should be TI_PaeError
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId, "TI_PaeError") {
+	// TextId (of RecordItem>Name): should be TI_PaeError
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId,
+		"TI_PaeError") {
 		t.Error()
 	}
-	//TextId (of RecordItem>Name): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(), reflect.String) {
-		t.Error()
-	}
-
-	//BitOffset (of RecordItem): should be 9
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset, 9) {
-		t.Error()
-	}
-	//BitOffset (of RecordItem): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(), reflect.Int) {
+	// TextId (of RecordItem>Name): should be string
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//Check correct length of RecordItem[] in Datatype
-	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray), 16) {
+	// BitOffset (of RecordItem): should be 9
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset,
+		9) {
+		t.Error()
+	}
+	// BitOffset (of RecordItem): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(),
+		reflect.Int) {
+		t.Error()
+	}
+
+	// Check correct length of RecordItem[] in Datatype
+	if !reflect.DeepEqual(
+		len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray),
+		16) {
 		t.Error()
 	}
 
 	// Set io Device to rexroth
-	ioDeviceInterface, _ = ioDeviceMap.Load(ioddFilemapKey_IFMiodd)
-	ioDevice = ioDeviceInterface.(IoDevice)
+	ioDeviceInterface, ok = ioDeviceMap.Load(ioddFilemapKey_IFMiodd)
+	if !ok {
+		t.Error()
+	}
+	ioDevice, ok = ioDeviceInterface.(IoDevice)
+	if !ok {
+		t.Error()
+	}
 	//DeviceId: should give out 967
 	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceIdentity.DeviceId, 967) {
 		t.Error()
@@ -461,7 +570,7 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 
-	//Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
+	// Check correct length of Text[] in ExternalTextCollection>PrimaryLanguage
 	if !reflect.DeepEqual(len(ioDevice.ExternalTextCollection.PrimaryLanguage.Text), 144) {
 		t.Error()
 	}
@@ -470,7 +579,9 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Id: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Id).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
@@ -479,57 +590,85 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 		t.Error()
 	}
 	//Value: type should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ExternalTextCollection.PrimaryLanguage.Text[0].Value).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//bitLength (Datatype): should give out 256
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength, uint(256)) {
+	// bitLength (Datatype): should give out 256
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength,
+		uint(256)) {
 		t.Error()
 	}
-	//bitLength (Datatype): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(), reflect.Uint) {
+	// bitLength (Datatype): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.BitLength).Kind(),
+		reflect.Uint) {
 		t.Error()
 	}
 
-	//BitLength (of SimpleDatatype): should be 0 here (because not specified)
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength, uint(0)) {
-		t.Errorf("Bitlength was %v and not 0.", ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength)
+	// BitLength (of SimpleDatatype): should be 0 here (because not specified)
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength,
+		uint(0)) {
+		t.Errorf(
+			"Bitlength was %v and not 0.",
+			ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength)
 	}
-	//BitLength (of SimpleDatatype): type should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(), reflect.Uint) {
-		t.Errorf("Type was %v and not int.", reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind())
+	// BitLength (of SimpleDatatype): type should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind(),
+		reflect.Uint) {
+		t.Errorf(
+			"Type was %v and not int.",
+			reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.BitLength).Kind())
 	}
 
 	//xsi:type (of SimpleDatatype): should be BooleanT
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type, "BooleanT") {
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type,
+		"BooleanT") {
 		t.Error()
 	}
 	//xsi:type (of SimpleDatatype): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(), reflect.String) {
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].SimpleDatatype.Type).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//TextId (of RecordItem>Name): should be TI_PD_SV_IN_2_Name
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId, "TI_PD_SV_IN_2_Name") {
+	// TextId (of RecordItem>Name): should be TI_PD_SV_IN_2_Name
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId,
+		"TI_PD_SV_IN_2_Name") {
 		t.Error()
 	}
-	//TextId (of RecordItem>Name): should be string
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(), reflect.String) {
-		t.Error()
-	}
-
-	//BitOffset (of RecordItem): should be 243
-	if !reflect.DeepEqual(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset, 243) {
-		t.Error()
-	}
-	//BitOffset (of RecordItem): should be int
-	if !reflect.DeepEqual(reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(), reflect.Int) {
+	// TextId (of RecordItem>Name): should be string
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].Name.TextId).Kind(),
+		reflect.String) {
 		t.Error()
 	}
 
-	//Check correct length of RecordItem[] in Datatype
-	if !reflect.DeepEqual(len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray), 8) {
+	// BitOffset (of RecordItem): should be 243
+	if !reflect.DeepEqual(
+		ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset,
+		243) {
+		t.Error()
+	}
+	// BitOffset (of RecordItem): should be int
+	if !reflect.DeepEqual(
+		reflect.TypeOf(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray[1].BitOffset).Kind(),
+		reflect.Int) {
+		t.Error()
+	}
+
+	// Check correct length of RecordItem[] in Datatype
+	if !reflect.DeepEqual(
+		len(ioDevice.ProfileBody.DeviceFunction.ProcessDataCollection.ProcessData.ProcessDataIn.Datatype.RecordItemArray),
+		8) {
 		t.Error()
 	}
 }

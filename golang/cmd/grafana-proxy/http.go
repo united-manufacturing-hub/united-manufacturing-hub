@@ -2,16 +2,15 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
+	"context"
 	"fmt"
+	"github.com/cristalhq/base64"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -39,9 +38,10 @@ func SetupRestAPI() {
 	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
 
 	// Healthcheck
-	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "online")
-	})
+	router.GET(
+		"/", func(c *gin.Context) {
+			c.String(http.StatusOK, "online")
+		})
 
 	const serviceRoute = "/:service/*data"
 	// Version of the API
@@ -67,7 +67,8 @@ func optionsCORSHAndler(c *gin.Context) {
 
 func handleInvalidInputError(c *gin.Context, err error) {
 
-	zap.S().Errorw("Invalid input error",
+	zap.S().Errorw(
+		"Invalid input error",
 		"error", err,
 	)
 
@@ -83,18 +84,18 @@ func handleProxyRequest(c *gin.Context, method string) {
 
 	zap.S().Debugf("getProxyHandler")
 
-	var getProxyRequestPath getProxyRequestPath
+	var gPPR getProxyRequestPath
 	var err error
 
 	// Failed to parse request into service name and original url
-	err = c.BindUri(&getProxyRequestPath)
+	err = c.BindUri(&gPPR)
 	if err != nil {
 		handleInvalidInputError(c, err)
 		return
 	}
 	var bodyBytes []byte
 	if c.Request.Body != nil {
-		bodyBytes, err = ioutil.ReadAll(c.Request.Body)
+		bodyBytes, err = io.ReadAll(c.Request.Body)
 		if err != nil {
 			handleInvalidInputError(c, err)
 			return
@@ -102,7 +103,7 @@ func handleProxyRequest(c *gin.Context, method string) {
 	}
 	zap.S().Warnf("Read %d bytes from original request", len(bodyBytes))
 
-	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(getProxyRequestPath.OriginalURI))
+	match, err := regexp.Match("[a-zA-z0-9_\\-?=/]+", []byte(gPPR.OriginalURI))
 	if err != nil {
 		handleInvalidInputError(c, err)
 		return
@@ -116,14 +117,14 @@ func handleProxyRequest(c *gin.Context, method string) {
 	zap.S().Debugf("", c.Request)
 
 	// Switch to handle our services
-	switch getProxyRequestPath.Service {
+	switch gPPR.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, getProxyRequestPath, method, bodyBytes)
+		HandleFactoryInput(c, gPPR, method, bodyBytes)
 	case "factoryinsight":
-		HandleFactoryInsight(c, getProxyRequestPath, method, bodyBytes)
+		HandleFactoryInsight(c, gPPR, method, bodyBytes)
 	default:
 		{
-			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(getProxyRequestPath.Service))
+			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(gPPR.Service))
 			c.AbortWithStatus(http.StatusBadRequest)
 		}
 	}
@@ -170,7 +171,7 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 
 	authHeader := c.GetHeader("authorization")
 	s := strings.Split(authHeader, " ")
-	//Basic BASE64Encoded
+	// Basic BASE64Encoded
 	if len(s) != 2 {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
@@ -210,7 +211,7 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 		return
 	}
 
-	DoProxiedRequest(c, err, u, "", authHeader, method, bytes)
+	DoProxiedRequest(c, u, "", authHeader, method, bytes)
 }
 
 // HandleFactoryInput handles proxy requests to factoryinput
@@ -248,7 +249,9 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
 	zap.S().Warnf("Proxified URL: %s", internal.SanitizeString(u.String()))
 	if err != nil {
-		zap.S().Warnf("url.Parse failed: %s", internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
+		zap.S().Warnf(
+			"url.Parse failed: %s",
+			internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
 		handleInvalidInputError(c, err)
 		return
 	}
@@ -292,35 +295,47 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
-	ak := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
-	DoProxiedRequest(c, err, u, sessionCookie, ak, method, bodyBytes)
+	ak := fmt.Sprintf(
+		"Basic %s",
+		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
+
+	DoProxiedRequest(c, u, sessionCookie, ak, method, bodyBytes)
 }
 
-func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie string, authorizationKey string, method string, bodyBytes []byte) {
+func DoProxiedRequest(
+	c *gin.Context,
+	u *url.URL,
+	sessionCookie string,
+	authorizationKey string,
+	method string,
+	bodyBytes []byte) {
 
 	// Proxy request to backend
 	client := &http.Client{}
 
 	zap.S().Debugf("Request URL: %s", internal.SanitizeString(u.String()))
-	//CORS request !
+	// CORS request !
 	if u.String() == "" {
 		zap.S().Debugf("CORS Answer")
 		c.Status(http.StatusOK)
-		_, err := c.Writer.Write([]byte("online"))
-		if err != nil {
+
+		if _, err := c.Writer.WriteString("online"); err != nil {
 			zap.S().Debugf("Failed to reply to CORS request")
-			c.AbortWithError(http.StatusInternalServerError, err)
+			errx := c.AbortWithError(http.StatusInternalServerError, err)
+			if errx != nil {
+				zap.S().Errorf("Failed to abort with error: %v", errx)
+			}
 		}
 	} else {
-
+		var err error
 		var req *http.Request
 		// no nil check required, len(nil slice) is 0
 		if len(bodyBytes) > 0 {
 			zap.S().Warnf("Request with body bytes: %s", internal.SanitizeByteArray(bodyBytes))
-			req, err = http.NewRequest(method, u.String(), bytes.NewBuffer(bodyBytes))
+			req, err = http.NewRequestWithContext(context.Background(), method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
 			zap.S().Warnf("Request without body bytes")
-			req, err = http.NewRequest(method, u.String(), nil)
+			req, err = http.NewRequestWithContext(context.Background(), method, u.String(), http.NoBody)
 
 		}
 		if err != nil {
@@ -333,42 +348,43 @@ func DoProxiedRequest(c *gin.Context, err error, u *url.URL, sessionCookie strin
 		}
 		req.Header.Set("Authorization", authorizationKey)
 
-		resp, err := client.Do(req)
+		var resp *http.Response
+		resp, err = client.Do(req)
+
 		if err != nil {
-			zap.S().Debugf("Client.Do error: ", err)
+			zap.S().Debugf("Client.Do error: %v", err)
 			c.AbortWithStatus(500)
 			return
 		}
 
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
-				panic(err)
-			}
-		}(resp.Body)
-
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		var bodyBytesRet []byte
+		bodyBytesRet, err = io.ReadAll(resp.Body)
 		if err != nil {
-			log.Fatal(err)
+			zap.S().Errorf("io.ReadAll error: %v", err)
+			c.AbortWithStatus(500)
+			return
+		}
+		err = resp.Body.Close()
+		if err != nil {
+			zap.S().Errorf("Failed to close response body: %v", err)
+			c.AbortWithStatus(500)
+			return
 		}
 
 		zap.S().Debugf("Backend answer:")
-		zap.S().Debugf(string(bodyBytes))
+		zap.S().Debugf(string(bodyBytesRet))
 
 		c.Status(resp.StatusCode)
 
 		for a, b := range resp.Header {
 			c.Header(a, b[0])
 		}
-		_, err = c.Writer.Write(bodyBytes)
+		_, err = c.Writer.Write(bodyBytesRet)
 		if err != nil {
-			c.AbortWithError(http.StatusInternalServerError, err)
+			errx := c.AbortWithError(http.StatusInternalServerError, err)
+			if errx != nil {
+				zap.S().Errorf("Failed to write response: %s", err)
+			}
 		}
-	}
-
-	if err != nil {
-		err = c.AbortWithError(http.StatusInternalServerError, err)
-		// err is always not nil
-		panic(err)
 	}
 }

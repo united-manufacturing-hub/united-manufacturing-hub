@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"errors"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,9 +14,9 @@ import (
 
 // Parsing of Iodd File content
 type IoDevice struct {
-	ProfileBody            ProfileBody            `xml:"ProfileBody"`
-	ExternalTextCollection ExternalTextCollection `xml:"ExternalTextCollection"`
 	DocumentInfo           DocumentInfo           `xml:"DocumentInfo"`
+	ExternalTextCollection ExternalTextCollection `xml:"ExternalTextCollection"`
+	ProfileBody            ProfileBody            `xml:"ProfileBody"`
 }
 
 type DocumentInfo struct {
@@ -49,7 +49,7 @@ type Text struct {
 
 type DeviceFunction struct {
 	DatatypeCollection    DatatypeCollection    `xml:"DatatypeCollection"`
-	ProcessDataCollection ProcessDataCollection `xml:"ProcessDataCollection"` //ToDo: array?
+	ProcessDataCollection ProcessDataCollection `xml:"ProcessDataCollection"`
 }
 
 type DatatypeCollection struct {
@@ -65,19 +65,19 @@ type ProcessData struct {
 }
 
 type ProcessDataIn struct {
-	Datatype    Datatype    `xml:"Datatype"`
 	DatatypeRef DatatypeRef `xml:"DatatypeRef"`
 	Name        Name        `xml:"Name"`
+	Datatype    Datatype    `xml:"Datatype"`
 }
 
 type Datatype struct {
-	BitLength        uint          `xml:"bitLength,attr"`
-	FixedLength      uint          `xml:"fixedLength,attr"`
-	RecordItemArray  []RecordItem  `xml:"RecordItem"`
-	Type             string        `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	Type             string        `xml:"type,attr"`
 	Id               string        `xml:"id,attr"`
+	RecordItemArray  []RecordItem  `xml:"RecordItem"`
 	SingleValueArray []SingleValue `xml:"SingleValue"`
 	ValueRangeArray  []ValueRange  `xml:"ValueRange"`
+	BitLength        uint          `xml:"bitLength,attr"`
+	FixedLength      uint          `xml:"fixedLength,attr"`
 }
 
 type SingleValue struct {
@@ -92,10 +92,10 @@ type ValueRange struct {
 }
 
 type RecordItem struct {
-	BitOffset      int            `xml:"bitOffset,attr"`
-	SimpleDatatype SimpleDatatype `xml:"SimpleDatatype"`
 	Name           Name           `xml:"Name"`
 	DatatypeRef    DatatypeRef    `xml:"DatatypeRef"`
+	SimpleDatatype SimpleDatatype `xml:"SimpleDatatype"`
+	BitOffset      int            `xml:"bitOffset,attr"`
 }
 
 type Name struct {
@@ -107,11 +107,11 @@ type DatatypeRef struct {
 }
 
 type SimpleDatatype struct {
-	Type        string      `xml:"type,attr"` // Dropped "xsi:" to correctly unmarshal
+	ValueRange  ValueRange  `xml:"ValueRange"`
+	SingleValue SingleValue `xml:"SingleValue"`
+	Type        string      `xml:"type,attr"`
 	BitLength   uint        `xml:"bitLength,attr"`
 	FixedLength uint        `xml:"fixedLength,attr"`
-	SingleValue SingleValue `xml:"SingleValue"`
-	ValueRange  ValueRange  `xml:"ValueRange"`
 }
 
 // Todo add datatyperef if not simple datatype
@@ -124,7 +124,10 @@ type IoddFilemapKey struct {
 
 // AddNewDeviceToIoddFilesAndMap uses ioddFilemapKey to download new iodd file (if key not alreaddy in IoDevice map).
 // Then updates map by checking for new files, unmarhaling them und importing into map
-func AddNewDeviceToIoddFilesAndMap(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, fileInfoSlice []os.FileInfo) ([]os.FileInfo, error) {
+func AddNewDeviceToIoddFilesAndMap(
+	ioddFilemapKey IoddFilemapKey,
+	relativeDirectoryPath string,
+	fileInfoSlice []fs.DirEntry) ([]fs.DirEntry, error) {
 	zap.S().Debugf("Requesting IoddFile %v -> %s", ioddFilemapKey, relativeDirectoryPath)
 	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
 	if err != nil {
@@ -145,7 +148,10 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 	// Unmarshal file with Unmarshal
 	err := xml.Unmarshal(ioddFile, &payload)
 	if err != nil {
-		zap.S().Errorf("Unmarshaling of IoDevice %#v failed. Deleting iodd.xml file now and stopping container after that. Error: %v", ioddFile, err)
+		zap.S().Errorf(
+			"Unmarshaling of IoDevice %#v failed. Deleting iodd.xml file now and stopping container after that. Error: %v",
+			ioddFile,
+			err)
 		err = os.Remove(absoluteFilePath)
 		// If unmarshaling fails we remove the iodd.xml file and stop tze container
 		if err != nil {
@@ -157,10 +163,14 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 }
 
 // ReadIoddFiles Determines with oldFileInfoSlice if new .xml Iodd files are in IoddFiles folder -> if yes: unmarshals new files and caches in IoDevice Map
-func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string) ([]os.FileInfo, error) {
-	absoluteDirectoryPath, _ := filepath.Abs(relativeDirectoryPath)
+func ReadIoddFiles(oldFileInfoSlice []fs.DirEntry, relativeDirectoryPath string) ([]fs.DirEntry, error) {
+	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
+	if err != nil {
+		zap.S().Errorf("Error in ReadIoddFiles: %s", err.Error())
+		return oldFileInfoSlice, err
+	}
 	// check for new iodd files
-	currentFileInfoSlice, err := ioutil.ReadDir(absoluteDirectoryPath)
+	currentFileInfoSlice, err := os.ReadDir(absoluteDirectoryPath)
 	if err != nil {
 		err = errors.New("reading of currentFileInfoSlice from specified directory failed")
 		return oldFileInfoSlice, err
@@ -177,12 +187,13 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string)
 		// create path to file
 		absoluteFilePath := absoluteDirectoryPath + "/" + name
 		// read file
-		dat, err := ioutil.ReadFile(absoluteFilePath)
+		var dat []byte
+		dat, err = os.ReadFile(absoluteFilePath)
 		if err != nil {
 			return oldFileInfoSlice, err
 		}
 		// Unmarshal
-		ioDevice := IoDevice{}
+		var ioDevice IoDevice
 		ioDevice, err = UnmarshalIoddFile(dat, absoluteFilePath)
 		if err != nil {
 			return oldFileInfoSlice, err
@@ -195,8 +206,11 @@ func ReadIoddFiles(oldFileInfoSlice []os.FileInfo, relativeDirectoryPath string)
 
 		if idm, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
 			// IoDevice is already in ioddIoDeviceMap
-			// -> replace depending on date (newest version should be used)
-			if earlier, _ := currentDateEarlierThenOldDate(ioDevice.DocumentInfo.ReleaseDate, idm.(IoDevice).DocumentInfo.ReleaseDate); earlier {
+			// -> replace depending on date (the newest version should be used)
+			var earlier bool
+			if earlier, err = currentDateEarlierThenOldDate(
+				ioDevice.DocumentInfo.ReleaseDate,
+				idm.(IoDevice).DocumentInfo.ReleaseDate); earlier && err == nil {
 				ioDeviceMap.Store(ioddFilemapKey, ioDevice)
 			}
 			continue
@@ -233,15 +247,15 @@ func contains(slice []string, entry string) bool {
 	return false
 }
 
-//getNamesOfFileInfo returns the names of files stored inside a FileInfo slice
-func getNamesOfFileInfo(fileInfoSlice []os.FileInfo) (namesSlice []string) {
+// getNamesOfFileInfo returns the names of files stored inside a FileInfo slice
+func getNamesOfFileInfo(fileInfoSlice []fs.DirEntry) (namesSlice []string) {
 	for _, element := range fileInfoSlice {
 		namesSlice = append(namesSlice, element.Name())
 	}
 	return
 }
 
-//currentDateEarlierThenOldDate returns if a date is earlier then another
+// currentDateEarlierThenOldDate returns if a date is earlier then another
 func currentDateEarlierThenOldDate(currentDate string, oldDate string) (bool, error) {
 	const shortDate = "2006-01-02"
 	parsedCurrentDate, err := time.Parse(shortDate, currentDate)

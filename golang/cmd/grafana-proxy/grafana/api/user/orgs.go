@@ -7,37 +7,41 @@ package user
 //    bytes, err = user.Marshal()
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 )
 
 type Orgs []OrgsElement
 
 func UnmarshalOrgs(data []byte) (Orgs, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	var r Orgs
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *Orgs) Marshal() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	return json.Marshal(r)
 }
 
 type OrgsElement struct {
-	OrgID int64  `json:"orgId"`
 	Name  string `json:"name"`
 	Role  string `json:"role"`
+	OrgID int64  `json:"orgId"`
 }
 
 func GetOrgas(sessioncookie string) (Orgs, error) {
 	url := fmt.Sprintf("%s/api/user/orgs", GrafanaUrl)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, http.NoBody)
 	if err != nil {
 
 		return Orgs{}, err
@@ -45,24 +49,24 @@ func GetOrgas(sessioncookie string) (Orgs, error) {
 
 	req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", sessioncookie))
 
-	resp, err := client.Do(req)
+	var resp *http.Response
+	resp, err = client.Do(req)
 	if err != nil {
-
 		return Orgs{}, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
-
 	if resp.StatusCode == http.StatusOK {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		var bodyBytes []byte
+		bodyBytes, err = io.ReadAll(resp.Body)
 		if err != nil {
+			zap.S().Fatalf("Failed to read response body: %v", err)
+			return nil, err
+		}
 
-			log.Fatal(err)
+		err = resp.Body.Close()
+		if err != nil {
+			zap.S().Errorf("Failed to close response body: %v", err)
+			return nil, err
 		}
 
 		orgs, err := UnmarshalOrgs(bodyBytes)

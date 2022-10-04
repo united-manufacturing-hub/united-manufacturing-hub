@@ -1,6 +1,3 @@
-//go:build kafka
-// +build kafka
-
 package main
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"

@@ -10,6 +10,8 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -21,10 +23,6 @@ import (
 
 var localMQTTClient MQTT.Client
 var remoteMQTTClient MQTT.Client
-
-// this is only used if SSL is not enabled
-const localMQTTClientID = "MQTT-BRIDGE-LOCAL"
-const remoteMQTTClientID = "MQTT-BRIDGE-REMOTE"
 
 var buildtime string
 
@@ -40,9 +38,15 @@ func main() {
 
 	zap.S().Infof("This is mqtt-bridge build date: %s", buildtime)
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof %v", err)
+		}
+	}()
 
-	//dryRun := os.Getenv("DRY_RUN")
+	// dryRun := os.Getenv("DRY_RUN")
 
 	// Read environment variables for remote broker
 	remoteCertificateName := os.Getenv("REMOTE_CERTIFICATE_NAME")
@@ -80,20 +84,44 @@ func main() {
 		zap.S().Errorf("Error setting up remote queue", err)
 		return
 	}
-	defer closeQueue(remotePg)
+	defer func(pq *goque.Queue) {
+		err = closeQueue(pq)
+		if err != nil {
+			zap.S().Errorf("Error closing remote queue", err)
+		}
+	}(remotePg)
 
 	localPg, err := setupQueue("local")
 	if err != nil {
 		zap.S().Errorf("Error setting up local queue", err)
 		return
 	}
-	defer closeQueue(localPg)
+	defer func(pq *goque.Queue) {
+		err = closeQueue(pq)
+		if err != nil {
+			zap.S().Errorf("Error closing local queue", err)
+		}
+	}(localPg)
 
 	// Setting up MQTT
 	zap.S().Debugf("Setting up MQTT")
 
-	remoteMQTTClient = setupMQTT(remoteCertificateName, "remote", remoteMQTTBrokerURL, remoteSubMQTTTopic, remoteMQTTBrokerSSLEnabled, remotePg, !BRIDGE_ONE_WAY) // make remote subscription dependent on variable
-	localMQTTClient = setupMQTT(localCertificateName, "local", localMQTTBrokerURL, localSubMQTTTopic, localMQTTBrokerSSLEnabled, localPg, true)                   // always subscribe to local
+	remoteMQTTClient = setupMQTT(
+		remoteCertificateName,
+		"remote",
+		remoteMQTTBrokerURL,
+		remoteSubMQTTTopic,
+		remoteMQTTBrokerSSLEnabled,
+		remotePg,
+		!BRIDGE_ONE_WAY) // make remote subscription dependent on variable
+	localMQTTClient = setupMQTT(
+		localCertificateName,
+		"local",
+		localMQTTBrokerURL,
+		localSubMQTTTopic,
+		localMQTTBrokerSSLEnabled,
+		localPg,
+		true) // always subscribe to local
 
 	// Setting up endless loops to send out messages
 	go publishQueueToBroker(remotePg, localMQTTClient, "local", remoteSubMQTTTopic, localPubMQTTTopic)
@@ -113,7 +141,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -132,7 +160,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
@@ -141,7 +169,12 @@ func ShutdownApplicationGraceful() {
 
 // publishQueueToBroker starts an endless loop and publishes the given queue element by element to the selected MQTT broker.
 // There can be multiple processes running of this function and to identify each of them a prefix is used
-func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, subMQTTTopic string, pubMQTTTopic string) {
+func publishQueueToBroker(
+	pq *goque.Queue,
+	client MQTT.Client,
+	prefix string,
+	subMQTTTopic string,
+	pubMQTTTopic string) {
 	for {
 		if pq.Length() == 0 {
 			time.Sleep(1 * time.Millisecond) // wait 1 ms to avoid high cpu usage
@@ -165,7 +198,7 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 		// Publish element and wait for confirmation
 
 		if !strings.HasPrefix(currentMessage.Topic, subMQTTTopic) {
-			zap.S().Errorf("Recieved unexpected message", currentMessage.Topic, subMQTTTopic)
+			zap.S().Errorf("Received unexpected message", currentMessage.Topic, subMQTTTopic)
 			return
 		}
 
@@ -173,10 +206,10 @@ func publishQueueToBroker(pq *goque.Queue, client MQTT.Client, prefix string, su
 		topic := pubMQTTTopic + strings.TrimPrefix(currentMessage.Topic, subMQTTTopic)
 
 		token := client.Publish(topic, 1, false, currentMessage.Message)
-		token.Wait() // wait indefinete amount of time (librarz will automatically resend)
+		token.Wait() // wait indefinite amount of time (librarz will automatically resend)
 
-		// if successfully recieved at broker delete from stack
-		topElement, err = pq.Dequeue()
+		// if successfully received at broker delete from stack
+		_, err = pq.Dequeue()
 		if err != nil {
 			zap.S().Fatalf("Error dequeuing element", err)
 			return

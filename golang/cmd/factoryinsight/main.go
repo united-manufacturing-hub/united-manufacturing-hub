@@ -28,6 +28,8 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 )
 
@@ -46,7 +48,13 @@ func main() {
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	PQHost := "db"
 	// Read environment variables
@@ -109,7 +117,13 @@ func main() {
 	shutdownEnabled = false
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
-	go http.ListenAndServe("0.0.0.0:8086", health)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", err)
+		}
+	}()
 
 	zap.S().Debugf("Healthcheck initialized..", redisURI)
 
@@ -133,7 +147,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -161,7 +175,7 @@ func ShutdownApplicationGraceful() {
 
 	ShutdownDB()
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)

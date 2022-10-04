@@ -1,14 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/heptiolabs/healthcheck"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"math"
 	"net/http"
+
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -29,6 +31,8 @@ type TopicMap []TopicMapElement
 
 func UnmarshalTopicMap(data []byte) (TopicMap, error) {
 	var r TopicMap
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
@@ -36,8 +40,8 @@ func UnmarshalTopicMap(data []byte) (TopicMap, error) {
 type TopicMapElement struct {
 	Name          string  `json:"name"`
 	Topic         string  `json:"topic"`
-	Bidirectional bool    `json:"bidirectional"`
 	SendDirection SendDir `json:"send_direction,omitempty"`
+	Bidirectional bool    `json:"bidirectional"`
 }
 
 var LocalKafkaBootstrapServers string
@@ -55,7 +59,13 @@ func main() {
 	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %s", err)
+		}
+	}()
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -63,14 +73,26 @@ func main() {
 	zap.S().Debugf("Setting up metrics %s %v", metricsPath, metricsPort)
 
 	http.Handle(metricsPath, promhttp.Handler())
-	go http.ListenAndServe(metricsPort, nil)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe(metricsPort, nil)
+		if err != nil {
+			zap.S().Errorf("Error starting metrics: %s", err)
+		}
+	}()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
-	go http.ListenAndServe("0.0.0.0:8086", health)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", err)
+		}
+	}()
 
 	zap.S().Debugf("Starting queue processor")
 	KafkaTopicMap := os.Getenv("KAFKA_TOPIC_MAP")
@@ -113,7 +135,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	// It's important to handle both signals, allowing Kafka to shut down gracefully !
 	// If this is not possible, it will attempt to rebalance itself, which will increase startup time
-	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigs, syscall.SIGTERM)
 
 	go func() {
 		// Kubernetes sends SIGTERM 30 seconds before
@@ -122,7 +144,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIG %v", sig)
+		zap.S().Infof("Received SIG %v", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -162,7 +184,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(1 * time.Second)
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
@@ -186,21 +208,23 @@ func PerformanceReport() {
 		lastPutbacks = internal.KafkaPutBacks
 		lastConfirmed = internal.KafkaConfirmed
 
-		zap.S().Infof("Performance report"+
-			"| Commits: %f, Commits/s: %f"+
-			"| Messages: %f, Messages/s: %f"+
-			"| PutBacks: %f, PutBacks/s: %f"+
-			"| Confirms: %f, Confirms/s: %f",
+		zap.S().Infof(
+			"Performance report"+
+				"| Commits: %f, Commits/s: %f"+
+				"| Messages: %f, Messages/s: %f"+
+				"| PutBacks: %f, PutBacks/s: %f"+
+				"| Confirms: %f, Confirms/s: %f",
 			internal.KafkaCommits, commitsPerSecond,
 			internal.KafkaMessages, messagesPerSecond,
 			internal.KafkaPutBacks, putbacksPerSecond,
 			internal.KafkaConfirmed, confirmsPerSecond,
 		)
 
-		zap.S().Infof("Cache report"+
-			"\nEntry count: %d"+
-			"\nHitrate: %f"+
-			"\nLookup count: %d",
+		zap.S().Infof(
+			"Cache report"+
+				"\nEntry count: %d"+
+				"\nHitrate: %f"+
+				"\nLookup count: %d",
 			messageCache.EntryCount(), messageCache.HitRate(), messageCache.LookupCount(),
 		)
 

@@ -75,19 +75,19 @@ const (
 
 	// EquipmentFailureState means that there is an equipment failure (e.g. broken engine)
 	EquipmentFailureState = 180000
-	
+
 	// EquipmentFailureState means that there is an equipment failure at the welder
 	EquipmentFailureStateWelder = 180001
-	
+
 	// EquipmentFailureState means that there is an equipment failure at the welder
 	EquipmentFailureStateExpender = 180002
-	
+
 	// EquipmentFailureState means that there is an equipment failure Palletizer
 	EquipmentFailureStatePalletizer = 180003
-	
+
 	// EquipmentFailureState means that there is an equipment failure Underbody-machine
 	EquipmentFailureStateUnderbody = 180004
-	
+
 	// EquipmentFailureState means that there is an equipment failure (e.g. broken engine)
 	EquipmentFailureStateTopcover = 180005
 

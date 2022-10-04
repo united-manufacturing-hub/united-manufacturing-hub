@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/EagleChen/mapmutex"
 	"github.com/lib/pq"
 	"github.com/omeid/pgerror"
@@ -46,14 +44,13 @@ func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 
 // ShutdownDB closes all database connections
 func ShutdownDB() {
-	err := db.Close()
-	if err != nil {
+	if err := db.Close(); err != nil {
 		panic(err)
 	}
 }
 
 // PQErrorHandling logs and handles postgresql errors
-func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical bool) {
+func PQErrorHandling(sqlStatement string, err error, isCritical bool) {
 
 	if e := pgerror.ConnectionException(err); e != nil {
 		zap.S().Errorw(
@@ -76,18 +73,19 @@ func PQErrorHandling(c *gin.Context, sqlStatement string, err error, isCritical 
 }
 
 // GetLocations retrieves all locations for a given customer
-func GetLocations(c *gin.Context, customerID string) (locations []string, error error) {
+func GetLocations(customerID string) (locations []string, err error) {
 	zap.S().Infof("[GetLocations] customerID: %v", customerID)
 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
-	rows, err := db.Query(sqlStatement, customerID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, customerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -95,18 +93,18 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 
 	for rows.Next() {
 		var location string
-		err := rows.Scan(&location)
+		err = rows.Scan(&location)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		locations = append(locations, location)
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -114,18 +112,18 @@ func GetLocations(c *gin.Context, customerID string) (locations []string, error 
 }
 
 // GetAssets retrieves all assets for a given customer
-func GetAssets(c *gin.Context, customerID string, location string) (assets []string, error error) {
+func GetAssets(customerID string, location string) (assets []string, err error) {
 	zap.S().Infof("[GetAssets] customerID: %v, location: %v", customerID, location)
 
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
-	rows, err := db.Query(sqlStatement, customerID, location)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, customerID, location)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -133,18 +131,16 @@ func GetAssets(c *gin.Context, customerID string, location string) (assets []str
 
 	for rows.Next() {
 		var asset string
-		err := rows.Scan(&asset)
+		err = rows.Scan(&asset)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		}
 		assets = append(assets, asset)
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -152,18 +148,18 @@ func GetAssets(c *gin.Context, customerID string, location string) (assets []str
 }
 
 // GetComponents retrieves all assets for a given customer
-func GetComponents(c *gin.Context, assetID uint32) (components []string, error error) {
+func GetComponents(assetID uint32) (components []string, err error) {
 	zap.S().Infof("[GetComponents] assetID: %v", assetID)
 
 	sqlStatement := `SELECT distinct(componentname) FROM componentTable WHERE asset_id=$1;`
 
-	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -171,18 +167,16 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 
 	for rows.Next() {
 		var component string
-		err := rows.Scan(&component)
+		err = rows.Scan(&component)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		}
 		components = append(components, component)
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -191,13 +185,13 @@ func GetComponents(c *gin.Context, assetID uint32) (components []string, error e
 
 // GetStatesRaw gets all states for a specific asset in a timerange. It returns an array of datamodel.StateEntry
 func GetStatesRaw(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
 	to time.Time,
-	configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, error error) {
+	configuration datamodel.CustomerConfiguration) (data []datamodel.StateEntry, err error) {
 	zap.S().Infof(
 		"[GetStatesRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, configuration: %v",
 		customerID,
@@ -207,9 +201,10 @@ func GetStatesRaw(
 		to,
 		configuration)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -233,13 +228,13 @@ func GetStatesRaw(
 
 		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
 
-		err := db.QueryRow(sqlStatement, assetID, from).Scan(&timestamp, &dataPoint)
-		if err == sql.ErrNoRows {
+		err = db.QueryRow(sqlStatement, assetID, from).Scan(&timestamp, &dataPoint)
+		if errors.Is(err, sql.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		} else {
 			// use "from" timestamp instead of timestamp in the state as we want to look only at data within the selected time range
@@ -255,13 +250,14 @@ func GetStatesRaw(
 
 		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 
-		rows, err := db.Query(sqlStatement, assetID, from, to)
-		if err == sql.ErrNoRows {
-			PQErrorHandling(c, sqlStatement, err, false)
+		var rows *sql.Rows
+		rows, err = db.Query(sqlStatement, assetID, from, to)
+		if errors.Is(err, sql.ErrNoRows) {
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -271,10 +267,10 @@ func GetStatesRaw(
 			var timestamp time.Time
 			var dataPoint int
 
-			err := rows.Scan(&timestamp, &dataPoint)
+			err = rows.Scan(&timestamp, &dataPoint)
 			if err != nil {
-				PQErrorHandling(c, sqlStatement, err, false)
-				error = err
+				PQErrorHandling(sqlStatement, err, false)
+
 				return
 			}
 
@@ -288,8 +284,8 @@ func GetStatesRaw(
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -304,13 +300,13 @@ func GetStatesRaw(
 
 // GetShiftsRaw gets all shifts for a specific asset in a timerange in a raw format
 func GetShiftsRaw(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
 	to time.Time,
-	configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, error error) {
+	configuration datamodel.CustomerConfiguration) (data []datamodel.ShiftEntry, err error) {
 	zap.S().Infof(
 		"[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, configuration: %v",
 		customerID,
@@ -320,9 +316,9 @@ func GetShiftsRaw(
 		to,
 		configuration)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
 		return
 	}
 
@@ -353,8 +349,8 @@ func GetShiftsRaw(
 		ORDER BY begin_timestamp ASC LIMIT 1;
 		`
 
-		err := db.QueryRow(sqlStatement, assetID, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
-		if err == sql.ErrNoRows {
+		err = db.QueryRow(sqlStatement, assetID, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
+		if errors.Is(err, sql.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 
@@ -366,14 +362,13 @@ func GetShiftsRaw(
 			}
 			data = append(data, fullRow)
 		} else if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		} else {
 			// First entry is always noShift
 			fullRow := datamodel.ShiftEntry{
 				TimestampBegin: internal.UnixEpoch,
-				TimestampEnd:   timestampStart, //.Add(time.Duration(-1) * time.Millisecond)
+				TimestampEnd:   timestampStart, // .Add(time.Duration(-1) * time.Millisecond)
 				ShiftType:      0,
 			}
 			data = append(data, fullRow)
@@ -395,13 +390,13 @@ func GetShiftsRaw(
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
-		rows, err := db.Query(sqlStatement, assetID, from, to) //OFFSET to prevent entering first result twice
-		if err == sql.ErrNoRows {
-			PQErrorHandling(c, sqlStatement, err, false)
+		var rows *sql.Rows
+		rows, err = db.Query(sqlStatement, assetID, from, to) // OFFSET to prevent entering first result twice
+		if errors.Is(err, sql.ErrNoRows) {
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		}
 
@@ -409,10 +404,9 @@ func GetShiftsRaw(
 
 		for rows.Next() {
 
-			err := rows.Scan(&timestampStart, &timestampEnd, &shiftType)
+			err = rows.Scan(&timestampStart, &timestampEnd, &shiftType)
 			if err != nil {
-				PQErrorHandling(c, sqlStatement, err, false)
-				error = err
+				PQErrorHandling(sqlStatement, err, false)
 				return
 			}
 			fullRow := datamodel.ShiftEntry{
@@ -424,8 +418,7 @@ func GetShiftsRaw(
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		}
 
@@ -449,12 +442,12 @@ func GetShiftsRaw(
 
 // GetShifts gets all shifts for a specific asset in a timerange
 func GetShifts(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data datamodel.DataResponseAny, error error) {
+	to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v",
 		customerID,
@@ -466,28 +459,28 @@ func GetShifts(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "shiftName"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-	configuration, err := GetCustomerConfiguration(c, customerID)
+	var configuration datamodel.CustomerConfiguration
+	configuration, err = GetCustomerConfiguration(customerID)
 	if err != nil {
 		zap.S().Errorw(
 			"GetCustomerConfiguration failed",
 			"error", err,
 		)
-		error = err
 		return
 	}
 
-	rawShifts, err := GetShiftsRaw(c, customerID, location, asset, from, to, configuration)
+	var rawShifts []datamodel.ShiftEntry
+	rawShifts, err = GetShiftsRaw(customerID, location, asset, from, to, configuration)
 	if err != nil {
 		zap.S().Errorw(
 			"GetShiftsRaw failed",
 			"error", err,
 		)
-		error = err
 		return
 	}
 
-	processedShifts := cleanRawShiftData(rawShifts, from, to, configuration)
-	processedShifts = addNoShiftsBetweenShifts(processedShifts, configuration)
+	processedShifts := cleanRawShiftData(rawShifts)
+	processedShifts = addNoShiftsBetweenShifts(processedShifts)
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedShifts {
@@ -503,13 +496,13 @@ func GetShifts(
 
 // GetProcessValue gets all data for specific valueName and for a specific asset in a timerange
 func GetProcessValue(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
 	to time.Time,
-	valueName string) (data datamodel.DataResponseAny, error error) {
+	valueName string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetShiftsRaw] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v",
 		customerID,
@@ -519,9 +512,9 @@ func GetProcessValue(
 		to,
 		valueName)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
 		return
 	}
 
@@ -530,13 +523,13 @@ func GetProcessValue(
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	sqlStatement := `SELECT timestamp, value FROM processValueTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
-	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID, from, to, valueName)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -547,10 +540,9 @@ func GetProcessValue(
 		var timestamp time.Time
 		var dataPoint float64
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		}
 		fullRow := []interface{}{
@@ -560,8 +552,7 @@ func GetProcessValue(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -570,13 +561,13 @@ func GetProcessValue(
 }
 
 func GetProcessValueString(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
 	to time.Time,
-	valueName string) (data datamodel.DataResponseAny, error error) {
+	valueName string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetProcessValueString] customerID: %v, location: %v, asset: %v, from: %v, to: %v, valueName: %v",
 		customerID,
@@ -586,9 +577,10 @@ func GetProcessValueString(
 		to,
 		valueName)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -597,13 +589,14 @@ func GetProcessValueString(
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	sqlStatement := `SELECT timestamp, value FROM ProcessValueStringTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
-	rows, err := db.Query(sqlStatement, assetID, from, to, valueName)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID, from, to, valueName)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -614,10 +607,10 @@ func GetProcessValueString(
 		var timestamp time.Time
 		var dataPoint string
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		fullRow := []interface{}{
@@ -627,8 +620,8 @@ func GetProcessValueString(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -638,11 +631,11 @@ func GetProcessValueString(
 
 // GetCurrentState gets the latest state of an asset
 func GetCurrentState(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
-	keepStatesInteger bool) (data datamodel.DataResponseAny, error error) {
+	keepStatesInteger bool) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetCurrentState] customerID: %v, location: %v, asset: %v keepStatesInteger: %v",
 		customerID,
@@ -650,22 +643,24 @@ func GetCurrentState(
 		asset,
 		keepStatesInteger)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "state"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	configuration, err := GetCustomerConfiguration(c, customerID)
+	var configuration datamodel.CustomerConfiguration
+	configuration, err = GetCustomerConfiguration(customerID)
 	if err != nil {
 		zap.S().Errorw(
 			"GetCustomerConfiguration failed",
 			"error", err,
 		)
-		error = err
+
 		return
 	}
 
@@ -674,12 +669,12 @@ func GetCurrentState(
 
 	sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 ORDER BY timestamp DESC LIMIT 1;`
 	err = db.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -693,7 +688,7 @@ func GetCurrentState(
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
 		fullRow := []interface{}{
-			ConvertStateToString(c, dataPoint, configuration),
+			ConvertStateToString(dataPoint, configuration),
 			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
@@ -703,15 +698,16 @@ func GetCurrentState(
 
 // GetDataTimeRangeForAsset gets the first and latest timestamp. This is used to show all existing data e.g. to create recommendations
 func GetDataTimeRangeForAsset(
-	c *gin.Context,
+
 	customerID string,
 	location string,
-	asset string) (data datamodel.DataResponseAny, error error) {
+	asset string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetDataTimeRangeForAsset] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 	data.ColumnNames = []string{"firstTimestamp", "lastTimestamp"}
@@ -726,17 +722,17 @@ func GetDataTimeRangeForAsset(
 	sqlStatement := `SELECT MAX(timestamp),MIN(timestamp) FROM stateTable WHERE asset_id=$1;`
 
 	err = db.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
 	if !lastTimestampPq.Valid || !firstTimestampPq.Valid {
-		error = errors.New("asset has no states yet")
+		err = errors.New("asset has no states yet")
 		return
 	}
 
@@ -744,7 +740,7 @@ func GetDataTimeRangeForAsset(
 	firstTimestamp = firstTimestampPq.Time
 
 	fullRow := []interface{}{firstTimestamp.Format(time.RFC3339), lastTimestamp.Format(time.RFC3339)}
-	//fullRow := []float64{float64(firstTimestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), float64(lastTimestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+	// fullRow := []float64{float64(firstTimestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))), float64(lastTimestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 	data.Datapoints = append(data.Datapoints, fullRow)
 
 	return
@@ -752,12 +748,12 @@ func GetDataTimeRangeForAsset(
 
 // GetCountsRaw gets all states for a specific asset in a timerange
 func GetCountsRaw(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data []datamodel.CountEntry, error error) {
+	to time.Time) (data []datamodel.CountEntry, err error) {
 	zap.S().Infof(
 		"[GetCountsRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -766,9 +762,10 @@ func GetCountsRaw(
 		from,
 		to)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -786,13 +783,14 @@ func GetCountsRaw(
 
 		// no data in cache
 		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
-		rows, err := db.Query(sqlStatement, assetID, from, to)
-		if err == sql.ErrNoRows {
-			PQErrorHandling(c, sqlStatement, err, false)
+		var rows *sql.Rows
+		rows, err = db.Query(sqlStatement, assetID, from, to)
+		if errors.Is(err, sql.ErrNoRows) {
+			PQErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -803,10 +801,10 @@ func GetCountsRaw(
 			var count int32
 			var scrapN sql.NullInt32
 
-			err := rows.Scan(&timestamp, &count, &scrapN)
+			err = rows.Scan(&timestamp, &count, &scrapN)
 			if err != nil {
-				PQErrorHandling(c, sqlStatement, err, false)
-				error = err
+				PQErrorHandling(sqlStatement, err, false)
+
 				return
 			}
 
@@ -824,8 +822,8 @@ func GetCountsRaw(
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -839,12 +837,12 @@ func GetCountsRaw(
 
 // GetCounts gets all states for a specific asset in a timerange
 func GetCounts(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data datamodel.DataResponseAny, error error) {
+	to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetCounts] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -857,10 +855,11 @@ func GetCounts(
 	JSONColumnName2 := customerID + "-" + location + "-" + asset + "-" + "scrap"
 	data.ColumnNames = []string{JSONColumnName, JSONColumnName2, "timestamp"}
 
-	countSlice, err := GetCountsRaw(c, customerID, location, asset, from, to)
+	var countSlice []datamodel.CountEntry
+	countSlice, err = GetCountsRaw(customerID, location, asset, from, to)
 	if err != nil {
 		zap.S().Errorf("GetCountsRaw failed", err)
-		error = err
+
 		return
 	}
 
@@ -876,8 +875,9 @@ func GetCounts(
 	return
 }
 
-//TODO test GetTotalCounts
+// TODO test GetTotalCounts
 
+/*
 // GetTotalCounts gets the sum of produced units for a specific asset in a timerange
 func GetTotalCounts(
 	c *gin.Context,
@@ -885,7 +885,7 @@ func GetTotalCounts(
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data datamodel.DataResponseAny, error error) {
+	to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetTotalCounts] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -897,10 +897,10 @@ func GetTotalCounts(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	countSlice, err := GetCountsRaw(c, customerID, location, asset, from, to)
+	countSlice, err = GetCountsRaw(c, customerID, location, asset, from, to)
 	if err != nil {
 		zap.S().Errorf("GetCountsRaw failed", err)
-		error = err
+
 		return
 	}
 
@@ -915,17 +915,18 @@ func GetTotalCounts(
 	data.Datapoints = append(data.Datapoints, fullRow)
 
 	return
-}
+}s
+*/
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
 	to time.Time,
-	aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+	aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetProductionSpeed] customerID: %v, location: %v, asset: %v from: %v, to: %v, aggregatedInterval: %v",
 		customerID,
@@ -935,16 +936,17 @@ func GetProductionSpeed(
 		to,
 		aggregatedInterval)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	//time_bucket_gapfill does not work on Microsoft Azure (license issue)
+	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
 	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
 	FROM countTable 
@@ -953,14 +955,15 @@ func GetProductionSpeed(
 	GROUP BY speedPerIntervall 
 	ORDER BY speedPerIntervall ASC;`
 
-	rows, err := db.Query(sqlStatement, assetID, from, to)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID, from, to)
 
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -973,10 +976,10 @@ func GetProductionSpeed(
 		var timestamp time.Time
 		var dataPoint float64
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -1010,8 +1013,8 @@ func GetProductionSpeed(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1020,13 +1023,13 @@ func GetProductionSpeed(
 
 // GetQualityRate gets the quality rate in a selectable interval (in minutes) for a given time range
 func GetQualityRate(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
 	to time.Time,
-	aggregatedInterval int) (data datamodel.DataResponseAny, error error) {
+	aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetQualityRate] customerID: %v, location: %v, asset: %v from: %v, to: %v, aggregatedInterval: %v",
 		customerID,
@@ -1036,16 +1039,17 @@ func GetQualityRate(
 		to,
 		aggregatedInterval)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	//time_bucket_gapfill does not work on Microsoft Azure (license issue)
+	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
 	SELECT time_bucket('1 minutes', timestamp) as ratePerIntervall, 
 		coalesce(
@@ -1057,14 +1061,15 @@ func GetQualityRate(
 	GROUP BY ratePerIntervall 
 	ORDER BY ratePerIntervall ASC;`
 
-	rows, err := db.Query(sqlStatement, assetID, from, to)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID, from, to)
 
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1077,10 +1082,10 @@ func GetQualityRate(
 		var timestamp time.Time
 		var dataPoint float64
 
-		err := rows.Scan(&timestamp, &dataPoint)
+		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -1114,8 +1119,8 @@ func GetQualityRate(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1123,9 +1128,9 @@ func GetQualityRate(
 }
 
 // GetCustomerConfiguration fetches the customer configuration (KPI definition, etc.) from the database
-func GetCustomerConfiguration(c *gin.Context, customerID string) (
+func GetCustomerConfiguration( customerID string) (
 	configuration datamodel.CustomerConfiguration,
-	error error) {
+	err error) {
 	zap.S().Infof("[GetCustomerConfiguration] customerID: %v", customerID)
 
 	// Get from cache if possible
@@ -1154,7 +1159,7 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (
 		WHERE 
 			customer=$1;
 	`
-	err := db.QueryRow(sqlStatement, customerID).Scan(
+	err = db.QueryRow(sqlStatement, customerID).Scan(
 		&configuration.MicrostopDurationInSeconds,
 		&configuration.IgnoreMicrostopUnderThisDurationInSeconds,
 		&configuration.MinimumRunningTimeInSeconds,
@@ -1166,7 +1171,7 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (
 		&tempPerformanceLossStates,
 	)
 
-	if err == sql.ErrNoRows { // default values if no configuration is stored yet
+	if errors.Is(err, sql.ErrNoRows) { // default values if no configuration is stored yet
 		configuration.MicrostopDurationInSeconds = 60 * 2
 		configuration.IgnoreMicrostopUnderThisDurationInSeconds = -1 // do not apply
 		configuration.MinimumRunningTimeInSeconds = 0
@@ -1199,8 +1204,8 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (
 		zap.S().Warnf("No configuration stored for customer %s, using default !", customerID)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1216,10 +1221,10 @@ func GetCustomerConfiguration(c *gin.Context, customerID string) (
 
 // GetRecommendations gets all current recommendations for a specific asset
 func GetRecommendations(
-	c *gin.Context,
+
 	customerID string,
 	location string,
-	asset string) (data datamodel.DataResponseAny, error error) {
+	asset string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetRecommendations] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
 	data.ColumnNames = []string{
@@ -1240,13 +1245,14 @@ func GetRecommendations(
 		AND (timestamp = (SELECT MAX(timestamp) FROM recommendationTable WHERE enabled=True AND uid LIKE $1)) 
 	ORDER BY timestamp DESC;`
 	// AND (timestamp=) used to only get the recommendations from the latest calculation batch (avoid showing old ones)
-	rows, err := db.Query(sqlStatement, likeString)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, likeString)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1261,7 +1267,7 @@ func GetRecommendations(
 		var recommendationTextEN string
 		var recommendationTextDE string
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&timestamp,
 			&recommendationType,
 			&recommendationValues,
@@ -1270,8 +1276,8 @@ func GetRecommendations(
 			&diagnoseTextEN,
 			&diagnoseTextDE)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -1288,8 +1294,8 @@ func GetRecommendations(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1298,15 +1304,16 @@ func GetRecommendations(
 
 // GetMaintenanceActivities gets all maintenance activities for a specific asset
 func GetMaintenanceActivities(
-	c *gin.Context,
+
 	customerID string,
 	location string,
-	asset string) (data datamodel.DataResponseAny, error error) {
+	asset string) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetMaintenanceActivities] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 	data.ColumnNames = []string{"Component", "Activity", "Timestamp"}
@@ -1318,13 +1325,14 @@ func GetMaintenanceActivities(
 		(maintenanceActivities.component_id = componentTable.id) 
 	WHERE component_id IN (SELECT component_id FROM componentTable WHERE asset_id = $1);`
 
-	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1336,10 +1344,10 @@ func GetMaintenanceActivities(
 		var activityType int
 		var timestamp time.Time
 
-		err := rows.Scan(&componentName, &activityType, &timestamp)
+		err = rows.Scan(&componentName, &activityType, &timestamp)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		fullRow := []interface{}{
@@ -1350,8 +1358,8 @@ func GetMaintenanceActivities(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1360,12 +1368,12 @@ func GetMaintenanceActivities(
 
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
 func GetUniqueProducts(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data datamodel.DataResponseAny, error error) {
+	to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetUniqueProducts] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -1374,9 +1382,10 @@ func GetUniqueProducts(
 		from,
 		to)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 	data.ColumnNames = []string{"UID", "AID", "TimestampBegin", "TimestampEnd", "ProductID", "IsScrap"}
@@ -1389,13 +1398,14 @@ func GetUniqueProducts(
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY begin_timestamp_ms ASC;`
 
-	rows, err := db.Query(sqlStatement, assetID, from, to)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID, from, to)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1410,10 +1420,10 @@ func GetUniqueProducts(
 		var productID int
 		var isScrap bool
 
-		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
+		err = rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		var fullRow []interface{}
@@ -1434,15 +1444,15 @@ func GetUniqueProducts(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
-	//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
+	// CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
 	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
 	if err != nil {
-		error = err
+
 		return
 	}
 	return
@@ -1450,19 +1460,20 @@ func GetUniqueProducts(
 
 // GetUpcomingTimeBasedMaintenanceActivities returns UpcomingTimeBasedMaintenanceActivities array for an asset
 func GetUpcomingTimeBasedMaintenanceActivities(
-	c *gin.Context,
+
 	customerID string,
 	location string,
-	asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, error error) {
+	asset string) (data []datamodel.UpcomingTimeBasedMaintenanceActivities, err error) {
 	zap.S().Infof(
 		"[GetUpcomingTimeBasedMaintenanceActivities] customerID: %v, location: %v, asset: %v",
 		customerID,
 		location,
 		asset)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -1492,13 +1503,14 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 	WHERE timebasedmaintenance.component_id IN (SELECT timebasedmaintenance.component_id FROM componentTable WHERE asset_id = $1);
 	`
 
-	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1514,10 +1526,10 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 		var NextActivity pq.NullTime
 		var Duration sql.NullFloat64
 
-		err := rows.Scan(&ComponentName, &IntervallInHours, &ActivityType, &LatestActivity, &NextActivity, &Duration)
+		err = rows.Scan(&ComponentName, &IntervallInHours, &ActivityType, &LatestActivity, &NextActivity, &Duration)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		fullRow := datamodel.UpcomingTimeBasedMaintenanceActivities{
@@ -1536,12 +1548,12 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 
 // GetOrdersRaw gets all order and product infirmation in a specific time range for an asset
 func GetOrdersRaw(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data []datamodel.OrdersRaw, error error) {
+	to time.Time) (data []datamodel.OrdersRaw, err error) {
 	zap.S().Infof(
 		"[GetOrdersRaw] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -1550,9 +1562,10 @@ func GetOrdersRaw(
 		from,
 		to)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -1571,13 +1584,14 @@ func GetOrdersRaw(
 		ORDER BY begin_timestamp ASC;
 	`
 
-	rows, err := db.Query(sqlStatement, assetID, from, to)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID, from, to)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1594,10 +1608,10 @@ func GetOrdersRaw(
 		var productName string
 		var timePerUnitInSeconds float64
 
-		err := rows.Scan(&orderName, &targetUnits, &beginTimestamp, &endTimestamp, &productName, &timePerUnitInSeconds)
+		err = rows.Scan(&orderName, &targetUnits, &beginTimestamp, &endTimestamp, &productName, &timePerUnitInSeconds)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		fullRow := datamodel.OrdersRaw{
@@ -1615,15 +1629,16 @@ func GetOrdersRaw(
 
 // GetUnstartedOrdersRaw gets all order and product infirmation for an asset that have not started yet
 func GetUnstartedOrdersRaw(
-	c *gin.Context,
+
 	customerID string,
 	location string,
-	asset string) (data []datamodel.OrdersUnstartedRaw, error error) {
+	asset string) (data []datamodel.OrdersUnstartedRaw, err error) {
 	zap.S().Infof("[GetUnstartedOrdersRaw] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -1636,13 +1651,14 @@ func GetUnstartedOrdersRaw(
 			AND end_timestamp IS NULL 
 			AND orderTable.asset_id = $1;`
 
-	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1656,10 +1672,10 @@ func GetUnstartedOrdersRaw(
 		var productName string
 		var timePerUnitInSeconds float64
 
-		err := rows.Scan(&orderName, &targetUnits, &productName, &timePerUnitInSeconds)
+		err = rows.Scan(&orderName, &targetUnits, &productName, &timePerUnitInSeconds)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 		fullRow := datamodel.OrdersUnstartedRaw{
@@ -1674,25 +1690,27 @@ func GetUnstartedOrdersRaw(
 }
 
 // GetDistinctProcessValues gets all possible process values for a specific asset. It returns an array of strings with every string starting with process_
-func GetDistinctProcessValues(c *gin.Context, customerID string, location string, asset string) (
+func GetDistinctProcessValues( customerID string, location string, asset string) (
 	data []string,
-	error error) {
+	err error) {
 	zap.S().Infof("[GetDistinctProcessValues] customerID: %v, location: %v, asset: %v", customerID, location, asset)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
 	sqlStatement := `SELECT distinct valueName FROM processValueTable WHERE asset_id=$1;`
-	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1701,10 +1719,10 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
 	for rows.Next() {
 		var currentString string
 
-		err := rows.Scan(&currentString)
+		err = rows.Scan(&currentString)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -1713,37 +1731,39 @@ func GetDistinctProcessValues(c *gin.Context, customerID string, location string
 
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
 	return
 }
 
-func GetDistinctProcessValuesString(c *gin.Context, customerID string, location string, asset string) (
+func GetDistinctProcessValuesString( customerID string, location string, asset string) (
 	data []string,
-	error error) {
+	err error) {
 	zap.S().Infof(
 		"[GetDistinctProcessValuesString] customerID: %v, location: %v, asset: %v",
 		customerID,
 		location,
 		asset)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
 	sqlStatement := `SELECT distinct valueName FROM processvaluestringtable WHERE asset_id=$1;`
-	rows, err := db.Query(sqlStatement, assetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatement, assetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1752,10 +1772,10 @@ func GetDistinctProcessValuesString(c *gin.Context, customerID string, location 
 	for rows.Next() {
 		var currentString string
 
-		err := rows.Scan(&currentString)
+		err = rows.Scan(&currentString)
 		if err != nil {
-			PQErrorHandling(c, sqlStatement, err, false)
-			error = err
+			PQErrorHandling(sqlStatement, err, false)
+
 			return
 		}
 
@@ -1764,8 +1784,8 @@ func GetDistinctProcessValuesString(c *gin.Context, customerID string, location 
 
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1773,7 +1793,7 @@ func GetDistinctProcessValuesString(c *gin.Context, customerID string, location 
 }
 
 // GetAssetID gets the assetID from the database
-func GetAssetID(c *gin.Context, customerID string, location string, assetID string) (DBassetID uint32, error error) {
+func GetAssetID(customerID string, location string, assetID string) (DBassetID uint32, err error) {
 	zap.S().Infof("[GetAssetID] customerID: %v, location: %v, assetID: %v", customerID, location, assetID)
 
 	// Get from cache if possible
@@ -1785,19 +1805,19 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 	}
 
 	sqlStatement := "SELECT id FROM assetTable WHERE assetid=$1 AND location=$2 AND customer=$3;"
-	err := db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatement, err, false)
+	err = db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf(
 			"[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v",
 			customerID,
 			location,
 			assetID)
-		error = errors.New("asset does not exist")
+		err = errors.New("asset does not exist")
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatement, err, false)
-		error = err
+		PQErrorHandling(sqlStatement, err, false)
+
 		return
 	}
 
@@ -1810,8 +1830,11 @@ func GetAssetID(c *gin.Context, customerID string, location string, assetID stri
 
 // GetUniqueProductsWithTags gets all unique products with tags and parents for a specific asset in a specific time range
 func GetUniqueProductsWithTags(
-	c *gin.Context, customerID string, location string, asset string,
-	from time.Time, to time.Time) (data datamodel.DataResponseAny, error error) {
+	customerID string,
+	location string,
+	asset string,
+	from time.Time,
+	to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetUniqueProductsWithTags] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -1820,13 +1843,14 @@ func GetUniqueProductsWithTags(
 		from,
 		to)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
-	//getting all uniqueProducts and if existing all productTags (float)
+	// getting all uniqueProducts and if existing all productTags (float)
 	sqlStatementData := `
 	SELECT uniqueProductID, uniqueProductAlternativeID, begin_timestamp_ms, end_timestamp_ms, product_id, is_scrap, valueName, value
 	FROM uniqueProductTable 
@@ -1836,7 +1860,7 @@ func GetUniqueProductsWithTags(
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY uniqueProductID ASC;`
 
-	//getting productTagString (string) data linked to UID's
+	// getting productTagString (string) data linked to UID's
 	sqlStatementDataStrings := `
 	SELECT uniqueProductID, begin_timestamp_ms, valueName, value
 	FROM uniqueProductTable 
@@ -1846,7 +1870,7 @@ func GetUniqueProductsWithTags(
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY uniqueProductID ASC;`
 
-	//getting inheritance data (product_name and AID of parents at the specified asset)
+	// getting inheritance data (product_name and AID of parents at the specified asset)
 	sqlStatementDataInheritance := `
 	SELECT unProdTab.uniqueProductID, unProdTab.begin_timestamp_ms, prodTab.product_name, unProdTabForAID.uniqueProductAlternativeID
 	FROM uniqueProductTable unProdTab
@@ -1858,49 +1882,52 @@ func GetUniqueProductsWithTags(
 		OR (unProdTab.begin_timestamp_ms < $2 AND unProdTab.end_timestamp_ms > $3) 
 	ORDER BY unProdTab.uniqueProductID ASC;`
 
-	rows, err := db.Query(sqlStatementData, assetID, from, to)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatementData, err, false)
+	var rows *sql.Rows
+	rows, err = db.Query(sqlStatementData, assetID, from, to)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatementData, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementData, err, false)
-		error = err
+		PQErrorHandling(sqlStatementData, err, false)
+
 		return
 	}
 
 	defer rows.Close()
 
-	rowsStrings, err := db.Query(sqlStatementDataStrings, assetID, from, to)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatementDataStrings, err, false)
+	var rowsStrings *sql.Rows
+	rowsStrings, err = db.Query(sqlStatementDataStrings, assetID, from, to)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatementDataStrings, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementDataStrings, err, false)
-		error = err
+		PQErrorHandling(sqlStatementDataStrings, err, false)
+
 		return
 	}
 
 	defer rowsStrings.Close()
 
-	rowsInheritance, err := db.Query(sqlStatementDataInheritance, assetID, from, to)
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
+	var rowsInheritance *sql.Rows
+	rowsInheritance, err = db.Query(sqlStatementDataInheritance, assetID, from, to)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatementDataInheritance, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
-		error = err
+		PQErrorHandling(sqlStatementDataInheritance, err, false)
+
 		return
 	}
 
 	defer rowsInheritance.Close()
 
-	//Defining the base column names
+	// Defining the base column names
 	data.ColumnNames = []string{"UID", "AID", "timestamp", "timestampEnd", "ProductID", "IsScrap"}
 
 	var indexRow int
 	var indexColumn int
 
-	//Rows can contain valueName and value or not: if not, they contain null
+	// Rows can contain valueName and value or not: if not, they contain null
 	for rows.Next() {
 
 		var UID int
@@ -1912,15 +1939,15 @@ func GetUniqueProductsWithTags(
 		var valueName sql.NullString
 		var value sql.NullFloat64
 
-		err := rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
+		err = rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
-			PQErrorHandling(c, sqlStatementData, err, false)
-			error = err
+			PQErrorHandling(sqlStatementData, err, false)
+
 			return
 		}
 
-		//if productTag valueName not in data.ColumnNames yet (because the valueName of productTag comes up for the first time
-		//in the current row), add valueName to data.ColumnNames, store index of column for data.DataPoints and extend slice
+		// if productTag valueName not in data.ColumnNames yet (because the valueName of productTag comes up for the first time
+		// in the current row), add valueName to data.ColumnNames, store index of column for data.DataPoints and extend slice
 		if valueName.Valid {
 			data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(
 				data.Datapoints,
@@ -1928,29 +1955,29 @@ func GetUniqueProductsWithTags(
 				valueName.String)
 		}
 
-		if data.Datapoints == nil { //if no row in data.Datapoints, create new row
+		if data.Datapoints == nil { // if no row in data.Datapoints, create new row
 			data.Datapoints = CreateNewRowInData(
 				data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
 				timestampBegin, timestampEnd, productID, isScrap, valueName, value)
-		} else { //if there are already rows in Data.datapoint
+		} else { // if there are already rows in Data.datapoint
 			indexRow = len(data.Datapoints) - 1
 			lastUID, ok := data.Datapoints[indexRow][0].(int)
 			if !ok {
 				zap.S().Errorf("GetUniqueProductsWithTags: casting lastUID to int error", UID, timestampBegin)
 				return
 			}
-			//check if the last row of data.Datapoints already has the same UID, as the current row, and if the
-			//productTag information of the current row is valid. If yes: add productTag information of current row to
-			//data.Datapoints
+			// check if the last row of data.Datapoints already has the same UID, as the current row, and if the
+			// productTag information of the current row is valid. If yes: add productTag information of current row to
+			// data.Datapoints
 			if UID == lastUID && value.Valid && valueName.Valid {
 				data.Datapoints[indexRow][indexColumn] = value.Float64
-			} else if UID == lastUID && (!value.Valid || !valueName.Valid) { //if there are multiple lines with the same UID, each line should have a correct productTag
+			} else if UID == lastUID && (!value.Valid || !valueName.Valid) { // if there are multiple lines with the same UID, each line should have a correct productTag
 				zap.S().Errorf(
 					"GetUniqueProductsWithTags: value.Valid or valueName.Valid false where it shouldn't",
 					UID,
 					timestampBegin)
 				return
-			} else if UID != lastUID { //create new row in tempDataPoints
+			} else if UID != lastUID { // create new row in tempDataPoints
 				data.Datapoints = CreateNewRowInData(
 					data.Datapoints, data.ColumnNames, indexColumn, UID, AID,
 					timestampBegin, timestampEnd, productID, isScrap, valueName, value)
@@ -1963,8 +1990,8 @@ func GetUniqueProductsWithTags(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatementData, err, false)
-		error = err
+		PQErrorHandling(sqlStatementData, err, false)
+
 		return
 	}
 
@@ -1975,14 +2002,14 @@ func GetUniqueProductsWithTags(
 		var valueName sql.NullString
 		var value sql.NullString
 
-		err := rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
+		err = rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
 		if err != nil {
-			PQErrorHandling(c, sqlStatementData, err, false)
-			error = err
+			PQErrorHandling(sqlStatementData, err, false)
+
 			return
 		}
-		//Because of the inner join and the not null constraints of productTagString information in the postgresDB, both
-		//valueName and value should be valid
+		// Because of the inner join and the not null constraints of productTagString information in the postgresDB, both
+		// valueName and value should be valid
 		if !valueName.Valid || !value.Valid {
 			zap.S().Errorf(
 				"GetUniqueProductsWithTags: valueName or value for productTagString not valid",
@@ -1990,25 +2017,25 @@ func GetUniqueProductsWithTags(
 				timestampBegin)
 			return
 		}
-		//if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		// if productTagString name not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
 		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(
 			data.Datapoints,
 			data.ColumnNames,
 			valueName.String)
-		var contains bool //indicates, if the UID is already contained in the data.Datpoints slice or not
+		var contains bool // indicates, if the UID is already contained in the data.Datpoints slice or not
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
-		if contains { //true if UID already in data.Datapoints
+		if contains { // true if UID already in data.Datapoints
 			data.Datapoints[indexRow][indexColumn] = value.String
-		} else { //throw error
+		} else { // throw error
 			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
 			return
 		}
 	}
 	err = rowsStrings.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatementDataStrings, err, false)
-		error = err
+		PQErrorHandling(sqlStatementDataStrings, err, false)
+
 		return
 	}
 
@@ -2019,14 +2046,14 @@ func GetUniqueProductsWithTags(
 		var productName string
 		var AID string
 
-		err := rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
+		err = rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
 		if err != nil {
-			PQErrorHandling(c, sqlStatementData, err, false)
-			error = err
+			PQErrorHandling(sqlStatementData, err, false)
+
 			return
 		}
 
-		//if productName (describing type of product) not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
+		// if productName (describing type of product) not yet known, add to data.ColumnNames, store index for data.DataPoints in newColumns and extend slice
 		data.Datapoints, data.ColumnNames, indexColumn = ChangeOutputFormat(
 			data.Datapoints,
 			data.ColumnNames,
@@ -2034,7 +2061,7 @@ func GetUniqueProductsWithTags(
 		var contains bool
 		contains, indexRow = SliceContainsInt(data.Datapoints, UID, 0)
 
-		if contains { //true if UID already in data.Datapoints
+		if contains { // true if UID already in data.Datapoints
 			data.Datapoints[indexRow][indexColumn] = AID
 		} else {
 			zap.S().Errorf("GetUniqueProductsWithTags: UID not found: Error!", UID, timestampBegin)
@@ -2043,15 +2070,15 @@ func GetUniqueProductsWithTags(
 	}
 	err = rowsInheritance.Err()
 	if err != nil {
-		PQErrorHandling(c, sqlStatementDataInheritance, err, false)
-		error = err
+		PQErrorHandling(sqlStatementDataInheritance, err, false)
+
 		return
 	}
 
-	//CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
+	// CheckOutputDimensions checks, if the length of columnNames corresponds to the length of each row of data
 	err = CheckOutputDimensions(data.Datapoints, data.ColumnNames)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -2064,11 +2091,11 @@ type CountStruct struct {
 	scrap     int
 }
 type OrderStruct struct {
+	beginTimeStamp time.Time
+	endTimeStamp   sql.NullTime
 	orderID        int
 	productId      int
 	targetUnits    int
-	beginTimeStamp time.Time
-	endTimeStamp   sql.NullTime
 }
 
 type ProductStruct struct {
@@ -2078,12 +2105,12 @@ type ProductStruct struct {
 
 // GetAccumulatedProducts gets the accumulated counts for an observation timeframe and an asset
 func GetAccumulatedProducts(
-	c *gin.Context,
+
 	customerID string,
 	location string,
 	asset string,
 	from time.Time,
-	to time.Time) (data datamodel.DataResponseAny, error error) {
+	to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
 		"[GetUniqueProductsWithTags] customerID: %v, location: %v, asset: %v from: %v, to: %v",
 		customerID,
@@ -2092,9 +2119,10 @@ func GetAccumulatedProducts(
 		from,
 		to)
 
-	assetID, err := GetAssetID(c, customerID, location, asset)
+	var assetID uint32
+	assetID, err = GetAssetID(customerID, location, asset)
 	if err != nil {
-		error = err
+
 		return
 	}
 
@@ -2146,23 +2174,23 @@ ORDER BY begin_timestamp ASC
 	// Get order outside observation window
 	row := db.QueryRow(sqlStatementGetOutsider, assetID, from)
 	err = row.Err()
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf("No outsider rows")
-		//We don't care if there is no outside order, in this case we will just select all insider orders
+		// We don't care if there is no outside order, in this case we will just select all insider orders
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
-		error = err
+		PQErrorHandling(sqlStatementGetOutsider, err, false)
+
 		return
 	}
 
 	// Holds an order, retrieved from our DB
 	type Order struct {
-		OID            int
-		PID            int
 		timestampBegin time.Time
 		timestampEnd   sql.NullTime
-		targetUnits    sql.NullInt32
+		OID            int
+		PID            int
 		AID            int
+		targetUnits    sql.NullInt32
 	}
 
 	// Order that has started before observation time
@@ -2187,11 +2215,11 @@ ORDER BY begin_timestamp ASC
 		AID:            AidOuter,
 	}
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		foundOutsider = false
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementGetOutsider, err, false)
-		error = err
+		PQErrorHandling(sqlStatementGetOutsider, err, false)
+
 		return
 	}
 
@@ -2206,12 +2234,12 @@ ORDER BY begin_timestamp ASC
 		insideOrderRows, err = db.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
 	}
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		// It is valid to have no internal rows !
 		zap.S().Debugf("No internal rows")
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
-		error = err
+		PQErrorHandling(sqlStatementGetInsidersNoOutsider, err, false)
+
 		return
 	}
 
@@ -2227,10 +2255,10 @@ ORDER BY begin_timestamp ASC
 		var timestampEnd sql.NullTime
 		var targetUnits sql.NullInt32
 		var AID int
-		err := insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
+		err = insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
 		if err != nil {
-			PQErrorHandling(c, sqlStatementGetInsidersNoOutsider, err, false)
-			error = err
+			PQErrorHandling(sqlStatementGetInsidersNoOutsider, err, false)
+
 			return
 		}
 		foundInsider = true
@@ -2244,12 +2272,12 @@ ORDER BY begin_timestamp ASC
 			AID)
 		insideOrders = append(
 			insideOrders, Order{
-				OID,
-				PID,
-				timestampBegin,
-				timestampEnd,
-				targetUnits,
-				AID,
+				OID:            OID,
+				PID:            PID,
+				timestampBegin: timestampBegin,
+				timestampEnd:   timestampEnd,
+				targetUnits:    targetUnits,
+				AID:            AID,
 			})
 	}
 
@@ -2313,7 +2341,7 @@ ORDER BY begin_timestamp ASC
 	zap.S().Debugf("Set observation start to: %s", observationStart)
 	zap.S().Debugf("Set observation end to: %s", observationEnd)
 
-	//Get all counts
+	// Get all counts
 	var sqlStatementGetCounts = `SELECT timestamp, count, scrap FROM counttable WHERE asset_id = $1 AND timestamp >= to_timestamp($2::double precision) AND timestamp <= to_timestamp($3::double precision) ORDER BY timestamp ASC;`
 
 	countQueryBegin := observationStart.UnixMilli()
@@ -2324,18 +2352,19 @@ ORDER BY begin_timestamp ASC
 		countQueryEnd = observationEnd.UnixMilli()
 	}
 
-	countRows, err := db.Query(
+	var countRows *sql.Rows
+	countRows, err = db.Query(
 		sqlStatementGetCounts,
 		assetID,
 		float64(countQueryBegin)/1000,
 		float64(countQueryEnd)/1000)
 
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlStatementGetCounts, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlStatementGetCounts, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlStatementGetCounts, err, false)
-		error = err
+		PQErrorHandling(sqlStatementGetCounts, err, false)
+
 		return
 	}
 	defer countRows.Close()
@@ -2346,11 +2375,11 @@ ORDER BY begin_timestamp ASC
 		var timestamp time.Time
 		var count int32
 		var scrapN sql.NullInt32
-		err := countRows.Scan(&timestamp, &count, &scrapN)
+		err = countRows.Scan(&timestamp, &count, &scrapN)
 
 		if err != nil {
-			PQErrorHandling(c, sqlStatementGetCounts, err, false)
-			error = err
+			PQErrorHandling(sqlStatementGetCounts, err, false)
+
 			return
 		}
 
@@ -2362,7 +2391,7 @@ ORDER BY begin_timestamp ASC
 		countMap = append(countMap, CountStruct{timestamp: timestamp, count: int(count), scrap: int(scrap)})
 	}
 
-	//Get all orders in timeframe
+	// Get all orders in timeframe
 	sqlGetRunningOrders := `SELECT order_id, product_id, target_units, begin_timestamp, end_timestamp FROM ordertable WHERE asset_id = $1 AND begin_timestamp < to_timestamp($2::double precision) AND end_timestamp >= to_timestamp($3::double precision) OR end_timestamp = NULL`
 
 	orderQueryBegin := observationStart.UnixMilli()
@@ -2373,14 +2402,15 @@ ORDER BY begin_timestamp ASC
 		orderQueryEnd = observationEnd.UnixMilli()
 	}
 
-	orderRows, err := db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
+	var orderRows *sql.Rows
+	orderRows, err = db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
 
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlGetRunningOrders, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlGetRunningOrders, err, false)
-		error = err
+		PQErrorHandling(sqlGetRunningOrders, err, false)
+
 		return
 	}
 	defer orderRows.Close()
@@ -2393,11 +2423,11 @@ ORDER BY begin_timestamp ASC
 		var targetUnits int
 		var beginTimeStamp time.Time
 		var endTimeStamp sql.NullTime
-		err := orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
+		err = orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
 
 		if err != nil {
-			PQErrorHandling(c, sqlGetRunningOrders, err, false)
-			error = err
+			PQErrorHandling(sqlGetRunningOrders, err, false)
+
 			return
 		}
 
@@ -2413,14 +2443,15 @@ ORDER BY begin_timestamp ASC
 
 	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
 
-	productRows, err := db.Query(sqlGetProductsPerSec, assetID)
+	var productRows *sql.Rows
+	productRows, err = db.Query(sqlGetProductsPerSec, assetID)
 
-	if err == sql.ErrNoRows {
-		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		PQErrorHandling(sqlGetProductsPerSec, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(c, sqlGetProductsPerSec, err, false)
-		error = err
+		PQErrorHandling(sqlGetProductsPerSec, err, false)
+
 		return
 	}
 	defer productRows.Close()
@@ -2429,11 +2460,11 @@ ORDER BY begin_timestamp ASC
 	for productRows.Next() {
 		var productId int
 		var timePerUnitInSec float64
-		err := productRows.Scan(&productId, &timePerUnitInSec)
+		err = productRows.Scan(&productId, &timePerUnitInSec)
 
 		if err != nil {
-			PQErrorHandling(c, sqlGetProductsPerSec, err, false)
-			error = err
+			PQErrorHandling(sqlGetProductsPerSec, err, false)
+
 			return
 		}
 
@@ -2441,13 +2472,8 @@ ORDER BY begin_timestamp ASC
 	}
 
 	zap.S().Debugf("AssetID: %d", assetID)
-	data, err = CalculateAccumulatedProducts(c, to, observationStart, observationEnd, countMap, orderMap, productMap)
-	return data, err
-}
-
-// BeforeOrEqual returns if t is before or equal to u
-func BeforeOrEqual(t time.Time, u time.Time) bool {
-	return t.Before(u) || t.Equal(u)
+	data = CalculateAccumulatedProducts(to, observationStart, observationEnd, countMap, orderMap, productMap)
+	return data, nil
 }
 
 // AfterOrEqual returns if t is after or equal to u

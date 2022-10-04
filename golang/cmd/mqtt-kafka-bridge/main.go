@@ -9,6 +9,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
+	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -35,7 +36,13 @@ func main() {
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
 	// pprof
-	go http.ListenAndServe("localhost:1337", nil)
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("localhost:1337", nil)
+		if err != nil {
+			zap.S().Errorf("Error starting pprof: %v", err)
+		}
+	}()
 
 	// Read environment variables for MQTT
 	MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
@@ -57,24 +64,40 @@ func main() {
 		zap.S().Fatalf("Error setting up incoming queue", err)
 		return
 	}
-	defer closeQueue(mqttIncomingQueue)
+	defer func(pq *goque.Queue) {
+		err = closeQueue(pq)
+		if err != nil {
+			zap.S().Errorf("Error closing queue %v", err)
+		}
+	}(mqttIncomingQueue)
 
 	mqttOutGoingQueue, err = setupQueue("outgoing")
 	if err != nil {
 		zap.S().Fatalf("Error setting up outgoing queue", err)
 		return
 	}
-	defer closeQueue(mqttOutGoingQueue)
+	defer func(pq *goque.Queue) {
+		err = closeQueue(pq)
+		if err != nil {
+			zap.S().Errorf("Error closing outgoing queue %v", err)
+		}
+	}(mqttOutGoingQueue)
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
-	go http.ListenAndServe("0.0.0.0:8086", health)
+	go func() {
+		/* #nosec G114 */
+		err = http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Fatalf("Error starting healthcheck %v", err)
+		}
+	}()
 
 	zap.S().Debugf("Setting up MQTT")
-	//mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
+	// mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
 	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
 
 	zap.S().Debugf("Setting up Kafka")
@@ -82,7 +105,7 @@ func main() {
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/tls.key")
+		_, err = os.Open("/SSL_certs/tls.key")
 		if err != nil {
 			panic("SSL key file not found")
 		}
@@ -95,30 +118,33 @@ func main() {
 			panic("SSL CA cert file not found")
 		}
 	}
-	internal.SetupKafka(kafka.ConfigMap{
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"group.id":                 "mqtt-kafka-bridge",
-	})
+	internal.SetupKafka(
+		kafka.ConfigMap{
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"group.id":                 "mqtt-kafka-bridge",
+			"metadata.max.age.ms":      180000,
+		})
 
-	// KafkaTopicProbeConsumer recieves a message when a new topic is created
-	internal.SetupKafkaTopicProbeConsumer(kafka.ConfigMap{
-		"bootstrap.servers":        KafkaBoostrapServer,
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
-		"group.id":                 "kafka-to-blob-topic-probe",
-		"enable.auto.commit":       true,
-		"auto.offset.reset":        "earliest",
-		//"debug":                    "security,broker",
-		"topic.metadata.refresh.interval.ms": "30000",
-	})
+	// KafkaTopicProbeConsumer receives a message when a new topic is created
+	internal.SetupKafkaTopicProbeConsumer(
+		kafka.ConfigMap{
+			"bootstrap.servers":        KafkaBoostrapServer,
+			"security.protocol":        securityProtocol,
+			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.certificate.location": "/SSL_certs/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"group.id":                 "kafka-to-blob-topic-probe",
+			"enable.auto.commit":       true,
+			"auto.offset.reset":        "earliest",
+			// "debug":                    "security,broker",
+			"topic.metadata.refresh.interval.ms": "30000",
+		})
 
 	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
@@ -155,7 +181,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Recieved SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -179,7 +205,7 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(15 * time.Second) // Wait that all data is processed
 
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
@@ -189,11 +215,12 @@ func ShutdownApplicationGraceful() {
 func ReportStats() {
 	lastConfirmed := 0.0
 	for !ShuttingDown {
-		zap.S().Infof("Reporting stats"+
-			"| MQTT->Kafka queue lenght: %d"+
-			"| Kafka->MQTT queue length: %d"+
-			"| Produces Kafka messages: %f"+
-			"| Produces Kafka messages/s: %f",
+		zap.S().Infof(
+			"Reporting stats"+
+				"| MQTT->Kafka queue length: %d"+
+				"| Kafka->MQTT queue length: %d"+
+				"| Produces Kafka messages: %f"+
+				"| Produces Kafka messages/s: %f",
 			mqttIncomingQueue.Length(),
 			mqttOutGoingQueue.Length(),
 			internal.KafkaConfirmed,
