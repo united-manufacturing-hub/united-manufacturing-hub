@@ -20,7 +20,7 @@ type ParsedMessage struct {
 }
 
 type TopicProbeMessage struct {
-	Topic string
+	Topic string `json:"topic"`
 }
 
 // ParseMessage parses a kafka message and returns a ParsedMessage struct or false if the message is not a valid message
@@ -127,6 +127,11 @@ func StartTopicProbeQueueProcessor(topicProbeProcessorChannel chan *kafka.Messag
 		err := jsoniter.Unmarshal(msg.Value, &topicProbeMessage)
 		if err != nil {
 			zap.S().Errorf("[TP] Failed to unmarshal topic probe message: %s", err)
+			continue
+		}
+
+		if topicProbeMessage.Topic == "" {
+			zap.S().Errorf("[TP] Empty topic in topic probe message")
 			continue
 		}
 
