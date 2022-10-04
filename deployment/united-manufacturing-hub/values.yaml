@@ -2885,6 +2885,9 @@ mqttkafkabridge:
   pdb:
     enabled: true
     minAvailable: 1
+  initContainer:
+    repository: unitedmanufacturinghub/kafka-init
+    pullPolicy: IfNotPresent
 
 ### kafka-to-blob ###
 kafkatoblob:
