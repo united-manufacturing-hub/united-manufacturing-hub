@@ -622,7 +622,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 				processedStatesCleaned := removeUnnecessaryElementsFromStateSlice(processedStates, oldD, d)
 
 				var tempResult [][]interface{}
-				tempResult, err = CalculateStopParetos(processedStatesCleaned,	d, *includeRunning, true, configuration)
+				tempResult, err = CalculateStopParetos(processedStatesCleaned, d, *includeRunning, true, configuration)
 				if err != nil {
 					handleInternalServerError(c, err)
 					return
@@ -1381,7 +1381,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
-	recommendations, err := GetRecommendations(getDataRequest.Customer,getDataRequest.Location,getDataRequest.Asset)
+	recommendations, err := GetRecommendations(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
@@ -1477,7 +1477,7 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	// Fetching from the database
-	timeRange, err := GetDataTimeRangeForAsset(getDataRequest.Customer,getDataRequest.Location,getDataRequest.Asset)
+	timeRange, err := GetDataTimeRangeForAsset(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
 		handleInternalServerError(c, err)
 		return
