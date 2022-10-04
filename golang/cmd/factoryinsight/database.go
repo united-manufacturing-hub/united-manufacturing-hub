@@ -1677,25 +1677,7 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 		return
 	}
 
-	sqlStatement := `WITH RECURSIVE cte AS (
-   (
-   SELECT valuename
-   FROM   processvaluetable
-   ORDER  BY 1
-   LIMIT  1
-   )
-   UNION ALL
-   SELECT l.*
-   FROM   cte c
-   CROSS  JOIN LATERAL (
-      SELECT valuename
-      FROM   processvaluetable t
-      WHERE  t.valuename > c.valuename AND asset_id=$1
-      ORDER  BY 1
-      LIMIT  1
-      ) l
-   )
-TABLE  cte;`
+	sqlStatement := `SELECT distinct valueName FROM processValueTable WHERE asset_id=$1;`
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1746,25 +1728,7 @@ func GetDistinctProcessValuesString(customerID string, location string, asset st
 		return
 	}
 
-	sqlStatement := `WITH RECURSIVE cte AS (
-   (
-   SELECT valuename
-   FROM   processvaluestringtable
-   ORDER  BY 1
-   LIMIT  1
-   )
-   UNION ALL
-   SELECT l.*
-   FROM   cte c
-   CROSS  JOIN LATERAL (
-      SELECT valuename
-      FROM   processvaluestringtable t
-      WHERE  t.valuename > c.valuename AND asset_id=$1
-      ORDER  BY 1
-      LIMIT  1
-      ) l
-   )
-TABLE  cte;`
+	sqlStatement := `SELECT distinct valueName FROM processvaluestringtable WHERE asset_id=$1;`
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
