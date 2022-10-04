@@ -126,7 +126,7 @@ write_files:
         kafka:
           enabled: true
           useSSL: false
-          defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
+          defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
     
     
       # timescaledb, factoryinsight, grafana, redis
@@ -172,8 +172,8 @@ write_files:
       kafkaBridge:
         enabled: false
         remotebootstrapServer: ""
-        topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on local broker, if they do not exist
-        topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count # ; seperated list of topics to create on remote broker, if they do not exist
+        topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on local broker, if they do not exist
+        topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on remote broker, if they do not exist
         topicmap:
         - bidirectional: false
           name: HighIntegrity
@@ -186,6 +186,98 @@ write_files:
     
       kafkaStateDetector:
         enabled: false
+    
+    # custom changes for full development environment
+    factoryinsight:
+      replicas: 2
+      hpa:
+        enabled: true
+        minReplicas: 2
+        maxReplicas: 5
+      pdb:
+        enabled: true
+        annotations: {}
+        minAvailable: 2
+      resources:
+        limits:
+          cpu: 1000m
+        requests:
+          cpu: 200m
+    kafkatopostgresql:
+      replicas: 3
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+        requests:
+          cpu: 200m
+          memory: 250Mi
+    kafka:
+      heapOpts: -Xms512M -Xmx1024M
+      zookeeper:
+        heapSize: 512
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 4Gi
+        requests:
+          cpu: 500m
+          memory: 250Mi
+    redis:
+      master:
+        extraFlags:
+          - --maxmemory 4gb
+        resources:
+          limits:
+            memory: 4Gi
+          requests:
+            cpu: 100m
+            memory: 1Gi
+      replica:
+        replicaCount: 3
+        resources:
+          limits:
+            memory: 4Gi
+          requests:
+            cpu: 100m
+            memory: 1Gi
+    vernemq:
+    additionalEnv:
+      - name: DOCKER_VERNEMQ_ALLOW_REGISTER_DURING_NETSPLIT
+        value: "on"
+      - name: DOCKER_VERNEMQ_ALLOW_PUBLISH_DURING_NETSPLIT
+        value: "on"
+      - name: DOCKER_VERNEMQ_ALLOW_SUBSCRIBE_DURING_NETSPLIT
+        value: "on"
+      - name: DOCKER_VERNEMQ_ALLOW_UNSUBSCRIBE_DURING_NETSPLIT
+        value: "on"
+      - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
+        value: "on"
+      - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
+        value: "-1"
+      - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
+        value: "-1"
+      - name: DOCKER_VERNEMQ_LISTENER__SSL__CAFILE
+        value: /etc/ssl/vernemq/ca.crt
+      - name: DOCKER_VERNEMQ_LISTENER__SSL__CERTFILE
+        value: /etc/ssl/vernemq/tls.crt
+      - name: DOCKER_VERNEMQ_LISTENER__SSL__KEYFILE
+        value: /etc/ssl/vernemq/tls.key
+      - name: DOCKER_VERNEMQ_ACCEPT_EULA
+        value: "yes"
+      - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__USE_IDENTITY_AS_USERNAME
+        value: "on"
+      - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
+        value: "on"
+      - name: DOCKER_VERNEMQ_LISTENER__TCP__ALLOWED_PROTOCOL_VERSIONS
+        value: 3,4,5
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1000Mi
+        requests:
+          cpu: 200m
+          memory: 200Mi
 
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
