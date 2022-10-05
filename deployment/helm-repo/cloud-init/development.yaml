@@ -1,165 +1,17 @@
 ---
 # See https://github.com/rancher/k3os/blob/master/README.md#configuration
 
+
 # This will be used as serial number as well
 # HOSTNAME DOES NOT ALLOW UNDERSCORES
-hostname: development-minimal
+hostname: development
 
 write_files:
 
 # Write Helm values file
 - content: |
     ---
-    # Please adjust the following lines
-    # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
-    _000_commonConfig:
-      serialNumber: "default"  # usually the hostname
-      # This allows to specify data sources, which is mostly used for instances running on the edge
-      datasources:
-    
-        # barcodereader reads out connected USB barcodereaders emulating a keyboard
-        barcodereader:
-          enabled: false
-          USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
-          USBDevicePath: "" # Linux device path, if empty, USBDeviceName is used
-          customerID: "raw"
-          location: "barcodereader"
-          machineID: "barcodereader"
-    
-        # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
-        sensorconnect:
-          enabled: false
-          iprange: "192.168.10.1/24"  # IP Range in CIDR notation
-          enableKafka: true
-          enableMQTT: false
 
-        cameraconnect:
-          enabled: false
-    
-      # dataprocessing involves microservices, whose main purpose is to process the data
-      dataprocessing:
-        nodered:
-          enabled: true
-          defaultFlows: false
-    
-      # Infrastructure
-      infrastructure:
-    
-        # vernemq
-        mqtt:
-          enabled: true
-          AclConfig: |-
-            pattern #
-    
-        # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
-        kafka:
-          enabled: true
-          useSSL: false
-          defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count
-    
-      # timescaledb, factoryinsight, grafana, redis
-      # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
-      # If you want to enable only some of these components, set enabled to false and enable them in the detailed configuration below 000_commonConfig
-      datastorage:
-        enabled: true
-        db_password: "changeme"
-    
-      # factoryinput, grafanaproxy
-      datainput:
-        enabled: false
-
-    # custom changes for minimal version
-    factoryinsight:
-      replicas: 1
-      hpa:
-        enabled: false
-      pdb:
-        enabled: false
-      resources:
-        limits:
-          cpu: 200m
-          memory: 200Mi
-        requests:
-          cpu: 50m
-          memory: 50Mi
-    kafkatopostgresql:
-      replicas: 1
-      resources:
-        limits:
-          cpu: 200m
-          memory: 200Mi
-        requests:
-          cpu: 50m
-          memory: 50Mi
-    kafka:
-      heapOpts: -Xmx500m -Xms500m
-      zookeeper:
-        heapSize: 128
-      resources:
-        limits:
-          cpu: 1000m
-          memory: 1Gi
-        requests:
-          cpu: 100m
-          memory: 250Mi
-    redis:
-      replica:
-        replicaCount: 1
-        resources:
-          limits:
-            cpu: 200m
-            memory: 200Mi
-          requests:
-            cpu: 100m
-            memory: 100Mi
-      master:
-        extraFlags:
-          - --maxmemory 200mb
-        resources:
-          limits:
-            cpu: 200m
-            memory: 200Mi
-          requests:
-            cpu: 100m
-            memory: 100Mi
-    vernemq:
-      replicas: 1
-      additionalEnv:
-        - name: DOCKER_VERNEMQ_ALLOW_REGISTER_DURING_NETSPLIT
-          value: "on"
-        - name: DOCKER_VERNEMQ_ALLOW_PUBLISH_DURING_NETSPLIT
-          value: "on"
-        - name: DOCKER_VERNEMQ_ALLOW_SUBSCRIBE_DURING_NETSPLIT
-          value: "on"
-        - name: DOCKER_VERNEMQ_ALLOW_UNSUBSCRIBE_DURING_NETSPLIT
-          value: "on"
-        - name: DOCKER_VERNEMQ_ALLOW_ANONYMOUS
-          value: "on"
-        - name: DOCKER_VERNEMQ_MAX_ONLINE_MESSAGES
-          value: "1000"
-        - name: DOCKER_VERNEMQ_MAX_OFFLINE_MESSAGES
-          value: "1000"
-        - name: DOCKER_VERNEMQ_LISTENER__SSL__CAFILE
-          value: /etc/ssl/vernemq/ca.crt
-        - name: DOCKER_VERNEMQ_LISTENER__SSL__CERTFILE
-          value: /etc/ssl/vernemq/tls.crt
-        - name: DOCKER_VERNEMQ_LISTENER__SSL__KEYFILE
-          value: /etc/ssl/vernemq/tls.key
-        - name: DOCKER_VERNEMQ_ACCEPT_EULA
-          value: "yes"
-        - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__USE_IDENTITY_AS_USERNAME
-          value: "on"
-        - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
-          value: "on"
-        - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
-          value: "50mb"
-      resources:
-        limits:
-          cpu: 500m
-          memory: 500Mi
-        requests:
-          cpu: 100m
-          memory: 100Mi
   path: /home/rancher/configs/united-manufacturing-hub-development.yaml
 
 - content: |
@@ -314,8 +166,6 @@ write_files:
       exit
       fi
 
-      echo "Initial setup finished! This might take now awhile..."
-
       num1=$(k3s -v | grep -o 'v1.[0-9][0-9]' | sed 's/v//g')
       num2="1.20"
       num3="1.21"
@@ -333,6 +183,9 @@ write_files:
       echo "Minimal version:     $num2"
       echo "Maximal version:     $num3"
       fi
+
+      echo "Initial setup finished! This might take now awhile..."
+      echo "You can press ENTER, to continue to the linux login screen."
 
   path: /home/rancher/initial_setup.sh
 
