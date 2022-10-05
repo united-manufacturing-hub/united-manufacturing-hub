@@ -2433,6 +2433,8 @@ vernemq:
       value: "on"
     - name: DOCKER_VERNEMQ_LISTENER__SSL__DEFAULT__REQUIRE_CERTIFICATE
       value: "on"
+    - name: DOCKER_VERNEMQ_LISTENER__TCP__ALLOWED_PROTOCOL_VERSIONS
+      value: 3,4,5
     - name: DOCKER_VERNEMQ_LEVELDB.maximum_memory
       value: "50mb"
   extraVolumeMounts:
