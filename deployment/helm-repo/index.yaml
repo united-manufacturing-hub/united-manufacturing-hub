@@ -514,7 +514,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1290--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.6.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.6.tgz
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.6-prerelease1
