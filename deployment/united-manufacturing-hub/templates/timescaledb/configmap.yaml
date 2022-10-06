@@ -29,33 +29,33 @@ data:
     -------------------- Tables for ISA95 model --------------------
     CREATE TABLE IF NOT EXISTS "enterpriseTable" (
     "id" int PRIMARY KEY,
-    "name" string UNIQUE NOT NULL
+    "name" text UNIQUE NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS "siteTable" (
     "id" int PRIMARY KEY,
-    "name" string NOT NULL,
+    "name" text NOT NULL,
     "enterpriseId" int NOT NULL,
     unique ("name", "enterpriseId")
     );
 
     CREATE TABLE IF NOT EXISTS "areaTable" (
     "id" int PRIMARY KEY,
-    "name" string NOT NULL,
+    "name" text NOT NULL,
     "siteId" int NOT NULL,
     unique ("name", "siteId")
     );
 
     CREATE TABLE IF NOT EXISTS "productionLineTable" (
     "id" int PRIMARY KEY,
-    "name" string NOT NULL,
+    "name" text NOT NULL,
     "areaId" int NOT NULL,
     unique ("name", "areaId")
     );
 
     CREATE TABLE IF NOT EXISTS "workCellTable" (
     "id" int PRIMARY KEY,
-    "name" string NOT NULL,
+    "name" text NOT NULL,
     "productionLineId" int NOT NULL,
     unique ("name", "productionLineId")
     );
@@ -100,7 +100,7 @@ data:
     -------------------- TimescaleDB table for process value names --------------------
     CREATE TABLE IF NOT EXISTS "processValueNameTable" (
     "id" int PRIMARY KEY,
-    "name" string UNIQUE NOT NULL
+    "name" text UNIQUE NOT NULL
     );
 
     -------------------- TimescaleDB table for process values --------------------
@@ -128,12 +128,12 @@ data:
     -- create an index to increase performance
     CREATE INDEX ON processvaluetable(valueNameId, workCellId) WITH (timescaledb.transaction_per_chunk);
 
-    -------------------- TimescaleDB table for process values string --------------------
+    -------------------- TimescaleDB table for process values text --------------------
     CREATE TABLE IF NOT EXISTS "processValueStringTable" (
     "timestamp" timestamp NOT NULL,
     "workCellId" int,
     "valueNameId" int NOT NULL,
-    "value" string NOT NULL
+    "value" text NOT NULL
     UNIQUE("timestamp", "workCellId", "valueNameId")
     );
 
@@ -345,7 +345,7 @@ data:
     ON DELETE CASCADE
     );
 
-    -------------------- TimescaleDB table for process values string --------------------
+    -------------------- TimescaleDB table for process values text --------------------
     CREATE TABLE IF NOT EXISTS processValueStringTable
     (
     timestamp               TIMESTAMPTZ                         NOT NULL,
