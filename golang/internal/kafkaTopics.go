@@ -109,7 +109,7 @@ const (
 	umhV1SyntaxRegex   = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>raw|standard|custom)\.([\w\-_.]+\.?)$`
 	umhV1CustomRegex   = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>custom)\.(?P<tag>processValueString|processValue)(\.(?P<label>[\w\-_.]+))?$`
 	umhV1RawRegex      = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>raw)\.((rawImage\.(?P<transmitterId>[\w\-_]+)\.)(?P<macAddress>([0-9A-Fa-f]{2}-){5}([0-9A-Fa-f]{2})|)|(raw))`
-	umhV1StandardRegex = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>standard)\.(((?P<job>job)\.(?P<jobMethod>add|delete|end))|((?P<shift>shift)\.(?P<shiftMethod>add|delete))|((?P<producttype>product-type)\.(?P<producttypeMethod>add))|((?P<product>product)\.(?P<productMethod>add|modify))|((?P<state>state)\.(?P<stateMethod>add|overwrite|activity|reason)))`
+	umhV1StandardRegex = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>standard)\.(((?P<job>job)\.(?P<jobMethod>add|delete|end))|((?P<shift>shift)\.(?P<shiftMethod>add|delete))|((?P<producttype>product-type)\.(?P<producttypeMethod>add))|((?P<product>product)\.(?P<productMethod>add|overwrite))|((?P<state>state)\.(?P<stateMethod>add|overwrite|activity|reason)))`
 )
 
 var umhV1SyntaxCompiledRegex = regexp.MustCompile(umhV1SyntaxRegex)
