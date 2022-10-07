@@ -9,11 +9,11 @@ import (
 )
 
 // KafkaUMHTopicRegex is the regex used to validate kafka topics
-// Deprecated: Use KafkaUMHTopicV1Regex instead
+// Deprecated: Use umhV1SyntaxRegex instead
 var KafkaUMHTopicRegex = `^ia\.((raw\.(\d|-|\w|_|\.)+)|(rawImage\.(\d|-|\w|_)+\.(\d|-|\w|_)+)|(((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((count|scrapCount|barcode|activity|detectedAnomaly|addShift|addOrder|addProduct|startOrder|endOrder|productImage|productTag|productTagString|addParentToChild|state|cycleTimeTrigger|uniqueProduct|scrapUniqueProduct|recommendations)|(processValue(\.(\d|-|\w|_)+)*)|(processValueString(\.(\d|-|\w|_)+)*))))$`
 
 // KafkaUMHTopicCompiledRegex is the compiled regex used to validate kafka topics
-// Deprecated: Use KafkaUMHTopicV1CompiledRegex instead
+// Deprecated: Use umhV1SyntaxCompiledRegex instead
 var KafkaUMHTopicCompiledRegex = regexp.MustCompile(KafkaUMHTopicRegex)
 
 // IsKafkaTopicValid returns true if the given topic is valid
@@ -120,6 +120,10 @@ func IsKafkaTopicV1Valid(topic string) bool {
 }
 
 type TopicInformationV1 struct {
+	Label          *string
+	Method         *string
+	TransmitterId  *string
+	MacAddress     *string
 	Enterprise     string
 	Site           string
 	Area           string
@@ -127,10 +131,6 @@ type TopicInformationV1 struct {
 	WorkCell       string
 	TagGroup       string
 	Tag            string
-	Label          *string
-	Method         *string
-	TransmitterId  *string
-	MacAddress     *string
 }
 
 func (t *TopicInformationV1) Display() string {
