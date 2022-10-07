@@ -12,11 +12,11 @@ import (
 )
 
 type Semver struct {
+	Prerelease    string
+	BuildMetadata string
 	Major         int
 	Minor         int
 	Patch         int
-	Prerelease    string
-	BuildMetadata string
 }
 
 func (s Semver) String() string {

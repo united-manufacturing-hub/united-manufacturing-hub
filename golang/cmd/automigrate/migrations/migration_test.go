@@ -19,7 +19,7 @@ func TestSliceFromVersion(t *testing.T) {
 func TestList_Apply(t *testing.T) {
 	list := buildLinkedList()
 	lv := SliceBetweenVersions(&list, Semver{Major: 0, Minor: 10, Patch: 1}, Semver{Major: 0, Minor: 10, Patch: 3})
-	err := lv.Apply(nil)
+	err := lv.Apply(Semver{Major: 0, Minor: 10, Patch: 1}, nil)
 	if err != nil {
 		t.Fatalf("error applying migrations: %v", err)
 	}
