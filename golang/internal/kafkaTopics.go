@@ -103,6 +103,9 @@ func getTopicInformation(topic string) *TopicInformation {
 }
 
 const (
+	// umhV1SyntaxRegex is the regex used to validate kafka topics
+	// It only checks if the syntax is correct.
+	// Please use GetTopicInformationV1Cached to get a deep check of the topic
 	umhV1SyntaxRegex   = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>raw|standard|custom)\.([\w\-_.]+\.?)$`
 	umhV1CustomRegex   = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>custom)\.(?P<tag>processValueString|processValue)(\.(?P<label>[\w\-_.]+))?$`
 	umhV1RawRegex      = `^umh\.v1\.(?P<enterprise>[\w\-_]+)\.(?P<site>[\w\-_]+)\.(?P<area>[\w\-_]+)\.(?P<productionLine>[\w\-_]+)\.(?P<workCell>[\w\-_]+)\.(?P<tagGroup>raw)\.((rawImage\.(?P<transmitterId>[\w\-_]+)\.)(?P<macAddress>([0-9A-Fa-f]{2}-){5}([0-9A-Fa-f]{2})|)|(raw))`
