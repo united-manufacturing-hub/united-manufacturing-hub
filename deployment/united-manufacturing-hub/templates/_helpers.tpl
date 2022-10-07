@@ -236,6 +236,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kowl
 {{- end }}
 
 {{/*
+Labels for automigrate
+*/}}
+{{- define "united-manufacturing-hub.labels.automigrate" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-automigrate
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
