@@ -28,46 +28,37 @@ data:
 
     -------------------- Tables for ISA95 model --------------------
     CREATE TABLE IF NOT EXISTS "enterpriseTable" (
-    "id" int PRIMARY KEY,
-    "name" text UNIQUE NOT NULL
+        "id" int PRIMARY KEY,
+        "name" text UNIQUE NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS "siteTable" (
-    "id" int PRIMARY KEY,
-    "name" text NOT NULL,
-    "enterpriseId" int NOT NULL,
-    unique ("name", "enterpriseId")
+        "id" int PRIMARY KEY,
+        "name" text NOT NULL,
+        "enterpriseId" int NOT NULL REFERENCES enterpriseTable (id),
+        unique ("name", "enterpriseId")
     );
 
     CREATE TABLE IF NOT EXISTS "areaTable" (
-    "id" int PRIMARY KEY,
-    "name" text NOT NULL,
-    "siteId" int NOT NULL,
-    unique ("name", "siteId")
+        "id" int PRIMARY KEY,
+        "name" text NOT NULL,
+        "siteId" int NOT NULL REFERENCES siteTable (id),
+        unique ("name", "siteId")
     );
 
     CREATE TABLE IF NOT EXISTS "productionLineTable" (
-    "id" int PRIMARY KEY,
-    "name" text NOT NULL,
-    "areaId" int NOT NULL,
-    unique ("name", "areaId")
+        "id" int PRIMARY KEY,
+        "name" text NOT NULL,
+        "areaId" int NOT  NULL REFERENCES areaTable (id),
+        unique ("name", "areaId")
     );
 
     CREATE TABLE IF NOT EXISTS "workCellTable" (
-    "id" int PRIMARY KEY,
-    "name" text NOT NULL,
-    "productionLineId" int NOT NULL,
-    unique ("name", "productionLineId")
+        "id" int PRIMARY KEY,
+        "name" text NOT NULL,
+        "productionLineId" int NOT  NULL REFERENCES workCellTable (id),
+        unique ("name", "productionLineId")
     );
-
-    ALTER TABLE "siteTable" ADD FOREIGN KEY ("enterpriseId") REFERENCES "enterpriseTable" ("id");
-
-    ALTER TABLE "areaTable" ADD FOREIGN KEY ("siteId") REFERENCES "siteTable" ("id");
-
-    ALTER TABLE "productionLineTable" ADD FOREIGN KEY ("areaId") REFERENCES "areaTable" ("id");
-
-    ALTER TABLE "workCellTable" ADD FOREIGN KEY ("productionLineId") REFERENCES "productionLineTable" ("id");
-
 
     -------------------- TimescaleDB table for states --------------------
     CREATE TABLE IF NOT EXISTS stateTable
@@ -99,22 +90,18 @@ data:
 
     -------------------- TimescaleDB table for process value names --------------------
     CREATE TABLE IF NOT EXISTS "processValueNameTable" (
-    "id" int PRIMARY KEY,
-    "name" text UNIQUE NOT NULL
+        "id" int PRIMARY KEY,
+        "name" text UNIQUE NOT NULL
     );
 
     -------------------- TimescaleDB table for process values --------------------
     CREATE TABLE IF NOT EXISTS "processValueTable" (
-    "timestamp" timestamptz NOT NULL,
-    "workCellId" int,
-    "valueNameId" int NOT NULL,
-    "value" double NOT NULL
-    UNIQUE("timestamp", "workCellId", "valueNameId")
+        "timestamp" timestamptz NOT NULL,
+        "workCellId" int NOT NULL REFERENCES workCellTable (id),
+        "valueNameId" int NOT NULL REFERENCES processValueNameTable (id),
+        "value" double NOT NULL
+        UNIQUE("timestamp", "workCellId", "valueNameId")
     );
-
-    ALTER TABLE "processValueTable" ADD FOREIGN KEY ("workCellId") REFERENCES "workCellTable" ("id");
-
-    ALTER TABLE "processValueTable" ADD FOREIGN KEY ("valueNameId") REFERENCES "processValueNameTable" ("id");
 
     -- creating hypertable
     SELECT create_hypertable('processValueTable', 'timestamp');
@@ -130,16 +117,12 @@ data:
 
     -------------------- TimescaleDB table for process values text --------------------
     CREATE TABLE IF NOT EXISTS "processValueStringTable" (
-    "timestamp" timestamp NOT NULL,
-    "workCellId" int,
-    "valueNameId" int NOT NULL,
-    "value" text NOT NULL
-    UNIQUE("timestamp", "workCellId", "valueNameId")
+        "timestamp" timestamp NOT NULL,
+        "workCellId" int NOT NULL REFERENCES workCellTable (id),
+        "valueNameId" int NOT NULL REFERENCES processValueNameTable (id),
+        "value" text NOT NULL
+        UNIQUE("timestamp", "workCellId", "valueNameId")
     );
-
-    ALTER TABLE "processValueStringTable" ADD FOREIGN KEY ("workCellId") REFERENCES "workCellTable" ("id");
-
-    ALTER TABLE "processValueStringTable" ADD FOREIGN KEY ("valueNameId") REFERENCES "processValueNameTable" ("id");
 
     -- creating hypertable
     SELECT create_hypertable('processValueStringTable', 'timestamp');
@@ -345,7 +328,7 @@ data:
     ON DELETE CASCADE
     );
 
-    -------------------- TimescaleDB table for process values text --------------------
+    -------------------- TimescaleDB table for process value strings --------------------
     CREATE TABLE IF NOT EXISTS processValueStringTable
     (
     timestamp               TIMESTAMPTZ                         NOT NULL,
