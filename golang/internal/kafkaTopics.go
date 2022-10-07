@@ -6,13 +6,22 @@ import (
 	"strings"
 )
 
+// KafkaUMHTopicRegex is the regex used to validate kafka topics
+// Deprecated: Use KafkaUMHTopicV1Regex instead
 var KafkaUMHTopicRegex = `^ia\.((raw\.(\d|-|\w|_|\.)+)|(rawImage\.(\d|-|\w|_)+\.(\d|-|\w|_)+)|(((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((count|scrapCount|barcode|activity|detectedAnomaly|addShift|addOrder|addProduct|startOrder|endOrder|productImage|productTag|productTagString|addParentToChild|state|cycleTimeTrigger|uniqueProduct|scrapUniqueProduct|recommendations)|(processValue(\.(\d|-|\w|_)+)*)|(processValueString(\.(\d|-|\w|_)+)*))))$`
+
+// KafkaUMHTopicCompiledRegex is the compiled regex used to validate kafka topics
+// Deprecated: Use KafkaUMHTopicV1CompiledRegex instead
 var KafkaUMHTopicCompiledRegex = regexp.MustCompile(KafkaUMHTopicRegex)
 
+// IsKafkaTopicValid returns true if the given topic is valid
+// Deprecated: Use IsKafkaTopicV1Valid instead
 func IsKafkaTopicValid(topic string) bool {
 	return KafkaUMHTopicCompiledRegex.MatchString(topic)
 }
 
+// TopicInformation contains information about a kafka topic
+// Deprecated: Use TopicInformationV1 instead
 type TopicInformation struct {
 	TransmitterId      *string
 	MacAddressOfCamera *string
@@ -27,6 +36,7 @@ var regexLruCache, _ = lru.New(100)
 
 // GetTopicInformationCached returns the topic information for the given topic.
 // The topic information is cached in an LRU cache, resulting in up to 10x performance improvement.
+// Deprecated: Use GetTopicInformationV1Cached instead
 func GetTopicInformationCached(topic string) *TopicInformation {
 	value, ok := regexLruCache.Get(topic)
 	if ok {
@@ -39,6 +49,7 @@ func GetTopicInformationCached(topic string) *TopicInformation {
 
 // getTopicInformation returns the topic information for the given topic
 // Use the cached version if possible (GetTopicInformationCached)
+// Deprecated: Use GetTopicInformationV1 instead
 func getTopicInformation(topic string) *TopicInformation {
 	if !IsKafkaTopicValid(topic) {
 		return nil
