@@ -1,12 +1,14 @@
-package main
+package v1
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
 	"math"
+	"os/signal"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -15,8 +17,10 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
-var logData = false
-var _ sync.Mutex
+var (
+	logData = false
+	_       sync.Mutex
+)
 
 // ChannelResult returns the returnValue and an error code from a goroutine
 type ChannelResult struct {
@@ -43,7 +47,7 @@ func BusinessLogicErrorHandling(operationName string, err error, isCritical bool
 		"error", err.Error(),
 	)
 	if isCritical {
-		ShutdownApplicationGraceful()
+		signal.Notify(GracefulShutdownChannel, syscall.SIGTERM)
 	}
 }
 
@@ -1628,8 +1632,8 @@ func CalculateAverageStateTime(
 		to,
 		internal.AsHash(configuration),
 		targetState)
-	if mutex.TryLock(key) { // is is already running?
-		defer mutex.Unlock(key)
+	if Mutex.TryLock(key) { // is is already running?
+		defer Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool

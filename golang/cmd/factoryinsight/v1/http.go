@@ -1,92 +1,15 @@
-package main
+package v1
 
 import (
-	"fmt"
-	"net/http"
-	"strings"
-	"time"
-
-	"github.com/gin-contrib/gzip"
-	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
+	"net/http"
+	"strings"
+	"time"
 )
-
-// SetupRestAPI initializes the REST API and starts listening
-func SetupRestAPI(accounts gin.Accounts, version string) {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-
-	// Add a ginzap middleware, which:
-	//   - Logs all requests, like a combined access and error log.
-	//   - Logs to stdout.
-	//   - RFC3339 with UTC time format.
-	router.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
-
-	// Logs all panic to error log
-	//   - stack means whether output the stack info.
-	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
-
-	// Use gzip for all requests
-	router.Use(gzip.Gzip(gzip.DefaultCompression))
-
-	// Healthcheck
-	router.GET(
-		"/", func(c *gin.Context) {
-			c.String(http.StatusOK, "online")
-		})
-
-	apiString := fmt.Sprintf("/api/v%s", version)
-
-	// Version of the API
-	v1 := router.Group(apiString, gin.BasicAuth(accounts))
-	{
-		// WARNING: Need to check in each specific handler whether the user is actually allowed to access it, so that valid user "ia" cannot access data for customer "abc"
-		v1.GET("/:customer", getLocationsHandler)
-		v1.GET("/:customer/:location", getAssetsHandler)
-		v1.GET("/:customer/:location/:asset", getValuesHandler)
-		v1.GET("/:customer/:location/:asset/:value", getDataHandler)
-	}
-
-	err := router.Run(":80")
-	if err != nil {
-		zap.S().Fatalf("Error starting the server: %s", err)
-	}
-}
-
-func handleInternalServerError(c *gin.Context, err error) {
-
-	zap.S().Errorw(
-		"Internal server error",
-		"error", err,
-	)
-
-	c.String(http.StatusInternalServerError, "The server had an internal error.")
-}
-
-func handleInvalidInputError(c *gin.Context, err error) {
-
-	zap.S().Errorw(
-		"Invalid input error",
-		"error", internal.SanitizeString(err.Error()),
-	)
-
-	c.String(400, "You have provided a wrong input. Please check your parameters.")
-}
-
-// Access handler
-func checkIfUserIsAllowed(c *gin.Context, customer string) error {
-
-	user := c.MustGet(gin.AuthUserKey)
-	if user != customer {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
-		return fmt.Errorf("user %s unauthorized to access %s", user, internal.SanitizeString(customer))
-	}
-	return nil
-}
 
 // ---------------------- getLocations ----------------------
 
@@ -94,7 +17,7 @@ type getLocationsRequest struct {
 	Customer string `uri:"customer" binding:"required"`
 }
 
-func getLocationsHandler(c *gin.Context) {
+func GetLocationsHandler(c *gin.Context) {
 
 	var getLocationsRequestInstance getLocationsRequest
 	var err error
@@ -102,12 +25,12 @@ func getLocationsHandler(c *gin.Context) {
 
 	err = c.BindUri(&getLocationsRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
 	// Check whether user has access to that customer
-	err = checkIfUserIsAllowed(c, getLocationsRequestInstance.Customer)
+	err = helpers.CheckIfUserIsAllowed(c, getLocationsRequestInstance.Customer)
 	if err != nil {
 		return
 	}
@@ -115,7 +38,7 @@ func getLocationsHandler(c *gin.Context) {
 	// Fetching from the database
 	locations, err = GetLocations(getLocationsRequestInstance.Customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -129,7 +52,7 @@ type getAssetsRequest struct {
 	Location string `uri:"location" binding:"required"`
 }
 
-func getAssetsHandler(c *gin.Context) {
+func GetAssetsHandler(c *gin.Context) {
 
 	var getAssetsRequestInstance getAssetsRequest
 	var err error
@@ -137,12 +60,12 @@ func getAssetsHandler(c *gin.Context) {
 
 	err = c.BindUri(&getAssetsRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
 	// Check whether user has access to that customer
-	err = checkIfUserIsAllowed(c, getAssetsRequestInstance.Customer)
+	err = helpers.CheckIfUserIsAllowed(c, getAssetsRequestInstance.Customer)
 	if err != nil {
 		return
 	}
@@ -150,7 +73,7 @@ func getAssetsHandler(c *gin.Context) {
 	// Fetching from the database
 	assets, err = GetAssets(getAssetsRequestInstance.Customer, getAssetsRequestInstance.Location)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -165,18 +88,18 @@ type getValuesRequest struct {
 	Asset    string `uri:"asset" binding:"required"`
 }
 
-func getValuesHandler(c *gin.Context) {
+func GetValuesHandler(c *gin.Context) {
 
 	var getValuesRequestInstance getValuesRequest
 
 	err := c.BindUri(&getValuesRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
 	// Check whether user has access to that customer
-	err = checkIfUserIsAllowed(c, getValuesRequestInstance.Customer)
+	err = helpers.CheckIfUserIsAllowed(c, getValuesRequestInstance.Customer)
 	if err != nil {
 		return
 	}
@@ -221,7 +144,7 @@ func getValuesHandler(c *gin.Context) {
 			getValuesRequestInstance.Location,
 			getValuesRequestInstance.Asset)
 		if err != nil {
-			handleInternalServerError(c, err)
+			helpers.HandleInternalServerError(c, err)
 			return
 		}
 
@@ -245,7 +168,7 @@ func getValuesHandler(c *gin.Context) {
 			getValuesRequestInstance.Location,
 			getValuesRequestInstance.Asset)
 		if err != nil {
-			handleInternalServerError(c, err)
+			helpers.HandleInternalServerError(c, err)
 			return
 		}
 
@@ -273,19 +196,19 @@ type getDataRequest struct {
 	Value    string `uri:"value" binding:"required"`
 }
 
-func getDataHandler(c *gin.Context) {
+func GetDataHandler(c *gin.Context) {
 
 	var getDataRequestInstance getDataRequest
 	var err error
 
 	err = c.BindUri(&getDataRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
 	// Check whether user has access to that customer
-	err = checkIfUserIsAllowed(c, getDataRequestInstance.Customer)
+	err = helpers.CheckIfUserIsAllowed(c, getDataRequestInstance.Customer)
 	if err != nil {
 		return
 	}
@@ -350,7 +273,7 @@ func getDataHandler(c *gin.Context) {
 			processProcessValueStringRequest(c, getDataRequestInstance)
 
 		} else {
-			handleInvalidInputError(c, err)
+			helpers.HandleInvalidInputError(c, err)
 			return
 		}
 
@@ -381,7 +304,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getStatesRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -393,42 +316,42 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -443,7 +366,7 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 		to,
 		configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -499,7 +422,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 	err = c.BindQuery(&getAggregatedStatesRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -513,14 +436,14 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 
 	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// TODO: parallelize
@@ -528,28 +451,28 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -565,7 +488,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 		to,
 		configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -584,7 +507,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 			configuration)
 
 		if err != nil {
-			handleInternalServerError(c, err)
+			helpers.HandleInternalServerError(c, err)
 			return
 		}
 	} else {
@@ -624,7 +547,7 @@ func processAggregatedStatesRequest(c *gin.Context, getDataRequest getDataReques
 				var tempResult [][]interface{}
 				tempResult, err = CalculateStopParetos(processedStatesCleaned, d, *includeRunning, true, configuration)
 				if err != nil {
-					handleInternalServerError(c, err)
+					helpers.HandleInternalServerError(c, err)
 					return
 				}
 
@@ -688,7 +611,7 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getAvailabilityRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -705,34 +628,34 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -762,13 +685,13 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 				to,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculateAvailability(processedStates, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -785,13 +708,13 @@ func processAvailabilityRequest(c *gin.Context, getDataRequest getDataRequest) {
 				currentTo,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculateAvailability(processedStates, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -827,7 +750,7 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getPerformanceRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -838,41 +761,41 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -902,13 +825,13 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 				to,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculatePerformance(processedStates, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -925,13 +848,13 @@ func processPerformanceRequest(c *gin.Context, getDataRequest getDataRequest) {
 				currentTo,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculatePerformance(processedStates, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -966,7 +889,7 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getQualityRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -978,14 +901,14 @@ func processQualityRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// customer configuration
 	_, err = GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1048,7 +971,7 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getOEERequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1065,34 +988,34 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1125,13 +1048,13 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 				to,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculateOEE(processedStates, countSliceSplit, current, to, configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -1150,13 +1073,13 @@ func processOEERequest(c *gin.Context, getDataRequest getDataRequest) {
 				currentTo,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculateOEE(processedStates, countSliceSplit, current, currentTo, configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -1193,7 +1116,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	err = c.BindQuery(&getStateHistogramRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1206,41 +1129,41 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1255,7 +1178,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 		to,
 		configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1266,7 +1189,7 @@ func processStateHistogramRequest(c *gin.Context, getDataRequest getDataRequest)
 	data.Datapoints, err = CalculateStateHistogram(processedStates, includeRunning, keepStatesInteger, configuration)
 
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1333,7 +1256,7 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getCurrentStateRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1345,7 +1268,7 @@ func processCurrentStateRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getDataRequest.Asset,
 		getCurrentStateRequestInstance.KeepStatesInteger)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, state)
@@ -1359,7 +1282,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getCountsRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1372,7 +1295,7 @@ func processCountsRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getCountsRequestInstance.From,
 		getCountsRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, counts)
@@ -1383,7 +1306,7 @@ func processRecommendationRequest(c *gin.Context, getDataRequest getDataRequest)
 	// Fetching from the database
 	recommendations, err := GetRecommendations(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, recommendations)
@@ -1396,7 +1319,7 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getShiftsRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1408,7 +1331,7 @@ func processShiftsRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getShiftsRequestInstance.From,
 		getShiftsRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, shifts)
@@ -1421,7 +1344,7 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getProcessValueRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1438,7 +1361,7 @@ func processProcessValueRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getProcessValueRequestInstance.To,
 		valueName)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, processValues)
@@ -1450,7 +1373,7 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 
 	err = c.BindQuery(&getProcessValueStringRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1468,7 +1391,7 @@ func processProcessValueStringRequest(c *gin.Context, getDataRequest getDataRequ
 		getProcessValueStringRequestInstance.To,
 		valueName)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, processValuesString)
@@ -1479,7 +1402,7 @@ func processTimeRangeRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Fetching from the database
 	timeRange, err := GetDataTimeRangeForAsset(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1493,7 +1416,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 		getDataRequest.Location,
 		getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1503,7 +1426,7 @@ func processUpcomingMaintenanceActivitiesRequest(c *gin.Context, getDataRequest 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(getDataRequest.Customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1548,7 +1471,7 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 
 	err = c.BindQuery(&getOrderRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1563,7 +1486,7 @@ func processUnstartedOrderTableRequest(c *gin.Context, getDataRequest getDataReq
 	zap.S().Debugf("GetUnstartedOrdersRaw")
 	rawOrders, err := GetUnstartedOrdersRaw(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1585,7 +1508,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getOrderRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1601,14 +1524,14 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 	zap.S().Debugf("GetCustomerConfiguration")
 	configuration, err := GetCustomerConfiguration(getDataRequest.Customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	zap.S().Debugf("GetAssetID")
 	assetID, err := GetAssetID(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1620,7 +1543,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getOrderRequestInstance.From,
 		getOrderRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1633,7 +1556,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getOrderRequestInstance.From,
 		getOrderRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1647,7 +1570,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getOrderRequestInstance.To,
 		configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1661,7 +1584,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getOrderRequestInstance.To,
 		configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1679,7 +1602,7 @@ func processOrderTableRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getDataRequest.Location,
 		getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1693,7 +1616,7 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 
 	err = c.BindQuery(&getOrderRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1707,7 +1630,7 @@ func processOrderTimelineRequest(c *gin.Context, getDataRequest getDataRequest) 
 		getOrderRequestInstance.From,
 		getOrderRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1719,7 +1642,7 @@ func processMaintenanceActivitiesRequest(c *gin.Context, getDataRequest getDataR
 	// Fetching from the database
 	data, err := GetMaintenanceActivities(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1733,7 +1656,7 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 
 	err = c.BindQuery(&getUniqueProductsRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1747,7 +1670,7 @@ func processUniqueProductsRequest(c *gin.Context, getDataRequest getDataRequest)
 		getUniqueProductsRequestInstance.From,
 		getUniqueProductsRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, uniqueProducts)
@@ -1758,13 +1681,13 @@ func processMaintenanceComponentsRequest(c *gin.Context, getDataRequest getDataR
 	// Fetching from the database
 	assetID, err := GetAssetID(getDataRequest.Customer, getDataRequest.Location, getDataRequest.Asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	data, err := GetComponents(assetID)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1779,7 +1702,7 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 
 	err = c.BindQuery(&getProductionSpeedRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1792,7 +1715,7 @@ func processProductionSpeedRequest(c *gin.Context, getDataRequest getDataRequest
 		getProductionSpeedRequestInstance.To,
 		getProductionSpeedRequestInstance.AggregationInterval)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, counts)
@@ -1806,7 +1729,7 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getQualityRateRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1819,7 +1742,7 @@ func processQualityRateRequest(c *gin.Context, getDataRequest getDataRequest) {
 		getQualityRateRequestInstance.To,
 		getQualityRateRequestInstance.AggregationInterval)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, counts)
@@ -1856,7 +1779,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 
 	err = c.BindQuery(&getAverageCleaningTimeRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -1867,41 +1790,41 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 
 	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -1932,7 +1855,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 				to,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -1943,7 +1866,7 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 				configuration,
 				18) // Cleaning is 18
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -1960,13 +1883,13 @@ func processAverageCleaningTimeRequest(c *gin.Context, getDataRequest getDataReq
 				currentTo,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
 			tempDatapoints, err = CalculateAverageStateTime(processedStates, current, currentTo, configuration, 18)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -2003,7 +1926,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 	err = c.BindQuery(&getAverageChangeoverTimeRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -2014,41 +1937,41 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 
 	assetID, err := GetAssetID(customer, location, asset)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
 	configuration, err := GetCustomerConfiguration(customer)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
 	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
 	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
 	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
 	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
@@ -2077,7 +2000,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 				to,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -2088,7 +2011,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 				configuration,
 				datamodel.ChangeoverState)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -2105,7 +2028,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 				currentTo,
 				configuration)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -2116,7 +2039,7 @@ func processAverageChangeoverTimeRequest(c *gin.Context, getDataRequest getDataR
 				configuration,
 				datamodel.ChangeoverState)
 			if err != nil {
-				handleInternalServerError(c, err)
+				helpers.HandleInternalServerError(c, err)
 				return
 			}
 
@@ -2138,7 +2061,7 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 
 	err = c.BindQuery(&getUniqueProductsWithTagsRequestInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -2150,7 +2073,7 @@ func processUniqueProductsWithTagsRequest(c *gin.Context, getDataRequest getData
 		getUniqueProductsWithTagsRequestInstance.From,
 		getUniqueProductsWithTagsRequestInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, uniqueProductsWithTags)
@@ -2168,7 +2091,7 @@ func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
 
 	err = c.BindQuery(&getProcessAccumulatedProductsInstance)
 	if err != nil {
-		handleInvalidInputError(c, err)
+		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
@@ -2179,7 +2102,7 @@ func processAccumulatedProducts(c *gin.Context, getDataRequest getDataRequest) {
 		getProcessAccumulatedProductsInstance.From,
 		getProcessAccumulatedProductsInstance.To)
 	if err != nil {
-		handleInternalServerError(c, err)
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, accumulatedProducts)

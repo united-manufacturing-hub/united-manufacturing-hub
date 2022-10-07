@@ -7,7 +7,7 @@ Important principles: stateless as much as possible
 /*
 Target architecture:
 
-Incoming REST call --> http.go
+Incoming REST call --> helpers.go
 There is one function for that specific call. It parses the parameters and executes further functions:
 1. One or multiple function getting the data from the database (database.go)
 2. Only one function processing everything. In this function no database calls are allowed to be as stateless as possible (dataprocessing.go)
@@ -16,7 +16,11 @@ Then the results are bundled together and a return JSON is created.
 
 import (
 	"fmt"
+	"github.com/gin-contrib/gzip"
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
+	apiV1 "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v1"
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,8 +37,10 @@ import (
 	_ "net/http/pprof"
 )
 
-var buildtime string
-var shutdownEnabled bool
+var (
+	buildtime       string
+	shutdownEnabled bool
+)
 
 func main() {
 	// Initialize zap logging
@@ -127,14 +133,14 @@ func main() {
 
 	zap.S().Debugf("Healthcheck initialized..", redisURI)
 
-	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort)
+	sigs := make(chan os.Signal, 1)
+	database.Connect(PQUser, PQPassword, PWDBName, PQHost, PQPort, sigs)
 
 	zap.S().Debugf("DB initialized..", PQHost)
 
-	SetupRestAPI(accounts, version)
+	setupRestAPI(accounts, version)
 
 	// Allow graceful shutdown
-	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM)
 
 	go func() {
@@ -173,11 +179,53 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(4 * time.Minute) // Wait until all remaining open connections are handled
 
-	ShutdownDB()
+	database.Shutdown()
 
 	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
+}
+
+// setupRestAPI initializes the REST API and starts listening
+func setupRestAPI(accounts gin.Accounts, version string) {
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+
+	// Add a ginzap middleware, which:
+	//   - Logs all requests, like a combined access and error log.
+	//   - Logs to stdout.
+	//   - RFC3339 with UTC time format.
+	router.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
+
+	// Logs all panic to error log
+	//   - stack means whether output the stack info.
+	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
+
+	// Use gzip for all requests
+	router.Use(gzip.Gzip(gzip.DefaultCompression))
+
+	// Healthcheck
+	router.GET(
+		"/", func(c *gin.Context) {
+			c.String(http.StatusOK, "online")
+		})
+
+	apiString := fmt.Sprintf("/api/v%s", version)
+
+	// Version of the API
+	v1 := router.Group(apiString, gin.BasicAuth(accounts))
+	{
+		// WARNING: Need to check in each specific handler whether the user is actually allowed to access it, so that valid user "ia" cannot access data for customer "abc"
+		v1.GET("/:customer", apiV1.GetLocationsHandler)
+		v1.GET("/:customer/:location", apiV1.GetAssetsHandler)
+		v1.GET("/:customer/:location/:asset", apiV1.GetValuesHandler)
+		v1.GET("/:customer/:location/:asset/:value", apiV1.GetDataHandler)
+	}
+
+	err := router.Run(":80")
+	if err != nil {
+		zap.S().Fatalf("Error starting the server: %s", err)
+	}
 }

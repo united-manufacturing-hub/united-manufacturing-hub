@@ -1,75 +1,30 @@
-package main
+package v1
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/EagleChen/mapmutex"
+	"os"
 	"time"
 
-	"github.com/EagleChen/mapmutex"
 	"github.com/lib/pq"
-	"github.com/omeid/pgerror"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 )
 
-var db *sql.DB
+var (
+	db                      *sql.DB
+	Mutex                   *mapmutex.Mutex
+	GracefulShutdownChannel chan os.Signal
+)
 
-// for caching
-var mutex *mapmutex.Mutex
-
-// SetupDB setups the db and stores the handler in a global variable in database.go
-func SetupDB(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int) {
-	psqlInfo := fmt.Sprintf(
-		"host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=require",
-		PQHost,
-		PQPort,
-		PQUser,
-		PQPassword,
-		PWDBName)
-	var err error
-	db, err = sql.Open("postgres", psqlInfo)
-	if err != nil {
-		panic(err)
-	}
-
-	mutex = mapmutex.NewCustomizedMapMutex(
-		800,
-		100000000,
-		10,
-		1.1,
-		0.2) // default configs: maxDelay:  100000000, // 0.1 second baseDelay: 10,        // 10 nanosecond
-}
-
-// ShutdownDB closes all database connections
-func ShutdownDB() {
-	if err := db.Close(); err != nil {
-		panic(err)
-	}
-}
-
-// PQErrorHandling logs and handles postgresql errors
-func PQErrorHandling(sqlStatement string, err error, isCritical bool) {
-
-	if e := pgerror.ConnectionException(err); e != nil {
-		zap.S().Errorw(
-			"PostgreSQL failed: ConnectionException",
-			"error", err,
-			"sqlStatement", sqlStatement,
-		)
-		isCritical = true
-	} else {
-		zap.S().Errorw(
-			"PostgreSQL failed. ",
-			"error", err,
-			"sqlStatement", sqlStatement,
-		)
-	}
-
-	if isCritical {
-		ShutdownApplicationGraceful()
-	}
+func init() {
+	db = database.Db
+	Mutex = database.Mutex
+	GracefulShutdownChannel = database.GracefulShutdownChannel
 }
 
 // GetLocations retrieves all locations for a given customer
@@ -81,10 +36,10 @@ func GetLocations(customerID string) (locations []string, err error) {
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, customerID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -95,7 +50,7 @@ func GetLocations(customerID string) (locations []string, err error) {
 		var location string
 		err = rows.Scan(&location)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -103,7 +58,7 @@ func GetLocations(customerID string) (locations []string, err error) {
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -120,10 +75,10 @@ func GetAssets(customerID string, location string) (assets []string, err error) 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, customerID, location)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -133,14 +88,14 @@ func GetAssets(customerID string, location string) (assets []string, err error) 
 		var asset string
 		err = rows.Scan(&asset)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
 		assets = append(assets, asset)
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -156,10 +111,10 @@ func GetComponents(assetID uint32) (components []string, err error) {
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -169,14 +124,14 @@ func GetComponents(assetID uint32) (components []string, err error) {
 		var component string
 		err = rows.Scan(&component)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
 		components = append(components, component)
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -208,8 +163,8 @@ func GetStatesRaw(
 	}
 
 	key := fmt.Sprintf("GetStatesRaw-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
-	if mutex.TryLock(key) { // is is already running?
-		defer mutex.Unlock(key)
+	if Mutex.TryLock(key) { // is is already running?
+		defer Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -232,7 +187,7 @@ func GetStatesRaw(
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		} else {
@@ -252,10 +207,10 @@ func GetStatesRaw(
 		var rows *sql.Rows
 		rows, err = db.Query(sqlStatement, assetID, from, to)
 		if errors.Is(err, sql.ErrNoRows) {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -268,7 +223,7 @@ func GetStatesRaw(
 
 			err = rows.Scan(&timestamp, &dataPoint)
 			if err != nil {
-				PQErrorHandling(sqlStatement, err, false)
+				database.ErrorHandling(sqlStatement, err, false)
 
 				return
 			}
@@ -283,7 +238,7 @@ func GetStatesRaw(
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -321,8 +276,8 @@ func GetShiftsRaw(
 	}
 
 	key := fmt.Sprintf("GetShiftsRaw-%d-%s-%s-%s", assetID, from, to, internal.AsHash(configuration))
-	if mutex.TryLock(key) { // is is already running?
-		defer mutex.Unlock(key)
+	if Mutex.TryLock(key) { // is is already running?
+		defer Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -360,7 +315,7 @@ func GetShiftsRaw(
 			}
 			data = append(data, fullRow)
 		} else if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else {
 			// First entry is always noShift
@@ -391,10 +346,10 @@ func GetShiftsRaw(
 		var rows *sql.Rows
 		rows, err = db.Query(sqlStatement, assetID, from, to) // OFFSET to prevent entering first result twice
 		if errors.Is(err, sql.ErrNoRows) {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
 
@@ -404,7 +359,7 @@ func GetShiftsRaw(
 
 			err = rows.Scan(&timestampStart, &timestampEnd, &shiftType)
 			if err != nil {
-				PQErrorHandling(sqlStatement, err, false)
+				database.ErrorHandling(sqlStatement, err, false)
 				return
 			}
 			fullRow := datamodel.ShiftEntry{
@@ -416,7 +371,7 @@ func GetShiftsRaw(
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
 
@@ -522,10 +477,10 @@ func GetProcessValue(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to, valueName)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -538,7 +493,7 @@ func GetProcessValue(
 
 		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
 		fullRow := []interface{}{
@@ -548,7 +503,7 @@ func GetProcessValue(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
@@ -587,10 +542,10 @@ func GetProcessValueString(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to, valueName)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -604,7 +559,7 @@ func GetProcessValueString(
 
 		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -615,7 +570,7 @@ func GetProcessValueString(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -664,10 +619,10 @@ func GetCurrentState(
 	sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 ORDER BY timestamp DESC LIMIT 1;`
 	err = db.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -715,10 +670,10 @@ func GetDataTimeRangeForAsset(customerID string, location string, asset string) 
 
 	err = db.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -761,8 +716,8 @@ func GetCountsRaw(
 	}
 
 	key := fmt.Sprintf("GetCountsRaw-%d-%s-%s", assetID, from, to)
-	if mutex.TryLock(key) { // is is already running?
-		defer mutex.Unlock(key)
+	if Mutex.TryLock(key) { // is is already running?
+		defer Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -777,10 +732,10 @@ func GetCountsRaw(
 		var rows *sql.Rows
 		rows, err = db.Query(sqlStatement, assetID, from, to)
 		if errors.Is(err, sql.ErrNoRows) {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -794,7 +749,7 @@ func GetCountsRaw(
 
 			err = rows.Scan(&timestamp, &count, &scrapN)
 			if err != nil {
-				PQErrorHandling(sqlStatement, err, false)
+				database.ErrorHandling(sqlStatement, err, false)
 
 				return
 			}
@@ -813,7 +768,7 @@ func GetCountsRaw(
 		}
 		err = rows.Err()
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -948,10 +903,10 @@ func GetProductionSpeed(
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -967,7 +922,7 @@ func GetProductionSpeed(
 
 		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1002,7 +957,7 @@ func GetProductionSpeed(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1053,10 +1008,10 @@ func GetQualityRate(
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1072,7 +1027,7 @@ func GetQualityRate(
 
 		err = rows.Scan(&timestamp, &dataPoint)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1107,7 +1062,7 @@ func GetQualityRate(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1190,7 +1145,7 @@ func GetCustomerConfiguration(customerID string) (configuration datamodel.Custom
 		zap.S().Warnf("No configuration stored for customer %s, using default !", customerID)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1232,10 +1187,10 @@ func GetRecommendations(customerID string, location string, asset string) (
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, likeString)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1260,7 +1215,7 @@ func GetRecommendations(customerID string, location string, asset string) (
 			&diagnoseTextEN,
 			&diagnoseTextDE)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1278,7 +1233,7 @@ func GetRecommendations(customerID string, location string, asset string) (
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1310,10 +1265,10 @@ func GetMaintenanceActivities(customerID string, location string, asset string) 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1328,7 +1283,7 @@ func GetMaintenanceActivities(customerID string, location string, asset string) 
 
 		err = rows.Scan(&componentName, &activityType, &timestamp)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1340,7 +1295,7 @@ func GetMaintenanceActivities(customerID string, location string, asset string) 
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1382,10 +1337,10 @@ func GetUniqueProducts(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1403,7 +1358,7 @@ func GetUniqueProducts(
 
 		err = rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1425,7 +1380,7 @@ func GetUniqueProducts(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1486,10 +1441,10 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1508,7 +1463,7 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 
 		err = rows.Scan(&ComponentName, &IntervallInHours, &ActivityType, &LatestActivity, &NextActivity, &Duration)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1566,10 +1521,10 @@ func GetOrdersRaw(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1589,7 +1544,7 @@ func GetOrdersRaw(
 
 		err = rows.Scan(&orderName, &targetUnits, &beginTimestamp, &endTimestamp, &productName, &timePerUnitInSeconds)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1631,10 +1586,10 @@ func GetUnstartedOrdersRaw(customerID string, location string, asset string) (
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1651,7 +1606,7 @@ func GetUnstartedOrdersRaw(customerID string, location string, asset string) (
 
 		err = rows.Scan(&orderName, &targetUnits, &productName, &timePerUnitInSeconds)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1681,10 +1636,10 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1696,7 +1651,7 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 
 		err = rows.Scan(&currentString)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1706,7 +1661,7 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1732,10 +1687,10 @@ func GetDistinctProcessValuesString(customerID string, location string, asset st
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1747,7 +1702,7 @@ func GetDistinctProcessValuesString(customerID string, location string, asset st
 
 		err = rows.Scan(&currentString)
 		if err != nil {
-			PQErrorHandling(sqlStatement, err, false)
+			database.ErrorHandling(sqlStatement, err, false)
 
 			return
 		}
@@ -1757,7 +1712,7 @@ func GetDistinctProcessValuesString(customerID string, location string, asset st
 
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1780,7 +1735,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 	sqlStatement := "SELECT id FROM assetTable WHERE assetid=$1 AND location=$2 AND customer=$3;"
 	err = db.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf(
 			"[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v",
 			customerID,
@@ -1789,7 +1744,7 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 		err = errors.New("asset does not exist")
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatement, err, false)
+		database.ErrorHandling(sqlStatement, err, false)
 
 		return
 	}
@@ -1858,10 +1813,10 @@ func GetUniqueProductsWithTags(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatementData, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatementData, err, false)
+		database.ErrorHandling(sqlStatementData, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatementData, err, false)
+		database.ErrorHandling(sqlStatementData, err, false)
 
 		return
 	}
@@ -1871,10 +1826,10 @@ func GetUniqueProductsWithTags(
 	var rowsStrings *sql.Rows
 	rowsStrings, err = db.Query(sqlStatementDataStrings, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatementDataStrings, err, false)
+		database.ErrorHandling(sqlStatementDataStrings, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatementDataStrings, err, false)
+		database.ErrorHandling(sqlStatementDataStrings, err, false)
 
 		return
 	}
@@ -1884,10 +1839,10 @@ func GetUniqueProductsWithTags(
 	var rowsInheritance *sql.Rows
 	rowsInheritance, err = db.Query(sqlStatementDataInheritance, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatementDataInheritance, err, false)
+		database.ErrorHandling(sqlStatementDataInheritance, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatementDataInheritance, err, false)
+		database.ErrorHandling(sqlStatementDataInheritance, err, false)
 
 		return
 	}
@@ -1914,7 +1869,7 @@ func GetUniqueProductsWithTags(
 
 		err = rows.Scan(&UID, &AID, &timestampBegin, &timestampEnd, &productID, &isScrap, &valueName, &value)
 		if err != nil {
-			PQErrorHandling(sqlStatementData, err, false)
+			database.ErrorHandling(sqlStatementData, err, false)
 
 			return
 		}
@@ -1963,7 +1918,7 @@ func GetUniqueProductsWithTags(
 	}
 	err = rows.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatementData, err, false)
+		database.ErrorHandling(sqlStatementData, err, false)
 
 		return
 	}
@@ -1977,7 +1932,7 @@ func GetUniqueProductsWithTags(
 
 		err = rowsStrings.Scan(&UID, &timestampBegin, &valueName, &value)
 		if err != nil {
-			PQErrorHandling(sqlStatementData, err, false)
+			database.ErrorHandling(sqlStatementData, err, false)
 
 			return
 		}
@@ -2007,7 +1962,7 @@ func GetUniqueProductsWithTags(
 	}
 	err = rowsStrings.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatementDataStrings, err, false)
+		database.ErrorHandling(sqlStatementDataStrings, err, false)
 
 		return
 	}
@@ -2021,7 +1976,7 @@ func GetUniqueProductsWithTags(
 
 		err = rowsInheritance.Scan(&UID, &timestampBegin, &productName, &AID)
 		if err != nil {
-			PQErrorHandling(sqlStatementData, err, false)
+			database.ErrorHandling(sqlStatementData, err, false)
 
 			return
 		}
@@ -2043,7 +1998,7 @@ func GetUniqueProductsWithTags(
 	}
 	err = rowsInheritance.Err()
 	if err != nil {
-		PQErrorHandling(sqlStatementDataInheritance, err, false)
+		database.ErrorHandling(sqlStatementDataInheritance, err, false)
 
 		return
 	}
@@ -2150,7 +2105,7 @@ ORDER BY begin_timestamp ASC
 		zap.S().Debugf("No outsider rows")
 		// We don't care if there is no outside order, in this case we will just select all insider orders
 	} else if err != nil {
-		PQErrorHandling(sqlStatementGetOutsider, err, false)
+		database.ErrorHandling(sqlStatementGetOutsider, err, false)
 
 		return
 	}
@@ -2190,7 +2145,7 @@ ORDER BY begin_timestamp ASC
 	if errors.Is(err, sql.ErrNoRows) {
 		foundOutsider = false
 	} else if err != nil {
-		PQErrorHandling(sqlStatementGetOutsider, err, false)
+		database.ErrorHandling(sqlStatementGetOutsider, err, false)
 
 		return
 	}
@@ -2210,7 +2165,7 @@ ORDER BY begin_timestamp ASC
 		// It is valid to have no internal rows !
 		zap.S().Debugf("No internal rows")
 	} else if err != nil {
-		PQErrorHandling(sqlStatementGetInsidersNoOutsider, err, false)
+		database.ErrorHandling(sqlStatementGetInsidersNoOutsider, err, false)
 
 		return
 	}
@@ -2229,7 +2184,7 @@ ORDER BY begin_timestamp ASC
 		var AID int
 		err = insideOrderRows.Scan(&OID, &PID, &timestampBegin, &timestampEnd, &targetUnits, &AID)
 		if err != nil {
-			PQErrorHandling(sqlStatementGetInsidersNoOutsider, err, false)
+			database.ErrorHandling(sqlStatementGetInsidersNoOutsider, err, false)
 
 			return
 		}
@@ -2332,10 +2287,10 @@ ORDER BY begin_timestamp ASC
 		float64(countQueryEnd)/1000)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlStatementGetCounts, err, false)
+		database.ErrorHandling(sqlStatementGetCounts, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlStatementGetCounts, err, false)
+		database.ErrorHandling(sqlStatementGetCounts, err, false)
 
 		return
 	}
@@ -2350,7 +2305,7 @@ ORDER BY begin_timestamp ASC
 		err = countRows.Scan(&timestamp, &count, &scrapN)
 
 		if err != nil {
-			PQErrorHandling(sqlStatementGetCounts, err, false)
+			database.ErrorHandling(sqlStatementGetCounts, err, false)
 
 			return
 		}
@@ -2378,10 +2333,10 @@ ORDER BY begin_timestamp ASC
 	orderRows, err = db.Query(sqlGetRunningOrders, assetID, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlGetRunningOrders, err, false)
+		database.ErrorHandling(sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlGetRunningOrders, err, false)
+		database.ErrorHandling(sqlGetRunningOrders, err, false)
 
 		return
 	}
@@ -2398,7 +2353,7 @@ ORDER BY begin_timestamp ASC
 		err = orderRows.Scan(&orderID, &productId, &targetUnits, &beginTimeStamp, &endTimeStamp)
 
 		if err != nil {
-			PQErrorHandling(sqlGetRunningOrders, err, false)
+			database.ErrorHandling(sqlGetRunningOrders, err, false)
 
 			return
 		}
@@ -2419,10 +2374,10 @@ ORDER BY begin_timestamp ASC
 	productRows, err = db.Query(sqlGetProductsPerSec, assetID)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		PQErrorHandling(sqlGetProductsPerSec, err, false)
+		database.ErrorHandling(sqlGetProductsPerSec, err, false)
 		return
 	} else if err != nil {
-		PQErrorHandling(sqlGetProductsPerSec, err, false)
+		database.ErrorHandling(sqlGetProductsPerSec, err, false)
 
 		return
 	}
@@ -2435,7 +2390,7 @@ ORDER BY begin_timestamp ASC
 		err = productRows.Scan(&productId, &timePerUnitInSec)
 
 		if err != nil {
-			PQErrorHandling(sqlGetProductsPerSec, err, false)
+			database.ErrorHandling(sqlGetProductsPerSec, err, false)
 
 			return
 		}
