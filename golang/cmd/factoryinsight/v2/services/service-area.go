@@ -14,16 +14,16 @@ import (
 //	GracefulShutdownChannel = database.GracefulShutdownChannel
 //}
 
-// GetSites returns all sites of an enterprise
-func GetSites(enterpriseName string) (sites []models.GetSitesResponse, err error) {
-	zap.S().Infof("[GetSites] Getting sites for enterprise %s", enterpriseName)
+// GetAreas returns all areas of a site
+func GetAreas(enterpriseName string, siteName string) (areas []models.GetAreasResponse, err error) {
+	zap.S().Infof("[GetAreas] Getting areas for enterprise %s and site %s", enterpriseName, siteName)
 
-	sqlStatement := `SELECT id, name FROM siteTable WHERE enterpriseName = $1`
+	sqlStatement := `SELECT id, name FROM areaTable WHERE enterpriseName = $1 AND siteName = $2`
 
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, enterpriseName)
+	rows, err = db.Query(sqlStatement, enterpriseName, siteName)
 	if errors.Is(err, sql.ErrNoRows) {
-		zap.S().Warnf("[GetSites] No sites found for enterprise %s", enterpriseName)
+		zap.S().Warnf("[GetAreas] No areas found for enterprise %s and site %s", enterpriseName, siteName)
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -32,13 +32,13 @@ func GetSites(enterpriseName string) (sites []models.GetSitesResponse, err error
 	defer rows.Close()
 
 	for rows.Next() {
-		var site models.Site
-		err = rows.Scan(&site.Id, &site.Name)
+		var area models.Area
+		err = rows.Scan(&area.Id, &area.Name)
 		if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
-		sites = append(sites, models.GetSitesResponse{Sites: []models.Site{site}})
+		areas = append(areas, models.GetAreasResponse{Areas: []models.Area{area}})
 	}
 	err = rows.Err()
 	if err != nil {

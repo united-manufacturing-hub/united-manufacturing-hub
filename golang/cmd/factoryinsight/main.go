@@ -228,6 +228,7 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 	v2 := router.Group(apiString, gin.BasicAuth(accounts))
 	{
 		v2.GET("/:enterpriseName", V2controllers.GetSitesHandler)
+		v2.GET("/:enterpriseName/:siteName", V2controllers.GetAreasHandler)
 	}
 
 	err := router.Run(":80")
