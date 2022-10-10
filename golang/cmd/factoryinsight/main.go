@@ -233,6 +233,7 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", V2controllers.GetWorkCellsHandler)
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", V2controllers.GetTagGroupsHandler)
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/:tagGroupName", V2controllers.GetTagsHandler)
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/:tagGroupName/:tagName", V2controllers.GetMethodsHandler)
 	}
 
 	err := router.Run(":80")
