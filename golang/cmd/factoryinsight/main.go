@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	apiV1 "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v1"
+	V2controllers "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/controllers"
 	"net/http"
 	"os"
 	"os/signal"
@@ -222,6 +223,11 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		v1.GET("/:customer/:location", apiV1.GetAssetsHandler)
 		v1.GET("/:customer/:location/:asset", apiV1.GetValuesHandler)
 		v1.GET("/:customer/:location/:asset/:value", apiV1.GetDataHandler)
+	}
+
+	v2 := router.Group(apiString, gin.BasicAuth(accounts))
+	{
+		v2.GET("/:enterpriseName", V2controllers.GetSitesHandler)
 	}
 
 	err := router.Run(":80")
