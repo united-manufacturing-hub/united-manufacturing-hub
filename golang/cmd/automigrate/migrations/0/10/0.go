@@ -37,11 +37,11 @@ func V0x10x0(db *sql.DB) error {
 }
 
 type AssetTable struct {
-	id       int
 	assetid  string
 	location string
 	customer string
 	shaSum   string
+	id       int
 }
 
 func migrateAssetTable(db *sql.DB) (map[int]int, error) {
@@ -202,13 +202,18 @@ func migrateOtherTables(db *sql.DB, idMap map[int]int) error {
 	return nil
 }
 
+func checkIfColumnExists(colName, tableName string, db *sql.DB) (bool, error) {
+	var assetIdExists bool
+	err := db.QueryRow("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = " + tableName + " AND column_name = '" + colName + "')").Scan(&assetIdExists)
+	if err != nil {
+		return false, err
+	}
+	return assetIdExists, nil
+}
+
 func migrateComponentTable(db *sql.DB, idMap map[int]int) error {
 	// Check if asset_id column exists
-	var assetIdExists bool
-	err := db.QueryRow("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'componentTable' AND column_name = 'asset_id')").Scan(&assetIdExists)
-	if err != nil {
-		return err
-	}
+	assetIdExists, err := checkIfColumnExists("asset_id", "componentTable", db)
 	if !assetIdExists {
 		zap.S().Info("Asset_id column does not exist in componentTable. Skipping migration")
 		return nil

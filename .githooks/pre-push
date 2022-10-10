@@ -5,6 +5,8 @@ cwd=$(pwd)
 # shellcheck disable=SC2046
 cd $(git rev-parse --show-toplevel)/golang || exit 1
 
+go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+
 while true; do
   fieldalignment -fix  ./...
   if [ $? -eq 0 ]; then
