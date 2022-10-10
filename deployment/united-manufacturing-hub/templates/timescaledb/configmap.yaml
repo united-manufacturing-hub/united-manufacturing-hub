@@ -23,7 +23,7 @@ data:
 
     \c {{.Values.factoryinsight.db_database}}
 
-      -- Extend the database with TimescaleDB
+        -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
     -------------------- Tables for ISA95 model --------------------
@@ -90,9 +90,11 @@ data:
 
     -------------------- TimescaleDB table for process value names --------------------
     CREATE TABLE IF NOT EXISTS processValueNameTable (
-        id int PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         name text UNIQUE NOT NULL
     );
+
+    CREATE INDEX ON processValueNameTable (name);
 
     -------------------- TimescaleDB table for process values --------------------
     CREATE TABLE IF NOT EXISTS processValueTable (
@@ -329,7 +331,7 @@ data:
     -- ISA tables
 
 	BEGIN TRANSACTION;
-    
+
     INSERT INTO enterpriseTable (name) VALUES ('factoryinsight');
     INSERT INTO siteTable (name, enterpriseId) VALUES ('testLocation', 1);
     INSERT INTO areaTable (name, siteId) VALUES ('default', 1);
