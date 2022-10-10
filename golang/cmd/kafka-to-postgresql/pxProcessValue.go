@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -199,22 +200,47 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 				case "measurement":
 				case "serial_number":
 				default:
-					// zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
-					value, valueIsFloat64 := v.(float64)
-					if !valueIsFloat64 {
-						// Check value is a string containing a float64
-						valueString, valueIsString := v.(string)
-						if !valueIsString {
-							zap.S().Warnf("[HT][PV] Value is not a string or float64 (%v)", v)
-							discardCounter++
-							continue
-						}
-						value, err = strconv.ParseFloat(valueString, 64)
+					var value float64
+
+					// This function can parse any float, int and bool values.
+					// It will discard any other values with a warning.
+					switch v.(type) {
+					case float64:
+						// This converts normal int and float values to float64
+						value = v.(float64)
+					case string:
+						valAsStr := v.(string)
+						// https://go.dev/ref/spec#Floating-point_literals
+						value, err = strconv.ParseFloat(valAsStr, 64)
 						if err != nil {
-							zap.S().Warnf("[HT][PV] Value is not a float64 (%s)", err)
-							discardCounter++
-							continue
+							// convert string to lower case
+							// Passes all tests cases from https://go.dev/ref/spec#Integer_literals
+							valAsStr = strings.ToLower(valAsStr)
+							if len(valAsStr) > 2 && (valAsStr[0:2] == "0x" || valAsStr[0:2] == "0o" || valAsStr[0:2] == "0b") {
+								// parse hex
+								var parseInt int64
+								parseInt, err = strconv.ParseInt(valAsStr, 0, 64)
+								if err != nil {
+									zap.S().Warnf("Error parsing %s string: %s (%s)\n", valAsStr[0:2], valAsStr, err)
+									discardCounter++
+									continue
+								}
+								value = float64(parseInt)
+							} else {
+								zap.S().Warnf("error parsing %s as float64: %s\n", valAsStr, err)
+								discardCounter++
+								continue
+							}
 						}
+					case bool:
+						boolVal := v.(bool)
+						if boolVal {
+							value = 1
+						} else {
+							value = 0
+						}
+					default:
+						zap.S().Warnf("[HT][PV] Value is not a string, float64 or boolean (%v)", v)
 					}
 
 					// This coversion is necessary for postgres
