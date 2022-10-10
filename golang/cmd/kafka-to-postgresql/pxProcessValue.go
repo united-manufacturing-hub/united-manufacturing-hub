@@ -134,6 +134,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 	// temporaryCommitCounterAsFloat64 is used for stats only, it just increments, whenever a message was added to the transaction.
 	// at the end, this count is added to the global Commit counter
 	temporaryCommitCounterAsFloat64 := float64(0)
+	discardCounter := 0
 	zap.S().Debugf("[HT][PV] 2")
 	{
 
@@ -201,10 +202,19 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 					// zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
 					value, valueIsFloat64 := v.(float64)
 					if !valueIsFloat64 {
-
-						// zap.S().Debugf("[HT][PV] Value is not a float64")
-						// Value is malformed, skip to next key
-						continue
+						// Check value is a string containing a float64
+						valueString, valueIsString := v.(string)
+						if !valueIsString {
+							zap.S().Warnf("[HT][PV] Value is not a string or float64 (%v)", v)
+							discardCounter++
+							continue
+						}
+						value, err = strconv.ParseFloat(valueString, 64)
+						if err != nil {
+							zap.S().Warnf("[HT][PV] Value is not a float64 (%s)", err)
+							discardCounter++
+							continue
+						}
 					}
 
 					// This coversion is necessary for postgres
@@ -282,15 +292,18 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		}
 		return putBackMsg, true, AssetIDnotFound, nil
 	} else {
-		zap.S().Debugf("Pre-commit to process value table: %d", temporaryCommitCounterAsFloat64)
+		zap.S().Debugf("Pre-commit to process value table: %f", temporaryCommitCounterAsFloat64)
 		err = txn.Commit()
 		if err != nil {
 			return messages, true, "Failed to commit", err
 		}
 		zap.S().Debugf(
 			"Committed %d messages, putting back %d messages",
-			len(messages)-len(putBackMsg),
+			len(messages)-len(putBackMsg)-discardCounter,
 			len(putBackMsg))
+		if discardCounter > 0 {
+			zap.S().Warnf("Discarded %d messages", discardCounter)
+		}
 		if len(putBackMsg) > 0 {
 			return putBackMsg, true, AssetIDnotFound, nil
 		}
