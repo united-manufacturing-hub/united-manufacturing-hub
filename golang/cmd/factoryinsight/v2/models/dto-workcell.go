@@ -6,5 +6,5 @@ type WorkCell struct {
 }
 
 type GetWorkCellsResponse struct {
-	Workcells []WorkCell `json:"workcells"`
+	WorkCells []WorkCell `json:"workCells"`
 }

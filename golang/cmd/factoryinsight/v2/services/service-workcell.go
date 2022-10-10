@@ -31,7 +31,7 @@ func GetWorkCells(entrerpriseName string, siteName string, areaName string, prod
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
-		workCells = append(workCells, models.GetWorkCellsResponse{Workcells: []models.WorkCell{workCell}})
+		workCells = append(workCells, models.GetWorkCellsResponse{WorkCells: []models.WorkCell{workCell}})
 	}
 	err = rows.Err()
 	if err != nil {
