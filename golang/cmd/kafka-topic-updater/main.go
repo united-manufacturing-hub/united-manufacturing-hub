@@ -34,6 +34,7 @@ func main() {
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go func() {
+		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Errorf("Error starting healthcheck: %s", err)
@@ -63,7 +64,7 @@ func main() {
 	go processing(processorChannel)
 
 	for {
-		_ = <-internal.KafkaProducer.Events()
+		<-internal.KafkaProducer.Events()
 	}
 }
 
@@ -101,10 +102,10 @@ func processing(processorChannel chan *kafka.Message) {
 		message := <-processorChannel
 		topicinfo = *internal.GetTopicInformationCached(*message.TopicPartition.Topic)
 		var oldtopicmatch = re.MatchString(*message.TopicPartition.Topic)
-		if oldtopicmatch == true {
+		if oldtopicmatch {
 			switch {
 			case reraw.MatchString(topicinfo.Topic):
-				strings.Replace(*message.TopicPartition.Topic, "ia.raw", "umh.v1.defaultEnterprise.defaultSite.defaultArea.defaultProductionLine.defaultWorkCell.raw.raw", 1)
+				*message.TopicPartition.Topic = strings.Replace(*message.TopicPartition.Topic, "ia.raw", "umh.v1.defaultEnterprise.defaultSite.defaultArea.defaultProductionLine.defaultWorkCell.raw.raw", 1)
 			case topicinfo.Topic == "count":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product.add"
 			case topicinfo.Topic == "addOrder":
