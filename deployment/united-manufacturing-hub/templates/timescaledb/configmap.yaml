@@ -26,6 +26,20 @@ data:
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
+    -------------------- Table for auto migration --------------------
+    CREATE TABLE IF NOT EXISTS migrationTable
+    (
+        id SERIAL PRIMARY KEY,
+        fromMajor int NOT NULL,
+        fromMinor int NOT NULL,
+        fromPatch int NOT NULL,
+        toMajor int NOT NULL,
+        toMinor int NOT NULL,
+        toPatch int NOT NULL,
+        timestamp TIMESTAMPTZ NOT NULL,
+        unique (fromMajor, fromMinor, fromPatch, toMajor, toMinor, toPatch)
+    );
+
     -------------------- Table with all assets --------------------
     CREATE TABLE IF NOT EXISTS assetTable
     (

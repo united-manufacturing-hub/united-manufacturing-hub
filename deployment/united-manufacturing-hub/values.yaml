@@ -338,6 +338,20 @@ _001_customMicroservices:
 serviceAccount:
   create: true
 
+### automigrate ###
+automigrate:
+  enabled: true
+  image:
+    repository: unitedmanufacturinghub/automigrate
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 100m
+    limits:
+      memory: 2Gi
+      cpu: 1000m
+
 ### kafkastatedetector ###
 kafkastatedetector:
   enabled: false
