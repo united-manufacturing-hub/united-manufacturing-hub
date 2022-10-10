@@ -23,41 +23,41 @@ data:
 
     \c {{.Values.factoryinsight.db_database}}
 
-    -- Extend the database with TimescaleDB
+      -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
     -------------------- Tables for ISA95 model --------------------
-    CREATE TABLE IF NOT EXISTS "enterpriseTable" (
-        "id" int PRIMARY KEY,
-        "name" text UNIQUE NOT NULL
+    CREATE TABLE IF NOT EXISTS enterpriseTable (
+        id SERIAL PRIMARY KEY,
+        name text UNIQUE NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS "siteTable" (
-        "id" int PRIMARY KEY,
-        "name" text NOT NULL,
-        "enterpriseId" int NOT NULL REFERENCES enterpriseTable (id),
-        unique ("name", "enterpriseId")
+    CREATE TABLE IF NOT EXISTS siteTable (
+        id SERIAL PRIMARY KEY,
+        name text NOT NULL,
+        enterpriseId int NOT NULL REFERENCES enterpriseTable (id),
+        unique (name, enterpriseId)
     );
 
-    CREATE TABLE IF NOT EXISTS "areaTable" (
-        "id" int PRIMARY KEY,
-        "name" text NOT NULL,
-        "siteId" int NOT NULL REFERENCES siteTable (id),
-        unique ("name", "siteId")
+    CREATE TABLE IF NOT EXISTS areaTable (
+        id SERIAL PRIMARY KEY,
+        name text NOT NULL,
+        siteId int NOT NULL REFERENCES siteTable (id),
+        unique (name, siteId)
     );
 
-    CREATE TABLE IF NOT EXISTS "productionLineTable" (
-        "id" int PRIMARY KEY,
-        "name" text NOT NULL,
-        "areaId" int NOT  NULL REFERENCES areaTable (id),
-        unique ("name", "areaId")
+    CREATE TABLE IF NOT EXISTS productionLineTable (
+        id SERIAL PRIMARY KEY,
+        name text NOT NULL,
+        areaId int NOT  NULL REFERENCES areaTable (id),
+        unique (name, areaId)
     );
 
-    CREATE TABLE IF NOT EXISTS "workCellTable" (
-        "id" int PRIMARY KEY,
-        "name" text NOT NULL,
-        "productionLineId" int NOT  NULL REFERENCES workCellTable (id),
-        unique ("name", "productionLineId")
+    CREATE TABLE IF NOT EXISTS workCellTable (
+        id SERIAL PRIMARY KEY,
+        name text NOT NULL,
+        productionLineId int NOT  NULL REFERENCES workCellTable (id),
+        unique (name, productionLineId)
     );
 
     -------------------- TimescaleDB table for states --------------------
@@ -89,18 +89,19 @@ data:
     CREATE INDEX ON countTable (workCellId, timestamp DESC);
 
     -------------------- TimescaleDB table for process value names --------------------
-    CREATE TABLE IF NOT EXISTS "processValueNameTable" (
-        "id" int PRIMARY KEY,
-        "name" text UNIQUE NOT NULL
+    CREATE TABLE IF NOT EXISTS processValueNameTable (
+        id int PRIMARY KEY,
+        name text UNIQUE NOT NULL
     );
 
     -------------------- TimescaleDB table for process values --------------------
-    CREATE TABLE IF NOT EXISTS "processValueTable" (
-        "timestamp" timestamptz NOT NULL,
-        "workCellId" int NOT NULL REFERENCES workCellTable (id),
-        "valueNameId" int NOT NULL REFERENCES processValueNameTable (id),
-        "value" double NOT NULL
-        UNIQUE("timestamp", "workCellId", "valueNameId")
+    CREATE TABLE IF NOT EXISTS processValueTable (
+        id SERIAL PRIMARY KEY,
+        timestamp timestamptz NOT NULL,
+        workCellId int NOT NULL REFERENCES workCellTable (id),
+        valueNameId int NOT NULL REFERENCES processValueNameTable (id),
+        value double precision NOT NULL,
+        UNIQUE(timestamp, workCellId, valueNameId)
     );
 
     -- creating hypertable
@@ -109,30 +110,23 @@ data:
     -- creating an index to increase performance
     CREATE INDEX ON processValueTable (workCellId, timestamp DESC);
 
-    -- creating an index to increase performance
-    CREATE INDEX ON processValueTable (valueNameId);
-
     -- create an index to increase performance
     CREATE INDEX ON processvaluetable(valueNameId, workCellId) WITH (timescaledb.transaction_per_chunk);
 
     -------------------- TimescaleDB table for process values text --------------------
-    CREATE TABLE IF NOT EXISTS "processValueStringTable" (
-        "timestamp" timestamp NOT NULL,
-        "workCellId" int NOT NULL REFERENCES workCellTable (id),
-        "valueNameId" int NOT NULL REFERENCES processValueNameTable (id),
-        "value" text NOT NULL
-        UNIQUE("timestamp", "workCellId", "valueNameId")
+    CREATE TABLE IF NOT EXISTS processValueStringTable (
+        id SERIAL PRIMARY KEY,
+        timestamp timestamp NOT NULL,
+        workCellId int NOT NULL REFERENCES workCellTable (id),
+        valueNameId int NOT NULL REFERENCES processValueNameTable (id),
+        value text NOT NULL,
+        UNIQUE(timestamp, workCellId, valueNameId)
     );
 
     -- creating hypertable
     SELECT create_hypertable('processValueStringTable', 'timestamp');
     -- creating an index to increase performance
     CREATE INDEX ON processValueStringTable (workCellId, timestamp DESC);
-
-    -- creating an index to increase performance
-    CREATE INDEX ON processValueStringTable (valueName);
-
-
 
     -------------------- TimescaleDB table for uniqueProduct --------------------
     CREATE TABLE IF NOT EXISTS uniqueProductTable
@@ -328,31 +322,24 @@ data:
     ON DELETE CASCADE
     );
 
-    -------------------- TimescaleDB table for process value strings --------------------
-    CREATE TABLE IF NOT EXISTS processValueStringTable
-    (
-    timestamp               TIMESTAMPTZ                         NOT NULL,
-    workCellId                SERIAL                              REFERENCES workCellTable (id),
-    valueName               TEXT                                NOT NULL,
-    value                   TEXT                                NOT NULL,
-    UNIQUE(timestamp, workCellId, valueName)
-    );
-    -- creating hypertable
-    SELECT create_hypertable('processValueStringTable', 'timestamp');
-    -- creating an index to increase performance
-    CREATE INDEX ON processValueStringTable (workCellId, timestamp DESC);
-
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO factoryinsight;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO factoryinsight;
 
     -- TEST DATA
     -- ISA tables
 
-    INSERT INTO enterpriseTable ("name") VALUES ("factoryinsight");
-    INSERT INTO siteTable ("name", "enterpriseId") VALUES ("testLocation", 1);
-    INSERT INTO areaTable ("name", "siteId") VALUES ("default", 1);
-    INSERT INTO productionLineTable ("name", "areaId") VALUES ("default", 1);
-    INSERT INTO workCellTable ("name", "productionLineId") VALUES ("testMachine", 1);
+	BEGIN TRANSACTION;
+    
+    INSERT INTO enterpriseTable (name) VALUES ('factoryinsight');
+    INSERT INTO siteTable (name, enterpriseId) VALUES ('testLocation', 1);
+    INSERT INTO areaTable (name, siteId) VALUES ('default', 1);
+    INSERT INTO productionLineTable (name, areaId) VALUES ('default', 1);
+    INSERT INTO workCellTable (name, productionLineId) VALUES ('testMachine', 1);
+
+	END TRANSACTION;
+
+
+	BEGIN TRANSACTION;
 
     -- productTable
     INSERT INTO productTable(product_name,workCellId,time_per_unit_in_seconds) VALUES ('product107782',1,600);
@@ -368,6 +355,11 @@ data:
     INSERT INTO productTable(product_name,workCellId,time_per_unit_in_seconds) VALUES ('product107792',1,5112);
     INSERT INTO productTable(product_name,workCellId,time_per_unit_in_seconds) VALUES ('product107799',1,4008);
 
+	END TRANSACTION;
+
+
+	BEGIN TRANSACTION;
+
     -- orderTable
     INSERT INTO orderTable(order_name,product_id,target_units,workCellId,begin_timestamp,end_timestamp) VALUES (107117,6,1,1,'2020-11-23 00:05:43+00','2020-11-23 01:25:11+00');
     INSERT INTO orderTable(order_name,product_id,target_units,workCellId,begin_timestamp,end_timestamp) VALUES (107118,2,1,1,'2020-11-23 01:25:30+00','2020-11-23 03:06:11+00');
@@ -382,12 +374,22 @@ data:
     INSERT INTO orderTable(order_name,product_id,target_units,workCellId,begin_timestamp,end_timestamp) VALUES (107823,8,1,1,'2020-11-26 02:31:52+00','2020-11-26 03:11:37+00');
     INSERT INTO orderTable(order_name,product_id,target_units,workCellId,begin_timestamp,end_timestamp) VALUES (107829,7,1,1,'2020-11-25 18:51:15+00','2020-11-25 19:24:43+00');
 
+	END TRANSACTION;
+
+
+	BEGIN TRANSACTION;
+
     -- shiftTable
     INSERT INTO shiftTable(product_id,product_name,workCellId,time_per_unit_in_seconds) VALUES (1,'2020-11-25 05:00:00+00','2020-11-26 05:00:00+00',1);
     INSERT INTO shiftTable(product_id,product_name,workCellId,time_per_unit_in_seconds) VALUES (1,'2020-11-27 05:00:00+00','2020-11-27 21:00:00+00',1);
     INSERT INTO shiftTable(product_id,product_name,workCellId,time_per_unit_in_seconds) VALUES (1,'2020-11-28 05:00:00+00','2020-11-28 12:00:00+00',1);
     INSERT INTO shiftTable(product_id,product_name,workCellId,time_per_unit_in_seconds) VALUES (1,'2020-11-26 05:00:00+00','2020-11-27 05:00:00+00',1);
     INSERT INTO shiftTable(product_id,product_name,workCellId,time_per_unit_in_seconds) VALUES (1,'2020-11-24 05:00:00+00','2020-11-25 05:00:00+00',1);
+
+	END TRANSACTION;
+
+
+	BEGIN TRANSACTION;
 
     -- stateTable
     INSERT INTO stateTable(timestamp,workCellId,state) VALUES ('2020-11-25 23:59:01+00',1,40000);
@@ -7593,5 +7595,6 @@ data:
     INSERT INTO stateTable(timestamp,workCellId,state) VALUES ('2020-11-26 00:00:05+00',1,40000);
     INSERT INTO stateTable(timestamp,workCellId,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
 
+    END TRANSACTION;
     __SQL__
 {{end}}
