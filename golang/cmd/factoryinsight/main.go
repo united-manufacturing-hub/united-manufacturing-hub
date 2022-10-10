@@ -229,6 +229,7 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 	{
 		v2.GET("/:enterpriseName", V2controllers.GetSitesHandler)
 		v2.GET("/:enterpriseName/:siteName", V2controllers.GetAreasHandler)
+		v2.GET("/:enterpriseName/:siteName/:areaName", V2controllers.GetProductionLinesHandler)
 	}
 
 	err := router.Run(":80")
