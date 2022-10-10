@@ -17,7 +17,7 @@ type getSiteRequest struct {
 // GetSitesHandler handles a GET request to /api/v2/{enterprise}
 func GetSitesHandler(c *gin.Context) {
 	var request getSiteRequest
-	var sites []models.GetSitesResponse
+	var sites models.GetSitesResponse
 
 	err := c.BindUri(&request)
 	if err != nil {

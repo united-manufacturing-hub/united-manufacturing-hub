@@ -17,7 +17,7 @@ type getAreasRequest struct {
 
 func GetAreasHandler(c *gin.Context) {
 	var request getAreasRequest
-	var areas []models.GetAreasResponse
+	var areas models.GetAreasResponse
 
 	err := c.BindUri(request)
 	if err != nil {

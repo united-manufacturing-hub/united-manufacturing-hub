@@ -19,7 +19,7 @@ type getWorkCellsRequest struct {
 
 func GetWorkCellsHandler(c *gin.Context) {
 	var request getWorkCellsRequest
-	var workCells []models.GetWorkCellsResponse
+	var workCells models.GetWorkCellsResponse
 
 	err := c.BindUri(&request)
 	if err != nil {

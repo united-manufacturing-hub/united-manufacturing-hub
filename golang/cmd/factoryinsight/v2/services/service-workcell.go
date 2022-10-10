@@ -8,8 +8,19 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetWorkCells(entrerpriseName string, siteName string, areaName string, productionLineName string) (workCells []models.GetWorkCellsResponse, err error) {
-	zap.S().Infof("[GetWorkCells] Getting work cells for enterprise %s, site %s, area %s and production line %s", entrerpriseName, siteName, areaName, productionLineName)
+func GetWorkCells(
+	entrerpriseName string,
+	siteName string,
+	areaName string,
+	productionLineName string,
+) (workCells models.GetWorkCellsResponse, err error) {
+	zap.S().Infof(
+		"[GetWorkCells] Getting work cells for enterprise %s, site %s, area %s and production line %s",
+		entrerpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+	)
 
 	sqlStatement := `SELECT id, name FROM workCellTable WHERE enterpriseName = $1 AND siteName = $2 AND areaName = $3 AND productionLineName = $4`
 
@@ -31,7 +42,7 @@ func GetWorkCells(entrerpriseName string, siteName string, areaName string, prod
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
-		workCells = append(workCells, models.GetWorkCellsResponse{WorkCells: []models.WorkCell{workCell}})
+		workCells.WorkCells = append(workCells.WorkCells, workCell)
 	}
 	err = rows.Err()
 	if err != nil {

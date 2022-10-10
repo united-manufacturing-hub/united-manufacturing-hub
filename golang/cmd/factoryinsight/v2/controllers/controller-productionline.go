@@ -18,7 +18,7 @@ type getProductionLineRequest struct {
 
 func GetProductionLinesHandler(c *gin.Context) {
 	var request getProductionLineRequest
-	var productionLines []models.GetProductionLinesResponse
+	var productionLines models.GetProductionLinesResponse
 
 	err := c.BindUri(&request)
 	if err != nil {

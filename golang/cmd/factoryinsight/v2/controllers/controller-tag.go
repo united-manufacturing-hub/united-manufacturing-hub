@@ -19,7 +19,7 @@ type getTagsRequest struct {
 
 func GetTagsHandler(c *gin.Context) {
 	var request getTagsRequest
-	var tags []models.GetTagsResponse
+	var tags models.GetTagsResponse
 
 	err := c.BindUri(&request)
 	if err != nil {

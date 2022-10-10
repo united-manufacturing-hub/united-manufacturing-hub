@@ -6,11 +6,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetStandardTags() (tags []models.GetTagsResponse, err error) {
+func GetStandardTags() (tags models.GetTagsResponse, err error) {
 	zap.S().Infof("[GetTags] Getting standard tags")
 
 	for id, tag := range internal.StandardTags {
-		tags = append(tags, models.GetTagsResponse{Tags: []models.Tag{{Id: id, Name: tag}}})
+		tags.Tags = append(tags.Tags, models.Tag{Id: id, Name: tag})
 	}
 	return
 }
@@ -22,7 +22,7 @@ func GetCustomTags(
 	productionLineName string,
 	workCellName string,
 	tagGroupName string,
-) (tags []models.GetTagsResponse, err error) {
+) (tags models.GetTagsResponse, err error) {
 	zap.S().Infof(
 		"[GetTags] Getting custom tags for enterprise %s, site %s, area %s, production line %s, work cell %s and tag group %s",
 		enterpriseName,

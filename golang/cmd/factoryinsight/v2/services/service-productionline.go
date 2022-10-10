@@ -9,8 +9,18 @@ import (
 )
 
 // GetProductionLines returns all production lines for a given area
-func GetProductionLines(enterpriseName string, siteName string, areaName string) (productionLines []models.GetProductionLinesResponse, err error) {
-	zap.S().Infof("[GetProductionLines] Getting production lines for enterprise %s, site %s and area %s", enterpriseName, siteName, areaName)
+func GetProductionLines(
+	enterpriseName string,
+	siteName string,
+	areaName string,
+) (productionLines models.GetProductionLinesResponse, err error) {
+
+	zap.S().Infof(
+		"[GetProductionLines] Getting production lines for enterprise %s, site %s and area %s",
+		enterpriseName,
+		siteName,
+		areaName,
+	)
 
 	sqlStatement := `SELECT id, name FROM productionLineTable WHERE enterpriseName = $1 AND siteName = $2 AND areaName = $3`
 
@@ -32,7 +42,7 @@ func GetProductionLines(enterpriseName string, siteName string, areaName string)
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
-		productionLines = append(productionLines, models.GetProductionLinesResponse{ProductionLines: []models.ProductionLine{productionLine}})
+		productionLines.ProductionLines = append(productionLines.ProductionLines, productionLine)
 	}
 	err = rows.Err()
 	if err != nil {

@@ -11,9 +11,9 @@ package internal
 //)
 
 var StandardTags = map[int]string{
-	0: "job",
-	1: "product",
-	2: "productType",
-	3: "shift",
-	4: "state",
+	1: "job",
+	2: "product",
+	3: "productType",
+	4: "shift",
+	5: "state",
 }

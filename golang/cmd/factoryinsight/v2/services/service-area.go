@@ -15,7 +15,7 @@ import (
 //}
 
 // GetAreas returns all areas of a site
-func GetAreas(enterpriseName string, siteName string) (areas []models.GetAreasResponse, err error) {
+func GetAreas(enterpriseName string, siteName string) (areas models.GetAreasResponse, err error) {
 	zap.S().Infof("[GetAreas] Getting areas for enterprise %s and site %s", enterpriseName, siteName)
 
 	sqlStatement := `SELECT id, name FROM areaTable WHERE enterpriseName = $1 AND siteName = $2`
@@ -38,7 +38,7 @@ func GetAreas(enterpriseName string, siteName string) (areas []models.GetAreasRe
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
-		areas = append(areas, models.GetAreasResponse{Areas: []models.Area{area}})
+		areas.Areas = append(areas.Areas, area)
 	}
 	err = rows.Err()
 	if err != nil {

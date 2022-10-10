@@ -15,7 +15,7 @@ import (
 //}
 
 // GetSites returns all sites of an enterprise
-func GetSites(enterpriseName string) (sites []models.GetSitesResponse, err error) {
+func GetSites(enterpriseName string) (sites models.GetSitesResponse, err error) {
 	zap.S().Infof("[GetSites] Getting sites for enterprise %s", enterpriseName)
 
 	sqlStatement := `SELECT id, name FROM siteTable WHERE enterpriseName = $1`
@@ -38,7 +38,7 @@ func GetSites(enterpriseName string) (sites []models.GetSitesResponse, err error
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
-		sites = append(sites, models.GetSitesResponse{Sites: []models.Site{site}})
+		sites.Sites = append(sites.Sites, site)
 	}
 	err = rows.Err()
 	if err != nil {
