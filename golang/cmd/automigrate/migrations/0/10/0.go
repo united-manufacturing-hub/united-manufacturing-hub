@@ -214,6 +214,9 @@ func checkIfColumnExists(colName, tableName string, db *sql.DB) (bool, error) {
 func migrateComponentTable(db *sql.DB, idMap map[int]int) error {
 	// Check if asset_id column exists
 	assetIdExists, err := checkIfColumnExists("asset_id", "componentTable", db)
+	if err != nil {
+		return err
+	}
 	if !assetIdExists {
 		zap.S().Info("Asset_id column does not exist in componentTable. Skipping migration")
 		return nil
