@@ -21,7 +21,7 @@ func SetupDB(
 	sslmode string) *sql.DB {
 
 	psqlInfo := fmt.Sprintf(
-		"host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=%s",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		PQHost,
 		PQPort,
 		PQUser,

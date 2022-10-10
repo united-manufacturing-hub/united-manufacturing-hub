@@ -121,6 +121,10 @@ func getLatestMigration(db *sql.DB) Semver {
 	if err != nil {
 		zap.S().Fatalf("Error getting latest migration: %s", err)
 	}
+	hasResults := result.Next()
+	if !hasResults {
+		zap.S().Fatalf("Error getting latest migration: No results")
+	}
 	var major, minor, patch int
 	err = result.Scan(&major, &minor, &patch)
 	if err != nil {
@@ -130,9 +134,15 @@ func getLatestMigration(db *sql.DB) Semver {
 }
 
 func checkForAnyMigration(db *sql.DB) bool {
+	createMigrationTableIfNotExists(db)
 	result, err := db.Query("SELECT count(1) FROM migrationtable")
 	if err != nil {
 		zap.S().Fatalf("Error checking for any migration: %s", err)
+	}
+	hasResults := result.Next()
+	if !hasResults {
+		zap.S().Warnf("No migrations found")
+		return false
 	}
 	var count int
 	err = result.Scan(&count)
@@ -142,8 +152,27 @@ func checkForAnyMigration(db *sql.DB) bool {
 	return count > 0
 }
 
+func createMigrationTableIfNotExists(db *sql.DB) {
+	creationCommand := `CREATE TABLE IF NOT EXISTS migrationTable
+    (
+        id SERIAL PRIMARY KEY,
+        fromMajor int NOT NULL,
+        fromMinor int NOT NULL,
+        fromPatch int NOT NULL,
+        toMajor int NOT NULL,
+        toMinor int NOT NULL,
+        toPatch int NOT NULL,
+        timestamp TIMESTAMPTZ NOT NULL,
+        unique (fromMajor, fromMinor, fromPatch, toMajor, toMinor, toPatch)
+    );`
+	_, err := db.Exec(creationCommand)
+	if err != nil {
+		zap.S().Fatalf("Error creating migration table: %s", err)
+	}
+}
+
 func applyMigrations(last Semver, current Semver, db *sql.DB) {
-	if !checkIfNewer(last, current) {
+	if checkIfNewer(last, current) {
 		zap.S().Infof("No migrations to apply")
 		return
 	}
