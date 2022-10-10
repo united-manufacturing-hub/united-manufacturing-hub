@@ -226,6 +226,10 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 									continue
 								}
 								value = float64(parseInt)
+							} else if valAsStr == "true" {
+								value = 1
+							} else if valAsStr == "false" {
+								value = 0
 							} else {
 								zap.S().Warnf("error parsing %s as float64: %s\n", valAsStr, err)
 								discardCounter++
