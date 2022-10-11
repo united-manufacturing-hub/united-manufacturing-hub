@@ -5,6 +5,7 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/automigrate/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/automigrate/migrations"
 	"go.uber.org/zap"
 	"net/http"
@@ -81,7 +82,7 @@ func setupPostgres(health healthcheck.Handler) *sql.DB {
 		zap.S().Warnf("Postgres SSL mode is set to %s", PQSSLMode)
 	}
 
-	return SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, PQSSLMode)
+	return database.SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, PQSSLMode)
 }
 
 func main() {
@@ -94,5 +95,5 @@ func main() {
 	}
 	migrations.Migrate(helmVersion, db)
 
-	ShutdownDB(db)
+	database.ShutdownDB(db)
 }

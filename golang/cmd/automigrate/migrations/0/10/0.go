@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/automigrate/database"
 	"go.uber.org/zap"
 )
 
@@ -197,67 +198,139 @@ func createNewTables(db *sql.DB) error {
 func migrateOtherTables(db *sql.DB, idMap map[int]int) error {
 	err := migrateComponentTable(db, idMap)
 	if err != nil {
+		zap.S().Errorf("Error while migrating component table: %v", err)
+		return err
+	}
+	err = migrateCountTable(db, idMap)
+	if err != nil {
+		zap.S().Errorf("Error while migrating count table: %v", err)
 		return err
 	}
 	return nil
 }
 
-func checkIfColumnExists(colName, tableName string, db *sql.DB) (bool, error) {
-	var assetIdExists bool
-	err := db.QueryRow("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = " + tableName + " AND column_name = '" + colName + "')").Scan(&assetIdExists)
-	if err != nil {
-		return false, err
-	}
-	return assetIdExists, nil
-}
-
-func migrateComponentTable(db *sql.DB, idMap map[int]int) error {
-	// Check if asset_id column exists
-	assetIdExists, err := checkIfColumnExists("asset_id", "componentTable", db)
-	if err != nil {
-		return err
-	}
-	if !assetIdExists {
-		zap.S().Info("Asset_id column does not exist in componentTable. Skipping migration")
-		return nil
-	}
-
-	var dropConstraintCommand = `
-	ALTER TABLE componentTable DROP CONSTRAINT componenttable_asset_id_fkey;
-	`
-	_, err = db.Exec(dropConstraintCommand)
-	if err != nil {
-		return err
-	}
-
-	var insertAddColumnCommand = `
-	ALTER TABLE componentTable ADD COLUMN workCellId int;
-	ALTER TABLE componenttable ADD CONSTRAINT componenttable_workCellId_componentname_key UNIQUE (workCellId, componentname);
-	ALTER TABLE componenttable ADD CONSTRAINT componenttable_workCellId_fkey FOREIGN KEY (workCellId) REFERENCES workCellTable (id);
-`
-	_, err = db.Exec(insertAddColumnCommand)
-	if err != nil {
-		return err
-	}
-
-	// Migrate data from asset_id to workCellId
+func AssetIdToWorkCellIdConverter(tableName string, db *sql.DB, idMap map[int]int) error {
+	var err error
 	for oldId, newId := range idMap {
-		_, err = db.Exec("UPDATE componentTable SET workCellId = $1 WHERE asset_id = $2", newId, oldId)
+		_, err = db.Exec(fmt.Sprintf("UPDATE %s SET workCellId = %s WHERE asset_id = %s", tableName, newId, oldId))
 		if err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	// Drop asset_id column
-	var dropColumnCommand = `
-	ALTER TABLE componenttable DROP CONSTRAINT componenttable_asset_id_componentname_key;
-	ALTER TABLE componentTable DROP COLUMN asset_id;
-	`
-
-	_, err = db.Exec(dropColumnCommand)
+func migrateComponentTable(db *sql.DB, idMap map[int]int) error {
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "componenttable", db)
 	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
 		return err
 	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in componenttable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("componenttable_asset_id_fkey", "componenttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.AddIntColumn("workCellId", "componenttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+	err = database.AddUniqueConstraint(
+		"componenttable_workCellId_componentname_key",
+		"componenttable",
+		[]string{"workCellId", "componentname"},
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding unique constraint: %v", err)
+		return err
+	}
+	err = database.AddFKConstraint(
+		"componenttable_workCellId_fkey",
+		"componenttable",
+		"workCellId",
+		"workCellTable",
+		"id",
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+
+	err = AssetIdToWorkCellIdConverter("componenttable", db, idMap)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+
+	err = database.DropTableConstraint("componenttable_asset_id_componentname_key", "componenttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id unique constraint: %v", err)
+		return err
+	}
+	err = database.DropColumn("asset_id", "componenttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func migrateCountTable(db *sql.DB, idMap map[int]int) error {
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "counttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
+		return err
+	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in counttable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("counttable_asset_id_fkey", "counttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.DropTableConstraint("counttable_timestamp_asset_id_key", "counttable", db)
+
+	err = database.AddIntColumn("workCellId", "counttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+	err = database.AddUniqueConstraint(
+		"counttable_workcellid_timestamp_key",
+		"counttable",
+		[]string{"workCellId", "timestamp"},
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding unique constraint: %v", err)
+		return err
+	}
+	err = database.AddFKConstraint("counttable_workcellid_fkey", "counttable", "workCellId", "workCellTable", "id", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+
+	err = AssetIdToWorkCellIdConverter("counttable", db, idMap)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+
+	err = database.DropColumn("asset_id", "counttable", db)
 
 	return nil
 }
