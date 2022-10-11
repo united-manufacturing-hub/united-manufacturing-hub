@@ -1,0 +1,22 @@
+apiVersion: k3d.io/v1alpha4
+kind: Simple
+metadata:
+  name: united-manufacturing-hub
+servers: 1
+agents: 2
+kubeAPI:
+  hostIP: "127.0.0.1" # where the Kubernetes API will be listening on
+  hostPort: "6445" # where the Kubernetes API listening port will be mapped to on your host system
+image: rancher/k3s:v1.23.8-k3s1
+registries:
+  create:
+    name: docker-io # name of the registry container
+    proxy:
+      remoteURL: https://registry-1.docker.io # proxy DockerHub
+    volumes:
+      - /tmp/reg:/var/lib/registry # persist data locally in /tmp/reg
+  config: | # tell K3s to use this registry when pulling from DockerHub
+    mirrors:
+      "docker.io":
+        endpoint:
+          - http://docker-io:5000
