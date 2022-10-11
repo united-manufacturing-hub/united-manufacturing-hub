@@ -212,7 +212,7 @@ func migrateOtherTables(db *sql.DB, idMap map[int]int) error {
 func AssetIdToWorkCellIdConverter(tableName string, db *sql.DB, idMap map[int]int) error {
 	var err error
 	for oldId, newId := range idMap {
-		_, err = db.Exec(fmt.Sprintf("UPDATE %s SET workCellId = %s WHERE asset_id = %s", tableName, newId, oldId))
+		_, err = db.Exec(fmt.Sprintf("UPDATE %s SET workCellId = %d WHERE asset_id = %d", tableName, newId, oldId))
 		if err != nil {
 			return err
 		}
@@ -303,6 +303,10 @@ func migrateCountTable(db *sql.DB, idMap map[int]int) error {
 	}
 
 	err = database.DropTableConstraint("counttable_timestamp_asset_id_key", "counttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping timestamp_asset_id unique constraint: %v", err)
+		return err
+	}
 
 	err = database.AddIntColumn("workCellId", "counttable", db)
 	if err != nil {
@@ -331,6 +335,9 @@ func migrateCountTable(db *sql.DB, idMap map[int]int) error {
 	}
 
 	err = database.DropColumn("asset_id", "counttable", db)
-
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
 	return nil
 }
