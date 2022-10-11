@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine3.16 as builder
+FROM python:3.10.7-slim-bullseye as runner
 
 WORKDIR /app
 
