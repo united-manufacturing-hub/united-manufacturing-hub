@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
@@ -9,12 +10,18 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
 var buildtime string
+var shutdownEnabled bool
+
+// initialize channels for incoming messages
+var processorChannel = make(chan *kafka.Message, 100)
 
 func main() {
 	// zap logging
@@ -33,6 +40,7 @@ func main() {
 	// pod liveness check
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
+	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
 	go func() {
 		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
@@ -41,9 +49,6 @@ func main() {
 		}
 	}()
 	zap.S().Debugf("Starting queue processor")
-
-	// initialize channels for incoming messages
-	processorChannel := make(chan *kafka.Message, 100)
 
 	//start up a kafka thing
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
@@ -63,13 +68,34 @@ func main() {
 
 	go processing(processorChannel)
 
-	for {
-		<-internal.KafkaProducer.Events()
-	}
+	go event()
+
+	// Allow graceful shutdown
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	go func() {
+		// before you trapped SIGTERM your process would
+		// have exited, so we are now on borrowed time.
+		//
+		// Kubernetes sends SIGTERM 30 seconds before
+		// shutting down the pod.
+
+		sig := <-sigs
+
+		// Log the received signal
+		zap.S().Infof("Received SIGTERM", sig)
+
+		// ... close TCP connections here.
+		ShutdownApplicationGraceful()
+
+	}()
+
+	select {} // block forever
 }
 
 func consume(processorChannel chan *kafka.Message) {
-	for {
+	for !shutdownEnabled {
 		message, err := internal.KafkaConsumer.ReadMessage(5)
 		if err != nil {
 			// This is fine, and expected behaviour
@@ -139,6 +165,37 @@ func processing(processorChannel chan *kafka.Message) {
 			if err != nil {
 				zap.S().Warnf("Failed to produce new topic structure %s, %s", err, *message.TopicPartition.Topic)
 			}
+
 		}
+	}
+}
+
+func isShutdownEnabled() healthcheck.Check {
+	return func() error {
+		if shutdownEnabled {
+			return fmt.Errorf("shutdown")
+		}
+		return nil
+	}
+}
+
+func ShutdownApplicationGraceful() {
+	zap.S().Infof("Shutting down application")
+	shutdownEnabled = true
+
+	for len(processorChannel) > 0 {
+		time.Sleep(time.Second)
+	}
+
+	zap.S().Infof("Successful shutdown. Exiting.")
+
+	// Gracefully exit.
+	// (Use runtime.GoExit() if you need to call defers)
+	os.Exit(0)
+}
+
+func event() {
+	for {
+		<-internal.KafkaProducer.Events()
 	}
 }

@@ -148,6 +148,15 @@ _000_commonConfig:
       sslCertificatePem: |-
         -----BEGIN CERTIFICATE-----
         -----END CERTIFICATE-----
+    kafkatopicupdater:
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+
     kafkatopostgresql:
 
       sslKeyPassword: ""
@@ -251,6 +260,9 @@ _000_commonConfig:
 #        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$
 
   kafkaStateDetector:
+    enabled: false
+
+  kafkatopicupdater:
     enabled: false
 
 _001_customMicroservices:
@@ -2184,6 +2196,30 @@ kafkatoblob:
   pdb:
     enabled: true
     minAvailable: 1
+
+
+### kafka-topic-updater ###
+
+kafkatopicupdater:
+  image:
+    repository: unitedmanufacturinghub/kafka-topic-updater
+    pullPolicy: IfNotPresent
+  replicas: 1
+  annotations: {}
+  resources:
+    limits:
+      cpu: 200m
+      memory: 200Mi
+    requests:
+      cpu: 50m
+      memory: 50Mi
+
+
+
+
+
+
+
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
