@@ -135,6 +135,9 @@ func AddUniqueConstraint(constraintName, tableName string, colNames []string, db
 	if err != nil {
 		return err
 	}
+	if constraintExists {
+		return nil
+	}
 	_, err = db.Exec(
 		fmt.Sprintf(
 			`ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s)`, tableName, constraintName, strings.Join(

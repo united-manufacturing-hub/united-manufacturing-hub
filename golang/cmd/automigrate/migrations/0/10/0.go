@@ -206,6 +206,11 @@ func migrateOtherTables(db *sql.DB, idMap map[int]int) error {
 		zap.S().Errorf("Error while migrating count table: %v", err)
 		return err
 	}
+	err = migrateOrderTable(db, idMap)
+	if err != nil {
+		zap.S().Errorf("Error while migrating order table: %v", err)
+		return err
+	}
 	return nil
 }
 
@@ -335,6 +340,58 @@ func migrateCountTable(db *sql.DB, idMap map[int]int) error {
 	}
 
 	err = database.DropColumn("asset_id", "counttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
+	return nil
+}
+
+func migrateOrderTable(db *sql.DB, idMap map[int]int) error {
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "ordertable", db)
+	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
+		return err
+	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in ordertable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("ordertable_asset_id_fkey", "ordertable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.AddIntColumn("workCellId", "ordertable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+	err = database.AddUniqueConstraint(
+		"ordertable_workCellId_ordername_key",
+		"ordertable",
+		[]string{"workCellId", "order_name"},
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding unique constraint: %v", err)
+		return err
+	}
+	err = database.AddFKConstraint("ordertable_workCellId_fkey", "ordertable", "workCellId", "workCellTable", "id", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+
+	err = AssetIdToWorkCellIdConverter("ordertable", db, idMap)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+
+	err = database.DropColumn("asset_id", "ordertable", db)
 	if err != nil {
 		zap.S().Errorf("Error while dropping asset_id column: %v", err)
 		return err
