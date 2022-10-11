@@ -8,13 +8,13 @@ import (
 )
 
 type getMethodsRequest struct {
-	EnterpriseName     string `json:"enterpriseName"`
-	SiteName           string `json:"siteName"`
-	AreaName           string `json:"areaName"`
-	ProductionLineName string `json:"productionLineName"`
-	WorkCellName       string `json:"workCellName"`
-	TagGroupName       string `json:"tagGroupName"`
-	TagName            string `json:"tagName"`
+	EnterpriseName     string `uri:"enterpriseName" binding:"required"`
+	SiteName           string `uri:"siteName" binding:"required"`
+	AreaName           string `uri:"areaName" binding:"required"`
+	ProductionLineName string `uri:"productionLineName" binding:"required"`
+	WorkCellName       string `uri:"workCellName" binding:"required"`
+	TagGroupName       string `uri:"tagGroupName" binding:"required"`
+	TagName            string `uri:"tagName" binding:"required"`
 }
 
 func GetMethodsHandler(c *gin.Context) {
