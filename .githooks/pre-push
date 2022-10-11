@@ -5,17 +5,27 @@ cwd=$(pwd)
 # shellcheck disable=SC2046
 cd $(git rev-parse --show-toplevel)/golang || exit 1
 
-while true; do
-  fieldalignment -fix  ./...
-  if [ $? -eq 0 ]; then
-    break
-  fi
+go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+# Try 10 times to do fieldalignment
+for _ in $(seq 1 10) ; do
+  fieldalignment -fix  ./... 2> /dev/null
 done
 
 go install golang.org/x/vuln/cmd/govulncheck@latest
-govulncheck ./...
+if govulncheck ./...; then
+  echo "govulncheck: no vulnerabilities found"
+else
+  echo "Vulnerabilities found"
+  exit 1
+fi
 
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.1-0.20220903190357-db4955a3bb7e
-golangci-lint run ./...
+if golangci-lint run ./...; then
+  echo "golangci-lint: no issues found"
+else
+  echo "Linting failed"
+  exit 1
+fi
+
 
 cd "$cwd" || exit 1
