@@ -19,7 +19,7 @@ else
   exit 1
 fi
 
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.1-0.20220903190357-db4955a3bb7e
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 if golangci-lint run ./...; then
   echo "golangci-lint: no issues found"
 else
