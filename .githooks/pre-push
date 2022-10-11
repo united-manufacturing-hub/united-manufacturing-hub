@@ -1,4 +1,13 @@
-#!/bin/sh
+#!/bin/env bash
+
+goVersion=$(go version | grep -o '1\.[0-9]*\.[0-9]*')
+# shellcheck disable=SC2206
+goVersionArray=(${goVersion//./ })
+
+if [ "${goVersionArray[1]}" -lt 19 ]; then
+    echo "Go version must be at least 1.19"
+    exit 1
+fi
 
 cwd=$(pwd)
 
