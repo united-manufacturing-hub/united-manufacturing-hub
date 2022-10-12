@@ -8,3 +8,8 @@ type Area struct {
 type GetAreasResponse struct {
 	Areas []Area `json:"areas"`
 }
+
+type GetAreasRequest struct {
+	EnterpriseName string `uri:"enterpriseName" binding:"required"`
+	SiteName       string `uri:"siteName" binding:"required"`
+}

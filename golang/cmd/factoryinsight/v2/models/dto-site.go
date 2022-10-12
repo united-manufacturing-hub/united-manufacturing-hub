@@ -7,3 +7,7 @@ type Site struct {
 type GetSitesResponse struct {
 	Sites []Site `json:"sites"`
 }
+
+type GetSiteRequest struct {
+	EnterpriseName string `uri:"enterpriseName" binding:"required"`
+}

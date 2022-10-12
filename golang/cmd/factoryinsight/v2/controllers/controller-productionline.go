@@ -10,14 +10,8 @@ import (
 	"net/http"
 )
 
-type getProductionLineRequest struct {
-	EnterpriseName string `uri:"enterpriseName" binding:"required"`
-	SiteName       string `uri:"siteName" binding:"required"`
-	AreaName       string `uri:"areaName" binding:"required"`
-}
-
 func GetProductionLinesHandler(c *gin.Context) {
-	var request getProductionLineRequest
+	var request models.GetProductionLineRequest
 	var productionLines models.GetProductionLinesResponse
 
 	err := c.BindUri(&request)

@@ -10,13 +10,9 @@ import (
 	"net/http"
 )
 
-type getSiteRequest struct {
-	EnterpriseName string `uri:"enterpriseName" binding:"required"`
-}
-
 // GetSitesHandler handles a GET request to /api/v2/{enterprise}
 func GetSitesHandler(c *gin.Context) {
-	var request getSiteRequest
+	var request models.GetSiteRequest
 	var sites models.GetSitesResponse
 
 	err := c.BindUri(&request)

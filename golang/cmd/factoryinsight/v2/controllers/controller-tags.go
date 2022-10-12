@@ -8,16 +8,8 @@ import (
 	"net/http"
 )
 
-type getTagGroupsRequest struct {
-	EnterpriseName     string `uri:"enterpriseName" binding:"required"`
-	SiteName           string `uri:"siteName" binding:"required"`
-	AreaName           string `uri:"areaName" binding:"required"`
-	ProductionLineName string `uri:"productionLineName" binding:"required"`
-	WorkCellName       string `uri:"workCellName" binding:"required"`
-}
-
 func GetTagGroupsHandler(c *gin.Context) {
-	var request getTagGroupsRequest
+	var request models.GetTagGroupsRequest
 	var tagGroups models.GetTagGroupsResponse
 
 	err := c.BindUri(&request)
@@ -40,4 +32,40 @@ func GetTagGroupsHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tagGroups)
+}
+
+func GetTagsHandler(c *gin.Context) {
+	var request models.GetTagsRequest
+	var tags models.GetTagsResponse
+
+	err := c.BindUri(&request)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	// Check if the user has access to that resource
+	err = helpers.CheckIfUserIsAllowed(c, request.EnterpriseName)
+	if err != nil {
+		return
+	}
+
+	switch request.TagGroupName {
+	case "standard":
+		tags, err = services.GetStandardTags()
+	case "custom":
+		tags, err = services.GetCustomTags(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName, request.TagGroupName)
+	case "raw": // TODO: Properly handle raw tags
+		return
+	default:
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, tags)
 }

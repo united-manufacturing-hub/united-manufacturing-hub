@@ -10,13 +10,8 @@ import (
 	"net/http"
 )
 
-type getAreasRequest struct {
-	EnterpriseName string `uri:"enterpriseName" binding:"required"`
-	SiteName       string `uri:"siteName" binding:"required"`
-}
-
 func GetAreasHandler(c *gin.Context) {
-	var request getAreasRequest
+	var request models.GetAreasRequest
 	var areas models.GetAreasResponse
 
 	err := c.BindUri(request)

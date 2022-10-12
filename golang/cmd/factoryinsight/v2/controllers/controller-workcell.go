@@ -10,15 +10,8 @@ import (
 	"net/http"
 )
 
-type getWorkCellsRequest struct {
-	EnterpriseName     string `uri:"enterpriseName" binding:"required"`
-	SiteName           string `uri:"siteName" binding:"required"`
-	AreaName           string `uri:"areaName" binding:"required"`
-	ProductionLineName string `uri:"productionLineName" binding:"required"`
-}
-
 func GetWorkCellsHandler(c *gin.Context) {
-	var request getWorkCellsRequest
+	var request models.GetWorkCellsRequest
 	var workCells models.GetWorkCellsResponse
 
 	err := c.BindUri(&request)
