@@ -34,3 +34,16 @@ type GetTagsRequest struct {
 	WorkCellName       string `uri:"workCellName" binding:"required"`
 	TagGroupName       string `uri:"tagGroupName" binding:"required"`
 }
+
+const (
+	CustomTagGroup   string = "custom"
+	StandardTagGroup string = "standard"
+)
+
+const (
+	JobsStandardTag       string = "jobs"
+	OutputStandardTag     string = "output"
+	ShiftsStandardTag     string = "shifts"
+	StateStandardTag      string = "state"
+	ThroughputStandardTag string = "throughput"
+)
