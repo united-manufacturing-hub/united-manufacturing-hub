@@ -75,7 +75,7 @@ func ShutdownDB(db *sql.DB) {
 	}
 }
 
-func CheckIfColumnExists(colName, tableName string, db *sql.DB) (bool, error) {
+func CheckIfColumnExists(colName, tableName string, db *sql.Tx) (bool, error) {
 	var assetIdExists bool
 	err := db.QueryRow(
 		`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2)`,
@@ -88,22 +88,22 @@ func CheckIfColumnExists(colName, tableName string, db *sql.DB) (bool, error) {
 	return assetIdExists, nil
 }
 
-func DropTableConstraint(constraintName string, tableName string, db *sql.DB) error {
+func DropTableConstraint(constraintName string, tableName string, db *sql.Tx) error {
 	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", tableName, constraintName))
 	return err
 }
 
-func DropColumn(colName, tableName string, db *sql.DB) error {
+func DropColumn(colName, tableName string, db *sql.Tx) error {
 	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s", tableName, colName))
 	return err
 }
 
-func AddIntColumn(colName, tableName string, db *sql.DB) error {
+func AddIntColumn(colName, tableName string, db *sql.Tx) error {
 	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s int", tableName, colName))
 	return err
 }
 
-func AddFKConstraint(constraintName, tableName, colName, fkTableName, fkColName string, db *sql.DB) error {
+func AddFKConstraint(constraintName, tableName, colName, fkTableName, fkColName string, db *sql.Tx) error {
 	// skip if constraint already exists
 	var constraintExists bool
 	err := db.QueryRow(
@@ -126,7 +126,7 @@ func AddFKConstraint(constraintName, tableName, colName, fkTableName, fkColName 
 	return err
 }
 
-func AddUniqueConstraint(constraintName, tableName string, colNames []string, db *sql.DB) error {
+func AddUniqueConstraint(constraintName, tableName string, colNames []string, db *sql.Tx) error {
 	// check if constraint already exists
 	var constraintExists bool
 	err := db.QueryRow(

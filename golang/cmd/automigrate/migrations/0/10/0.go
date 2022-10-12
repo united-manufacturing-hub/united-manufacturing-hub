@@ -5,44 +5,59 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/deckarep/golang-set"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/automigrate/database"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"math/rand"
+	"sync"
 )
 
 func V0x10x0(db *sql.DB) error {
 	zap.S().Infof("Applying migration 0.10.0")
 
-	zap.S().Infof("Creating new tables")
-	err := createNewTables(db)
+	// Open transaction
+	tx, err := db.Begin()
 	if err != nil {
+		zap.S().Fatalf("Error while opening transaction: %v", err)
+	}
+
+	zap.S().Infof("Creating new tables")
+	err = createNewTables(tx)
+	if err != nil {
+		tx.Rollback()
 		zap.S().Fatalf("Error while creating new tables: %v", err)
 	}
 	zap.S().Infof("Created new tables")
 
 	zap.S().Infof("Migrating asset table")
-	var assetIdMap map[int]int
-	assetIdMap, err = migrateAssetTable(db)
+	err = migrateAssetTable(tx)
 	if err != nil {
+		tx.Rollback()
 		zap.S().Fatalf("Error while migrating asset table: %v", err)
 	}
 	zap.S().Infof("Migrated asset table")
 
 	zap.S().Infof("Migrating value names")
-	var valueNameMap map[string]int
-	valueNameMap, err = createProcessValueNameEntriesFromPVandPVS(db)
+	err = createProcessValueNameEntriesFromPVandPVS(tx)
 	if err != nil {
+		tx.Rollback()
 		zap.S().Fatalf("Error while migrating value names: %v", err)
 	}
 	zap.S().Infof("Migrated value names")
 
 	zap.S().Infof("Migrating other tables to new ids")
-	err = migrateOtherTables(db, &assetIdMap, &valueNameMap)
+	err = migrateOtherTables(tx)
 	if err != nil {
+		tx.Rollback()
 		zap.S().Fatalf("Error while migrating other tables: %v", err)
 	}
 	zap.S().Infof("Migrated other tables to new ids")
+
+	err = tx.Commit()
+	if err != nil {
+		zap.S().Fatalf("Error while committing transaction: %v", err)
+	}
 
 	return errors.New("not implemented")
 }
@@ -55,7 +70,13 @@ type AssetTable struct {
 	id       int
 }
 
-func migrateAssetTable(db *sql.DB) (map[int]int, error) {
+var pvNMap = make(map[string]int)
+var pvNMapRWMutex = sync.RWMutex{}
+
+var assetIdMap = make(map[int]int)
+var assetIdMapRWMutex = sync.RWMutex{}
+
+func migrateAssetTable(db *sql.Tx) error {
 	//assetTable.customer -> enterpriseTable.name
 	//assetTable.location -> siteTable.name
 	//assetTable.assetid -> workCellTable.name
@@ -65,7 +86,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 	// Get all assets
 	rows, err := db.Query("SELECT * FROM assetTable")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 
@@ -75,7 +96,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 		var row AssetTable
 		err = rows.Scan(&row.id, &row.assetid, &row.location, &row.customer)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		// Calculate SHA256
 
@@ -88,7 +109,6 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 	}
 
 	// Map of old asset id to new asset id
-	var assetIdMap = make(map[int]int)
 
 	// Insert all assets into new tables
 	for _, asset := range assets {
@@ -96,7 +116,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 		_, err = db.Exec("INSERT INTO enterpriseTable (name) VALUES ($1) ON CONFLICT do nothing ", asset.customer)
 		if err != nil {
 			zap.S().Errorf("Error while inserting enterprise: %v", err)
-			return nil, err
+			return err
 		}
 
 		// Insert site
@@ -106,7 +126,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 			asset.customer)
 		if err != nil {
 			zap.S().Errorf("Error while inserting site: %v", err)
-			return nil, err
+			return err
 		}
 
 		// Insert area
@@ -117,7 +137,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 			asset.customer)
 		if err != nil {
 			zap.S().Errorf("Error while inserting area: %v", err)
-			return nil, err
+			return err
 		}
 
 		// Insert production line
@@ -127,7 +147,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 			"defaultArea"+asset.shaSum)
 		if err != nil {
 			zap.S().Errorf("Error while inserting production line: %v", err)
-			return nil, err
+			return err
 		}
 
 		// Insert work cell
@@ -137,7 +157,7 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 			"defaultProductionLine"+asset.shaSum)
 		if err != nil {
 			zap.S().Errorf("Error while inserting work cell: %v", err)
-			return nil, err
+			return err
 		}
 
 		// Get new asset id
@@ -149,112 +169,191 @@ func migrateAssetTable(db *sql.DB) (map[int]int, error) {
 
 		if err != nil {
 			zap.S().Errorf("Error while getting new asset id: %v", err)
-			return nil, err
+			return err
 		}
 		// Add to map
+		assetIdMapRWMutex.Lock()
 		assetIdMap[asset.id] = newAssetId
+		assetIdMapRWMutex.Unlock()
 	}
 
-	return assetIdMap, nil
+	return nil
 }
 
-func createProcessValueNameEntriesFromPVandPVS(db *sql.DB) (map[string]int, error) {
-	processValueNamesSet := mapset.NewSet()
+func createProcessValueNameEntriesFromPVandPVS(db *sql.Tx) error {
+	processValueNames := make([]string, 0)
 
 	zap.S().Infof("Getting process values names")
 	// Get all distinct process value names
 	rows, err := db.Query("SELECT DISTINCT valuename FROM processValueTable")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	zap.S().Infof("Scanning process values names")
 	for rows.Next() {
 		var processValueName string
 		err = rows.Scan(&processValueName)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		processValueNamesSet.Add(processValueName)
+		processValueNames = append(processValueNames, processValueName)
 	}
 
 	zap.S().Infof("Getting process value string names")
 	// Get all distinct process value string names
 	rows, err = db.Query("SELECT DISTINCT valuename FROM processValueStringTable")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	zap.S().Infof("Scanning process value string names")
 	for rows.Next() {
 		var processValueName string
 		err = rows.Scan(&processValueName)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		processValueNamesSet.Add(processValueName)
+		processValueNames = append(processValueNames, processValueName)
 	}
 
-	// Check if lenght of processValueNameTable is equal to processValueNamesSet
+	// Check if length of processValueNameTable is equal to processValueNames
 	var processValueNameTableLength int
 	err = db.QueryRow("SELECT COUNT(*) FROM processValueNameTable").Scan(&processValueNameTableLength)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var pvNMap = make(map[string]int)
 
-	if processValueNameTableLength == processValueNamesSet.Cardinality() {
-		zap.S().Infof("Process value name table already up to date")
-		// Get all process value names and there ids and put them into pvNMap
-		rows, err = db.Query("SELECT * FROM processValueNameTable")
+	if processValueNameTableLength != len(processValueNames) {
+
+		zap.S().Infof("Inserting %d process value names", len(processValueNames))
+		// insert process value names set and get there ids
+
+		var prepCopy *sql.Stmt
+		prepCopy, err = db.Prepare(pq.CopyIn("tmp_processValueNameTable", "name"))
 		if err != nil {
-			return nil, err
+			zap.S().Errorf("Error while preparing copy: %v", err)
+			return err
 		}
-		for rows.Next() {
-			var id int
-			var name string
-			err = rows.Scan(&id, &name)
-			if err != nil {
-				return nil, err
-			}
-			pvNMap[name] = id
-		}
-		return pvNMap, nil
-	}
 
-	zap.S().Infof("Inserting %d process value names", processValueNamesSet.Cardinality())
-	// insert process value names set and get there ids
-	for processValueName := range processValueNamesSet.Iter() {
+		var prepSelectAll *sql.Stmt
+		prepSelectAll, err = db.Prepare("SELECT id, name FROM processValueNameTable")
+
+		defer func(stmt1, stmt2 *sql.Stmt) {
+			if err := stmt1.Close(); err != nil {
+				zap.S().Errorf("Error while closing prepared statement: %v", err)
+			}
+			if err := stmt2.Close(); err != nil {
+				zap.S().Errorf("Error while closing prepared statement: %v", err)
+			}
+		}(prepCopy, prepSelectAll)
+
+		// deduplicate processValueNames
+		zap.S().Infof("Deduplicating process value names")
+		processValueNames = deduplicate(processValueNames)
+
+		// Shuffling
+		for i := range processValueNames {
+			j := rand.Intn(i + 1)
+			processValueNames[i], processValueNames[j] = processValueNames[j], processValueNames[i]
+		}
+
+		zap.S().Infof("Inserting process value names into work channel")
+		var cvChan = make(chan string, len(processValueNames))
+		for i := 0; i < len(processValueNames); i++ {
+			cvChan <- processValueNames[i]
+		}
+
+		var wg sync.WaitGroup
+		var threads = 90
+		wg.Add(threads)
+		zap.S().Infof("Starting %d threads", threads)
+		for i := 0; i < threads; i++ {
+			go concurrentInsertScan(cvChan, prepCopy, &wg)
+		}
+		wg.Wait()
+		zap.S().Infof("All threads finished")
+
+		// Copy tmp table to processValueNameTable
+		zap.S().Infof("Copying tmp table to processValueNameTable")
+		_, err = db.Exec("INSERT INTO processValueNameTable (name) (SELECT name FROM tmp_processValueNameTable) ON CONFLICT do nothing")
+
+	}
+	zap.S().Infof("Getting all process value names")
+	// Get all process value names and there ids and put them into pvNMap
+	rows, err = db.Query("SELECT * FROM processValueNameTable")
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
 		var id int
-		err = db.QueryRow(
-			"INSERT INTO processValueNameTable (name) VALUES ($1) RETURNING id",
-			processValueName).Scan(&id)
+		var name string
+		err = rows.Scan(&id, &name)
 		if err != nil {
-			// cast err to sql error
-			sqlErr, ok := err.(*pq.Error)
-			if !ok {
-				zap.S().Errorf("Error while casting error to sql error: %v", err)
-				return nil, err
-			}
-			// if error is unique_violation, get id of process value name
-			if sqlErr.Code == "23505" {
-				err = db.QueryRow(
-					"SELECT id FROM processValueNameTable WHERE name = $1",
-					processValueName).Scan(&id)
-				if err != nil {
-					zap.S().Errorf("Error while getting id of process value name: %v", err)
-					return nil, err
-				}
-			} else {
-				zap.S().Errorf("Error while inserting process value name: %v", err)
-				return nil, err
-			}
+			return err
 		}
-		pvNMap[processValueName.(string)] = id
+		pvNMapRWMutex.Lock()
+		pvNMap[name] = id
+		pvNMapRWMutex.Unlock()
 	}
+	return nil
 
-	return pvNMap, nil
 }
 
-func createNewTables(db *sql.DB) error {
+func deduplicate[T comparable](s []T) []T {
+	inResult := make(map[T]bool)
+	var result []T
+	for _, str := range s {
+		if _, ok := inResult[str]; !ok {
+			inResult[str] = true
+			result = append(result, str)
+		}
+	}
+	return result
+}
+
+var concurrentInsertScanCounterAtomic = atomic.NewInt32(0)
+
+func concurrentInsertScan(cvChan chan string, prepCopy *sql.Stmt, s *sync.WaitGroup) {
+
+	var err error
+
+	for {
+
+		select {
+		case x, ok := <-cvChan:
+			if ok {
+				_, err = prepCopy.Exec(x)
+				if err != nil {
+					// cast err to sql error
+					sqlErr, ok := err.(*pq.Error)
+					if !ok {
+						zap.S().Fatalf("Error while casting error to sql error: %v", err)
+					}
+					// if error is unique_violation, get id of process value name
+					if sqlErr.Code == "23505" {
+						continue
+					} else {
+						zap.S().Fatalf("Error while inserting process value name: %v", err)
+					}
+				}
+				concurrentInsertScanCounterAtomic.Add(1)
+				if current := concurrentInsertScanCounterAtomic.Load(); current%1000 == 0 {
+					zap.S().Infof("Inserted %d process value names", current)
+				}
+			} else {
+				zap.S().Infof("Channel closed!")
+				s.Done()
+				return
+			}
+		default:
+			zap.S().Infof("Channel empty!, returining")
+			s.Done()
+			return
+		}
+	}
+
+}
+
+func createNewTables(db *sql.Tx) error {
 	var creationCommand = `
     CREATE TABLE IF NOT EXISTS enterpriseTable (
         id SERIAL PRIMARY KEY,
@@ -301,23 +400,23 @@ func createNewTables(db *sql.DB) error {
 	return err
 }
 
-func migrateOtherTables(db *sql.DB, idMap *map[int]int, nameMap *map[string]int) error {
-	err := migrateComponentTable(db, idMap)
+func migrateOtherTables(db *sql.Tx) error {
+	err := migrateComponentTable(db)
 	if err != nil {
 		zap.S().Errorf("Error while migrating component table: %v", err)
 		return err
 	}
-	err = migrateCountTable(db, idMap)
+	err = migrateCountTable(db)
 	if err != nil {
 		zap.S().Errorf("Error while migrating count table: %v", err)
 		return err
 	}
-	err = migrateOrderTable(db, idMap)
+	err = migrateOrderTable(db)
 	if err != nil {
 		zap.S().Errorf("Error while migrating order table: %v", err)
 		return err
 	}
-	err = migrateProcessValueTable(db, idMap, nameMap)
+	err = migrateProcessValueTable(db)
 	if err != nil {
 		zap.S().Errorf("Error while migrating process value table: %v", err)
 		return err
@@ -325,9 +424,11 @@ func migrateOtherTables(db *sql.DB, idMap *map[int]int, nameMap *map[string]int)
 	return nil
 }
 
-func AssetIdToWorkCellIdConverter(tableName string, db *sql.DB, idMap *map[int]int) error {
+func AssetIdToWorkCellIdConverter(tableName string, db *sql.Tx) error {
 	var err error
-	for oldId, newId := range *idMap {
+	assetIdMapRWMutex.RLock()
+	defer assetIdMapRWMutex.RUnlock()
+	for oldId, newId := range assetIdMap {
 		_, err = db.Exec(fmt.Sprintf("UPDATE %s SET workCellId = %d WHERE asset_id = %d", tableName, newId, oldId))
 		if err != nil {
 			return err
@@ -336,7 +437,7 @@ func AssetIdToWorkCellIdConverter(tableName string, db *sql.DB, idMap *map[int]i
 	return nil
 }
 
-func migrateComponentTable(db *sql.DB, idMap *map[int]int) error {
+func migrateComponentTable(db *sql.Tx) error {
 	// Check if asset_id column exists
 	assetIdExists, err := database.CheckIfColumnExists("asset_id", "componenttable", db)
 	if err != nil {
@@ -380,7 +481,7 @@ func migrateComponentTable(db *sql.DB, idMap *map[int]int) error {
 		return err
 	}
 
-	err = AssetIdToWorkCellIdConverter("componenttable", db, idMap)
+	err = AssetIdToWorkCellIdConverter("componenttable", db)
 	if err != nil {
 		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
 		return err
@@ -400,7 +501,7 @@ func migrateComponentTable(db *sql.DB, idMap *map[int]int) error {
 	return nil
 }
 
-func migrateCountTable(db *sql.DB, idMap *map[int]int) error {
+func migrateCountTable(db *sql.Tx) error {
 	// Check if asset_id column exists
 	assetIdExists, err := database.CheckIfColumnExists("asset_id", "counttable", db)
 	if err != nil {
@@ -444,7 +545,7 @@ func migrateCountTable(db *sql.DB, idMap *map[int]int) error {
 		return err
 	}
 
-	err = AssetIdToWorkCellIdConverter("counttable", db, idMap)
+	err = AssetIdToWorkCellIdConverter("counttable", db)
 	if err != nil {
 		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
 		return err
@@ -458,7 +559,7 @@ func migrateCountTable(db *sql.DB, idMap *map[int]int) error {
 	return nil
 }
 
-func migrateOrderTable(db *sql.DB, idMap *map[int]int) error {
+func migrateOrderTable(db *sql.Tx) error {
 	// Check if asset_id column exists
 	assetIdExists, err := database.CheckIfColumnExists("asset_id", "ordertable", db)
 	if err != nil {
@@ -496,7 +597,7 @@ func migrateOrderTable(db *sql.DB, idMap *map[int]int) error {
 		return err
 	}
 
-	err = AssetIdToWorkCellIdConverter("ordertable", db, idMap)
+	err = AssetIdToWorkCellIdConverter("ordertable", db)
 	if err != nil {
 		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
 		return err
@@ -510,41 +611,49 @@ func migrateOrderTable(db *sql.DB, idMap *map[int]int) error {
 	return nil
 }
 
-func migrateProcessValueTable(db *sql.DB, idMap *map[int]int, nameMap *map[string]int) error {
+func migrateProcessValueTable(db *sql.Tx) error {
+	return migrateProcessXTable("processvaluetable", db)
+}
+
+func migrateProcessValueStringTable(db *sql.Tx) error {
+	return migrateProcessXTable("processvaluetable", db)
+}
+
+func migrateProcessXTable(tableName string, db *sql.Tx) error {
 	// Check if asset_id column exists
-	assetIdExists, err := database.CheckIfColumnExists("asset_id", "processvaluetable", db)
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
 		return err
 	}
 	if !assetIdExists {
-		zap.S().Info("Asset_id column does not exist in processvaluetable. Skipping migration")
+		zap.S().Info("Asset_id column does not exist in " + tableName + ". Skipping migration")
 		return nil
 	}
 
 	// Drop asset_id foreign key constraint
-	err = database.DropTableConstraint("processvaluetable_asset_id_fkey", "processvaluetable", db)
+	err = database.DropTableConstraint(tableName+"_asset_id_fkey", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
 		return err
 	}
 
 	// Drop timestamp,asset_id,valuename unique constraint
-	err = database.DropTableConstraint("processvaluetable_timestamp_asset_id_valuename_key", "processvaluetable", db)
+	err = database.DropTableConstraint(tableName+"_timestamp_asset_id_valuename_key", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while dropping timestamp_asset_id unique constraint: %v", err)
 		return err
 	}
 
 	// Add workCellId column
-	err = database.AddIntColumn("workCellId", "processvaluetable", db)
+	err = database.AddIntColumn("workCellId", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while adding workCellId column: %v", err)
 		return err
 	}
 
 	// Add valueNameId column
-	err = database.AddIntColumn("valueNameId", "processvaluetable", db)
+	err = database.AddIntColumn("valueNameId", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while adding valueNameId column: %v", err)
 		return err
@@ -552,8 +661,8 @@ func migrateProcessValueTable(db *sql.DB, idMap *map[int]int, nameMap *map[strin
 
 	// Add unique constraint
 	err = database.AddUniqueConstraint(
-		"processvaluetable_workcellid_timestamp_valuenameid_key",
-		"processvaluetable",
+		tableName+"_workcellid_timestamp_valuenameid_key",
+		tableName,
 		[]string{"workCellId", "timestamp", "valueNameId"},
 		db)
 	if err != nil {
@@ -563,8 +672,8 @@ func migrateProcessValueTable(db *sql.DB, idMap *map[int]int, nameMap *map[strin
 
 	// Add foreign key constraint for workCellId
 	err = database.AddFKConstraint(
-		"processvaluetable_workcellid_fkey",
-		"processvaluetable",
+		tableName+"_workcellid_fkey",
+		tableName,
 		"workCellId",
 		"workCellTable",
 		"id",
@@ -576,8 +685,8 @@ func migrateProcessValueTable(db *sql.DB, idMap *map[int]int, nameMap *map[strin
 
 	// Add foreign key constraint for valueNameId
 	err = database.AddFKConstraint(
-		"processvaluetable_valuenameid_fkey",
-		"processvaluetable",
+		tableName+"_valuenameid_fkey",
+		tableName,
 		"valueNameId",
 		"valuename",
 		"id",
@@ -589,27 +698,27 @@ func migrateProcessValueTable(db *sql.DB, idMap *map[int]int, nameMap *map[strin
 
 	// Convert asset_id to workCellId and valuename to valueNameId
 	// This might not work with the new FK constraint from valueNameId
-	err = AssetIdToWorkCellIdConverter("processvaluetable", db, idMap)
+	err = AssetIdToWorkCellIdConverter(tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
 		return err
 	}
 
-	err = ValueNameToValueNameIdConverter("processvaluetable", db, nameMap)
+	err = ValueNameToValueNameIdConverter(tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while converting valuename to valueNameId: %v", err)
 		return err
 	}
 
 	// Drop valuename column
-	err = database.DropColumn("valuename", "processvaluetable", db)
+	err = database.DropColumn("valuename", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while dropping valuename column: %v", err)
 		return err
 	}
 
 	// Drop asset_id column
-	err = database.DropColumn("asset_id", "processvaluetable", db)
+	err = database.DropColumn("asset_id", tableName, db)
 	if err != nil {
 		zap.S().Errorf("Error while dropping asset_id column: %v", err)
 		return err
@@ -618,9 +727,11 @@ func migrateProcessValueTable(db *sql.DB, idMap *map[int]int, nameMap *map[strin
 	return nil
 }
 
-func ValueNameToValueNameIdConverter(originTable string, db *sql.DB, nameMap *map[string]int) error {
+func ValueNameToValueNameIdConverter(originTable string, db *sql.Tx) error {
 	var err error
-	for name, id := range *nameMap {
+	pvNMapRWMutex.RLock()
+	defer pvNMapRWMutex.RUnlock()
+	for name, id := range pvNMap {
 		_, err = db.Exec(fmt.Sprintf("UPDATE %s SET valuenameid = %d WHERE valuename = '%s'", originTable, id, name))
 		if err != nil {
 			zap.S().Errorf("Error while converting valuename to valueNameId: %v", err)
