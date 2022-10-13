@@ -238,17 +238,19 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		// Get all data format for a given work cell
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", V2controllers.GetDataFormatHandler)
 		// Get all tag groups for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Tags", V2controllers.GetTagGroupsHandler)
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags", V2controllers.GetTagGroupsHandler)
 		// Get all tags for a given tag group
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Tags/:tagGroupName", V2controllers.GetTagsHandler)
-		// Get all methods for a given tag
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Tags/:tagGroupName/:tagName", V2controllers.GetTagsDataHandler)
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName", V2controllers.GetTagsHandler)
+		// Get specific data for a give work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName", V2controllers.GetTagsDataHandler)
 		// Get KPIs methods for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/KPIs", V2controllers.GetKpisMethodsHandler)
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis", V2controllers.GetKpisMethodsHandler)
 		// Get specific KPI data for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/KPIs/:kpisMethod", V2controllers.GetKpisDataHandler)
-		// Get all lists for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Lists/")
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod", V2controllers.GetKpisDataHandler)
+		// Get tables types for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables", V2controllers.GetTableTypesHandler)
+		// Get specific table data for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType", V2controllers.GetTableDataHandler)
 	}
 	//dataFormat
 	err := router.Run(":80")
