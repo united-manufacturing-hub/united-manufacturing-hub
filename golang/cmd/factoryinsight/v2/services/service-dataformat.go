@@ -22,23 +22,24 @@ func GetDataFormats(
 		workCellName,
 	)
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
+	var enterpriseId, siteId, areaId, productionLineId, workCellId uint32
+	enterpriseId, err = GetEnterpriseId(enterpriseName)
 	if err != nil {
 		return
 	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
+	siteId, err = GetSiteId(enterpriseId, siteName)
 	if err != nil {
 		return
 	}
-	areaId, err := GetAreaId(siteId, areaName)
+	areaId, err = GetAreaId(siteId, areaName)
 	if err != nil {
 		return
 	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	productionLineId, err = GetProductionLineId(areaId, productionLineName)
 	if err != nil {
 		return
 	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	workCellId, err = GetWorkCellId(productionLineId, workCellName)
 	if err != nil {
 		return
 	}
