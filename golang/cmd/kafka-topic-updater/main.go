@@ -1,14 +1,20 @@
 package main
 
 import (
-	"errors"
+	"encoding/json"
+	_ "errors"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	_ "github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/pkg/errors"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	_ "github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
+	_ "net/http"
 	"os"
 	"os/signal"
 	"regexp"
@@ -77,14 +83,11 @@ func main() {
 	go func() {
 		// before you trapped SIGTERM your process would
 		// have exited, so we are now on borrowed time.
-		//
-		// Kubernetes sends SIGTERM 30 seconds before
-		// shutting down the pod.
 
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Received SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM %s", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
@@ -134,39 +137,125 @@ func processing(processorChannel chan *kafka.Message) {
 				*message.TopicPartition.Topic = strings.Replace(*message.TopicPartition.Topic, "ia.raw", "umh.v1.defaultEnterprise.defaultSite.defaultArea.defaultProductionLine.defaultWorkCell.raw.raw", 1)
 			case topicinfo.Topic == "count":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product.add"
+				var payload datamodel.Count
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case count: %s", err)
+				}
+				// producttypeid is not present in the current message structure, but required in the new one, so it declares 1234
+				var producttypeid uint64 = 1234
+				newpayload := datamodel.Productadd{Timestampend: payload.TimestampMs, Producttypeid: producttypeid, Scrap: payload.Scrap, Totalamount: payload.Count}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addOrder":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.add"
+				var payload datamodel.AddOrder
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case addOrder: %s", err)
+				}
+				newpayload := datamodel.Jobadd{ProductType: payload.ProductId, Jobid: payload.OrderId, Targetamount: payload.TargetUnits}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "startOrder":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.start"
+				var payload datamodel.StartOrder
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case startOrder: %s", err)
+				}
+				newpayload := datamodel.Jobstart{Jobid: payload.OrderId, Timestampbegin: payload.TimestampMs}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "endOrder":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.end"
+				var payload datamodel.EndOrder
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case endOrder: %s", err)
+				}
+				newpayload := datamodel.Jobend{TimestampEnd: payload.TimestampMs, Jobid: payload.OrderId}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addShift":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.shift.add"
+				var payload datamodel.AddShift
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case addShift: %s", err)
+				}
+				newpayload := datamodel.Shiftadd{Timestampbegin: payload.TimestampMs, Timestampend: payload.TimestampMsEnd}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "deleteShift":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.shift.delete"
+				var payload datamodel.DeleteShift
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case deleteShift: %s", err)
+				}
+				newpayload := datamodel.Shiftdelete{Timestampbegin: payload.TimeStampMs}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addProduct":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product-type.add"
+				var payload datamodel.AddProduct
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case addProduct: %s", err)
+				}
+				newpayload := datamodel.Producttypeadd{ProductId: payload.ProductId, Cycletimeinseconds: payload.TimePerUnitInSeconds}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "modifyProducedPieces":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product.overwrite"
+				var payload datamodel.ModifyProducedPieces
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case modifyProducedPieces: %s", err)
+				}
+				newpayload := datamodel.Productoverwrite{Timestampend: payload.TimestampMs, Totalamount: payload.Count, Scrap: payload.Scrap}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "state":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.add"
+				var payload datamodel.State
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case state: %s", err)
+				}
+				newpayload := datamodel.Stateadd{Timestampbegin: payload.TimestampMs, State: payload.State}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "modifyState":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.overwrite"
+				var payload datamodel.ModifyState
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case modifyState: %s", err)
+				}
+				newpayload := datamodel.Stateoverwrite{Timestampbegin: payload.StartTimeStampMs, Timestampend: payload.EndTimeStampMs, State: uint64(payload.NewState)}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "activity":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.activity"
+				var payload datamodel.Activity
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case activity: %s", err)
+				}
+				newpayload := datamodel.Stateactivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "detectedAnomaly":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.add"
+				var payload datamodel.Activity
+				err := json.Unmarshal(message.Value, &payload)
+				if err != nil {
+					zap.S().Errorf("Error unmarshaling json: case activity: %s", err)
+				}
+				newpayload := datamodel.Stateactivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
+				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "processValue":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
 			case topicinfo.Topic == "processValueString":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
 			}
-			err := internal.KafkaProducer.Produce(message, nil)
-			if err != nil {
-				zap.S().Warnf("Failed to produce new topic structure %s, %s", err, *message.TopicPartition.Topic)
-			}
-
 		}
+		err := internal.KafkaProducer.Produce(message, nil)
+		if err != nil {
+			zap.S().Warnf("Failed to produce new topic structure %s, %s", err, *message.TopicPartition.Topic)
+		}
+
 	}
 }
 
