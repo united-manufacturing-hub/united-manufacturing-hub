@@ -10,6 +10,9 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 /*
@@ -72,8 +75,7 @@ func setupPostgres(health healthcheck.Handler) *sql.DB {
 	// Postgres
 	PQHost := os.Getenv("POSTGRES_HOST")
 	PQPort := 5432
-	PQUser := os.Getenv("POSTGRES_USER")
-	PQPassword := os.Getenv("POSTGRES_PASSWORD")
+	PQPassword := os.Getenv("PATRONI_SUPERUSER_PASSWORD")
 	PWDBName := os.Getenv("POSTGRES_DATABASE")
 	PQSSLMode := os.Getenv("POSTGRES_SSLMODE")
 	if PQSSLMode == "" {
@@ -82,18 +84,57 @@ func setupPostgres(health healthcheck.Handler) *sql.DB {
 		zap.S().Warnf("Postgres SSL mode is set to %s", PQSSLMode)
 	}
 
-	return database.SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, PQSSLMode)
+	return database.SetupDB(PQPassword, PWDBName, PQHost, PQPort, health, PQSSLMode)
 }
+
+var shuttingDown bool
 
 func main() {
 	health := setupLoggingMetricsHealthcheck()
 	db := setupPostgres(health)
 
-	helmVersion, ok := migrations.StringToSemver(os.Getenv("VERSION"))
-	if !ok {
-		zap.S().Fatalf("VERSION is not a valid semver: %s", os.Getenv("VERSION"))
-	}
-	migrations.Migrate(helmVersion, db)
+	go AwaitNewHelmVersionAndApplyMigrations(db)
 
-	database.ShutdownDB(db)
+	// Allow graceful shutdown
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	go func() {
+		// before you trapped SIGTERM your process would
+		// have exited, so we are now on borrowed time.
+		//
+		// Kubernetes sends SIGTERM 30 seconds before
+		// shutting down the pod.
+
+		sig := <-sigs
+
+		// Log the received signal
+		zap.S().Infof("Received SIGTERM: %d", sig)
+		shuttingDown = true
+		database.ShutdownDB(db)
+
+	}()
+
+	select {} // block forever
+}
+
+func AwaitNewHelmVersionAndApplyMigrations(db *sql.DB) {
+	var lastVersion migrations.Semver
+	for !shuttingDown {
+
+		helmVersion, ok := migrations.StringToSemver(os.Getenv("VERSION"))
+		if !ok {
+			zap.S().Fatalf("VERSION is not a valid semver: %s", os.Getenv("VERSION"))
+		}
+
+		if migrations.CheckIfLastIsNewerOrSameAsCurrent(lastVersion, helmVersion) {
+			zap.S().Infof("Last version is newer or same as current version, skipping migration")
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		migrations.Migrate(helmVersion, db)
+
+		time.Sleep(10 * time.Second)
+	}
 }

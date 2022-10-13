@@ -13,7 +13,6 @@ import (
 
 // SetupDB setups the db and stores the handler in a global variable in database.go
 func SetupDB(
-	PQUser string,
 	PQPassword string,
 	PWDBName string,
 	PQHost string,
@@ -22,10 +21,9 @@ func SetupDB(
 	sslmode string) *sql.DB {
 
 	psqlInfo := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%d user=postgres password=%s dbname=%s sslmode=%s",
 		PQHost,
 		PQPort,
-		PQUser,
 		PQPassword,
 		PWDBName,
 		sslmode)
@@ -115,6 +113,7 @@ func AddFKConstraint(constraintName, tableName, colName, fkTableName, fkColName 
 	if constraintExists {
 		return nil
 	}
+	zap.S().Infof("Adding FK constraint %v to table %v", constraintName, tableName)
 	_, err = db.Exec(
 		fmt.Sprintf(
 			"ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",

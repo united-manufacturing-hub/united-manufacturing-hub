@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 type Semver struct {
@@ -104,7 +105,7 @@ func Migrate(current Semver, db *sql.DB) {
 	}
 }
 
-func checkIfNewer(last Semver, current Semver) bool {
+func CheckIfLastIsNewerOrSameAsCurrent(last Semver, current Semver) bool {
 	if last.Major < current.Major {
 		return false
 	}
@@ -172,7 +173,7 @@ func createMigrationTableIfNotExists(db *sql.DB) {
 }
 
 func applyMigrations(last Semver, current Semver, db *sql.DB) {
-	if checkIfNewer(last, current) {
+	if CheckIfLastIsNewerOrSameAsCurrent(last, current) {
 		zap.S().Infof("No migrations to apply")
 		return
 	}
@@ -186,6 +187,23 @@ func applyMigrations(last Semver, current Semver, db *sql.DB) {
 		zap.S().Fatalf("Error applying migrations: %s", err)
 	}
 
+	// Update migration table
+	updateMigrationTable(last, current, db)
+}
+
+func updateMigrationTable(last Semver, current Semver, db *sql.DB) {
+	_, err := db.Exec(
+		"INSERT INTO migrationtable (fromMajor, fromMinor, fromPatch, toMajor, toMinor, toPatch, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		last.Major,
+		last.Minor,
+		last.Patch,
+		current.Major,
+		current.Minor,
+		current.Patch,
+		time.Now())
+	if err != nil {
+		zap.S().Fatalf("Error updating migration table: %s", err)
+	}
 }
 
 type migrationfunc func(db *sql.DB) error
@@ -266,8 +284,8 @@ func SliceBetweenVersions(L *List, oldVersion Semver, newVersion Semver) *List {
 	var newList List
 	l := L.head
 	for l != nil {
-		if checkIfNewer(l.version, oldVersion) {
-			if !checkIfNewer(l.version, newVersion) {
+		if CheckIfLastIsNewerOrSameAsCurrent(l.version, oldVersion) {
+			if !CheckIfLastIsNewerOrSameAsCurrent(l.version, newVersion) {
 				newList.Insert(l.migration, l.version)
 			}
 		}

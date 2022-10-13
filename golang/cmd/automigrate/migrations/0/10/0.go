@@ -3,7 +3,6 @@ package _10
 import (
 	"crypto/sha256"
 	"database/sql"
-	"errors"
 	"fmt"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/automigrate/database"
@@ -13,53 +12,73 @@ import (
 	"sync"
 )
 
-func V0x10x0(db *sql.DB) error {
-	zap.S().Infof("Applying migration 0.10.0")
-
-	// Open transaction
+func GetTx(db *sql.DB) *sql.Tx {
 	tx, err := db.Begin()
 	if err != nil {
 		zap.S().Fatalf("Error while opening transaction: %v", err)
 	}
+	return tx
+}
+
+func V0x10x0(db *sql.DB) error {
+	zap.S().Infof("Applying migration 0.10.0")
 
 	zap.S().Infof("Creating new tables")
-	err = createNewTables(tx)
+	txCNT := GetTx(db)
+	err := createNewTables(txCNT)
 	if err != nil {
-		tx.Rollback()
+		errX := txCNT.Rollback()
+		if errX != nil {
+			zap.S().Errorf("Error while rolling back transaction: %v", err)
+		}
 		zap.S().Fatalf("Error while creating new tables: %v", err)
+	}
+	errX := txCNT.Commit()
+	if errX != nil {
+		zap.S().Errorf("Error while commiting back transaction: %v", err)
 	}
 	zap.S().Infof("Created new tables")
 
 	zap.S().Infof("Migrating asset table")
-	err = migrateAssetTable(tx)
+	txAT := GetTx(db)
+	err = migrateAssetTable(txAT)
 	if err != nil {
-		tx.Rollback()
+		errX = txAT.Rollback()
+		if errX != nil {
+			zap.S().Errorf("Error while rolling back transaction: %v", err)
+		}
 		zap.S().Fatalf("Error while migrating asset table: %v", err)
+	}
+	errX = txAT.Commit()
+	if errX != nil {
+		zap.S().Errorf("Error while rolling back transaction: %v", err)
 	}
 	zap.S().Infof("Migrated asset table")
 
 	zap.S().Infof("Migrating value names")
-	err = createProcessValueNameEntriesFromPVandPVS(tx)
+	err = createProcessValueNameEntriesFromPVandPVS(db)
 	if err != nil {
-		tx.Rollback()
 		zap.S().Fatalf("Error while migrating value names: %v", err)
 	}
 	zap.S().Infof("Migrated value names")
 
 	zap.S().Infof("Migrating other tables to new ids")
-	err = migrateOtherTables(tx)
+	txOT := GetTx(db)
+	err = migrateOtherTables(txOT)
 	if err != nil {
-		tx.Rollback()
+		errX = txOT.Rollback()
+		if errX != nil {
+			zap.S().Errorf("Error while rolling back transaction: %v", err)
+		}
 		zap.S().Fatalf("Error while migrating other tables: %v", err)
+	}
+	errX = txOT.Commit()
+	if errX != nil {
+		zap.S().Errorf("Error while rolling back transaction: %v", err)
 	}
 	zap.S().Infof("Migrated other tables to new ids")
 
-	err = tx.Commit()
-	if err != nil {
-		zap.S().Fatalf("Error while committing transaction: %v", err)
-	}
-
-	return errors.New("not implemented")
+	return nil
 }
 
 type AssetTable struct {
@@ -70,7 +89,7 @@ type AssetTable struct {
 	id       int
 }
 
-var pvNMap = make(map[string]int)
+var pvNMap map[string]int
 var pvNMapRWMutex = sync.RWMutex{}
 
 var assetIdMap = make(map[int]int)
@@ -180,71 +199,121 @@ func migrateAssetTable(db *sql.Tx) error {
 	return nil
 }
 
-func createProcessValueNameEntriesFromPVandPVS(db *sql.Tx) error {
+func createProcessValueNameEntriesFromPVandPVS(db *sql.DB) error {
+	// check if valuename exists in processvalue table
+
+	txPV := GetTx(db)
+	pvNeedsMigration, err := database.CheckIfColumnExists("valuename", "processvaluetable", txPV)
+	if err != nil {
+		zap.S().Errorf("Error while checking if column exists: %v", err)
+		return err
+	}
+	err = txPV.Commit()
+	if err != nil {
+		zap.S().Errorf("Error while committing transaction: %v", err)
+		return err
+	}
+
+	txPVS := GetTx(db)
+	pvsNeedsMigration, err := database.CheckIfColumnExists("valuename", "processvaluestringtable", txPVS)
+	if err != nil {
+		zap.S().Errorf("Error while checking if column exists: %v", err)
+		return err
+	}
+	err = txPVS.Commit()
+	if err != nil {
+		zap.S().Errorf("Error while committing transaction: %v", err)
+		return err
+	}
+
+	if !pvNeedsMigration && !pvsNeedsMigration {
+		zap.S().Info("No migration needed for processvalue and processvaluestring table")
+		return nil
+	}
+
 	processValueNames := make([]string, 0)
 
-	zap.S().Infof("Getting process values names")
-	// Get all distinct process value names
-	rows, err := db.Query("SELECT DISTINCT valuename FROM processValueTable")
-	if err != nil {
-		return err
-	}
-	zap.S().Infof("Scanning process values names")
-	for rows.Next() {
-		var processValueName string
-		err = rows.Scan(&processValueName)
+	var rows *sql.Rows
+	if pvNeedsMigration {
+		zap.S().Infof("Getting process values names")
+		// Get all distinct process value names
+		rows, err = db.Query("SELECT DISTINCT valuename FROM processValueTable")
 		if err != nil {
+			zap.S().Errorf("Error while getting process value names: %v", err)
 			return err
 		}
-		processValueNames = append(processValueNames, processValueName)
+		zap.S().Infof("Scanning process values names")
+		for rows.Next() {
+			var processValueName string
+			err = rows.Scan(&processValueName)
+			if err != nil {
+				zap.S().Errorf("Error while scanning process value name: %v", err)
+				return err
+			}
+			processValueNames = append(processValueNames, processValueName)
+		}
 	}
 
-	zap.S().Infof("Getting process value string names")
-	// Get all distinct process value string names
-	rows, err = db.Query("SELECT DISTINCT valuename FROM processValueStringTable")
-	if err != nil {
-		return err
-	}
-	zap.S().Infof("Scanning process value string names")
-	for rows.Next() {
-		var processValueName string
-		err = rows.Scan(&processValueName)
+	if pvsNeedsMigration {
+		zap.S().Infof("Getting process value string names")
+		// Get all distinct process value string names
+		rows, err = db.Query("SELECT DISTINCT valuename FROM processValueStringTable")
 		if err != nil {
 			return err
 		}
-		processValueNames = append(processValueNames, processValueName)
+		zap.S().Infof("Scanning process value string names")
+		for rows.Next() {
+			var processValueName string
+			err = rows.Scan(&processValueName)
+			if err != nil {
+				zap.S().Errorf("Error while scanning process value string name: %v", err)
+				return err
+			}
+			processValueNames = append(processValueNames, processValueName)
+		}
 	}
 
 	// Check if length of processValueNameTable is equal to processValueNames
 	var processValueNameTableLength int
-	err = db.QueryRow("SELECT COUNT(*) FROM processValueNameTable").Scan(&processValueNameTableLength)
+	err = db.QueryRow("SELECT COUNT(1) FROM processValueNameTable").Scan(&processValueNameTableLength)
 	if err != nil {
 		return err
 	}
 
+	var threads = 90
+	var count int
+	if processValueNameTableLength > len(processValueNames) {
+		count = processValueNameTableLength
+	} else {
+		count = len(processValueNames)
+	}
+	zap.S().Infof("Count of process value names: %d", count)
+
 	if processValueNameTableLength != len(processValueNames) {
+		var tx *sql.Tx
+		tx, err = db.Begin()
+		if err != nil {
+			return err
+		}
+		zap.S().Infof(
+			"Creating process value name entries (%d vs %d)",
+			processValueNameTableLength,
+			len(processValueNames))
+		// Create tmp_processValueNameTable
+		_, err = tx.Exec("CREATE TEMP TABLE tmp_processvaluenametable (LIKE processValueNameTable INCLUDING DEFAULTS) ON COMMIT DROP")
+		if err != nil {
+			return err
+		}
 
 		zap.S().Infof("Inserting %d process value names", len(processValueNames))
 		// insert process value names set and get there ids
 
 		var prepCopy *sql.Stmt
-		prepCopy, err = db.Prepare(pq.CopyIn("tmp_processValueNameTable", "name"))
+		prepCopy, err = tx.Prepare(pq.CopyIn("tmp_processvaluenametable", "name"))
 		if err != nil {
 			zap.S().Errorf("Error while preparing copy: %v", err)
 			return err
 		}
-
-		var prepSelectAll *sql.Stmt
-		prepSelectAll, err = db.Prepare("SELECT id, name FROM processValueNameTable")
-
-		defer func(stmt1, stmt2 *sql.Stmt) {
-			if err := stmt1.Close(); err != nil {
-				zap.S().Errorf("Error while closing prepared statement: %v", err)
-			}
-			if err := stmt2.Close(); err != nil {
-				zap.S().Errorf("Error while closing prepared statement: %v", err)
-			}
-		}(prepCopy, prepSelectAll)
 
 		// deduplicate processValueNames
 		zap.S().Infof("Deduplicating process value names")
@@ -263,7 +332,6 @@ func createProcessValueNameEntriesFromPVandPVS(db *sql.Tx) error {
 		}
 
 		var wg sync.WaitGroup
-		var threads = 90
 		wg.Add(threads)
 		zap.S().Infof("Starting %d threads", threads)
 		for i := 0; i < threads; i++ {
@@ -271,31 +339,83 @@ func createProcessValueNameEntriesFromPVandPVS(db *sql.Tx) error {
 		}
 		wg.Wait()
 		zap.S().Infof("All threads finished")
-
+		err = prepCopy.Close()
+		if err != nil {
+			zap.S().Errorf("Error while closing copy: %v", err)
+			return err
+		}
 		// Copy tmp table to processValueNameTable
 		zap.S().Infof("Copying tmp table to processValueNameTable")
-		_, err = db.Exec("INSERT INTO processValueNameTable (name) (SELECT name FROM tmp_processValueNameTable) ON CONFLICT do nothing")
+		_, err = tx.Exec("INSERT INTO processValueNameTable (name) (SELECT name FROM tmp_processvaluenametable) ON CONFLICT do nothing")
 
+		err = tx.Commit()
+		if err != nil {
+			zap.S().Errorf("Error while committing: %v", err)
+			return err
+		}
+
+	} else {
+		zap.S().Infof("Process value names already in database")
 	}
-	zap.S().Infof("Getting all process value names")
-	// Get all process value names and there ids and put them into pvNMap
-	rows, err = db.Query("SELECT * FROM processValueNameTable")
+
+	zap.S().Infof("Pre-allocating map for %d process value names", count)
+	pvNMapRWMutex.Lock()
+	pvNMap = make(map[string]int, count)
+	pvNMapRWMutex.Unlock()
+
+	// Divide count by threads
+	var chunkSize = count / threads
+	var remainder = count % threads
+
+	zap.S().Infof("Preparing name select statement")
+	// prepare select statement with chunk size
+	var prepSelect *sql.Stmt
+	prepSelect, err = db.Prepare("SELECT id, name FROM processValueNameTable LIMIT $1 OFFSET $2")
 	if err != nil {
+		zap.S().Errorf("Error while preparing select: %v", err)
 		return err
 	}
+	zap.S().Infof("Finished preparing name select statement")
+
+	var wg sync.WaitGroup
+	zap.S().Infof("Starting %d threads", threads)
+	wg.Add(threads)
+	for i := 0; i < threads; i++ {
+		if i == threads-1 {
+			go concurrentGetProcessValueNames(i*chunkSize, (i+1)*chunkSize+remainder, &wg, prepSelect)
+		} else {
+			go concurrentGetProcessValueNames(i*chunkSize, (i+1)*chunkSize, &wg, prepSelect)
+		}
+	}
+	wg.Wait()
+
+	return nil
+}
+
+func concurrentGetProcessValueNames(offset int, limit int, s *sync.WaitGroup, prepSelect *sql.Stmt) {
+	defer s.Done()
+	rows, err := prepSelect.Query(limit, offset)
+	if err != nil {
+		zap.S().Errorf("Error while querying: %v", err)
+		return
+	}
+	localMap := make(map[string]int, limit)
 	for rows.Next() {
 		var id int
 		var name string
 		err = rows.Scan(&id, &name)
 		if err != nil {
-			return err
+			zap.S().Errorf("Error while scanning: %v", err)
+			return
 		}
-		pvNMapRWMutex.Lock()
-		pvNMap[name] = id
-		pvNMapRWMutex.Unlock()
+		localMap[name] = id
 	}
-	return nil
-
+	pvNMapRWMutex.Lock()
+	for k, v := range localMap {
+		pvNMap[k] = v
+	}
+	pvNMapRWMutex.Unlock()
+	zap.S().Infof("Finished thread %d -> %d", offset, limit)
 }
 
 func deduplicate[T comparable](s []T) []T {
@@ -336,16 +456,14 @@ func concurrentInsertScan(cvChan chan string, prepCopy *sql.Stmt, s *sync.WaitGr
 					}
 				}
 				concurrentInsertScanCounterAtomic.Add(1)
-				if current := concurrentInsertScanCounterAtomic.Load(); current%1000 == 0 {
+				if current := concurrentInsertScanCounterAtomic.Load(); current%10000 == 0 {
 					zap.S().Infof("Inserted %d process value names", current)
 				}
 			} else {
-				zap.S().Infof("Channel closed!")
 				s.Done()
 				return
 			}
 		default:
-			zap.S().Infof("Channel empty!, returining")
 			s.Done()
 			return
 		}
@@ -421,6 +539,241 @@ func migrateOtherTables(db *sql.Tx) error {
 		zap.S().Errorf("Error while migrating process value table: %v", err)
 		return err
 	}
+	err = migrateProcessValueStringTable(db)
+	if err != nil {
+		zap.S().Errorf("Error while migrating process value string table: %v", err)
+		return err
+	}
+	err = migrateProductTable(db)
+	if err != nil {
+		zap.S().Errorf("Error while migrating product table: %v", err)
+		return err
+	}
+	err = migrateShiftTable(db)
+	if err != nil {
+		zap.S().Errorf("Error while migrating shift table: %v", err)
+		return err
+	}
+	err = migrateStateTable(db)
+	if err != nil {
+		zap.S().Errorf("Error while migrating state table: %v", err)
+		return err
+	}
+	err = migrateUniqueProductTable(db)
+	if err != nil {
+		zap.S().Errorf("Error while migrating unique product table: %v", err)
+		return err
+	}
+	return nil
+}
+
+func migrateUniqueProductTable(db *sql.Tx) error {
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "uniqueproducttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
+		return err
+	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in uniqueproducttable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("uniqueproducttable_asset_id_fkey", "uniqueproducttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.AddIntColumn("workCellId", "uniqueproducttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+	err = database.AddFKConstraint(
+		"uniqueproducttable_workcellid_fkey",
+		"uniqueproducttable",
+		"workCellId",
+		"workCellTable",
+		"id",
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+
+	err = AssetIdToWorkCellIdConverter("uniqueproducttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+
+	err = database.DropColumn("asset_id", "uniqueproducttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
+	return nil
+}
+
+func migrateStateTable(db *sql.Tx) error {
+
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "statetable", db)
+	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
+		return err
+	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in statetable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("statetable_asset_id_fkey", "statetable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.AddIntColumn("workCellId", "statetable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+
+	err = database.AddFKConstraint(
+		"statetable_workcellid_fkey",
+		"statetable",
+		"workCellId",
+		"workCellTable",
+		"id",
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+	err = AssetIdToWorkCellIdConverter("statetable", db)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+	err = database.DropColumn("asset_id", "statetable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
+	return nil
+}
+
+func migrateShiftTable(db *sql.Tx) error {
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "shifttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
+		return err
+	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in shifttable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("shifttable_asset_id_fkey", "shifttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.AddIntColumn("workCellId", "shifttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+
+	err = database.AddFKConstraint(
+		"shifttable_workcellid_fkey",
+		"shifttable",
+		"workCellId",
+		"workCellTable",
+		"id",
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+
+	err = AssetIdToWorkCellIdConverter("shifttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+
+	err = database.DropColumn("asset_id", "shifttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
+	return nil
+}
+
+func migrateProductTable(db *sql.Tx) error {
+	// Check if asset_id column exists
+	assetIdExists, err := database.CheckIfColumnExists("asset_id", "producttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while checking if asset_id column exists: %v", err)
+		return err
+	}
+	if !assetIdExists {
+		zap.S().Info("Asset_id column does not exist in producttable. Skipping migration")
+		return nil
+	}
+
+	err = database.DropTableConstraint("producttable_asset_id_fkey", "producttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id foreign key constraint: %v", err)
+		return err
+	}
+
+	err = database.AddIntColumn("workCellId", "producttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while adding workCellId column: %v", err)
+		return err
+	}
+
+	err = database.AddUniqueConstraint(
+		"producttable_product_name_workCellId_key",
+		"producttable",
+		[]string{"product_name", "workCellId"},
+		db)
+	if err != nil {
+		zap.S().Errorf("Error while adding unique constraint on producttable: %v", err)
+		return err
+	}
+
+	err = database.AddFKConstraint(
+		"producttable_workcellid_fkey",
+		"producttable",
+		"workCellId",
+		"workCellTable",
+		"id",
+		db)
+
+	if err != nil {
+
+		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
+		return err
+	}
+
+	err = AssetIdToWorkCellIdConverter("producttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while converting asset_id to workCellId: %v", err)
+		return err
+	}
+
+	err = database.DropColumn("asset_id", "producttable", db)
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset_id column: %v", err)
+		return err
+	}
 	return nil
 }
 
@@ -470,7 +823,7 @@ func migrateComponentTable(db *sql.Tx) error {
 		return err
 	}
 	err = database.AddFKConstraint(
-		"componenttable_workCellId_fkey",
+		"componenttable_workcellid_fkey",
 		"componenttable",
 		"workCellId",
 		"workCellTable",
@@ -591,7 +944,7 @@ func migrateOrderTable(db *sql.Tx) error {
 		zap.S().Errorf("Error while adding unique constraint: %v", err)
 		return err
 	}
-	err = database.AddFKConstraint("ordertable_workCellId_fkey", "ordertable", "workCellId", "workCellTable", "id", db)
+	err = database.AddFKConstraint("ordertable_workcellid_fkey", "ordertable", "workCellId", "workCellTable", "id", db)
 	if err != nil {
 		zap.S().Errorf("Error while adding workCellId foreign key constraint: %v", err)
 		return err
@@ -688,7 +1041,7 @@ func migrateProcessXTable(tableName string, db *sql.Tx) error {
 		tableName+"_valuenameid_fkey",
 		tableName,
 		"valueNameId",
-		"valuename",
+		"processvaluenametable",
 		"id",
 		db)
 	if err != nil {
