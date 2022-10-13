@@ -66,11 +66,11 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		if json.Valid(payload) {
-			zap.S().Debugf("onMessageReceived", topic, payload)
+			zap.S().Debugf("onMessageReceived (%s) [%v]", topic, payload)
 			go storeNewMessageIntoQueue(topic, payload, pg)
 		} else {
 			zap.S().Warnf(
-				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
+				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON (%s) [%v]",
 				topic,
 				payload)
 		}
@@ -86,7 +86,7 @@ func onConnect(c MQTT.Client) {
 // onConnectionLost outputs warn message
 func onConnectionLost(c MQTT.Client, err error) {
 	optionsReader := c.OptionsReader()
-	zap.S().Warnf("Connection lost, restarting", err, optionsReader.ClientID())
+	zap.S().Warnf("Connection lost, restarting (%s) [%s]", err, optionsReader.ClientID())
 	ShutdownApplicationGraceful()
 }
 
@@ -109,7 +109,7 @@ func SetupMQTT(
 			mqttTopic = "$share/MQTT_KAFKA_BRIDGE/ia/#"
 		}
 
-		zap.S().Infof("Running in Kubernetes mode", podName, mqttTopic)
+		zap.S().Infof("Running in Kubernetes mode (%s) (%s)", podName, mqttTopic)
 
 	} else {
 		tlsconfig := newTLSConfig()
@@ -119,14 +119,14 @@ func SetupMQTT(
 			mqttTopic = "ia/#"
 		}
 
-		zap.S().Infof("Running in normal mode", mqttTopic, certificateName)
+		zap.S().Infof("Running in normal mode (%s) (%s)", mqttTopic, certificateName)
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
 	opts.SetOrderMatters(false)
 
-	zap.S().Debugf("Broker configured", mqttBrokerURL, certificateName)
+	zap.S().Debugf("Broker configured (%s) (%s)", mqttBrokerURL, certificateName)
 
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
@@ -191,7 +191,7 @@ func processOutgoingMessages() {
 		// Failed to send MQTT message (or 10x timeout)
 		err = token.Error()
 		if err != nil || !sendMQTT {
-			zap.S().Warnf("Failed to send MQTT message", err, sendMQTT)
+			zap.S().Warnf("Failed to send MQTT message (%s) (%v)", err, sendMQTT)
 			// Try to re-enqueue the message
 			storeMessageIntoQueue(mqttData.Topic, mqttData.Message, mqttOutGoingQueue)
 			// After an error, just wait a bit
