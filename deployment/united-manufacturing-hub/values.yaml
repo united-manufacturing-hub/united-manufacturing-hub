@@ -71,7 +71,7 @@ _000_commonConfig:
     kafka:
       enabled: true
       useSSL: false
-      defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
+      defaultTopics: umh.v1.kafka.newTopic
 
   certificates:
     CACert: |-
@@ -215,14 +215,14 @@ _000_commonConfig:
   mqttBridge:
     enabled: false
     remoteBrokerURL: "ssl://united-manufacturing-hub-vernemq-local-service.united-manufacturing-hub:8883"
-    localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    localPubTopic: "umh/v1"
+    localSubTopic: "umh/v1/factoryinsight"  # /# will be automatically appended to the string specified here.
     oneWay: true
     localBrokerSSLEnabled: false
-    localPubTopic: "ia"
     localCertificateName: "LOCAL"
     remoteBrokerSSLEnabled: true
-    remoteSubTopic: "ia"
-    remotePubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
+    remoteSubTopic: "umh/v1"
+    remotePubTopic: "umh/v1/factoryinsight"  # /# will be automatically appended to the string specified here.
 
     CAcert: |
       -----BEGIN CERTIFICATE-----
@@ -237,18 +237,18 @@ _000_commonConfig:
   kafkaBridge:
     enabled: false
     remotebootstrapServer: ""
-    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic# ; seperated list of topics to create on local broker, if they do not exist
-    topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on remote broker, if they do not exist
+    topicCreationLocalList: umh.v1.kafka.newTopic # ; seperated list of topics to create on local broker, if they do not exist
+    topicCreationRemoteList: umh.v1.kafka.newTopic # ; seperated list of topics to create on remote broker, if they do not exist
     topicmap:
 # Example topic map
 #      - bidirectional: false
-#        name: HighIntegrity
+#        name: Send standard
 #        send_direction: to_remote
-#        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
+#        topic: ^umh\.v1\.([\w\-_]+)\.([\w\-_]+)\.([\w\-_]+)\.([\w\-_]+)\.([\w\-_]+)\.(standard)\.([\w\-_.]+\.?)$
 #      - bidirectional: false
-#        name: HighThroughput
+#        name: Send custom
 #        send_direction: to_remote
-#        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$
+#        topic: ^umh\.v1\.([\w\-_]+)\.([\w\-_]+)\.([\w\-_]+)\.([\w\-_]+)\.([\w\-_]+)\.(custom)\.([\w\-_.]+\.?)$
 
   kafkaStateDetector:
     enabled: false
