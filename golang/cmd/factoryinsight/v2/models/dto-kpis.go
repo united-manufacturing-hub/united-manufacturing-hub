@@ -2,16 +2,16 @@ package models
 
 import "time"
 
-type Kpi struct {
+type KpiMethod struct {
 	Id   int    `json:"id"`
 	Name string `json:"name"`
 }
 
-type GetKpisResponse struct {
-	Kpis []Kpi `json:"oee"`
+type GetKpisMethodsResponse struct {
+	Kpis []KpiMethod `json:"kpis"`
 }
 
-type GetKpisRequest struct {
+type GetKpisMethodsRequest struct {
 	EnterpriseName     string `uri:"enterpriseName" binding:"required"`
 	SiteName           string `uri:"siteName" binding:"required"`
 	AreaName           string `uri:"areaName" binding:"required"`
@@ -28,7 +28,22 @@ type GetKpisDataRequest struct {
 	KpisMethod         string `uri:"kpisMethod" binding:"required"`
 }
 
-type KpiRequest struct {
+type GetOeeKpiRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
+type GetAvailabilityKpiRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
+type GetPerformanceKpiRequest struct {
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
+}
+
+type GetQualityKpiRequest struct {
 	From time.Time `form:"from" binding:"required"`
 	To   time.Time `form:"to" binding:"required"`
 }

@@ -47,29 +47,29 @@ type GetTagsDataRequest struct {
 	TagName            string `uri:"tagName" binding:"required"`
 }
 
-type GetJobRequest struct {
+type GetJobTagRequest struct {
 	From time.Time `json:"from" binding:"required"`
 	To   time.Time `json:"to" binding:"required"`
 }
 
-type GetCountRequest struct {
+type GetCountTagRequest struct {
 	From                time.Time `json:"from" binding:"required"`
 	To                  time.Time `json:"to" binding:"required"`
 	AccumulatedProducts bool      `json:"accumulatedProducts"`
 }
 
-type GetShiftsRequest struct {
+type GetShiftsTagRequest struct {
 	From time.Time `json:"from" binding:"required"`
 	To   time.Time `json:"to" binding:"required"`
 }
 
-type GetStateRequest struct {
+type GetStateTagRequest struct {
 	From              time.Time `form:"from" binding:"required"`
 	To                time.Time `form:"to" binding:"required"`
 	KeepStatesInteger bool      `form:"keepStatesInteger"`
 }
 
-type GetThroughputRequest struct {
+type GetThroughputTagRequest struct {
 	From                time.Time `form:"from" binding:"required"`
 	To                  time.Time `form:"to" binding:"required"`
 	AggregationInterval int       `form:"aggregationInterval"`

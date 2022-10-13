@@ -9,7 +9,7 @@ import (
 	"net/http"
 )
 
-func GetKpis(enterpriseName string, siteName string, areaName string, productionLineName string, workCellName string) (kpis models.GetKpisResponse, err error) {
+func GetKpisMethods(enterpriseName string, siteName string, areaName string, productionLineName string, workCellName string) (kpis models.GetKpisMethodsResponse, err error) {
 
 	enterpriseId, err := GetEnterpriseId(enterpriseName)
 	if err != nil {
@@ -42,10 +42,10 @@ func GetKpis(enterpriseName string, siteName string, areaName string, production
 	}
 
 	if stateExists {
-		kpis.Kpis = append(kpis.Kpis, models.Kpi{Id: 1, Name: models.OeeKpi})
-		kpis.Kpis = append(kpis.Kpis, models.Kpi{Id: 2, Name: models.AvailabilityKpi})
-		kpis.Kpis = append(kpis.Kpis, models.Kpi{Id: 3, Name: models.PerformanceKpi})
-		kpis.Kpis = append(kpis.Kpis, models.Kpi{Id: 4, Name: models.QualityKpi})
+		kpis.Kpis = append(kpis.Kpis, models.KpiMethod{Id: 1, Name: models.OeeKpi})
+		kpis.Kpis = append(kpis.Kpis, models.KpiMethod{Id: 2, Name: models.AvailabilityKpi})
+		kpis.Kpis = append(kpis.Kpis, models.KpiMethod{Id: 3, Name: models.PerformanceKpi})
+		kpis.Kpis = append(kpis.Kpis, models.KpiMethod{Id: 4, Name: models.QualityKpi})
 	}
 
 	return
@@ -61,17 +61,17 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	workCell := request.WorkCellName
 
 	// ### parse query ###
-	var oeeKpiRequest models.KpiRequest
+	var getOeeKpiRequest models.GetOeeKpiRequest
 	var err error
 
-	err = c.BindUri(&oeeKpiRequest)
+	err = c.BindUri(&getOeeKpiRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
-	from := oeeKpiRequest.From
-	to := oeeKpiRequest.To
+	from := getOeeKpiRequest.From
+	to := getOeeKpiRequest.To
 
 	// ### fetch necessary data from database ###
 
@@ -199,17 +199,17 @@ func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataReq
 	workCell := request.WorkCellName
 
 	// ### parse query ###
-	var availabilityKpiRequest models.KpiRequest
+	var getAvailabilityKpiRequest models.GetAvailabilityKpiRequest
 	var err error
 
-	err = c.BindQuery(&availabilityKpiRequest)
+	err = c.BindQuery(&getAvailabilityKpiRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
-	from := availabilityKpiRequest.From
-	to := availabilityKpiRequest.To
+	from := getAvailabilityKpiRequest.From
+	to := getAvailabilityKpiRequest.To
 
 	// ### fetch necessary data from database ###
 
@@ -333,17 +333,17 @@ func ProcessPerformanceKpiRequest(c *gin.Context, request models.GetKpisDataRequ
 	workCell := request.WorkCellName
 
 	// ### parse query ###
-	var performanceKpiRequest models.KpiRequest
+	var getPerformanceKpiRequest models.GetPerformanceKpiRequest
 	var err error
 
-	err = c.BindQuery(&performanceKpiRequest)
+	err = c.BindQuery(&getPerformanceKpiRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
-	from := performanceKpiRequest.From
-	to := performanceKpiRequest.To
+	from := getPerformanceKpiRequest.From
+	to := getPerformanceKpiRequest.To
 
 	// ### fetch necessary data from database ###
 
@@ -467,17 +467,17 @@ func ProcessQualityKpiRequest(c *gin.Context, request models.GetKpisDataRequest)
 	workCell := request.WorkCellName
 
 	// ### parse query ###
-	var qualityKpiRequest models.KpiRequest
+	var getQualityKpiRequest models.GetQualityKpiRequest
 	var err error
 
-	err = c.BindQuery(&qualityKpiRequest)
+	err = c.BindQuery(&getQualityKpiRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
-	from := qualityKpiRequest.From
-	to := qualityKpiRequest.To
+	from := getQualityKpiRequest.From
+	to := getQualityKpiRequest.To
 
 	// ### fetch necessary data from database ###
 

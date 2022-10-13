@@ -9,7 +9,7 @@ import (
 )
 
 func GetKpisMethodsHandler(c *gin.Context) {
-	var request models.GetKpisRequest
+	var request models.GetKpisMethodsRequest
 
 	err := c.BindUri(&request)
 	if err != nil {
@@ -24,7 +24,7 @@ func GetKpisMethodsHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	kpis, err := services.GetKpis(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	kpis, err := services.GetKpisMethods(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
 	// TODO: Better error handling. Check if the error is a database error or a not found error (kpis is empty)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)

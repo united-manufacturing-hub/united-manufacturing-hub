@@ -76,10 +76,10 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	workCellName := request.WorkCellName
 
 	// ### parse query ###
-	var getJobRequest models.GetJobRequest
+	var getJobTagRequest models.GetJobTagRequest
 	var err error
 
-	err = c.BindQuery(&getJobRequest)
+	err = c.BindQuery(&getJobTagRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -92,8 +92,8 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 		request.Customer,
 		request.Location,
 		request.Asset,
-		getJobRequest.From,
-		getJobRequest.To)
+		getJobTagRequest.From,
+		getJobTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -113,11 +113,11 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	workCellName := request.WorkCellName
 
 	// ### parse query ###
-	var getCountRequest models.GetCountRequest
+	var getCountTagRequest models.GetCountTagRequest
 	var err error
 	// var counts ???
 
-	err = c.BindQuery(&getCountRequest)
+	err = c.BindQuery(&getCountTagRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -129,8 +129,8 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		request.Customer,
 		request.Location,
 		request.Asset,
-		getCountRequest.From,
-		getCountRequest.To)
+		getCountTagRequest.From,
+		getCountTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -149,10 +149,10 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	workCellName := request.WorkCellName
 
 	// ### parse query ###
-	var getShiftsRequest models.GetShiftsRequest
+	var getShiftsTagRequest models.GetShiftsTagRequest
 	var err error
 
-	err = c.BindQuery(&getShiftsRequest)
+	err = c.BindQuery(&getShiftsTagRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -163,8 +163,8 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		request.Customer,
 		request.Location,
 		request.Asset,
-		getShiftsRequest.From,
-		getShiftsRequest.To)
+		getShiftsTagRequest.From,
+		getShiftsTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -184,18 +184,18 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	workCellName := request.WorkCellName
 
 	// ### parse query ###
-	var getStateRequest models.GetStateRequest
+	var getStateTagRequest models.GetStateTagRequest
 	var err error
 
-	err = c.BindQuery(&getStateRequest)
+	err = c.BindQuery(&getStateTagRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
-	from := getStateRequest.From
-	to := getStateRequest.To
-	keepStatesInteger := getStateRequest.KeepStatesInteger
+	from := getStateTagRequest.From
+	to := getStateTagRequest.To
+	keepStatesInteger := getStateTagRequest.KeepStatesInteger
 
 	// ### fetch necessary data from database ###
 
@@ -290,28 +290,28 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	workCellName := request.WorkCellName
 
 	// ### parse query ###
-	var getThroughputRequest models.GetThroughputRequest
+	var getThroughputTagRequest models.GetThroughputTagRequest
 	var err error
 	// var counts ???
 
-	err = c.BindQuery(&getThroughputRequest)
+	err = c.BindQuery(&getThroughputTagRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
 	}
 
-	from := getThroughputRequest.From
-	to := getThroughputRequest.To
-	aggregationInterval := getThroughputRequest.AggregationInterval
+	from := getThroughputTagRequest.From
+	to := getThroughputTagRequest.To
+	aggregationInterval := getThroughputTagRequest.AggregationInterval
 
 	// Fetching from the database
 	counts, err = GetProductionSpeed(
 		request.Customer,
 		request.Location,
 		request.Asset,
-		getThroughputRequest.From,
-		getThroughputRequest.To,
-		getThroughputRequest.AggregationInterval)
+		getThroughputTagRequest.From,
+		getThroughputTagRequest.To,
+		getThroughputTagRequest.AggregationInterval)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
