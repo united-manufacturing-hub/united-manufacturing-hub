@@ -61,10 +61,11 @@ spec:
               value: {{.Values.factoryinsight.db_host}}
             - name: POSTGRES_DATABASE
               value: {{.Values.factoryinsight.db_database}}
-            - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
-            - name: POSTGRES_PASSWORD
-              value: {{.Values._000_commonConfig.datastorage.db_password}}
+            - name: PATRONI_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{include "united-manufacturing-hub.fullname" .}}-credentials
+                  key: PATRONI_SUPERUSER_PASSWORD
             - name: VERSION
               value: {{.Chart.Version}}
 
