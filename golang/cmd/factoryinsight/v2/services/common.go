@@ -8,6 +8,12 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	db                      = database.Db
+	Mutex                   = database.Mutex
+	GracefulShutdownChannel = database.GracefulShutdownChannel
+)
+
 func GetEnterpriseId(enterpriseName string) (enterpriseId uint32, err error) {
 	zap.S().Infof("[GetEnterpriseID] enterpriseName: %v", enterpriseName)
 
