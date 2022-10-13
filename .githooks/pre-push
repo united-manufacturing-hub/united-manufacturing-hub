@@ -15,6 +15,7 @@ cwd=$(pwd)
 cd $(git rev-parse --show-toplevel)/golang || exit 1
 
 go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+
 # Try 10 times to do fieldalignment
 for _ in $(seq 1 10) ; do
   fieldalignment -fix  ./... 2> /dev/null

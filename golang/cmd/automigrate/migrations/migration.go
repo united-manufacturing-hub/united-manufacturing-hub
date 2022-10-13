@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 type Semver struct {
@@ -28,6 +29,27 @@ func (s Semver) String() string {
 		version += fmt.Sprintf("+%s", s.BuildMetadata)
 	}
 	return version
+}
+func (s Semver) Compare(b Semver) int {
+	if s.Major > b.Major {
+		return 1
+	}
+	if s.Major < b.Major {
+		return -1
+	}
+	if s.Minor > b.Minor {
+		return 1
+	}
+	if s.Minor < b.Minor {
+		return -1
+	}
+	if s.Patch > b.Patch {
+		return 1
+	}
+	if s.Patch < b.Patch {
+		return -1
+	}
+	return 0
 }
 
 func StringToSemver(version string) (semver Semver, parseable bool) {
@@ -104,22 +126,14 @@ func Migrate(current Semver, db *sql.DB) {
 	}
 }
 
-func checkIfNewer(last Semver, current Semver) bool {
-	if last.Major < current.Major {
-		return false
-	}
-	if last.Major == current.Major && last.Minor < current.Minor {
-		return false
-	}
-	if last.Major == current.Major && last.Minor == current.Minor && last.Patch <= current.Patch {
-		return false
-	}
-	return true
-}
 func getLatestMigration(db *sql.DB) Semver {
 	result, err := db.Query("SELECT tomajor, tominor, topatch FROM migrationtable ORDER BY timestamp DESC LIMIT 1")
 	if err != nil {
 		zap.S().Fatalf("Error getting latest migration: %s", err)
+	}
+	hasResults := result.Next()
+	if !hasResults {
+		zap.S().Fatalf("Error getting latest migration: No results")
 	}
 	var major, minor, patch int
 	err = result.Scan(&major, &minor, &patch)
@@ -130,9 +144,15 @@ func getLatestMigration(db *sql.DB) Semver {
 }
 
 func checkForAnyMigration(db *sql.DB) bool {
+	createMigrationTableIfNotExists(db)
 	result, err := db.Query("SELECT count(1) FROM migrationtable")
 	if err != nil {
 		zap.S().Fatalf("Error checking for any migration: %s", err)
+	}
+	hasResults := result.Next()
+	if !hasResults {
+		zap.S().Warnf("No migrations found")
+		return false
 	}
 	var count int
 	err = result.Scan(&count)
@@ -142,8 +162,27 @@ func checkForAnyMigration(db *sql.DB) bool {
 	return count > 0
 }
 
+func createMigrationTableIfNotExists(db *sql.DB) {
+	creationCommand := `CREATE TABLE IF NOT EXISTS migrationTable
+    (
+        id SERIAL PRIMARY KEY,
+        fromMajor int NOT NULL,
+        fromMinor int NOT NULL,
+        fromPatch int NOT NULL,
+        toMajor int NOT NULL,
+        toMinor int NOT NULL,
+        toPatch int NOT NULL,
+        timestamp TIMESTAMPTZ NOT NULL,
+        unique (fromMajor, fromMinor, fromPatch, toMajor, toMinor, toPatch)
+    );`
+	_, err := db.Exec(creationCommand)
+	if err != nil {
+		zap.S().Fatalf("Error creating migration table: %s", err)
+	}
+}
+
 func applyMigrations(last Semver, current Semver, db *sql.DB) {
-	if !checkIfNewer(last, current) {
+	if last.Compare(current) <= 0 {
 		zap.S().Infof("No migrations to apply")
 		return
 	}
@@ -152,11 +191,26 @@ func applyMigrations(last Semver, current Semver, db *sql.DB) {
 	// Apply migrations
 	fullList := buildLinkedList()
 	applyList := SliceBetweenVersions(&fullList, last, current)
+
 	err := applyList.Apply(last, db)
 	if err != nil {
 		zap.S().Fatalf("Error applying migrations: %s", err)
 	}
+	zap.S().Infof("Successfully applied migrations from %s to %s", last, current)
 
+}
+
+func updateMigrationTable(last Semver, current Semver, db *sql.DB) error {
+	_, err := db.Exec(
+		"INSERT INTO migrationtable (fromMajor, fromMinor, fromPatch, toMajor, toMinor, toPatch, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		last.Major,
+		last.Minor,
+		last.Patch,
+		current.Major,
+		current.Minor,
+		current.Patch,
+		time.Now())
+	return err
 }
 
 type migrationfunc func(db *sql.DB) error
@@ -214,15 +268,7 @@ func (L *List) Apply(oldVersion Semver, db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		// Set migration as applied
-		_, err = db.Exec(
-			"INSERT INTO migrationtable (frommajor, fromminor, frompatch, tomajor, tominor, topatch, timestamp) VALUES (?, ?, ?, ?, ?, ?, now())",
-			lastVersion.Major,
-			lastVersion.Minor,
-			lastVersion.Patch,
-			l.version.Major,
-			l.version.Minor,
-			l.version.Patch)
+		err = updateMigrationTable(lastVersion, l.version, db)
 		if err != nil {
 			return err
 		}
@@ -237,10 +283,8 @@ func SliceBetweenVersions(L *List, oldVersion Semver, newVersion Semver) *List {
 	var newList List
 	l := L.head
 	for l != nil {
-		if checkIfNewer(l.version, oldVersion) {
-			if !checkIfNewer(l.version, newVersion) {
-				newList.Insert(l.migration, l.version)
-			}
+		if l.version.Compare(oldVersion) > 0 && l.version.Compare(newVersion) <= 0 {
+			newList.Insert(l.migration, l.version)
 		}
 		l = l.next
 	}
