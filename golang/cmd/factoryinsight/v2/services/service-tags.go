@@ -1,8 +1,13 @@
 package services
 
 import (
+	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
+	"net/http"
+	"time"
 )
 
 func GetTagGroups(
@@ -58,4 +63,258 @@ func GetCustomTags(
 	)
 	// TODO: Implement GetCustomTags
 	return
+}
+
+func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// TODO adapt this to the new data model
+
+	// ### store request in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+	var getJobRequest models.GetJobRequest
+	var err error
+
+	err = c.BindQuery(&getJobRequest)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
+
+	// Process data
+	data, err := GetOrdersTimeline(
+		request.Customer,
+		request.Location,
+		request.Asset,
+		getJobRequest.From,
+		getJobRequest.To)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// TODO adapt this to the new data model
+
+	// ### store request in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+	var getCountRequest models.GetCountRequest
+	var err error
+	// var counts ???
+
+	err = c.BindQuery(&getCountRequest)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	// Fetching from the database
+	// TODO: #88 Return timestamps in RFC3339 in /counts
+	counts, err = GetCounts(
+		request.Customer,
+		request.Location,
+		request.Asset,
+		getCountRequest.From,
+		getCountRequest.To)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, counts)
+}
+
+func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// TODO adapt this to the new data model
+
+	// ### store request in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+	var getShiftsRequest models.GetShiftsRequest
+	var err error
+
+	err = c.BindQuery(&getShiftsRequest)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	// Fetching from the database
+	shifts, err := GetShifts(
+		request.Customer,
+		request.Location,
+		request.Asset,
+		getShiftsRequest.From,
+		getShiftsRequest.To)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, shifts)
+}
+
+// ProcessStateTagRequest is responsible for fetchinf all required data and calculating states over time.
+// The result is usually visualized in "DiscretePanel" in Grafana
+func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// TODO adapt this to the new data model
+	// ### store request in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+	var getStateRequest models.GetStateRequest
+	var err error
+
+	err = c.BindQuery(&getStateRequest)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	from := getStateRequest.From
+	to := getStateRequest.To
+	keepStatesInteger := getStateRequest.KeepStatesInteger
+
+	// ### fetch necessary data from database ###
+
+	assetID, err := GetAssetID(customer, location, asset)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// customer configuration
+	configuration, err := GetCustomerConfiguration(customer)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// raw states from database
+	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get shifts for noShift detection
+	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get counts for lowSpeed detection
+	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// ### calculate (only one function allowed here) ###
+	processedStates, err := processStatesOptimized(
+		assetID,
+		rawStates,
+		rawShifts,
+		countSlice,
+		orderArray,
+		from,
+		to,
+		configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// ### create JSON ###
+	var data datamodel.DataResponseAny
+	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "state"
+	data.ColumnNames = []string{JSONColumnName, "timestamp"}
+
+	// TODO: #90 Return timestamps in RFC3339 in /state
+
+	// Loop through all datapoints
+	for _, dataPoint := range processedStates {
+		if keepStatesInteger {
+			fullRow := []interface{}{
+				dataPoint.State,
+				float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			data.Datapoints = append(data.Datapoints, fullRow)
+		} else {
+			fullRow := []interface{}{
+				ConvertStateToString(dataPoint.State, configuration),
+				float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			data.Datapoints = append(data.Datapoints, fullRow)
+		}
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// TODO adapt this to the new data model
+	// ### store request in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+	var getThroughputRequest models.GetThroughputRequest
+	var err error
+	// var counts ???
+
+	err = c.BindQuery(&getThroughputRequest)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	from := getThroughputRequest.From
+	to := getThroughputRequest.To
+	aggregationInterval := getThroughputRequest.AggregationInterval
+
+	// Fetching from the database
+	counts, err = GetProductionSpeed(
+		request.Customer,
+		request.Location,
+		request.Asset,
+		getThroughputRequest.From,
+		getThroughputRequest.To,
+		getThroughputRequest.AggregationInterval)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, counts)
 }

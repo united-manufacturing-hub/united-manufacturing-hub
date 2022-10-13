@@ -227,15 +227,30 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 
 	v2 := router.Group(apiString, gin.BasicAuth(accounts))
 	{
+		// Get all sites for a given enterprise
 		v2.GET("/:enterpriseName", V2controllers.GetSitesHandler)
+		// Get all areas for a given site)
 		v2.GET("/:enterpriseName/:siteName", V2controllers.GetAreasHandler)
+		// Get all production lines for a given area
 		v2.GET("/:enterpriseName/:siteName/:areaName", V2controllers.GetProductionLinesHandler)
+		// Get all work cells for a given production line
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", V2controllers.GetWorkCellsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", V2controllers.GetTagGroupsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/:tagGroupName", V2controllers.GetTagsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/:tagGroupName/:tagName", V2controllers.GetMethodsHandler)
+		// Get all data format for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", V2controllers.GetDataFormatHandler)
+		// Get all tag groups for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Tags", V2controllers.GetTagGroupsHandler)
+		// Get all tags for a given tag group
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Tags/:tagGroupName", V2controllers.GetTagsHandler)
+		// Get all methods for a given tag
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Tags/:tagGroupName/:tagName", V2controllers.GetTagsDataHandler)
+		// Get KPIs methods for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/KPIs", V2controllers.GetKpisMethodsHandler)
+		// Get specific KPI data for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/KPIs/:kpisMethod", V2controllers.GetKpisDataHandler)
+		// Get all lists for a given work cell
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/Lists/")
 	}
-
+	//dataFormat
 	err := router.Run(":80")
 	if err != nil {
 		zap.S().Fatalf("Error starting the server: %s", err)

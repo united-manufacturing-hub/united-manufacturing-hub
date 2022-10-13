@@ -51,12 +51,10 @@ func GetTagsHandler(c *gin.Context) {
 	}
 
 	switch request.TagGroupName {
-	case "standard":
+	case models.CustomTagGroup:
 		tags, err = services.GetStandardTags()
-	case "custom":
+	case models.StandardTagGroup:
 		tags, err = services.GetCustomTags(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName, request.TagGroupName)
-	case "raw": // TODO: Properly handle raw tags
-		return
 	default:
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -68,4 +66,45 @@ func GetTagsHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tags)
+}
+
+func GetTagsDataHandler(c *gin.Context) {
+	var request models.GetTagsDataRequest
+
+	err := c.BindUri(&request)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	// Check if the user has access to that resource
+	err = helpers.CheckIfUserIsAllowed(c, request.EnterpriseName)
+	if err != nil {
+		return
+	}
+
+	switch request.TagGroupName {
+	case models.StandardTagGroup:
+		switch request.TagName {
+		case models.JobsStandardTag:
+			services.ProcessJobTagRequest(c, request)
+		case models.OutputStandardTag:
+			services.ProcessOutputTagRequest(c, request)
+		case models.ShiftsStandardTag:
+			services.ProcessShiftsTagRequest(c, request)
+		case models.StateStandardTag:
+			services.ProcessStateTagRequest(c, request)
+		case models.ThroughputStandardTag:
+			services.ProcessThroughputTagRequest(c, request)
+
+		default:
+			helpers.HandleInvalidInputError(c, err)
+			return
+		}
+	case models.CustomTagGroup:
+		// TODO: Implement custom tags
+	default:
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
 }
