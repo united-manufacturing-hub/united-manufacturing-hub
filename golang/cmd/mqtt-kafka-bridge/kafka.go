@@ -99,19 +99,57 @@ func kafkaToQueue(topic string) {
 
 		payload := msg.Value
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		kafkaTopic := *msg.TopicPartition.Topic
 
-		if json.Valid(payload) {
-			kafkaTopic := msg.TopicPartition.Topic
-			validTopic, mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
+		// Parse topic
+		isV1Topic := internal.IsKafkaTopicV1Valid(kafkaTopic)
+		isOldTopic := internal.IsKafkaTopicValid(kafkaTopic)
 
-			if validTopic {
+		if !isV1Topic && !isOldTopic {
+			zap.S().Warnf("Invalid topic: %s", kafkaTopic)
+			continue
+		}
+		isRaw := false
+
+		if isV1Topic {
+			topicInformationV1, err2 := internal.GetTopicInformationV1Cached(kafkaTopic)
+			if err2 != nil || topicInformationV1 == nil {
+				zap.S().Warnf("Failed to get topic information: %s", err2)
+				continue
+			}
+			if topicInformationV1.TagGroup == "raw" {
+				isRaw = true
+			}
+		}
+
+		if isOldTopic {
+			topicInformation := internal.GetTopicInformationCached(kafkaTopic)
+			if topicInformation == nil {
+				zap.S().Warnf("Failed to get topic information")
+				continue
+			}
+			if topicInformation.Topic == "raw" {
+				isRaw = true
+			}
+		}
+
+		validTopic, mqttTopic := internal.KafkaTopicToMqtt(kafkaTopic)
+
+		if validTopic {
+			if json.Valid(payload) || isRaw {
 				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
-				zap.S().Debugf("kafkaToQueue", topic, payload)
+				zap.S().Debugf("kafkaToQueue (%s) [%v]", topic, payload)
+			} else {
+				zap.S().Warnf(
+					"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON (%s) [%v]",
+					topic, payload)
 			}
 		} else {
 			zap.S().Warnf(
-				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
-				topic, payload)
+				"kafkaToQueue [INVALID] message not forwarded because the topic is not valid (%s) [%v]",
+				topic,
+				payload)
 		}
+
 	}
 }

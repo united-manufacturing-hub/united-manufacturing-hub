@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
 	"time"
 
@@ -45,7 +46,7 @@ func newTLSConfig() *tls.Config {
 		RootCAs: certpool,
 		// ClientAuth = whether to request cert from server.
 		// Since the server is set up for SSL, this happens
-		// anyways.
+		// anyway.
 		// ClientAuth: tls.NoClientCert,
 		// ClientCAs = certs used to validate client cert.
 		// ClientCAs: nil,
@@ -65,7 +66,44 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 		payload := message.Payload()
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-		if json.Valid(payload) {
+		valid, kafkaTopic := internal.MqttTopicToKafka(topic)
+		if !valid {
+			zap.S().Warnf("Invalid topic: %s", topic)
+			return
+		}
+		// Parse topic
+		isV1Topic := internal.IsKafkaTopicV1Valid(kafkaTopic)
+		isOldTopic := internal.IsKafkaTopicValid(kafkaTopic)
+
+		if !isV1Topic && !isOldTopic {
+			zap.S().Warnf("Invalid topic: %s", kafkaTopic)
+			return
+		}
+		isRaw := false
+
+		if isV1Topic {
+			topicInformationV1, err2 := internal.GetTopicInformationV1Cached(kafkaTopic)
+			if err2 != nil || topicInformationV1 == nil {
+				zap.S().Warnf("Failed to get topic information: %s", err2)
+				return
+			}
+			if topicInformationV1.TagGroup == "raw" {
+				isRaw = true
+			}
+		}
+
+		if isOldTopic {
+			topicInformation := internal.GetTopicInformationCached(kafkaTopic)
+			if topicInformation == nil {
+				zap.S().Warnf("Failed to get topic information")
+				return
+			}
+			if topicInformation.Topic == "raw" {
+				isRaw = true
+			}
+		}
+
+		if json.Valid(payload) || isRaw {
 			zap.S().Debugf("onMessageReceived (%s) [%v]", topic, payload)
 			go storeNewMessageIntoQueue(topic, payload, pg)
 		} else {
