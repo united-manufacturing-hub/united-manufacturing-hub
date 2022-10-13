@@ -11,8 +11,8 @@ import (
 
 // ParsedMessage is a struct that contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
 type ParsedMessage struct {
-	Payload          []byte
 	TopicInformation TopicInformationV1
+	Payload          []byte
 }
 
 type TopicProbeMessage struct {
