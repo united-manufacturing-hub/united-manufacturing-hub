@@ -16,9 +16,7 @@ import (
 	"time"
 )
 
-type DeleteShift struct{}
-
-type deleteShift struct {
+type DeleteShift struct {
 	TimeStampMs uint32 `json:"timestamp_ms"`
 }
 
@@ -49,7 +47,7 @@ func (c DeleteShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 	}()
 
 	// sC is the payload, parsed as deleteShift
-	var sC deleteShift
+	var sC DeleteShift
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

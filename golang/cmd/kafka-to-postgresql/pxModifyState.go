@@ -14,9 +14,7 @@ import (
 	"time"
 )
 
-type ModifyState struct{}
-
-type modifyState struct {
+type ModifyState struct {
 	StartTimeStampMs *uint32 `json:"timestamp_ms"`
 	EndTimeStampMs   *uint32 `json:"timestamp_ms_end"`
 	NewState         *uint32 `json:"new_state"`
@@ -49,7 +47,7 @@ func (c ModifyState) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 	}()
 
 	// sC is the payload, parsed as modifyState
-	var sC modifyState
+	var sC ModifyState
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
@@ -95,10 +93,10 @@ func (c ModifyState) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 
 	if val.Next() {
 		var (
-			LastRowTimestamp float64
+			LastRowTimestamp    float64
 			LastRowTimestampInt int64
-			LastRowAssetId int64
-			LastRowState int64
+			LastRowAssetId      int64
+			LastRowState        int64
 		)
 		err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
 		if err != nil {

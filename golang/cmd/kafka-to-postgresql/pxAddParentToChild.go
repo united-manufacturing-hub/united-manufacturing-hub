@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type AddParentToChild struct{}
-
-type addParentToChild struct {
+type AddParentToChild struct {
 	ChildAID    *string `json:"childAID"`
 	ParentAID   *string `json:"parentAID"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
@@ -47,7 +45,7 @@ func (c AddParentToChild) ProcessMessages(msg internal.ParsedMessage) (putback b
 	}()
 
 	// sC is the payload, parsed as addParentToChild
-	var sC addParentToChild
+	var sC AddParentToChild
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

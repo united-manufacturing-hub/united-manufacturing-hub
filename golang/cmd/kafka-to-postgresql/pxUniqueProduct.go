@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type UniqueProduct struct{}
-
-type uniqueProduct struct {
+type UniqueProduct struct {
 	BeginTimestampMs           *uint64 `json:"begin_timestamp_ms"`
 	EndTimestampMs             *int64  `json:"end_timestamp_ms"`
 	ProductId                  *string `json:"product_id"`
@@ -49,7 +47,7 @@ func (c UniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool
 	}()
 
 	// sC is the payload, parsed as uniqueProduct
-	var sC uniqueProduct
+	var sC UniqueProduct
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

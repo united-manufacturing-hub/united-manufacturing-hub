@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type StartOrder struct{}
-
-type startOrder struct {
+type StartOrder struct {
 	OrderId     *string `json:"order_id"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
 }
@@ -46,7 +44,7 @@ func (c StartOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	}()
 
 	// sC is the payload, parsed as startOrder
-	var sC startOrder
+	var sC StartOrder
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type AddShift struct{}
-
-type addShift struct {
+type AddShift struct {
 	TimestampMsEnd *uint64 `json:"timestamp_ms_end"`
 	TimestampMs    *uint64 `json:"timestamp_ms"`
 }
@@ -46,7 +44,7 @@ func (c AddShift) ProcessMessages(msg internal.ParsedMessage) (putback bool, err
 	}()
 
 	// sC is the payload, parsed as addShift
-	var sC addShift
+	var sC AddShift
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

@@ -17,9 +17,7 @@ import (
 	"time"
 )
 
-type AddMaintenanceActivity struct{}
-
-type addMaintenanceActivity struct {
+type AddMaintenanceActivity struct {
 	TimestampMs   *uint64 `json:"timestamp_ms"`
 	ComponentName *string `json:"component"`
 	Activity      *int32  `json:"activity"`
@@ -55,7 +53,7 @@ func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (
 	}()
 
 	// sC is the payload, parsed as addMaintenanceActivity
-	var sC addMaintenanceActivity
+	var sC AddMaintenanceActivity
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

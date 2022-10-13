@@ -14,9 +14,7 @@ import (
 	"time"
 )
 
-type ModifyProducedPieces struct{}
-
-type modifyProducedPieces struct {
+type ModifyProducedPieces struct {
 	// Has to be int32 to allow transmission of "not changed" value (value < 0)
 	Count *int32 `json:"count"`
 	// Has to be int32 to allow transmission of "not changed" value (value < 0)
@@ -51,7 +49,7 @@ func (c ModifyProducedPieces) ProcessMessages(msg internal.ParsedMessage) (putba
 	}()
 
 	// sC is the payload, parsed as modifyProducedPieces
-	var sC modifyProducedPieces
+	var sC ModifyProducedPieces
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

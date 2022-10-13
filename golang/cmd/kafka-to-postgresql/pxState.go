@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type State struct{}
-
-type state struct {
+type State struct {
 	State       *uint32 `json:"state"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
 }
@@ -46,7 +44,7 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	}()
 
 	// sC is the payload, parsed as state
-	var sC state
+	var sC State
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

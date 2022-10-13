@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type Count struct{}
-
-type count struct {
+type Count struct {
 	Count       *uint32 `json:"count"`
 	Scrap       *uint32 `json:"scrap"`
 	TimestampMs *uint64 `json:"timestamp_ms"`
@@ -50,7 +48,7 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 	start = time.Now()
 
 	// sC is the payload, parsed as count
-	var sC count
+	var sC Count
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

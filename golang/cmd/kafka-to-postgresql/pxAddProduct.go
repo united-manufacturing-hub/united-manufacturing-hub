@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type AddProduct struct{}
-
-type addProduct struct {
+type AddProduct struct {
 	ProductId            *string  `json:"product_id"`
 	TimePerUnitInSeconds *float64 `json:"time_per_unit_in_seconds"`
 }
@@ -46,7 +44,7 @@ func (c AddProduct) ProcessMessages(msg internal.ParsedMessage) (putback bool, e
 	}()
 
 	// sC is the payload, parsed as addProduct
-	var sC addProduct
+	var sC AddProduct
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type ProductTagString struct{}
-
-type productTagString struct {
+type ProductTagString struct {
 	AID         *string `json:"AID"`
 	Name        *string `json:"name"`
 	Value       *string `json:"value"`
@@ -48,7 +46,7 @@ func (c ProductTagString) ProcessMessages(msg internal.ParsedMessage) (putback b
 	}()
 
 	// sC is the payload, parsed as productTagString
-	var sC productTagString
+	var sC ProductTagString
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

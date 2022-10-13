@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-type ScrapUniqueProduct struct{}
-
-type scrapUniqueProduct struct {
+type ScrapUniqueProduct struct {
 	UID *uint32 `json:"UID"`
 }
 
@@ -45,7 +43,7 @@ func (c ScrapUniqueProduct) ProcessMessages(msg internal.ParsedMessage) (putback
 	}()
 
 	// sC is the payload, parsed as scrapUniqueProduct
-	var sC scrapUniqueProduct
+	var sC ScrapUniqueProduct
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())

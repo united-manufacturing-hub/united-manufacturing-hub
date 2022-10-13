@@ -16,9 +16,7 @@ import (
 	"time"
 )
 
-type Recommendation struct{}
-
-type recommendation struct {
+type Recommendation struct {
 	UID                  *string
 	TimestampMs          *uint64 `json:"timestamp_ms"`
 	Customer             *string
@@ -60,7 +58,7 @@ func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback boo
 	}()
 
 	// sC is the payload, parsed as recommendation
-	var sC recommendation
+	var sC Recommendation
 	err = jsoniter.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
