@@ -3,12 +3,12 @@ package _10
 import (
 	"crypto/sha256"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/automigrate/database"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"math/rand"
 	"sync"
 )
 
@@ -35,13 +35,16 @@ func V0x10x0(db *sql.DB) error {
 	}
 	errX := txCNT.Commit()
 	if errX != nil {
-		zap.S().Errorf("Error while commiting back transaction: %v", err)
+		zap.S().Errorf("Error while committing back transaction: %v", err)
 	}
 	zap.S().Infof("Created new tables")
 
 	// Skip if asset table is missing
 	var exists bool
 	exists, err = database.TableExists(db, "assettable")
+	if err != nil {
+		zap.S().Fatalf("Error while checking if asset table exists: %v", err)
+	}
 	if !exists {
 		zap.S().Warnf("Asset table does not exist, skipping migration")
 		return nil
@@ -98,6 +101,9 @@ func V0x10x0(db *sql.DB) error {
 		zap.S().Fatalf("Error while dropping old tables: %v", err)
 	}
 	errX = txDOT.Commit()
+	if errX != nil {
+		zap.S().Errorf("Error while rolling back transaction: %v", err)
+	}
 
 	zap.S().Infof("Applied migration 0.10.0")
 
@@ -351,12 +357,6 @@ func createProcessValueNameEntriesFromPVandPVS(db *sql.DB) error {
 		zap.S().Infof("Deduplicating process value names")
 		processValueNames = deduplicate(processValueNames)
 
-		// Shuffling
-		for i := range processValueNames {
-			j := rand.Intn(i + 1)
-			processValueNames[i], processValueNames[j] = processValueNames[j], processValueNames[i]
-		}
-
 		zap.S().Infof("Inserting process value names into work channel")
 		var cvChan = make(chan string, len(processValueNames))
 		for i := 0; i < len(processValueNames); i++ {
@@ -379,6 +379,10 @@ func createProcessValueNameEntriesFromPVandPVS(db *sql.DB) error {
 		// Copy tmp table to processValueNameTable
 		zap.S().Infof("Copying tmp table to processValueNameTable")
 		_, err = tx.Exec("INSERT INTO processValueNameTable (name) (SELECT name FROM tmp_processvaluenametable) ON CONFLICT do nothing")
+		if err != nil {
+			zap.S().Errorf("Error while copying tmp table to processValueNameTable: %v", err)
+			return err
+		}
 
 		err = tx.Commit()
 		if err != nil {
@@ -475,9 +479,9 @@ func concurrentInsertScan(cvChan chan string, prepCopy *sql.Stmt, s *sync.WaitGr
 			if ok {
 				_, err = prepCopy.Exec(x)
 				if err != nil {
-					// cast err to sql error
-					sqlErr, ok := err.(*pq.Error)
-					if !ok {
+					var sqlErr *pq.Error
+					okC := errors.As(err, &sqlErr)
+					if !okC {
 						zap.S().Fatalf("Error while casting error to sql error: %v", err)
 					}
 					// if error is unique_violation, get id of process value name

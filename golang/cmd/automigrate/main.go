@@ -127,7 +127,7 @@ func AwaitNewHelmVersionAndApplyMigrations(db *sql.DB) {
 			zap.S().Fatalf("VERSION is not a valid semver: %s", os.Getenv("VERSION"))
 		}
 
-		if migrations.CheckIfLastIsNewerOrSameAsCurrent(lastVersion, helmVersion) {
+		if lastVersion.Compare(helmVersion) <= 0 {
 			zap.S().Infof("Last version is newer or same as current version, skipping migration")
 			time.Sleep(10 * time.Second)
 			continue

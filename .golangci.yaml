@@ -87,6 +87,7 @@ linters-settings:
       - github.com/gin-contrib/gzip
       - embed
       - crypto/sha256
+      - go.uber.org/atomic
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
