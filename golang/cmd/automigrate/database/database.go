@@ -144,3 +144,14 @@ func AddUniqueConstraint(constraintName, tableName string, colNames []string, db
 				",")))
 	return err
 }
+
+func TableExists(db *sql.DB, tableName string) (bool, error) {
+	var exists bool
+	err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)`,
+		tableName).Scan(&exists)
+	if err != nil {
+		return exists, err
+	}
+	return exists, nil
+}

@@ -39,6 +39,14 @@ func V0x10x0(db *sql.DB) error {
 	}
 	zap.S().Infof("Created new tables")
 
+	// Skip if asset table is missing
+	var exists bool
+	exists, err = database.TableExists(db, "assettable")
+	if !exists {
+		zap.S().Warnf("Asset table does not exist, skipping migration")
+		return nil
+	}
+
 	zap.S().Infof("Migrating asset table")
 	txAT := GetTx(db)
 	err = migrateAssetTable(txAT)
@@ -78,7 +86,31 @@ func V0x10x0(db *sql.DB) error {
 	}
 	zap.S().Infof("Migrated other tables to new ids")
 
+	// Drop asset table
+	zap.S().Infof("Dropping old tables")
+	txDOT := GetTx(db)
+	err = dropOldTables(txDOT)
+	if err != nil {
+		errX = txDOT.Rollback()
+		if errX != nil {
+			zap.S().Errorf("Error while rolling back transaction: %v", err)
+		}
+		zap.S().Fatalf("Error while dropping old tables: %v", err)
+	}
+	errX = txDOT.Commit()
+
+	zap.S().Infof("Applied migration 0.10.0")
+
 	return nil
+}
+
+func dropOldTables(db *sql.Tx) error {
+	zap.S().Infof("Dropping asset table")
+	_, err := db.Exec("DROP TABLE IF EXISTS assettable RESTRICT ")
+	if err != nil {
+		zap.S().Errorf("Error while dropping asset table: %v", err)
+	}
+	return err
 }
 
 type AssetTable struct {
@@ -969,7 +1001,7 @@ func migrateProcessValueTable(db *sql.Tx) error {
 }
 
 func migrateProcessValueStringTable(db *sql.Tx) error {
-	return migrateProcessXTable("processvaluetable", db)
+	return migrateProcessXTable("processvaluestringtable", db)
 }
 
 func migrateProcessXTable(tableName string, db *sql.Tx) error {
