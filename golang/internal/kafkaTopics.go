@@ -177,6 +177,12 @@ func GetTopicInformationV1Cached(topic string) (*TopicInformationV1, error) {
 	return gti, nil
 }
 
+const (
+	TagGroupRaw      = "raw"
+	TagGroupStandard = "standard"
+	TagGroupCustom   = "custom"
+)
+
 func getTopicInformationV1(topic string) (*TopicInformationV1, error) {
 	if !IsKafkaTopicV1Valid(topic) {
 		return nil, errors.New("invalid topic")
@@ -213,11 +219,11 @@ func getTopicInformationV1(topic string) (*TopicInformationV1, error) {
 
 	var err error
 	switch topicInformation.TagGroup {
-	case "custom":
+	case TagGroupCustom:
 		getTopicInformationV1Custom(topic, &topicInformation)
-	case "raw":
+	case TagGroupRaw:
 		getTopicInformationV1Raw(topic, &topicInformation)
-	case "standard":
+	case TagGroupStandard:
 		err = getTopicInformationV1Standard(topic, &topicInformation)
 	default:
 		return nil, errors.New("invalid topic")
@@ -265,7 +271,7 @@ func getTopicInformationV1Raw(topic string, t *TopicInformationV1) {
 		t.MacAddress = &mac
 		t.TransmitterId = &transmitterId
 	} else {
-		t.Tag = "raw"
+		t.Tag = TagGroupRaw
 	}
 }
 

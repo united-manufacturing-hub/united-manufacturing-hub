@@ -87,7 +87,7 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 				zap.S().Warnf("Failed to get topic information: %s", err2)
 				return
 			}
-			if topicInformationV1.TagGroup == "raw" {
+			if topicInformationV1.TagGroup == internal.TagGroupRaw {
 				isRaw = true
 			}
 		}
@@ -98,7 +98,7 @@ func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 				zap.S().Warnf("Failed to get topic information")
 				return
 			}
-			if topicInformation.Topic == "raw" {
+			if topicInformation.Topic == internal.TagGroupRaw {
 				isRaw = true
 			}
 		}
