@@ -7,16 +7,12 @@ import (
 	"github.com/coocood/freecache"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
-	"strings"
 )
 
 // ParsedMessage is a struct that contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
 type ParsedMessage struct {
-	AssetId     string
-	Location    string
-	CustomerId  string
-	PayloadType string
-	Payload     []byte
+	Payload          []byte
+	TopicInformation TopicInformationV1
 }
 
 type TopicProbeMessage struct {
@@ -56,29 +52,26 @@ func PutCacheKafkaMessageAsParsedMessage(msg *kafka.Message) (valid bool, messag
 	if msg == nil || msg.TopicPartition.Topic == nil {
 		return
 	}
-	topicInformation := GetTopicInformationCached(*msg.TopicPartition.Topic)
+	topicInformation, err := GetTopicInformationV1Cached(*msg.TopicPartition.Topic)
+	if err != nil {
+		zap.S().Errorf("Failed to get topic information for topic: %s", *msg.TopicPartition.Topic)
+		return false, ParsedMessage{}
+	}
 	if topicInformation == nil {
 		zap.S().Errorf(" Invalid topic: %s", *msg.TopicPartition.Topic)
 		return false, ParsedMessage{}
 	}
 
-	customerID := topicInformation.CustomerId
-	location := topicInformation.Location
-	assetID := topicInformation.AssetId
-	payloadType := strings.ToLower(topicInformation.Topic)
 	payload := msg.Value
 	pm := ParsedMessage{
-		AssetId:     assetID,
-		Location:    location,
-		CustomerId:  customerID,
-		PayloadType: payloadType,
-		Payload:     payload,
+		Payload:          payload,
+		TopicInformation: *topicInformation,
 	}
 
 	var cacheKey = AsXXHash(msg.Key, msg.Value, []byte((*msg.TopicPartition.Topic)))
 
 	var buffer bytes.Buffer
-	err := gob.NewEncoder(&buffer).Encode(pm)
+	err = gob.NewEncoder(&buffer).Encode(pm)
 	if err != nil {
 		zap.S().Errorf("Failed to encode message: %s", err)
 	} else {
