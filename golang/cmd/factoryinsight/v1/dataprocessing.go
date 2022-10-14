@@ -2334,14 +2334,3 @@ func CalculateAccumulatedProducts(
 	zap.S().Debugf("After predictions dataPointIndex: %d", dataPointIndex)
 	return datapoints
 }
-
-// SplitCountSlice returns a slice of counts with the time being between from and to
-func SplitCountSlice(counts []datamodel.CountEntry, from time.Time, to time.Time) []datamodel.CountEntry {
-	var result []datamodel.CountEntry
-	for _, count := range counts {
-		if count.Timestamp.UnixMilli() >= from.UnixMilli() && count.Timestamp.UnixMilli() < to.UnixMilli() {
-			result = append(result, count)
-		}
-	}
-	return result
-}

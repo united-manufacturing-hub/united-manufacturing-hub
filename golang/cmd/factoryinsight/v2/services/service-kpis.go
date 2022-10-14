@@ -5,6 +5,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"net/http"
 )
@@ -54,17 +55,16 @@ func GetKpisMethods(enterpriseName string, siteName string, areaName string, pro
 func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// TODO adapt this to the new data model
 	// ### store request values in proper variables ###
-	enterprise := request.EnterpriseName
-	site := request.SiteName
-	area := request.AreaName
-	productLine := request.ProductionLineName
-	workCell := request.WorkCellName
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
 
 	// ### parse query ###
 	var getOeeKpiRequest models.GetOeeKpiRequest
-	var err error
 
-	err = c.BindUri(&getOeeKpiRequest)
+	err := c.BindUri(&getOeeKpiRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -75,40 +75,61 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(customer, location, asset)
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
 	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(customer)
+	configuration, err := GetEnterpriseConfiguration(enterpriseName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(workCellId, from, to, configuration)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(workCellId, from, to, configuration)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(workCellId, from, to)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(workCellId, from, to)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -118,6 +139,7 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
+	// TODO: adapt JSONColumnName to new data model
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
@@ -131,10 +153,10 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
-			countSliceSplit := SplitCountSlice(countSlice, current, to)
+			countSliceSplit := repository.SplitCountSlice(countSlice, current, to)
 
 			processedStates, err := processStates(
-				assetID,
+				workCellId,
 				rawStates,
 				rawShifts,
 				countSlice,
@@ -156,10 +178,10 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 			current = to
 		} else { // otherwise, calculate for entire time range
 
-			countSliceSplit := SplitCountSlice(countSlice, current, currentTo)
+			countSliceSplit := repository.SplitCountSlice(countSlice, current, currentTo)
 
 			processedStates, err := processStates(
-				assetID,
+				workCellId,
 				rawStates,
 				rawShifts,
 				countSlice,
@@ -192,11 +214,11 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// TODO adapt this to the new data model
 	// ### store request in proper variables ###
-	enterprise := request.EnterpriseName
-	site := request.SiteName
-	area := request.AreaName
-	productLine := request.ProductionLineName
-	workCell := request.WorkCellName
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	areaName := request.AreaName
+	productionLineName := request.ProductionLineName
+	workCellName := request.WorkCellName
 
 	// ### parse query ###
 	var getAvailabilityKpiRequest models.GetAvailabilityKpiRequest
@@ -213,40 +235,61 @@ func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataReq
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(customer, location, asset)
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
 	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(customer)
+	configuration, err := GetEnterpriseConfiguration(enterpriseName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 	// raw states from database
-	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(workCellId, from, to, configuration)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(workCellId, from, to, configuration)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(workCellId, from, to)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(workCellId, from, to)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -256,6 +299,7 @@ func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataReq
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
+	// TODO: adapt JSONColumnName to new data model
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "oee"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
@@ -269,7 +313,7 @@ func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataReq
 		if currentTo.After(to) { // if the next 24h is out of timerange, only calculate OEE till the last value
 
 			processedStates, err := processStates(
-				assetID,
+				workCellId,
 				rawStates,
 				rawShifts,
 				countSlice,
@@ -354,7 +398,7 @@ func ProcessPerformanceKpiRequest(c *gin.Context, request models.GetKpisDataRequ
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(customer)
+	configuration, err := GetEnterpriseConfiguration(customer)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -482,7 +526,7 @@ func ProcessQualityKpiRequest(c *gin.Context, request models.GetKpisDataRequest)
 	// ### fetch necessary data from database ###
 
 	// customer configuration
-	_, err = GetCustomerConfiguration(customer)
+	_, err = GetEnterpriseConfiguration(customer)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return

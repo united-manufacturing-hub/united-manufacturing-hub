@@ -1185,6 +1185,66 @@ func GetWorkCellIDFromCache(productionLineId uint32, workCellName string) (workC
 	return
 }
 
+// StoreEnterpriseConfigurationToCache stores customer id to cache
+func StoreEnterpriseConfigurationToCache(enterpriseName string, data datamodel.EnterpriseConfiguration) {
+
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("GetEnterpriseConfigurationFromCache-%s", enterpriseName)
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	b, err := json.Marshal(&data)
+	if err != nil {
+		zap.S().Errorf("json marshall")
+		return
+	}
+
+	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetEnterpriseConfigurationFromCache gets customer configuration from cache
+func GetEnterpriseConfigurationFromCache(enterpriseName string) (data datamodel.EnterpriseConfiguration, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("GetEnterpriseConfigurationFromCache-%s", enterpriseName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("error getting key from redis", key, err)
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
+		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+		err = json.Unmarshal(b, &data)
+		if err != nil {
+			zap.S().Errorf("json Unmarshal", b)
+			return
+		}
+
+		cacheHit = true
+	}
+
+	return
+}
+
 // GetTiered Attempts to get key from memory cache, if fails it falls back to redis
 func GetTiered(key string) (cached bool, value interface{}) {
 	if memCache == nil && rdb == nil {

@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
@@ -75,9 +76,34 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
 	// ### parse query ###
 	var getJobTagRequest models.GetJobTagRequest
-	var err error
 
 	err = c.BindQuery(&getJobTagRequest)
 	if err != nil {
@@ -88,12 +114,7 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
-	data, err := GetOrdersTimeline(
-		request.Customer,
-		request.Location,
-		request.Asset,
-		getJobTagRequest.From,
-		getJobTagRequest.To)
+	data, err := GetOrdersTimeline(workCellId, getJobTagRequest.From, getJobTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -112,9 +133,34 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
 	// ### parse query ###
 	var getCountTagRequest models.GetCountTagRequest
-	var err error
 	// var counts ???
 
 	err = c.BindQuery(&getCountTagRequest)
@@ -125,12 +171,7 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
-	counts, err = GetCounts(
-		request.Customer,
-		request.Location,
-		request.Asset,
-		getCountTagRequest.From,
-		getCountTagRequest.To)
+	counts, err = GetCounts(workCellId, getCountTagRequest.From, getCountTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -148,9 +189,34 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
 	// ### parse query ###
 	var getShiftsTagRequest models.GetShiftsTagRequest
-	var err error
 
 	err = c.BindQuery(&getShiftsTagRequest)
 	if err != nil {
@@ -159,12 +225,7 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	// Fetching from the database
-	shifts, err := GetShifts(
-		request.Customer,
-		request.Location,
-		request.Asset,
-		getShiftsTagRequest.From,
-		getShiftsTagRequest.To)
+	shifts, err := GetShifts(enterpriseName, workCellId, getShiftsTagRequest.From, getShiftsTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -199,42 +260,62 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	assetID, err := GetAssetID(customer, location, asset)
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// customer configuration
-	configuration, err := GetCustomerConfiguration(customer)
+	configuration, err := GetEnterpriseConfiguration(enterpriseName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// raw states from database
-	rawStates, err := GetStatesRaw(customer, location, asset, from, to, configuration)
+	rawStates, err := GetStatesRaw(workCellId, from, to, configuration)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(customer, location, asset, from, to, configuration)
+	rawShifts, err := GetShiftsRaw(workCellId, from, to, configuration)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(customer, location, asset, from, to)
+	countSlice, err := GetCountsRaw(workCellId, from, to)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(customer, location, asset, from, to)
+	orderArray, err := GetOrdersRaw(workCellId, from, to)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -242,7 +323,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 
 	// ### calculate (only one function allowed here) ###
 	processedStates, err := processStatesOptimized(
-		assetID,
+		workCellId,
 		rawStates,
 		rawShifts,
 		countSlice,
@@ -257,6 +338,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
+	// TODO: adapt JSONColumnName to new data model
 	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "state"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
@@ -271,7 +353,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {
 			fullRow := []interface{}{
-				ConvertStateToString(dataPoint.State, configuration),
+				repository.ConvertStateToString(dataPoint.State, configuration),
 				float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
@@ -289,9 +371,34 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
+	enterpriseId, err := GetEnterpriseId(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	siteId, err := GetSiteId(enterpriseId, siteName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	areaId, err := GetAreaId(siteId, areaName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	productionLineId, err := GetProductionLineId(areaId, productionLineName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
 	// ### parse query ###
 	var getThroughputTagRequest models.GetThroughputTagRequest
-	var err error
 	// var counts ???
 
 	err = c.BindQuery(&getThroughputTagRequest)
@@ -305,13 +412,7 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	aggregationInterval := getThroughputTagRequest.AggregationInterval
 
 	// Fetching from the database
-	counts, err = GetProductionSpeed(
-		request.Customer,
-		request.Location,
-		request.Asset,
-		getThroughputTagRequest.From,
-		getThroughputTagRequest.To,
-		getThroughputTagRequest.AggregationInterval)
+	counts, err = GetProductionSpeed(workCellId, from, to, aggregationInterval)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return

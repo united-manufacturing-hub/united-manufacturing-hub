@@ -78,8 +78,8 @@ func ProcessJobsTableRequest(c *gin.Context, request models.GetTableDataRequest)
 		request.Value)
 
 	// customer configuration
-	zap.S().Debugf("GetCustomerConfiguration")
-	configuration, err := GetCustomerConfiguration(request.Customer)
+	zap.S().Debugf("GetEnterpriseConfiguration")
+	configuration, err := GetEnterpriseConfiguration(request.Customer)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
