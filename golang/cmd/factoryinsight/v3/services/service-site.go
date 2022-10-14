@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/models"
 	"go.uber.org/zap"
 )
 

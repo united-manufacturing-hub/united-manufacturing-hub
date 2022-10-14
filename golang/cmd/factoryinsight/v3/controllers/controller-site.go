@@ -5,12 +5,12 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/services"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/services"
 	"net/http"
 )
 
-// GetSitesHandler handles a GET request to /api/v2/{enterprise}
+// GetSitesHandler handles a GET request to /api/v3/{enterprise}
 func GetSitesHandler(c *gin.Context) {
 	var request models.GetSiteRequest
 	var sites models.GetSitesResponse

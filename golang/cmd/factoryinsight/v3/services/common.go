@@ -262,7 +262,7 @@ func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		// Get from cache if possible
 		var cacheHit bool
 		customerConfiguration := configuration.ConvertEnterpriseToCustomerConfiguration()
-		// TODO: GetStatesRawFromCache for EnterpriseConfiguration (V2 maybe? Or a cache service inside v2/services/ with the caching function specific to v2?)
+		// TODO: GetStatesRawFromCache for EnterpriseConfiguration (V2 maybe? Or a cache service inside v3/services/ with the caching function specific to v3?)
 		data, cacheHit = internal.GetStatesRawFromCache(workCellId, from, to, customerConfiguration)
 		if cacheHit { // data found
 			zap.S().Debugf("GetStatesRaw cache hit")
@@ -358,7 +358,7 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		// Get from cache if possible
 		var cacheHit bool
 		customerConfiguration := configuration.ConvertEnterpriseToCustomerConfiguration()
-		// TODO: GetStatesRawFromCache for EnterpriseConfiguration (V2 maybe? Or a cache service inside v2/services/ with the caching function specific to v2?)
+		// TODO: GetStatesRawFromCache for EnterpriseConfiguration (V2 maybe? Or a cache service inside v3/services/ with the caching function specific to v3?)
 		data, cacheHit = internal.GetRawShiftsFromCache(workCellId, from, to, customerConfiguration)
 		if cacheHit { // data found
 			zap.S().Debugf("GetShiftsRaw cache hit")

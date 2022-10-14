@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	apiV1 "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v1"
-	V2controllers "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/controllers"
+	v3controllers "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/controllers"
 	"net/http"
 	"os"
 	"os/signal"
@@ -225,32 +225,32 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		v1.GET("/:customer/:location/:asset/:value", apiV1.GetDataHandler)
 	}
 
-	v2 := router.Group(apiString, gin.BasicAuth(accounts))
+	v3 := router.Group(apiString, gin.BasicAuth(accounts))
 	{
 		// Get all sites for a given enterprise
-		v2.GET("/:enterpriseName", V2controllers.GetSitesHandler)
+		v3.GET("/:enterpriseName", v3controllers.GetSitesHandler)
 		// Get all areas for a given site)
-		v2.GET("/:enterpriseName/:siteName", V2controllers.GetAreasHandler)
+		v3.GET("/:enterpriseName/:siteName", v3controllers.GetAreasHandler)
 		// Get all production lines for a given area
-		v2.GET("/:enterpriseName/:siteName/:areaName", V2controllers.GetProductionLinesHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName", v3controllers.GetProductionLinesHandler)
 		// Get all work cells for a given production line
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", V2controllers.GetWorkCellsHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v3controllers.GetWorkCellsHandler)
 		// Get all data format for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", V2controllers.GetDataFormatHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", v3controllers.GetDataFormatHandler)
 		// Get all tag groups for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags", V2controllers.GetTagGroupsHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags", v3controllers.GetTagGroupsHandler)
 		// Get all tags for a given tag group
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName", V2controllers.GetTagsHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName", v3controllers.GetTagsHandler)
 		// Get specific data for a give work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName", V2controllers.GetTagsDataHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName", v3controllers.GetTagsDataHandler)
 		// Get KPIs methods for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis", V2controllers.GetKpisMethodsHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis", v3controllers.GetKpisMethodsHandler)
 		// Get specific KPI data for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod", V2controllers.GetKpisDataHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod", v3controllers.GetKpisDataHandler)
 		// Get tables types for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables", V2controllers.GetTableTypesHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables", v3controllers.GetTableTypesHandler)
 		// Get specific table data for a given work cell
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType", V2controllers.GetTableDataHandler)
+		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType", v3controllers.GetTableDataHandler)
 	}
 	//dataFormat
 	err := router.Run(":80")
