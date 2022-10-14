@@ -28,7 +28,7 @@ require (
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.23.0
 	gonum.org/v1/gonum v0.12.0
-	k8s.io/apimachinery v0.25.2
+	k8s.io/apimachinery v0.25.3
 )
 
 require (
