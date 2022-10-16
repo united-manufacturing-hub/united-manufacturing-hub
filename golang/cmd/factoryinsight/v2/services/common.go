@@ -368,11 +368,10 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShifts gets all shifts for a specific asset in a timerange
-func GetShifts(enterpriseName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetShifts(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v", workCellId, from, to)
 
-	// TODO: adapt JSONColumnName to new data model
-	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "shiftName"
+	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "shiftName"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	var configuration datamodel.EnterpriseConfiguration
@@ -395,8 +394,8 @@ func GetShifts(enterpriseName string, workCellId uint32, from, to time.Time) (da
 		return
 	}
 
-	processedShifts := cleanRawShiftData(rawShifts)
-	processedShifts = addNoShiftsBetweenShifts(processedShifts)
+	processedShifts := CleanRawShiftData(rawShifts)
+	processedShifts = AddNoShiftsBetweenShifts(processedShifts)
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedShifts {
@@ -482,12 +481,11 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 }
 
 // GetCounts gets all states for a specific asset in a timerange
-func GetCounts(workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetCounts] workCellId: %v from: %v, to: %v", workCellId, from, to)
 
-	// TODO: adapt JSONColumnName to new data model
-	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "count"
-	JSONColumnName2 := customerID + "-" + location + "-" + asset + "-" + "scrap"
+	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "count"
+	JSONColumnName2 := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "scrap"
 	data.ColumnNames = []string{JSONColumnName, JSONColumnName2, "timestamp"}
 
 	var countSlice []datamodel.CountEntry
@@ -573,10 +571,9 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 }
 
 // GetOrdersTimeline gets all orders for a specific asset in a timerange for a timeline
-func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
 
-	// TODO: adapt JSONColumnName to new data model
-	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "order"
+	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	// configuration := getCustomerConfiguration(span, customerID, location, asset)
@@ -588,7 +585,7 @@ func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.Da
 		return
 	}
 
-	processedOrders := addNoOrdersBetweenOrders(rawOrders, from, to)
+	processedOrders := AddNoOrdersBetweenOrders(rawOrders, from, to)
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedOrders {
@@ -602,11 +599,10 @@ func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.Da
 }
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
-func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
+func GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v", workCellId, from, to, aggregatedInterval)
 
-	// TODO: adapt JSONColumnName to new data model
-	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
+	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)

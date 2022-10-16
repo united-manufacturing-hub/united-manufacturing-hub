@@ -8,7 +8,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/repository"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
@@ -16,13 +16,7 @@ import (
 	"time"
 )
 
-func GetTagGroups(
-	enterpriseName string,
-	siteName string,
-	areaName string,
-	productionLineName string,
-	workCellName string,
-) (tagGroups []string, err error) {
+func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCellName string) (tagGroups []string, err error) {
 	zap.S().Infof(
 		"[GetTagGroups] Getting tag groups for enterprise %s, site %s, area %s, production line %s and work cell %s",
 		enterpriseName,
@@ -87,7 +81,6 @@ func GetCustomTags(workCellName string) (grouping map[string][]string, err error
 }
 
 func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
-	// TODO adapt this to the new data model
 
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
@@ -96,27 +89,7 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	areaId, err := GetAreaId(siteId, areaName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -134,7 +107,7 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
-	data, err := GetOrdersTimeline(workCellId, getJobTagRequest.From, getJobTagRequest.To)
+	data, err := GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getJobTagRequest.From, getJobTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -144,7 +117,6 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 }
 
 func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
-	// TODO adapt this to the new data model
 
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
@@ -153,27 +125,7 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	areaId, err := GetAreaId(siteId, areaName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -191,7 +143,7 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
-	counts, err = GetCounts(workCellId, getCountTagRequest.From, getCountTagRequest.To)
+	counts, err := GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getCountTagRequest.From, getCountTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -200,7 +152,6 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 }
 
 func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
-	// TODO adapt this to the new data model
 
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
@@ -209,27 +160,7 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	areaId, err := GetAreaId(siteId, areaName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -245,7 +176,7 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	// Fetching from the database
-	shifts, err := GetShifts(enterpriseName, workCellId, getShiftsTagRequest.From, getShiftsTagRequest.To)
+	shifts, err := GetShifts(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getShiftsTagRequest.From, getShiftsTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -263,6 +194,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	areaName := request.AreaName
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
+	tagName := request.TagName
 
 	// ### parse query ###
 	var getStateTagRequest models.GetStateTagRequest
@@ -280,27 +212,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 
 	// ### fetch necessary data from database ###
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	areaId, err := GetAreaId(siteId, areaName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -342,7 +254,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	}
 
 	// ### calculate (only one function allowed here) ###
-	processedStates, err := processStatesOptimized(
+	processedStates, err := ProcessStatesOptimized(
 		workCellId,
 		rawStates,
 		rawShifts,
@@ -359,7 +271,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// ### create JSON ###
 	var data datamodel.DataResponseAny
 	// TODO: adapt JSONColumnName to new data model
-	JSONColumnName := customer + "-" + location + "-" + asset + "-" + "state"
+	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	// TODO: #90 Return timestamps in RFC3339 in /state
@@ -383,7 +295,6 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 }
 
 func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
-	// TODO adapt this to the new data model
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -391,27 +302,7 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	productionLineName := request.ProductionLineName
 	workCellName := request.WorkCellName
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	areaId, err := GetAreaId(siteId, areaName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -432,7 +323,7 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	aggregationInterval := getThroughputTagRequest.AggregationInterval
 
 	// Fetching from the database
-	counts, err = GetProductionSpeed(workCellId, from, to, aggregationInterval)
+	counts, err := GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, from, to, aggregationInterval)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
