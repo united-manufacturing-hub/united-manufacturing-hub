@@ -19,7 +19,7 @@ type OrderStruct struct {
 }
 
 type ProductStruct struct {
-	productId               int
+	ProductId               int
 	TimePerProductUnitInSec float64
 }
 
