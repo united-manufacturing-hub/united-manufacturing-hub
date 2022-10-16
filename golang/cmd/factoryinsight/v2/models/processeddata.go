@@ -22,3 +22,8 @@ type ProductStruct struct {
 	productId               int
 	TimePerProductUnitInSec float64
 }
+
+type ChannelResult struct {
+	err         error
+	returnValue interface{}
+}
