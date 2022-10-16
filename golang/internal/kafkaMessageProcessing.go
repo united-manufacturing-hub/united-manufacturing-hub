@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// ParsedMessage is a struct that contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
+// ParsedMessage is a struct that Contains the parsed message key and value as AssetId, Location, CustomerId, PayloadType & Payload
 type ParsedMessage struct {
 	AssetId     string
 	Location    string

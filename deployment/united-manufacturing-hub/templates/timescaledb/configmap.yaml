@@ -177,6 +177,10 @@ data:
         PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'
     );
 
+    -------------------- TimescaleDB table for aggregation --------------------
+    CREATE MATERIALIZED VIEW IF NOT EXISTS aggregationTable_minute
+    WITH (timescaledb.continuous) AS
+
 
     --- MIGRATIONS
     -- Add here your migrations
