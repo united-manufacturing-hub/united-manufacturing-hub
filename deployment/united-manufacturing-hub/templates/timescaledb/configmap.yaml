@@ -177,10 +177,100 @@ data:
         PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'
     );
 
-    -------------------- TimescaleDB table for aggregation --------------------
+    -------------------- TimescaleDB table for aggregation (1min) --------------------
     CREATE MATERIALIZED VIEW IF NOT EXISTS aggregationTable_minute
     WITH (timescaledb.continuous) AS
+    SELECT asset_id,
+           valueName,
+           time_bucket(INTERVAL '1 minute', timestamp) AS bucket,
+           AVG(value) AS avg,
+           COUNT(value) AS count,
+           MAX(value) AS max,
+           MIN(value) AS min,
+           SUM(value) AS sum
+    FROM processValueTable
+    GROUP BY asset_id, valueName, bucket;
+        
+    SELECT add_continuous_aggregate_policy('aggregationTable_minute',
+        start_offset => INTERVAL '1 day',
+        end_offset => INTERVAL '1 minute',
+        schedule_interval => INTERVAL '1 minute');
 
+    -------------------- TimescaleDB table for aggregation (1day) --------------------
+    CREATE MATERIALIZED VIEW IF NOT EXISTS aggregationTable_day
+    WITH (timescaledb.continuous) AS
+    SELECT asset_id,
+           valueName,
+           time_bucket(INTERVAL '1 day', timestamp) AS bucket,
+           AVG(value) AS avg,
+           COUNT(value) AS count,
+           MAX(value) AS max,
+           MIN(value) AS min,
+           SUM(value) AS sum
+    FROM processValueTable
+    GROUP BY asset_id, valueName, bucket;
+    
+    SELECT add_continuous_aggregate_policy('aggregationTable_day',
+        start_offset => INTERVAL '1 week',
+        end_offset => INTERVAL '1 day',
+        schedule_interval => INTERVAL '1 day');
+
+    -------------------- TimescaleDB table for aggregation (1week) --------------------
+    CREATE MATERIALIZED VIEW IF NOT EXISTS aggregationTable_week
+    WITH (timescaledb.continuous) AS
+    SELECT asset_id,
+           valueName,
+           time_bucket(INTERVAL '1 week', timestamp) AS bucket,
+           AVG(value) AS avg,
+           COUNT(value) AS count,
+           MAX(value) AS max,
+           MIN(value) AS min,
+           SUM(value) AS sum
+    FROM processValueTable
+    GROUP BY asset_id, valueName, bucket;
+
+    SELECT add_continuous_aggregate_policy('aggregationTable_week',
+        start_offset => INTERVAL '1 month',
+        end_offset => INTERVAL '1 week',
+        schedule_interval => INTERVAL '1 week');
+
+    -------------------- TimescaleDB table for aggregation (1month) --------------------
+    CREATE MATERIALIZED VIEW IF NOT EXISTS aggregationTable_month
+    WITH (timescaledb.continuous) AS
+    SELECT asset_id,
+           valueName,
+           time_bucket(INTERVAL '1 month', timestamp) AS bucket,
+           AVG(value) AS avg,
+           COUNT(value) AS count,
+           MAX(value) AS max,
+           MIN(value) AS min,
+           SUM(value) AS sum
+    FROM processValueTable
+    GROUP BY asset_id, valueName, bucket;
+
+    SELECT add_continuous_aggregate_policy('aggregationTable_month',
+        start_offset => INTERVAL '1 year',
+        end_offset => INTERVAL '1 month',
+        schedule_interval => INTERVAL '1 month');
+
+    -------------------- TimescaleDB table for aggregation (1year) --------------------
+    CREATE MATERIALIZED VIEW IF NOT EXISTS aggregationTable_year
+    WITH (timescaledb.continuous) AS
+    SELECT asset_id,
+           valueName,
+           time_bucket(INTERVAL '1 year', timestamp) AS bucket,
+           AVG(value) AS avg,
+           COUNT(value) AS count,
+           MAX(value) AS max,
+           MIN(value) AS min,
+           SUM(value) AS sum
+    FROM processValueTable
+    GROUP BY asset_id, valueName, bucket;
+        
+    SELECT add_continuous_aggregate_policy('aggregationTable_year',
+        start_offset => INTERVAL '10 year',
+        end_offset => INTERVAL '1 year',
+        schedule_interval => INTERVAL '1 year');
 
     --- MIGRATIONS
     -- Add here your migrations
