@@ -23,7 +23,7 @@ func GetDataFormats(
 	)
 
 	var workCellId uint32
-	workCellId, err = GetWorkCellID(enterpriseName, siteName, workCellName)
+	workCellId, err = GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		return
 	}

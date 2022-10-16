@@ -21,15 +21,15 @@ var (
 	GracefulShutdownChannel = database.GracefulShutdownChannel
 )
 
-// GetWorkCellID gets the assetID from the database
-func GetWorkCellID(enterpriseName string, siteName string, workCellName string) (workCellId uint32, err error) {
-	zap.S().Infof("[GetWorkCellID] enterpriseName: %v, siteName: %v, workCellName: %v", enterpriseName, siteName, workCellName)
+// GetWorkCellId gets the assetID from the database
+func GetWorkCellId(enterpriseName string, siteName string, workCellName string) (workCellId uint32, err error) {
+	zap.S().Infof("[GetWorkCellId] enterpriseName: %v, siteName: %v, workCellName: %v", enterpriseName, siteName, workCellName)
 
 	// Get from cache if possible
 	var cacheHit bool
 	workCellId, cacheHit = internal.GetAssetIDFromCache(enterpriseName, siteName, workCellName)
 	if cacheHit { // data found
-		// zap.S().Debugf("GetWorkCellID cache hit")
+		// zap.S().Debugf("GetWorkCellId cache hit")
 		return
 	}
 
@@ -38,7 +38,7 @@ func GetWorkCellID(enterpriseName string, siteName string, workCellName string) 
 	if errors.Is(err, sql.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf(
-			"[GetWorkCellID] No asset found for enterpriseName: %v, siteName: %v, workCellName: %v",
+			"[GetWorkCellId] No asset found for enterpriseName: %v, siteName: %v, workCellName: %v",
 			enterpriseName,
 			siteName,
 			workCellName)

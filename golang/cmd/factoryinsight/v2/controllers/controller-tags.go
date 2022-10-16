@@ -108,7 +108,8 @@ func GetTagsDataHandler(c *gin.Context) {
 			return
 		}
 	case models.CustomTagGroup:
-		// TODO: Implement custom tags
+		services.ProcessCustomTagRequest(c, request)
+
 	default:
 		helpers.HandleInvalidInputError(c, err)
 		return

@@ -36,6 +36,8 @@ type GetCustomTagDataRequest struct {
 	TagAggregates []string `form:"tagAggregates" binding:"required"`
 	GapFilling    string   `form:"gapFilling" binding:"required"`
 	TimeBucket    string   `form:"timeBucket" binding:"required"`
+	From          string   `form:"from" binding:"required"`
+	To            string   `form:"to" binding:"required"`
 }
 
 type GetJobTagRequest struct {
@@ -80,9 +82,24 @@ const (
 )
 
 const (
-	AverageTagAggregate string = "Average"
-	CountTagAggregate   string = "Count"
-	MaxTagAggregate     string = "Maximum"
-	MinTagAggregate     string = "Minimum"
-	SumTagAggregate     string = "Sum"
+	AverageTagAggregate string = "avg"
+	CountTagAggregate   string = "count"
+	MaxTagAggregate     string = "max"
+	MinTagAggregate     string = "min"
+	SumTagAggregate     string = "sum"
+)
+
+const (
+	MinuteAggregateView string = "minute"
+	HourAggregateView   string = "hour"
+	DayAggregateView    string = "day"
+	WeekAggregateView   string = "week"
+	MonthAggregateView  string = "month"
+	YearAggregateView   string = "year"
+)
+
+const (
+	NoGapFilling            string = "null"
+	InterpolationGapFilling string = "interpolation"
+	LocfGapFilling          string = "locf"
 )

@@ -2,12 +2,13 @@ package services
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/repository"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
@@ -447,27 +448,14 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	workCellName := request.WorkCellName
 	tagName := request.TagName
 
-	enterpriseId, err := GetEnterpriseId(enterpriseName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
+	var data datamodel.DataResponseAny
+
+	if request.TagGroupName != models.CustomTagGroup {
+		helpers.HandleInvalidInputError(c, errors.New("invalid tag group"))
 		return
 	}
-	siteId, err := GetSiteId(enterpriseId, siteName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	areaId, err := GetAreaId(siteId, areaName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	productionLineId, err := GetProductionLineId(areaId, productionLineName)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
-	workCellId, err := GetWorkCellId(productionLineId, workCellName)
+
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -475,7 +463,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	var getCustomTagDataRequest models.GetCustomTagDataRequest
 
-	err := c.BindQuery(&getCustomTagDataRequest)
+	err = c.BindQuery(&getCustomTagDataRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -484,54 +472,78 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	tagAggregates := getCustomTagDataRequest.TagAggregates
 	gapFilling := getCustomTagDataRequest.GapFilling
 	timeBucket := getCustomTagDataRequest.TimeBucket
+	from := getCustomTagDataRequest.From
+	to := getCustomTagDataRequest.To
 
-	if internal.Contains(tagAggregates, models.AverageTagAggregate) {
+	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
+	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-		sqlStatement := `SELECT time_bucket(INTERVAL $1, timestamp) AS bucket, AVG(value) FROM processValueTable WHERE asset_id = $2 AND valueName $3`
+	var selectAggregationMethod string
+	var gapFillingMethod string
 
-		var rows *sql.Rows
-		rows, err = db.Query(sqlStatement, timeBucket, workCellId, tagName)
-		if err != nil {
-			database.ErrorHandling(sqlStatement, err, false)
-			return
-		}
-
-		defer rows.Close()
-
-		for rows.Next() {
-			var timestamp time.Time
-			var value float64
-			err = rows.Scan(&timestamp, &value)
-			if err != nil {
-				database.ErrorHandling(sqlStatement, err, false)
-				return
-			}
-		}
+	switch gapFilling {
+	case models.NoGapFilling:
+		gapFillingMethod = "%s, "
+	case models.InterpolationGapFilling:
+		gapFillingMethod = "interpolate(%s), "
+	case models.LocfGapFilling:
+		gapFillingMethod = "locf(%s), "
 	}
-
-	var aggregateStatement string
 
 	for _, tagAggregate := range tagAggregates {
 		switch tagAggregate {
 		case models.AverageTagAggregate:
-			aggregateStatement += "AVG(value), "
+			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.AverageTagAggregate)
 		case models.CountTagAggregate:
-			aggregateStatement += "COUNT(value), "
+			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.CountTagAggregate)
 		case models.MaxTagAggregate:
-			aggregateStatement += "MAX(value), "
+			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MaxTagAggregate)
 		case models.MinTagAggregate:
-			aggregateStatement += "MIN(value), "
+			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MinTagAggregate)
 		case models.SumTagAggregate:
-			aggregateStatement += "SUM(value), "
+			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.SumTagAggregate)
 		}
 	}
 
-	aggregateStatement = aggregateStatement[:len(aggregateStatement)-2]
+	selectAggregationMethod = selectAggregationMethod[:len(selectAggregationMethod)-2]
 
-	sqlStatement := `SELECT time_bucket(INTERVAL $1, timestamp) AS bucket, $2 FROM processValueTable WHERE asset_id = $3 AND valueName $4`
+	var aggregatedView string
+	var bucketName string
+
+	switch timeBucket {
+	case models.MinuteAggregateView:
+		aggregatedView = "aggregationTable_minute"
+		bucketName = "minute"
+	case models.HourAggregateView:
+		aggregatedView = "aggregationTable_hour"
+		bucketName = "hour"
+	case models.DayAggregateView:
+		aggregatedView = "aggregationTable_day"
+		bucketName = "day"
+	case models.WeekAggregateView:
+		aggregatedView = "aggregationTable_week"
+		bucketName = "week"
+	case models.MonthAggregateView:
+		aggregatedView = "aggregationTable_month"
+		bucketName = "month"
+	case models.YearAggregateView:
+		aggregatedView = "aggregationTable_year"
+		bucketName = "year"
+	}
+
+	sqlStatement := fmt.Sprintf(`SELECT
+						bucket as %s,
+ 						%s
+					 FROM %s
+					 WHERE
+					    asset_id = $1 AND
+					    valueName = $2 AND
+					    bucket BETWEEN $3 AND $4
+					 GROUP BY bucket, asset_id, valueName
+					 ORDER BY bucket ASC`, bucketName, selectAggregationMethod, aggregatedView)
 
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, timeBucket, aggregateStatement, workCellId, tagName)
+	rows, err = db.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return
@@ -539,13 +551,30 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	defer rows.Close()
 
+	cols, err := rows.Columns()
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+	colLen := len(cols)
+	values := make([]interface{}, colLen)
+
 	for rows.Next() {
-		var timestamp time.Time
-		var value float64
-		err = rows.Scan(&timestamp, &value)
+		values[0] = new(time.Time)
+		for i := 1; i < colLen; i++ {
+			values[i] = new(float64)
+		}
+
+		err = rows.Scan(values...)
 		if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
+
+		valuesSanitized := []interface{}{
+			float64(values[0].(*time.Time).UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			values}
+		data.Datapoints = append(data.Datapoints, valuesSanitized)
 	}
+	c.JSON(http.StatusOK, data)
 }
