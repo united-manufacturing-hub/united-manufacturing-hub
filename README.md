@@ -8,59 +8,19 @@
 
 <!-- <img src="docs/static/images/Otto.svg" height="150"> -->
 
-The Open-Source toolkit to build your own reliable and secure Industrial IoT platform. It provides you with an entire IT / OT infrastructure - from the edge to on-premise to the cloud. 
+The United Manufacturing Hub is an Open-Source [Helm chart for Kubernetes](https://helm.sh/), which combines state-of -the-art IT / OT tools & technologies and brings them into the hands of the engineer.
 
-It sets up and pre-configures multiple software packages using [Helm for Kubernetes](https://helm.sh/) to enable the backbone of the Industrial IoT containing:
-1. a **Unified Namespace** through an MQTT broker and Apache Kafka
-2. **Performant and scalable data storage** using relational, timeseries and blob databases
-3. Various **industry-proven connectors** to sensors, PLCs, cameras and other systems
-4. Data models, documentation, tutorials and ready-to-use solutions
+## What can you do with it?
 
-### Key benefits
-
-- **Applicable** by including manufacturing specific business logics and applications (e.g., OEE analysis or Digital Shadow)
-- **Reliable and Maintainable** through the usage of established IT and OT technologies
-- **Scalable** across factories and clouds through a microservice approach and Kubernetes
-- **Secure** by allowing to inspect and control each component to ensure confidentiality, integrity, and availability
-
-### Dashboard demo
-
-![Demo](docs/content/en/docs/dashboard.gif)
+1. **Extract data from the shopfloor** via [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red), [sensorconnect](https://learn.umh.app/docs/core/sensorconnect/) and [barcodereader](https://learn.umh.app/docs/core/barcodereader/)
+2. **Contextualize and standardize data** using [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red) and our [pre-defined datamodel](https://learn.umh.app/docs/datamodel/) (which is compliant with multiple standards)
+3. **Exchange and store data** using [MQTT](https://learn.umh.app/know/industrial-internet-of-things/techniques/mqtt/), [Kafka](https://learn.umh.app/know/industrial-internet-of-things/techniques/kafka/), TimescaleDB / PostgreSQL and Min.io
+4. **Visualize data** using [Grafana](https://learn.umh.app/know/industrial-internet-of-things/tools/#grafana) and [factoryinsight](https://learn.umh.app/docs/core/factoryinsight/)
 
 ## Get started
 
-- [Go to our documentation](https://docs.umh.app/docs/) to learn about installation, maintaining, the architecture and the topic IIoT in general
-- [Go to our website](https://www.umh.app) for commercial support and implementation
-
-## Technology & architecture
-
-The UMH consists out of a single Helm Chart for Kubernetes, which allows you to easily install, provision and configure it using a single .yaml file.
-
-The Helm Chart consists out of
-- [TimescaleDB](https://www.timescale.com/), as relational and time-series database
-- [VerneMQ](https://vernemq.com/), as MQTT Broker to connect with external devices
-- [Apache Kafka](https://kafka.apache.org/), as message broker for internal communication
-- [Node-RED](https://nodered.org/), as low-code programming tool for customization
-- A wrapper around [PLC4X](https://plc4x.apache.org/), as library to read out PLCs
-- [Grafana](https://grafana.com/) and various plugins, as default visualization tool
-- [Various self-written microservices](https://docs.umh.app/docs/developers/), as application logic (e.g., customizable OEE calculation) and/or to extract data from the shop floor (e.g., IO-Link sensors)
-
-It can be deployed 
-- in a federation (recommended), to allow each machine, production line and factory to work on its own without being reliant on external factors like internet connection
-- centralized, e.g., "everything connected with the cloud"
-- decentralized, e.g., "each machine is on its own"
-
-A [full architecture diagram](https://docs.umh.app/docs/concepts/) can be found in the documentation.
-
-## Citations
-
-- Niemeyer, C. & Gehrke, Inga & Müller, Kai & Küsters, Dennis & Gries, Thomas. (2020). Getting Small Medium Enterprises started on Industry 4.0 using retrofitting solutions. Procedia Manufacturing. 45. 208-214. 10.1016/j.promfg.2020.04.096. 
-- Kunz, P. (2020). Deep Learning zur industriellen Qualitätsprüfung: Entwicklung eines Plug-and-Play Bildverarbeitungssystems. Institut für Textiltechnik (RWTH Aachen University). 
-- Müller, M. (2020). Industrielle Bildverarbeitung zur Qualitätskontrolle in Produktionslinien: Entwicklung einer Entscheidungslogik zur Anwendungsfallspezifischen Auswahl von Hard- und Software. Institut für Textiltechnik (RWTH Aachen University). 
-- Altenhofen, N. (2021). Design and Evaluation of a Blue Ocean Strategy for an Open-Core IIoT Platform Provider in the Manufacturing Sector. Institute for Technology and Innovation Management (RWTH Aachen University). 
-- Tratner, T. (2021). Implementation of Time Series Data based Digital Time Studies for Manual Processes within the Context of a Learning Factory. Institute of Innovation and Industrial Management (TU Graz).
-
-See also [publications](https://docs.umh.app/docs/publications/) for more material!
+- [Get started by installing the United Manufacturing Hub](https://learn.umh.app/getstarted/)
+- [Visit our learning platform](https://www.umh.app) learn all about common IT, OT and IIoT concepts such as the [**Unified Namespace**](https://learn.umh.app/know/industrial-internet-of-things/techniques/unified-namespace/) and associated common open source tools such as Node-RED, Grafana and the United Manufacturing Hub.
 
 <!-- LICENSE -->
 ## License
