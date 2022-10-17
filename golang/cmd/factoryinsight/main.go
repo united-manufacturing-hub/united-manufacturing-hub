@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	buildtime       string
+	buildtime string
 	shutdownEnabled bool
 )
 
@@ -232,15 +232,33 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
 		v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v2controllers.GetWorkCellsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", v2controllers.GetDataFormatHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags", v2controllers.GetTagGroupsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName", v2controllers.GetTagsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName", v2controllers.GetTagsDataHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis", v2controllers.GetKpisMethodsHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod", v2controllers.GetKpisDataHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables", v2controllers.GetTableTypesHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType", v2controllers.GetTableDataHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType", v2controllers.GetTableDataHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
+			v2controllers.GetDataFormatHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
+			v2controllers.GetTagGroupsHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName",
+			v2controllers.GetTagsHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName",
+			v2controllers.GetTagsDataHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis",
+			v2controllers.GetKpisMethodsHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod",
+			v2controllers.GetKpisDataHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables",
+			v2controllers.GetTableTypesHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
+			v2controllers.GetTableDataHandler)
+		v2.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType",
+			v2controllers.GetTableDataHandler)
 	}
 
 	v3 := router.Group(apiString, gin.BasicAuth(accounts))
@@ -254,21 +272,38 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		// Get all work cells for a given production line
 		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v3controllers.GetWorkCellsHandler)
 		// Get all data format for a given work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName", v3controllers.GetDataFormatHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
+			v3controllers.GetDataFormatHandler)
 		// Get all tag groups for a given work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags", v3controllers.GetTagGroupsHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
+			v3controllers.GetTagGroupsHandler)
 		// Get all tags for a given tag group
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName", v3controllers.GetTagsHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName",
+			v3controllers.GetTagsHandler)
 		// Get specific data for a give work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName", v3controllers.GetTagsDataHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName",
+			v3controllers.GetTagsDataHandler)
 		// Get KPIs methods for a given work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis", v3controllers.GetKpisMethodsHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis",
+			v3controllers.GetKpisMethodsHandler)
 		// Get specific KPI data for a given work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod", v3controllers.GetKpisDataHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod",
+			v3controllers.GetKpisDataHandler)
 		// Get tables types for a given work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables", v3controllers.GetTableTypesHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables",
+			v3controllers.GetTableTypesHandler)
 		// Get specific table data for a given work cell
-		v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType", v3controllers.GetTableDataHandler)
+		v3.GET(
+			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
+			v3controllers.GetTableDataHandler)
+
 	}
 	//dataFormat
 	err := router.Run(":80")

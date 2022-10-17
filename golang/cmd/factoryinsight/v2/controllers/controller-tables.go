@@ -24,7 +24,12 @@ func GetTableTypesHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	tables, err := services.GetTableTypes(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	tables, err := services.GetTableTypes(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName,
+		request.WorkCellName)
 	// TODO: Better error handling. Check if the error is a database error or a not found error (tables is empty)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
@@ -56,28 +61,6 @@ func GetTableDataHandler(c *gin.Context) {
 		services.ProcessProductsTableRequest(c, request)
 	case models.ProductTypesTable:
 		services.ProcessProductTypesTableRequest(c, request)
-	default:
-		helpers.HandleInvalidInputError(c, err)
-		return
-	}
-}
-
-func GetShopfloorLossesTableDataHandler(c *gin.Context) {
-	var request models.GetTableDataRequest
-
-	err := c.BindUri(&request)
-	if err != nil {
-		helpers.HandleInvalidInputError(c, err)
-		return
-	}
-
-	// Check if the user has access to that resource
-	err = helpers.CheckIfUserIsAllowed(c, request.EnterpriseName)
-	if err != nil {
-		return
-	}
-
-	switch request.TableType {
 	case models.AvailabilityHistogramTable:
 		services.ProcessAvailabilityHistogramTableRequest(c, request)
 	case models.AvailabilityTotalTable:

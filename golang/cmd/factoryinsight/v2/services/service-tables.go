@@ -13,7 +13,12 @@ import (
 	"time"
 )
 
-func GetTableTypes(enterpriseName string, siteName string, areaName string, productionLineName string, workCellName string) (tables models.GetTableTypesResponse, err error) {
+func GetTableTypes(
+	enterpriseName string,
+	siteName string,
+	areaName string,
+	productionLineName string,
+	workCellName string) (tables models.GetTableTypesResponse, err error) {
 
 	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
@@ -299,7 +304,7 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"state", "occurrences"}
 
-	data.Datapoints, err = CalculateStateHistogram(processedStates, includeRunning, keepStatesInteger, configuration)
+	data.Datapoints, err = CalculateStateHistogram(processedStates, *includeRunning, *keepStatesInteger, configuration)
 
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
@@ -307,6 +312,198 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 	}
 
 	c.JSON(http.StatusOK, data)
+}
+
+func ProcessAvailabilityTotalTableRequest(c *gin.Context, request models.GetTableDataRequest) {
+
+	// ### store getDataRequest in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+
+	var getAggregatedStatesRequestInstance models.GetAggregatedStatesRequest
+	var err error
+
+	err = c.BindQuery(&getAggregatedStatesRequestInstance)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	from := getAggregatedStatesRequestInstance.From
+	to := getAggregatedStatesRequestInstance.To
+	keepStatesInteger := getAggregatedStatesRequestInstance.KeepStatesInteger
+	aggregationType := getAggregatedStatesRequestInstance.AggregationType
+	includeRunning := getAggregatedStatesRequestInstance.IncludeRunning
+
+	// ### fetch necessary data from database ###
+
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// enterpriseName configuration
+	configuration, err := GetEnterpriseConfiguration(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	// TODO: parallelize
+
+	// raw states from database
+	rawStates, err := GetStatesRaw(workCellId, from, to, configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get shifts for noShift detection
+	rawShifts, err := GetShiftsRaw(workCellId, from, to, configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get counts for lowSpeed detection
+	countSlice, err := GetCountsRaw(workCellId, from, to)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(workCellId, from, to)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// ### calculate (only one function allowed here) ###
+
+	processedStates, err := ProcessStatesOptimized(
+		workCellId,
+		rawStates,
+		rawShifts,
+		countSlice,
+		orderArray,
+		from,
+		to,
+		configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// TODO: #84 Convert states to string when keepStatesInteger is false and aggregationType is 1
+
+	// Prepare JSON
+	var data datamodel.DataResponseAny
+	if aggregationType == 0 { // default case. aggregate over everything
+		data.ColumnNames = []string{"state", "duration"}
+
+		data.Datapoints, err = CalculateStopParetos(
+			processedStates,
+			to,
+			*includeRunning,
+			*keepStatesInteger,
+			configuration)
+
+		if err != nil {
+			helpers.HandleInternalServerError(c, err)
+			return
+		}
+	} else {
+		data.ColumnNames = []string{"category", "state", "duration"}
+
+		if aggregationType == 1 { // category: hour in a day
+
+			// create resultDatapoints [][]float64. resultDatapoints[HOUR][STATE] = sum of STATE in that hour
+			var resultDatapoints [24][datamodel.MaxState]float64 // 24 hours in a day, 2000 different states (0 - 1999)
+
+			// round up "from" till the next full hour
+			tempFrom := time.Date(from.Year(), from.Month(), from.Day(), from.Hour()+1, 0, 0, 0, from.Location())
+
+			if !tempFrom.Before(to) {
+				zap.S().Warnf("Not big enough time range (!tempFrom.Before(to))", tempFrom, to)
+			}
+
+			// round down "to" till the next full hour
+			tempTo := time.Date(to.Year(), to.Month(), to.Day(), to.Hour(), 0, 0, 0, to.Location())
+
+			if !tempTo.After(from) {
+				zap.S().Warnf("Not big enough time range (!tempTo.After(from)) %v -> %v", tempTo, from)
+			}
+
+			// Call CalculateStopParetos for every hour between "from" and "to" and add results to resultDatapoints
+			oldD := tempFrom
+
+			for d := tempFrom; !d.After(tempTo); d = d.Add(time.Hour) { // timestamp is beginning of the state. d is current progress.
+				if d == oldD { // if first entry
+					continue
+				}
+
+				currentHour := d.Hour()
+
+				processedStatesCleaned := RemoveUnnecessaryElementsFromStateSlice(processedStates, oldD, d)
+
+				var tempResult [][]interface{}
+				tempResult, err = CalculateStopParetos(processedStatesCleaned, d, *includeRunning, true, configuration)
+				if err != nil {
+					helpers.HandleInternalServerError(c, err)
+					return
+				}
+
+				for _, dataPoint := range tempResult {
+					state, ok := dataPoint[0].(int)
+					if !ok {
+						zap.S().Warnf("Could not convert state to int %v", dataPoint[0])
+						continue
+					}
+					var duration float64
+					duration, ok = dataPoint[1].(float64)
+					if !ok {
+						zap.S().Warnf("Could not convert duration to float64 %v", dataPoint[1])
+						continue
+					}
+
+					resultDatapoints[currentHour][state] += duration
+				}
+
+				oldD = d
+			}
+
+			// create return JSON
+			for index, currentHourDatapoint := range resultDatapoints {
+				hour := index
+
+				for state, duration := range currentHourDatapoint {
+
+					if duration > 0 {
+						fullRow := []interface{}{hour, state, duration}
+						data.Datapoints = append(data.Datapoints, fullRow)
+					}
+
+				}
+
+			}
+
+		}
+	}
+
+	c.JSON(http.StatusOK, data)
+
+}
+
+func ProcessPerformanceTableRequest(c *gin.Context, request models.GetTableDataRequest) {
+	c.String(http.StatusNotImplemented, "Not implemented yet")
+}
+
+func ProcessQualityTableRequest(c *gin.Context, request models.GetTableDataRequest) {
+	c.String(http.StatusNotImplemented, "Not implemented yet")
 }
 
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
@@ -673,7 +870,11 @@ ORDER BY begin_timestamp ASC
 	}
 
 	var orderRows *sql.Rows
-	orderRows, err = db.Query(sqlGetRunningOrders, workCellId, float64(orderQueryEnd)/1000, float64(orderQueryBegin)/1000)
+	orderRows, err = db.Query(
+		sqlGetRunningOrders,
+		workCellId,
+		float64(orderQueryEnd)/1000,
+		float64(orderQueryBegin)/1000)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		database.ErrorHandling(sqlGetRunningOrders, err, false)
