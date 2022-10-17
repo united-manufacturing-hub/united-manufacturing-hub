@@ -1,7 +1,6 @@
 package services
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"go.uber.org/zap"
 )
@@ -28,16 +27,13 @@ func GetDataFormats(
 		return
 	}
 
-	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
-
 	var stateExists bool
-	err = db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	stateExists, err = GetStateExists(workCellId)
 	if err != nil {
-		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 	if stateExists { // TODO: Check if this is correct
-		dataFormats = []string{models.TagsDataFormat, models.KpisDataFormat, models.ListsDataFormat}
+		dataFormats = []string{models.TagsDataFormat, models.KpisDataFormat, models.TablesDataFormat}
 	} else {
 		dataFormats = []string{""}
 	}

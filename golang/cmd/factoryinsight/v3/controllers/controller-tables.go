@@ -1,5 +1,8 @@
 package controllers
 
+/*
+
+
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
@@ -24,7 +27,12 @@ func GetTableTypesHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	tables, err := services.GetTableTypes(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	tables, err := services.GetTableTypes(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName,
+		request.WorkCellName)
 	// TODO: Better error handling. Check if the error is a database error or a not found error (tables is empty)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
@@ -61,3 +69,4 @@ func GetTableDataHandler(c *gin.Context) {
 		return
 	}
 }
+*/

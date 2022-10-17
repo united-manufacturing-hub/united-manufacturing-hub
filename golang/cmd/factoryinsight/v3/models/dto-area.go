@@ -1,8 +1,11 @@
 package models
 
+/*
+
+
 type Area struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetAreasResponse struct {
@@ -13,3 +16,4 @@ type GetAreasRequest struct {
 	EnterpriseName string `uri:"enterpriseName" binding:"required"`
 	SiteName       string `uri:"siteName" binding:"required"`
 }
+*/

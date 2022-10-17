@@ -3,8 +3,8 @@ package models
 import "time"
 
 type TableType struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetTableTypesResponse struct {
@@ -46,12 +46,20 @@ type GetProductTypesTableRequest struct {
 type GetAvailabilityHistogramRequest struct {
 	From              time.Time `form:"from" binding:"required"`
 	To                time.Time `form:"to" binding:"required"`
-	IncludeRunning    bool      `form:"includeRunning"`
-	KeepStatesInteger bool      `form:"keepStatesInteger"`
+	IncludeRunning    *bool     `form:"includeRunning" binding:"required"`    // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
+	KeepStatesInteger *bool     `form:"keepStatesInteger" binding:"required"` // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
+}
+
+type GetAggregatedStatesRequest struct {
+	From              time.Time `form:"from" binding:"required"`
+	To                time.Time `form:"to" binding:"required"`
+	IncludeRunning    *bool     `form:"includeRunning" binding:"required"`    // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
+	KeepStatesInteger *bool     `form:"keepStatesInteger" binding:"required"` // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
+	AggregationType   int       `form:"aggregationType"`
 }
 
 const (
-	JobTable                   string = "job"
+	JobsTable                  string = "jobs"
 	ProductsTable              string = "products"
 	ProductTypesTable          string = "productTypes"
 	AvailabilityHistogramTable string = "availabilityHistogram"

@@ -33,27 +33,27 @@ type GetTagsDataRequest struct {
 }
 
 type GetCustomTagDataRequest struct {
-	TagAggregates []string `form:"tagAggregates" binding:"required"`
-	GapFilling    string   `form:"gapFilling" binding:"required"`
-	TimeBucket    string   `form:"timeBucket" binding:"required"`
-	From          string   `form:"from" binding:"required"`
-	To            string   `form:"to" binding:"required"`
+	GapFilling    string    `form:"gapFilling" binding:"required"`
+	TimeBucket    string    `form:"timeBucket" binding:"required"`
+	From          time.Time `form:"from" binding:"required"`
+	To            time.Time `form:"to" binding:"required"`
+	TagAggregates string    `form:"tagAggregates" binding:"required"`
 }
 
 type GetJobTagRequest struct {
-	From time.Time `json:"from" binding:"required"`
-	To   time.Time `json:"to" binding:"required"`
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
 }
 
 type GetCountTagRequest struct {
-	From                time.Time `json:"from" binding:"required"`
-	To                  time.Time `json:"to" binding:"required"`
-	AccumulatedProducts bool      `json:"accumulatedProducts"`
+	From                time.Time `form:"from" binding:"required"`
+	To                  time.Time `form:"to" binding:"required"`
+	AccumulatedProducts bool      `form:"accumulatedProducts"`
 }
 
 type GetShiftsTagRequest struct {
-	From time.Time `json:"from" binding:"required"`
-	To   time.Time `json:"to" binding:"required"`
+	From time.Time `form:"from" binding:"required"`
+	To   time.Time `form:"to" binding:"required"`
 }
 
 type GetStateTagRequest struct {

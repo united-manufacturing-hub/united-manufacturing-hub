@@ -1,5 +1,8 @@
 package services
 
+/*
+
+
 import (
 	"database/sql"
 	"errors"
@@ -48,3 +51,4 @@ func GetAreas(enterpriseName string, siteName string) (areas models.GetAreasResp
 
 	return
 }
+*/

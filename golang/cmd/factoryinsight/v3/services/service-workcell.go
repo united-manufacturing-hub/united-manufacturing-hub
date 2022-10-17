@@ -1,5 +1,8 @@
 package services
 
+/*
+
+
 import (
 	"database/sql"
 	"errors"
@@ -27,7 +30,12 @@ func GetWorkCells(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, entrerpriseName, siteName, areaName, productionLineName)
 	if errors.Is(err, sql.ErrNoRows) {
-		zap.S().Warnf("[GetWorkCells] No work cells found for enterprise %s, site %s, area %s and production line %s", entrerpriseName, siteName, areaName, productionLineName)
+		zap.S().Warnf(
+			"[GetWorkCells] No work cells found for enterprise %s, site %s, area %s and production line %s",
+			entrerpriseName,
+			siteName,
+			areaName,
+			productionLineName)
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -52,3 +60,4 @@ func GetWorkCells(
 
 	return
 }
+*/

@@ -1,5 +1,8 @@
 package controllers
 
+/*
+
+
 import (
 	"database/sql"
 	"errors"
@@ -37,3 +40,4 @@ func GetAreasHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, areas)
 }
+*/

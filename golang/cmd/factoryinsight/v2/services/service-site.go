@@ -14,9 +14,10 @@ func GetSites(enterpriseName string) (sites []string, err error) {
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, enterpriseName)
+	rows, err = database.Db.Query(sqlStatement, enterpriseName)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)

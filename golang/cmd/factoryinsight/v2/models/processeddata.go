@@ -24,6 +24,6 @@ type ProductStruct struct {
 }
 
 type ChannelResult struct {
-	err         error
-	returnValue interface{}
+	Err         error
+	ReturnValue interface{}
 }

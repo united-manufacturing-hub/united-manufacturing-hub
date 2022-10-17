@@ -1,14 +1,14 @@
 package services
 
+/*
+
+
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/repository"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
-	"time"
 )
 
 func GetTagGroups(
@@ -177,6 +177,7 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 	c.JSON(http.StatusOK, counts)
+	* /
 }
 
 func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
@@ -237,6 +238,7 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 // The result is usually visualized in "DiscretePanel" in Grafana
 func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -360,10 +362,12 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	}
 
 	c.JSON(http.StatusOK, data)
+	* /
 }
 
 func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -418,4 +422,6 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 		return
 	}
 	c.JSON(http.StatusOK, counts)
+	* /
 }
+*/

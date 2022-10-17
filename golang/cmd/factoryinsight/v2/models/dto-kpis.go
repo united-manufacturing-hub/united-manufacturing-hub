@@ -3,8 +3,8 @@ package models
 import "time"
 
 type KpiMethod struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetKpisMethodsResponse struct {

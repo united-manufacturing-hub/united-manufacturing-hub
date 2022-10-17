@@ -1,5 +1,8 @@
 package controllers
 
+/*
+
+
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
@@ -24,7 +27,12 @@ func GetKpisMethodsHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	kpis, err := services.GetKpisMethods(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	kpis, err := services.GetKpisMethods(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName,
+		request.WorkCellName)
 	// TODO: Better error handling. Check if the error is a database error or a not found error (kpis is empty)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
@@ -63,3 +71,4 @@ func GetKpisDataHandler(c *gin.Context) {
 		return
 	}
 }
+*/

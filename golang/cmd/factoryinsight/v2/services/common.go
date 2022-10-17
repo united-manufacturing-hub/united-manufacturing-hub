@@ -15,15 +15,30 @@ import (
 )
 
 var (
-	db                      = database.Db
-	logData                 = false
-	Mutex                   = database.Mutex
-	GracefulShutdownChannel = database.GracefulShutdownChannel
+	logData = false
 )
 
+func GetStateExists(workCellId uint32) (bool, error) {
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
+
+	var stateExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	return stateExists, err
+}
+
 // GetWorkCellId gets the assetID from the database
-func GetWorkCellId(enterpriseName string, siteName string, workCellName string) (workCellId uint32, err error) {
-	zap.S().Infof("[GetWorkCellId] enterpriseName: %v, siteName: %v, workCellName: %v", enterpriseName, siteName, workCellName)
+func GetWorkCellId(enterpriseName string, siteName string, workCellName string) (
+	workCellId uint32,
+	err error) {
+	zap.S().Infof(
+		"[GetWorkCellId] enterpriseName: %v, siteName: %v, workCellName: %v",
+		enterpriseName,
+		siteName,
+		workCellName)
 
 	// Get from cache if possible
 	var cacheHit bool
@@ -34,7 +49,7 @@ func GetWorkCellId(enterpriseName string, siteName string, workCellName string) 
 	}
 
 	sqlStatement := "SELECT id FROM assetTable WHERE assetID=$1 AND location=$2 AND customer=$3;"
-	err = db.QueryRow(sqlStatement, workCellName, siteName, enterpriseName).Scan(&workCellId)
+	err = database.Db.QueryRow(sqlStatement, workCellName, siteName, enterpriseName).Scan(&workCellId)
 	if errors.Is(err, sql.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf(
@@ -46,7 +61,6 @@ func GetWorkCellId(enterpriseName string, siteName string, workCellName string) 
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
-
 		return
 	}
 
@@ -87,7 +101,7 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 		WHERE 
 			customer=$1;
 	`
-	err = db.QueryRow(sqlStatement, enterpriseName).Scan(
+	err = database.Db.QueryRow(sqlStatement, enterpriseName).Scan(
 		&configuration.MicrostopDurationInSeconds,
 		&configuration.IgnoreMicrostopUnderThisDurationInSeconds,
 		&configuration.MinimumRunningTimeInSeconds,
@@ -130,7 +144,7 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 			150000)
 		configuration.LanguageCode = datamodel.LanguageEnglish // English
 		zap.S().Warnf("No configuration stored for enterprise %s, using default !", enterpriseName)
-		return
+		return configuration, nil
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 
@@ -148,12 +162,20 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 }
 
 // GetStatesRaw gets all states for a specific work cell in a timerange. It returns an array of datamodel.StateEntry
-func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []datamodel.StateEntry, err error) {
-	zap.S().Infof("[GetStatesRaw] workCellId: %v, from: %v, to: %v, configuration: %v", workCellId, from, to, configuration)
+func GetStatesRaw(
+	workCellId uint32,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []datamodel.StateEntry, err error) {
+	zap.S().Infof(
+		"[GetStatesRaw] workCellId: %v, from: %v, to: %v, configuration: %v",
+		workCellId,
+		from,
+		to,
+		configuration)
 
 	key := fmt.Sprintf("GetStatesRaw-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
-	if Mutex.TryLock(key) { // is is already running?
-		defer Mutex.Unlock(key)
+	if database.Mutex.TryLock(key) { // is is already running?
+		defer database.Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -171,9 +193,9 @@ func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		var timestamp time.Time
 		var dataPoint int
 
-		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE workCellId=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
+		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
 
-		err = db.QueryRow(sqlStatement, workCellId, from).Scan(&timestamp, &dataPoint)
+		err = database.Db.QueryRow(sqlStatement, workCellId, from).Scan(&timestamp, &dataPoint)
 		if errors.Is(err, sql.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
@@ -193,20 +215,22 @@ func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel
 			data = append(data, fullRow)
 		}
 
-		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE workCellId=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
+		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp;`
 
 		var rows *sql.Rows
-		rows, err = db.Query(sqlStatement, workCellId, from, to)
+		rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
 		if errors.Is(err, sql.ErrNoRows) {
-			database.ErrorHandling(sqlStatement, err, false)
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
 			return
 		} else if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
-
 			return
 		}
 
-		defer rows.Close()
+		defer func(rows *sql.Rows) {
+			_ = rows.Close()
+		}(rows)
 
 		for rows.Next() {
 			var timestamp time.Time
@@ -244,12 +268,20 @@ func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShiftsRaw gets all shifts for a specific work cell in a timerange in a raw format
-func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []datamodel.ShiftEntry, err error) {
-	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v, configuration: %v", workCellId, from, to, configuration)
+func GetShiftsRaw(
+	workCellId uint32,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []datamodel.ShiftEntry, err error) {
+	zap.S().Infof(
+		"[GetShiftsRaw] workCellId: %v, from: %v, to: %v, configuration: %v",
+		workCellId,
+		from,
+		to,
+		configuration)
 
 	key := fmt.Sprintf("GetShiftsRaw-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
-	if Mutex.TryLock(key) { // is is already running?
-		defer Mutex.Unlock(key)
+	if database.Mutex.TryLock(key) { // is is already running?
+		defer database.Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -268,15 +300,15 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		var shiftType int
 
 		sqlStatement := `
-		SELECT begin_timestamp, end_timestamp, type 
-		FROM shiftTable 
-		WHERE workCellId=$1 
-			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-			OR (begin_timestamp < $2 AND end_timestamp > $3))
-		ORDER BY begin_timestamp ASC LIMIT 1;
-		`
+				SELECT begin_timestamp, end_timestamp, type 
+				FROM shiftTable 
+				WHERE asset_id=$1 
+					AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+					OR (begin_timestamp < $2 AND end_timestamp > $3))
+				ORDER BY begin_timestamp LIMIT 1;
+				`
 
-		err = db.QueryRow(sqlStatement, workCellId, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
+		err = database.Db.QueryRow(sqlStatement, workCellId, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
 		if errors.Is(err, sql.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
@@ -310,15 +342,19 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		}
 
 		sqlStatement = `
-		SELECT begin_timestamp, end_timestamp, type 
-		FROM shiftTable 
-		WHERE workCellId=$1 
-			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-			OR (begin_timestamp < $2 AND end_timestamp > $3))
-		ORDER BY begin_timestamp ASC OFFSET 1;`
+				SELECT begin_timestamp, end_timestamp, type 
+				FROM shiftTable 
+				WHERE asset_id=$1 
+					AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+					OR (begin_timestamp < $2 AND end_timestamp > $3))
+				ORDER BY begin_timestamp OFFSET 1;`
 
 		var rows *sql.Rows
-		rows, err = db.Query(sqlStatement, workCellId, from, to) // OFFSET to prevent entering first result twice
+		rows, err = database.Db.Query(
+			sqlStatement,
+			workCellId,
+			from,
+			to) // OFFSET to prevent entering first result twice
 		if errors.Is(err, sql.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
@@ -327,7 +363,9 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 			return
 		}
 
-		defer rows.Close()
+		defer func(rows *sql.Rows) {
+			_ = rows.Close()
+		}(rows)
 
 		for rows.Next() {
 
@@ -368,7 +406,10 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShifts gets all shifts for a specific asset in a timerange
-func GetShifts(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetShifts(
+	enterpriseName, siteName, areaName, productionLineName, workCellName string,
+	workCellId uint32,
+	from, to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v", workCellId, from, to)
 
 	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "shiftName"
@@ -414,8 +455,8 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 	zap.S().Infof("[GetCountsRaw] workCellId: %v from: %v, to: %v", workCellId, from, to)
 
 	key := fmt.Sprintf("GetCountsRaw-%d-%s-%s", workCellId, from, to)
-	if Mutex.TryLock(key) { // is is already running?
-		defer Mutex.Unlock(key)
+	if database.Mutex.TryLock(key) { // is is already running?
+		defer database.Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -427,9 +468,9 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 
 		// no data in cache
 		// TODO: update query and implementation, no "scrap" field in new datamodel
-		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE workCellId=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
+		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp;`
 		var rows *sql.Rows
-		rows, err = db.Query(sqlStatement, workCellId, from, to)
+		rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
 		if errors.Is(err, sql.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
@@ -439,7 +480,9 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 			return
 		}
 
-		defer rows.Close()
+		defer func(rows *sql.Rows) {
+			_ = rows.Close()
+		}(rows)
 
 		for rows.Next() {
 			var timestamp time.Time
@@ -481,7 +524,10 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 }
 
 // GetCounts gets all states for a specific asset in a timerange
-func GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetCounts(
+	enterpriseName, siteName, areaName, productionLineName, workCellName string,
+	workCellId uint32,
+	from, to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof("[GetCounts] workCellId: %v from: %v, to: %v", workCellId, from, to)
 
 	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "count"
@@ -491,7 +537,7 @@ func GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellN
 	var countSlice []datamodel.CountEntry
 	countSlice, err = GetCountsRaw(workCellId, from, to)
 	if err != nil {
-		zap.S().Errorf("GetCountsRaw failed", err)
+		zap.S().Errorf("GetCountsRaw failed: %v", err)
 
 		return
 	}
@@ -508,29 +554,30 @@ func GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellN
 	return
 }
 
-// GetOrdersRaw gets all order and product infirmation in a specific time range for a work cell
+// GetOrdersRaw gets all order and product information in a specific time range for a work cell
 func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.OrdersRaw, err error) {
 	zap.S().Infof("[GetOrdersRaw] workCellId: %v from: %v, to: %v", workCellId, from, to)
 
 	sqlStatement := `
-		SELECT order_name, target_units, begin_timestamp, end_timestamp, productTable.product_name, productTable.time_per_unit_in_seconds
-		FROM orderTable 
-		FULL JOIN productTable ON productTable.product_id = orderTable.product_id
-		WHERE 
-			begin_timestamp IS NOT NULL 
-			AND end_timestamp IS NOT NULL 
-			AND orderTable.workCellId = $1 
-			AND ( 
-				(begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
-				OR (begin_timestamp < $2 AND end_timestamp > $3)
-			)
-		ORDER BY begin_timestamp ASC;
-	`
+			SELECT order_name, target_units, begin_timestamp, end_timestamp, productTable.product_name, productTable.time_per_unit_in_seconds
+			FROM orderTable 
+			FULL JOIN productTable ON productTable.product_id = orderTable.product_id
+			WHERE 
+				begin_timestamp IS NOT NULL 
+				AND end_timestamp IS NOT NULL 
+				AND orderTable.asset_id = $1 
+				AND ( 
+					(begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+					OR (begin_timestamp < $2 AND end_timestamp > $3)
+				)
+			ORDER BY begin_timestamp;
+		`
 
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, workCellId, from, to)
+	rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -538,7 +585,9 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 		return
 	}
 
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 
 	for rows.Next() {
 
@@ -571,7 +620,10 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 }
 
 // GetOrdersTimeline gets all orders for a specific asset in a timerange for a timeline
-func GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetOrdersTimeline(
+	enterpriseName, siteName, areaName, productionLineName, workCellName string,
+	workCellId uint32,
+	from, to time.Time) (data datamodel.DataResponseAny, err error) {
 
 	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
@@ -580,7 +632,7 @@ func GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, w
 
 	rawOrders, err := GetOrdersRaw(workCellId, from, to)
 	if err != nil {
-		zap.S().Errorf("GetOrdersRaw failed", err)
+		zap.S().Errorf("GetOrdersRaw failed: %v", err)
 
 		return
 	}
@@ -599,26 +651,36 @@ func GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, w
 }
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
-func GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, workCellName string, workCellId uint32, from, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
-	zap.S().Infof("[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v", workCellId, from, to, aggregatedInterval)
+func GetProductionSpeed(
+	enterpriseName, siteName, areaName, productionLineName, workCellName string,
+	workCellId uint32,
+	from, to time.Time,
+	aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
+	zap.S().Infof(
+		"[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v",
+		workCellId,
+		from,
+		to,
+		aggregatedInterval)
 
 	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
-	FROM countTable 
-	WHERE workCellId=$1 
-		AND timestamp BETWEEN $2 AND $3 
-	GROUP BY speedPerIntervall 
-	ORDER BY speedPerIntervall ASC;`
+		SELECT time_bucket('1 minutes', timestamp) as speedPerInterval, coalesce(sum(count),0)  
+		FROM countTable 
+		WHERE asset_id=$1 
+			AND timestamp BETWEEN $2 AND $3 
+		GROUP BY speedPerInterval 
+		ORDER BY speedPerInterval;`
 
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, workCellId, from, to)
+	rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -626,9 +688,11 @@ func GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, 
 		return
 	}
 
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 
-	// for custom gapfilling
+	// for custom gap-filling
 	var previousTimestamp time.Time
 
 	for rows.Next() {
@@ -644,7 +708,7 @@ func GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, 
 
 		// TODO: #92 Return timestamps in RFC3339 in /productionSpeed
 
-		// gapfilling to have constant 0 in grafana
+		// gap-filling to have constant 0 in grafana
 		if !previousTimestamp.IsZero() {
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
@@ -689,6 +753,6 @@ func BusinessLogicErrorHandling(operationName string, err error, isCritical bool
 		"error", err.Error(),
 	)
 	if isCritical {
-		signal.Notify(GracefulShutdownChannel, syscall.SIGTERM)
+		signal.Notify(database.GracefulShutdownChannel, syscall.SIGTERM)
 	}
 }

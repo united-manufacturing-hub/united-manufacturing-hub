@@ -1,16 +1,20 @@
 package services
 
+/*
+
+
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/repository"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
-	"net/http"
 )
 
-func GetKpisMethods(enterpriseName string, siteName string, areaName string, productionLineName string, workCellName string) (kpis models.GetKpisMethodsResponse, err error) {
+func GetKpisMethods(
+	enterpriseName string,
+	siteName string,
+	areaName string,
+	productionLineName string,
+	workCellName string) (kpis models.GetKpisMethodsResponse, err error) {
 
 	enterpriseId, err := GetEnterpriseId(enterpriseName)
 	if err != nil {
@@ -54,6 +58,7 @@ func GetKpisMethods(enterpriseName string, siteName string, areaName string, pro
 
 func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request values in proper variables ###
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -209,10 +214,13 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	}
 
 	c.JSON(http.StatusOK, data)
+
+	* /
 }
 
 func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request in proper variables ###
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -365,10 +373,13 @@ func ProcessAvailabilityKpiRequest(c *gin.Context, request models.GetKpisDataReq
 
 	c.JSON(http.StatusOK, data)
 
+	* /
+
 }
 
 func ProcessPerformanceKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request in proper variables ###
 	enterprise := request.EnterpriseName
 	site := request.SiteName
@@ -499,10 +510,13 @@ func ProcessPerformanceKpiRequest(c *gin.Context, request models.GetKpisDataRequ
 	}
 
 	c.JSON(http.StatusOK, data)
+
+	* /
 }
 
 func ProcessQualityKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request in proper variables ###
 	enterprise := request.EnterpriseName
 	site := request.SiteName
@@ -576,4 +590,7 @@ func ProcessQualityKpiRequest(c *gin.Context, request models.GetKpisDataRequest)
 	}
 
 	c.JSON(http.StatusOK, data)
+
+	* /
 }
+*/

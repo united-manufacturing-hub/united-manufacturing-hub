@@ -182,7 +182,7 @@ data:
     WITH (timescaledb.continuous) AS
     SELECT asset_id,
            valueName,
-           time_bucket_gapfill(INTERVAL '1 minute', timestamp) AS bucket,
+           time_bucket(INTERVAL '1 minute', timestamp) AS bucket,
            AVG(value) AS avg,
            COUNT(value) AS count,
            MAX(value) AS max,
@@ -201,7 +201,7 @@ data:
     WITH (timescaledb.continuous) AS
     SELECT asset_id,
            valueName,
-           time_bucket_gapfill(INTERVAL '1 hour', timestamp) AS bucket,
+           time_bucket(INTERVAL '1 hour', timestamp) AS bucket,
            AVG(value) AS avg,
            COUNT(value) AS count,
            MAX(value) AS max,
@@ -220,7 +220,7 @@ data:
     WITH (timescaledb.continuous) AS
     SELECT asset_id,
            valueName,
-           time_bucket_gapfill(INTERVAL '1 day', timestamp) AS bucket,
+           time_bucket(INTERVAL '1 day', timestamp) AS bucket,
            AVG(value) AS avg,
            COUNT(value) AS count,
            MAX(value) AS max,
@@ -239,7 +239,7 @@ data:
     WITH (timescaledb.continuous) AS
     SELECT asset_id,
            valueName,
-           time_bucket_gapfill(INTERVAL '1 week', timestamp) AS bucket,
+           time_bucket(INTERVAL '1 week', timestamp) AS bucket,
            AVG(value) AS avg,
            COUNT(value) AS count,
            MAX(value) AS max,
@@ -258,7 +258,7 @@ data:
     WITH (timescaledb.continuous) AS
     SELECT asset_id,
            valueName,
-           time_bucket_gapfill(INTERVAL '1 month', timestamp) AS bucket,
+           time_bucket(INTERVAL '1 month', timestamp) AS bucket,
            AVG(value) AS avg,
            COUNT(value) AS count,
            MAX(value) AS max,
@@ -277,7 +277,7 @@ data:
     WITH (timescaledb.continuous) AS
     SELECT asset_id,
            valueName,
-           time_bucket_gapfill(INTERVAL '1 year', timestamp) AS bucket,
+           time_bucket(INTERVAL '1 year', timestamp) AS bucket,
            AVG(value) AS avg,
            COUNT(value) AS count,
            MAX(value) AS max,

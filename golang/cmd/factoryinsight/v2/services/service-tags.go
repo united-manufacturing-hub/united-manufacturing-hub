@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
@@ -16,7 +16,9 @@ import (
 	"time"
 )
 
-func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCellName string) (tagGroups []string, err error) {
+func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCellName string) (
+	tagGroups []string,
+	err error) {
 	zap.S().Infof(
 		"[GetTagGroups] Getting tag groups for enterprise %s, site %s, area %s, production line %s and work cell %s",
 		enterpriseName,
@@ -45,13 +47,14 @@ func GetStandardTags() (tags []string, err error) {
 	return
 }
 
-func GetCustomTags(workCellName string) (grouping map[string][]string, err error) {
+func GetCustomTags(workCellId uint32) (grouping map[string][]string, err error) {
+	grouping = make(map[string][]string)
 	zap.S().Infof(
-		"[GetTags] Getting custom tags for work cell %s", workCellName)
+		"[GetTags] Getting custom tags for work cell %s", workCellId)
 
 	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
 
-	rows, err := db.Query(sqlStatement, workCellName)
+	rows, err := database.Db.Query(sqlStatement, workCellId)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return
@@ -68,7 +71,7 @@ func GetCustomTags(workCellName string) (grouping map[string][]string, err error
 		}
 
 		if strings.Count(valueName, "_") == 1 {
-			if !strings.HasPrefix(valueName, "_") || !strings.HasSuffix(valueName, "_") {
+			if !strings.HasPrefix(valueName, "_") && !strings.HasSuffix(valueName, "_") {
 				left, right, _ := strings.Cut(valueName, "_")
 				grouping[left] = append(grouping[left], right)
 			}
@@ -107,7 +110,15 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
-	data, err := GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getJobTagRequest.From, getJobTagRequest.To)
+	data, err := GetOrdersTimeline(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		getJobTagRequest.From,
+		getJobTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -143,7 +154,15 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
-	counts, err := GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getCountTagRequest.From, getCountTagRequest.To)
+	counts, err := GetCounts(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		getCountTagRequest.From,
+		getCountTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -176,7 +195,15 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	// Fetching from the database
-	shifts, err := GetShifts(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getShiftsTagRequest.From, getShiftsTagRequest.To)
+	shifts, err := GetShifts(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		getShiftsTagRequest.From,
+		getShiftsTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -323,7 +350,16 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	aggregationInterval := getThroughputTagRequest.AggregationInterval
 
 	// Fetching from the database
-	counts, err := GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, from, to, aggregationInterval)
+	counts, err := GetProductionSpeed(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		from,
+		to,
+		aggregationInterval)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -332,6 +368,8 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 }
 
 func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// FIXME: The views and queries are incorrect
+
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
 	areaName := request.AreaName
@@ -360,43 +398,32 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 
-	tagAggregates := getCustomTagDataRequest.TagAggregates
+	rawTagAggregates := getCustomTagDataRequest.TagAggregates
 	gapFilling := getCustomTagDataRequest.GapFilling
 	timeBucket := getCustomTagDataRequest.TimeBucket
 	from := getCustomTagDataRequest.From
 	to := getCustomTagDataRequest.To
 
-	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
-	data.ColumnNames = []string{"timestamp", JSONColumnName}
-
-	var selectAggregationMethod string
 	var gapFillingMethod string
 
 	switch gapFilling {
 	case models.NoGapFilling:
-		gapFillingMethod = "%s, "
+		gapFillingMethod = "%s"
 	case models.InterpolationGapFilling:
-		gapFillingMethod = "interpolate(%s), "
+		gapFillingMethod = "interpolate(%s)"
 	case models.LocfGapFilling:
-		gapFillingMethod = "locf(%s), "
+		gapFillingMethod = "locf(%s)"
+	default:
+		helpers.HandleInvalidInputError(
+			c,
+			fmt.Errorf(
+				"invalid gap filling method: %s. Valid values: %s, %s, %s",
+				gapFilling,
+				models.NoGapFilling,
+				models.InterpolationGapFilling,
+				models.LocfGapFilling))
+		return
 	}
-
-	for _, tagAggregate := range tagAggregates {
-		switch tagAggregate {
-		case models.AverageTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.AverageTagAggregate)
-		case models.CountTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.CountTagAggregate)
-		case models.MaxTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MaxTagAggregate)
-		case models.MinTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MinTagAggregate)
-		case models.SumTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.SumTagAggregate)
-		}
-	}
-
-	selectAggregationMethod = selectAggregationMethod[:len(selectAggregationMethod)-2]
 
 	var aggregatedView string
 	var bucketName string
@@ -420,21 +447,118 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	case models.YearAggregateView:
 		aggregatedView = "aggregationTable_year"
 		bucketName = "year"
+	default:
+		helpers.HandleInvalidInputError(
+			c,
+			fmt.Errorf(
+				"invalid time bucket: %s. Valid Values: %s, %s, %s, %s, %s, %s",
+				timeBucket,
+				models.MinuteAggregateView,
+				models.HourAggregateView,
+				models.DayAggregateView,
+				models.WeekAggregateView,
+				models.MonthAggregateView,
+				models.YearAggregateView))
+		return
 	}
 
-	sqlStatement := fmt.Sprintf(`SELECT
-						bucket as %s,
- 						%s
-					 FROM %s
-					 WHERE
-					    asset_id = $1 AND
-					    valueName = $2 AND
-					    bucket BETWEEN $3 AND $4
-					 GROUP BY bucket, asset_id, valueName
-					 ORDER BY bucket ASC`, bucketName, selectAggregationMethod, aggregatedView)
+	var selectClauseEntries []string
+	var groupByClauseEntries []string
 
+	rawTagAggregates = strings.ReplaceAll(rawTagAggregates, " ", "")
+	tagAggregates := strings.Split(rawTagAggregates, ",")
+
+	uniqueTagAggregates := make(map[string]bool)
+	for _, tagAggregate := range tagAggregates {
+		uniqueTagAggregates[tagAggregate] = true
+	}
+	tagAggregates = []string{}
+	for tagAggregate := range uniqueTagAggregates {
+		tagAggregates = append(tagAggregates, tagAggregate)
+	}
+
+	data.ColumnNames = []string{"timestamp"}
+	if len(tagAggregates) == 0 {
+		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
+		data.ColumnNames = append(data.ColumnNames, JSONColumnName)
+	} else {
+		for _, tagAggregate := range tagAggregates {
+			JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-" + tagAggregate
+			data.ColumnNames = append(data.ColumnNames, JSONColumnName)
+			switch tagAggregate {
+			case models.AverageTagAggregate:
+				selectClauseEntries = append(
+					selectClauseEntries,
+					fmt.Sprintf(gapFillingMethod, models.AverageTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.AverageTagAggregate))
+			case models.CountTagAggregate:
+				selectClauseEntries = append(
+					selectClauseEntries,
+					fmt.Sprintf(gapFillingMethod, models.CountTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.CountTagAggregate))
+			case models.MaxTagAggregate:
+				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.MaxTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.MaxTagAggregate))
+			case models.MinTagAggregate:
+				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.MinTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.MinTagAggregate))
+			case models.SumTagAggregate:
+				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.SumTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.SumTagAggregate))
+			default:
+				helpers.HandleInvalidInputError(
+					c,
+					fmt.Errorf(
+						"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
+						tagAggregate,
+						models.AverageTagAggregate,
+						models.CountTagAggregate,
+						models.MaxTagAggregate,
+						models.MinTagAggregate,
+						models.SumTagAggregate))
+				return
+			}
+		}
+	}
+
+	selectClause := strings.Join(selectClauseEntries, ", ")
+	if len(selectClauseEntries) > 0 {
+		selectClause = ", " + selectClause
+	}
+	groupByClause := strings.Join(groupByClauseEntries, ", ")
+	if len(groupByClauseEntries) > 0 {
+		groupByClause = ", " + groupByClause
+	}
+
+	var sqlStatement string
+	/* #nosec G201 */
+	{
+		sqlStatement = fmt.Sprintf(
+			`
+SELECT
+    bucket as "%s"%s
+FROM %s
+WHERE
+    asset_id = $1 AND
+    valueName = $2 AND
+    bucket BETWEEN $3 AND $4
+GROUP BY bucket, asset_id, valueName%s
+ORDER BY bucket`, bucketName, selectClause, aggregatedView, groupByClause)
+	}
+
+	zap.S().Debugf("sqlStatement: %s", sqlStatement)
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, workCellId, tagName, from, to)
+	rows, err = database.Db.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return

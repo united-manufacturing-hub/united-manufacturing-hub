@@ -9,7 +9,7 @@ type GetDataFormatRequest struct {
 }
 
 const (
-	TagsDataFormat  string = "tags"
-	KpisDataFormat  string = "kips"
-	ListsDataFormat string = "lists"
+	TagsDataFormat   string = "tags"
+	KpisDataFormat   string = "kpis"
+	TablesDataFormat string = "tables"
 )

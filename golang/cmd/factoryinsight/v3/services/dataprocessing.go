@@ -1,5 +1,8 @@
 package services
 
+/*
+
+
 import (
 	"errors"
 	"fmt"
@@ -11,7 +14,14 @@ import (
 )
 
 // processStatesOptimized splits up arrays efficiently for better caching
-func processStatesOptimized(workCellId uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func processStatesOptimized(
+	workCellId uint32,
+	stateArray []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	countSlice []datamodel.CountEntry,
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	var processedStatesTemp []datamodel.StateEntry
 
@@ -82,7 +92,14 @@ func processStatesOptimized(workCellId uint32, stateArray []datamodel.StateEntry
 
 // processStates is responsible for cleaning states (e.g. remove the same state if it is adjacent)
 // and calculating new ones (e.g. microstops)
-func processStates(workCellId uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func processStates(
+	workCellId uint32,
+	stateArray []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	countSlice []datamodel.CountEntry,
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
 
@@ -132,7 +149,9 @@ func processStates(workCellId uint32, stateArray []datamodel.StateEntry, rawShif
 	return
 }
 
-func addUnknownMicrostops(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func addUnknownMicrostops(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -176,7 +195,11 @@ func addUnknownMicrostops(stateArray []datamodel.StateEntry, configuration datam
 }
 
 // automaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
-func automaticallyIdentifyChangeovers(stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func automaticallyIdentifyChangeovers(
+	stateArray []datamodel.StateEntry,
+	orderArray []datamodel.OrdersRaw,
+	to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -237,7 +260,9 @@ func automaticallyIdentifyChangeovers(stateArray []datamodel.StateEntry, orderAr
 }
 
 // calculateChangeoverStates splits up an unspecified stop into changeovers (assuming they are in order and there are no noOrder)
-func calculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []datamodel.OrdersRaw) (processedStateArray []datamodel.StateEntry, err error) {
+func calculateChangeoverStates(
+	stateTimeRange TimeRange,
+	overlappingOrders []datamodel.OrdersRaw) (processedStateArray []datamodel.StateEntry, err error) {
 
 	if len(overlappingOrders) == 1 {
 		order := overlappingOrders[0]
@@ -359,7 +384,9 @@ func combineAdjacentStops(stateArray []datamodel.StateEntry) (processedStateArra
 
 // getOrdersThatOverlapWithTimeRange gets all orders that overlap with a given time range (ignoring noOrders)
 // this assumes that orderArray is in ascending order
-func getOrdersThatOverlapWithTimeRange(stateTimeRange TimeRange, orderArray []datamodel.OrdersRaw) (overlappingOrders []datamodel.OrdersRaw) {
+func getOrdersThatOverlapWithTimeRange(
+	stateTimeRange TimeRange,
+	orderArray []datamodel.OrdersRaw) (overlappingOrders []datamodel.OrdersRaw) {
 	for _, order := range orderArray {
 
 		if order.OrderName == "noOrder" { // only process proper orders and not the filler in between them
@@ -389,7 +416,9 @@ func getOrdersThatOverlapWithTimeRange(stateTimeRange TimeRange, orderArray []da
 	return
 }
 
-func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, from, to time.Time) (processedCountSlice []datamodel.CountEntry) {
+func removeUnnecessaryElementsFromCountSlice(
+	countSlice []datamodel.CountEntry,
+	from, to time.Time) (processedCountSlice []datamodel.CountEntry) {
 	if len(countSlice) == 0 {
 		return
 	}
@@ -402,7 +431,9 @@ func removeUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, 
 	return
 }
 
-func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, from, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
+func removeUnnecessaryElementsFromOrderArray(
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
 	if len(orderArray) == 0 {
 		return
 	}
@@ -417,7 +448,9 @@ func removeUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, f
 	return
 }
 
-func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from, to time.Time) (processedStates []datamodel.StateEntry) {
+func removeUnnecessaryElementsFromStateSlice(
+	processedStatesRaw []datamodel.StateEntry,
+	from, to time.Time) (processedStates []datamodel.StateEntry) {
 	if len(processedStatesRaw) == 0 {
 		return
 	}
@@ -504,7 +537,9 @@ func removeUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 	return
 }
 
-func removeSmallRunningStates(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func removeSmallRunningStates(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -541,7 +576,9 @@ func removeSmallRunningStates(stateArray []datamodel.StateEntry, configuration d
 	return
 }
 
-func removeSmallStopStates(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func removeSmallStopStates(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -578,7 +615,9 @@ func removeSmallStopStates(stateArray []datamodel.StateEntry, configuration data
 	return
 }
 
-func specifySmallNoShiftsAsBreaks(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func specifySmallNoShiftsAsBreaks(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -650,7 +689,11 @@ func specifyUnknownStopsWithFollowingStopReason(stateArray []datamodel.StateEntr
 }
 
 // Note: workCellId is only used for caching
-func addLowSpeedStates(workCellId uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func addLowSpeedStates(
+	workCellId uint32,
+	stateArray []datamodel.StateEntry,
+	countSlice []datamodel.CountEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// actual function start
 	// TODO: neglecting all other states with additional information, e.g. 10556
@@ -702,7 +745,10 @@ func addLowSpeedStates(workCellId uint32, stateArray []datamodel.StateEntry, cou
 	return
 }
 
-func getProducedPiecesFromCountSlice(countSlice []datamodel.CountEntry, from time.Time, to time.Time) (totalCount float64) {
+func getProducedPiecesFromCountSlice(
+	countSlice []datamodel.CountEntry,
+	from time.Time,
+	to time.Time) (totalCount float64) {
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
@@ -718,7 +764,11 @@ func getProducedPiecesFromCountSlice(countSlice []datamodel.CountEntry, from tim
 
 // calculateLowSpeedStates splits up a "Running" state into multiple states either "Running" or "LowSpeed"
 // additionally it caches it results. See also cache.go
-func calculateLowSpeedStates(workCellId uint32, countSlice []datamodel.CountEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func calculateLowSpeedStates(
+	workCellId uint32,
+	countSlice []datamodel.CountEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, workCellId)
@@ -774,7 +824,9 @@ func calculateLowSpeedStates(workCellId uint32, countSlice []datamodel.CountEntr
 }
 
 // Adds noOrders at the beginning, ending and between orders
-func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from, to time.Time) (processedOrders []datamodel.OrderEntry) {
+func addNoOrdersBetweenOrders(
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time) (processedOrders []datamodel.OrderEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range orderArray {
@@ -834,7 +886,12 @@ func addNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from, to time.Ti
 }
 
 // CalculateOEE calculates the OEE
-func CalculateOEE(temporaryDatapoints []datamodel.StateEntry, countSlice []datamodel.CountEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
+func CalculateOEE(
+
+	temporaryDatapoints []datamodel.StateEntry,
+	countSlice []datamodel.CountEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
 
 	durationArrayChannel := make(chan datamodel.ChannelResult)
 	stateArrayChannel := make(chan datamodel.ChannelResult)
@@ -915,10 +972,15 @@ func CalculateOEE(temporaryDatapoints []datamodel.StateEntry, countSlice []datam
 	}
 
 	return
+
+
 }
 
 // calculateDurations returns an array with the duration between the states.
-func calculateDurations(temporaryDatapoints []datamodel.StateEntry, to time.Time, returnChannel chan datamodel.ChannelResult) {
+func calculateDurations(
+	temporaryDatapoints []datamodel.StateEntry,
+	to time.Time,
+	returnChannel chan datamodel.ChannelResult) {
 
 	// Prepare ChannelResult
 	durations := make([]float64, 0, len(temporaryDatapoints))
@@ -1024,3 +1086,4 @@ func CalculateQuality(temporaryDatapoints []datamodel.CountEntry) (data []interf
 	}
 	return
 }
+*/

@@ -1,5 +1,8 @@
 package controllers
 
+/*
+
+
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
@@ -25,7 +28,12 @@ func GetTagGroupsHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	tagGroups, err = services.GetTagGroups(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	tagGroups, err = services.GetTagGroups(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName,
+		request.WorkCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -54,7 +62,13 @@ func GetTagsHandler(c *gin.Context) {
 	case models.CustomTagGroup:
 		tags, err = services.GetStandardTags()
 	case models.StandardTagGroup:
-		tags, err = services.GetCustomTags(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName, request.TagGroupName)
+		tags, err = services.GetCustomTags(
+			request.EnterpriseName,
+			request.SiteName,
+			request.AreaName,
+			request.ProductionLineName,
+			request.WorkCellName,
+			request.TagGroupName)
 	default:
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -108,3 +122,4 @@ func GetTagsDataHandler(c *gin.Context) {
 		return
 	}
 }
+*/

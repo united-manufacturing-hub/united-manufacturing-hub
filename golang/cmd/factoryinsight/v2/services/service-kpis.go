@@ -2,10 +2,9 @@ package services
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"net/http"
 )
@@ -16,21 +15,14 @@ func GetKpisMethods(enterpriseName, siteName, workCellName string) (kpis models.
 	if err != nil {
 		return
 	}
-
-	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE workCellId = $1)`
-
 	var stateExists bool
-	err = db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	stateExists, err = GetStateExists(workCellId)
 	if err != nil {
-		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 
 	if stateExists {
-		kpis.Kpis = append(kpis.Kpis, models.OeeKpi)
-		kpis.Kpis = append(kpis.Kpis, models.AvailabilityKpi)
-		kpis.Kpis = append(kpis.Kpis, models.PerformanceKpi)
-		kpis.Kpis = append(kpis.Kpis, models.QualityKpi)
+		kpis.Kpis = append(kpis.Kpis, models.OeeKpi, models.AvailabilityKpi, models.PerformanceKpi, models.QualityKpi)
 	}
 
 	return
@@ -47,7 +39,7 @@ func ProcessOeeKpiRequest(c *gin.Context, request models.GetKpisDataRequest) {
 	// ### parse query ###
 	var getOeeKpiRequest models.GetOeeKpiRequest
 
-	err := c.BindUri(&getOeeKpiRequest)
+	err := c.BindQuery(&getOeeKpiRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return

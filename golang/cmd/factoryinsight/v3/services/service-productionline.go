@@ -1,5 +1,8 @@
 package services
 
+/*
+
+
 import (
 	"database/sql"
 	"errors"
@@ -27,7 +30,11 @@ func GetProductionLines(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, enterpriseName, siteName, areaName)
 	if errors.Is(err, sql.ErrNoRows) {
-		zap.S().Warnf("[GetProductionLines] No production lines found for enterprise %s, site %s and area %s", enterpriseName, siteName, areaName)
+		zap.S().Warnf(
+			"[GetProductionLines] No production lines found for enterprise %s, site %s and area %s",
+			enterpriseName,
+			siteName,
+			areaName)
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -52,3 +59,4 @@ func GetProductionLines(
 
 	return
 }
+*/

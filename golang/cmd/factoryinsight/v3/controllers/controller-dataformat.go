@@ -1,5 +1,8 @@
 package controllers
 
+/*
+
+
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
@@ -24,7 +27,12 @@ func GetDataFormatHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	dataFormats, err := services.GetDataFormats(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	dataFormats, err := services.GetDataFormats(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName,
+		request.WorkCellName)
 	// TODO: Better error handling. Check if the error is a database error or a not found error (dataFormats is empty)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
@@ -33,3 +41,4 @@ func GetDataFormatHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dataFormats)
 }
+*/

@@ -14,7 +14,7 @@ func GetAreasHandler(c *gin.Context) {
 	var request models.GetAreasRequest
 	var areas []string
 
-	err := c.BindUri(request)
+	err := c.BindUri(&request)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -29,7 +29,7 @@ func GetAreasHandler(c *gin.Context) {
 	// Fetch data from database
 	areas, err = services.GetAreas(request.EnterpriseName, request.SiteName)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No sites found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "No areas found"})
 	} else if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return

@@ -1,10 +1,13 @@
 package models
 
+/*
+
+
 import "time"
 
 type TagGroup struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetTagGroupsResponse struct {
@@ -20,8 +23,8 @@ type GetTagGroupsRequest struct {
 }
 
 type Tag struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetTagsResponse struct {
@@ -87,3 +90,4 @@ const (
 	StateStandardTag      string = "state"
 	ThroughputStandardTag string = "throughput"
 )
+*/

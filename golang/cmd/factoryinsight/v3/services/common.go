@@ -1,5 +1,8 @@
 package services
 
+/*
+
+
 import (
 	"database/sql"
 	"errors"
@@ -176,8 +179,8 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 	tempPerformanceLossStates := pq.Int32Array{}
 
 	sqlStatement := `
-		SELECT 
-			MicrostopDurationInSeconds, 
+		SELECT
+			MicrostopDurationInSeconds,
 			IgnoreMicrostopUnderThisDurationInSeconds,
 			MinimumRunningTimeInSeconds,
 			ThresholdForNoShiftsConsideredBreakInSeconds,
@@ -186,9 +189,9 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 			LanguageCode,
 			AvailabilityLossStates,
 			PerformanceLossStates
-		FROM 
-			configurationTable 
-		WHERE 
+		FROM
+			configurationTable
+		WHERE
 			customer=$1;
 	`
 	err = db.QueryRow(sqlStatement, enterpriseName).Scan(
@@ -252,8 +255,16 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 }
 
 // GetStatesRaw gets all states for a specific work cell in a timerange. It returns an array of datamodel.StateEntry
-func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []datamodel.StateEntry, err error) {
-	zap.S().Infof("[GetStatesRaw] workCellId: %v, from: %v, to: %v, configuration: %v", workCellId, from, to, configuration)
+func GetStatesRaw(
+	workCellId uint32,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []datamodel.StateEntry, err error) {
+	zap.S().Infof(
+		"[GetStatesRaw] workCellId: %v, from: %v, to: %v, configuration: %v",
+		workCellId,
+		from,
+		to,
+		configuration)
 
 	key := fmt.Sprintf("GetStatesRaw-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
 	if Mutex.TryLock(key) { // is is already running?
@@ -348,8 +359,16 @@ func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShiftsRaw gets all shifts for a specific work cell in a timerange in a raw format
-func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []datamodel.ShiftEntry, err error) {
-	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v, configuration: %v", workCellId, from, to, configuration)
+func GetShiftsRaw(
+	workCellId uint32,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []datamodel.ShiftEntry, err error) {
+	zap.S().Infof(
+		"[GetShiftsRaw] workCellId: %v, from: %v, to: %v, configuration: %v",
+		workCellId,
+		from,
+		to,
+		configuration)
 
 	key := fmt.Sprintf("GetShiftsRaw-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
 	if Mutex.TryLock(key) { // is is already running?
@@ -372,10 +391,10 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		var shiftType int
 
 		sqlStatement := `
-		SELECT begin_timestamp, end_timestamp, type 
-		FROM shiftTable 
-		WHERE workCellId=$1 
-			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+		SELECT begin_timestamp, end_timestamp, type
+		FROM shiftTable
+		WHERE workCellId=$1
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3)
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC LIMIT 1;
 		`
@@ -414,10 +433,10 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 		}
 
 		sqlStatement = `
-		SELECT begin_timestamp, end_timestamp, type 
-		FROM shiftTable 
-		WHERE workCellId=$1 
-			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+		SELECT begin_timestamp, end_timestamp, type
+		FROM shiftTable
+		WHERE workCellId=$1
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3)
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
@@ -472,7 +491,9 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShifts gets all shifts for a specific asset in a timerange
-func GetShifts(enterpriseName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetShifts(enterpriseName string, workCellId uint32, from, to time.Time) (
+	data datamodel.DataResponseAny,
+	err error) {
 	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v", workCellId, from, to)
 
 	// TODO: adapt JSONColumnName to new data model
@@ -620,14 +641,14 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 
 	sqlStatement := `
 		SELECT order_name, target_units, begin_timestamp, end_timestamp, productTable.product_name, productTable.time_per_unit_in_seconds
-		FROM orderTable 
+		FROM orderTable
 		FULL JOIN productTable ON productTable.product_id = orderTable.product_id
-		WHERE 
-			begin_timestamp IS NOT NULL 
-			AND end_timestamp IS NOT NULL 
-			AND orderTable.workCellId = $1 
-			AND ( 
-				(begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+		WHERE
+			begin_timestamp IS NOT NULL
+			AND end_timestamp IS NOT NULL
+			AND orderTable.workCellId = $1
+			AND (
+				(begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3)
 				OR (begin_timestamp < $2 AND end_timestamp > $3)
 			)
 		ORDER BY begin_timestamp ASC;
@@ -636,8 +657,9 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
+			return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 
@@ -680,6 +702,7 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
 
 	// TODO: adapt JSONColumnName to new data model
+
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
@@ -702,32 +725,41 @@ func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.Da
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	return
-
+	* /
 }
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
-func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
-	zap.S().Infof("[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v", workCellId, from, to, aggregatedInterval)
-
+func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterval int) (
+	data datamodel.DataResponseAny,
+	err error) {
 	// TODO: adapt JSONColumnName to new data model
+
+	zap.S().Infof(
+		"[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v",
+		workCellId,
+		from,
+		to,
+		aggregatedInterval)
+
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
-	FROM countTable 
-	WHERE workCellId=$1 
-		AND timestamp BETWEEN $2 AND $3 
-	GROUP BY speedPerIntervall 
-	ORDER BY speedPerIntervall ASC;`
+		SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)
+		FROM countTable
+		WHERE workCellId=$1
+			AND timestamp BETWEEN $2 AND $3
+		GROUP BY speedPerIntervall
+		ORDER BY speedPerIntervall ASC;`
 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
+			return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 
@@ -786,6 +818,8 @@ func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterva
 	}
 
 	return
+
+	* /
 }
 
 // BusinessLogicErrorHandling logs and handles errors during the business logic
@@ -800,3 +834,4 @@ func BusinessLogicErrorHandling(operationName string, err error, isCritical bool
 		signal.Notify(GracefulShutdownChannel, syscall.SIGTERM)
 	}
 }
+*/
