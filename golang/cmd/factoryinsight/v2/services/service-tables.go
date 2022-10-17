@@ -32,13 +32,13 @@ func GetTableTypes(
 
 	if stateExists {
 		tables.Tables = append(tables.Tables, models.TableType{Id: 0, Name: models.JobsTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 2, Name: models.ProductsTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 3, Name: models.ProductTypesTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 1, Name: models.ProductsTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 2, Name: models.ProductTypesTable})
 
-		tables.Tables = append(tables.Tables, models.TableType{Id: 4, Name: models.AvailabilityHistogramTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 5, Name: models.AvailabilityTotalTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 6, Name: models.PerformanceTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 7, Name: models.QualityTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 3, Name: models.AvailabilityHistogramTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 4, Name: models.AvailabilityTotalTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 5, Name: models.PerformanceTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 6, Name: models.QualityTable})
 	}
 
 	return
