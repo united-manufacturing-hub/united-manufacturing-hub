@@ -247,8 +247,8 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 
 	from := getShopfloorLossesTableRequest.From
 	to := getShopfloorLossesTableRequest.To
-	includeRunning := getShopfloorLossesTableRequest.IncludeRunning
-	keepStatesInteger := getShopfloorLossesTableRequest.KeepStatesInteger
+	includeRunning := *getShopfloorLossesTableRequest.IncludeRunning
+	keepStatesInteger := *getShopfloorLossesTableRequest.KeepStatesInteger
 
 	var workCellId uint32
 	workCellId, err = GetWorkCellId(enterpriseName, siteName, workCellName)
@@ -310,7 +310,7 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 	var data datamodel.DataResponseAny
 	data.ColumnNames = []string{"state", "occurrences"}
 
-	data.Datapoints, err = CalculateStateHistogram(processedStates, *includeRunning, *keepStatesInteger, configuration)
+	data.Datapoints, err = CalculateStateHistogram(processedStates, includeRunning, keepStatesInteger, configuration)
 
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
