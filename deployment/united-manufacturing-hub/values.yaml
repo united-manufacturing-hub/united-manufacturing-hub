@@ -263,7 +263,7 @@ _000_commonConfig:
     enabled: false
 
   kafkatopicupdater:
-    enabled: false
+    enabled: true
 
 _001_customMicroservices:
   -
