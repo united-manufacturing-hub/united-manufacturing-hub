@@ -59,7 +59,7 @@ func GetKpisDataHandler(c *gin.Context) {
 	case models.QualityKpi:
 		services.ProcessQualityKpiRequest(c, request)
 	default:
-		helpers.HandleInvalidInputError(c, err)
+		helpers.HandleTypeNotFound(c, request.KpisMethod)
 		return
 	}
 }

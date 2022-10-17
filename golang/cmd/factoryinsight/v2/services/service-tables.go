@@ -35,9 +35,14 @@ func GetTableTypes(
 	}
 
 	if stateExists {
-		tables.Tables = append(tables.Tables, models.TableType{Id: 0, Name: models.JobTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 0, Name: models.JobsTable})
 		tables.Tables = append(tables.Tables, models.TableType{Id: 2, Name: models.ProductsTable})
 		tables.Tables = append(tables.Tables, models.TableType{Id: 3, Name: models.ProductTypesTable})
+
+		tables.Tables = append(tables.Tables, models.TableType{Id: 4, Name: models.AvailabilityHistogramTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 5, Name: models.AvailabilityTotalTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 6, Name: models.PerformanceTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 7, Name: models.QualityTable})
 	}
 
 	return
@@ -56,7 +61,7 @@ func ProcessJobsTableRequest(c *gin.Context, request models.GetTableDataRequest)
 	var getJobTableRequest models.GetJobTableRequest
 	var err error
 
-	err = c.BindUri(&getJobTableRequest)
+	err = c.BindQuery(&getJobTableRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -163,7 +168,7 @@ func ProcessProductsTableRequest(c *gin.Context, request models.GetTableDataRequ
 	var getProductsTableRequest models.GetProductsTableRequest
 	var err error
 
-	err = c.BindUri(&getProductsTableRequest)
+	err = c.BindQuery(&getProductsTableRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -201,7 +206,7 @@ func ProcessProductTypesTableRequest(c *gin.Context, request models.GetTableData
 	var getProductTypesTableRequest models.GetProductTypesTableRequest
 	var err error
 
-	err = c.BindUri(&getProductTypesTableRequest)
+	err = c.BindQuery(&getProductTypesTableRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return
@@ -238,7 +243,7 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 	var getShopfloorLossesTableRequest models.GetAvailabilityHistogramRequest
 	var err error
 
-	err = c.BindUri(&getShopfloorLossesTableRequest)
+	err = c.BindQuery(&getShopfloorLossesTableRequest)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return

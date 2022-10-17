@@ -77,7 +77,7 @@ func GetTagsHandler(c *gin.Context) {
 		r.Tags = tags
 		response = r
 	default:
-		helpers.HandleInvalidInputError(c, err)
+		helpers.HandleTypeNotFound(c, request.TagGroupName)
 		return
 	}
 
@@ -119,14 +119,14 @@ func GetTagsDataHandler(c *gin.Context) {
 			services.ProcessThroughputTagRequest(c, request)
 
 		default:
-			helpers.HandleInvalidInputError(c, err)
+			helpers.HandleTypeNotFound(c, request.TagName)
 			return
 		}
 	case models.CustomTagGroup:
 		services.ProcessCustomTagRequest(c, request)
 
 	default:
-		helpers.HandleInvalidInputError(c, err)
+		helpers.HandleTypeNotFound(c, request.TagGroupName)
 		return
 	}
 }

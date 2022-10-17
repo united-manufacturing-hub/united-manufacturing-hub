@@ -59,7 +59,7 @@ type GetAggregatedStatesRequest struct {
 }
 
 const (
-	JobTable                   string = "job"
+	JobsTable                  string = "jobs"
 	ProductsTable              string = "products"
 	ProductTypesTable          string = "productTypes"
 	AvailabilityHistogramTable string = "availabilityHistogram"

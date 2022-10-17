@@ -264,9 +264,6 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 			v2.GET(
 				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
 				v2controllers.GetTableDataHandler)
-			v2.GET(
-				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType",
-				v2controllers.GetTableDataShopfloorLossesHandler)
 		}
 	}
 

@@ -11,6 +11,12 @@ import (
 )
 
 func HandleInternalServerError(c *gin.Context, err error) {
+	if c == nil {
+		panic("HandleInternalServerError: c is nil")
+	}
+	if err == nil {
+		err = errors.New("unknown error")
+	}
 
 	erx := internal.SanitizeString(err.Error())
 	zap.S().Errorw(
@@ -28,8 +34,36 @@ func HandleInternalServerError(c *gin.Context, err error) {
 		})
 }
 
-func HandleInvalidInputError(c *gin.Context, err error) {
+func HandleTypeNotFound(c *gin.Context, t any) {
+	if c == nil {
+		panic("HandleTypeNotFound: c is nil")
+	}
 
+	zap.S().Errorw(
+		"Type not found",
+		t,
+	)
+	// Get request url from c
+	route := c.FullPath()
+
+	c.JSON(
+		http.StatusNotFound,
+		gin.H{
+			"error":       fmt.Sprintf("Type %s not found", t),
+			"status":      http.StatusNotFound,
+			"message":     fmt.Sprintf("The requested type %s was not found.", t),
+			"stack-trace": string(debug.Stack()),
+			"route":       route,
+		})
+}
+
+func HandleInvalidInputError(c *gin.Context, err error) {
+	if c == nil {
+		panic("HandleInternalServerError: c is nil")
+	}
+	if err == nil {
+		err = errors.New("unknown error")
+	}
 	erx := internal.SanitizeString(err.Error())
 	zap.S().Errorw(
 		"Invalid input error",
@@ -39,9 +73,11 @@ func HandleInvalidInputError(c *gin.Context, err error) {
 	c.JSON(
 		http.StatusBadRequest,
 		gin.H{
-			"error":   erx,
-			"status":  http.StatusBadRequest,
-			"message": "You have provided a wrong input. Please check your parameters."})
+			"error":       erx,
+			"status":      http.StatusBadRequest,
+			"message":     "You have provided a wrong input. Please check your parameters.",
+			"stack-trace": string(debug.Stack()),
+		})
 }
 
 // CheckIfUserIsAllowed checks if the user is allowed to access the data for the given customer
