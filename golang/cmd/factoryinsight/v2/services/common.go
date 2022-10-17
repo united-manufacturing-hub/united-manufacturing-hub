@@ -31,7 +31,9 @@ func GetStateExists(workCellId uint32) (bool, error) {
 }
 
 // GetWorkCellId gets the assetID from the database
-func GetWorkCellId(enterpriseName string, siteName string, workCellName string) (workCellId uint32, err error) {
+func GetWorkCellId(enterpriseName string, siteName string, workCellName string) (
+	workCellId uint32,
+	err error) {
 	zap.S().Infof(
 		"[GetWorkCellId] enterpriseName: %v, siteName: %v, workCellName: %v",
 		enterpriseName,
@@ -59,7 +61,6 @@ func GetWorkCellId(enterpriseName string, siteName string, workCellName string) 
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
-
 		return
 	}
 
