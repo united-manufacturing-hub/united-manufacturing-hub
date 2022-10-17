@@ -340,9 +340,9 @@ func ProcessAvailabilityTotalTableRequest(c *gin.Context, request models.GetTabl
 
 	from := getAggregatedStatesRequestInstance.From
 	to := getAggregatedStatesRequestInstance.To
-	keepStatesInteger := getAggregatedStatesRequestInstance.KeepStatesInteger
+	keepStatesInteger := *getAggregatedStatesRequestInstance.KeepStatesInteger
 	aggregationType := getAggregatedStatesRequestInstance.AggregationType
-	includeRunning := getAggregatedStatesRequestInstance.IncludeRunning
+	includeRunning := *getAggregatedStatesRequestInstance.IncludeRunning
 
 	// ### fetch necessary data from database ###
 
@@ -414,8 +414,8 @@ func ProcessAvailabilityTotalTableRequest(c *gin.Context, request models.GetTabl
 		data.Datapoints, err = CalculateStopParetos(
 			processedStates,
 			to,
-			*includeRunning,
-			*keepStatesInteger,
+			includeRunning,
+			keepStatesInteger,
 			configuration)
 
 		if err != nil {
@@ -457,7 +457,7 @@ func ProcessAvailabilityTotalTableRequest(c *gin.Context, request models.GetTabl
 				processedStatesCleaned := RemoveUnnecessaryElementsFromStateSlice(processedStates, oldD, d)
 
 				var tempResult [][]interface{}
-				tempResult, err = CalculateStopParetos(processedStatesCleaned, d, *includeRunning, true, configuration)
+				tempResult, err = CalculateStopParetos(processedStatesCleaned, d, includeRunning, true, configuration)
 				if err != nil {
 					helpers.HandleInternalServerError(c, err)
 					return

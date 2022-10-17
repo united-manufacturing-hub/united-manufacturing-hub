@@ -53,8 +53,8 @@ type GetAvailabilityHistogramRequest struct {
 type GetAggregatedStatesRequest struct {
 	From              time.Time `form:"from" binding:"required"`
 	To                time.Time `form:"to" binding:"required"`
-	IncludeRunning    *bool     `form:"includeRunning" binding:"required"` // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
-	KeepStatesInteger *bool     `form:"keepStatesInteger"`                 // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
+	IncludeRunning    *bool     `form:"includeRunning" binding:"required"`    // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
+	KeepStatesInteger *bool     `form:"keepStatesInteger" binding:"required"` // *bool is required, see also https://github.com/gin-gonic/gin/issues/814
 	AggregationType   int       `form:"aggregationType"`
 }
 
