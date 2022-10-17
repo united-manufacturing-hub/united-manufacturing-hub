@@ -61,3 +61,33 @@ func GetTableDataHandler(c *gin.Context) {
 		return
 	}
 }
+
+func GetShopfloorLossesTableDataHandler(c *gin.Context) {
+	var request models.GetTableDataRequest
+
+	err := c.BindUri(&request)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	// Check if the user has access to that resource
+	err = helpers.CheckIfUserIsAllowed(c, request.EnterpriseName)
+	if err != nil {
+		return
+	}
+
+	switch request.TableType {
+	case models.AvailabilityHistogramTable:
+		services.ProcessAvailabilityHistogramTableRequest(c, request)
+	case models.AvailabilityTotalTable:
+		services.ProcessAvailabilityTotalTableRequest(c, request)
+	case models.PerformanceTable:
+		services.ProcessPerformanceTableRequest(c, request)
+	case models.QualityTable:
+		services.ProcessQualityTableRequest(c, request)
+	default:
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+}

@@ -240,6 +240,7 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod", v2controllers.GetKpisDataHandler)
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables", v2controllers.GetTableTypesHandler)
 		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType", v2controllers.GetTableDataHandler)
+		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType", v2controllers.GetTableDataHandler)
 	}
 
 	v3 := router.Group(apiString, gin.BasicAuth(accounts))

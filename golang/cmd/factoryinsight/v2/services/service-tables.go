@@ -222,6 +222,93 @@ func ProcessProductTypesTableRequest(c *gin.Context, request models.GetTableData
 	c.JSON(http.StatusOK, productTypes)
 }
 
+func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.GetTableDataRequest) {
+
+	// ### store request values in proper variables ###
+	enterpriseName := request.EnterpriseName
+	siteName := request.SiteName
+	workCellName := request.WorkCellName
+
+	// ### parse query ###
+	var getShopfloorLossesTableRequest models.GetAvailabilityHistogramRequest
+	var err error
+
+	err = c.BindUri(&getShopfloorLossesTableRequest)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	from := getShopfloorLossesTableRequest.From
+	to := getShopfloorLossesTableRequest.To
+	includeRunning := getShopfloorLossesTableRequest.IncludeRunning
+	keepStatesInteger := getShopfloorLossesTableRequest.KeepStatesInteger
+
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
+
+	// customer configuration
+	configuration, err := GetEnterpriseConfiguration(enterpriseName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	// raw states from database
+	rawStates, err := GetStatesRaw(workCellId, from, to, configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get shifts for noShift detection
+	rawShifts, err := GetShiftsRaw(workCellId, from, to, configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get counts for lowSpeed detection
+	countSlice, err := GetCountsRaw(workCellId, from, to)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// get orders for changeover detection
+	orderArray, err := GetOrdersRaw(workCellId, from, to)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// ### calculate (only one function allowed here) ###
+	processedStates, err := ProcessStatesOptimized(
+		workCellId,
+		rawStates,
+		rawShifts,
+		countSlice,
+		orderArray,
+		from,
+		to,
+		configuration)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	// ### create JSON ###
+	var data datamodel.DataResponseAny
+	data.ColumnNames = []string{"state", "occurrences"}
+
+	data.Datapoints, err = CalculateStateHistogram(processedStates, includeRunning, keepStatesInteger, configuration)
+
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
 // GetUniqueProducts gets all unique products for a specific asset in a specific time range
 func getUniqueProducts(workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
 	zap.S().Infof(
@@ -658,4 +745,3 @@ ORDER BY begin_timestamp ASC
 	data = CalculateAccumulatedProducts(to, observationStart, observationEnd, countMap, orderMap, productMap)
 	return data, nil
 }
-

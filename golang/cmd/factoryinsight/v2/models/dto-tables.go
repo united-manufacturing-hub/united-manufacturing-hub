@@ -43,9 +43,19 @@ type GetProductTypesTableRequest struct {
 	To   time.Time `form:"to" binding:"required"`
 }
 
+type GetAvailabilityHistogramRequest struct {
+	From              time.Time `form:"from" binding:"required"`
+	To                time.Time `form:"to" binding:"required"`
+	IncludeRunning    bool      `form:"includeRunning"`
+	KeepStatesInteger bool      `form:"keepStatesInteger"`
+}
+
 const (
-	JobTable          string = "job"
-	ProductsTable     string = "products"
-	ProductTypesTable string = "productTypes"
-	// TODO: shopfloor losses tables
+	JobTable                   string = "job"
+	ProductsTable              string = "products"
+	ProductTypesTable          string = "productTypes"
+	AvailabilityHistogramTable string = "availabilityHistogram"
+	AvailabilityTotalTable     string = "availabilityTotal"
+	PerformanceTable           string = "performance"
+	QualityTable               string = "quality"
 )
