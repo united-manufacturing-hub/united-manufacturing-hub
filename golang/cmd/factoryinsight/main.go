@@ -213,51 +213,55 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 			c.String(http.StatusOK, "online")
 		})
 
-	apiString := fmt.Sprintf("/api/v%s", version)
-
 	// Version of the API
-	v1 := router.Group(apiString, gin.BasicAuth(accounts))
-	{
-		// WARNING: Need to check in each specific handler whether the user is actually allowed to access it, so that valid user "ia" cannot access data for customer "abc"
-		v1.GET("/:customer", apiV1.GetLocationsHandler)
-		v1.GET("/:customer/:location", apiV1.GetAssetsHandler)
-		v1.GET("/:customer/:location/:asset", apiV1.GetValuesHandler)
-		v1.GET("/:customer/:location/:asset/:value", apiV1.GetDataHandler)
+	if version == "1" {
+		zap.S().Infof("Starting API version 1")
+		v1 := router.Group("/api/v1", gin.BasicAuth(accounts))
+		{
+			// WARNING: Need to check in each specific handler whether the user is actually allowed to access it, so that valid user "ia" cannot access data for customer "abc"
+			v1.GET("/:customer", apiV1.GetLocationsHandler)
+			v1.GET("/:customer/:location", apiV1.GetAssetsHandler)
+			v1.GET("/:customer/:location/:asset", apiV1.GetValuesHandler)
+			v1.GET("/:customer/:location/:asset/:value", apiV1.GetDataHandler)
+		}
 	}
 
-	v2 := router.Group(apiString, gin.BasicAuth(accounts))
-	{
-		v2.GET("/:enterpriseName", v2controllers.GetSitesHandler)
-		v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
-		v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v2controllers.GetWorkCellsHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
-			v2controllers.GetDataFormatHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
-			v2controllers.GetTagGroupsHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName",
-			v2controllers.GetTagsHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName",
-			v2controllers.GetTagsDataHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis",
-			v2controllers.GetKpisMethodsHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod",
-			v2controllers.GetKpisDataHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables",
-			v2controllers.GetTableTypesHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
-			v2controllers.GetTableDataHandler)
-		v2.GET(
-			"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType",
-			v2controllers.GetTableDataHandler)
+	if version == "2" {
+		zap.S().Infof("Starting API version 2")
+		v2 := router.Group("/api/v2", gin.BasicAuth(accounts))
+		{
+			v2.GET("/:enterpriseName", v2controllers.GetSitesHandler)
+			v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
+			v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
+			v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v2controllers.GetWorkCellsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
+				v2controllers.GetDataFormatHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
+				v2controllers.GetTagGroupsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName",
+				v2controllers.GetTagsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName",
+				v2controllers.GetTagsDataHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis",
+				v2controllers.GetKpisMethodsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod",
+				v2controllers.GetKpisDataHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables",
+				v2controllers.GetTableTypesHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
+				v2controllers.GetTableDataHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType",
+				v2controllers.GetTableDataHandler)
+		}
 	}
 
 	/*
