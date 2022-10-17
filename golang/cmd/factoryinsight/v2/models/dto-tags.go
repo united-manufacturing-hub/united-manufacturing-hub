@@ -37,7 +37,7 @@ type GetCustomTagDataRequest struct {
 	TimeBucket    string    `form:"timeBucket" binding:"required"`
 	From          time.Time `form:"from" binding:"required"`
 	To            time.Time `form:"to" binding:"required"`
-	TagAggregates []string  `form:"tagAggregates" binding:"required"`
+	TagAggregates string    `form:"tagAggregates" binding:"required"`
 }
 
 type GetJobTagRequest struct {

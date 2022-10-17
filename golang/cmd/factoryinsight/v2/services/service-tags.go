@@ -369,7 +369,6 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 
 func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// FIXME: The views and queries are incorrect
-	c.JSON(http.StatusOK, gin.H{"message": "Not implemented yet"})
 
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -399,25 +398,21 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 
-	tagAggregates := getCustomTagDataRequest.TagAggregates
+	rawTagAggregates := getCustomTagDataRequest.TagAggregates
 	gapFilling := getCustomTagDataRequest.GapFilling
 	timeBucket := getCustomTagDataRequest.TimeBucket
 	from := getCustomTagDataRequest.From
 	to := getCustomTagDataRequest.To
 
-	JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
-	data.ColumnNames = []string{"timestamp", JSONColumnName}
-
-	var selectAggregationMethod string
 	var gapFillingMethod string
 
 	switch gapFilling {
 	case models.NoGapFilling:
-		gapFillingMethod = "%s, "
+		gapFillingMethod = "%s"
 	case models.InterpolationGapFilling:
-		gapFillingMethod = "interpolate(%s), "
+		gapFillingMethod = "interpolate(%s)"
 	case models.LocfGapFilling:
-		gapFillingMethod = "locf(%s), "
+		gapFillingMethod = "locf(%s)"
 	default:
 		helpers.HandleInvalidInputError(
 			c,
@@ -430,36 +425,6 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 					models.LocfGapFilling)))
 		return
 	}
-
-	for _, tagAggregate := range tagAggregates {
-		switch tagAggregate {
-		case models.AverageTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.AverageTagAggregate)
-		case models.CountTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.CountTagAggregate)
-		case models.MaxTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MaxTagAggregate)
-		case models.MinTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MinTagAggregate)
-		case models.SumTagAggregate:
-			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.SumTagAggregate)
-		default:
-			helpers.HandleInvalidInputError(
-				c,
-				errors.New(
-					fmt.Sprintf(
-						"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
-						tagAggregate,
-						models.AverageTagAggregate,
-						models.CountTagAggregate,
-						models.MaxTagAggregate,
-						models.MinTagAggregate,
-						models.SumTagAggregate)))
-			return
-		}
-	}
-
-	selectAggregationMethod = selectAggregationMethod[:len(selectAggregationMethod)-2]
 
 	var aggregatedView string
 	var bucketName string
@@ -499,21 +464,102 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 
+	var selectClauseEntries []string
+	var groupByClauseEntries []string
+
+	rawTagAggregates = strings.ReplaceAll(rawTagAggregates, " ", "")
+	tagAggregates := strings.Split(rawTagAggregates, ",")
+
+	uniqueTagAggregates := make(map[string]bool)
+	for _, tagAggregate := range tagAggregates {
+		uniqueTagAggregates[tagAggregate] = true
+	}
+	tagAggregates = []string{}
+	for tagAggregate := range uniqueTagAggregates {
+		tagAggregates = append(tagAggregates, tagAggregate)
+	}
+
+	data.ColumnNames = []string{"timestamp"}
+	if len(tagAggregates) == 0 {
+		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
+		data.ColumnNames = append(data.ColumnNames, JSONColumnName)
+	} else {
+		for _, tagAggregate := range tagAggregates {
+			JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-" + tagAggregate
+			data.ColumnNames = append(data.ColumnNames, JSONColumnName)
+			switch tagAggregate {
+			case models.AverageTagAggregate:
+				selectClauseEntries = append(
+					selectClauseEntries,
+					fmt.Sprintf(gapFillingMethod, models.AverageTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.AverageTagAggregate))
+			case models.CountTagAggregate:
+				selectClauseEntries = append(
+					selectClauseEntries,
+					fmt.Sprintf(gapFillingMethod, models.CountTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.CountTagAggregate))
+			case models.MaxTagAggregate:
+				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.MaxTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.MaxTagAggregate))
+			case models.MinTagAggregate:
+				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.MinTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.MinTagAggregate))
+			case models.SumTagAggregate:
+				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.SumTagAggregate))
+				groupByClauseEntries = append(
+					groupByClauseEntries,
+					fmt.Sprintf("%s.%s", aggregatedView, models.SumTagAggregate))
+			default:
+				helpers.HandleInvalidInputError(
+					c,
+					errors.New(
+						fmt.Sprintf(
+							"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
+							tagAggregate,
+							models.AverageTagAggregate,
+							models.CountTagAggregate,
+							models.MaxTagAggregate,
+							models.MinTagAggregate,
+							models.SumTagAggregate)))
+				return
+			}
+		}
+	}
+
+	selectClause := strings.Join(selectClauseEntries, ", ")
+	if len(selectClauseEntries) > 0 {
+		selectClause = ", " + selectClause
+	}
+	groupByClause := strings.Join(groupByClauseEntries, ", ")
+	if len(groupByClauseEntries) > 0 {
+		groupByClause = ", " + groupByClause
+	}
+
 	var sqlStatement string
 	/* #nosec G201 */
 	{
 		sqlStatement = fmt.Sprintf(
-			`SELECT
-						bucket as %s,
- 						%s
-					 FROM %s
-					 WHERE
-					    asset_id = $1 AND
-					    valueName = $2 AND
-					    bucket BETWEEN $3 AND $4
-					 GROUP BY bucket, asset_id, valueName
-					 ORDER BY bucket ASC`, bucketName, selectAggregationMethod, aggregatedView)
+			`
+SELECT
+    bucket as "%s"%s
+FROM %s
+WHERE
+    asset_id = $1 AND
+    valueName = $2 AND
+    bucket BETWEEN $3 AND $4
+GROUP BY bucket, asset_id, valueName%s
+ORDER BY bucket`, bucketName, selectClause, aggregatedView, groupByClause)
 	}
+
+	zap.S().Debugf("sqlStatement: %s", sqlStatement)
 	var rows *sql.Rows
 	rows, err = database.Db.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
