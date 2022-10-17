@@ -33,9 +33,16 @@ type Stateactivity struct {
 	Activity       bool   `json:"activity"`
 }
 
+// Deprecated: Use Statereason instead
 type DetectedAnomaly struct {
 	DetectedAnomaly string `json:"detectedAnomaly"`
 	TimestampMs     uint64 `json:"timestamp_ms"`
+}
+
+// Statereason is the new datamodel type version of DetectedAnomaly
+type Statereason struct {
+	Timestampbegin uint64 `json:"timestamp-begin"`
+	Reason         string `json:"reason"`
 }
 
 // Deprecated: use Shiftadd instead for the new data model

@@ -64,7 +64,7 @@ func main() {
 			"security_protocol": "plaintext",
 			"group.id":          "kafka-topic-updater",
 		})
-	err := internal.KafkaConsumer.Subscribe("ia.+", nil)
+	err := internal.KafkaConsumer.Subscribe("^ia.+", nil)
 	if err != nil {
 		zap.S().Fatalf("failed to subscribe to old topics: %s", err)
 		return
@@ -237,13 +237,13 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Stateactivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "detectedAnomaly":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.add"
-				var payload datamodel.Activity
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.reason"
+				var payload datamodel.DetectedAnomaly
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case activity: %s", err)
 				}
-				newpayload := datamodel.Stateactivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
+				newpayload := datamodel.Statereason{Timestampbegin: payload.TimestampMs, Reason: payload.DetectedAnomaly}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "processValue":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
