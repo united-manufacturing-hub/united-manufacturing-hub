@@ -106,6 +106,12 @@ func main() {
 
 	// get currentVersion
 	version := os.Getenv("VERSION")
+	// parse as int
+	currentVersion, err := strconv.Atoi(version)
+	if err != nil {
+		zap.S().Fatalf("Cannot parse VERSION: not a number (%s)", version)
+		return // Abort program
+	}
 
 	zap.S().Debugf("Starting program..")
 
@@ -139,7 +145,7 @@ func main() {
 
 	zap.S().Debugf("DB initialized..", PQHost)
 
-	setupRestAPI(accounts, version)
+	setupRestAPI(accounts, currentVersion)
 
 	// Allow graceful shutdown
 	signal.Notify(sigs, syscall.SIGTERM)
@@ -190,7 +196,7 @@ func ShutdownApplicationGraceful() {
 }
 
 // setupRestAPI initializes the REST API and starts listening
-func setupRestAPI(accounts gin.Accounts, version string) {
+func setupRestAPI(accounts gin.Accounts, version int) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -214,7 +220,7 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		})
 
 	// Version of the API
-	if version == "1" {
+	if version >= 1 {
 		zap.S().Infof("Starting API version 1")
 		v1 := router.Group("/api/v1", gin.BasicAuth(accounts))
 		{
@@ -226,7 +232,7 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 		}
 	}
 
-	if version == "2" {
+	if version >= 2 {
 		zap.S().Infof("Starting API version 2")
 		v2 := router.Group("/api/v2", gin.BasicAuth(accounts))
 		{
@@ -260,12 +266,12 @@ func setupRestAPI(accounts gin.Accounts, version string) {
 				v2controllers.GetTableDataHandler)
 			v2.GET(
 				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/shopfloorlosses/:tableType",
-				v2controllers.GetTableDataHandler)
+				v2controllers.GetTableDataShopfloorLossesHandler)
 		}
 	}
 
 	/*
-		v3 := router.Group(apiString, gin.BasicAuth(accounts))
+		v3 := router.Group("/api/v3", gin.BasicAuth(accounts))
 		{
 			// Get all sites for a given enterprise
 			v3.GET("/:enterpriseName", v3controllers.GetSitesHandler)

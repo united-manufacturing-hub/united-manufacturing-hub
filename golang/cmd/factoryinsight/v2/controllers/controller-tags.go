@@ -57,16 +57,24 @@ func GetTagsHandler(c *gin.Context) {
 		return
 	}
 
+	var workCellId uint32
+	workCellId, err = services.GetWorkCellId(request.EnterpriseName, request.SiteName, request.WorkCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(nil, err)
+		return
+	}
+
 	switch request.TagGroupName {
 	case models.CustomTagGroup:
+		grouping, err = services.GetCustomTags(workCellId)
+		var r models.GetTagsResponse[map[string][]string]
+		r.Tags = make(map[string][]string)
+		r.Tags = grouping
+		response = r
+	case models.StandardTagGroup:
 		tags, err = services.GetStandardTags()
 		var r models.GetTagsResponse[[]string]
 		r.Tags = tags
-		response = r
-	case models.StandardTagGroup:
-		grouping, err = services.GetCustomTags(request.WorkCellName)
-		var r models.GetTagsResponse[map[string][]string]
-		r.Tags = grouping
 		response = r
 	default:
 		helpers.HandleInvalidInputError(c, err)

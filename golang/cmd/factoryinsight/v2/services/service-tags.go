@@ -47,13 +47,14 @@ func GetStandardTags() (tags []string, err error) {
 	return
 }
 
-func GetCustomTags(workCellName string) (grouping map[string][]string, err error) {
+func GetCustomTags(workCellId uint32) (grouping map[string][]string, err error) {
+	grouping = make(map[string][]string)
 	zap.S().Infof(
-		"[GetTags] Getting custom tags for work cell %s", workCellName)
+		"[GetTags] Getting custom tags for work cell %s", workCellId)
 
 	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
 
-	rows, err := db.Query(sqlStatement, workCellName)
+	rows, err := database.Db.Query(sqlStatement, workCellId)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return
@@ -70,7 +71,7 @@ func GetCustomTags(workCellName string) (grouping map[string][]string, err error
 		}
 
 		if strings.Count(valueName, "_") == 1 {
-			if !strings.HasPrefix(valueName, "_") || !strings.HasSuffix(valueName, "_") {
+			if !strings.HasPrefix(valueName, "_") && !strings.HasSuffix(valueName, "_") {
 				left, right, _ := strings.Cut(valueName, "_")
 				grouping[left] = append(grouping[left], right)
 			}
@@ -367,6 +368,9 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 }
 
 func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+	// FIXME: The views and queries are incorrect
+	c.JSON(http.StatusOK, gin.H{"message": "Not implemented yet"})
+
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
 	areaName := request.AreaName
@@ -414,6 +418,17 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		gapFillingMethod = "interpolate(%s), "
 	case models.LocfGapFilling:
 		gapFillingMethod = "locf(%s), "
+	default:
+		helpers.HandleInvalidInputError(
+			c,
+			errors.New(
+				fmt.Sprintf(
+					"invalid gap filling method: %s. Valid values: %s, %s, %s",
+					gapFilling,
+					models.NoGapFilling,
+					models.InterpolationGapFilling,
+					models.LocfGapFilling)))
+		return
 	}
 
 	for _, tagAggregate := range tagAggregates {
@@ -428,6 +443,19 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.MinTagAggregate)
 		case models.SumTagAggregate:
 			selectAggregationMethod += fmt.Sprintf(gapFillingMethod, models.SumTagAggregate)
+		default:
+			helpers.HandleInvalidInputError(
+				c,
+				errors.New(
+					fmt.Sprintf(
+						"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
+						tagAggregate,
+						models.AverageTagAggregate,
+						models.CountTagAggregate,
+						models.MaxTagAggregate,
+						models.MinTagAggregate,
+						models.SumTagAggregate)))
+			return
 		}
 	}
 
@@ -455,10 +483,27 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	case models.YearAggregateView:
 		aggregatedView = "aggregationTable_year"
 		bucketName = "year"
+	default:
+		helpers.HandleInvalidInputError(
+			c,
+			errors.New(
+				fmt.Sprintf(
+					"invalid time bucket: %s. Valid Values: %s, %s, %s, %s, %s, %s",
+					timeBucket,
+					models.MinuteAggregateView,
+					models.HourAggregateView,
+					models.DayAggregateView,
+					models.WeekAggregateView,
+					models.MonthAggregateView,
+					models.YearAggregateView)))
+		return
 	}
 
-	sqlStatement := fmt.Sprintf(
-		`SELECT
+	var sqlStatement string
+	/* #nosec G201 */
+	{
+		sqlStatement = fmt.Sprintf(
+			`SELECT
 						bucket as %s,
  						%s
 					 FROM %s
@@ -468,9 +513,9 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 					    bucket BETWEEN $3 AND $4
 					 GROUP BY bucket, asset_id, valueName
 					 ORDER BY bucket ASC`, bucketName, selectAggregationMethod, aggregatedView)
-
+	}
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, workCellId, tagName, from, to)
+	rows, err = database.Db.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return

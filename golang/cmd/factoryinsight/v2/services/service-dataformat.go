@@ -31,13 +31,13 @@ func GetDataFormats(
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
 
 	var stateExists bool
-	err = db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	err = database.Db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 	if stateExists { // TODO: Check if this is correct
-		dataFormats = []string{models.TagsDataFormat, models.KpisDataFormat, models.ListsDataFormat}
+		dataFormats = []string{models.TagsDataFormat, models.KpisDataFormat, models.TablesDataFormat}
 	} else {
 		dataFormats = []string{""}
 	}

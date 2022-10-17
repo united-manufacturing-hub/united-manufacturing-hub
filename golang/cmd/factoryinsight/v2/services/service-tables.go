@@ -25,10 +25,10 @@ func GetTableTypes(
 		return
 	}
 
-	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE WorkCellId = $1)`
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
 
 	var stateExists bool
-	err = db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	err = database.Db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return
@@ -530,9 +530,10 @@ func getUniqueProducts(workCellId uint32, from, to time.Time) (data datamodel.Da
 	ORDER BY begin_timestamp_ms ASC;`
 
 	var rows *sql.Rows
-	rows, err = db.Query(sqlStatement, workCellId, from, to)
+	rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -644,7 +645,7 @@ ORDER BY begin_timestamp ASC
 `
 
 	// Get order outside observation window
-	row := db.QueryRow(sqlStatementGetOutsider, workCellId, from)
+	row := database.Db.QueryRow(sqlStatementGetOutsider, workCellId, from)
 	err = row.Err()
 	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf("No outsider rows")
@@ -699,11 +700,11 @@ ORDER BY begin_timestamp ASC
 	if foundOutsider {
 		// Get insiders without the outsider order
 		zap.S().Debugf("Query with outsider: ", OuterOrder)
-		insideOrderRows, err = db.Query(sqlStatementGetInsiders, workCellId, from, to, OuterOrder.OID)
+		insideOrderRows, err = database.Db.Query(sqlStatementGetInsiders, workCellId, from, to, OuterOrder.OID)
 	} else {
 		// Get insiders
 		zap.S().Debugf("Query without outsider: ", OuterOrder)
-		insideOrderRows, err = db.Query(sqlStatementGetInsidersNoOutsider, workCellId, from, to)
+		insideOrderRows, err = database.Db.Query(sqlStatementGetInsidersNoOutsider, workCellId, from, to)
 	}
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -825,7 +826,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	var countRows *sql.Rows
-	countRows, err = db.Query(
+	countRows, err = database.Db.Query(
 		sqlStatementGetCounts,
 		workCellId,
 		float64(countQueryBegin)/1000,
@@ -875,7 +876,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	var orderRows *sql.Rows
-	orderRows, err = db.Query(
+	orderRows, err = database.Db.Query(
 		sqlGetRunningOrders,
 		workCellId,
 		float64(orderQueryEnd)/1000,
@@ -920,7 +921,7 @@ ORDER BY begin_timestamp ASC
 	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
 
 	var productRows *sql.Rows
-	productRows, err = db.Query(sqlGetProductsPerSec, workCellId)
+	productRows, err = database.Db.Query(sqlGetProductsPerSec, workCellId)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		database.ErrorHandling(sqlGetProductsPerSec, err, false)

@@ -14,7 +14,7 @@ func GetAreasHandler(c *gin.Context) {
 	var request models.GetAreasRequest
 	var areas []string
 
-	err := c.BindUri(request)
+	err := c.BindUri(&request)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
 		return

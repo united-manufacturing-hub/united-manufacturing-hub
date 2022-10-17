@@ -1,4 +1,5 @@
 package services
+
 /*
 
 
@@ -178,8 +179,8 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 	tempPerformanceLossStates := pq.Int32Array{}
 
 	sqlStatement := `
-		SELECT 
-			MicrostopDurationInSeconds, 
+		SELECT
+			MicrostopDurationInSeconds,
 			IgnoreMicrostopUnderThisDurationInSeconds,
 			MinimumRunningTimeInSeconds,
 			ThresholdForNoShiftsConsideredBreakInSeconds,
@@ -188,9 +189,9 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 			LanguageCode,
 			AvailabilityLossStates,
 			PerformanceLossStates
-		FROM 
-			configurationTable 
-		WHERE 
+		FROM
+			configurationTable
+		WHERE
 			customer=$1;
 	`
 	err = db.QueryRow(sqlStatement, enterpriseName).Scan(
@@ -390,10 +391,10 @@ func GetShiftsRaw(
 		var shiftType int
 
 		sqlStatement := `
-		SELECT begin_timestamp, end_timestamp, type 
-		FROM shiftTable 
-		WHERE workCellId=$1 
-			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+		SELECT begin_timestamp, end_timestamp, type
+		FROM shiftTable
+		WHERE workCellId=$1
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3)
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC LIMIT 1;
 		`
@@ -432,10 +433,10 @@ func GetShiftsRaw(
 		}
 
 		sqlStatement = `
-		SELECT begin_timestamp, end_timestamp, type 
-		FROM shiftTable 
-		WHERE workCellId=$1 
-			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+		SELECT begin_timestamp, end_timestamp, type
+		FROM shiftTable
+		WHERE workCellId=$1
+			AND ((begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3)
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
@@ -640,14 +641,14 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 
 	sqlStatement := `
 		SELECT order_name, target_units, begin_timestamp, end_timestamp, productTable.product_name, productTable.time_per_unit_in_seconds
-		FROM orderTable 
+		FROM orderTable
 		FULL JOIN productTable ON productTable.product_id = orderTable.product_id
-		WHERE 
-			begin_timestamp IS NOT NULL 
-			AND end_timestamp IS NOT NULL 
-			AND orderTable.workCellId = $1 
-			AND ( 
-				(begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3) 
+		WHERE
+			begin_timestamp IS NOT NULL
+			AND end_timestamp IS NOT NULL
+			AND orderTable.workCellId = $1
+			AND (
+				(begin_timestamp BETWEEN $2 AND $3 OR end_timestamp BETWEEN $2 AND $3)
 				OR (begin_timestamp < $2 AND end_timestamp > $3)
 			)
 		ORDER BY begin_timestamp ASC;
@@ -656,8 +657,9 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
+			return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 
@@ -755,8 +757,9 @@ func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterva
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
+			return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 

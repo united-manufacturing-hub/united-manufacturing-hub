@@ -36,7 +36,8 @@ func GetLocations(customerID string) (locations []string, err error) {
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, customerID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -75,7 +76,8 @@ func GetAssets(customerID string, location string) (assets []string, err error) 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, customerID, location)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -111,7 +113,8 @@ func GetComponents(assetID uint32) (components []string, err error) {
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -207,7 +210,8 @@ func GetStatesRaw(
 		var rows *sql.Rows
 		rows, err = db.Query(sqlStatement, assetID, from, to)
 		if errors.Is(err, sql.ErrNoRows) {
-			database.ErrorHandling(sqlStatement, err, false)
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
 			return
 		} else if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
@@ -346,7 +350,8 @@ func GetShiftsRaw(
 		var rows *sql.Rows
 		rows, err = db.Query(sqlStatement, assetID, from, to) // OFFSET to prevent entering first result twice
 		if errors.Is(err, sql.ErrNoRows) {
-			database.ErrorHandling(sqlStatement, err, false)
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
 			return
 		} else if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
@@ -477,7 +482,8 @@ func GetProcessValue(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to, valueName)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -542,7 +548,8 @@ func GetProcessValueString(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to, valueName)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -619,7 +626,8 @@ func GetCurrentState(
 	sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 ORDER BY timestamp DESC LIMIT 1;`
 	err = db.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -670,7 +678,8 @@ func GetDataTimeRangeForAsset(customerID string, location string, asset string) 
 
 	err = db.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -732,7 +741,8 @@ func GetCountsRaw(
 		var rows *sql.Rows
 		rows, err = db.Query(sqlStatement, assetID, from, to)
 		if errors.Is(err, sql.ErrNoRows) {
-			database.ErrorHandling(sqlStatement, err, false)
+			// it can happen, no need to escalate error
+			zap.S().Debugf("No Results Found")
 			return
 		} else if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
@@ -903,7 +913,8 @@ func GetProductionSpeed(
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1008,7 +1019,8 @@ func GetQualityRate(
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1187,7 +1199,8 @@ func GetRecommendations(customerID string, location string, asset string) (
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, likeString)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1265,7 +1278,8 @@ func GetMaintenanceActivities(customerID string, location string, asset string) 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1337,7 +1351,8 @@ func GetUniqueProducts(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1441,7 +1456,8 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1521,7 +1537,8 @@ func GetOrdersRaw(
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1586,7 +1603,8 @@ func GetUnstartedOrdersRaw(customerID string, location string, asset string) (
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1636,7 +1654,8 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
@@ -1687,7 +1706,8 @@ func GetDistinctProcessValuesString(customerID string, location string, asset st
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, assetID)
 	if errors.Is(err, sql.ErrNoRows) {
-		database.ErrorHandling(sqlStatement, err, false)
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)

@@ -1,4 +1,5 @@
 package models
+
 /*
 
 
@@ -21,7 +22,7 @@ type GetDataFormatRequest struct {
 
 const (
 	TagsDataFormat  string = "tags"
-	KpisDataFormat  string = "kips"
-	ListsDataFormat string = "lists"
+	KpisDataFormat  string = "kpis"
+	TablesDataFormat string = "tables"
 )
 */

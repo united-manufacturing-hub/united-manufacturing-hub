@@ -702,7 +702,7 @@ factoryinsight:
   # tag: 0.3.2
   replicas: 2
   user: "factoryinsight"
-  version: 2  # Which API version to serve
+  version: 2  # Minimum api version to host (e.g: 2 will host v1 and v2, 3 will host v1, v2 and v3)
   # Password will be generated automatically
   db_host: "united-manufacturing-hub"
   db_database: "factoryinsight"

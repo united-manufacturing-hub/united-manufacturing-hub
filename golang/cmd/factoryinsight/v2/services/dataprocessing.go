@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
@@ -53,7 +54,10 @@ func ConvertActivityToString(activity int, configuration datamodel.EnterpriseCon
 }
 
 // CalculateDurations returns an array with the duration between the states.
-func CalculateDurations(temporaryDatapoints []datamodel.StateEntry, to time.Time, returnChannel chan datamodel.ChannelResult) {
+func CalculateDurations(
+	temporaryDatapoints []datamodel.StateEntry,
+	to time.Time,
+	returnChannel chan datamodel.ChannelResult) {
 
 	// Prepare datamodel.ChannelResult
 	durations := make([]float64, 0, len(temporaryDatapoints))
@@ -115,7 +119,11 @@ func TransformToStateArray(temporaryDatapoints []datamodel.StateEntry, returnCha
 	returnChannel <- ChannelResultInstance
 }
 
-func GetTotalDurationForState(durationArray []float64, stateArray []int, state int, returnChannel chan datamodel.ChannelResult) {
+func GetTotalDurationForState(
+	durationArray []float64,
+	stateArray []int,
+	state int,
+	returnChannel chan datamodel.ChannelResult) {
 
 	// Prepare datamodel.ChannelResult
 	var totalDuration float64
@@ -145,7 +153,9 @@ func GetTotalDurationForState(durationArray []float64, stateArray []int, state i
 	returnChannel <- ChannelResultInstance
 }
 
-func AddUnknownMicrostops(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func AddUnknownMicrostops(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -202,7 +212,9 @@ func GetProducedPiecesFromCountSlice(countSlice []datamodel.CountEntry, from, to
 	return
 }
 
-func RemoveUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, from, to time.Time) (processedCountSlice []datamodel.CountEntry) {
+func RemoveUnnecessaryElementsFromCountSlice(
+	countSlice []datamodel.CountEntry,
+	from, to time.Time) (processedCountSlice []datamodel.CountEntry) {
 	if len(countSlice) == 0 {
 		return
 	}
@@ -215,7 +227,9 @@ func RemoveUnnecessaryElementsFromCountSlice(countSlice []datamodel.CountEntry, 
 	return
 }
 
-func RemoveUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, from, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
+func RemoveUnnecessaryElementsFromOrderArray(
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time) (processedOrdersArray []datamodel.OrdersRaw) {
 	if len(orderArray) == 0 {
 		return
 	}
@@ -230,7 +244,9 @@ func RemoveUnnecessaryElementsFromOrderArray(orderArray []datamodel.OrdersRaw, f
 	return
 }
 
-func RemoveUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.StateEntry, from, to time.Time) (processedStates []datamodel.StateEntry) {
+func RemoveUnnecessaryElementsFromStateSlice(
+	processedStatesRaw []datamodel.StateEntry,
+	from, to time.Time) (processedStates []datamodel.StateEntry) {
 	if len(processedStatesRaw) == 0 {
 		return
 	}
@@ -319,7 +335,11 @@ func RemoveUnnecessaryElementsFromStateSlice(processedStatesRaw []datamodel.Stat
 
 // CalculatateLowSpeedStates splits up a "Running" state into multiple states either "Running" or "LowSpeed"
 // additionally it caches it results. See also cache.go
-func CalculatateLowSpeedStates(workCellId uint32, countSlice []datamodel.CountEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func CalculatateLowSpeedStates(
+	workCellId uint32,
+	countSlice []datamodel.CountEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Get from cache if possible
 	processedStateArray, cacheHit := internal.GetCalculatateLowSpeedStatesFromCache(from, to, workCellId)
@@ -375,7 +395,11 @@ func CalculatateLowSpeedStates(workCellId uint32, countSlice []datamodel.CountEn
 }
 
 // Note: assetID is only used for caching
-func AddLowSpeedStates(workCellId uint32, stateArray []datamodel.StateEntry, countSlice []datamodel.CountEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func AddLowSpeedStates(
+	workCellId uint32,
+	stateArray []datamodel.StateEntry,
+	countSlice []datamodel.CountEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// actual function start
 	// TODO: neglecting all other states with additional information, e.g. 10556
@@ -427,7 +451,9 @@ func AddLowSpeedStates(workCellId uint32, stateArray []datamodel.StateEntry, cou
 	return
 }
 
-func SpecifySmallNoShiftsAsBreaks(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func SpecifySmallNoShiftsAsBreaks(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -464,7 +490,9 @@ func SpecifySmallNoShiftsAsBreaks(stateArray []datamodel.StateEntry, configurati
 	return
 }
 
-func RemoveSmallRunningStates(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func RemoveSmallRunningStates(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -501,7 +529,9 @@ func RemoveSmallRunningStates(stateArray []datamodel.StateEntry, configuration d
 	return
 }
 
-func RemoveSmallStopStates(stateArray []datamodel.StateEntry, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
+func RemoveSmallStopStates(
+	stateArray []datamodel.StateEntry,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -614,7 +644,9 @@ func SpecifyUnknownStopsWithFollowingStopReason(stateArray []datamodel.StateEntr
 }
 
 // Adds noOrders at the beginning, ending and between orders
-func AddNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from, to time.Time) (processedOrders []datamodel.OrderEntry) {
+func AddNoOrdersBetweenOrders(
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time) (processedOrders []datamodel.OrderEntry) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range orderArray {
@@ -673,7 +705,14 @@ func AddNoOrdersBetweenOrders(orderArray []datamodel.OrdersRaw, from, to time.Ti
 	return
 }
 
-func CalculateOrderInformation(rawOrders []datamodel.OrdersRaw, countSlice []datamodel.CountEntry, assetID uint32, rawStates []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, configuration datamodel.EnterpriseConfiguration, location, asset string) (data datamodel.DataResponseAny, errReturn error) {
+func CalculateOrderInformation(
+	rawOrders []datamodel.OrdersRaw,
+	countSlice []datamodel.CountEntry,
+	assetID uint32,
+	rawStates []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	configuration datamodel.EnterpriseConfiguration,
+	location, asset string) (data datamodel.DataResponseAny, errReturn error) {
 
 	data.ColumnNames = []string{
 		"Order ID",
@@ -873,7 +912,14 @@ func CalculateOrderInformation(rawOrders []datamodel.OrdersRaw, countSlice []dat
 }
 
 // ProcessStatesOptimized splits up arrays efficiently for better caching
-func ProcessStatesOptimized(workCellId uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func ProcessStatesOptimized(
+	workCellId uint32,
+	stateArray []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	countSlice []datamodel.CountEntry,
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	var processedStatesTemp []datamodel.StateEntry
 
@@ -944,7 +990,14 @@ func ProcessStatesOptimized(workCellId uint32, stateArray []datamodel.StateEntry
 
 // ProcessStates is responsible for cleaning states (e.g. remove the same state if it is adjacent)
 // and calculating new ones (e.g. microstops)
-func ProcessStates(workCellId uint32, stateArray []datamodel.StateEntry, rawShifts []datamodel.ShiftEntry, countSlice []datamodel.CountEntry, orderArray []datamodel.OrdersRaw, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func ProcessStates(
+	workCellId uint32,
+	stateArray []datamodel.StateEntry,
+	rawShifts []datamodel.ShiftEntry,
+	countSlice []datamodel.CountEntry,
+	orderArray []datamodel.OrdersRaw,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	key := fmt.Sprintf("processStates-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
 
@@ -1016,7 +1069,9 @@ func _(states []datamodel.StateEntry) {
 	}
 }
 
-func GetParetoArray(durationArray []float64, stateArray []int, includeRunning bool) (paretos []datamodel.ParetoEntry, err error) {
+func GetParetoArray(durationArray []float64, stateArray []int, includeRunning bool) (
+	paretos []datamodel.ParetoEntry,
+	err error) {
 
 	totalDurationChannel := make(chan datamodel.ChannelResult)
 
@@ -1071,7 +1126,11 @@ func GetParetoArray(durationArray []float64, stateArray []int, includeRunning bo
 }
 
 // CalculateStopParetos calculates the paretos for a given []datamodel.StateEntry
-func CalculateStopParetos(temporaryDatapoints []datamodel.StateEntry, to time.Time, includeRunning, keepStatesInteger bool, configuration datamodel.EnterpriseConfiguration) (data [][]interface{}, err error) {
+func CalculateStopParetos(
+	temporaryDatapoints []datamodel.StateEntry,
+	to time.Time,
+	includeRunning, keepStatesInteger bool,
+	configuration datamodel.EnterpriseConfiguration) (data [][]interface{}, err error) {
 
 	durationArrayChannel := make(chan datamodel.ChannelResult)
 	stateArrayChannel := make(chan datamodel.ChannelResult)
@@ -1129,7 +1188,10 @@ func CalculateStopParetos(temporaryDatapoints []datamodel.StateEntry, to time.Ti
 }
 
 // CalculateStateHistogram calculates the histogram for a given []datamodel.StateEntry
-func CalculateStateHistogram(temporaryDatapoints []datamodel.StateEntry, includeRunning, keepStatesInteger bool, configuration datamodel.EnterpriseConfiguration) (data [][]interface{}, err error) {
+func CalculateStateHistogram(
+	temporaryDatapoints []datamodel.StateEntry,
+	includeRunning, keepStatesInteger bool,
+	configuration datamodel.EnterpriseConfiguration) (data [][]interface{}, err error) {
 
 	var stateOccurances [datamodel.MaxState]int // All are initialized with 0
 
@@ -1164,7 +1226,10 @@ func CalculateStateHistogram(temporaryDatapoints []datamodel.StateEntry, include
 }
 
 // CalculateAvailability calculates the paretos for a given []ParetoDBResponse
-func CalculateAvailability(temporaryDatapoints []datamodel.StateEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
+func CalculateAvailability(
+	temporaryDatapoints []datamodel.StateEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
 
 	durationArrayChannel := make(chan datamodel.ChannelResult)
 	stateArrayChannel := make(chan datamodel.ChannelResult)
@@ -1234,7 +1299,10 @@ func CalculateAvailability(temporaryDatapoints []datamodel.StateEntry, from, to 
 }
 
 // CalculatePerformance calculates the paretos for a given []ParetoDBResponse
-func CalculatePerformance(temporaryDatapoints []datamodel.StateEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
+func CalculatePerformance(
+	temporaryDatapoints []datamodel.StateEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
 
 	durationArrayChannel := make(chan datamodel.ChannelResult)
 	stateArrayChannel := make(chan datamodel.ChannelResult)
@@ -1393,7 +1461,11 @@ func IsExcludedFromOEE(state int32, configuration datamodel.EnterpriseConfigurat
 }
 
 // CalculateOEE calculates the OEE
-func CalculateOEE(temporaryDatapoints []datamodel.StateEntry, countSlice []datamodel.CountEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
+func CalculateOEE(
+	temporaryDatapoints []datamodel.StateEntry,
+	countSlice []datamodel.CountEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []interface{}, err error) {
 
 	durationArrayChannel := make(chan datamodel.ChannelResult)
 	stateArrayChannel := make(chan datamodel.ChannelResult)
@@ -1477,7 +1549,11 @@ func CalculateOEE(temporaryDatapoints []datamodel.StateEntry, countSlice []datam
 }
 
 // CalculateAverageStateTime calculates the average state time. It is used e.g. for calculating the average cleaning time.
-func CalculateAverageStateTime(temporaryDatapoints []datamodel.StateEntry, from, to time.Time, configuration datamodel.EnterpriseConfiguration, targetState int) (data []interface{}, err error) {
+func CalculateAverageStateTime(
+	temporaryDatapoints []datamodel.StateEntry,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration,
+	targetState int) (data []interface{}, err error) {
 
 	key := fmt.Sprintf(
 		"CalculateAverageStateTime-%s-%s-%s-%s-%d",
@@ -1486,8 +1562,8 @@ func CalculateAverageStateTime(temporaryDatapoints []datamodel.StateEntry, from,
 		to,
 		internal.AsHash(configuration),
 		targetState)
-	if Mutex.TryLock(key) { // is is already running?
-		defer Mutex.Unlock(key)
+	if database.Mutex.TryLock(key) { // is is already running?
+		defer database.Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
@@ -1563,7 +1639,9 @@ func CalculateAverageStateTime(temporaryDatapoints []datamodel.StateEntry, from,
 
 // getOrdersThatOverlapWithState gets all orders that overlap with a given time range (ignoring noOrders)
 // this assumes that orderArray is in ascending order
-func GetOrdersThatOverlapWithTimeRange(stateTimeRange TimeRange, orderArray []datamodel.OrdersRaw) (overlappingOrders []datamodel.OrdersRaw) {
+func GetOrdersThatOverlapWithTimeRange(
+	stateTimeRange TimeRange,
+	orderArray []datamodel.OrdersRaw) (overlappingOrders []datamodel.OrdersRaw) {
 	for _, order := range orderArray {
 
 		if order.OrderName == "noOrder" { // only process proper orders and not the filler in between them
@@ -1594,7 +1672,9 @@ func GetOrdersThatOverlapWithTimeRange(stateTimeRange TimeRange, orderArray []da
 }
 
 // CalculateChangeoverStates splits up an unspecified stop into changeovers (assuming they are in order and there are no noOrder)
-func CalculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []datamodel.OrdersRaw) (processedStateArray []datamodel.StateEntry, err error) {
+func CalculateChangeoverStates(
+	stateTimeRange TimeRange,
+	overlappingOrders []datamodel.OrdersRaw) (processedStateArray []datamodel.StateEntry, err error) {
 
 	if len(overlappingOrders) == 1 {
 		order := overlappingOrders[0]
@@ -1674,7 +1754,11 @@ func CalculateChangeoverStates(stateTimeRange TimeRange, overlappingOrders []dat
 }
 
 // AutomaticallyIdentifyChangeovers automatically identifies changeovers if the corresponding configuration is set. See docs for more information.
-func AutomaticallyIdentifyChangeovers(stateArray []datamodel.StateEntry, orderArray []datamodel.OrdersRaw, to time.Time, configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
+func AutomaticallyIdentifyChangeovers(
+	stateArray []datamodel.StateEntry,
+	orderArray []datamodel.OrdersRaw,
+	to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (processedStateArray []datamodel.StateEntry, err error) {
 
 	// Loop through all datapoints
 	for index, dataPoint := range stateArray {
@@ -1780,7 +1864,10 @@ func SliceContainsInt(slice [][]interface{}, number, column int) (Contains bool,
 }
 
 // ChangeOutputFormat tests, if inputColumnName is already in output format and adds name, if not
-func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (dataOutput [][]interface{}, columnNamesOutput []string, columnIndex int) {
+func ChangeOutputFormat(data [][]interface{}, columnNames []string, inputColumnName string) (
+	dataOutput [][]interface{},
+	columnNamesOutput []string,
+	columnIndex int) {
 	for i, name := range columnNames {
 		if name == inputColumnName {
 			return data, columnNames, i
@@ -1814,7 +1901,17 @@ func LengthenSliceToFitNames(slice []interface{}, names []string) (sliceOutput [
 }
 
 // CreateNewRowInData adds a Row to data specifically for uniqueProductsWithTags, and fills in nil, where no information is known yet.
-func CreateNewRowInData(data [][]interface{}, columnNames []string, indexColumn, UID int, AID string, timestampBegin time.Time, timestampEnd sql.NullTime, productID int, isScrap bool, valueName sql.NullString, value sql.NullFloat64) (dataOut [][]interface{}) {
+func CreateNewRowInData(
+	data [][]interface{},
+	columnNames []string,
+	indexColumn, UID int,
+	AID string,
+	timestampBegin time.Time,
+	timestampEnd sql.NullTime,
+	productID int,
+	isScrap bool,
+	valueName sql.NullString,
+	value sql.NullFloat64) (dataOut [][]interface{}) {
 	var fullRow []interface{}
 	fullRow = append(fullRow, UID)
 	fullRow = append(fullRow, AID)
@@ -1848,7 +1945,11 @@ func CheckOutputDimensions(data [][]interface{}, columnNames []string) (err erro
 	return
 }
 
-func CalculateAccumulatedProducts(to, observationStart, observationEnd time.Time, countMap []models.CountStruct, orderMap []models.OrderStruct, productCache map[int]models.ProductStruct) (data datamodel.DataResponseAny) {
+func CalculateAccumulatedProducts(
+	to, observationStart, observationEnd time.Time,
+	countMap []models.CountStruct,
+	orderMap []models.OrderStruct,
+	productCache map[int]models.ProductStruct) (data datamodel.DataResponseAny) {
 
 	var datapoints datamodel.DataResponseAny
 	datapoints.ColumnNames = []string{
@@ -1926,7 +2027,9 @@ func CalculateAccumulatedProducts(to, observationStart, observationEnd time.Time
 
 		for _, count := range countMap {
 			if count.Timestamp.UnixMilli() >= i && count.Timestamp.UnixMilli() < steppingEnd {
-				counts = append(counts, models.CountStruct{Timestamp: count.Timestamp, Count: count.Count, Scrap: count.Scrap})
+				counts = append(
+					counts,
+					models.CountStruct{Timestamp: count.Timestamp, Count: count.Count, Scrap: count.Scrap})
 			}
 		}
 
