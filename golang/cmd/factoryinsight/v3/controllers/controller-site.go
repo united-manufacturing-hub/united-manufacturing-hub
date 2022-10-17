@@ -1,4 +1,6 @@
 package controllers
+/*
+
 
 import (
 	"database/sql"
@@ -38,3 +40,4 @@ func GetSitesHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, sites)
 }
+*/

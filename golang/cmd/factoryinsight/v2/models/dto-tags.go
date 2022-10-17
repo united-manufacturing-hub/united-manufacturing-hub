@@ -33,11 +33,11 @@ type GetTagsDataRequest struct {
 }
 
 type GetCustomTagDataRequest struct {
-	TagAggregates []string `form:"tagAggregates" binding:"required"`
 	GapFilling    string   `form:"gapFilling" binding:"required"`
 	TimeBucket    string   `form:"timeBucket" binding:"required"`
 	From          string   `form:"from" binding:"required"`
 	To            string   `form:"to" binding:"required"`
+	TagAggregates []string `form:"tagAggregates" binding:"required"`
 }
 
 type GetJobTagRequest struct {

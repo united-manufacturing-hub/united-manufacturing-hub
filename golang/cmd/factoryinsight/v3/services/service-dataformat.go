@@ -1,4 +1,6 @@
 package services
+/*
+
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
@@ -53,19 +55,23 @@ func GetDataFormats(
 		return
 	}
 	if stateExists { // TODO: Check if this is correct
-		dataFormats.DataFormats = append(dataFormats.DataFormats, models.DataFormat{
-			Id:   1,
-			Name: models.TagsDataFormat,
-		})
-		dataFormats.DataFormats = append(dataFormats.DataFormats, models.DataFormat{
-			Id:   2,
-			Name: models.KpisDataFormat,
-		})
-		dataFormats.DataFormats = append(dataFormats.DataFormats, models.DataFormat{
-			Id:   3,
-			Name: models.ListsDataFormat,
-		})
+		dataFormats.DataFormats = append(
+			dataFormats.DataFormats, models.DataFormat{
+				Id:   1,
+				Name: models.TagsDataFormat,
+			})
+		dataFormats.DataFormats = append(
+			dataFormats.DataFormats, models.DataFormat{
+				Id:   2,
+				Name: models.KpisDataFormat,
+			})
+		dataFormats.DataFormats = append(
+			dataFormats.DataFormats, models.DataFormat{
+				Id:   3,
+				Name: models.ListsDataFormat,
+			})
 	}
 
 	return
 }
+*/

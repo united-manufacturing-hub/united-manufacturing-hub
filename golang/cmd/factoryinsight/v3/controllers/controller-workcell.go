@@ -1,4 +1,6 @@
 package controllers
+/*
+
 
 import (
 	"database/sql"
@@ -27,7 +29,11 @@ func GetWorkCellsHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	workCells, err = services.GetWorkCells(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName)
+	workCells, err = services.GetWorkCells(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No work cells found"})
 	} else if err != nil {
@@ -37,3 +43,4 @@ func GetWorkCellsHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, workCells)
 }
+*/

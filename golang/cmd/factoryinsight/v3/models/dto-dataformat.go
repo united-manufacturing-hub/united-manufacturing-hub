@@ -1,8 +1,10 @@
 package models
+/*
+
 
 type DataFormat struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetDataFormatResponse struct {
@@ -22,3 +24,4 @@ const (
 	KpisDataFormat  string = "kips"
 	ListsDataFormat string = "lists"
 )
+*/

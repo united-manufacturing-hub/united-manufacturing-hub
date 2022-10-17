@@ -249,7 +249,12 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 	includeRunning := getShopfloorLossesTableRequest.IncludeRunning
 	keepStatesInteger := getShopfloorLossesTableRequest.KeepStatesInteger
 
-	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
+	var workCellId uint32
+	workCellId, err = GetWorkCellId(enterpriseName, siteName, workCellName)
+	if err != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
 
 	// customer configuration
 	configuration, err := GetEnterpriseConfiguration(enterpriseName)

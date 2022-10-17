@@ -1,4 +1,6 @@
 package services
+/*
+
 
 import (
 	"database/sql"
@@ -48,3 +50,4 @@ func GetSites(enterpriseName string) (sites models.GetSitesResponse, err error) 
 
 	return
 }
+*/

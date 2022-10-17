@@ -25,7 +25,12 @@ func GetTagGroupsHandler(c *gin.Context) {
 	}
 
 	// Fetch data from database
-	tagGroups, err = services.GetTagGroups(request.EnterpriseName, request.SiteName, request.AreaName, request.ProductionLineName, request.WorkCellName)
+	tagGroups, err = services.GetTagGroups(
+		request.EnterpriseName,
+		request.SiteName,
+		request.AreaName,
+		request.ProductionLineName,
+		request.WorkCellName)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -37,7 +42,7 @@ func GetTagGroupsHandler(c *gin.Context) {
 func GetTagsHandler(c *gin.Context) {
 	var request models.GetTagsRequest
 	var tags []string
-	var grouping = make(map[string][]string)
+	var grouping map[string][]string
 	var response any
 
 	err := c.BindUri(&request)
@@ -55,12 +60,14 @@ func GetTagsHandler(c *gin.Context) {
 	switch request.TagGroupName {
 	case models.CustomTagGroup:
 		tags, err = services.GetStandardTags()
-		var response models.GetTagsResponse[[]string]
-		response.Tags = tags
+		var r models.GetTagsResponse[[]string]
+		r.Tags = tags
+		response = r
 	case models.StandardTagGroup:
 		grouping, err = services.GetCustomTags(request.WorkCellName)
-		var response models.GetTagsResponse[map[string][]string]
-		response.Tags = grouping
+		var r models.GetTagsResponse[map[string][]string]
+		r.Tags = grouping
+		response = r
 	default:
 		helpers.HandleInvalidInputError(c, err)
 		return

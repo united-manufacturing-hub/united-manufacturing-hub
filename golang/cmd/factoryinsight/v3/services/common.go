@@ -1,4 +1,6 @@
 package services
+/*
+
 
 import (
 	"database/sql"
@@ -252,8 +254,16 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 }
 
 // GetStatesRaw gets all states for a specific work cell in a timerange. It returns an array of datamodel.StateEntry
-func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []datamodel.StateEntry, err error) {
-	zap.S().Infof("[GetStatesRaw] workCellId: %v, from: %v, to: %v, configuration: %v", workCellId, from, to, configuration)
+func GetStatesRaw(
+	workCellId uint32,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []datamodel.StateEntry, err error) {
+	zap.S().Infof(
+		"[GetStatesRaw] workCellId: %v, from: %v, to: %v, configuration: %v",
+		workCellId,
+		from,
+		to,
+		configuration)
 
 	key := fmt.Sprintf("GetStatesRaw-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
 	if Mutex.TryLock(key) { // is is already running?
@@ -348,8 +358,16 @@ func GetStatesRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShiftsRaw gets all shifts for a specific work cell in a timerange in a raw format
-func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel.EnterpriseConfiguration) (data []datamodel.ShiftEntry, err error) {
-	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v, configuration: %v", workCellId, from, to, configuration)
+func GetShiftsRaw(
+	workCellId uint32,
+	from, to time.Time,
+	configuration datamodel.EnterpriseConfiguration) (data []datamodel.ShiftEntry, err error) {
+	zap.S().Infof(
+		"[GetShiftsRaw] workCellId: %v, from: %v, to: %v, configuration: %v",
+		workCellId,
+		from,
+		to,
+		configuration)
 
 	key := fmt.Sprintf("GetShiftsRaw-%d-%s-%s-%s", workCellId, from, to, internal.AsHash(configuration))
 	if Mutex.TryLock(key) { // is is already running?
@@ -472,7 +490,9 @@ func GetShiftsRaw(workCellId uint32, from, to time.Time, configuration datamodel
 }
 
 // GetShifts gets all shifts for a specific asset in a timerange
-func GetShifts(enterpriseName string, workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
+func GetShifts(enterpriseName string, workCellId uint32, from, to time.Time) (
+	data datamodel.DataResponseAny,
+	err error) {
 	zap.S().Infof("[GetShiftsRaw] workCellId: %v, from: %v, to: %v", workCellId, from, to)
 
 	// TODO: adapt JSONColumnName to new data model
@@ -680,6 +700,7 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.DataResponseAny, err error) {
 
 	// TODO: adapt JSONColumnName to new data model
+
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "order"
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
@@ -702,25 +723,33 @@ func GetOrdersTimeline(workCellId uint32, from, to time.Time) (data datamodel.Da
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 	return
-
+	* /
 }
 
 // GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
-func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterval int) (data datamodel.DataResponseAny, err error) {
-	zap.S().Infof("[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v", workCellId, from, to, aggregatedInterval)
-
+func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterval int) (
+	data datamodel.DataResponseAny,
+	err error) {
 	// TODO: adapt JSONColumnName to new data model
+
+	zap.S().Infof(
+		"[GetProductionSpeed] workCellId: %v from: %v, to: %v, aggregatedInterval: %v",
+		workCellId,
+		from,
+		to,
+		aggregatedInterval)
+
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
-	FROM countTable 
-	WHERE workCellId=$1 
-		AND timestamp BETWEEN $2 AND $3 
-	GROUP BY speedPerIntervall 
-	ORDER BY speedPerIntervall ASC;`
+		SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)
+		FROM countTable
+		WHERE workCellId=$1
+			AND timestamp BETWEEN $2 AND $3
+		GROUP BY speedPerIntervall
+		ORDER BY speedPerIntervall ASC;`
 
 	var rows *sql.Rows
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
@@ -786,6 +815,8 @@ func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterva
 	}
 
 	return
+
+	* /
 }
 
 // BusinessLogicErrorHandling logs and handles errors during the business logic
@@ -800,3 +831,4 @@ func BusinessLogicErrorHandling(operationName string, err error, isCritical bool
 		signal.Notify(GracefulShutdownChannel, syscall.SIGTERM)
 	}
 }
+*/

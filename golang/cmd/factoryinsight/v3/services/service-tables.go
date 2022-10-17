@@ -1,15 +1,19 @@
 package services
+/*
+
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/models"
-	"go.uber.org/zap"
-	"net/http"
 )
 
-func GetTableTypes(enterpriseName string, siteName string, areaName string, productionLineName string, workCellName string) (tables models.GetTableTypesResponse, err error) {
+func GetTableTypes(
+	enterpriseName string,
+	siteName string,
+	areaName string,
+	productionLineName string,
+	workCellName string) (tables models.GetTableTypesResponse, err error) {
 
 	enterpriseId, err := GetEnterpriseId(enterpriseName)
 	if err != nil {
@@ -52,6 +56,7 @@ func GetTableTypes(enterpriseName string, siteName string, areaName string, prod
 
 func ProcessJobsTableRequest(c *gin.Context, request models.GetTableDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request values in proper variables ###
 	enterprise := request.EnterpriseName
 	site := request.SiteName
@@ -164,10 +169,12 @@ func ProcessJobsTableRequest(c *gin.Context, request models.GetTableDataRequest)
 	}
 
 	c.JSON(http.StatusOK, data)
+	* /
 }
 
 func ProcessProductsTableRequest(c *gin.Context, request models.GetTableDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request values in proper variables ###
 	enterprise := request.EnterpriseName
 	site := request.SiteName
@@ -199,10 +206,12 @@ func ProcessProductsTableRequest(c *gin.Context, request models.GetTableDataRequ
 		return
 	}
 	c.JSON(http.StatusOK, products)
+	* /
 }
 
 func ProcessProductTypesTableRequest(c *gin.Context, request models.GetTableDataRequest) {
 	// TODO adapt this to the new data model
+
 	// ### store request values in proper variables ###
 	enterprise := request.EnterpriseName
 	site := request.SiteName
@@ -232,4 +241,6 @@ func ProcessProductTypesTableRequest(c *gin.Context, request models.GetTableData
 		return
 	}
 	c.JSON(http.StatusOK, productTypes)
+	* /
 }
+*/

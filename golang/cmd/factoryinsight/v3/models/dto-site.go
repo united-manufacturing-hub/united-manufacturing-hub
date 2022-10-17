@@ -1,8 +1,10 @@
 package models
+/*
+
 
 type Site struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 type GetSitesResponse struct {
 	Sites []Site `json:"sites"`
@@ -11,3 +13,4 @@ type GetSitesResponse struct {
 type GetSiteRequest struct {
 	EnterpriseName string `uri:"enterpriseName" binding:"required"`
 }
+*/

@@ -1,4 +1,6 @@
 package services
+/*
+
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -56,13 +58,14 @@ func getOverlappingShifts(
 
 	// Loop through all shifts
 	for _, dataPoint := range processedShifts {
-		/*
-			zap.S().Infow("for _, dataPoint := range processedShifts",
-				"dataPoint.TimestampBegin", dataPoint.TimestampBegin.String(),
-				"dataPoint.TimestampEnd", dataPoint.TimestampEnd.String(),
-				"dataPoint.ShiftType", dataPoint.ShiftType,
-			)
-		*/
+
+		zap.S().Infow(
+			"for _, dataPoint := range processedShifts",
+			"dataPoint.TimestampBegin", dataPoint.TimestampBegin.String(),
+			"dataPoint.TimestampEnd", dataPoint.TimestampEnd.String(),
+			"dataPoint.ShiftType", dataPoint.ShiftType,
+		)
+		* /
 		if dataPoint.ShiftType != 0 {
 			secondTimeRange := TimeRange{dataPoint.TimestampBegin, dataPoint.TimestampEnd}
 
@@ -359,3 +362,4 @@ func addNoShiftsToStates(
 
 	return
 }
+*/

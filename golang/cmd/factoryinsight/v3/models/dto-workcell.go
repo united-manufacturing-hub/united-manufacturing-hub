@@ -1,8 +1,10 @@
 package models
+/*
+
 
 type WorkCell struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetWorkCellsResponse struct {
@@ -15,3 +17,4 @@ type GetWorkCellsRequest struct {
 	AreaName           string `uri:"areaName" binding:"required"`
 	ProductionLineName string `uri:"productionLineName" binding:"required"`
 }
+*/

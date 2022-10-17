@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v3/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
@@ -16,7 +16,9 @@ import (
 	"time"
 )
 
-func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCellName string) (tagGroups []string, err error) {
+func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCellName string) (
+	tagGroups []string,
+	err error) {
 	zap.S().Infof(
 		"[GetTagGroups] Getting tag groups for enterprise %s, site %s, area %s, production line %s and work cell %s",
 		enterpriseName,
@@ -107,7 +109,15 @@ func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 	// TODO: #97 Return timestamps in RFC3339 in /orderTimeline
 
 	// Process data
-	data, err := GetOrdersTimeline(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getJobTagRequest.From, getJobTagRequest.To)
+	data, err := GetOrdersTimeline(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		getJobTagRequest.From,
+		getJobTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -143,7 +153,15 @@ func ProcessOutputTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	// Fetching from the database
 	// TODO: #88 Return timestamps in RFC3339 in /counts
-	counts, err := GetCounts(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getCountTagRequest.From, getCountTagRequest.To)
+	counts, err := GetCounts(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		getCountTagRequest.From,
+		getCountTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -176,7 +194,15 @@ func ProcessShiftsTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	// Fetching from the database
-	shifts, err := GetShifts(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, getShiftsTagRequest.From, getShiftsTagRequest.To)
+	shifts, err := GetShifts(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		getShiftsTagRequest.From,
+		getShiftsTagRequest.To)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -323,7 +349,16 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	aggregationInterval := getThroughputTagRequest.AggregationInterval
 
 	// Fetching from the database
-	counts, err := GetProductionSpeed(enterpriseName, siteName, areaName, productionLineName, workCellName, workCellId, from, to, aggregationInterval)
+	counts, err := GetProductionSpeed(
+		enterpriseName,
+		siteName,
+		areaName,
+		productionLineName,
+		workCellName,
+		workCellId,
+		from,
+		to,
+		aggregationInterval)
 	if err != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
@@ -422,7 +457,8 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		bucketName = "year"
 	}
 
-	sqlStatement := fmt.Sprintf(`SELECT
+	sqlStatement := fmt.Sprintf(
+		`SELECT
 						bucket as %s,
  						%s
 					 FROM %s

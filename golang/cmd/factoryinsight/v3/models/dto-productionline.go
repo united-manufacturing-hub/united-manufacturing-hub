@@ -1,8 +1,10 @@
 package models
+/*
+
 
 type ProductionLine struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetProductionLinesResponse struct {
@@ -14,3 +16,4 @@ type GetProductionLineRequest struct {
 	SiteName       string `uri:"siteName" binding:"required"`
 	AreaName       string `uri:"areaName" binding:"required"`
 }
+*/

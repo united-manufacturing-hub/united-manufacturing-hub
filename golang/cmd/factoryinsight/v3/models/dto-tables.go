@@ -1,10 +1,12 @@
 package models
+/*
+
 
 import "time"
 
 type TableType struct {
-	Id   int    `json:"id"`
 	Name string `json:"name"`
+	Id   int    `json:"id"`
 }
 
 type GetTableTypesResponse struct {
@@ -49,3 +51,4 @@ const (
 	ProductTypesTable string = "productTypes"
 	// TODO: shopfloor losses tables
 )
+*/
