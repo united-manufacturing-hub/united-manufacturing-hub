@@ -24,13 +24,9 @@ func GetTableTypes(
 	if err != nil {
 		return
 	}
-
-	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
-
 	var stateExists bool
-	err = database.Db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	stateExists, err = GetStateExists(workCellId)
 	if err != nil {
-		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
 

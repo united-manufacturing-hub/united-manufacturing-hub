@@ -18,6 +18,18 @@ var (
 	logData = false
 )
 
+func GetStateExists(workCellId uint32) (bool, error) {
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
+
+	var stateExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	return stateExists, err
+}
+
 // GetWorkCellId gets the assetID from the database
 func GetWorkCellId(enterpriseName string, siteName string, workCellName string) (workCellId uint32, err error) {
 	zap.S().Infof(

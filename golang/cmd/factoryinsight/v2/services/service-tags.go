@@ -416,13 +416,12 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	default:
 		helpers.HandleInvalidInputError(
 			c,
-			errors.New(
-				fmt.Sprintf(
-					"invalid gap filling method: %s. Valid values: %s, %s, %s",
-					gapFilling,
-					models.NoGapFilling,
-					models.InterpolationGapFilling,
-					models.LocfGapFilling)))
+			fmt.Errorf(
+				"invalid gap filling method: %s. Valid values: %s, %s, %s",
+				gapFilling,
+				models.NoGapFilling,
+				models.InterpolationGapFilling,
+				models.LocfGapFilling))
 		return
 	}
 
@@ -451,16 +450,15 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	default:
 		helpers.HandleInvalidInputError(
 			c,
-			errors.New(
-				fmt.Sprintf(
-					"invalid time bucket: %s. Valid Values: %s, %s, %s, %s, %s, %s",
-					timeBucket,
-					models.MinuteAggregateView,
-					models.HourAggregateView,
-					models.DayAggregateView,
-					models.WeekAggregateView,
-					models.MonthAggregateView,
-					models.YearAggregateView)))
+			fmt.Errorf(
+				"invalid time bucket: %s. Valid Values: %s, %s, %s, %s, %s, %s",
+				timeBucket,
+				models.MinuteAggregateView,
+				models.HourAggregateView,
+				models.DayAggregateView,
+				models.WeekAggregateView,
+				models.MonthAggregateView,
+				models.YearAggregateView))
 		return
 	}
 
@@ -520,15 +518,14 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 			default:
 				helpers.HandleInvalidInputError(
 					c,
-					errors.New(
-						fmt.Sprintf(
-							"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
-							tagAggregate,
-							models.AverageTagAggregate,
-							models.CountTagAggregate,
-							models.MaxTagAggregate,
-							models.MinTagAggregate,
-							models.SumTagAggregate)))
+					fmt.Errorf(
+						"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
+						tagAggregate,
+						models.AverageTagAggregate,
+						models.CountTagAggregate,
+						models.MaxTagAggregate,
+						models.MinTagAggregate,
+						models.SumTagAggregate))
 				return
 			}
 		}
