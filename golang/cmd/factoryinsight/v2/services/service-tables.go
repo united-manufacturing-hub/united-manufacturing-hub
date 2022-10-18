@@ -38,13 +38,13 @@ func GetTableTypes(enterpriseName string, siteName string, workCellName string) 
 	if err != nil {
 		return
 	}
-
-	var shiftExists bool
-	shiftExists, err = GetShiftExists(workCellId)
-	if err != nil {
-		return
-	}
-
+	/*
+		var shiftExists bool
+		shiftExists, err = GetShiftExists(workCellId)
+		if err != nil {
+			return
+		}
+	*/
 	var productExists bool
 	productExists, err = GetProductExists(workCellId)
 	if err != nil {
@@ -67,7 +67,7 @@ func GetTableTypes(enterpriseName string, siteName string, workCellName string) 
 		tables.Tables = append(tables.Tables, models.TableType{Id: 2, Name: models.ProductTypesTable})
 	}
 
-	if stateExists && shiftExists && countExists && orderExists {
+	if stateExists {
 		tables.Tables = append(tables.Tables, models.TableType{Id: 3, Name: models.AvailabilityHistogramTable})
 		tables.Tables = append(tables.Tables, models.TableType{Id: 4, Name: models.AvailabilityTotalTable})
 	}
