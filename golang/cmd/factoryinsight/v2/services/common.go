@@ -149,8 +149,8 @@ func GetProductExists(workCellId uint32) (bool, error) {
 	return productExists, err
 }
 
-func GetThroughputExists(workCellid uint32) (bool, error) {
-	return GetOutputExists(workCellid)
+func GetThroughputExists(workCellId uint32) (bool, error) {
+	return GetOutputExists(workCellId)
 }
 
 // GetWorkCellId gets the assetID from the database
