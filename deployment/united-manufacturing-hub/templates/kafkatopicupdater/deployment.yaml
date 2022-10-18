@@ -48,6 +48,16 @@ spec:
                   fieldPath: metadata.name
             - name: LOGGING_LEVEL
               value: DEVELOPMENT
+            - name: AREA_NAME
+              value: {{.Values.kafkatopicupdater.env.area}}
+            - name: PRODUCTION_LINE
+              value: {{.Values.kafkatopicupdater.env.productionline}}
+            - name: ENTERPRISE
+              value: {{.Values.kafkatopicupdater.env.enterprise}}
+            - name: SITE_NAME
+              value: {{.Values.kafkatopicupdater.env.site}}
+            - name: WORK_CELL
+              value: {{.Values.kafkatopicupdater.env.workcell}}
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD

@@ -61,7 +61,7 @@ func main() {
 	internal.SetupKafka(
 		kafka.ConfigMap{
 			"bootstrap.servers": KafkaBoostrapServer,
-			"security_protocol": "plaintext",
+			"security.protocol": "plaintext",
 			"group.id":          "kafka-topic-updater",
 		})
 	err := internal.KafkaConsumer.Subscribe("^ia.+", nil)
@@ -118,6 +118,7 @@ func consume(processorChannel chan *kafka.Message) {
 			}
 
 		}
+		zap.S().Debugf("consuming message")
 		processorChannel <- message
 	}
 }
@@ -125,18 +126,28 @@ func consume(processorChannel chan *kafka.Message) {
 func processing(processorChannel chan *kafka.Message) {
 	// declaring regexps for different message types
 	re := regexp.MustCompile(internal.KafkaUMHTopicRegex)
-	reraw := regexp.MustCompile(`^ia.raw.(-\w_.)+`)
+	reraw := regexp.MustCompile(`^ia\.raw\.(\d|-|\w|_|\.)+`)
+	enterprise := os.Getenv("ENTERPRISE")
+	site := os.Getenv("SITE_NAME")
+	area := os.Getenv("AREA_NAME")
+	prodline := os.Getenv("PRODUCTION_LINE")
+	workcell := os.Getenv("WORK_CELL")
 	topicinfo := internal.TopicInformation{}
 	for {
 		message := <-processorChannel
+		zap.S().Debugf("processing message: %s", *message.TopicPartition.Topic)
 		topicinfo = *internal.GetTopicInformationCached(*message.TopicPartition.Topic)
 		var oldtopicmatch = re.MatchString(*message.TopicPartition.Topic)
 		if oldtopicmatch {
+			zap.S().Debugf("must old topic structure terminate beep boop")
 			switch {
-			case reraw.MatchString(topicinfo.Topic):
-				*message.TopicPartition.Topic = strings.Replace(*message.TopicPartition.Topic, "ia.raw", "umh.v1.defaultEnterprise.defaultSite.defaultArea.defaultProductionLine.defaultWorkCell.raw.raw", 1)
+			case reraw.MatchString(*message.TopicPartition.Topic):
+				zap.S().Debugf("recognized a raw message")
+				newraw := "umh.v1." + enterprise + "." + site + "." + area + "." + prodline + "." + workcell + ".raw.raw"
+				*message.TopicPartition.Topic = strings.Replace(*message.TopicPartition.Topic, "ia.raw", newraw, 1)
+				zap.S().Debugf("new topic: %s", *message.TopicPartition.Topic)
 			case topicinfo.Topic == "count":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product.add"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.product.add"
 				var payload datamodel.Count
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -147,7 +158,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Productadd{Timestampend: payload.TimestampMs, Producttypeid: producttypeid, Scrap: payload.Scrap, Totalamount: payload.Count}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addOrder":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.add"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.job.add"
 				var payload datamodel.AddOrder
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -156,7 +167,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Jobadd{ProductType: payload.ProductId, Jobid: payload.OrderId, Targetamount: payload.TargetUnits}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "startOrder":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.start"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.job.start"
 				var payload datamodel.StartOrder
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -165,7 +176,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Jobstart{Jobid: payload.OrderId, Timestampbegin: payload.TimestampMs}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "endOrder":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.job.end"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.job.end"
 				var payload datamodel.EndOrder
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -174,7 +185,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Jobend{TimestampEnd: payload.TimestampMs, Jobid: payload.OrderId}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addShift":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.shift.add"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.shift.add"
 				var payload datamodel.AddShift
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -183,7 +194,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Shiftadd{Timestampbegin: payload.TimestampMs, Timestampend: payload.TimestampMsEnd}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "deleteShift":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.shift.delete"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.shift.delete"
 				var payload datamodel.DeleteShift
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -192,7 +203,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Shiftdelete{Timestampbegin: payload.TimeStampMs}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addProduct":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product-type.add"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.product-type.add"
 				var payload datamodel.AddProduct
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -201,7 +212,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Producttypeadd{ProductId: payload.ProductId, Cycletimeinseconds: payload.TimePerUnitInSeconds}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "modifyProducedPieces":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.product.overwrite"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.product.overwrite"
 				var payload datamodel.ModifyProducedPieces
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -210,7 +221,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Productoverwrite{Timestampend: payload.TimestampMs, Totalamount: payload.Count, Scrap: payload.Scrap}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "state":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.add"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.add"
 				var payload datamodel.State
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -219,7 +230,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Stateadd{Timestampbegin: payload.TimestampMs, State: payload.State}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "modifyState":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.overwrite"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.overwrite"
 				var payload datamodel.ModifyState
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -228,7 +239,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Stateoverwrite{Timestampbegin: payload.StartTimeStampMs, Timestampend: payload.EndTimeStampMs, State: uint64(payload.NewState)}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "activity":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.activity"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.activity"
 				var payload datamodel.Activity
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -237,7 +248,7 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Stateactivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "detectedAnomaly":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".standard.state.reason"
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.reason"
 				var payload datamodel.DetectedAnomaly
 				err := json.Unmarshal(message.Value, &payload)
 				if err != nil {
@@ -246,11 +257,12 @@ func processing(processorChannel chan *kafka.Message) {
 				newpayload := datamodel.Statereason{Timestampbegin: payload.TimestampMs, Reason: payload.DetectedAnomaly}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "processValue":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
 			case topicinfo.Topic == "processValueString":
-				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + ".defaultarea.defaultproductionLine." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
+				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
 			}
 		}
+		zap.S().Debugf("producing message> %s", *message.TopicPartition.Topic)
 		err := internal.KafkaProducer.Produce(message, nil)
 		if err != nil {
 			zap.S().Warnf("Failed to produce new topic structure %s, %s", err, *message.TopicPartition.Topic)

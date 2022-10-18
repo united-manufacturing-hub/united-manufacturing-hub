@@ -2204,6 +2204,14 @@ kafkatopicupdater:
   image:
     repository: unitedmanufacturinghub/kafka-topic-updater
     pullPolicy: IfNotPresent
+  env:
+    # area and productionline are variables inserted into the topic structure to fill up the old structure to the new one
+    area: dis-area
+    productionline: dat-line
+    # these variables are used for raw topics as they didn't have a proper structure beforehand, so there is no customer, location, asset
+    enterprise: scroogemcduck
+    site: moneybin
+    workcell: coinpool
   replicas: 1
   annotations: {}
   resources:
