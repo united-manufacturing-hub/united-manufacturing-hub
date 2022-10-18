@@ -236,6 +236,7 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 		zap.S().Infof("Starting API version 2")
 		v2 := router.Group("/api/v2", gin.BasicAuth(accounts))
 		{
+			v2.GET("/treeStructure", v2controllers.GetTreeStructureHandler)
 			v2.GET("/:enterpriseName", v2controllers.GetSitesHandler)
 			v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
 			v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
