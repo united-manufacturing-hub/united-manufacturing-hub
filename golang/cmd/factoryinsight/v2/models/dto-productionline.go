@@ -7,7 +7,5 @@ type GetProductionLineRequest struct {
 }
 
 const (
-	MockProductionLine1 = "ProductionLine1"
-	MockProductionLine2 = "ProductionLine2"
-	MockProductionLine3 = "ProductionLine3"
+	MockDefaultProductionLine = "DefaultProductionLine"
 )

@@ -6,7 +6,5 @@ type GetAreasRequest struct {
 }
 
 const (
-	MockArea1 = "Area1"
-	MockArea2 = "Area2"
-	MockArea3 = "Area3"
+	MockDefaultArea = "DefaultArea"
 )

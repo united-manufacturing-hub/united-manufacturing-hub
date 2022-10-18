@@ -19,7 +19,7 @@ func GetProductionLines(
 		areaName,
 	)
 
-	productionLines = []string{models.MockProductionLine1, models.MockProductionLine2, models.MockProductionLine3}
+	productionLines = []string{models.MockDefaultProductionLine}
 
 	return
 }

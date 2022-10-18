@@ -20,27 +20,9 @@ func GetKpisMethods(enterpriseName, siteName, workCellName string) (kpis models.
 	if err != nil {
 		return
 	}
+	// All KPI's require state
 
-	var countExists bool
-	countExists, err = GetOutputExists(workCellId)
-	if err != nil {
-		return
-	}
-
-	var orderExists bool
-	orderExists, err = GetJobsExists(workCellId)
-	if err != nil {
-		return
-	}
-
-	var shiftExists bool
-	shiftExists, err = GetShiftExists(workCellId)
-	if err != nil {
-		return
-	}
-	// All KPI's requires states, shifts, counts & orders
-
-	if stateExists && shiftExists && countExists && orderExists {
+	if stateExists {
 		kpis.Kpis = append(kpis.Kpis, models.OeeKpi, models.AvailabilityKpi, models.PerformanceKpi, models.QualityKpi)
 	}
 
