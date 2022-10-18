@@ -30,20 +30,81 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 		workCellName,
 	)
 
-	tagGroups = []string{models.StandardTagGroup, models.CustomTagGroup}
+	id, err := GetWorkCellId(enterpriseName, siteName, workCellName)
+	if err != nil {
+		return nil, err
+	}
+	var customTagGroupExists bool
+	customTagGroupExists, err = GetCustomTagsExists(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var standardTags []string
+	standardTags, err = GetStandardTags(enterpriseName, siteName, workCellName)
+	if err != nil {
+		return nil, err
+	}
+
+	tagGroups = make([]string, 0)
+	if customTagGroupExists {
+		tagGroups = append(tagGroups, models.CustomTagGroup)
+	}
+	if len(standardTags) > 0 {
+		tagGroups = append(tagGroups, models.StandardTagGroup)
+	}
 
 	return tagGroups, nil
 }
 
-func GetStandardTags() (tags []string, err error) {
+func GetStandardTags(enterpriseName, siteName, workCellName string) (tags []string, err error) {
 	zap.S().Infof("[GetTags] Getting standard tags")
 
-	tags = []string{
-		models.JobsStandardTag,
-		models.OutputStandardTag,
-		models.ShiftsStandardTag,
-		models.StateStandardTag,
-		models.ThroughputStandardTag,
+	tags = make([]string, 0)
+
+	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
+	if err != nil {
+		return nil, err
+	}
+
+	jobsExists, err := GetJobsExists(workCellId)
+	if err != nil {
+		return nil, err
+	}
+	if jobsExists {
+		tags = append(tags, models.JobsStandardTag)
+	}
+
+	outputExists, err := GetOutputExists(workCellId)
+	if err != nil {
+		return nil, err
+	}
+	if outputExists {
+		tags = append(tags, models.OutputStandardTag)
+	}
+
+	stateExists, err := GetStateExists(workCellId)
+	if err != nil {
+		return nil, err
+	}
+	if stateExists {
+		tags = append(tags, models.StateStandardTag)
+	}
+
+	shiftExists, err := GetShiftExists(workCellId)
+	if err != nil {
+		return nil, err
+	}
+	if shiftExists {
+		tags = append(tags, models.ShiftsStandardTag)
+	}
+
+	throughputExists, err := GetThroughputExists(workCellId)
+	if err != nil {
+		return nil, err
+	}
+	if throughputExists {
+		tags = append(tags, models.ThroughputStandardTag)
 	}
 
 	return

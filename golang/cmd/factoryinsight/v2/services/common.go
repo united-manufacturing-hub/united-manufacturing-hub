@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -18,7 +19,14 @@ var (
 	logData = false
 )
 
+var lruExistCache, _ = lru.New(50)
+
 func GetStateExists(workCellId uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("state-exists-%d", workCellId))
+	if ok {
+		return true, nil
+	}
+
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
 
 	var stateExists bool
@@ -27,7 +35,122 @@ func GetStateExists(workCellId uint32) (bool, error) {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
 	}
+	if stateExists {
+		lruExistCache.Add(fmt.Sprintf("state-exists-%d", workCellId), true)
+	}
+
 	return stateExists, err
+}
+
+func GetCustomTagsExists(workCellId uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("custom-tags-exists-%d", workCellId))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM processvaluetable WHERE asset_id = $1)`
+	var customExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellId).Scan(&customExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if customExists {
+		lruExistCache.Add(fmt.Sprintf("custom-tags-exists-%d", workCellId), true)
+	}
+	return customExists, err
+}
+
+func GetJobsExists(workCellid uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("jobs-exists-%d", workCellid))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM ordertable WHERE asset_id = $1)`
+	var jobsExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellid).Scan(&jobsExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if jobsExists {
+		lruExistCache.Add(fmt.Sprintf("jobs-exists-%d", workCellid), true)
+	}
+	return jobsExists, err
+}
+
+func GetOutputExists(workCellid uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("output-exists-%d", workCellid))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM counttable WHERE asset_id = $1)`
+	var outputExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellid).Scan(&outputExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if outputExists {
+		lruExistCache.Add(fmt.Sprintf("output-exists-%d", workCellid), true)
+	}
+	return outputExists, err
+}
+func GetShiftExists(workCellid uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("shift-exists-%d", workCellid))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM shiftTable WHERE asset_id = $1)`
+	var shiftExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellid).Scan(&shiftExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if shiftExists {
+		lruExistCache.Add(fmt.Sprintf("shift-exists-%d", workCellid), true)
+	}
+	return shiftExists, err
+}
+
+func GetUniqueProductsExists(workCellId uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("unique-products-exists-%d", workCellId))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM uniqueProductTable WHERE asset_id = $1)`
+	var uniqueExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellId).Scan(&uniqueExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if uniqueExists {
+		lruExistCache.Add(fmt.Sprintf("unique-products-exists-%d", workCellId), true)
+	}
+	return uniqueExists, err
+}
+
+func GetProductExists(workCellId uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("product-exists-%d", workCellId))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM productTable WHERE asset_id = $1)`
+	var productExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellId).Scan(&productExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if productExists {
+		lruExistCache.Add(fmt.Sprintf("product-exists-%d", workCellId), true)
+	}
+	return productExists, err
+}
+
+func GetThroughputExists(workCellid uint32) (bool, error) {
+	return GetOutputExists(workCellid)
 }
 
 // GetWorkCellId gets the assetID from the database

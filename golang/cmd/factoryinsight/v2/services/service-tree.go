@@ -196,7 +196,7 @@ func GetTSP(customer string, site string, area string, line string) (models.Tree
 
 func GetTSTags(enterprise string, site string, workCell string) (tst models.TreeStructureTags, err error) {
 	tst = models.TreeStructureTags{}
-	tst.Standard, err = GetStandardTags()
+	tst.Standard, err = GetStandardTags(enterprise, site, workCell)
 	if err != nil {
 		return models.TreeStructureTags{}, err
 	}
@@ -216,7 +216,7 @@ func GetTST(customer string, site string, area string, line string, workCell str
 	tables map[string]models.TreeStructureTables,
 	err error) {
 	var tx models.GetTableTypesResponse
-	tx, err = GetTableTypes(customer, site, area, line, workCell)
+	tx, err = GetTableTypes(customer, site, workCell)
 	if err != nil {
 		return
 	}

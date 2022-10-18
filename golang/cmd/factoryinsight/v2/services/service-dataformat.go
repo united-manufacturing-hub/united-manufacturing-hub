@@ -21,21 +21,34 @@ func GetDataFormats(
 		workCellName,
 	)
 
-	var workCellId uint32
-	workCellId, err = GetWorkCellId(enterpriseName, siteName, workCellName)
+	//dataFormats = []string{models.TagsDataFormat, models.KpisDataFormat, models.TablesDataFormat}
+	dataFormats = make([]string, 0)
+
+	tagGroups, err := GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCellName)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	var stateExists bool
-	stateExists, err = GetStateExists(workCellId)
-	if err != nil {
-		return
+	if len(tagGroups) > 0 {
+		dataFormats = append(dataFormats, models.TagsDataFormat)
 	}
-	if stateExists { // TODO: Check if this is correct
-		dataFormats = []string{models.TagsDataFormat, models.KpisDataFormat, models.TablesDataFormat}
-	} else {
-		dataFormats = []string{""}
+
+	kpis, err := GetKpisMethods(enterpriseName, siteName, workCellName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(kpis.Kpis) > 0 {
+		dataFormats = append(dataFormats, models.KpisDataFormat)
+	}
+
+	tables, err := GetTableTypes(enterpriseName, siteName, workCellName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tables.Tables) > 0 {
+		dataFormats = append(dataFormats, models.TablesDataFormat)
 	}
 
 	return

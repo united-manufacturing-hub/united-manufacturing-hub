@@ -72,7 +72,7 @@ func GetTagsHandler(c *gin.Context) {
 		r.Tags = grouping
 		response = r
 	case models.StandardTagGroup:
-		tags, err = services.GetStandardTags()
+		tags, err = services.GetStandardTags(request.EnterpriseName, request.SiteName, request.WorkCellName)
 		var r models.GetTagsResponse[[]string]
 		r.Tags = tags
 		response = r

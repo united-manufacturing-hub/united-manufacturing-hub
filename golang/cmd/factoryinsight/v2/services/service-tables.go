@@ -13,12 +13,9 @@ import (
 	"time"
 )
 
-func GetTableTypes(
-	enterpriseName string,
-	siteName string,
-	areaName string,
-	productionLineName string,
-	workCellName string) (tables models.GetTableTypesResponse, err error) {
+func GetTableTypes(enterpriseName string, siteName string, workCellName string) (
+	tables models.GetTableTypesResponse,
+	err error) {
 
 	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
@@ -30,17 +27,55 @@ func GetTableTypes(
 		return
 	}
 
-	if stateExists {
-		tables.Tables = append(tables.Tables, models.TableType{Id: 0, Name: models.JobsTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 1, Name: models.ProductsTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 2, Name: models.ProductTypesTable})
-
-		tables.Tables = append(tables.Tables, models.TableType{Id: 3, Name: models.AvailabilityHistogramTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 4, Name: models.AvailabilityTotalTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 5, Name: models.PerformanceTable})
-		tables.Tables = append(tables.Tables, models.TableType{Id: 6, Name: models.QualityTable})
+	var countExists bool
+	countExists, err = GetOutputExists(workCellId)
+	if err != nil {
+		return
 	}
 
+	var orderExists bool
+	orderExists, err = GetJobsExists(workCellId)
+	if err != nil {
+		return
+	}
+
+	var shiftExists bool
+	shiftExists, err = GetShiftExists(workCellId)
+	if err != nil {
+		return
+	}
+
+	var productExists bool
+	productExists, err = GetProductExists(workCellId)
+	if err != nil {
+		return
+	}
+
+	var uniqueProductsExists bool
+	uniqueProductsExists, err = GetUniqueProductsExists(workCellId)
+	if err != nil {
+		return
+	}
+
+	if orderExists {
+		tables.Tables = append(tables.Tables, models.TableType{Id: 0, Name: models.JobsTable})
+	}
+	if uniqueProductsExists {
+		tables.Tables = append(tables.Tables, models.TableType{Id: 1, Name: models.ProductsTable})
+	}
+	if orderExists && countExists && productExists {
+		tables.Tables = append(tables.Tables, models.TableType{Id: 2, Name: models.ProductTypesTable})
+	}
+
+	if stateExists && shiftExists && countExists && orderExists {
+		tables.Tables = append(tables.Tables, models.TableType{Id: 3, Name: models.AvailabilityHistogramTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 4, Name: models.AvailabilityTotalTable})
+	}
+	/*
+		// NOT YET IMPLEMENTED !
+		tables.Tables = append(tables.Tables, models.TableType{Id: 5, Name: models.PerformanceTable})
+		tables.Tables = append(tables.Tables, models.TableType{Id: 6, Name: models.QualityTable})
+	*/
 	return
 }
 
