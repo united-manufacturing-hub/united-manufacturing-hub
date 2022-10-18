@@ -544,7 +544,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	data.ColumnNames = []string{"timestamp"}
 
-	var selectClauseEntries = make([]string, len(tagAggregates))
+	var selectClauseEntries = make([]string, 0)
 	for _, tagAggregate := range tagAggregates {
 		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-" + tagAggregate
 		data.ColumnNames = append(data.ColumnNames, JSONColumnName)
@@ -578,7 +578,10 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		selectClauseEntries = append(selectClauseEntries, strGF+" AS "+tagAggregate)
 	}
 
+	zap.S().Debugf("select clause entries: %v", selectClauseEntries)
+
 	selectClause := strings.Join(selectClauseEntries, ", ")
+
 	if len(selectClauseEntries) > 0 {
 		selectClause = ", " + selectClause
 	}
