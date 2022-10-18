@@ -3,12 +3,54 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"github.com/patrickmn/go-cache"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"go.uber.org/zap"
+	"sync"
+	"time"
 )
 
-func GetTreeStructure() (tree any, err error) {
+var treeCache = cache.New(1*time.Minute, 10*time.Minute)
+
+// GetTreeStructureFromCache returns the tree structure from cache and triggers a refresh in the background
+func GetTreeStructureFromCache() (tree models.TreeStructureEnterpriseMap, err error) {
+	zap.S().Infof("[GetTreeStructureFromCache] Getting tree structure from cache")
+	get, b := treeCache.Get("tree")
+	if b {
+		zap.S().Infof("[GetTreeStructureFromCache] Tree structure found in cache")
+		go refreshTreeCache()
+		return get.(models.TreeStructureEnterpriseMap), nil
+	}
+	zap.S().Infof("[GetTreeStructureFromCache] Tree structure not found in cache")
+	tree, err = GetTreeStructure()
+	if err != nil {
+		return
+	}
+	treeCache.Set("tree", tree, cache.DefaultExpiration)
+
+	return tree, nil
+}
+
+var refreshRunning sync.Mutex
+
+func refreshTreeCache() {
+	lockAcquired := refreshRunning.TryLock()
+	if !lockAcquired {
+		zap.S().Infof("[refreshTreeCache] Tree structure refresh already running")
+		return
+	}
+
+	structure, err := GetTreeStructure()
+	if err != nil {
+		refreshRunning.Unlock()
+		return
+	}
+	treeCache.Set("tree", structure, cache.DefaultExpiration)
+	refreshRunning.Unlock()
+}
+
+func GetTreeStructure() (tree models.TreeStructureEnterpriseMap, err error) {
 	zap.S().Infof("[GetTreeStructure] Getting tree structure")
 
 	sqlStatement := `SELECT DISTINCT customer FROM assetTable;`
@@ -140,9 +182,7 @@ func GetTSP(customer string, site string, area string, line string) (models.Tree
 		if err != nil {
 			return models.TreeStructureProductionLines{}, err
 		}
-		for _, method := range methods.Kpis {
-			tsw.KPIs = append(tsw.KPIs, method)
-		}
+		tsw.KPIs = append(tsw.KPIs, methods.Kpis...)
 
 		tsw.Tags, err = GetTSTags(customer, site, workCell)
 		if err != nil {

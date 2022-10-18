@@ -13,7 +13,7 @@ import (
 func GetTreeStructureHandler(c *gin.Context) {
 
 	// Fetch data from database
-	tree, err := services.GetTreeStructure()
+	tree, err := services.GetTreeStructureFromCache()
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No data found"})
 	} else if err != nil {

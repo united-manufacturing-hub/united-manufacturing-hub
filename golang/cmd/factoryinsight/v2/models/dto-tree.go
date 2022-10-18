@@ -16,9 +16,9 @@ type TreeStructureProductionLines struct {
 }
 
 type TreeStructureWorkCell struct {
+	Tags   TreeStructureTags              `json:"tags"`
 	Tables map[string]TreeStructureTables `json:"tables"`
 	KPIs   []string                       `json:"kpi"`
-	Tags   TreeStructureTags              `json:"tags"`
 }
 
 type TreeStructureTables struct {
@@ -26,6 +26,6 @@ type TreeStructureTables struct {
 }
 
 type TreeStructureTags struct {
-	Standard []string            `json:"standard"`
 	Custom   map[string][]string `json:"custom"`
+	Standard []string            `json:"standard"`
 }

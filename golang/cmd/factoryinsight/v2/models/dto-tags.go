@@ -33,6 +33,9 @@ type GetTagsDataRequest struct {
 }
 
 type GetCustomTagDataRequest struct {
+	IncludePrevious *bool `form:"includePrevious" binding:"required"`
+	IncludeNext     *bool `form:"includeNext" binding:"required"`
+
 	GapFilling    string    `form:"gapFilling" binding:"required"`
 	TimeBucket    string    `form:"timeBucket" binding:"required"`
 	From          time.Time `form:"from" binding:"required"`
