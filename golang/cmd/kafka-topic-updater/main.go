@@ -31,7 +31,7 @@ var processorChannel = make(chan *kafka.Message, 100)
 
 func main() {
 	// zap logging
-	log := logger.New("DEVELOPMENT")
+	log := logger.New("LOGGING_LEVEL")
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {

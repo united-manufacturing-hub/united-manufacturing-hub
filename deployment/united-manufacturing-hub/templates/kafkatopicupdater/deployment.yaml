@@ -46,7 +46,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-
+            - name: LOGGING_LEVEL
+              value: DEVELOPMENT
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
