@@ -12,6 +12,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -368,7 +370,6 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 }
 
 func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
-	// FIXME: The views and queries are incorrect
 
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -398,11 +399,49 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 
-	rawTagAggregates := getCustomTagDataRequest.TagAggregates
 	gapFilling := getCustomTagDataRequest.GapFilling
 	timeBucket := getCustomTagDataRequest.TimeBucket
+	// check if timebucket is valid
+	splitTimeBucket := strings.Split(timeBucket, " ")
+	if len(splitTimeBucket) != 2 {
+		helpers.HandleInvalidInputError(c, errors.New("invalid timebucket, requires number and interval"))
+		return
+	}
+	_, err = strconv.Atoi(splitTimeBucket[0])
+	if err != nil {
+		helpers.HandleInvalidInputError(c, errors.New("invalid timebucket, first part is not a number"))
+		return
+	}
+	switch strings.ToLower(splitTimeBucket[1]) {
+	case "year":
+	case "month":
+	case "week":
+	case "day":
+	case "hour":
+	case "minute":
+	case "second":
+	default:
+		helpers.HandleInvalidInputError(c, errors.New("invalid timebucket, second part is not a valid interval"))
+	}
+
 	from := getCustomTagDataRequest.From
 	to := getCustomTagDataRequest.To
+
+	if getCustomTagDataRequest.IncludeNext != nil && *getCustomTagDataRequest.IncludeNext {
+		to, err = QueryInterpolationPoint(workCellId, tagName, to)
+		if err != nil {
+			helpers.HandleInternalServerError(c, err)
+			return
+		}
+	}
+
+	if getCustomTagDataRequest.IncludePrevious != nil && *getCustomTagDataRequest.IncludePrevious {
+		from, err = QueryLOCFPoint(workCellId, tagName, from)
+		if err != nil {
+			helpers.HandleInternalServerError(c, err)
+			return
+		}
+	}
 
 	var gapFillingMethod string
 
@@ -425,48 +464,11 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 
-	var aggregatedView string
-	var bucketName string
-
-	switch timeBucket {
-	case models.MinuteAggregateView:
-		aggregatedView = "aggregationTable_minute"
-		bucketName = "minute"
-	case models.HourAggregateView:
-		aggregatedView = "aggregationTable_hour"
-		bucketName = "hour"
-	case models.DayAggregateView:
-		aggregatedView = "aggregationTable_day"
-		bucketName = "day"
-	case models.WeekAggregateView:
-		aggregatedView = "aggregationTable_week"
-		bucketName = "week"
-	case models.MonthAggregateView:
-		aggregatedView = "aggregationTable_month"
-		bucketName = "month"
-	case models.YearAggregateView:
-		aggregatedView = "aggregationTable_year"
-		bucketName = "year"
-	default:
-		helpers.HandleInvalidInputError(
-			c,
-			fmt.Errorf(
-				"invalid time bucket: %s. Valid Values: %s, %s, %s, %s, %s, %s",
-				timeBucket,
-				models.MinuteAggregateView,
-				models.HourAggregateView,
-				models.DayAggregateView,
-				models.WeekAggregateView,
-				models.MonthAggregateView,
-				models.YearAggregateView))
+	tagAggregates := strings.Split(strings.ReplaceAll(getCustomTagDataRequest.TagAggregates, " ", ""), ",")
+	if len(tagAggregates) == 0 {
+		helpers.HandleInvalidInputError(c, errors.New("invalid tag aggregates"))
 		return
 	}
-
-	var selectClauseEntries []string
-	var groupByClauseEntries []string
-
-	rawTagAggregates = strings.ReplaceAll(rawTagAggregates, " ", "")
-	tagAggregates := strings.Split(rawTagAggregates, ",")
 
 	uniqueTagAggregates := make(map[string]bool)
 	for _, tagAggregate := range tagAggregates {
@@ -477,83 +479,73 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		tagAggregates = append(tagAggregates, tagAggregate)
 	}
 
+	sort.Strings(tagAggregates)
+
 	data.ColumnNames = []string{"timestamp"}
-	if len(tagAggregates) == 0 {
-		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName
+
+	var selectClauseEntries []string
+	for _, tagAggregate := range tagAggregates {
+		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-" + tagAggregate
 		data.ColumnNames = append(data.ColumnNames, JSONColumnName)
-	} else {
-		for _, tagAggregate := range tagAggregates {
-			JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-" + tagAggregate
-			data.ColumnNames = append(data.ColumnNames, JSONColumnName)
-			switch tagAggregate {
-			case models.AverageTagAggregate:
-				selectClauseEntries = append(
-					selectClauseEntries,
-					fmt.Sprintf(gapFillingMethod, models.AverageTagAggregate))
-				groupByClauseEntries = append(
-					groupByClauseEntries,
-					fmt.Sprintf("%s.%s", aggregatedView, models.AverageTagAggregate))
-			case models.CountTagAggregate:
-				selectClauseEntries = append(
-					selectClauseEntries,
-					fmt.Sprintf(gapFillingMethod, models.CountTagAggregate))
-				groupByClauseEntries = append(
-					groupByClauseEntries,
-					fmt.Sprintf("%s.%s", aggregatedView, models.CountTagAggregate))
-			case models.MaxTagAggregate:
-				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.MaxTagAggregate))
-				groupByClauseEntries = append(
-					groupByClauseEntries,
-					fmt.Sprintf("%s.%s", aggregatedView, models.MaxTagAggregate))
-			case models.MinTagAggregate:
-				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.MinTagAggregate))
-				groupByClauseEntries = append(
-					groupByClauseEntries,
-					fmt.Sprintf("%s.%s", aggregatedView, models.MinTagAggregate))
-			case models.SumTagAggregate:
-				selectClauseEntries = append(selectClauseEntries, fmt.Sprintf(gapFillingMethod, models.SumTagAggregate))
-				groupByClauseEntries = append(
-					groupByClauseEntries,
-					fmt.Sprintf("%s.%s", aggregatedView, models.SumTagAggregate))
-			default:
-				helpers.HandleInvalidInputError(
-					c,
-					fmt.Errorf(
-						"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
-						tagAggregate,
-						models.AverageTagAggregate,
-						models.CountTagAggregate,
-						models.MaxTagAggregate,
-						models.MinTagAggregate,
-						models.SumTagAggregate))
-				return
-			}
+		var str string
+		switch tagAggregate {
+		case models.AverageTagAggregate:
+			str = fmt.Sprintf("%s(value)", models.AverageTagAggregate)
+		case models.CountTagAggregate:
+			str = fmt.Sprintf("%s(value)", models.CountTagAggregate)
+		case models.MaxTagAggregate:
+			str = fmt.Sprintf("%s(value)", models.MaxTagAggregate)
+		case models.MinTagAggregate:
+			str = fmt.Sprintf("%s(value)", models.MinTagAggregate)
+		case models.SumTagAggregate:
+			str = fmt.Sprintf("%s(value)", models.SumTagAggregate)
+		default:
+			helpers.HandleInvalidInputError(
+				c,
+				fmt.Errorf(
+					"invalid tag aggregate: %s. Valid values: %s, %s, %s, %s, %s",
+					tagAggregate,
+					models.AverageTagAggregate,
+					models.CountTagAggregate,
+					models.MaxTagAggregate,
+					models.MinTagAggregate,
+					models.SumTagAggregate))
+			return
 		}
+
+		strGF := fmt.Sprintf(gapFillingMethod, str)
+		selectClauseEntries = append(selectClauseEntries, strGF+" AS "+tagAggregate)
 	}
 
 	selectClause := strings.Join(selectClauseEntries, ", ")
 	if len(selectClauseEntries) > 0 {
 		selectClause = ", " + selectClause
 	}
-	groupByClause := strings.Join(groupByClauseEntries, ", ")
-	if len(groupByClauseEntries) > 0 {
-		groupByClause = ", " + groupByClause
-	}
 
 	var sqlStatement string
-	/* #nosec G201 */
+	// #nosec G201
 	{
 		sqlStatement = fmt.Sprintf(
 			`
 SELECT
-    bucket as "%s"%s
-FROM %s
+    time_bucket_gapfill('%s', timestamp) AS bucket,
+    asset_id
+    %s
+FROM
+    processvaluetable
 WHERE
-    asset_id = $1 AND
-    valueName = $2 AND
-    bucket BETWEEN $3 AND $4
-GROUP BY bucket, asset_id, valueName%s
-ORDER BY bucket`, bucketName, selectClause, aggregatedView, groupByClause)
+        asset_id = $1 AND
+        valuename = $2 AND
+        timestamp >= $3 AND
+        timestamp <= $4
+GROUP BY bucket, asset_id
+ORDER BY bucket;
+`, timeBucket, selectClause)
+	}
+
+	if from.After(to) {
+		helpers.HandleInvalidInputError(c, errors.New("invalid time range (from > to)"))
+		return
 	}
 
 	zap.S().Debugf("sqlStatement: %s", sqlStatement)
@@ -571,25 +563,93 @@ ORDER BY bucket`, bucketName, selectClause, aggregatedView, groupByClause)
 		database.ErrorHandling(sqlStatement, err, false)
 		return
 	}
-	colLen := len(cols)
-	values := make([]interface{}, colLen)
 
 	for rows.Next() {
-		values[0] = new(time.Time)
-		for i := 1; i < colLen; i++ {
-			values[i] = new(float64)
+		row := make([]interface{}, len(cols))
+		for i := range row {
+			row[i] = new(interface{})
 		}
-
-		err = rows.Scan(values...)
+		err = rows.Scan(row...)
 		if err != nil {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
 
-		valuesSanitized := []interface{}{
-			float64(values[0].(*time.Time).UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
-			values}
-		data.Datapoints = append(data.Datapoints, valuesSanitized)
+		r0 := row[0]
+		// convert *interface{} to string
+		timestamp := fmt.Sprintf("%v", *r0.(*interface{}))
+		//2023-01-01 01:00:00 +0000 +0000
+		timestamp = strings.ReplaceAll(timestamp, " +0000 +0000", "")
+
+		//2023-01-01 01:00:00
+		// parse to time.time
+		var t time.Time
+		t, err = time.Parse("2006-01-02 15:04:05", timestamp)
+		if err != nil {
+			database.ErrorHandling(sqlStatement, err, false)
+			return
+		}
+
+		// time.time as rfc 3339
+		row[0] = t.Format(time.RFC3339)
+
+		// row without row 1, but including 0
+
+		rowX := make([]interface{}, len(row)-1)
+		n := 0
+		for i := range row {
+			if i == 1 {
+				continue
+			}
+			rowX[n] = row[i]
+			n++
+		}
+
+		data.Datapoints = append(data.Datapoints, rowX)
 	}
 	c.JSON(http.StatusOK, data)
+}
+
+func QueryLOCFPoint(workCellId uint32, tagName string, from time.Time) (time.Time, error) {
+	sqlStatement := `
+SELECT
+    timestamp
+FROM
+    processvaluetable
+WHERE
+	asset_id=$1 AND
+	valuename = $2 AND
+	timestamp < $3
+ORDER BY 
+	timestamp DESC
+LIMIT 1
+`
+	var timestamp time.Time
+	err := database.Db.QueryRow(sqlStatement, workCellId, tagName, from).Scan(&timestamp)
+	if errors.Is(err, sql.ErrNoRows) {
+		timestamp = from
+		return timestamp, nil
+	}
+	return timestamp, err
+}
+
+func QueryInterpolationPoint(workCellId uint32, tagName string, to time.Time) (time.Time, error) {
+	sqlStatement := `
+SELECT
+                        timestamp
+                    FROM processvaluetable
+                    WHERE
+                            asset_id = $1 AND
+                            valuename = $2 AND
+                            timestamp >= $3
+                    ORDER BY timestamp
+                    LIMIT 1
+`
+	var timestamp time.Time
+	err := database.Db.QueryRow(sqlStatement, workCellId, tagName, to).Scan(&timestamp)
+	if errors.Is(err, sql.ErrNoRows) {
+		timestamp = to
+		return timestamp, nil
+	}
+	return timestamp, err
 }
