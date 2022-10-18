@@ -268,7 +268,7 @@ func GetCustomTagsTree(
 			te = append(
 				te, models.TreeEntry{
 					Label: value,
-					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + group + "/" + tag + "/" + value,
+					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + group + "/" + tag + "_" + value,
 				})
 		}
 	}
