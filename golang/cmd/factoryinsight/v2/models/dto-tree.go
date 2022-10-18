@@ -1,5 +1,6 @@
 package models
 
+/*
 type TreeStructureEnterpriseMap map[string]TreeStructureEnterprise
 
 type TreeStructureEnterprise struct {
@@ -28,4 +29,18 @@ type TreeStructureTables struct {
 type TreeStructureTags struct {
 	Custom   map[string][]string `json:"custom"`
 	Standard []string            `json:"standard"`
+}*/
+
+type TreeEntry struct {
+	Label   string        `json:"label"`
+	Value   string        `json:"value"`
+	Entries []interface{} `json:"entries"`
+}
+
+type TreeEntryWorkCell struct {
+	Label  string      `json:"label"`
+	Value  string      `json:"value"`
+	Tables []TreeEntry `json:"tables"`
+	KPIs   []TreeEntry `json:"kpi"`
+	Tags   []TreeEntry `json:"tags"`
 }
