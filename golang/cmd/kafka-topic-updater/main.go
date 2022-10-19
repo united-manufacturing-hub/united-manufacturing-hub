@@ -28,6 +28,7 @@ var shutdownEnabled bool
 
 // initialize channels for incoming messages
 var processorChannel = make(chan *kafka.Message, 100)
+var newTopicChannel = make(chan *kafka.Message, 100)
 var enterprise = os.Getenv("ENTERPRISE")
 var site = os.Getenv("SITE_NAME")
 var area = os.Getenv("AREA_NAME")
@@ -75,6 +76,17 @@ func main() {
 		return
 	}
 
+	internal.SetupKafkaTopicProbeConsumer(
+		kafka.ConfigMap{
+			"bootstrap.servers": KafkaBoostrapServer,
+			"security.protocol": "plaintext",
+			"group.id":          "kafka-topic-updater",
+		})
+
+	go newTopicProbe(newTopicChannel)
+
+	go newTopicReaction(newTopicChannel)
+
 	go consume(processorChannel)
 
 	go processing(processorChannel)
@@ -100,6 +112,45 @@ func main() {
 	}()
 
 	select {} // block forever
+}
+
+func newTopicProbe(newTopicChannel chan *kafka.Message) {
+	for !shutdownEnabled {
+		message, err := internal.KafkaTopicProbeConsumer.ReadMessage(5)
+		if err != nil {
+			// This is fine, and expected behaviour
+			var kafkaError kafka.Error
+			ok := errors.As(err, &kafkaError)
+			if ok && kafkaError.Code() == kafka.ErrTimedOut {
+				// Sleep to reduce CPU usage
+				time.Sleep(internal.OneSecond)
+				continue
+			} else if ok && kafkaError.Code() == kafka.ErrUnknownTopicOrPart {
+				time.Sleep(5 * time.Second)
+				continue
+			} else {
+				zap.S().Warnf("Failed to read kafka message: %s", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+		}
+		zap.S().Debugf("consuming message")
+		newTopicChannel <- message
+
+	}
+
+}
+
+func newTopicReaction(newTopicChannel chan *kafka.Message) {
+	for {
+		message := <-newTopicChannel
+		zap.S().Debugf("processing new topic: %s", *message.TopicPartition.Topic)
+		_, err := internal.KafkaConsumer.GetMetadata(nil, true, 50000)
+		if err != nil {
+			zap.S().Errorf("Error fetching new metadata")
+		}
+	}
 }
 
 func consume(processorChannel chan *kafka.Message) {

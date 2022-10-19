@@ -10,7 +10,7 @@ import (
 
 // KafkaUMHTopicRegex is the regex used to validate kafka topics
 // Deprecated: Use umhV1SyntaxRegex instead
-var KafkaUMHTopicRegex = `^ia\.((raw\.(\d|-|\w|_|\.)+)|(rawImage\.(\d|-|\w|_)+\.(\d|-|\w|_)+)|(((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((count|scrapCount|barcode|activity|detectedAnomaly|addShift|deleteShift|addOrder|addProduct|startOrder|endOrder|productImage|productTag|productTagString|addParentToChild|state|cycleTimeTrigger|uniqueProduct|scrapUniqueProduct|recommendations)|(processValue(\.(\d|-|\w|_)+)*)|(processValueString(\.(\d|-|\w|_)+)*))))$`
+var KafkaUMHTopicRegex = `^ia\.((raw\.(\d|-|\w|_|\.)+)|(rawImage\.(\d|-|\w|_)+\.(\d|-|\w|_)+)|(((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((\d|-|\w|_)+)\.((count|scrapCount|barcode|activity|detectedAnomaly|addShift|deleteShift|addOrder|addProduct|modifyProducedPieces|startOrder|endOrder|productImage|productTag|productTagString|addParentToChild|state|cycleTimeTrigger|uniqueProduct|scrapUniqueProduct|recommendations)|(processValue(\.(\d|-|\w|_)+)*)|(processValueString(\.(\d|-|\w|_)+)*))))$`
 
 // KafkaUMHTopicCompiledRegex is the compiled regex used to validate kafka topics
 // Deprecated: Use umhV1SyntaxCompiledRegex instead

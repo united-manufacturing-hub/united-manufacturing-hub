@@ -59,7 +59,7 @@ type Shiftadd struct {
 
 // Deprecated: use Shiftdelete instead for the new datamodel
 type DeleteShift struct {
-	TimeStampMs uint32 `json:"timestamp_ms"`
+	TimeStampMs uint64 `json:"timestamp_ms"`
 }
 
 // Shiftdelete is new datamodel version of DeleteShift
