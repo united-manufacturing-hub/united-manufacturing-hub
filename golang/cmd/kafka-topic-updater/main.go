@@ -28,6 +28,11 @@ var shutdownEnabled bool
 
 // initialize channels for incoming messages
 var processorChannel = make(chan *kafka.Message, 100)
+var enterprise = os.Getenv("ENTERPRISE")
+var site = os.Getenv("SITE_NAME")
+var area = os.Getenv("AREA_NAME")
+var prodline = os.Getenv("PRODUCTION_LINE")
+var workcell = os.Getenv("WORK_CELL")
 
 func main() {
 	// zap logging
@@ -120,18 +125,15 @@ func consume(processorChannel chan *kafka.Message) {
 		}
 		zap.S().Debugf("consuming message")
 		processorChannel <- message
+
 	}
 }
 
+// TODO might be more performant to switch it up and have a function for each topic?
 func processing(processorChannel chan *kafka.Message) {
 	// declaring regexps for different message types
 	re := regexp.MustCompile(internal.KafkaUMHTopicRegex)
 	reraw := regexp.MustCompile(`^ia\.raw\.(\d|-|\w|_|\.)+`)
-	enterprise := os.Getenv("ENTERPRISE")
-	site := os.Getenv("SITE_NAME")
-	area := os.Getenv("AREA_NAME")
-	prodline := os.Getenv("PRODUCTION_LINE")
-	workcell := os.Getenv("WORK_CELL")
 	topicinfo := internal.TopicInformation{}
 	for {
 		message := <-processorChannel
@@ -139,11 +141,11 @@ func processing(processorChannel chan *kafka.Message) {
 		topicinfo = *internal.GetTopicInformationCached(*message.TopicPartition.Topic)
 		var oldtopicmatch = re.MatchString(*message.TopicPartition.Topic)
 		if oldtopicmatch {
-			zap.S().Debugf("must old topic structure terminate beep boop")
+			zap.S().Debugf("must terminate old topic structure  beep boop")
 			switch {
 			case reraw.MatchString(*message.TopicPartition.Topic):
 				zap.S().Debugf("recognized a raw message")
-				newraw := "umh.v1." + enterprise + "." + site + "." + area + "." + prodline + "." + workcell + ".raw.raw"
+				newraw := "umh.v1." + enterprise + "." + site + "." + area + "." + prodline + "." + workcell + ".raw"
 				*message.TopicPartition.Topic = strings.Replace(*message.TopicPartition.Topic, "ia.raw", newraw, 1)
 				zap.S().Debugf("new topic: %s", *message.TopicPartition.Topic)
 			case topicinfo.Topic == "count":
@@ -200,7 +202,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case deleteShift: %s", err)
 				}
-				newpayload := datamodel.Shiftdelete{Timestampbegin: payload.TimeStampMs}
+				newpayload := datamodel.Shiftdelete{Timestampbegin: uint64(payload.TimeStampMs)}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addProduct":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.product-type.add"

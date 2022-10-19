@@ -64,7 +64,7 @@ type DeleteShift struct {
 
 // Shiftdelete is new datamodel version of DeleteShift
 type Shiftdelete struct {
-	Timestampbegin uint32 `json:"timestamp-begin"`
+	Timestampbegin uint64 `json:"timestamp-begin"`
 }
 
 // Deprecated: use Jobadd instead for the new data model
