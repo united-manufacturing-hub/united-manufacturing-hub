@@ -245,6 +245,9 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
 				v2controllers.GetDataFormatHandler)
 			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/getValues",
+				v2controllers.GetValueTree)
+			v2.GET(
 				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
 				v2controllers.GetTagGroupsHandler)
 			v2.GET(

@@ -13,42 +13,120 @@ import (
 
 var treeCache = cache.New(1*time.Minute, 10*time.Minute)
 
-func GetTreeStructureFromCache() (tree interface{}, err error) {
-	zap.S().Infof("[GetTreeStructureFromCache] Getting tree structure from cache")
-	get, b := treeCache.Get("tree")
+const (
+	cacheKeyFormatTree = "format-tree"
+	cacheKeyValueTree  = "value-tree"
+)
+
+func GetFormatTreeStructureFromCache() (tree interface{}, err error) {
+	zap.S().Infof("[GetFormatTreeStructureFromCache] Getting tree structure from cache")
+	get, b := treeCache.Get(cacheKeyFormatTree)
 	if b {
-		zap.S().Infof("[GetTreeStructureFromCache] Tree structure found in cache")
-		go refreshTreeCache()
+		zap.S().Infof("[GetFormatTreeStructureFromCache] Tree structure found in cache")
+		go refreshFormatTreeCache()
 		return get, nil
 	}
-	zap.S().Infof("[GetTreeStructureFromCache] Tree structure not found in cache")
-	tree, err = GetTreeStructure()
+	zap.S().Infof("[GetFormatTreeStructureFromCache] Tree structure not found in cache")
+	tree, err = GetFormatTreeStructure()
 	if err != nil {
 		return
 	}
-	treeCache.Set("tree", tree, cache.DefaultExpiration)
+	treeCache.Set(cacheKeyFormatTree, tree, cache.DefaultExpiration)
 
 	return tree, nil
 }
 
-var refreshRunning sync.Mutex
-
-func refreshTreeCache() {
-	lockAcquired := refreshRunning.TryLock()
-	if !lockAcquired {
-		zap.S().Infof("[refreshTreeCache] Tree structure refresh already running")
-		return
+func GetValueTreeStructureFromCache(request models.GetTagGroupsRequest) (tree interface{}, err error) {
+	zap.S().Infof("[GetValueTreeStructureFromCache] Getting tree structure from cache")
+	get, b := treeCache.Get(cacheKeyValueTree)
+	if b {
+		zap.S().Infof("[GetValueTreeStructureFromCache] Tree structure found in cache")
+		go refreshValueTreeCache(request)
+		return get, nil
 	}
-
-	structure, err := GetTreeStructure()
+	zap.S().Infof("[GetValueTreeStructureFromCache] Tree structure not found in cache")
+	tree, err = GetValueTreeStructure(request)
 	if err != nil {
-		refreshRunning.Unlock()
 		return
 	}
-	treeCache.Set("tree", structure, cache.DefaultExpiration)
-	refreshRunning.Unlock()
+	treeCache.Set(cacheKeyValueTree, tree, cache.DefaultExpiration)
+
+	return tree, nil
 }
-func GetTreeStructure() (tree interface{}, err error) {
+
+var refreshRunningFT sync.Mutex
+
+func refreshFormatTreeCache() {
+	lockAcquired := refreshRunningFT.TryLock()
+	if !lockAcquired {
+		zap.S().Infof("[refreshFormatTreeCache] Tree structure refresh already running")
+		return
+	}
+
+	structure, err := GetFormatTreeStructure()
+	if err != nil {
+		refreshRunningFT.Unlock()
+		return
+	}
+	treeCache.Set(cacheKeyFormatTree, structure, cache.DefaultExpiration)
+	refreshRunningFT.Unlock()
+}
+
+var refreshRunningVT sync.Mutex
+
+func refreshValueTreeCache(request models.GetTagGroupsRequest) {
+	lockAcquired := refreshRunningVT.TryLock()
+	if !lockAcquired {
+		zap.S().Infof("[refreshValueTreeCache] Tree structure refresh already running")
+		return
+	}
+
+	structure, err := GetValueTreeStructure(request)
+	if err != nil {
+		refreshRunningVT.Unlock()
+		return
+	}
+	treeCache.Set(cacheKeyValueTree, structure, cache.DefaultExpiration)
+	refreshRunningVT.Unlock()
+}
+
+func GetValueTreeStructure(request models.GetTagGroupsRequest) (
+	tree interface{},
+	err error) {
+
+	customer := request.EnterpriseName
+	site := request.SiteName
+	area := request.AreaName
+	line := request.ProductionLineName
+	workCell := request.WorkCellName
+
+	var tables []models.TreeEntryFormat
+	tables, err = GetTableTreeStructure(customer, site, area, line, workCell)
+	if err != nil {
+		return tree, err
+	}
+	var kpis []models.TreeEntryFormat
+	kpis, err = GetKPITreeStructure(customer, site, area, line, workCell)
+	if err != nil {
+		return tree, err
+	}
+	var tags []models.TreeEntryFormat
+	tags, err = GetTagsTreeStructure(customer, site, area, line, workCell)
+	if err != nil {
+		return tree, err
+	}
+	tree = models.TreeEntryValues{
+		Label:  workCell,
+		Value:  customer + "/" + site + "/" + area + "/" + line + "/" + workCell,
+		Tables: tables,
+		KPIs:   kpis,
+		Tags:   tags,
+	}
+
+	return tree, nil
+}
+
+func GetFormatTreeStructure() (tree interface{}, err error) {
 
 	var Entries []interface{}
 	Entries, err = GetEnterpriseTreeStructure()
@@ -100,7 +178,7 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 			return nil, err
 		}
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label:   customer,
 				Value:   customer,
 				Entries: siteTree,
@@ -122,7 +200,7 @@ func GetSiteTreeStructure(customer string) (te []interface{}, err error) {
 			return nil, err
 		}
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label:   site,
 				Value:   customer + "/" + site,
 				Entries: areaTree,
@@ -144,7 +222,7 @@ func GetAreaTreeStructure(customer string, site string) (te []interface{}, err e
 			return nil, err
 		}
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label:   area,
 				Value:   customer + "/" + site + "/" + area,
 				Entries: lineTree,
@@ -166,7 +244,7 @@ func GetLineTreeStructure(customer string, site string, area string) (te []inter
 			return nil, err
 		}
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label:   line,
 				Value:   customer + "/" + site + "/" + area + "/" + line,
 				Entries: machineTree,
@@ -184,35 +262,17 @@ func GetWorkCellTreeStructure(customer string, site string, area string, line st
 		return nil, err
 	}
 	for _, workCell := range workCells {
-		var tables []models.TreeEntry
-		tables, err = GetTableTreeStructure(customer, site, area, line, workCell)
-		if err != nil {
-			return nil, err
-		}
-		var kpis []models.TreeEntry
-		kpis, err = GetKPITreeStructure(customer, site, area, line, workCell)
-		if err != nil {
-			return nil, err
-		}
-		var tags []models.TreeEntry
-		tags, err = GetTagsTreeStructure(customer, site, area, line, workCell)
-		if err != nil {
-			return nil, err
-		}
 		te = append(
-			te, models.TreeEntryWorkCell{
-				Label:  workCell,
-				Value:  customer + "/" + site + "/" + area + "/" + line + "/" + workCell,
-				Tables: tables,
-				KPIs:   kpis,
-				Tags:   tags,
+			te, models.TreeEntryFormat{
+				Label: workCell,
+				Value: customer + "/" + site + "/" + area + "/" + line + "/" + workCell,
 			})
 	}
 	return te, err
 }
 
 func GetTagsTreeStructure(customer string, site string, area string, line string, cell string) (
-	te []models.TreeEntry,
+	te []models.TreeEntryFormat,
 	err error) {
 
 	var tags []string
@@ -234,7 +294,7 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 			return nil, err
 		}
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label:   tagGroup,
 				Value:   customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + tagGroup,
 				Entries: structure,
@@ -266,7 +326,7 @@ func GetCustomTagsTree(
 	for tag, values := range tags {
 		for _, value := range values {
 			te = append(
-				te, models.TreeEntry{
+				te, models.TreeEntryFormat{
 					Label: value,
 					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + group + "/" + tag + "_" + value,
 				})
@@ -287,7 +347,7 @@ func GetStandardTagsTree(customer string, site string, area string, line string,
 	}
 	for _, t := range tags {
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label: t,
 				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + tagGroup + "/" + t,
 			})
@@ -296,7 +356,7 @@ func GetStandardTagsTree(customer string, site string, area string, line string,
 }
 
 func GetKPITreeStructure(customer string, site string, area string, line string, cell string) (
-	te []models.TreeEntry,
+	te []models.TreeEntryFormat,
 	err error) {
 
 	var kpis models.GetKpisMethodsResponse
@@ -306,7 +366,7 @@ func GetKPITreeStructure(customer string, site string, area string, line string,
 	}
 	for _, kpi := range kpis.Kpis {
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label: kpi,
 				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + kpi,
 			})
@@ -315,7 +375,7 @@ func GetKPITreeStructure(customer string, site string, area string, line string,
 }
 
 func GetTableTreeStructure(customer string, site string, area string, line string, cell string) (
-	te []models.TreeEntry,
+	te []models.TreeEntryFormat,
 	err error) {
 
 	var types models.GetTableTypesResponse
@@ -325,7 +385,7 @@ func GetTableTreeStructure(customer string, site string, area string, line strin
 	}
 	for _, table := range types.Tables {
 		te = append(
-			te, models.TreeEntry{
+			te, models.TreeEntryFormat{
 				Label: table.Name,
 				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + table.Name,
 			})
@@ -334,17 +394,17 @@ func GetTableTreeStructure(customer string, site string, area string, line strin
 }
 
 /*
-// GetTreeStructureFromCache returns the tree structure from cache and triggers a refresh in the background
-func GetTreeStructureFromCache() (tree models.TreeStructureEnterpriseMap, err error) {
-	zap.S().Infof("[GetTreeStructureFromCache] Getting tree structure from cache")
+// GetFormatTreeStructureFromCache returns the tree structure from cache and triggers a refresh in the background
+func GetFormatTreeStructureFromCache() (tree models.TreeStructureEnterpriseMap, err error) {
+	zap.S().Infof("[GetFormatTreeStructureFromCache] Getting tree structure from cache")
 	get, b := treeCache.Get("tree")
 	if b {
-		zap.S().Infof("[GetTreeStructureFromCache] Tree structure found in cache")
-		go refreshTreeCache()
+		zap.S().Infof("[GetFormatTreeStructureFromCache] Tree structure found in cache")
+		go refreshFormatTreeCache()
 		return get.(models.TreeStructureEnterpriseMap), nil
 	}
-	zap.S().Infof("[GetTreeStructureFromCache] Tree structure not found in cache")
-	tree, err = GetTreeStructure()
+	zap.S().Infof("[GetFormatTreeStructureFromCache] Tree structure not found in cache")
+	tree, err = GetFormatTreeStructure()
 	if err != nil {
 		return
 	}
@@ -353,26 +413,26 @@ func GetTreeStructureFromCache() (tree models.TreeStructureEnterpriseMap, err er
 	return tree, nil
 }
 
-var refreshRunning sync.Mutex
+var refreshRunningFT sync.Mutex
 
-func refreshTreeCache() {
-	lockAcquired := refreshRunning.TryLock()
+func refreshFormatTreeCache() {
+	lockAcquired := refreshRunningFT.TryLock()
 	if !lockAcquired {
-		zap.S().Infof("[refreshTreeCache] Tree structure refresh already running")
+		zap.S().Infof("[refreshFormatTreeCache] Tree structure refresh already running")
 		return
 	}
 
-	structure, err := GetTreeStructure()
+	structure, err := GetFormatTreeStructure()
 	if err != nil {
-		refreshRunning.Unlock()
+		refreshRunningFT.Unlock()
 		return
 	}
 	treeCache.Set("tree", structure, cache.DefaultExpiration)
-	refreshRunning.Unlock()
+	refreshRunningFT.Unlock()
 }
 
-func GetTreeStructure() (tree models.TreeStructureEnterpriseMap, err error) {
-	zap.S().Infof("[GetTreeStructure] Getting tree structure")
+func GetFormatTreeStructure() (tree models.TreeStructureEnterpriseMap, err error) {
+	zap.S().Infof("[GetFormatTreeStructure] Getting tree structure")
 
 	sqlStatement := `SELECT DISTINCT customer FROM assetTable;`
 	var rows *sql.Rows

@@ -31,16 +31,16 @@ type TreeStructureTags struct {
 	Standard []string            `json:"standard"`
 }*/
 
-type TreeEntry struct {
+type TreeEntryFormat struct {
 	Label   string        `json:"label"`
 	Value   string        `json:"value"`
 	Entries []interface{} `json:"entries"`
 }
 
-type TreeEntryWorkCell struct {
-	Label  string      `json:"label"`
-	Value  string      `json:"value"`
-	Tables []TreeEntry `json:"tables"`
-	KPIs   []TreeEntry `json:"kpi"`
-	Tags   []TreeEntry `json:"tags"`
+type TreeEntryValues struct {
+	Label  string            `json:"label"`
+	Value  string            `json:"value"`
+	Tables []TreeEntryFormat `json:"tables"`
+	KPIs   []TreeEntryFormat `json:"kpi"`
+	Tags   []TreeEntryFormat `json:"tags"`
 }
