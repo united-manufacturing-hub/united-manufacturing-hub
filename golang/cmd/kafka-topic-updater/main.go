@@ -114,6 +114,7 @@ func main() {
 	select {} // block forever
 }
 
+// newTopicProbe readsthe messages and puts them into the newtopic channel
 func newTopicProbe(newTopicChannel chan *kafka.Message) {
 	for !shutdownEnabled {
 		message, err := internal.KafkaTopicProbeConsumer.ReadMessage(5)
@@ -142,6 +143,7 @@ func newTopicProbe(newTopicChannel chan *kafka.Message) {
 
 }
 
+// newTopicReaction updates the metadata for the KafkaConsumer, so new topics are available immediately
 func newTopicReaction(newTopicChannel chan *kafka.Message) {
 	for {
 		message := <-newTopicChannel
@@ -153,6 +155,7 @@ func newTopicReaction(newTopicChannel chan *kafka.Message) {
 	}
 }
 
+// consume consumes messages with ia.+ as topic structure and puts them in the processorChannel
 func consume(processorChannel chan *kafka.Message) {
 	for !shutdownEnabled {
 		message, err := internal.KafkaConsumer.ReadMessage(5)
@@ -181,6 +184,7 @@ func consume(processorChannel chan *kafka.Message) {
 }
 
 // TODO might be more performant to switch it up and have a function for each topic?
+// processing takes the messages published in ia.+ and processes them bases on topic to publish a new message on the new data model
 func processing(processorChannel chan *kafka.Message) {
 	// declaring regexps for different message types
 	re := regexp.MustCompile(internal.KafkaUMHTopicRegex)
@@ -192,7 +196,7 @@ func processing(processorChannel chan *kafka.Message) {
 		topicinfo = *internal.GetTopicInformationCached(*message.TopicPartition.Topic)
 		var oldtopicmatch = re.MatchString(*message.TopicPartition.Topic)
 		if oldtopicmatch {
-			zap.S().Debugf("must terminate old topic structure  beep boop")
+			zap.S().Debugf("detected old topic structure")
 			switch {
 			case reraw.MatchString(*message.TopicPartition.Topic):
 				zap.S().Debugf("recognized a raw message")
