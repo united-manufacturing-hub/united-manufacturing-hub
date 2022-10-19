@@ -60,9 +60,9 @@ func main() {
 			zap.S().Errorf("Error starting healthcheck: %s", err)
 		}
 	}()
-	zap.S().Debugf("Starting queue processor")
+	zap.S().Debugf("Starting queue processing")
 
-	//start up a kafka thing
+	//start up a kafka client
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	internal.SetupKafka(
 		kafka.ConfigMap{
