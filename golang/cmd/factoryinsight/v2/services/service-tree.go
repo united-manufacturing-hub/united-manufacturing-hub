@@ -324,12 +324,21 @@ func GetCustomTagsTree(
 
 	// flatten the map
 	for tag, values := range tags {
-		for _, value := range values {
+		if len(values) == 0 {
 			te = append(
 				te, models.TreeEntryFormat{
-					Label: value,
-					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + group + "/" + tag + "_" + value,
+					Label: tag,
+					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag,
 				})
+
+		} else {
+			for _, value := range values {
+				te = append(
+					te, models.TreeEntryFormat{
+						Label: tag + "_" + value,
+						Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag + "_" + value,
+					})
+			}
 		}
 	}
 
@@ -349,7 +358,7 @@ func GetStandardTagsTree(customer string, site string, area string, line string,
 		te = append(
 			te, models.TreeEntryFormat{
 				Label: t,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + tagGroup + "/" + t,
+				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + tagGroup + "/" + t,
 			})
 	}
 	return te, err
@@ -368,7 +377,7 @@ func GetKPITreeStructure(customer string, site string, area string, line string,
 		te = append(
 			te, models.TreeEntryFormat{
 				Label: kpi,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + kpi,
+				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "kpis" + "/" + kpi,
 			})
 	}
 	return te, err
@@ -387,7 +396,7 @@ func GetTableTreeStructure(customer string, site string, area string, line strin
 		te = append(
 			te, models.TreeEntryFormat{
 				Label: table.Name,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + table.Name,
+				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tables" + "/" + table.Name,
 			})
 	}
 	return te, err
