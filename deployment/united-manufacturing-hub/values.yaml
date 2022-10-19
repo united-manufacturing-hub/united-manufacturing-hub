@@ -1623,7 +1623,7 @@ grafana:
 
   extraInitContainers:
     - args:
-        - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/
+        - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-datasource-v2.zip "https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/download/latest/umh-datasource-v2.zip" && unzip -n /var/lib/grafana/umh-datasource-v2.zip -d /var/lib/grafana/plugins/
       command:
         - /bin/sh
         - -c
