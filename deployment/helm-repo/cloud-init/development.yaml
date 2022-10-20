@@ -130,7 +130,7 @@ write_files:
       echo "Helm installed!"
 
       echo "Adding helm repo..."
-      if ! helm repo add united-manufacturing-hub https://repo.umh.app/; then
+      if ! helm repo add united-manufacturing-hub https://deploy-preview-1321--umh-helm-repo.netlify.app/; then
       echo "Failed to add umh repository, aborting setup"
       exit
       fi
@@ -144,7 +144,7 @@ write_files:
       echo "Created namespace!"
 
       echo "Install Helm chart united-manufacturing-hub..."
-      if ! helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --values "/home/rancher/configs/united-manufacturing-hub-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub; then
+      if ! helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --values "/home/rancher/configs/united-manufacturing-hub-development.yaml" --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub --devel; then
       echo "Failed to install united-manufacturing-hub using helm, aborting setup"
       exit
       fi
