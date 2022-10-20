@@ -462,34 +462,25 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	gapFilling := getCustomTagDataRequest.GapFilling
 	timeBucket := getCustomTagDataRequest.TimeBucket
-	// check if timebucket is valid
-	splitTimeBucket := strings.Split(timeBucket, " ")
-	if len(splitTimeBucket) != 2 {
-		helpers.HandleInvalidInputError(c, errors.New("invalid timebucket, requires number and interval"))
-		return
-	}
-	_, err = strconv.Atoi(splitTimeBucket[0])
-	if err != nil {
-		helpers.HandleInvalidInputError(c, errors.New("invalid timebucket, first part is not a number"))
-		return
-	}
-	switch strings.ToLower(splitTimeBucket[1]) {
-	case "year":
-	case "month":
-	case "week":
-	case "day":
-	case "hour":
-	case "minute":
-	case "second":
-	default:
-		helpers.HandleInvalidInputError(c, errors.New("invalid timebucket, second part is not a valid interval"))
-	}
 
 	from := getCustomTagDataRequest.From
 	to := getCustomTagDataRequest.To
 
+	zap.S().Debug("from: ", from)
+	zap.S().Debug("to: ", to)
+
+	bucketToDuration, err := timeBucketToDuration(timeBucket)
+	if err != nil {
+		helpers.HandleInvalidInputError(c, err)
+		return
+	}
+
+	fromMinusBucketSize := from.Add(bucketToDuration * -1)
+	toPlusBucketSize := to.Add(bucketToDuration)
+
 	if helpers.StrToBool(getCustomTagDataRequest.IncludeNext) {
-		to, err = QueryInterpolationPoint(workCellId, tagName, to)
+		zap.S().Debug("Including next")
+		to, err = QueryInterpolationPoint(workCellId, tagName, toPlusBucketSize)
 		if err != nil {
 			helpers.HandleInternalServerError(c, err)
 			return
@@ -497,7 +488,8 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	if helpers.StrToBool(getCustomTagDataRequest.IncludePrevious) {
-		from, err = QueryLOCFPoint(workCellId, tagName, from)
+		zap.S().Debug("Including previous")
+		from, err = QueryLOCFPoint(workCellId, tagName, fromMinusBucketSize)
 		if err != nil {
 			helpers.HandleInternalServerError(c, err)
 			return
@@ -672,6 +664,40 @@ ORDER BY bucket;
 		data.Datapoints = append(data.Datapoints, rowX)
 	}
 	c.JSON(http.StatusOK, data)
+}
+
+func timeBucketToDuration(timeBucket string) (vx time.Duration, err error) {
+	// check if timebucket is valid
+	splitTimeBucket := strings.Split(timeBucket, " ")
+	if len(splitTimeBucket) != 2 {
+		return 0, errors.New("invalid time bucket")
+	}
+	var v int
+	v, err = strconv.Atoi(splitTimeBucket[0])
+	if err != nil {
+		return 0, errors.New("invalid time bucket")
+	}
+
+	switch strings.ToLower(splitTimeBucket[1]) {
+	case "year":
+		vx = time.Duration(v) * (time.Hour * 24 * 365)
+	case "month":
+		// 31 is safe here !
+		vx = time.Duration(v) * (time.Hour * 24 * 31)
+	case "week":
+		vx = time.Duration(v) * (time.Hour * 24 * 7)
+	case "day":
+		vx = time.Duration(v) * (time.Hour * 24)
+	case "hour":
+		vx = time.Duration(v) * time.Hour
+	case "minute":
+		vx = time.Duration(v) * time.Minute
+	case "second":
+		vx = time.Duration(v) * time.Second
+	default:
+		return 0, errors.New("invalid time bucket")
+	}
+	return vx, nil
 }
 
 func QueryLOCFPoint(workCellId uint32, tagName string, from time.Time) (time.Time, error) {
