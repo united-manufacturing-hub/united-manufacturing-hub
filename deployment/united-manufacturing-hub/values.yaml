@@ -1622,7 +1622,7 @@ grafana:
   affinity: {}
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.0.9
+    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.1.0
       imagePullPolicy: IfNotPresent
       name: init-umh-datasource
       volumeMounts:
