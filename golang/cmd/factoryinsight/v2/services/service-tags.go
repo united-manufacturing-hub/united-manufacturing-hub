@@ -476,17 +476,18 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	zap.S().Debug("bucketToDuration: ", bucketToDuration)
-	/*
-		// TODO: this gives incorrect values, if the next datapoint is to far out
-			// round from and to to the nearest bucket
-			fromX := from.Truncate(bucketToDuration)
-			zap.S().Debug("fromX: ", fromX)
-			toX := to.Truncate(bucketToDuration)
-			zap.S().Debug("toX: ", toX)
-	*/
 
-	fromMinusBucketSize := from.Add(bucketToDuration * -1)
-	toPlusBucketSize := to.Add(bucketToDuration)
+	// round from and to to the nearest bucket
+	fromX := from.Truncate(bucketToDuration)
+	zap.S().Debug("fromX: ", fromX)
+	toX := to.Truncate(bucketToDuration)
+	zap.S().Debug("toX: ", toX)
+
+	fromMinusBucketSize := fromX.Add(bucketToDuration * -1)
+	toPlusBucketSize := toX.Add(bucketToDuration)
+
+	zap.S().Debug("fromMinusBucketSize: ", fromMinusBucketSize)
+	zap.S().Debug("toPlusBucketSize: ", toPlusBucketSize)
 
 	if helpers.StrToBool(getCustomTagDataRequest.IncludeNext) {
 		zap.S().Debug("Including next")
