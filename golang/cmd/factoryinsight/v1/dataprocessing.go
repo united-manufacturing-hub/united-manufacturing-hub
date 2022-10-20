@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"math"
 	"os/signal"
 	"sort"
@@ -47,7 +48,7 @@ func BusinessLogicErrorHandling(operationName string, err error, isCritical bool
 		"error", err.Error(),
 	)
 	if isCritical {
-		signal.Notify(GracefulShutdownChannel, syscall.SIGTERM)
+		signal.Notify(database.GracefulShutdownChannel, syscall.SIGTERM)
 	}
 }
 
@@ -1632,8 +1633,8 @@ func CalculateAverageStateTime(
 		to,
 		internal.AsHash(configuration),
 		targetState)
-	if Mutex.TryLock(key) { // is is already running?
-		defer Mutex.Unlock(key)
+	if database.Mutex.TryLock(key) { // is is already running?
+		defer database.Mutex.Unlock(key)
 
 		// Get from cache if possible
 		var cacheHit bool
