@@ -1622,7 +1622,7 @@ grafana:
   affinity: {}
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.0.4
+    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.0.5
       imagePullPolicy: IfNotPresent
       name: init-umh-datasource
       volumeMounts:
@@ -1854,9 +1854,9 @@ grafana:
           url: "http://united-manufacturing-hub-factoryinsight-service/"
           # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
           jsonData:
-            customerId: $FACTORYINSIGHT_CUSTOMERID
+            customerID: $FACTORYINSIGHT_CUSTOMERID
             apiKey: $FACTORYINSIGHT_PASSWORD
-            serverURL: "http://united-manufacturing-hub-factoryinsight-service/"
+            baseURL: "http://united-manufacturing-hub-factoryinsight-service/"
             apiKeyConfigured: true
           version: 1
           # <bool> allow users to edit datasources from the UI.
