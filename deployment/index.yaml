@@ -1,0 +1,2107 @@
+apiVersion: v1
+entries:
+  factorycube-edge:
+  - apiVersion: v2
+    appVersion: 0.7.2
+    created: "2022-10-20T15:14:09.9471296+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: b99287dead65cf872d7fb1e14860c8e5ff062f1677ca28f039607178cc1c5cc4
+    home: https://www.umh.app
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.7.2.tgz
+    version: 0.7.2
+  - apiVersion: v2
+    appVersion: 0.7.1
+    created: "2022-10-20T15:14:09.9454476+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 45dab1f80d6eb3d687fec8cfd59547a6cf0aca9573051984e72586686a44b1f8
+    home: https://www.umh.app
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.7.1.tgz
+    version: 0.7.1
+  - apiVersion: v2
+    appVersion: 0.7.0
+    created: "2022-10-20T15:14:09.9438918+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 92e0a124a79778b83c88252905a8ea0ccb63986bba646f7f431e2bccd3d6e99d
+    home: https://www.umh.app
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.7.0.tgz
+    version: 0.7.0
+  - apiVersion: v2
+    appVersion: 0.6.1
+    created: "2022-10-20T15:14:09.9412405+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 6aa8157e1ab526aa149b786964efbe097f322e2fd627688740fcaf2f90e23008
+    home: https://www.umh.app
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.6.1.tgz
+    version: 0.6.1
+  - apiVersion: v2
+    appVersion: 0.6.0
+    created: "2022-10-20T15:14:09.9396684+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 4c0d4187617d03f4b8a679e95b7fadf2539ae75337150e40954108ff8233b698
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.6.0.tgz
+    version: 0.6.0
+  - apiVersion: v2
+    appVersion: 0.5.1
+    created: "2022-10-20T15:14:09.9380973+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: 71083cbd6956775118510a3dc3a9ce8ea24358d60c35c19095b8205607ae859a
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.5.1.tgz
+    version: 0.5.1
+  - apiVersion: v2
+    appVersion: 0.5.0
+    created: "2022-10-20T15:14:09.9365087+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: a5ac1fb5ca7ec695f5db09e480f5448499028ede75e5a156605cb8b113edf127
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.5.0.tgz
+    version: 0.5.0
+  - apiVersion: v2
+    appVersion: 0.4.4
+    created: "2022-10-20T15:14:09.9346279+02:00"
+    description: A Helm chart for Kubernetes which setups the entire factorycube core.
+    digest: ef2fcbee0ad7e9f5f2904c5385261fb9574200c9d45709848c20359020d8d0d4
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-edge
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-edge-0.4.4.tgz
+    version: 0.4.4
+  factorycube-server:
+  - apiVersion: v2
+    appVersion: 0.7.2
+    created: "2022-10-20T15:14:10.0460962+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 9014b2c78ecd43164ec0a5dbb06a776b7c4664531c4c38043ddbab9f5724c852
+    home: https://www.umh.app
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.7.2.tgz
+    version: 0.7.2
+  - apiVersion: v2
+    appVersion: 0.7.1
+    created: "2022-10-20T15:14:10.0345744+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: df8cdbea9238ed67b43a73208e3d4502de00ddb86b089eff4528e505626348bb
+    home: https://www.umh.app
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.7.1.tgz
+    version: 0.7.1
+  - apiVersion: v2
+    appVersion: 0.7.0
+    created: "2022-10-20T15:14:10.0219274+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 63bce59b2d2dc492f2a218ca90d5864a52c1fcc5ff62391ce76c73a069118a6e
+    home: https://www.umh.app
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.7.0.tgz
+    version: 0.7.0
+  - apiVersion: v2
+    appVersion: 0.6.1
+    created: "2022-10-20T15:14:10.0098623+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 377b8bb259efdcc24bf1a665281e4f6647776287cfedae1f0136aa8ea3bb6a10
+    home: https://www.umh.app
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.6.1.tgz
+    version: 0.6.1
+  - apiVersion: v2
+    appVersion: 0.6.0
+    created: "2022-10-20T15:14:09.9968914+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: cdc8c96bbd212b1f1b8a6e222a7347e31bca77bc805ed2b8de10e32e9759430e
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.6.0.tgz
+    version: 0.6.0
+  - apiVersion: v2
+    appVersion: 0.5.1
+    created: "2022-10-20T15:14:09.9847162+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.9
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: 119ab2e9830027b589a38ca29522aa065c295499a86af88daab22d80a1064faa
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.5.1.tgz
+    version: 0.5.1
+  - apiVersion: v2
+    appVersion: 0.5.0
+    created: "2022-10-20T15:14:09.9726296+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.9
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: minio-operator.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    description: A Helm chart for Kubernetes
+    digest: a73bca65948757ee4db0b1c87a42688551458cac4caf9619efd8c6e660d979ad
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.5.0.tgz
+    version: 0.5.0
+  - apiVersion: v2
+    appVersion: 0.4.4
+    created: "2022-10-20T15:14:09.9595844+02:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: vernemq.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.9
+    - condition: grafana.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: timescaledb-single.enabled
+      name: timescaledb-single
+      repository: https://charts.timescale.com
+      version: 0.9.0
+    description: A Helm chart for Kubernetes
+    digest: 8cf6a0a0d118559c7e5dab56b3a40f7ba0f4057d76f0fa83e593a83ba45de046
+    home: https://www.united-manufacturing-hub.com
+    name: factorycube-server
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/factorycube-server-0.4.4.tgz
+    version: 0.4.4
+  united-manufacturing-hub:
+  - apiVersion: v2
+    appVersion: 0.9.7-prerelease1
+    created: "2022-10-20T15:14:10.8679692+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.1.7
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 8d818f3b0be9ad40013d3fa115dea0874ca28995307adb55e49e0d13cf8a5ce0
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.7-prerelease1.tgz
+    version: 0.9.7-prerelease1
+  - apiVersion: v2
+    appVersion: 0.9.6
+    created: "2022-10-20T15:14:10.8404404+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.1.7
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 8c77fa2eb038d7efdeba73682eefee94d193b8976e0710a8bdf222bc2d2b91a6
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.6.tgz
+    version: 0.9.6
+  - apiVersion: v2
+    appVersion: 0.9.6-prerelease1
+    created: "2022-10-20T15:14:10.8202859+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.1.7
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 56d5af11d7e1b17df4201cb178df77e91883e53fd52cfc225e0827e736b446af
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.6-prerelease1.tgz
+    version: 0.9.6-prerelease1
+  - apiVersion: v2
+    appVersion: 0.9.5
+    created: "2022-10-20T15:14:10.7992328+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 043e070f02d07b180671cdae40bebb6843c577ab59fe0915f96f8ea0c8d98bc0
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.5.tgz
+    version: 0.9.5
+  - apiVersion: v2
+    appVersion: 0.9.5-prerelease2
+    created: "2022-10-20T15:14:10.7776857+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 09f84ca376799b98c8d88b0c158058a016d359687c9d800ab00936586e7bba08
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.5-prerelease2.tgz
+    version: 0.9.5-prerelease2
+  - apiVersion: v2
+    appVersion: 0.9.5-prerelease1
+    created: "2022-10-20T15:14:10.7559441+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 1d2ae123d8e25e504737aff934a17145917e54bb536bda39c33c8cfaaeddd285
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.5-prerelease1.tgz
+    version: 0.9.5-prerelease1
+  - apiVersion: v2
+    appVersion: 0.9.4
+    created: "2022-10-20T15:14:10.7348559+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 3a70fdcd0367169637e3c68bfbbf92a75bfcfca1c5f4a16545057c089882dcbb
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4.tgz
+    version: 0.9.4
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease7
+    created: "2022-10-20T15:14:10.7146696+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: f374249373fb5c69ab302876d925b72c7bcb7b800e0f19bfa1b9e2565ac965a4
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease7.tgz
+    version: 0.9.4-prerelease7
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease6
+    created: "2022-10-20T15:14:10.6939054+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: ba494ea179a20a5920a9649c924d0310cd38d43fe5805a603e395af6ccfd5a00
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease6.tgz
+    version: 0.9.4-prerelease6
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease5
+    created: "2022-10-20T15:14:10.6728789+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 38c3a81b6963253aee198154929a5ab7ca0657cdabdc0b4cd7279960c117cd2e
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease5.tgz
+    version: 0.9.4-prerelease5
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease4
+    created: "2022-10-20T15:14:10.6528236+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 4a47f0fa90bec32323897fe7a33c0b5568df6c02c197163068e5ab6979393b3d
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease4.tgz
+    version: 0.9.4-prerelease4
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease3
+    created: "2022-10-20T15:14:10.6308738+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: db145b8fd4c9721ba50056c66f1f0f61be5e1d931fdd1ae392ff23f3c6a2f6ab
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease3.tgz
+    version: 0.9.4-prerelease3
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease2
+    created: "2022-10-20T15:14:10.6103429+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: e1d00e41c2ad9a3f7e356b9b05c638a281bb234e9ac224d4d162c9a0098d5bc5
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease2.tgz
+    version: 0.9.4-prerelease2
+  - apiVersion: v2
+    appVersion: 0.9.4-prerelease1
+    created: "2022-10-20T15:14:10.5887823+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: b6beebafdf20a17865a40281fa4aaac847e04c73029e1c2ede46bb0bd59b6495
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.4-prerelease1.tgz
+    version: 0.9.4-prerelease1
+  - apiVersion: v2
+    appVersion: 0.9.3
+    created: "2022-10-20T15:14:10.5677465+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: c8f1a76b221014fd2961a5e40afb33996b4d913acdf9c85d4a6aaf7a56809fe1
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.3.tgz
+    version: 0.9.3
+  - apiVersion: v2
+    appVersion: 0.9.3-prerelease3
+    created: "2022-10-20T15:14:10.5359708+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: b696d626d19913d0523a05cfd07ef95aea9e1f0b2dd7dd0f1895c72a10f6e845
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.3-prerelease3.tgz
+    version: 0.9.3-prerelease3
+  - apiVersion: v2
+    appVersion: 0.9.3-prerelease2
+    created: "2022-10-20T15:14:10.5134172+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: a62f53b26e56fd762e83b70f28e4c7d81fcd539f7a9788475bc576c2de892107
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.3-prerelease2.tgz
+    version: 0.9.3-prerelease2
+  - apiVersion: v2
+    appVersion: 0.9.3-prerelease1
+    created: "2022-10-20T15:14:10.4948544+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 9591f5f57110ad64e7787db0895a62181691aa0bf23e5f0850f7e646693dda2d
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.3-prerelease1.tgz
+    version: 0.9.3-prerelease1
+  - apiVersion: v2
+    appVersion: 0.9.2
+    created: "2022-10-20T15:14:10.4354244+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 7ffaf386e245a6b9443b6a720cbb738c2c592d5f283333f00b51cc9cb9a61657
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.2.tgz
+    version: 0.9.2
+  - apiVersion: v2
+    appVersion: 0.9.1
+    created: "2022-10-20T15:14:10.4166965+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 9e1b17a156038fc85ceec838b3bc833d856da0ecc861d5811a21c70834cbc51a
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.1.tgz
+    version: 0.9.1
+  - apiVersion: v2
+    appVersion: 0.9.0
+    created: "2022-10-20T15:14:10.3985999+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: e84a3bbb89b529edc05ce7b1f5064cc26c9d3c74a27c88822381611a03421f3b
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0.tgz
+    version: 0.9.0
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease9
+    created: "2022-10-20T15:14:10.3795132+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 17d298f2b7d5df25e4cc5650f66200c351d9376a395a08286fff08d6e6025123
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease9.tgz
+    version: 0.9.0-prerelease9
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease8
+    created: "2022-10-20T15:14:10.3605199+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 71c69f393eb66236b453113ca1d7d57627f26f5e94038ffad6d67a5fc28fc190
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease8.tgz
+    version: 0.9.0-prerelease8
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease7
+    created: "2022-10-20T15:14:10.34183+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 4f63c86d3e008e6c5a452755dc23b4970917cbb5178ef673ba44afd4b656018b
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease7.tgz
+    version: 0.9.0-prerelease7
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease6
+    created: "2022-10-20T15:14:10.3228059+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 5b47f5745299498a5c2f05bf3b8ca90482b0d045f230d9b5763fd45a92aaca2a
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease6.tgz
+    version: 0.9.0-prerelease6
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease5
+    created: "2022-10-20T15:14:10.3046442+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 3e80c7f8ff8ed60e58a36d4e7885879d4a2bc0bbd74176056dabd810070e82cd
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease5.tgz
+    version: 0.9.0-prerelease5
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease4
+    created: "2022-10-20T15:14:10.2859297+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: b56a0a931b32081ca13aed797c354a9c42c2eccd6651a654420130f5f7d8c8e7
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease4.tgz
+    version: 0.9.0-prerelease4
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease3
+    created: "2022-10-20T15:14:10.2671296+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 75cf58f60edcddc18de065c532b30b5b967bd26cfd0e23b0f8856e1734ff118c
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease3.tgz
+    version: 0.9.0-prerelease3
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease2
+    created: "2022-10-20T15:14:10.247956+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 0be95c8be7945c2e363b05c879fef2f5475f3d737566a7229106d228e388b4be
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease2.tgz
+    version: 0.9.0-prerelease2
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease10
+    created: "2022-10-20T15:14:10.2266057+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 4840e648614ac32d46440b0377d1621f1d401914b16600436f9374d6814bedee
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease10.tgz
+    version: 0.9.0-prerelease10
+  - apiVersion: v2
+    appVersion: 0.9.0-prerelease1
+    created: "2022-10-20T15:14:10.2071331+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 60135a7ee5b17410c42e18d4fae93017a27756ab1ce1fc9071847eb2e3e68381
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.9.0-prerelease1.tgz
+    version: 0.9.0-prerelease1
+  - apiVersion: v2
+    appVersion: 0.8.7
+    created: "2022-10-20T15:14:10.1890784+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 2ba5b310d68d72ed8772bdc55402c1eec4ef9df43bcc288b9c4e4511bff9d61e
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.7.tgz
+    version: 0.8.7
+  - apiVersion: v2
+    appVersion: 0.8.6
+    created: "2022-10-20T15:14:10.1724716+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 3f1f2194317f73e2f5218774864d8ab12da12484e0cabc2b86182e9b944af614
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.6.tgz
+    version: 0.8.6
+  - apiVersion: v2
+    appVersion: 0.8.5
+    created: "2022-10-20T15:14:10.1534181+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 0304fb8577e2cd09e25911ba4439b5ef827e771d4b76eac476a7a94cea8e5659
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.5.tgz
+    version: 0.8.5
+  - apiVersion: v2
+    appVersion: 0.8.4
+    created: "2022-10-20T15:14:10.1349088+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: a04b90ffd33e8e030e1f9ecad41d6b22433310755ee409ba204bc4ac45b46ad9
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.4.tgz
+    version: 0.8.4
+  - apiVersion: v2
+    appVersion: 0.8.3
+    created: "2022-10-20T15:14:10.1170108+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 6ab964318d8d715922f94250045ec39c8af371a086f6853c5ac78cbd5453324f
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.3.tgz
+    version: 0.8.3
+  - apiVersion: v2
+    appVersion: 0.8.2
+    created: "2022-10-20T15:14:10.0988099+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: bba01d566e9b8315ca9054726fef3cbc89e4e013dd962c3117570218b633a27d
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.2.tgz
+    version: 0.8.2
+  - apiVersion: v2
+    appVersion: 0.8.1
+    created: "2022-10-20T15:14:10.0807562+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.2.0
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.3.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: 234a90b89aabc0e552aeb8b31011b2fec2b43796b5cffb89757c87554f8f6815
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.1.tgz
+    version: 0.8.1
+  - apiVersion: v2
+    appVersion: 0.8.0
+    created: "2022-10-20T15:14:10.0625622+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 12.7.3
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.7
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.13.5
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.9.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: minio-operator
+      repository: https://operator.min.io/
+      version: 4.1.7
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 14.4.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: a143dab63f8f31875766437d9b1f1ab461e1babac067386497a5b945ab17ade9
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://deploy-preview-1322--umh-helm-repo.netlify.app/helm-repo/united-manufacturing-hub-0.8.0.tgz
+    version: 0.8.0
+generated: "2022-10-20T15:14:09.9325332+02:00"
