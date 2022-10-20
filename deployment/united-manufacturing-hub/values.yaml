@@ -1622,12 +1622,7 @@ grafana:
   affinity: {}
 
   extraInitContainers:
-    - args:
-        - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-datasource-v2.zip "https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/download/latest/umh-datasource-v2.zip" && unzip -n /var/lib/grafana/umh-datasource-v2.zip -d /var/lib/grafana/plugins/
-      command:
-        - /bin/sh
-        - -c
-      image: busybox
+    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.0.1
       imagePullPolicy: IfNotPresent
       name: init-umh-datasource
       volumeMounts:
@@ -1635,7 +1630,7 @@ grafana:
           name: storage
 
           # subPath: ia-factoryinsight-datasource.zip
-  ## Enable an Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
+  ## Enable a Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
   extraContainers: |
   # - name: proxy
   #   image: quay.io/gambol99/keycloak-proxy:latest
@@ -1867,6 +1862,25 @@ grafana:
           version: 1
           # <bool> allow users to edit datasources from the UI.
           isDefault: true
+          editable: false
+        # <string, required> name of the datasource. Required
+        - name: umh-datasource-v2
+          # <string, required> datasource type. Required
+          type: umh-datasource-v2
+          # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
+          access: proxy
+          # <int> org id. will default to orgId 1 if not specified
+          orgId: 1
+          url: "http://united-manufacturing-hub-factoryinsight-service/"
+          # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
+          jsonData:
+            customerId: $FACTORYINSIGHT_CUSTOMERID
+            apiKey: $FACTORYINSIGHT_PASSWORD
+            serverURL: "http://united-manufacturing-hub-factoryinsight-service/"
+            apiKeyConfigured: true
+          version: 1
+          # <bool> allow users to edit datasources from the UI.
+          isDefault: false
           editable: false
 
   ## Configure notifiers
