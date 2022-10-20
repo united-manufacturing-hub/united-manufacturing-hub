@@ -33,8 +33,8 @@ type GetTagsDataRequest struct {
 }
 
 type GetCustomTagDataRequest struct {
-	IncludePrevious *bool `form:"includePrevious" binding:"required"`
-	IncludeNext     *bool `form:"includeNext" binding:"required"`
+	IncludePrevious string `form:"includePrevious" binding:"required"`
+	IncludeNext     string `form:"includeNext" binding:"required"`
 
 	GapFilling    string    `form:"gapFilling" binding:"required"`
 	TimeBucket    string    `form:"timeBucket" binding:"required"`
@@ -51,7 +51,7 @@ type GetJobTagRequest struct {
 type GetCountTagRequest struct {
 	From                time.Time `form:"from" binding:"required"`
 	To                  time.Time `form:"to" binding:"required"`
-	AccumulatedProducts bool      `form:"accumulatedProducts"`
+	AccumulatedProducts string    `form:"accumulatedProducts"`
 }
 
 type GetShiftsTagRequest struct {
@@ -62,7 +62,7 @@ type GetShiftsTagRequest struct {
 type GetStateTagRequest struct {
 	From              time.Time `form:"from" binding:"required"`
 	To                time.Time `form:"to" binding:"required"`
-	KeepStatesInteger bool      `form:"keepStatesInteger"`
+	KeepStatesInteger string    `form:"keepStatesInteger"`
 }
 
 type GetThroughputTagRequest struct {

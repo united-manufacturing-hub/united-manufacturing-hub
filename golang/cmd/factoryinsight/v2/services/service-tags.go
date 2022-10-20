@@ -298,7 +298,7 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 
 	from := getStateTagRequest.From
 	to := getStateTagRequest.To
-	keepStatesInteger := getStateTagRequest.KeepStatesInteger
+	keepStatesInteger := helpers.StrToBool(getStateTagRequest.KeepStatesInteger)
 
 	// ### fetch necessary data from database ###
 
@@ -488,7 +488,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	from := getCustomTagDataRequest.From
 	to := getCustomTagDataRequest.To
 
-	if getCustomTagDataRequest.IncludeNext != nil && *getCustomTagDataRequest.IncludeNext {
+	if helpers.StrToBool(getCustomTagDataRequest.IncludeNext) {
 		to, err = QueryInterpolationPoint(workCellId, tagName, to)
 		if err != nil {
 			helpers.HandleInternalServerError(c, err)
@@ -496,7 +496,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		}
 	}
 
-	if getCustomTagDataRequest.IncludePrevious != nil && *getCustomTagDataRequest.IncludePrevious {
+	if helpers.StrToBool(getCustomTagDataRequest.IncludePrevious) {
 		from, err = QueryLOCFPoint(workCellId, tagName, from)
 		if err != nil {
 			helpers.HandleInternalServerError(c, err)

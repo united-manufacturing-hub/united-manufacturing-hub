@@ -282,8 +282,8 @@ func ProcessAvailabilityHistogramTableRequest(c *gin.Context, request models.Get
 
 	from := getShopfloorLossesTableRequest.From
 	to := getShopfloorLossesTableRequest.To
-	includeRunning := *getShopfloorLossesTableRequest.IncludeRunning
-	keepStatesInteger := *getShopfloorLossesTableRequest.KeepStatesInteger
+	includeRunning := helpers.StrToBool(getShopfloorLossesTableRequest.IncludeRunning)
+	keepStatesInteger := helpers.StrToBool(getShopfloorLossesTableRequest.KeepStatesInteger)
 
 	var workCellId uint32
 	workCellId, err = GetWorkCellId(enterpriseName, siteName, workCellName)
@@ -375,9 +375,9 @@ func ProcessAvailabilityTotalTableRequest(c *gin.Context, request models.GetTabl
 
 	from := getAggregatedStatesRequestInstance.From
 	to := getAggregatedStatesRequestInstance.To
-	keepStatesInteger := *getAggregatedStatesRequestInstance.KeepStatesInteger
+	keepStatesInteger := helpers.StrToBool(getAggregatedStatesRequestInstance.KeepStatesInteger)
 	aggregationType := getAggregatedStatesRequestInstance.AggregationType
-	includeRunning := *getAggregatedStatesRequestInstance.IncludeRunning
+	includeRunning := helpers.StrToBool(getAggregatedStatesRequestInstance.IncludeRunning)
 
 	// ### fetch necessary data from database ###
 
