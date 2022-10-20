@@ -1,10 +1,12 @@
 package helpers
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
 	"runtime/debug"
@@ -16,6 +18,25 @@ func HandleInternalServerError(c *gin.Context, err error) {
 	}
 	if err == nil {
 		err = errors.New("unknown error")
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		var data datamodel.DataResponseAny
+		data.ColumnNames = []string{
+			"error",
+			"stack-trace",
+		}
+		data.Datapoints = [][]interface{}{
+			{
+				"no rows in result set",
+			},
+			{
+				string(debug.Stack()),
+			},
+		}
+		c.JSON(
+			http.StatusNoContent, data)
+		return
 	}
 
 	erx := internal.SanitizeString(err.Error())
