@@ -13,16 +13,15 @@ ADD "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases
 RUN md5sum -c umh-factoryinput-panel.zip.md5
 
 # Download umh-datasource-v2
-ADD "https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/latest/download/umh-datasource-v2.zip" umh-datasource-v2.zip
-ADD "https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/latest/download/umh-datasource-v2.zip.md5" umh-datasource-v2.zip.md5
+ADD "https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/latest/download/umh-v2-datasource.zip" umh-v2-datasource.zip
+ADD "https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/latest/download/umh-v2-datasource.zip.md5" umh-v2-datasource.zip.md5
 # Check md5 checksum
 RUN md5sum -c umh-datasource.zip.md5
 
 # Unpack grafana plugins
 RUN unzip -n umh-datasource.zip
 RUN unzip -n umh-factoryinput-panel.zip
-RUN unzip -n umh-datasource-v2.zip
-RUN mv umh-datasource-v2 umh-v2-datasource
+RUN unzip -n umh-v2-datasource.zip
 
 
 COPY deployment/grafana-plugin-extractor/runner.sh /runner.sh
