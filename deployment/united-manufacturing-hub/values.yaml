@@ -1622,7 +1622,7 @@ grafana:
   affinity: {}
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.0.1
+    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.0.3
       imagePullPolicy: IfNotPresent
       name: init-umh-datasource
       volumeMounts:
@@ -1740,7 +1740,7 @@ grafana:
   ## make sure to replace arn:aws:iam::123456789000:role/iam-role-name-here with your role arn
 
   env:
-    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-factoryinput-panel
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-factoryinput-panel,umh-v2-datasource
 
   ## "valueFrom" environment variable references that will be added to deployment pods
   ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#envvarsource-v1-core
@@ -1864,9 +1864,9 @@ grafana:
           isDefault: true
           editable: false
         # <string, required> name of the datasource. Required
-        - name: umh-datasource-v2
+        - name: umh-v2-datasource
           # <string, required> datasource type. Required
-          type: umh-datasource-v2
+          type: umh-v2-datasource
           # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
           access: proxy
           # <int> org id. will default to orgId 1 if not specified
