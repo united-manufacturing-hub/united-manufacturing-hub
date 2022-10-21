@@ -854,6 +854,397 @@ func StoreProductIDToCache(productName int32, DBassetID uint32, DBProductId uint
 	}
 }
 
+// StoreEnterpriseIDToCache stores enterprise id to cache
+func StoreEnterpriseIDToCache(enterpriseName string, enterpriseID uint32) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getEnterpriseName-%s", enterpriseName)
+
+	if enterpriseID == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(int(enterpriseID))
+
+	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetEnterpriseIDFromCache gets enterprise id from cache
+func GetEnterpriseIDFromCache(enterpriseName string) (enterpriseId uint32, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("getEnterpriseName-%s", enterpriseName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("[GetEnterpriseIDFromCache] error getting key from redis")
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		var rawEnterpriseId int
+		rawEnterpriseId, err = strconv.Atoi(value)
+		if err != nil {
+			zap.S().Errorf("[GetEnterpriseIDFromCache] error converting value to integer")
+			return
+		}
+
+		var int32EnterpriseId int32
+		int32EnterpriseId, err = safecast.Int32(rawEnterpriseId)
+		if err != nil {
+			zap.S().Errorf("[GetEnterpriseIDFromCache] error converting value to integer")
+			return
+		}
+
+		enterpriseId = uint32(int32EnterpriseId)
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreSiteIDToCache stores site id to cache
+func StoreSiteIDToCache(enterpriseId uint32, siteName string, siteID uint32) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strEnterpriseId := strconv.Itoa(int(enterpriseId))
+
+	key := fmt.Sprintf("getSiteName-%s-%s", strEnterpriseId, siteName)
+
+	if siteID == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(int(siteID))
+
+	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetSiteIDFromCache gets site id from cache
+func GetSiteIDFromCache(enterpriseId uint32, siteName string) (siteId uint32, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strEnterpriseId := strconv.Itoa(int(enterpriseId))
+
+	key := fmt.Sprintf("getSiteName-%s-%s", strEnterpriseId, siteName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("[GetSiteIDFromCache] error getting key from redis")
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		var rawSiteId int
+		rawSiteId, err = strconv.Atoi(value)
+		if err != nil {
+			zap.S().Errorf("[GetSiteIDFromCache] error converting value to integer")
+			return
+		}
+
+		var int32SiteId int32
+		int32SiteId, err = safecast.Int32(rawSiteId)
+		if err != nil {
+			zap.S().Errorf("[GetSiteIDFromCache] error converting value to integer")
+			return
+		}
+
+		siteId = uint32(int32SiteId)
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreAreaIDToCache stores area id to cache
+func StoreAreaIDToCache(siteId uint32, areaName string, areaID uint32) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strSiteId := strconv.Itoa(int(siteId))
+
+	key := fmt.Sprintf("getAreaName-%s-%s", strSiteId, areaName)
+
+	if areaID == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(int(areaID))
+
+	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetAreaIDFromCache gets area id from cache
+func GetAreaIDFromCache(siteId uint32, areaName string) (areaId uint32, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strSiteId := strconv.Itoa(int(siteId))
+
+	key := fmt.Sprintf("getAreaName-%s-%s", strSiteId, areaName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("[GetAreaIDFromCache] error getting key from redis")
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		var rawAreaId int
+		rawAreaId, err = strconv.Atoi(value)
+		if err != nil {
+			zap.S().Errorf("[GetAreaIDFromCache] error converting value to integer")
+			return
+		}
+
+		var int32AreaId int32
+		int32AreaId, err = safecast.Int32(rawAreaId)
+		if err != nil {
+			zap.S().Errorf("[GetAreaIDFromCache] error converting value to integer")
+			return
+		}
+
+		areaId = uint32(int32AreaId)
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreProductionLineIDToCache stores production line id to cache
+func StoreProductionLineIDToCache(areaId uint32, productionLineName string, productionLineID uint32) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strAreaId := strconv.Itoa(int(areaId))
+
+	key := fmt.Sprintf("getProductionLineName-%s-%s", strAreaId, productionLineName)
+
+	if productionLineID == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(int(productionLineID))
+
+	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetProductionLineIDFromCache gets production line id from cache
+func GetProductionLineIDFromCache(areaId uint32, productionLineName string) (productionLineId uint32, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strAreaId := strconv.Itoa(int(areaId))
+
+	key := fmt.Sprintf("getProductionLineName-%s-%s", strAreaId, productionLineName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("[GetProductionLineIDFromCache] error getting key from redis")
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		var rawProductionLineId int
+		rawProductionLineId, err = strconv.Atoi(value)
+		if err != nil {
+			zap.S().Errorf("[GetProductionLineIDFromCache] error converting value to integer")
+			return
+		}
+
+		var int32ProductionLineId int32
+		int32ProductionLineId, err = safecast.Int32(rawProductionLineId)
+		if err != nil {
+			zap.S().Errorf("[GetProductionLineIDFromCache] error converting value to integer")
+			return
+		}
+
+		productionLineId = uint32(int32ProductionLineId)
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreWorkCellIDToCache stores work cell id to cache
+func StoreWorkCellIDToCache(productionLineId uint32, workCellName string, workCellID uint32) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strProductionLineId := strconv.Itoa(int(productionLineId))
+
+	key := fmt.Sprintf("getWorkCellName-%s-%s", strProductionLineId, workCellName)
+
+	if workCellID == 0 {
+		// zap.S().Debugf("input is empty. aborting storing into database.", key)
+		return
+	}
+
+	b := strconv.Itoa(int(workCellID))
+
+	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetWorkCellIDFromCache gets work cell id from cache
+func GetWorkCellIDFromCache(productionLineId uint32, workCellName string) (workCellId uint32, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	strProductionLineId := strconv.Itoa(int(productionLineId))
+
+	key := fmt.Sprintf("getWorkCellName-%s-%s", strProductionLineId, workCellName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("[GetWorkCellIDFromCache] error getting key from redis")
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		var rawWorkCellId int
+		rawWorkCellId, err = strconv.Atoi(value)
+		if err != nil {
+			zap.S().Errorf("[GetWorkCellIDFromCache] error converting value to integer")
+			return
+		}
+
+		var int32WorkCellId int32
+		int32WorkCellId, err = safecast.Int32(rawWorkCellId)
+		if err != nil {
+			zap.S().Errorf("[GetWorkCellIDFromCache] error converting value to integer")
+			return
+		}
+
+		workCellId = uint32(int32WorkCellId)
+
+		cacheHit = true
+	}
+	return
+}
+
+// StoreEnterpriseConfigurationToCache stores customer id to cache
+func StoreEnterpriseConfigurationToCache(enterpriseName string, data datamodel.EnterpriseConfiguration) {
+
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("GetEnterpriseConfigurationFromCache-%s", enterpriseName)
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	b, err := json.Marshal(&data)
+	if err != nil {
+		zap.S().Errorf("json marshall")
+		return
+	}
+
+	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	if err != nil {
+		zap.S().Errorf("redis failed")
+		zap.S().Errorf("redis failed: %#v", err)
+		return
+	}
+}
+
+// GetEnterpriseConfigurationFromCache gets customer configuration from cache
+func GetEnterpriseConfigurationFromCache(enterpriseName string) (data datamodel.EnterpriseConfiguration, cacheHit bool) {
+	if rdb == nil { // only the case during tests
+		// zap.S().Errorf("rdb == nil")
+		return
+	}
+
+	key := fmt.Sprintf("GetEnterpriseConfigurationFromCache-%s", enterpriseName)
+
+	value, err := rdb.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) { // if no value, then return nothing
+		return
+	} else if err != nil {
+		zap.S().Errorf("error getting key from redis", key, err)
+		return
+	} else if value == NullStr {
+		// zap.S().Debugf("got empty value back from redis. Ignoring...", key)
+	} else {
+		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
+		b := []byte(value)
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+		err = json.Unmarshal(b, &data)
+		if err != nil {
+			zap.S().Errorf("json Unmarshal", b)
+			return
+		}
+
+		cacheHit = true
+	}
+
+	return
+}
+
 // GetTiered Attempts to get key from memory cache, if fails it falls back to redis
 func GetTiered(key string) (cached bool, value interface{}) {
 	if memCache == nil && rdb == nil {

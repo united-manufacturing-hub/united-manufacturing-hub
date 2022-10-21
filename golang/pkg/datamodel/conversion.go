@@ -103,3 +103,17 @@ func ConvertNewToOld(newState int) (oldState int) {
 
 	return oldState
 }
+
+func (e EnterpriseConfiguration) ConvertEnterpriseToCustomerConfiguration() (c CustomerConfiguration) {
+	c.AutomaticallyIdentifyChangeovers = e.AutomaticallyIdentifyChangeovers
+	c.AvailabilityLossStates = e.AvailabilityLossStates
+	c.IgnoreMicrostopUnderThisDurationInSeconds = e.IgnoreMicrostopUnderThisDurationInSeconds
+	c.LanguageCode = e.LanguageCode
+	c.LowSpeedThresholdInPcsPerHour = e.LowSpeedThresholdInPcsPerHour
+	c.MicrostopDurationInSeconds = e.MicrostopDurationInSeconds
+	c.MinimumRunningTimeInSeconds = e.MinimumRunningTimeInSeconds
+	c.PerformanceLossStates = e.PerformanceLossStates
+	c.ThresholdForNoShiftsConsideredBreakInSeconds = e.ThresholdForNoShiftsConsideredBreakInSeconds
+
+	return
+}
