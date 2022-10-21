@@ -94,7 +94,7 @@ spec:
                   name: factoryinsight-secret
                   key: password
             - name: VERSION
-              value: {{.Values.factoryinsight.version | quote}}
+              value: {{.Values.factoryinsight.version | default 2 | quote}}
 
           livenessProbe:
             httpGet:
