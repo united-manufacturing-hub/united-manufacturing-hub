@@ -131,7 +131,7 @@ func IsValidStruct(testStruct interface{}, allowedNilFields []string) (success b
 		field := v.Field(i)
 		if field.Pointer() == 0 {
 			fieldName := v.Type().Field(i).Name
-			if Contains(allowedNilFields, fieldName) {
+			if contains(allowedNilFields, fieldName) {
 				continue
 			}
 			zap.S().Warnf("%s is nil, check for typing errors !\n", fieldName)
@@ -140,7 +140,7 @@ func IsValidStruct(testStruct interface{}, allowedNilFields []string) (success b
 	}
 	return
 }
-func Contains(s []string, e string) bool {
+func contains(s []string, e string) bool {
 	for _, a := range s {
 		if a == e {
 			return true
