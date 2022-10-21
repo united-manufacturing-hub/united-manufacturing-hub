@@ -3,7 +3,7 @@ entries:
   factorycube-edge:
   - apiVersion: v2
     appVersion: 0.7.2
-    created: "2022-10-21T10:30:09.1177987+02:00"
+    created: "2022-10-21T10:57:38.8248267+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: b99287dead65cf872d7fb1e14860c8e5ff062f1677ca28f039607178cc1c5cc4
     home: https://www.umh.app
@@ -12,11 +12,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.7.2.tgz
+    - https://repo.umh.app/factorycube-edge-0.7.2.tgz
     version: 0.7.2
   - apiVersion: v2
     appVersion: 0.7.1
-    created: "2022-10-21T10:30:09.1106674+02:00"
+    created: "2022-10-21T10:57:38.8227669+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 45dab1f80d6eb3d687fec8cfd59547a6cf0aca9573051984e72586686a44b1f8
     home: https://www.umh.app
@@ -25,7 +25,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.7.1.tgz
+    - https://repo.umh.app/factorycube-edge-0.7.1.tgz
     version: 0.7.1
   - apiVersion: v2
     appVersion: 0.7.0
@@ -42,7 +42,7 @@ entries:
     version: 0.7.1-prerelease
   - apiVersion: v2
     appVersion: 0.7.0
-    created: "2022-10-21T10:30:09.1037517+02:00"
+    created: "2022-10-21T10:57:38.8201773+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 92e0a124a79778b83c88252905a8ea0ccb63986bba646f7f431e2bccd3d6e99d
     home: https://www.umh.app
@@ -51,11 +51,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.7.0.tgz
+    - https://repo.umh.app/factorycube-edge-0.7.0.tgz
     version: 0.7.0
   - apiVersion: v2
     appVersion: 0.6.1
-    created: "2022-10-21T10:30:09.0983007+02:00"
+    created: "2022-10-21T10:57:38.8179845+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 6aa8157e1ab526aa149b786964efbe097f322e2fd627688740fcaf2f90e23008
     home: https://www.umh.app
@@ -64,7 +64,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.6.1.tgz
+    - https://repo.umh.app/factorycube-edge-0.6.1.tgz
     version: 0.6.1
   - apiVersion: v2
     appVersion: 0.6.1-prerelease
@@ -81,7 +81,7 @@ entries:
     version: 0.6.1-prerelease
   - apiVersion: v2
     appVersion: 0.6.0
-    created: "2022-10-21T10:30:09.0927854+02:00"
+    created: "2022-10-21T10:57:38.8163902+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 4c0d4187617d03f4b8a679e95b7fadf2539ae75337150e40954108ff8233b698
     home: https://www.united-manufacturing-hub.com
@@ -90,11 +90,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.6.0.tgz
+    - https://repo.umh.app/factorycube-edge-0.6.0.tgz
     version: 0.6.0
   - apiVersion: v2
     appVersion: 0.5.1
-    created: "2022-10-21T10:30:09.0862666+02:00"
+    created: "2022-10-21T10:57:38.8147546+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: 71083cbd6956775118510a3dc3a9ce8ea24358d60c35c19095b8205607ae859a
     home: https://www.united-manufacturing-hub.com
@@ -103,11 +103,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.5.1.tgz
+    - https://repo.umh.app/factorycube-edge-0.5.1.tgz
     version: 0.5.1
   - apiVersion: v2
     appVersion: 0.5.0
-    created: "2022-10-21T10:30:09.078385+02:00"
+    created: "2022-10-21T10:57:38.8120335+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: a5ac1fb5ca7ec695f5db09e480f5448499028ede75e5a156605cb8b113edf127
     home: https://www.united-manufacturing-hub.com
@@ -116,11 +116,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.5.0.tgz
+    - https://repo.umh.app/factorycube-edge-0.5.0.tgz
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2022-10-21T10:30:09.0725052+02:00"
+    created: "2022-10-21T10:57:38.8109552+02:00"
     description: A Helm chart for Kubernetes which setups the entire factorycube core.
     digest: ef2fcbee0ad7e9f5f2904c5385261fb9574200c9d45709848c20359020d8d0d4
     home: https://www.united-manufacturing-hub.com
@@ -129,12 +129,12 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-edge-0.4.4.tgz
+    - https://repo.umh.app/factorycube-edge-0.4.4.tgz
     version: 0.4.4
   factorycube-server:
   - apiVersion: v2
     appVersion: 0.7.2
-    created: "2022-10-21T10:30:09.2861095+02:00"
+    created: "2022-10-21T10:57:38.923686+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -164,11 +164,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.7.2.tgz
+    - https://repo.umh.app/factorycube-server-0.7.2.tgz
     version: 0.7.2
   - apiVersion: v2
     appVersion: 0.7.1
-    created: "2022-10-21T10:30:09.2671499+02:00"
+    created: "2022-10-21T10:57:38.9116289+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -198,7 +198,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.7.1.tgz
+    - https://repo.umh.app/factorycube-server-0.7.1.tgz
     version: 0.7.1
   - apiVersion: v2
     appVersion: 0.7.0
@@ -236,7 +236,7 @@ entries:
     version: 0.7.1-prerelease
   - apiVersion: v2
     appVersion: 0.7.0
-    created: "2022-10-21T10:30:09.2488736+02:00"
+    created: "2022-10-21T10:57:38.8990727+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -266,11 +266,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.7.0.tgz
+    - https://repo.umh.app/factorycube-server-0.7.0.tgz
     version: 0.7.0
   - apiVersion: v2
     appVersion: 0.6.1
-    created: "2022-10-21T10:30:09.2286686+02:00"
+    created: "2022-10-21T10:57:38.8869521+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -300,7 +300,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.6.1.tgz
+    - https://repo.umh.app/factorycube-server-0.6.1.tgz
     version: 0.6.1
   - apiVersion: v2
     appVersion: 0.6.1-prerelease
@@ -338,7 +338,7 @@ entries:
     version: 0.6.1-prerelease
   - apiVersion: v2
     appVersion: 0.6.0
-    created: "2022-10-21T10:30:09.2095239+02:00"
+    created: "2022-10-21T10:57:38.8737049+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -368,11 +368,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.6.0.tgz
+    - https://repo.umh.app/factorycube-server-0.6.0.tgz
     version: 0.6.0
   - apiVersion: v2
     appVersion: 0.5.1
-    created: "2022-10-21T10:30:09.187246+02:00"
+    created: "2022-10-21T10:57:38.8611669+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -402,11 +402,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.5.1.tgz
+    - https://repo.umh.app/factorycube-server-0.5.1.tgz
     version: 0.5.1
   - apiVersion: v2
     appVersion: 0.5.0
-    created: "2022-10-21T10:30:09.1632261+02:00"
+    created: "2022-10-21T10:57:38.8489127+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -436,11 +436,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.5.0.tgz
+    - https://repo.umh.app/factorycube-server-0.5.0.tgz
     version: 0.5.0
   - apiVersion: v2
     appVersion: 0.4.4
-    created: "2022-10-21T10:30:09.1394188+02:00"
+    created: "2022-10-21T10:57:38.8350414+02:00"
     dependencies:
     - condition: redis.enabled
       name: redis
@@ -466,12 +466,59 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/factorycube-server-0.4.4.tgz
+    - https://repo.umh.app/factorycube-server-0.4.4.tgz
     version: 0.4.4
   united-manufacturing-hub:
   - apiVersion: v2
+    appVersion: 0.9.7
+    created: "2022-10-21T10:57:39.7932427+02:00"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.1.7
+    - condition: _000_commonConfig.infrastructure.mqtt.enabled
+      name: vernemq
+      repository: https://vernemq.github.io/docker-vernemq
+      version: 1.6.12-1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.21.1
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      version: 0.10.0
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: operator
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.blobstorage.enabled
+      name: tenant
+      repository: https://operator.min.io/
+      version: 4.4.17
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 15.0.1
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: kowl
+      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      version: 2.3.0
+    description: A Helm chart for Kubernetes
+    digest: a93f210d2cc729fba46624b26c5e3809fe8fabb499b25b78d3ec9c96c8cd6a48
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.7.tgz
+    version: 0.9.7
+  - apiVersion: v2
     appVersion: 0.9.7-prerelease1
-    created: "2022-10-21T10:30:10.4368154+02:00"
+    created: "2022-10-21T10:57:39.770933+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -514,11 +561,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.7-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.7-prerelease1.tgz
     version: 0.9.7-prerelease1
   - apiVersion: v2
     appVersion: 0.9.6
-    created: "2022-10-21T10:30:10.4147801+02:00"
+    created: "2022-10-21T10:57:39.7506443+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -561,11 +608,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.6.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.6.tgz
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.6-prerelease1
-    created: "2022-10-21T10:30:10.3860912+02:00"
+    created: "2022-10-21T10:57:39.7267455+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -608,11 +655,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.6-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.6-prerelease1.tgz
     version: 0.9.6-prerelease1
   - apiVersion: v2
     appVersion: 0.9.5
-    created: "2022-10-21T10:30:10.3577842+02:00"
+    created: "2022-10-21T10:57:39.7030733+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -655,11 +702,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.5.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.5.tgz
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.5-prerelease2
-    created: "2022-10-21T10:30:10.3291566+02:00"
+    created: "2022-10-21T10:57:39.6764133+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -702,11 +749,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.5-prerelease2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.5-prerelease2.tgz
     version: 0.9.5-prerelease2
   - apiVersion: v2
     appVersion: 0.9.5-prerelease1
-    created: "2022-10-21T10:30:10.3007378+02:00"
+    created: "2022-10-21T10:57:39.6539092+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -749,11 +796,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.5-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.5-prerelease1.tgz
     version: 0.9.5-prerelease1
   - apiVersion: v2
     appVersion: 0.9.4
-    created: "2022-10-21T10:30:10.2721781+02:00"
+    created: "2022-10-21T10:57:39.6312128+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -796,11 +843,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4.tgz
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.4-prerelease7
-    created: "2022-10-21T10:30:10.2426632+02:00"
+    created: "2022-10-21T10:57:39.6093203+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -843,11 +890,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease7.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease7.tgz
     version: 0.9.4-prerelease7
   - apiVersion: v2
     appVersion: 0.9.4-prerelease6
-    created: "2022-10-21T10:30:10.2153481+02:00"
+    created: "2022-10-21T10:57:39.5881507+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -890,11 +937,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease6.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease6.tgz
     version: 0.9.4-prerelease6
   - apiVersion: v2
     appVersion: 0.9.4-prerelease5
-    created: "2022-10-21T10:30:10.1871563+02:00"
+    created: "2022-10-21T10:57:39.5656581+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -937,11 +984,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease5.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease5.tgz
     version: 0.9.4-prerelease5
   - apiVersion: v2
     appVersion: 0.9.4-prerelease4
-    created: "2022-10-21T10:30:10.1592769+02:00"
+    created: "2022-10-21T10:57:39.5432105+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -984,11 +1031,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease4.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease4.tgz
     version: 0.9.4-prerelease4
   - apiVersion: v2
     appVersion: 0.9.4-prerelease3
-    created: "2022-10-21T10:30:10.131839+02:00"
+    created: "2022-10-21T10:57:39.5211492+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1031,11 +1078,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease3.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease3.tgz
     version: 0.9.4-prerelease3
   - apiVersion: v2
     appVersion: 0.9.4-prerelease2
-    created: "2022-10-21T10:30:10.103885+02:00"
+    created: "2022-10-21T10:57:39.4989163+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1078,11 +1125,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease2.tgz
     version: 0.9.4-prerelease2
   - apiVersion: v2
     appVersion: 0.9.4-prerelease1
-    created: "2022-10-21T10:30:10.0758522+02:00"
+    created: "2022-10-21T10:57:39.4774077+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1121,11 +1168,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.4-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.4-prerelease1.tgz
     version: 0.9.4-prerelease1
   - apiVersion: v2
     appVersion: 0.9.3
-    created: "2022-10-21T10:30:10.0494901+02:00"
+    created: "2022-10-21T10:57:39.4558026+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1164,11 +1211,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.3.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.3.tgz
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.3-prerelease3
-    created: "2022-10-21T10:30:10.0207658+02:00"
+    created: "2022-10-21T10:57:39.4353016+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1207,11 +1254,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.3-prerelease3.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.3-prerelease3.tgz
     version: 0.9.3-prerelease3
   - apiVersion: v2
     appVersion: 0.9.3-prerelease2
-    created: "2022-10-21T10:30:09.9928264+02:00"
+    created: "2022-10-21T10:57:39.4090543+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1250,11 +1297,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.3-prerelease2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.3-prerelease2.tgz
     version: 0.9.3-prerelease2
   - apiVersion: v2
     appVersion: 0.9.3-prerelease1
-    created: "2022-10-21T10:30:09.9647291+02:00"
+    created: "2022-10-21T10:57:39.3899447+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1293,11 +1340,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.3-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.3-prerelease1.tgz
     version: 0.9.3-prerelease1
   - apiVersion: v2
     appVersion: 0.9.2
-    created: "2022-10-21T10:30:09.9019646+02:00"
+    created: "2022-10-21T10:57:39.3298479+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1336,11 +1383,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.2.tgz
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
-    created: "2022-10-21T10:30:09.874677+02:00"
+    created: "2022-10-21T10:57:39.3101481+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1379,11 +1426,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.1.tgz
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
-    created: "2022-10-21T10:30:09.8493018+02:00"
+    created: "2022-10-21T10:57:39.2906977+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1422,11 +1469,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0.tgz
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.9.0-prerelease9
-    created: "2022-10-21T10:30:09.8238148+02:00"
+    created: "2022-10-21T10:57:39.2702124+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1465,11 +1512,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease9.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease9.tgz
     version: 0.9.0-prerelease9
   - apiVersion: v2
     appVersion: 0.9.0-prerelease8
-    created: "2022-10-21T10:30:09.7487663+02:00"
+    created: "2022-10-21T10:57:39.2512541+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1508,11 +1555,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease8.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease8.tgz
     version: 0.9.0-prerelease8
   - apiVersion: v2
     appVersion: 0.9.0-prerelease7
-    created: "2022-10-21T10:30:09.7219744+02:00"
+    created: "2022-10-21T10:57:39.2314819+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1551,11 +1598,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease7.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease7.tgz
     version: 0.9.0-prerelease7
   - apiVersion: v2
     appVersion: 0.9.0-prerelease6
-    created: "2022-10-21T10:30:09.6849659+02:00"
+    created: "2022-10-21T10:57:39.2103046+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1594,11 +1641,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease6.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease6.tgz
     version: 0.9.0-prerelease6
   - apiVersion: v2
     appVersion: 0.9.0-prerelease5
-    created: "2022-10-21T10:30:09.659926+02:00"
+    created: "2022-10-21T10:57:39.1902836+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1637,11 +1684,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease5.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease5.tgz
     version: 0.9.0-prerelease5
   - apiVersion: v2
     appVersion: 0.9.0-prerelease4
-    created: "2022-10-21T10:30:09.6332786+02:00"
+    created: "2022-10-21T10:57:39.1712314+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1680,11 +1727,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease4.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease4.tgz
     version: 0.9.0-prerelease4
   - apiVersion: v2
     appVersion: 0.9.0-prerelease3
-    created: "2022-10-21T10:30:09.597564+02:00"
+    created: "2022-10-21T10:57:39.1512918+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1723,11 +1770,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease3.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease3.tgz
     version: 0.9.0-prerelease3
   - apiVersion: v2
     appVersion: 0.9.0-prerelease2
-    created: "2022-10-21T10:30:09.5652767+02:00"
+    created: "2022-10-21T10:57:39.1317623+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1766,11 +1813,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease2.tgz
     version: 0.9.0-prerelease2
   - apiVersion: v2
     appVersion: 0.9.0-prerelease10
-    created: "2022-10-21T10:30:09.5387403+02:00"
+    created: "2022-10-21T10:57:39.1127655+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1809,11 +1856,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease10.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease10.tgz
     version: 0.9.0-prerelease10
   - apiVersion: v2
     appVersion: 0.9.0-prerelease1
-    created: "2022-10-21T10:30:09.5140656+02:00"
+    created: "2022-10-21T10:57:39.0915955+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1852,11 +1899,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.9.0-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.0-prerelease1.tgz
     version: 0.9.0-prerelease1
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2022-10-21T10:30:09.4899934+02:00"
+    created: "2022-10-21T10:57:39.0733766+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1895,11 +1942,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.7.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.7.tgz
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2022-10-21T10:30:09.4645229+02:00"
+    created: "2022-10-21T10:57:39.0543171+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1938,11 +1985,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.6.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.6.tgz
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2022-10-21T10:30:09.4398141+02:00"
+    created: "2022-10-21T10:57:39.034146+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1981,11 +2028,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.5.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.5.tgz
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2022-10-21T10:30:09.4149947+02:00"
+    created: "2022-10-21T10:57:39.0155273+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2024,7 +2071,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.4.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.4.tgz
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.4-prerelease2
@@ -2114,7 +2161,7 @@ entries:
     version: 0.8.4-prerelease
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2022-10-21T10:30:09.3887862+02:00"
+    created: "2022-10-21T10:57:38.9967763+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2153,7 +2200,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.3.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.3.tgz
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.3-prerelease1
@@ -2200,7 +2247,7 @@ entries:
     version: 0.8.3-prerelease1
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2022-10-21T10:30:09.3632167+02:00"
+    created: "2022-10-21T10:57:38.9783259+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2239,11 +2286,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.2.tgz
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2022-10-21T10:30:09.3387031+02:00"
+    created: "2022-10-21T10:57:38.9591468+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2282,7 +2329,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.1.tgz
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.1-prerelease
@@ -2329,7 +2376,7 @@ entries:
     version: 0.8.1-prerelease
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2022-10-21T10:30:09.3137053+02:00"
+    created: "2022-10-21T10:57:38.9414059+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2368,7 +2415,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://deploy-preview-1322--umh-helm-repo.netlify.app/united-manufacturing-hub-0.8.0.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
   - apiVersion: v2
     appVersion: 0.8.0-prerelease
@@ -2499,4 +2546,4 @@ entries:
     urls:
     - https://repo.umh.app/united-manufacturing-hub-0.8.0-prerelease2.tgz
     version: 0.8.0-prerelease2
-generated: "2022-10-21T10:30:09.0638721+02:00"
+generated: "2022-10-21T10:57:38.8087797+02:00"
