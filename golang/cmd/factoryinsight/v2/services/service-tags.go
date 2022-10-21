@@ -647,6 +647,8 @@ ORDER BY bucket;
 		timestamp := fmt.Sprintf("%v", *r0.(*interface{}))
 		//2023-01-01 01:00:00 +0000 +0000
 		timestamp = strings.ReplaceAll(timestamp, " +0000 +0000", "")
+		timestamp = strings.ReplaceAll(timestamp, " +0000", "")
+		timestamp = strings.ReplaceAll(timestamp, " UTC", "")
 
 		//2023-01-01 01:00:00
 		// parse to time.time
