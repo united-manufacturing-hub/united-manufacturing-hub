@@ -33,6 +33,19 @@ type CustomerConfiguration struct {
 	AutomaticallyIdentifyChangeovers             bool
 }
 
+// EnterpriseConfiguration contains all configurations for that specific enterprise (incl. machine specific configurations)
+type EnterpriseConfiguration struct {
+	AvailabilityLossStates                       []int32
+	PerformanceLossStates                        []int32
+	MicrostopDurationInSeconds                   float64
+	IgnoreMicrostopUnderThisDurationInSeconds    float64
+	MinimumRunningTimeInSeconds                  float64
+	ThresholdForNoShiftsConsideredBreakInSeconds float64
+	LowSpeedThresholdInPcsPerHour                float64
+	LanguageCode                                 LanguageCode
+	AutomaticallyIdentifyChangeovers             bool
+}
+
 // DataResponseAny is the format of the returned JSON.
 type DataResponseAny struct {
 	ColumnNames []string        `json:"columnNames"`
@@ -85,4 +98,10 @@ type OrdersUnstartedRaw struct {
 	ProductName          string
 	TargetUnits          int
 	TimePerUnitInSeconds float64
+}
+
+// ChannelResult returns the returnValue and an error code from a goroutine
+type ChannelResult struct {
+	Err         error
+	ReturnValue interface{}
 }
