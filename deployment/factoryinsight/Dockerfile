@@ -16,7 +16,7 @@ ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 ADD ./golang/test/factoryinsight /build/test/factoryinsight
 
-RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/factoryinsight
+RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-s -w -X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/factoryinsight
 RUN GOOS=linux go test -tags musl,kafka -v --mod=readonly ./cmd/factoryinsight
 
 FROM scratch
