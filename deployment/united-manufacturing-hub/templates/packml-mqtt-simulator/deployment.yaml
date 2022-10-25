@@ -1,0 +1,56 @@
+---
+{{if .Values._000_commonConfig.datasources.packmlmqttsimulator.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+  labels:
+    {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 4}}
+    app.kubernetes.io/component: "packmlmqttsimulator"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 6}}
+      app.kubernetes.io/component: "packmlmqttsimulator"
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 8}}
+        app.kubernetes.io/component: "packmlmqttsimulator"
+    spec:
+      volumes:
+        - name: packmlmqttsimulator
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+          {{if .Values.packmlmqttsimulator.tag}}
+          image: {{.Values.packmlmqttsimulator.image}}:{{.Values.packmlmqttsimulator.tag}}
+          {{- else}}
+          image: {{.Values.packmlmqttsimulator.image}}:{{.Chart.AppVersion}}
+          imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
+          {{end}}
+          env:
+            - name: SITE
+              value: {{.Values.packmlmqttsimulator.env.site}}
+            - name: AREA
+              value: {{.Values.packmlmqttsimulator.env.area}}
+            - name: LINE
+              value: {{.Values.packmlmqttsimulator.env.productionline}}
+            - name: MQTT_BROKER_URL
+              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+          resources:
+            limits:
+              cpu: {{.Values.packmlmqttsimulator.resources.limits.cpu}}
+              memory: {{.Values.packmlmqttsimulator.resources.limits.memory}}
+            requests:
+              cpu:{{.Values.packmlmqttsimulator.resources.requests.cpu}}
+              memory: {{.Values.packmlmqttsimulator.resources.requests.memory}}
+          volumeMounts:
+            - mountPath: /configs
+              name: iotsensors-mqtt-config
+{{end}}

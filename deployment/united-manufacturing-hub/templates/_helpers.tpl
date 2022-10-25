@@ -56,6 +56,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-mqttbrid
 {{- end }}
 
 {{/*
+Labels for packmlmqttsimulator
+*/}}
+{{- define "united-manufacturing-hub.labels.packmlmqttsimulator" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-packmlmqttsimulator
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Labels for factoryinsight
 */}}
 {{- define "united-manufacturing-hub.labels.factoryinsight" -}}

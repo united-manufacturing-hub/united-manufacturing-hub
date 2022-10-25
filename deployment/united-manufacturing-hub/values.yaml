@@ -43,6 +43,10 @@ _000_commonConfig:
     iotsensorsmqtt:
       enabled: true
 
+    # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
+    # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
+    packmlmqttsimulator:
+      enabled: true
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
@@ -437,6 +441,8 @@ iotsensorsmqtt:
     limits:
       cpu: "100m"
       memory: "100Mi"
+
+
 
 
 ### kafkabridge ###
@@ -2224,8 +2230,27 @@ kafkatopicupdater:
 
 
 
-
-
+### packmlmqttsimulator
+packmlmqttsimulator:
+  image:
+    repository: unitedmanufacturinghub/packmlmqttsimulator
+    pullPolicy: IfNotPresent
+  env:
+    # area and productionline are variables inserted into the topic structure to fill up the old structure to the new one
+    area: DefaultArea
+    productionline: DefaultProductionLine
+    # these variables are used for raw topics as they didn't have a proper structure beforehand, so there is no customer, location, asset
+    site: testLocation
+  replicas: 1
+  annotations: {}
+  # tag: v1.0.0
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
 
 
 
