@@ -110,13 +110,7 @@ spec:
           #    path: /ready
           #    port: 8086
           #  periodSeconds: 5
-          resources:
-            limits:
-              cpu: {{.Values.kafkatopicupdater.resources.limits.cpu}}
-              memory: {{.Values.kafkatopicupdater.resources.limits.memory}}
-            requests:
-              cpu: {{.Values.kafkatopicupdater.resources.requests.cpu}}
-              memory: {{.Values.kafkatopicupdater.resources.requests.memory}}
+          resources: {}
           volumeMounts:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
