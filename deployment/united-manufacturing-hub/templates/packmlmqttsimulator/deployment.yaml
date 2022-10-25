@@ -50,7 +50,4 @@ spec:
             requests:
               cpu:{{.Values.packmlmqttsimulator.resources.requests.cpu}}
               memory: {{.Values.packmlmqttsimulator.resources.requests.memory}}
-          volumeMounts:
-            - mountPath: /configs
-              name: iotsensors-mqtt-config
 {{end}}
