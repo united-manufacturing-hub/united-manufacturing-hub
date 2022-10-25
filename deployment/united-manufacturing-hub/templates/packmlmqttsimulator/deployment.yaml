@@ -22,10 +22,6 @@ spec:
         {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 8}}
         app.kubernetes.io/component: "packmlmqttsimulator"
     spec:
-      volumes:
-        - name: packmlmqttsimulator
-          configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
           {{if .Values.packmlmqttsimulator.tag}}
