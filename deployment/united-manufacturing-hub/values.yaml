@@ -2206,12 +2206,12 @@ kafkatopicupdater:
     pullPolicy: IfNotPresent
   env:
     # area and productionline are variables inserted into the topic structure to fill up the old structure to the new one
-    area: area
-    productionline: productionLine
+    area: DefaultArea
+    productionline: DefaultProductionLine
     # these variables are used for raw topics as they didn't have a proper structure beforehand, so there is no customer, location, asset
-    enterprise: enterprise
-    site: site
-    workcell: workcell
+    enterprise: factoryinsight
+    site: testLocation
+    workcell: testMachine
   replicas: 1
   annotations: {}
   resources:

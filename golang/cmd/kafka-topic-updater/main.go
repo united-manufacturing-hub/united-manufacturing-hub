@@ -212,7 +212,7 @@ func processing(processorChannel chan *kafka.Message) {
 				}
 				// producttypeid is not present in the current message structure, but required in the new one, so it declares 1234
 				var producttypeid uint64 = 1234
-				newpayload := datamodel.Productadd{Timestampend: payload.TimestampMs, Producttypeid: producttypeid, Scrap: payload.Scrap, Totalamount: payload.Count}
+				newpayload := datamodel.ProductAdd{Timestampend: payload.TimestampMs, Producttypeid: producttypeid, Scrap: payload.Scrap, Totalamount: payload.Count}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addOrder":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.job.add"
@@ -221,7 +221,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case addOrder: %s", err)
 				}
-				newpayload := datamodel.Jobadd{ProductType: payload.ProductId, Jobid: payload.OrderId, Targetamount: payload.TargetUnits}
+				newpayload := datamodel.JobAdd{ProductType: payload.ProductId, Jobid: payload.OrderId, Targetamount: payload.TargetUnits}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "startOrder":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.job.start"
@@ -230,7 +230,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case startOrder: %s", err)
 				}
-				newpayload := datamodel.Jobstart{Jobid: payload.OrderId, Timestampbegin: payload.TimestampMs}
+				newpayload := datamodel.JobStart{Jobid: payload.OrderId, Timestampbegin: payload.TimestampMs}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "endOrder":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.job.end"
@@ -239,7 +239,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case endOrder: %s", err)
 				}
-				newpayload := datamodel.Jobend{TimestampEnd: payload.TimestampMs, Jobid: payload.OrderId}
+				newpayload := datamodel.JobEnd{TimestampEnd: payload.TimestampMs, Jobid: payload.OrderId}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addShift":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.shift.add"
@@ -248,7 +248,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case addShift: %s", err)
 				}
-				newpayload := datamodel.Shiftadd{Timestampbegin: payload.TimestampMs, Timestampend: payload.TimestampMsEnd}
+				newpayload := datamodel.ShiftAdd{Timestampbegin: payload.TimestampMs, Timestampend: payload.TimestampMsEnd}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "deleteShift":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.shift.delete"
@@ -257,7 +257,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case deleteShift: %s", err)
 				}
-				newpayload := datamodel.Shiftdelete{Timestampbegin: uint64(payload.TimeStampMs)}
+				newpayload := datamodel.ShiftDelete{Timestampbegin: uint64(payload.TimeStampMs)}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "addProduct":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.product-type.add"
@@ -266,7 +266,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case addProduct: %s", err)
 				}
-				newpayload := datamodel.Producttypeadd{ProductId: payload.ProductId, Cycletimeinseconds: payload.TimePerUnitInSeconds}
+				newpayload := datamodel.ProductTypeAdd{ProductId: payload.ProductId, Cycletimeinseconds: payload.TimePerUnitInSeconds}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "modifyProducedPieces":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.product.overwrite"
@@ -275,7 +275,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case modifyProducedPieces: %s", err)
 				}
-				newpayload := datamodel.Productoverwrite{Timestampend: payload.TimestampMs, Totalamount: payload.Count, Scrap: payload.Scrap}
+				newpayload := datamodel.ProductOverwrite{Timestampend: payload.TimestampMs, Totalamount: payload.Count, Scrap: payload.Scrap}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "state":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.add"
@@ -284,7 +284,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case state: %s", err)
 				}
-				newpayload := datamodel.Stateadd{Timestampbegin: payload.TimestampMs, State: payload.State}
+				newpayload := datamodel.StateAdd{Timestampbegin: payload.TimestampMs, State: payload.State}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "modifyState":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.overwrite"
@@ -293,7 +293,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case modifyState: %s", err)
 				}
-				newpayload := datamodel.Stateoverwrite{Timestampbegin: payload.StartTimeStampMs, Timestampend: payload.EndTimeStampMs, State: uint64(payload.NewState)}
+				newpayload := datamodel.StateOverwrite{Timestampbegin: payload.StartTimeStampMs, Timestampend: payload.EndTimeStampMs, State: uint64(payload.NewState)}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "activity":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.activity"
@@ -302,7 +302,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case activity: %s", err)
 				}
-				newpayload := datamodel.Stateactivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
+				newpayload := datamodel.StateActivity{Timestampbegin: payload.TimestampMs, Activity: payload.Activity}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "detectedAnomaly":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".standard.state.reason"
@@ -311,7 +311,7 @@ func processing(processorChannel chan *kafka.Message) {
 				if err != nil {
 					zap.S().Errorf("Error unmarshaling json: case activity: %s", err)
 				}
-				newpayload := datamodel.Statereason{Timestampbegin: payload.TimestampMs, Reason: payload.DetectedAnomaly}
+				newpayload := datamodel.StateReason{Timestampbegin: payload.TimestampMs, Reason: payload.DetectedAnomaly}
 				message.Value, _ = json.Marshal(newpayload)
 			case topicinfo.Topic == "processValue":
 				*message.TopicPartition.Topic = "umh.v1." + topicinfo.CustomerId + "." + topicinfo.Location + "." + area + "." + prodline + "." + topicinfo.AssetId + ".custom." + strings.Join(topicinfo.ExtendedTopics, ".")
