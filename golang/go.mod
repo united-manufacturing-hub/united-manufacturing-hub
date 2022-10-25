@@ -8,7 +8,7 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coocood/freecache v1.2.2
 	github.com/cristalhq/base64 v0.1.2
-	github.com/eclipse/paho.mqtt.golang v1.4.1
+	github.com/eclipse/paho.mqtt.golang v1.4.2
 	github.com/gin-contrib/gzip v0.0.6
 	github.com/gin-contrib/zap v0.1.0
 	github.com/gin-gonic/gin v1.8.1
