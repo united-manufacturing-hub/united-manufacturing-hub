@@ -38,7 +38,7 @@ spec:
             - name: LINE
               value: {{.Values.packmlmqttsimulator.env.productionline}}
             - name: MQTT_URL
-              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
           resources:
             limits:
               cpu: {{.Values.packmlmqttsimulator.resources.limits.cpu}}
