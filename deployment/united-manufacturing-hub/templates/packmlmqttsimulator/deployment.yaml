@@ -7,7 +7,6 @@ metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
   labels:
     {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 4}}
-    app.kubernetes.io/component: "packmlmqttsimulator"
 spec:
   replicas: 1
   selector:
