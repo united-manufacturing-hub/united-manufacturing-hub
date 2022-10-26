@@ -43,6 +43,6 @@ spec:
               cpu: {{.Values.packmlmqttsimulator.resources.limits.cpu}}
               memory: {{.Values.packmlmqttsimulator.resources.limits.memory}}
             requests:
-              cpu:{{.Values.packmlmqttsimulator.resources.requests.cpu}}
+              cpu: {{.Values.packmlmqttsimulator.resources.requests.cpu}}
               memory: {{.Values.packmlmqttsimulator.resources.requests.memory}}
 {{end}}
