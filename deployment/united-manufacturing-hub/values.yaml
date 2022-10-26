@@ -148,6 +148,15 @@ _000_commonConfig:
       sslCertificatePem: |-
         -----BEGIN CERTIFICATE-----
         -----END CERTIFICATE-----
+    kafkatopicupdater:
+      sslKeyPassword: ""
+      sslKeyPem: |-
+        -----BEGIN PRIVATE KEY-----
+        -----END PRIVATE KEY-----
+      sslCertificatePem: |-
+        -----BEGIN CERTIFICATE-----
+        -----END CERTIFICATE-----
+
     kafkatopostgresql:
 
       sslKeyPassword: ""
@@ -252,6 +261,9 @@ _000_commonConfig:
 
   kafkaStateDetector:
     enabled: false
+
+  kafkatopicupdater:
+    enabled: true
 
 _001_customMicroservices:
   -
@@ -2198,6 +2210,38 @@ kafkatoblob:
   pdb:
     enabled: true
     minAvailable: 1
+
+
+### kafka-topic-updater ###
+
+kafkatopicupdater:
+  image:
+    repository: unitedmanufacturinghub/kafka-topic-updater
+    pullPolicy: IfNotPresent
+  env:
+    # area and productionline are variables inserted into the topic structure to fill up the old structure to the new one
+    area: DefaultArea
+    productionline: DefaultProductionLine
+    # these variables are used for raw topics as they didn't have a proper structure beforehand, so there is no customer, location, asset
+    enterprise: factoryinsight
+    site: testLocation
+    workcell: testMachine
+  replicas: 1
+  annotations: {}
+  resources:
+    limits:
+      cpu: 200m
+      memory: 200Mi
+    requests:
+      cpu: 50m
+      memory: 50Mi
+
+
+
+
+
+
+
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:

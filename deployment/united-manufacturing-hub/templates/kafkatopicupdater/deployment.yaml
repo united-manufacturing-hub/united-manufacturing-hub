@@ -1,0 +1,90 @@
+---
+{{if .Values._000_commonConfig.kafkatopicupdater.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkatopicupdater" . | nindent 4}}
+  {{if .Values.kafkatopicupdater.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkatopicupdater.annotations | nindent 4}}
+  {{end}}
+spec:
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater
+        {{- include "united-manufacturing-hub.labels.kafkatopicupdater" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater
+          {{if .Values.kafkatopicupdater.image.tag}}
+          image: {{.Values.kafkatopicupdater.image.repository}}:{{.Values.kafkatopicupdater.image.tag}}
+          {{- else}}
+          image: {{.Values.kafkatopicupdater.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkatopicupdater.image.pullPolicy}}
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: LOGGING_LEVEL
+              value: DEVELOPMENT
+            - name: AREA_NAME
+              value: {{.Values.kafkatopicupdater.env.area}}
+            - name: PRODUCTION_LINE
+              value: {{.Values.kafkatopicupdater.env.productionline}}
+            - name: ENTERPRISE
+              value: {{.Values.kafkatopicupdater.env.enterprise}}
+            - name: SITE_NAME
+              value: {{.Values.kafkatopicupdater.env.site}}
+            - name: WORK_CELL
+              value: {{.Values.kafkatopicupdater.env.workcell}}
+            - name: KAFKA_USE_SSL
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: {{.Values._000_commonConfig.certificates.kafkatopicupdater.sslKeyPassword | quote}}
+          resources:
+            limits:
+              cpu: {{.Values.kafkatopicupdater.resources.limits.cpu}}
+              memory: {{.Values.kafkatopicupdater.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.kafkatopicupdater.resources.requests.cpu}}
+              memory: {{.Values.kafkatopicupdater.resources.requests.memory}}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater-certificates
+              mountPath: /SSL_certs/remote
+              readOnly: true
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatopicupdater-secrets
+      serviceAccountName: ""
+      restartPolicy: Always
+  replicas: {{.Values.kafkatoblob.replicas}}
+{{end}}
+

@@ -236,6 +236,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kowl
 {{- end }}
 
 {{/*
+
+Labels for kafkatopicupdater
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkatopicupdater" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatopicupdater
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
 Labels for automigrate
 */}}
 {{- define "united-manufacturing-hub.labels.automigrate" -}}
