@@ -17,8 +17,10 @@ spec:
   template:
     metadata:
       labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
         {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 8}}
     spec:
+      serviceAccountName: ""
       restartPolicy: Always
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
