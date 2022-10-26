@@ -28,8 +28,8 @@ spec:
           image: {{.Values.packmlmqttsimulator.image}}:{{.Values.packmlmqttsimulator.tag}}
           {{- else}}
           image: {{.Values.packmlmqttsimulator.image}}:{{.Chart.AppVersion}}
-          imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
           {{end}}
+          imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
           env:
             - name: SITE
               value: {{.Values.packmlmqttsimulator.env.site}}
