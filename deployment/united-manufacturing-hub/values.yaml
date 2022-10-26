@@ -2189,7 +2189,7 @@ packmlmqttsimulator:
     productionline: DefaultProductionLine
     site: testLocation
   replicas: 1
-  # tag: v1.0.0
+  tag: latest
   resources:
     requests:
       cpu: "10m"
