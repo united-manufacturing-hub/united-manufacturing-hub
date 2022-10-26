@@ -25,9 +25,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
           {{if .Values.packmlmqttsimulator.tag}}
-          image: {{.Values.packmlmqttsimulator.image}}:{{.Values.packmlmqttsimulator.tag}}
+          image: {{.Values.packmlmqttsimulator.image.repository}}:{{.Values.packmlmqttsimulator.tag}}
           {{- else}}
-          image: {{.Values.packmlmqttsimulator.image}}:{{.Chart.AppVersion}}
+          image: {{.Values.packmlmqttsimulator.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
           env:
