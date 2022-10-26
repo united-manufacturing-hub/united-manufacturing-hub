@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -134,6 +135,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 	// temporaryCommitCounterAsFloat64 is used for stats only, it just increments, whenever a message was added to the transaction.
 	// at the end, this count is added to the global Commit counter
 	temporaryCommitCounterAsFloat64 := float64(0)
+	discardCounter := 0
 	zap.S().Debugf("[HT][PV] 2")
 	{
 
@@ -198,13 +200,51 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 				case "measurement":
 				case "serial_number":
 				default:
-					// zap.S().Debugf("[HT][PV] Inserting %s: %v", k, v)
-					value, valueIsFloat64 := v.(float64)
-					if !valueIsFloat64 {
+					var value float64
 
-						// zap.S().Debugf("[HT][PV] Value is not a float64")
-						// Value is malformed, skip to next key
-						continue
+					// This function can parse any float, int and bool values.
+					// It will discard any other values with a warning.
+					switch vX := v.(type) {
+					case float64:
+						// This converts normal int and float values to float64
+						value = vX
+					case string:
+						valAsStr := vX
+						// https://go.dev/ref/spec#Floating-point_literals
+						value, err = strconv.ParseFloat(valAsStr, 64)
+						if err != nil {
+							// convert string to lower case
+							// Passes all tests cases from https://go.dev/ref/spec#Integer_literals
+							valAsStr = strings.ToLower(valAsStr)
+							if len(valAsStr) > 2 && (valAsStr[0:2] == "0x" || valAsStr[0:2] == "0o" || valAsStr[0:2] == "0b") {
+								// parse hex
+								var parseInt int64
+								parseInt, err = strconv.ParseInt(valAsStr, 0, 64)
+								if err != nil {
+									zap.S().Warnf("Error parsing %s string: %s (%s)\n", valAsStr[0:2], valAsStr, err)
+									discardCounter++
+									continue
+								}
+								value = float64(parseInt)
+							} else if valAsStr == "true" {
+								value = 1
+							} else if valAsStr == "false" {
+								value = 0
+							} else {
+								zap.S().Warnf("error parsing %s as float64: %s\n", valAsStr, err)
+								discardCounter++
+								continue
+							}
+						}
+					case bool:
+						boolVal := vX
+						if boolVal {
+							value = 1
+						} else {
+							value = 0
+						}
+					default:
+						zap.S().Warnf("[HT][PV] Value is not a string, float64 or boolean (%v)", v)
 					}
 
 					// This coversion is necessary for postgres
@@ -282,15 +322,18 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		}
 		return putBackMsg, true, AssetIDnotFound, nil
 	} else {
-		zap.S().Debugf("Pre-commit to process value table: %d", temporaryCommitCounterAsFloat64)
+		zap.S().Debugf("Pre-commit to process value table: %f", temporaryCommitCounterAsFloat64)
 		err = txn.Commit()
 		if err != nil {
 			return messages, true, "Failed to commit", err
 		}
 		zap.S().Debugf(
 			"Committed %d messages, putting back %d messages",
-			len(messages)-len(putBackMsg),
+			len(messages)-len(putBackMsg)-discardCounter,
 			len(putBackMsg))
+		if discardCounter > 0 {
+			zap.S().Warnf("Discarded %d messages", discardCounter)
+		}
 		if len(putBackMsg) > 0 {
 			return putBackMsg, true, AssetIDnotFound, nil
 		}
