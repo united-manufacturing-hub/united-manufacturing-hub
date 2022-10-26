@@ -12,16 +12,15 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 6}}
-      app.kubernetes.io/component: "packmlmqttsimulator"
+      name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
         {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 8}}
-        app.kubernetes.io/component: "packmlmqttsimulator"
     spec:
+      restartPolicy: Always
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
           {{if .Values.packmlmqttsimulator.tag}}
