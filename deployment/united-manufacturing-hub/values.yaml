@@ -442,6 +442,8 @@ opcuasimulator:
     limits:
       cpu: "100m"
       memory: "100Mi"
+  service:
+    annotations: {}
 
 ### kafkabridge ###
 kafkabridge:
