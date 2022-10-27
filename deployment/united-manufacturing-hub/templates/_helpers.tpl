@@ -161,6 +161,15 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-iotsenso
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
+
+{{/*
+Labels for opcuasimulator
+*/}}
+{{- define "united-manufacturing-hub.labels.opcuasimulator" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-opcuasimulator
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
 {{/*
 Labels for vernemq
 */}}

@@ -1,0 +1,46 @@
+---
+{{if .Values._000_commonConfig.datasources.opcuasimulator.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
+  labels:
+    {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 4}}
+    app.kubernetes.io/component: "opcuasimulator"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 6}}
+      app.kubernetes.io/component: "opcuasimulator"
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 8}}
+        app.kubernetes.io/component: "opcuasimulator"
+    spec:
+      volumes:
+        - name: opcuasimulator-config
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
+          {{if .Values.opcuasimulator.tag}}
+          image: {{.Values.opcuasimulator.image}}:{{.Values.opcuasimulator.tag}}
+          {{- else}}
+          image: {{.Values.opcuasimulator.image}}:latest
+          {{end}}
+          resources:
+            limits:
+              cpu: {{.Values.opcuasimulator.resources.limits.cpu}}
+              memory: {{.Values.opcuasimulator.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.opcuasimulator.resources.requests.cpu}}
+              memory: {{.Values.opcuasimulator.requests.memory}}
+          volumeMounts:
+            - mountPath: /configs
+              name: opcuasimulator-config
+{{end}}

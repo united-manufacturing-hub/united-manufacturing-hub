@@ -1,0 +1,38 @@
+
+---
+{{if .Values._000_commonConfig.datasources.opcuasimulator.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
+data:
+  config.json: |
+    {
+      "SET_DELAY_BETWEEN_MESSAGES" : 5,
+      "RANDOMIZE_DELAY_BETWEEN_MESSAGES" : "true",
+      "SIMULATORS": [
+        {
+          "Name" : "ConcentrationNH3",
+          "Mean" : 50.0,
+          "StandardDeviation" : 3.0
+        },
+        {
+          "Name" : "ConcentrationN2",
+          "Mean" : 80.0,
+          "StandardDeviation" : 9.0
+        },
+        {
+          "Name" : "ConcentrationH2",
+          "Mean" : 40.0,
+          "StandardDeviation" : 3.0
+        },
+        {
+          "Name" : "Pressure",
+          "Mean" : 300,
+          "StandardDeviation" : 50.0
+        }
+      ]
+      }
+
+{{end}}

@@ -43,6 +43,11 @@ _000_commonConfig:
     iotsensorsmqtt:
       enabled: true
 
+    # iotsensorsmqtt simulates IoT sensor data as over OPC UA.
+    # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsOPCUA
+    opcuasimulator:
+      enabled: true
+
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
@@ -426,6 +431,17 @@ iotsensorsmqtt:
       cpu: "100m"
       memory: "100Mi"
 
+### opcuasimulator ###
+opcuasimulator:
+  image: amineamaach/simulators-pgmqtt
+  tag: v1.0.0
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
 
 ### kafkabridge ###
 kafkabridge:
