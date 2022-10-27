@@ -24,11 +24,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
-          {{if .Values.packmlmqttsimulator.tag}}
-          image: {{.Values.packmlmqttsimulator.image.repository}}:{{.Values.packmlmqttsimulator.tag}}
-          {{- else}}
-          image: {{.Values.packmlmqttsimulator.image.repository}}:{{.Chart.AppVersion}}
-          {{end}}
+          image: {{.Values.packmlmqttsimulator.image.repository}}@sha256:{{.Values.packmlmqttsimulator.hash}}
           imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
           env:
             - name: SITE
