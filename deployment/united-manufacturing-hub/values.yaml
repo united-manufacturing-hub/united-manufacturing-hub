@@ -2189,7 +2189,7 @@ packmlmqttsimulator:
     productionline: DefaultProductionLine
     site: testLocation
   replicas: 1
-  tag: 2.0.3
+  hash: 01e2f0da3542f1b4e0de830a8d24135de03fd9174dce184ed329bed3ee688e19
   resources:
     requests:
       cpu: "10m"
