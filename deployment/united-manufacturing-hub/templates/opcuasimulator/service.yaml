@@ -6,10 +6,6 @@ metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator-service
   labels:
     {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 4}}
-  {{if .Values.opcuasimulator.service.annotations}}
-  annotations:
-    {{- toYaml .Values.opcuasimulator.service.annotations | nindent 4}}
-  {{end}}
 spec:
   type: ClusterIP
   ports:
