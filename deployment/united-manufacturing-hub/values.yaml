@@ -2182,14 +2182,14 @@ kowl:
 ### packmlmqttsimulator ###
 packmlmqttsimulator:
   image:
-    repository: unitedmanufacturinghub/packmlmqttsimulator
+    repository: spruiktec/packml-simulator
     pullPolicy: IfNotPresent
   env:
     area: DefaultArea
     productionline: DefaultProductionLine
     site: testLocation
   replicas: 1
-  tag: latest
+  tag: 2.0.3
   resources:
     requests:
       cpu: "10m"
