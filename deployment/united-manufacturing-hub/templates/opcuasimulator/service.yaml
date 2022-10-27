@@ -12,7 +12,7 @@ spec:
     - port: 46010
       targetPort: 46010
       protocol: TCP
-      name: opc.tcp
+      name: opctcp
   selector:
      {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 4}}
 
