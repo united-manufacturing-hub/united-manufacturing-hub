@@ -433,7 +433,7 @@ iotsensorsmqtt:
 
 ### opcuasimulator ###
 opcuasimulator:
-  image: amineamaach/simulators-pgmqtt
+  image: amineamaach/sensors-opcua
   tag: v1.0.0
   resources:
     requests:
