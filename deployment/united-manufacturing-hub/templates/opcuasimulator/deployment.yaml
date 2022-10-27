@@ -39,7 +39,7 @@ spec:
               memory: {{.Values.opcuasimulator.resources.limits.memory}}
             requests:
               cpu: {{.Values.opcuasimulator.resources.requests.cpu}}
-              memory: {{.Values.opcuasimulator.requests.memory}}
+              memory: {{.Values.opcuasimulator.resources.requests.memory}}
           volumeMounts:
             - mountPath: /configs
               name: opcuasimulator-config
