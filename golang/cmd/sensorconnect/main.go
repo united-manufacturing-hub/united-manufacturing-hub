@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -76,6 +77,19 @@ func main() {
 		err := http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error while starting pprof: %s", err.Error())
+		}
+	}()
+
+	// Prometheus
+	zap.S().Debugf("Setting up healthcheck")
+
+	health := healthcheck.NewHandler()
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
+	go func() {
+		/* #nosec G114 */
+		err := http.ListenAndServe("0.0.0.0:8086", health)
+		if err != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", err)
 		}
 	}()
 
