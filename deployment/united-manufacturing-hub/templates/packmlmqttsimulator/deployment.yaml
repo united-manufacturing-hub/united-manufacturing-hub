@@ -1,0 +1,45 @@
+---
+{{if .Values._000_commonConfig.datasources.packmlmqttsimulator.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+  labels:
+    {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 4}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+        {{- include "united-manufacturing-hub.labels.packmlmqttsimulator" . | nindent 8}}
+    spec:
+      serviceAccountName: ""
+      restartPolicy: Always
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
+          image: {{.Values.packmlmqttsimulator.image.repository}}@sha256:{{.Values.packmlmqttsimulator.hash}}
+          imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
+          env:
+            - name: SITE
+              value: {{.Values.packmlmqttsimulator.env.site}}
+            - name: AREA
+              value: {{.Values.packmlmqttsimulator.env.area}}
+            - name: LINE
+              value: {{.Values.packmlmqttsimulator.env.productionline}}
+            - name: MQTT_URL
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+          resources:
+            limits:
+              cpu: {{.Values.packmlmqttsimulator.resources.limits.cpu}}
+              memory: {{.Values.packmlmqttsimulator.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.packmlmqttsimulator.resources.requests.cpu}}
+              memory: {{.Values.packmlmqttsimulator.resources.requests.memory}}
+{{end}}
