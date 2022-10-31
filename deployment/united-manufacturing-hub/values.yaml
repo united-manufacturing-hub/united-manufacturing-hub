@@ -43,6 +43,11 @@ _000_commonConfig:
     iotsensorsmqtt:
       enabled: true
 
+    # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
+    # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
+    packmlmqttsimulator:
+      enabled: true
+
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
@@ -2177,7 +2182,24 @@ kowl:
       mountPath: /SSL_certs
       readOnly: true
 
-
+### packmlmqttsimulator ###
+packmlmqttsimulator:
+  image:
+    repository: spruiktec/packml-simulator
+    pullPolicy: IfNotPresent
+  env:
+    area: DefaultArea
+    productionline: DefaultProductionLine
+    site: testLocation
+  replicas: 1
+  hash: 01e2f0da3542f1b4e0de830a8d24135de03fd9174dce184ed329bed3ee688e19
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
 
 ### mqtt-kafka-bridge ###
 mqttkafkabridge:

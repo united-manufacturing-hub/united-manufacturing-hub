@@ -104,6 +104,15 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-timescal
 {{- end }}
 
 {{/*
+Labels for packmlmqttsimulator
+*/}}
+{{- define "united-manufacturing-hub.labels.packmlmqttsimulator" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-packmlmqttsimulator
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+
+{{/*
 Labels for grafanaproxy
 */}}
 {{- define "united-manufacturing-hub.labels.grafanaproxy" -}}
