@@ -9,9 +9,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -469,44 +471,6 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	zap.S().Debug("from: ", from)
 	zap.S().Debug("to: ", to)
 
-	bucketToDuration, err := timeBucketToDuration(timeBucket)
-	if err != nil {
-		helpers.HandleInvalidInputError(c, err)
-		return
-	}
-
-	zap.S().Debug("bucketToDuration: ", bucketToDuration)
-
-	// round from and to to the nearest bucket
-	fromX := from.Truncate(bucketToDuration)
-	zap.S().Debug("fromX: ", fromX)
-	toX := to.Truncate(bucketToDuration)
-	zap.S().Debug("toX: ", toX)
-
-	fromMinusBucketSize := fromX.Add(bucketToDuration * -1)
-	toPlusBucketSize := toX.Add(bucketToDuration)
-
-	zap.S().Debug("fromMinusBucketSize: ", fromMinusBucketSize)
-	zap.S().Debug("toPlusBucketSize: ", toPlusBucketSize)
-
-	if helpers.StrToBool(getCustomTagDataRequest.IncludeNext) {
-		zap.S().Debug("Including next")
-		to, err = QueryInterpolationPoint(workCellId, tagName, toPlusBucketSize)
-		if err != nil {
-			helpers.HandleInternalServerError(c, err)
-			return
-		}
-	}
-
-	if helpers.StrToBool(getCustomTagDataRequest.IncludePrevious) {
-		zap.S().Debug("Including previous")
-		from, err = QueryLOCFPoint(workCellId, tagName, fromMinusBucketSize)
-		if err != nil {
-			helpers.HandleInternalServerError(c, err)
-			return
-		}
-	}
-
 	var gapFillingMethod string
 
 	switch gapFilling {
@@ -545,7 +509,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	sort.Strings(tagAggregates)
 
-	data.ColumnNames = []string{"timestamp"}
+	data.ColumnNames = []string{}
 
 	var selectClauseEntries = make([]string, 0)
 	for _, tagAggregate := range tagAggregates {
@@ -590,10 +554,67 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 	}
 
 	var sqlStatement string
-	// #nosec G201
-	{
-		sqlStatement = fmt.Sprintf(
-			`
+	if timeBucket == "none" {
+		// #nosec G201
+		{
+			sqlStatement = fmt.Sprintf(
+				`
+SELECT
+	asset_id
+	%s
+FROM
+	processvaluetable
+WHERE
+    asset_id = $1 AND
+    valuename = $2 AND
+    timestamp >= $3 AND
+    timestamp <= $4
+GROUP BY asset_id
+`, selectClause)
+		}
+	} else {
+		data.ColumnNames = append([]string{"timestamp"}, data.ColumnNames...)
+		bucketToDuration, err := timeBucketToDuration(timeBucket)
+		if err != nil {
+			helpers.HandleInvalidInputError(c, err)
+			return
+		}
+
+		zap.S().Debug("bucketToDuration: ", bucketToDuration)
+
+		// round from and to to the nearest bucket
+		fromX := from.Truncate(bucketToDuration)
+		zap.S().Debug("fromX: ", fromX)
+		toX := to.Truncate(bucketToDuration)
+		zap.S().Debug("toX: ", toX)
+
+		fromMinusBucketSize := fromX.Add(bucketToDuration * -1)
+		toPlusBucketSize := toX.Add(bucketToDuration)
+
+		zap.S().Debug("fromMinusBucketSize: ", fromMinusBucketSize)
+		zap.S().Debug("toPlusBucketSize: ", toPlusBucketSize)
+
+		if helpers.StrToBool(getCustomTagDataRequest.IncludeNext) {
+			zap.S().Debug("Including next")
+			to, err = QueryInterpolationPoint(workCellId, tagName, toPlusBucketSize)
+			if err != nil {
+				helpers.HandleInternalServerError(c, err)
+				return
+			}
+		}
+
+		if helpers.StrToBool(getCustomTagDataRequest.IncludePrevious) {
+			zap.S().Debug("Including previous")
+			from, err = QueryLOCFPoint(workCellId, tagName, fromMinusBucketSize)
+			if err != nil {
+				helpers.HandleInternalServerError(c, err)
+				return
+			}
+		}
+		// #nosec G201
+		{
+			sqlStatement = fmt.Sprintf(
+				`
 SELECT
     time_bucket_gapfill('%s', timestamp) AS bucket,
     asset_id
@@ -608,8 +629,9 @@ WHERE
 GROUP BY bucket, asset_id
 ORDER BY bucket;
 `, timeBucket, selectClause)
-	}
+		}
 
+	}
 	if from.After(to) {
 		helpers.HandleInvalidInputError(c, errors.New("invalid time range (from > to)"))
 		return
@@ -642,32 +664,37 @@ ORDER BY bucket;
 			return
 		}
 
-		r0 := row[0]
-		// convert *interface{} to string
-		timestamp := fmt.Sprintf("%v", *r0.(*interface{}))
-		//2023-01-01 01:00:00 +0000 +0000
-		timestamp = strings.ReplaceAll(timestamp, " +0000 +0000", "")
-		timestamp = strings.ReplaceAll(timestamp, " +0000", "")
-		timestamp = strings.ReplaceAll(timestamp, " UTC", "")
+		var rowX = make([]interface{}, len(row)-1)
 
-		//2023-01-01 01:00:00
-		// parse to time.time
-		var t time.Time
-		t, err = time.Parse("2006-01-02 15:04:05", timestamp)
-		if err != nil {
-			database.ErrorHandling(sqlStatement, err, false)
-			return
+		// if timeBucket is set, include timestamp in response
+		if timeBucket != "none" {
+
+			r0 := row[0]
+			// convert *interface{} to string
+			timestamp := fmt.Sprintf("%v", *r0.(*interface{}))
+			//2023-01-01 01:00:00 +0000 +0000
+			timestamp = strings.ReplaceAll(timestamp, " +0000 +0000", "")
+			timestamp = strings.ReplaceAll(timestamp, " +0000", "")
+			timestamp = strings.ReplaceAll(timestamp, " UTC", "")
+
+			//2023-01-01 01:00:00
+			// parse to time.time
+			var t time.Time
+			t, err = time.Parse("2006-01-02 15:04:05", timestamp)
+			if err != nil {
+				database.ErrorHandling(sqlStatement, err, false)
+				return
+			}
+
+			// time.time as rfc 3339
+			row[0] = t.Format(time.RFC3339)
+
 		}
 
-		// time.time as rfc 3339
-		row[0] = t.Format(time.RFC3339)
-
-		// row without row 1, but including 0
-
-		rowX := make([]interface{}, len(row)-1)
+		// row without asset_id
 		n := 0
 		for i := range row {
-			if i == 1 {
+			if i == internal.IndexOf(cols, "asset_id") {
 				continue
 			}
 			rowX[n] = row[i]
@@ -679,38 +706,42 @@ ORDER BY bucket;
 	c.JSON(http.StatusOK, data)
 }
 
-func timeBucketToDuration(timeBucket string) (vx time.Duration, err error) {
+func timeBucketToDuration(timeBucket string) (duration time.Duration, err error) {
 	// check if timebucket is valid
-	splitTimeBucket := strings.Split(timeBucket, " ")
-	if len(splitTimeBucket) != 2 {
-		return 0, errors.New("invalid time bucket")
+	var validTimeBucket = regexp.MustCompile(`^\d+[mhdwMy]$|^none$`)
+
+	if !validTimeBucket.MatchString(timeBucket) {
+		err = fmt.Errorf("invalid time bucket: %s", timeBucket)
+		return
 	}
-	var v int
-	v, err = strconv.Atoi(splitTimeBucket[0])
+
+	var timeBucketUnit = timeBucket[len(timeBucket)-1:]
+	var timeBucketSize = timeBucket[:len(timeBucket)-1]
+
+	var timeBucketSizeInt int
+	timeBucketSizeInt, err = strconv.Atoi(timeBucketSize)
 	if err != nil {
 		return 0, errors.New("invalid time bucket")
 	}
 
-	switch strings.ToLower(splitTimeBucket[1]) {
-	case "year":
-		vx = time.Duration(v) * (time.Hour * 24 * 365)
-	case "month":
+	switch timeBucketUnit {
+	case "y":
+		duration = time.Duration(timeBucketSizeInt) * (time.Hour * 24 * 365)
+	case "M":
 		// 31 is safe here !
-		vx = time.Duration(v) * (time.Hour * 24 * 31)
-	case "week":
-		vx = time.Duration(v) * (time.Hour * 24 * 7)
-	case "day":
-		vx = time.Duration(v) * (time.Hour * 24)
-	case "hour":
-		vx = time.Duration(v) * time.Hour
-	case "minute":
-		vx = time.Duration(v) * time.Minute
-	case "second":
-		vx = time.Duration(v) * time.Second
+		duration = time.Duration(timeBucketSizeInt) * (time.Hour * 24 * 31)
+	case "w":
+		duration = time.Duration(timeBucketSizeInt) * (time.Hour * 24 * 7)
+	case "d":
+		duration = time.Duration(timeBucketSizeInt) * (time.Hour * 24)
+	case "h":
+		duration = time.Duration(timeBucketSizeInt) * time.Hour
+	case "m":
+		duration = time.Duration(timeBucketSizeInt) * time.Minute
 	default:
 		return 0, errors.New("invalid time bucket")
 	}
-	return vx, nil
+	return duration, nil
 }
 
 func QueryLOCFPoint(workCellId uint32, tagName string, from time.Time) (time.Time, error) {
