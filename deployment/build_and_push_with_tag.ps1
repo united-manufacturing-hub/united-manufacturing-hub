@@ -64,7 +64,14 @@ function BuildAndPush
             Write-Error "Build failed"
             return
         }
+
         docker push $tag_name
+
+        if ($LASTEXITCODE -ne 0)
+        {
+            Write-Host -ForegroundColor Red "Push failed. Check your credentials"
+            exit
+        }
     }
 
 }
@@ -102,7 +109,7 @@ do {
     }
     catch [System.Management.Automation.ValidationMetadataException]
     {
-        Write-Hos -ForegroundColor Red "Invalid input"
+        Write-Host -ForegroundColor Red "Invalid input"
         continue
     }
 
