@@ -490,6 +490,7 @@ WHERE
     timestamp >= $3 AND
     timestamp <= $4
 GROUP BY asset_id, timestamp, value
+ORDER BY timestamp
 `
 	} else {
 		gapFilling := getCustomTagDataRequest.GapFilling
