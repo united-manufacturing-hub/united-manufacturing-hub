@@ -7,7 +7,7 @@ Important principles: stateless as much as possible
 /*
 Target architecture:
 
-Incoming REST call --> http.go
+Incoming REST call --> helpers.go
 There is one function for that specific call. It parses the parameters and executes further functions:
 1. One or multiple function getting the data from the database (database.go)
 2. Only one function processing everything. In this function no database calls are allowed to be as stateless as possible (dataprocessing.go)
@@ -16,7 +16,12 @@ Then the results are bundled together and a return JSON is created.
 
 import (
 	"fmt"
+	"github.com/gin-contrib/gzip"
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
+	apiV1 "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v1"
+	v2controllers "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/controllers"
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,8 +38,10 @@ import (
 	_ "net/http/pprof"
 )
 
-var buildtime string
-var shutdownEnabled bool
+var (
+	buildtime       string
+	shutdownEnabled bool
+)
 
 func main() {
 	// Initialize zap logging
@@ -99,6 +106,12 @@ func main() {
 
 	// get currentVersion
 	version := os.Getenv("VERSION")
+	// parse as int
+	currentVersion, err := strconv.Atoi(version)
+	if err != nil {
+		zap.S().Fatalf("Cannot parse VERSION: not a number (%s)", version)
+		return // Abort program
+	}
 
 	zap.S().Debugf("Starting program..")
 
@@ -127,14 +140,14 @@ func main() {
 
 	zap.S().Debugf("Healthcheck initialized..", redisURI)
 
-	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort)
+	sigs := make(chan os.Signal, 1)
+	database.Connect(PQUser, PQPassword, PWDBName, PQHost, PQPort, sigs)
 
 	zap.S().Debugf("DB initialized..", PQHost)
 
-	SetupRestAPI(accounts, version)
+	setupRestAPI(accounts, currentVersion)
 
 	// Allow graceful shutdown
-	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM)
 
 	go func() {
@@ -173,11 +186,141 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(4 * time.Minute) // Wait until all remaining open connections are handled
 
-	ShutdownDB()
+	database.Shutdown()
 
 	zap.S().Infof("Successful shutdown. Exiting.")
 
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
+}
+
+// setupRestAPI initializes the REST API and starts listening
+func setupRestAPI(accounts gin.Accounts, version int) {
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+
+	// Add a ginzap middleware, which:
+	//   - Logs all requests, like a combined access and error log.
+	//   - Logs to stdout.
+	//   - RFC3339 with UTC time format.
+	router.Use(ginzap.Ginzap(zap.L(), time.RFC3339, true))
+
+	// Logs all panic to error log
+	//   - stack means whether output the stack info.
+	router.Use(ginzap.RecoveryWithZap(zap.L(), true))
+
+	// Use gzip for all requests
+	router.Use(gzip.Gzip(gzip.DefaultCompression))
+
+	// Healthcheck
+	router.GET(
+		"/", func(c *gin.Context) {
+			c.String(http.StatusOK, "online")
+		})
+
+	// Version of the API
+	if version >= 1 {
+		zap.S().Infof("Starting API version 1")
+		v1 := router.Group("/api/v1", gin.BasicAuth(accounts))
+		{
+			// WARNING: Need to check in each specific handler whether the user is actually allowed to access it, so that valid user "ia" cannot access data for customer "abc"
+			v1.GET("/:customer", apiV1.GetLocationsHandler)
+			v1.GET("/:customer/:location", apiV1.GetAssetsHandler)
+			v1.GET("/:customer/:location/:asset", apiV1.GetValuesHandler)
+			v1.GET("/:customer/:location/:asset/:value", apiV1.GetDataHandler)
+		}
+	}
+
+	if version >= 2 {
+		zap.S().Infof("Starting API version 2")
+		v2 := router.Group("/api/v2", gin.BasicAuth(accounts))
+		{
+			v2.GET("/treeStructure", v2controllers.GetTreeStructureHandler)
+			v2.GET("/:enterpriseName", v2controllers.GetSitesHandler)
+			v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
+			v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
+			v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v2controllers.GetWorkCellsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
+				v2controllers.GetDataFormatHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/getValues",
+				v2controllers.GetValueTree)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
+				v2controllers.GetTagGroupsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName",
+				v2controllers.GetTagsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName",
+				v2controllers.GetTagsDataHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis",
+				v2controllers.GetKpisMethodsHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod",
+				v2controllers.GetKpisDataHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables",
+				v2controllers.GetTableTypesHandler)
+			v2.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
+				v2controllers.GetTableDataHandler)
+		}
+	}
+
+	/*
+		v3 := router.Group("/api/v3", gin.BasicAuth(accounts))
+		{
+			// Get all sites for a given enterprise
+			v3.GET("/:enterpriseName", v3controllers.GetSitesHandler)
+			// Get all areas for a given site)
+			v3.GET("/:enterpriseName/:siteName", v3controllers.GetAreasHandler)
+			// Get all production lines for a given area
+			v3.GET("/:enterpriseName/:siteName/:areaName", v3controllers.GetProductionLinesHandler)
+			// Get all work cells for a given production line
+			v3.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v3controllers.GetWorkCellsHandler)
+			// Get all data format for a given work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName",
+				v3controllers.GetDataFormatHandler)
+			// Get all tag groups for a given work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags",
+				v3controllers.GetTagGroupsHandler)
+			// Get all tags for a given tag group
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName",
+				v3controllers.GetTagsHandler)
+			// Get specific data for a give work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tags/:tagGroupName/:tagName",
+				v3controllers.GetTagsDataHandler)
+			// Get KPIs methods for a given work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis",
+				v3controllers.GetKpisMethodsHandler)
+			// Get specific KPI data for a given work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/kpis/:kpisMethod",
+				v3controllers.GetKpisDataHandler)
+			// Get tables types for a given work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables",
+				v3controllers.GetTableTypesHandler)
+			// Get specific table data for a given work cell
+			v3.GET(
+				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
+				v3controllers.GetTableDataHandler)
+
+		}
+
+	*/
+	//dataFormat
+	err := router.Run(":80")
+	if err != nil {
+		zap.S().Fatalf("Error starting the server: %s", err)
+	}
 }

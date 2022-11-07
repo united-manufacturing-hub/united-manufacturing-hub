@@ -43,6 +43,11 @@ _000_commonConfig:
     iotsensorsmqtt:
       enabled: true
 
+    # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
+    # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
+    packmlmqttsimulator:
+      enabled: true
+
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
     nodered:
@@ -728,6 +733,7 @@ factoryinsight:
   # tag: 0.3.2
   replicas: 2
   user: "factoryinsight"
+  version: 2  # Minimum api version to host (e.g: 2 will host v1 and v2, 3 will host v1, v2 and v3)
   # Password will be generated automatically
   db_host: "united-manufacturing-hub"
   db_database: "factoryinsight"
@@ -1647,12 +1653,7 @@ grafana:
   affinity: {}
 
   extraInitContainers:
-    - args:
-        - mkdir -p /var/lib/grafana/plugins && wget -O /var/lib/grafana/umh-datasource.zip "https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/latest/download/umh-datasource.zip" && unzip -n /var/lib/grafana/umh-datasource.zip -d /var/lib/grafana/plugins/ && wget -O /var/lib/grafana/umh-factoryinput-panel.zip "https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/latest/download/umh-factoryinput-panel.zip" && unzip -n /var/lib/grafana/umh-factoryinput-panel.zip -d /var/lib/grafana/plugins/
-      command:
-        - /bin/sh
-        - -c
-      image: busybox
+    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.1.3
       imagePullPolicy: IfNotPresent
       name: init-umh-datasource
       volumeMounts:
@@ -1660,7 +1661,7 @@ grafana:
           name: storage
 
           # subPath: ia-factoryinsight-datasource.zip
-  ## Enable an Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
+  ## Enable a Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
   extraContainers: |
   # - name: proxy
   #   image: quay.io/gambol99/keycloak-proxy:latest
@@ -1770,7 +1771,7 @@ grafana:
   ## make sure to replace arn:aws:iam::123456789000:role/iam-role-name-here with your role arn
 
   env:
-    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-factoryinput-panel
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-factoryinput-panel,umh-v2-datasource
 
   ## "valueFrom" environment variable references that will be added to deployment pods
   ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#envvarsource-v1-core
@@ -1874,6 +1875,24 @@ grafana:
     datasources.yaml:
       apiVersion: 1
       datasources:
+        - name: umh-v2-datasource
+          # <string, required> datasource type. Required
+          type: umh-v2-datasource
+          # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
+          access: proxy
+          # <int> org id. will default to orgId 1 if not specified
+          orgId: 1
+          url: "http://united-manufacturing-hub-factoryinsight-service/"
+          # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
+          jsonData:
+            customerID: $FACTORYINSIGHT_CUSTOMERID
+            apiKey: $FACTORYINSIGHT_PASSWORD
+            baseURL: "http://united-manufacturing-hub-factoryinsight-service/"
+            apiKeyConfigured: true
+          version: 1
+          # <bool> allow users to edit datasources from the UI.
+          isDefault: false
+          editable: false
         # <string, required> name of the datasource. Required
         - name: umh-datasource
           # <string, required> datasource type. Required
@@ -1893,6 +1912,7 @@ grafana:
           # <bool> allow users to edit datasources from the UI.
           isDefault: true
           editable: false
+        # <string, required> name of the datasource. Required
 
   ## Configure notifiers
   ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
@@ -2185,7 +2205,24 @@ kowl:
       mountPath: /SSL_certs
       readOnly: true
 
-
+### packmlmqttsimulator ###
+packmlmqttsimulator:
+  image:
+    repository: spruiktec/packml-simulator
+    pullPolicy: IfNotPresent
+  env:
+    area: DefaultArea
+    productionline: DefaultProductionLine
+    site: testLocation
+  replicas: 1
+  hash: 01e2f0da3542f1b4e0de830a8d24135de03fd9174dce184ed329bed3ee688e19
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
 
 ### mqtt-kafka-bridge ###
 mqttkafkabridge:
