@@ -157,3 +157,12 @@ func EnvIsTrue(envVariable string) bool {
 	}
 	return false
 }
+
+func IndexOf(slice []string, value string) int {
+	for p, v := range slice {
+		if v == value {
+			return p
+		}
+	}
+	return -1
+}
