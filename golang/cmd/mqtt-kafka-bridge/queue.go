@@ -63,7 +63,7 @@ func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error)
 	var item *goque.Item
 	item, err = pq.Dequeue()
 	if err != nil || item == nil {
-		zap.S().Errorf("Failed to dequeue message", err)
+		zap.S().Errorf("Failed to dequeue message: %s", err)
 		return
 	}
 
