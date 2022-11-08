@@ -112,8 +112,8 @@ func GetStandardTags(enterpriseName, siteName, workCellName string) (tags []stri
 	return
 }
 
-func GetCustomTags(workCellId uint32) (grouping map[string][]string, err error) {
-	grouping = make(map[string][]string)
+func GetCustomTags(workCellId uint32) (tags []string, err error) {
+	//tags = make(map[string][]string)
 	zap.S().Infof(
 		"[GetTags] Getting custom tags for work cell %s", workCellId)
 
@@ -135,17 +135,50 @@ func GetCustomTags(workCellId uint32) (grouping map[string][]string, err error) 
 			return
 		}
 
-		if strings.Count(valueName, "_") == 1 {
-			if !strings.HasPrefix(valueName, "_") && !strings.HasSuffix(valueName, "_") {
-				left, right, _ := strings.Cut(valueName, "_")
-				grouping[left] = append(grouping[left], right)
-			}
-		} else if strings.Count(valueName, "_") == 0 {
-			grouping[valueName] = []string{}
-		}
+		tags = append(tags, valueName)
+
+		//if strings.Count(valueName, "_") == 1 && (strings.HasPrefix(valueName, "_") || strings.HasSuffix(valueName, "_")) {
+		//
+		//}
+		//if (strings.HasPrefix(valueName, "_") && strings.Count(valueName, "_") == 1) ||
+		//	(strings.HasSuffix(valueName, "_") && strings.Count(valueName, "_") == 1) ||
+		//	(strings.HasPrefix(valueName, "_") && strings.HasSuffix(valueName, "_")) {
+		//	strings.spl
+		//}
+		//if strings.Count(valueName, "_") == 1 {
+		//	if !strings.HasPrefix(valueName, "_") && !strings.HasSuffix(valueName, "_") {
+		//		left, right, _ := strings.Cut(valueName, "_")
+		//		tags[left] = append(tags[left], right)
+		//	}
+		//} else if strings.Count(valueName, "_") == 0 {
+		//	tags[valueName] = []string{}
+		//}
+
+		//if strings.Count(valueName, "_") == 0 {
+		//	groupingNew = append(groupingNew, models.TreeEntryFormat{
+		//		Value:    valueName,
+		//	})
+		//} else {
+		//	splitValues := strings.Split(valueName, "_")
+		//	for i, value := range splitValues {
+		//		if value == "" {
+		//
+		//		} else {
+		//			parentIdx := slices.IndexFunc(groupingNew, func(p Parent) bool { return p.Value == value })
+		//			if parentIdx == -1 {
+		//				groupingNew[parentIdx].Children = append(groupingNew[parentIdx].Children, Parent{Value: value, Children: nil})
+		//			}
+		//		}
+		//	}
+		//}
 	}
 
 	return
+}
+
+type Parent struct {
+	Value    string
+	Children []Parent
 }
 
 func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {

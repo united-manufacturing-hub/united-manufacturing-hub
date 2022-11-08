@@ -7,6 +7,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"go.uber.org/zap"
+	"strings"
 	"sync"
 	"time"
 )
@@ -309,40 +310,74 @@ func GetCustomTagsTree(
 	area string,
 	line string,
 	cell string,
-	group string) (te []interface{}, err error) {
+	group string) (te map[string]*models.TreeEntryFormat, err error) {
 
 	var id uint32
 	id, err = GetWorkCellId(customer, site, cell)
 	if err != nil {
 		return nil, err
 	}
-	var tags map[string][]string
+	var tags []string
 	tags, err = GetCustomTags(id)
 	if err != nil {
 		return nil, err
 	}
 
-	// flatten the map
-	for tag, values := range tags {
-		if len(values) == 0 {
-			te = append(
-				te, models.TreeEntryFormat{
-					Label: tag,
-					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag,
-				})
+	for _, tag := range tags {
 
-		} else {
-			for _, value := range values {
-				te = append(
-					te, models.TreeEntryFormat{
-						Label: tag + "_" + value,
-						Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag + "_" + value,
-					})
+		value := customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag
+
+		hasPrefix := false
+		hasSuffix := false
+
+		if strings.Count(tag, "_") == 0 {
+			te[tag] = &models.TreeEntryFormat{
+				Label:   tag,
+				Value:   value,
+				Entries: nil,
 			}
+			continue
 		}
+
+		if strings.HasPrefix(tag, "_") {
+			hasPrefix = true
+			tag = strings.TrimPrefix(tag, "_")
+		}
+		if strings.HasSuffix(tag, "_") {
+			hasSuffix = true
+			tag = strings.TrimSuffix(tag, "_")
+		}
+
+		splitTag := strings.Split(tag, "_")
+		if hasPrefix {
+			splitTag[0] = "_" + splitTag[0]
+		}
+		if hasSuffix {
+			splitTag[len(splitTag)-1] = splitTag[len(splitTag)-1] + "_"
+		}
+
+		te[splitTag[0]] = mapTagGrouping(te, splitTag, value)
 	}
 
 	return te, err
+}
+
+func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value string) (a *models.TreeEntryFormat) {
+	a, exists := pte[st[0]]
+	if !exists {
+		a = &models.TreeEntryFormat{
+			Label:   st[0],
+			Value:   "",
+			Entries: map[string]*models.TreeEntryFormat{},
+		}
+	}
+	if len(st) > 1 {
+		a.Entries[st[1]] = mapTagGrouping(a.Entries, st[1:], value)
+	} else {
+		a.Value = value
+		a.Entries = nil
+	}
+	return
 }
 
 func GetStandardTagsTree(customer string, site string, area string, line string, cell string, tagGroup string) (
