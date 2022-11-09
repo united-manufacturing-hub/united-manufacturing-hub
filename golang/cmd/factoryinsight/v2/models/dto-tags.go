@@ -2,8 +2,8 @@ package models
 
 import "time"
 
-type GetTagsResponse[T []string | map[string][]string] struct {
-	Tags T
+type GetTagsResponse struct {
+	Tags []string
 }
 type GetTagGroupsRequest struct {
 	EnterpriseName     string `uri:"enterpriseName" binding:"required"`
