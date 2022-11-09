@@ -7,6 +7,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
 	"strings"
 	"sync"
 	"time"
@@ -327,34 +328,9 @@ func GetCustomTagsTree(
 
 		value := customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag
 
-		hasPrefix := false
-		hasSuffix := false
-
-		if strings.Count(tag, "_") == 0 {
-			te[tag] = &models.TreeEntryFormat{
-				Label:   tag,
-				Value:   value,
-				Entries: nil,
-			}
-			continue
-		}
-
-		if strings.HasPrefix(tag, "_") {
-			hasPrefix = true
-			tag = strings.TrimPrefix(tag, "_")
-		}
-		if strings.HasSuffix(tag, "_") {
-			hasSuffix = true
-			tag = strings.TrimSuffix(tag, "_")
-		}
-
 		splitTag := strings.Split(tag, "_")
-		if hasPrefix {
-			splitTag[0] = "_" + splitTag[0]
-		}
-		if hasSuffix {
-			splitTag[len(splitTag)-1] = splitTag[len(splitTag)-1] + "_"
-		}
+		sanitizedSplitTag := removeEmpty(splitTag)
+		sanitizedSplitTag = slices.Clip(sanitizedSplitTag)
 
 		te[splitTag[0]] = mapTagGrouping(te, splitTag, value)
 	}
@@ -378,6 +354,16 @@ func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value s
 		a.Entries = nil
 	}
 	return
+}
+
+func removeEmpty(s []string) []string {
+	var r []string
+	idx := slices.Index(s, "")
+	if idx != -1 {
+		r = append(s[:idx], s[idx+1:]...)
+		return removeEmpty(r)
+	}
+	return s
 }
 
 func GetStandardTagsTree(customer string, site string, area string, line string, cell string, tagGroup string) (
