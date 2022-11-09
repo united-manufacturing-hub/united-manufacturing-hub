@@ -174,7 +174,7 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 	}
 
 	for _, customer := range customers {
-		var siteTree []interface{}
+		var siteTree map[string]*models.TreeEntryFormat
 		siteTree, err = GetSiteTreeStructure(customer)
 		if err != nil {
 			return nil, err
@@ -189,74 +189,74 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 	return te, err
 }
 
-func GetSiteTreeStructure(customer string) (te []interface{}, err error) {
+func GetSiteTreeStructure(customer string) (te map[string]*models.TreeEntryFormat, err error) {
 	var sites []string
 	sites, err = GetSites(customer)
 	if err != nil {
 		return nil, err
 	}
 	for _, site := range sites {
-		var areaTree []interface{}
+		var areaTree map[string]*models.TreeEntryFormat
 		areaTree, err = GetAreaTreeStructure(customer, site)
 		if err != nil {
 			return nil, err
 		}
-		te = append(
-			te, models.TreeEntryFormat{
-				Label:   site,
-				Value:   customer + "/" + site,
-				Entries: areaTree,
-			})
+		value := customer + "/" + site
+		te[site] = &models.TreeEntryFormat{
+			Label:   site,
+			Value:   value,
+			Entries: areaTree,
+		}
 	}
 	return te, err
 }
 
-func GetAreaTreeStructure(customer string, site string) (te []interface{}, err error) {
+func GetAreaTreeStructure(customer string, site string) (te map[string]*models.TreeEntryFormat, err error) {
 	var areas []string
 	areas, err = GetAreas(customer, site)
 	if err != nil {
 		return nil, err
 	}
 	for _, area := range areas {
-		var lineTree []interface{}
+		var lineTree map[string]*models.TreeEntryFormat
 		lineTree, err = GetLineTreeStructure(customer, site, area)
 		if err != nil {
 			return nil, err
 		}
-		te = append(
-			te, models.TreeEntryFormat{
-				Label:   area,
-				Value:   customer + "/" + site + "/" + area,
-				Entries: lineTree,
-			})
+		value := customer + "/" + site + "/" + area
+		te[area] = &models.TreeEntryFormat{
+			Label:   area,
+			Value:   value,
+			Entries: lineTree,
+		}
 	}
 	return te, err
 }
 
-func GetLineTreeStructure(customer string, site string, area string) (te []interface{}, err error) {
+func GetLineTreeStructure(customer string, site string, area string) (te map[string]*models.TreeEntryFormat, err error) {
 	var lines []string
 	lines, err = GetProductionLines(customer, site, area)
 	if err != nil {
 		return nil, err
 	}
 	for _, line := range lines {
-		var machineTree []interface{}
+		var machineTree map[string]*models.TreeEntryFormat
 		machineTree, err = GetWorkCellTreeStructure(customer, site, area, line)
 		if err != nil {
 			return nil, err
 		}
-		te = append(
-			te, models.TreeEntryFormat{
-				Label:   line,
-				Value:   customer + "/" + site + "/" + area + "/" + line,
-				Entries: machineTree,
-			})
+		value := customer + "/" + site + "/" + area + "/" + line
+		te[line] = &models.TreeEntryFormat{
+			Label:   line,
+			Value:   value,
+			Entries: machineTree,
+		}
 	}
 	return te, err
 }
 
 func GetWorkCellTreeStructure(customer string, site string, area string, line string) (
-	te []interface{},
+	te map[string]*models.TreeEntryFormat,
 	err error) {
 	var workCells []string
 	workCells, err = GetWorkCells(customer, site, area, line)
@@ -264,11 +264,11 @@ func GetWorkCellTreeStructure(customer string, site string, area string, line st
 		return nil, err
 	}
 	for _, workCell := range workCells {
-		te = append(
-			te, models.TreeEntryFormat{
-				Label: workCell,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + workCell,
-			})
+		value := customer + "/" + site + "/" + area + "/" + line + "/" + workCell
+		te[workCell] = &models.TreeEntryFormat{
+			Label: workCell,
+			Value: value,
+		}
 	}
 	return te, err
 }
@@ -283,7 +283,7 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 		return nil, err
 	}
 	for _, tagGroup := range tags {
-		var structure []interface{}
+		var structure map[string]*models.TreeEntryFormat
 		if tagGroup == models.StandardTagGroup {
 			structure, err = GetStandardTagsTree(customer, site, area, line, cell, tagGroup)
 		} else if tagGroup == models.CustomTagGroup {
@@ -328,10 +328,18 @@ func GetCustomTagsTree(
 
 		value := customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag
 
+		// ignore tag that are only made of underscores
+		if slices.Compact([]rune(tag))[0] == '_' {
+			continue
+		}
+
 		splitTag := strings.Split(tag, "_")
+		// ignore underscores at the beginning or end of the tag or if there are multiple underscores in a row
 		sanitizedSplitTag := removeEmpty(splitTag)
+		// remove unused capacity to save memory
 		sanitizedSplitTag = slices.Clip(sanitizedSplitTag)
 
+		// create the mapping
 		te[splitTag[0]] = mapTagGrouping(te, splitTag, value)
 	}
 
@@ -340,6 +348,7 @@ func GetCustomTagsTree(
 
 func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value string) (a *models.TreeEntryFormat) {
 	a, exists := pte[st[0]]
+	// if the tag group does not exist, create it
 	if !exists {
 		a = &models.TreeEntryFormat{
 			Label:   st[0],
@@ -347,6 +356,7 @@ func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value s
 			Entries: map[string]*models.TreeEntryFormat{},
 		}
 	}
+	// if the tag group is a leaf, set the value
 	if len(st) > 1 {
 		a.Entries[st[1]] = mapTagGrouping(a.Entries, st[1:], value)
 	} else {
@@ -361,13 +371,14 @@ func removeEmpty(s []string) []string {
 	idx := slices.Index(s, "")
 	if idx != -1 {
 		r = append(s[:idx], s[idx+1:]...)
+		// recursively remove empty strings
 		return removeEmpty(r)
 	}
 	return s
 }
 
 func GetStandardTagsTree(customer string, site string, area string, line string, cell string, tagGroup string) (
-	te []interface{},
+	te map[string]*models.TreeEntryFormat,
 	err error) {
 
 	var tags []string
@@ -375,12 +386,12 @@ func GetStandardTagsTree(customer string, site string, area string, line string,
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range tags {
-		te = append(
-			te, models.TreeEntryFormat{
-				Label: t,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + tagGroup + "/" + t,
-			})
+	for _, tag := range tags {
+		value := customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + tagGroup + "/" + tag
+		te[tag] = &models.TreeEntryFormat{
+			Label: tag,
+			Value: value,
+		}
 	}
 	return te, err
 }
