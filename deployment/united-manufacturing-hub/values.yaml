@@ -444,7 +444,7 @@ opcuasimulator:
       memory: "100Mi"
   service:
     annotations: {}
-    # certadds can add hostnames and ip addresses to the certificate for the simulator
+    # certadds can add hostnames and ip addresses to the certificate for the simulator so connection to the opcua client is easier
   certadds:
     hosts: "opcua"
     #ips: "1.1.1.1"
