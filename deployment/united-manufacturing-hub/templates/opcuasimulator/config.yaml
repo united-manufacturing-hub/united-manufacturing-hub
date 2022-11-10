@@ -32,7 +32,14 @@ data:
           "Mean" : 300,
           "StandardDeviation" : 50.0
         }
-      ]
+      ],
+      "CERTIFICATE":
+      {
+        "Hosts" : [{{.Values.opcuasimulator.certadds.hosts}}],
+        {{if .Values.opcuasimulator.certadds.ips}}
+        "IPS" : [{{.Values.opcuasimulator.certadds.ips}}]
+        {{end}}
       }
+    }
 
-{{end}}
+    {{end}}

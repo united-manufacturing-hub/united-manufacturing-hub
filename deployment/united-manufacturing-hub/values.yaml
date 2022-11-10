@@ -444,6 +444,10 @@ opcuasimulator:
       memory: "100Mi"
   service:
     annotations: {}
+    # certadds can add hostnames and ip addresses to the certificate for the simulator
+  certadds:
+    hosts: "opcua"
+    #ips: "1.1.1.1"
 
 ### kafkabridge ###
 kafkabridge:
