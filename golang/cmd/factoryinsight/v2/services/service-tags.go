@@ -114,7 +114,7 @@ func GetStandardTags(enterpriseName, siteName, workCellName string) (tags []stri
 
 func GetCustomTags(workCellId uint32) (tags []string, err error) {
 	zap.S().Infof(
-		"[GetTags] Getting custom tags for work cell %s", workCellId)
+		"[GetTags] Getting custom tags for work cell %d", workCellId)
 
 	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
 

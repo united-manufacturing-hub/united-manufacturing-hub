@@ -281,13 +281,14 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 	te []models.TreeEntryFormat,
 	err error) {
 
+	zap.S().Infof("[GetTagsTreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var tags []string
 	tags, err = GetTagGroups(customer, site, area, line, cell)
 	if err != nil {
 		return nil, err
 	}
 	for _, tagGroup := range tags {
-		var structure map[string]*models.TreeEntryFormat
+		var structure = make(map[string]*models.TreeEntryFormat)
 		if tagGroup == models.StandardTagGroup {
 			structure, err = GetStandardTagsTree(customer, site, area, line, cell, tagGroup)
 		} else if tagGroup == models.CustomTagGroup {
@@ -316,8 +317,8 @@ func GetCustomTagsTree(
 	line string,
 	cell string,
 	group string) (te map[string]*models.TreeEntryFormat, err error) {
-	te = make(map[string]*models.TreeEntryFormat)
 
+	te = make(map[string]*models.TreeEntryFormat)
 	var id uint32
 	id, err = GetWorkCellId(customer, site, cell)
 	if err != nil {
@@ -359,11 +360,11 @@ func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value s
 	if !exists {
 		a = &models.TreeEntryFormat{
 			Label:   st[0],
-			Value:   "",
+			Value:   st[0],
 			Entries: map[string]*models.TreeEntryFormat{},
 		}
 	}
-	// if the tag group is a leaf, set the value
+	// if the tag group is a leaf, set value and end the recursion
 	if len(st) > 1 {
 		a.Entries[st[1]] = mapTagGrouping(a.Entries, st[1:], value)
 	} else {
@@ -388,6 +389,7 @@ func GetStandardTagsTree(customer string, site string, area string, line string,
 	te map[string]*models.TreeEntryFormat,
 	err error) {
 
+	te = make(map[string]*models.TreeEntryFormat)
 	var tags []string
 	tags, err = GetStandardTags(customer, site, cell)
 	if err != nil {
@@ -407,6 +409,7 @@ func GetKPITreeStructure(customer string, site string, area string, line string,
 	te []models.TreeEntryFormat,
 	err error) {
 
+	zap.S().Infof("[GetKPITreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var kpis models.GetKpisMethodsResponse
 	kpis, err = GetKpisMethods(customer, site, cell)
 	if err != nil {
@@ -426,6 +429,7 @@ func GetTableTreeStructure(customer string, site string, area string, line strin
 	te []models.TreeEntryFormat,
 	err error) {
 
+	zap.S().Infof("[GetTableTreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var types models.GetTableTypesResponse
 	types, err = GetTableTypes(customer, site, cell)
 	if err != nil {
