@@ -191,6 +191,7 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 
 func GetSiteTreeStructure(customer string) (te map[string]*models.TreeEntryFormat, err error) {
 	var sites []string
+	te = make(map[string]*models.TreeEntryFormat)
 	sites, err = GetSites(customer)
 	if err != nil {
 		return nil, err
@@ -213,6 +214,7 @@ func GetSiteTreeStructure(customer string) (te map[string]*models.TreeEntryForma
 
 func GetAreaTreeStructure(customer string, site string) (te map[string]*models.TreeEntryFormat, err error) {
 	var areas []string
+	te = make(map[string]*models.TreeEntryFormat)
 	areas, err = GetAreas(customer, site)
 	if err != nil {
 		return nil, err
@@ -235,6 +237,7 @@ func GetAreaTreeStructure(customer string, site string) (te map[string]*models.T
 
 func GetLineTreeStructure(customer string, site string, area string) (te map[string]*models.TreeEntryFormat, err error) {
 	var lines []string
+	te = make(map[string]*models.TreeEntryFormat)
 	lines, err = GetProductionLines(customer, site, area)
 	if err != nil {
 		return nil, err
@@ -259,6 +262,7 @@ func GetWorkCellTreeStructure(customer string, site string, area string, line st
 	te map[string]*models.TreeEntryFormat,
 	err error) {
 	var workCells []string
+	te = make(map[string]*models.TreeEntryFormat)
 	workCells, err = GetWorkCells(customer, site, area, line)
 	if err != nil {
 		return nil, err
@@ -312,6 +316,7 @@ func GetCustomTagsTree(
 	line string,
 	cell string,
 	group string) (te map[string]*models.TreeEntryFormat, err error) {
+	te = make(map[string]*models.TreeEntryFormat)
 
 	var id uint32
 	id, err = GetWorkCellId(customer, site, cell)
@@ -323,6 +328,8 @@ func GetCustomTagsTree(
 	if err != nil {
 		return nil, err
 	}
+
+	slices.Sort(tags)
 
 	for _, tag := range tags {
 
