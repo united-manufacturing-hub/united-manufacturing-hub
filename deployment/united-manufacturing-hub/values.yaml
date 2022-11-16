@@ -2457,6 +2457,28 @@ hivemq:
     requests:
       cpu: 100m
       memory: 100Mi
+  statefulset:
+    annotations: { }
+    labels: { }
+    lifecycle: { }
+    livenessProbe:
+      failureThreshold: 3
+      initialDelaySeconds: 600
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    podAnnotations: { }
+    podManagementPolicy: OrderedReady
+    prometheus.io/port: "8888"
+    prometheus.io/scrape: "true"
+    readinessProbe:
+      failureThreshold: 3
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    terminationGracePeriodSeconds: 60
+    updateStrategy: RollingUpdate
 
 ##### CONFIG FOR VERNEMQ #####
 vernemq:
