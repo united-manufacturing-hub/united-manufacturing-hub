@@ -178,6 +178,13 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-vernemq
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
+{{/*
+Labels for vernemq
+*/}}
+{{- define "united-manufacturing-hub.labels.vernemq" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-hivemq
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
 
 {{/*
 Labels for emqxedge

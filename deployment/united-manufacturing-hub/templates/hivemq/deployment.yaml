@@ -1,0 +1,47 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
+  labels:
+    {{- include "united-manufacturing-hub.labels.hivemq" . | nindent 4}}
+    app.kubernetes.io/component: "hivemq"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.hivemq" . | nindent 6}}
+      app.kubernetes.io/component: "hivemq"
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.hivemq" . | nindent 8}}
+        app.kubernetes.io/component: "hivemq"
+    spec:
+      volumes:
+        - name: hivemq-mqtt-config
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
+          {{if .Values.hivemq.tag}}
+          image: {{.Values.hivemq.image}}:{{.Values.hivemq.tag}}
+          {{- else}}
+          image: {{.Values.hivemq.image}}:2022.1
+          {{end}}
+          resources:
+            limits:
+              cpu: {{.Values.hivemq.resources.limits.cpu}}
+              memory: {{.Values.hivemq.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.hivemq.resources.requests.cpu}}
+              memory: {{.Values.hivemq.resources.requests.memory}}
+          volumeMounts:
+            - mountPath: /configs
+              name: hivemq-mqtt-config
+
+{{end}}
