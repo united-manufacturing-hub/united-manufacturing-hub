@@ -4,45 +4,45 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemq-ce
   labels:
-    {{- include "united-manufacturing-hub.labels.hivemq" . | nindent 4}}
-    app.kubernetes.io/component: "hivemq"
+    {{- include "united-manufacturing-hub.labels.hivemq-ce" . | nindent 4}}
+    app.kubernetes.io/component: "hivemq-ce"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "united-manufacturing-hub.labels.hivemq" . | nindent 6}}
-      app.kubernetes.io/component: "hivemq"
+      {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 6}}
+      app.kubernetes.io/component: "hivemq-ce"
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        {{- include "united-manufacturing-hub.labels.hivemq" . | nindent 8}}
-        app.kubernetes.io/component: "hivemq"
+        {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 8}}
+        app.kubernetes.io/component: "hivemqce"
     spec:
       volumes:
-        - name: hivemq-mqtt-config
+        - name: hivemq-ce-mqtt-config
           configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
+            name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
       containers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
-          {{if .Values.hivemq.tag}}
-          image: {{.Values.hivemq.image.repository}}:{{.Values.hivemq.tag}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
+          {{if .Values.hivemqce.tag}}
+          image: {{.Values.hivemqce.image.repository}}:{{.Values.hivemqce.tag}}
           {{- else}}
-          image: {{.Values.hivemq.image.repository}}:2022.1
+          image: {{.Values.hivemqce.image.repository}}:2022.1
           {{end}}
-          imagePullPolicy: {{.Values.hivemq.image.pullPolicy}}
+          imagePullPolicy: {{.Values.hivemqce.image.pullPolicy}}
           resources:
             limits:
-              cpu: {{.Values.hivemq.resources.limits.cpu}}
-              memory: {{.Values.hivemq.resources.limits.memory}}
+              cpu: {{.Values.hivemqce.resources.limits.cpu}}
+              memory: {{.Values.hivemqce.resources.limits.memory}}
             requests:
-              cpu: {{.Values.hivemq.resources.requests.cpu}}
-              memory: {{.Values.hivemq.resources.requests.memory}}
+              cpu: {{.Values.hivemqce.resources.requests.cpu}}
+              memory: {{.Values.hivemqce.resources.requests.memory}}
           volumeMounts:
             - mountPath: /configs
-              name: hivemq-mqtt-config
+              name: hivemq-ce-mqtt-config
 
 {{end}}

@@ -2447,7 +2447,7 @@ redis:
 
 ##### CONFIG FOR HIVEMQ CE
 ##### you can set a tag if you want a version other than 2022.1
-hivemq-ce:
+hivemqce:
   image:
     repository: hivemq/hivemq-ce
     pullPolicy: IfNotPresent
