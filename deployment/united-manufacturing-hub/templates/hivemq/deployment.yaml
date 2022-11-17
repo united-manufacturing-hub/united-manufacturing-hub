@@ -29,10 +29,11 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemq
           {{if .Values.hivemq.tag}}
-          image: {{.Values.hivemq.image}}:{{.Values.hivemq.tag}}
+          image: {{.Values.hivemq.image.repository}}:{{.Values.hivemq.tag}}
           {{- else}}
-          image: {{.Values.hivemq.image}}:2022.1
+          image: {{.Values.hivemq.image.repository}}:2022.1
           {{end}}
+          imagePullPolicy: {{.Values.hivemq.image.pullPolicy}}
           resources:
             limits:
               cpu: {{.Values.hivemq.resources.limits.cpu}}
