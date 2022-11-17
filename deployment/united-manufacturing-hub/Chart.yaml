@@ -74,4 +74,4 @@ dependencies:
   - name: hivemq-operator
     version: 0.11.9
     repository: https://hivemq.github.io/helm-charts
-    condition: _000_commonConfig.infrastructure.mqtt.enabled
+    condition: _000_commonConfig.infrastructure.hivemq-operator.enabled

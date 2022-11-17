@@ -60,6 +60,7 @@ _000_commonConfig:
     # vernemq
     mqtt:
       enabled: true
+      hivemq-operator: false
       AclConfig: |-
         pattern #
       CACert: |

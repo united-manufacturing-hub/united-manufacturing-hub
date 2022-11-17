@@ -22,4 +22,4 @@ spec:
   selector:
     app.kubernetes.io/name: hivemq
     app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
-  {{end}}
+{{end}}
