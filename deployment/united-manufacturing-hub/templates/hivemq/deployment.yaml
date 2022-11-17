@@ -6,14 +6,14 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemq-ce
   labels:
-    {{- include "united-manufacturing-hub.labels.hivemq-ce" . | nindent 4}}
-    app.kubernetes.io/component: "hivemq-ce"
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+    app.kubernetes.io/component: "hivemqce"
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 6}}
-      app.kubernetes.io/component: "hivemq-ce"
+      app.kubernetes.io/component: "hivemqce"
   strategy:
     type: RollingUpdate
   template:
