@@ -2444,11 +2444,10 @@ redis:
     enabled: false
 
 ##### CONFIG FOR HIVEMQ CE
+##### you can set a tag if you want a version other than 2022.1
 hivemq:
   image:
     repository: hivemq/hivemq-ce
-    ### you can set a tag if you want a version other than 2022.1
-    #tag: latest
     pullPolicy: IfNotPresent
   resources:
     limits:
