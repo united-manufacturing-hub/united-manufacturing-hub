@@ -5,7 +5,7 @@ kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service
   labels:
-    app.kubernetes.io/name: hivemq
+    app.kubernetes.io/name: hivemqce
     app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
     app.kubernetes.io/managed-by: helm
 spec:
@@ -20,6 +20,6 @@ spec:
       protocol: TCP
       name: mqtt
   selector:
-    app.kubernetes.io/name: hivemq
+    app.kubernetes.io/name: hivemqce
     app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
 {{end}}
