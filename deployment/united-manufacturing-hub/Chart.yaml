@@ -72,6 +72,6 @@ dependencies:
     condition: _000_commonConfig.infrastructure.kafka.enabled
 
   - name: hivemq-operator
-    version: 0.11.9
     repository: https://hivemq.github.io/helm-charts
-    condition: _000_commonConfig.infrastructure.hivemq-operator.enabled
+    version: 0.11.9
+    condition: _000_commonConfig.infrastructure.mqtt.hivemq-operator.enabled
