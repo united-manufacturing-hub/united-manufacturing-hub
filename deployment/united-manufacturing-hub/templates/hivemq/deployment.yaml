@@ -4,7 +4,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-hivemq-ce
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   labels:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
     app.kubernetes.io/component: "hivemqce"
@@ -23,7 +23,7 @@ spec:
         app.kubernetes.io/component: "hivemqce"
     spec:
       volumes:
-        - name: hivemq-ce-mqtt-config
+        - name: hivemqce-mqtt-config
           configMap:
             name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
       containers:
@@ -43,6 +43,6 @@ spec:
               memory: {{.Values.hivemqce.resources.requests.memory}}
           volumeMounts:
             - mountPath: /configs
-              name: hivemq-ce-mqtt-config
+              name: hivemqce-mqtt-config
 
 {{end}}
