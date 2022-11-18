@@ -44,5 +44,13 @@ spec:
           volumeMounts:
             - mountPath: /configs
               name: hivemqce-mqtt-config
+          ports:
+            - name: mqtt
+              containerPort: 1883
+              protocol: TCP
+            - name: mqtts
+              containerPort: 8883
+              protocol: TCP
+
 
 {{end}}
