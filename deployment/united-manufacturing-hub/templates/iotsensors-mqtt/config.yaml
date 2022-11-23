@@ -10,7 +10,7 @@ data:
   config.json: |
     {
       "MQTT_BROKER": {
-      "SERVER_URL":"mqtt://united-manufacturing-hub-vernemq-local-service:1883",
+      "SERVER_URL":"mqtt://united-manufacturing-hub-hivemqce-local-service:1883",
       "SERVER_USER": "",
       "SERVER_PWD": "",
       "SERVER_RETAIN": "true",

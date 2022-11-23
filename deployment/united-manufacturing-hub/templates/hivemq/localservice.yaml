@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/name: hivemqce
     app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
     app.kubernetes.io/managed-by: helm
+    app.kubernetes.io/component: "hivemqce"
 spec:
   type: ClusterIP
   ports:
