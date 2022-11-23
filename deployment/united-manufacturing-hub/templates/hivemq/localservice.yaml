@@ -22,6 +22,4 @@ spec:
       name: mqtt
   selector:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
-    app.kubernetes.io/name: hivemqce
-    app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
 {{end}}
