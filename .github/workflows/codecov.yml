@@ -18,6 +18,6 @@ jobs:
         run: go test ./... -tags kafka -race -coverprofile coverage.out -covermode=atomic
         working-directory: ./golang
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           files: ./golang/coverage.out
