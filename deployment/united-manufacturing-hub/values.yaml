@@ -2467,6 +2467,8 @@ hivemqce:
       cpu: 100m
       memory: 100Mi
   persistence:
+    extension:
+      size: 100Mi
     storage:
       size: 2Gi
   service:

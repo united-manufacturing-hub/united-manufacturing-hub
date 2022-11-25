@@ -9,9 +9,13 @@ RUN unzip -n hivemq-file-rbac-extension.zip
 COPY runner.sh /runner.sh
 RUN dos2unix /runner.sh
 
+COPY cleaner.sh /cleaner.sh
+RUN dos2unix /cleaner.sh
+
 FROM alpine as runner
 COPY --from=base /hivemq-file-rbac-extension /hivemq-file-rbac-extension
 COPY --from=base /runner.sh /runner.sh
+COPY --from=base /cleaner.sh /cleaner.sh
 
 RUN chmod +x /runner.sh
 

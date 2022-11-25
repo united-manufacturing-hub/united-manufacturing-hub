@@ -27,11 +27,17 @@ spec:
             name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
           persistentVolumeClaim:
-            claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-data
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
+          persistentVolumeClaim:
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-extensions
       initContainers:
         - name: hivemqce-extension-init
           image: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.repository}}:{{.Values.hivemqce.initContainer.hivemqextensioninit.image.tag}}
           imagePullPolicy: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.pullPolicy}}
+          volumeMounts:
+            - mountPath: /opt/hivemq-ce-2022.1/extensions
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
           {{if .Values.hivemqce.image.tag}}
@@ -48,9 +54,9 @@ spec:
               cpu: {{.Values.hivemqce.resources.requests.cpu}}
               memory: {{.Values.hivemqce.resources.requests.memory}}
           volumeMounts:
-            - mountPath: /opt/hivemq/conf # This is a symlink to /opt/hivemq-ce-VERSION/conf
+            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/conf
               name: hivemqce-mqtt-config
-            - mountPath: /opt/hivemq/conf/data
+            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/data
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
           ports:
             {{- if .Values.hivemqce.service.mqtt.enabled}}
@@ -76,10 +82,11 @@ spec:
           lifecycle:
             postStart:
               exec:
-                command:
-                  - sh
+                command: # Execute cleaner.sh
+                  - /bin/sh
                   - -c
-                  - rm -rf /opt/hivemq-ce-2022.1/extensions/hivemq-allow-all-extensions
+                  - /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/cleaner.sh
+
 
 
 
