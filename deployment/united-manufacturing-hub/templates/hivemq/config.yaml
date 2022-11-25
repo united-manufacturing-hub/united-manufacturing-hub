@@ -8,4 +8,68 @@ metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
 data:
   config.xml: |
+    <?xml version="1.0"?>
+    <hivemq xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <listeners>
+            <tcp-listener>
+                <port>1883</port>
+                <bind-address>0.0.0.0</bind-address>
+            </tcp-listener>
+            <websocket-listener>
+                <port>8000</port>
+                <bind-address>0.0.0.0</bind-address>
+                <path>/mqtt</path>
+                <name>hivemq-websocket</name>
+                <subprotocols>
+                    <subprotocol>mqttv3.1</subprotocol>
+                    <subprotocol>mqtt</subprotocol>
+                </subprotocols>
+                <allow-extensions>true</allow-extensions>
+            </websocket-listener>
+        </listeners>
+        <persistence>
+            <client-session>
+                <general>
+                    <mode>file</mode>
+                </general>
+                <queued-messages>
+                    <max-queued-messages>1800000</max-queued-messages>
+                    <queued-messages-strategy>discard-oldest</queued-messages-strategy>
+                    <mode>file</mode>
+                </queued-messages>
+                <subscriptions>
+                    <mode>file</mode>
+                </subscriptions>
+            </client-session>
+            <message-flow>
+                <incoming>
+                    <mode>file</mode>
+                </incoming>
+                <outgoing>
+                    <mode>file</mode>
+                </outgoing>
+            </message-flow>
+            <retained-messages>
+                <mode>file</mode>
+            </retained-messages>
+            <publish-payloads>
+                <mode>file</mode>
+            </publish-payloads>
+            <attribute>
+                <mode>file</mode>
+            </attribute>
+            <client-group>
+                <mode>file</mode>
+            </client-group>
+        </persistence>
+        <security>
+            <allow-empty-client-id>
+                <enabled>false</enabled>
+            </allow-empty-client-id>
+            <utf8-validation>
+                <enabled>true</enabled>
+            </utf8-validation>
+        </security>
+    </hivemq>
+
 {{end}}

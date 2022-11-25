@@ -2,7 +2,7 @@
 {{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
 
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   labels:
@@ -14,8 +14,6 @@ spec:
     matchLabels:
       {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 6}}
       app.kubernetes.io/component: "hivemqce"
-  strategy:
-    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -26,10 +24,17 @@ spec:
         - name: hivemqce-mqtt-config
           configMap:
             name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
+          persistentVolumeClaim:
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim
+      initContainers:
+        - name: hivemqce-extension-init
+          image: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.repository}}:{{.Values.hivemqce.initContainer.hivemqextensioninit.image.tag}}
+          imagePullPolicy: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.pullPolicy}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
-          {{if .Values.hivemqce.tag}}
-          image: {{.Values.hivemqce.image.repository}}:{{.Values.hivemqce.tag}}
+          {{if .Values.hivemqce.image.tag}}
+          image: {{.Values.hivemqce.image.repository}}:{{.Values.hivemqce.image.tag}}
           {{- else}}
           image: {{.Values.hivemqce.image.repository}}:2022.1
           {{end}}
@@ -42,8 +47,10 @@ spec:
               cpu: {{.Values.hivemqce.resources.requests.cpu}}
               memory: {{.Values.hivemqce.resources.requests.memory}}
           volumeMounts:
-            - mountPath: /configs
+            - mountPath: /opt/hivemq/conf # This is a symlink to /opt/hivemq-ce-VERSION/conf
               name: hivemqce-mqtt-config
+            - mountPath: /opt/hivemq/conf/data
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemq-data
           ports:
             {{- if .Values.hivemqce.service.mqtt.enabled}}
             - name: mqtt
@@ -65,6 +72,7 @@ spec:
               containerPort: 8443
               protocol: TCP
             {{- end}}
+
 
 
 {{end}}
