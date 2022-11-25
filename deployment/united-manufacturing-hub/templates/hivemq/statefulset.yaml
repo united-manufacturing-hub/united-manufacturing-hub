@@ -25,9 +25,9 @@ spec:
         - name: hivemqce-mqtt-config
           configMap:
             name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-hive
-        - name: hivemqce-rbac-config
+        - name: hivemqce-extension-config
           configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-rbac
+            name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extension
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-data
@@ -64,8 +64,8 @@ spec:
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
             - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
-            - mountPath: /credentials
-              name: hivemqce-rbac-config
+            - mountPath: /configs
+              name: hivemqce-extension-config
               readOnly: true
           livenessProbe:
             httpGet:
@@ -116,9 +116,10 @@ spec:
           lifecycle:
             postStart:
                 exec:
-                    command: ["/bin/sh", "-c", "cp /credentials/credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml"]
-
-
-
+                    command: [
+                      "/bin/sh",
+                      "-c",
+                      "cp /configs/credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml && cp /configs/heartbeat.xml  /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
+                    ]
 
 {{end}}
