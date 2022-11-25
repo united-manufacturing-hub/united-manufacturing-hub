@@ -1,0 +1,127 @@
+
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-rbac
+data:
+  # https://github.com/hivemq/hivemq-file-rbac-extension
+  credentials.xml: |
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <file-rbac>
+        <users>
+            <user>
+                <name>mqttkafkabridge</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>mqttbridge</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>M21tR09vUkI3NTBSUlJWOHdRQUV2R3VCbUJEeGw3WDY=:100:GguBx5OY0JHD0IQhCoVgzf0/cx2dPDbHcC4NXu2fEnu0Oz2Ii2afammPZBd0y0M0Q46Gyf/z/c4lKd5qQ8Oo3Q==</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>mqtttoblob</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>NGtwRk4xbk5ZN2hPQWNWVlJyNmliRkxodTlmd3EwcjE=:100:xT2gIiFHVtvMA16U9BNN7Me7hUbMJ5bPNF6eXto+i7G3JgvOHA5gn8cQ12/P55+wbWw5TV3Ikj4sOolZPOHgJQ==</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>sensorconnect</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>iotsensors-mqtt</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==</password>
+                <roles>
+                    <id>ia_raw</id>
+                </roles>
+            </user>
+            <user>
+                <name>packmlsimulator</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>ZzBCbzEyaWlnZkRjbndTa2RLTW1aSmlsOWtQSWtpak0=:100:9FWqFUN88VPio9yFR59XbE9fr/GUkM1fnKCNn2wvK06MMtKp5LPtUrTCOLhHgkFQ6IMw92wi9HTsLRFxnM+reQ==</password>
+                <roles>
+                    <id>packmlsimulator</id>
+                </roles>
+            </user>
+            <user>
+                <name>node-red</name>
+                <!--- password hash for "INSECURE_INSECURE_INSECURE" -->
+                <password>aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==</password>
+                <roles>
+                    <id>packmlsimulator</id>
+                    <id>umh_read_write</id>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>admin-user</name>
+                <!-- GENERATE A NEW PASSWORD TO GET SUPERUSER ACCESS ! -->
+                <password>M0p0Y1hhR2VGbzRGTkV3aXVkOHFab05uTTE1dHl3R0U=:100:MaQCaaTWf260vQou02+Z5XKPtjxQJbS/cUfB0kxKf9qFzZQ1V4R2YtCH4GDSguE+CLIrhEG8m3XbuvdbWdKBnA==</password>
+                <roles>
+                    <id>superuser</id>
+                </roles>
+            </user>
+        </users>
+        <roles>
+            <role>
+                <id>umh_read_write</id>
+                <permissions>
+                    <permission>
+                        <topic>umh/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>ia_read_write</id>
+                <permissions>
+                    <permission>
+                        <topic>ia/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>ia_raw</id>
+                <permissions>
+                    <permission>
+                        <topic>ia/raw/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>packmlsimulator</id>
+                <permissions>
+                    <permission>
+                        <topic>testLocation/DefaultArea/DefaultProductionLine/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>superuser</id>
+                <permissions>
+                    <permission>
+                        <!-- Allow everything -->
+                        <topic>#</topic>
+                    </permission>
+                </permissions>
+            </role>
+        </roles>
+    </file-rbac>
+
+{{end}}

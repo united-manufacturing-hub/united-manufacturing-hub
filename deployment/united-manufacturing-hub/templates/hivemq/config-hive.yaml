@@ -5,7 +5,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-hive
 data:
   config.xml: |
     <?xml version="1.0"?>

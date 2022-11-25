@@ -60,10 +60,6 @@ _000_commonConfig:
     # vernemq
     mqtt:
       enabled: true
-      hivemq-operator:
-        enabled: false
-      AclConfig: |-
-        pattern #
       CACert: |
         -----BEGIN CERTIFICATE-----
         -----END CERTIFICATE-----
