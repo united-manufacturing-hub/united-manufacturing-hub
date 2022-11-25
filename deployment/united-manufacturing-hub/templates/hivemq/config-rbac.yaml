@@ -128,13 +128,10 @@ data:
 
 
 
-  prometheus.xml: |
-    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <heartbeat-extension-configuration>
-        <port>9399</port>
-        <ip>0.0.0.0</ip>
-        <metric_path>/heartbeat</metric_path>
-    </heartbeat-extension-configuration>
+  prometheus.properties: |
+    ip=0.0.0.0
+    port=9399
+    metric_path=/metrics
 
 
 {{end}}
