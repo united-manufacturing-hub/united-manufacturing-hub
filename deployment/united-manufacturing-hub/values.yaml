@@ -2450,7 +2450,14 @@ redis:
 hivemqce:
   image:
     repository: hivemq/hivemq-ce
+    tag: 2022.1
     pullPolicy: IfNotPresent
+  initContainer:
+    hivemqextensioninit:
+      image:
+        repository: unitedmanufacturinghub/hivemq-init
+        tag: 0.0.1-hivemqrbac4.5.3
+        pullPolicy: IfNotPresent
   resources:
     limits:
       cpu: 500m
@@ -2458,6 +2465,9 @@ hivemqce:
     requests:
       cpu: 100m
       memory: 100Mi
+  persistence:
+    storage:
+      size: 2Gi
   service:
     mqtt:
       enabled: true

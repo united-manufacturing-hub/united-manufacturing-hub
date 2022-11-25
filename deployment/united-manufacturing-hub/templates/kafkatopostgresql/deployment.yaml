@@ -36,7 +36,7 @@ spec:
       # Be nice to kafka & the db
       terminationGracePeriodSeconds: 180
       initContainers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
           {{if .Values.kafkabridge.image.tag}}
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
           {{- else}}
