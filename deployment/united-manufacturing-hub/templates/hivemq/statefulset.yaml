@@ -67,6 +67,24 @@ spec:
             - mountPath: /credentials
               name: hivemqce-rbac-config
               readOnly: true
+          livenessProbe:
+            httpGet:
+              port: 9090
+              path: /heartbeat
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              port: 9090
+              path: /heartbeat
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
           ports:
             {{- if .Values.hivemqce.service.mqtt.enabled}}
             - name: mqtt
@@ -88,6 +106,13 @@ spec:
               containerPort: 8443
               protocol: TCP
             {{- end}}
+            - name: prometheus
+              containerPort: 9399
+              protocol: TCP
+            - name: health
+              containerPort: 9090
+              protocol: TCP
+
           lifecycle:
             postStart:
                 exec:

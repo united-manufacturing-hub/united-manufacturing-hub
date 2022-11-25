@@ -110,7 +110,6 @@ data:
                 <id>superuser</id>
                 <permissions>
                     <permission>
-                        
                         <topic>#</topic>
                     </permission>
                 </permissions>
