@@ -60,6 +60,10 @@ _000_commonConfig:
     # vernemq
     mqtt:
       enabled: true
+      adminUser:
+        enabled: false
+        name: "admin-user"
+        encryptedPassword: M0p0Y1hhR2VGbzRGTkV3aXVkOHFab05uTTE1dHl3R0U=:100:MaQCaaTWf260vQou02+Z5XKPtjxQJbS/cUfB0kxKf9qFzZQ1V4R2YtCH4GDSguE+CLIrhEG8m3XbuvdbWdKBnA==
       CACert: |
         -----BEGIN CERTIFICATE-----
         -----END CERTIFICATE-----
@@ -364,6 +368,7 @@ mqttbridge:
       memory: "100Mi"
   mqtt:
     password: INSECURE_INSECURE_INSECURE
+    encryptedPassword: M21tR09vUkI3NTBSUlJWOHdRQUV2R3VCbUJEeGw3WDY=:100:GguBx5OY0JHD0IQhCoVgzf0/cx2dPDbHcC4NXu2fEnu0Oz2Ii2afammPZBd0y0M0Q46Gyf/z/c4lKd5qQ8Oo3Q==
 
 ### barcodereader ###
 barcodereader:
@@ -407,6 +412,7 @@ sensorconnect:
       memory: "200Mi"
   mqtt:
     password: INSECURE_INSECURE_INSECURE
+    encryptedPassword: ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==
 
 ### cameraconnect ###
 cameraconnect:
@@ -432,6 +438,9 @@ iotsensorsmqtt:
     limits:
       cpu: "100m"
       memory: "100Mi"
+  mqtt:
+    password: INSECURE_INSECURE_INSECURE
+    encryptedPassword: T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==
 
 
 ### kafkabridge ###
@@ -447,6 +456,8 @@ kafkabridge:
 
 ### nodered ###
 nodered:
+  mqtt:
+    encryptedPassword: aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==
   tag: 2.0.6
   port: 1880
   storageRequest: 1Gi
@@ -735,8 +746,6 @@ factoryinsight:
       requests:
         cpu: 50m
         memory: 50Mi
-  mqtt:
-    password: INSECURE_INSECURE_INSECURE
 
 ### factoryinput ###
 factoryinput:
@@ -752,6 +761,9 @@ factoryinput:
   pdb:
     enabled: true
     minAvailable: 1
+  mqtt:
+    password: INSECURE_INSECURE_INSECURE
+    encryptedPassword: emQ1NHEzcWN3ajVNZnRkaXphbzJDZ1V6aEFsMnlxTlU=:100:wR0Br1UBGt5i2oruSbzNXJEicUEpcSwY/RmR8igExshAuEeLeFeWy82a9AOkkiGVBP2N2IMTBFRvY0W/lvQ8gA==
 
 ### grafanaproxy ###
 grafanaproxy:
@@ -2183,8 +2195,8 @@ packmlmqttsimulator:
     productionline: DefaultProductionLine
     site: testLocation
     mqtt:
-      username: PACKMLSIMULATOR
       password: INSECURE_INSECURE_INSECURE
+      encryptedPassword: ZzBCbzEyaWlnZkRjbndTa2RLTW1aSmlsOWtQSWtpak0=:100:9FWqFUN88VPio9yFR59XbE9fr/GUkM1fnKCNn2wvK06MMtKp5LPtUrTCOLhHgkFQ6IMw92wi9HTsLRFxnM+reQ==
   replicas: 1
   resources:
     requests:
@@ -2208,6 +2220,7 @@ mqttkafkabridge:
     pullPolicy: IfNotPresent
   mqtt:
     password: INSECURE_INSECURE_INSECURE
+    encryptedPassword: WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==
 
 ### kafka-to-blob ###
 kafkatoblob:

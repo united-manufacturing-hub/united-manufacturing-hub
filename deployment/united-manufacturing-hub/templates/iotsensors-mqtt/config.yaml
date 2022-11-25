@@ -12,7 +12,7 @@ data:
       "MQTT_BROKER": {
       "SERVER_URL":"mqtt://united-manufacturing-hub-hivemqce-local-service:1883",
       "SERVER_USER": "IOTSENSORSMQTT",
-      "SERVER_PWD": "INSECURE_INSECURE_INSECURE",
+      "SERVER_PWD": {{.Values.iotsensorsmqtt.mqtt.password | quote}},
       "SERVER_RETAIN": "true",
       "SERVER_QOS": 1,
       "CLIENT_ID": "IoTSensorsMQTT-Simulator",
