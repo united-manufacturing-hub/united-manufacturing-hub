@@ -6,7 +6,7 @@ RUN echo "ce5b037c0f15787360a9a674c248c1e1e35f2375e585c7cc45af609c47030b5e  hive
 
 RUN unzip -n hivemq-file-rbac-extension.zip
 
-COPY deployment/grafana-plugin-extractor/runner.sh /runner.sh
+COPY runner.sh /runner.sh
 RUN dos2unix /runner.sh
 
 FROM alpine as runner

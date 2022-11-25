@@ -73,6 +73,13 @@ spec:
               containerPort: 8443
               protocol: TCP
             {{- end}}
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - rm -rf /opt/hivemq-ce-2022.1/extensions/hivemq-allow-all-extensions
 
 
 

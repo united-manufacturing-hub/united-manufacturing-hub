@@ -2456,7 +2456,8 @@ hivemqce:
     hivemqextensioninit:
       image:
         repository: unitedmanufacturinghub/hivemq-init
-        tag: 0.0.1-hivemqrbac4.5.3
+        #tag: 0.0.1-hivemqrbac4.5.3
+        tag: latest
         pullPolicy: IfNotPresent
   resources:
     limits:
