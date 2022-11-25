@@ -9,6 +9,7 @@ metadata:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
     app.kubernetes.io/component: "hivemqce"
 spec:
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   replicas: 1
   selector:
     matchLabels:

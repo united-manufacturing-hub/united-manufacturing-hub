@@ -71,5 +71,4 @@ data:
             </utf8-validation>
         </security>
     </hivemq>
-
 {{end}}
