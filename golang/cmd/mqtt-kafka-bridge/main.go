@@ -49,6 +49,7 @@ func main() {
 	MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
 	MQTTTopic := os.Getenv("MQTT_TOPIC")
 	podName := os.Getenv("MY_POD_NAME")
+	mqttPassword := os.Getenv("MQTT_PASSWORD")
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
@@ -97,8 +98,7 @@ func main() {
 	}()
 
 	zap.S().Debugf("Setting up MQTT")
-	// mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
-	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
+	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue, mqttPassword)
 
 	zap.S().Debugf("Setting up Kafka")
 	securityProtocol := "plaintext"
