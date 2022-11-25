@@ -99,7 +99,7 @@ spec:
               value: PRODUCTION
 
             - name: MQTT_BROKER_URL
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
 
             - name: MQTT_CERTIFICATE_NAME
               value: "NO_CERT"

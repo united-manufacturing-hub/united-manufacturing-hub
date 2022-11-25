@@ -56,7 +56,7 @@ spec:
               value: "1883"
 
             - name: BROKER_URL
-              value: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+              value: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service
 
             - name: BUCKET_NAME
               value: "umh"
