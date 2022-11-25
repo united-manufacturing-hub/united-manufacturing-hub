@@ -409,7 +409,7 @@ func GetKPITreeStructure(customer string, site string, area string, line string,
 	te []models.TreeEntryFormat,
 	err error) {
 
-	zap.S().Infof("[GetKPITreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
+	zap.S().Debugf("[GetKPITreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var kpis models.GetKpisMethodsResponse
 	kpis, err = GetKpisMethods(customer, site, cell)
 	if err != nil {
@@ -429,7 +429,7 @@ func GetTableTreeStructure(customer string, site string, area string, line strin
 	te []models.TreeEntryFormat,
 	err error) {
 
-	zap.S().Infof("[GetTableTreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
+	zap.S().Debugf("[GetTableTreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var types models.GetTableTypesResponse
 	types, err = GetTableTypes(customer, site, cell)
 	if err != nil {
