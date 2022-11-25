@@ -83,13 +83,6 @@ spec:
               containerPort: 8443
               protocol: TCP
             {{- end}}
-          #lifecycle:
-          #  postStart:
-          #    exec:
-          #      command: # Execute cleaner.sh
-          #        - /bin/sh
-          #        - -c
-          #        - /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/cleaner.sh
 
 
 
