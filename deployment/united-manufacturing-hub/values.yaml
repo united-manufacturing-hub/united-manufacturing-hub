@@ -2487,6 +2487,18 @@ hivemqce:
     mqtts:
       enabled: true
       port: 8883
+      tls_versions:
+        - "TLSv1.3"
+        - "TLSv1.2"
+      cipher_suites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+        - TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+        - TLS_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_RSA_WITH_AES_128_CBC_SHA
+        - TLS_RSA_WITH_AES_256_CBC_SHA
     type: LoadBalancer
     ws:
       enabled: false
@@ -2494,3 +2506,15 @@ hivemqce:
     wss:
       enabled: false
       port: 8443
+      tls_versions:
+        - "TLSv1.3"
+        - "TLSv1.2"
+      cipher_suites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+        - TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+        - TLS_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_RSA_WITH_AES_128_CBC_SHA
+        - TLS_RSA_WITH_AES_256_CBC_SHA
