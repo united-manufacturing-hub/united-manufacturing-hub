@@ -109,6 +109,9 @@ spec:
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
 
+            - name: MQTT_PASSWORD
+              value: {{.Values.mqttkafkabridge.mqtt.password | quote}}
+
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           # livenessProbe:

@@ -61,6 +61,9 @@ spec:
           value: {{.Values._000_commonConfig.mqttBridge.localBrokerSSLEnabled | quote}}
         - name: BRIDGE_ONE_WAY
           value: {{.Values._000_commonConfig.mqttBridge.oneWay | quote}}
+        - name: MQTT_PASSWORD
+          value: {{.Values.mqttbridge.mqtt.password | quote}}
+
       volumes:
       - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
         persistentVolumeClaim:
