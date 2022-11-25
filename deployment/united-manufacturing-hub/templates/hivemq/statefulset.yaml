@@ -64,8 +64,7 @@ spec:
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
             - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
-              readOnly: true
-            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/
+            - mountPath: /credentials.xml
               name: hivemqce-rbac-config
               readOnly: true
           ports:
@@ -89,6 +88,10 @@ spec:
               containerPort: 8443
               protocol: TCP
             {{- end}}
+          lifecycle:
+            postStart:
+                exec:
+                    command: ["/bin/sh", "-c", "cp /credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml"]
 
 
 
