@@ -132,7 +132,7 @@ data:
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <heartbeat-extension-configuration>
         <port>9399</port>
-        <host>0.0.0.0</host>
+        <ip>0.0.0.0</ip>
         <metric_path>/heartbeat</metric_path>
     </heartbeat-extension-configuration>
 
