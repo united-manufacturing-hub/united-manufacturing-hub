@@ -65,8 +65,3 @@ dependencies:
     repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
     version: 2.3.0
     condition: _000_commonConfig.infrastructure.kafka.enabled
-
-  - name: hivemq-operator
-    repository: https://hivemq.github.io/helm-charts
-    version: 0.11.9
-    condition: _000_commonConfig.infrastructure.mqtt.hivemq-operator.enabled
