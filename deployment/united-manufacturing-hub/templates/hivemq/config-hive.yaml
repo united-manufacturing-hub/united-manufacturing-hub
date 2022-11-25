@@ -11,12 +11,41 @@ data:
     <?xml version="1.0"?>
     <hivemq xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
         <listeners>
+            {{- if .Values.hivemqce.service.mqtt.enabled}}
             <tcp-listener>
                 <port>1883</port>
                 <bind-address>0.0.0.0</bind-address>
+                <name>hivemq-mqtt</name>
             </tcp-listener>
+            {{- end}}
+            {{- if .Values.hivemqce.service.mqtts.enabled}}
+            <tls-tcp-listener>
+                <port>8883</port>
+                <bind-address>0.0.0.0</bind-address>
+                <name>hivemq-secure-mqtt</name>
+                <tls>
+                    <protocols>
+                        {{range .Values.hivemqce.service.mqtts.tls_versions}}
+                        <protocol>{{.}}</protocol>
+                        {{end}}
+                    </protocols>
+                    <keystore>
+                        <path>/path/to/the/key/store.jks</path>
+                        <password>password-keystore</password>
+                        <private-key-password>password-key</private-key-password>
+                    </keystore>
+                    <cipher-suites>
+                        {{range .Values.hivemqce.service.mqtts.cipher_suites}}
+                        <cipher-suite>{{.}}</cipher-suite>
+                        {{end}}
+                    </cipher-suites>
+                    <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
+                </tls>
+            </tls-tcp-listener>
+            {{- end}}
+            {{- if .Values.hivemqce.service.ws.enabled}}
             <websocket-listener>
-                <port>8000</port>
+                <port>8080</port>
                 <bind-address>0.0.0.0</bind-address>
                 <path>/mqtt</path>
                 <name>hivemq-websocket</name>
@@ -26,6 +55,38 @@ data:
                 </subprotocols>
                 <allow-extensions>true</allow-extensions>
             </websocket-listener>
+            {{- end}}
+            {{- if .Values.hivemqce.service.wss.enabled}}
+            <tls-websocket-listener>
+                <port>8443</port>
+                <bind-address>0.0.0.0</bind-address>
+                <path>/mqtt</path>
+                <name>hivemq-secure-websocket</name>
+                <subprotocols>
+                    <subprotocol>mqttv3.1</subprotocol>
+                    <subprotocol>mqtt</subprotocol>
+                </subprotocols>
+                <allow-extensions>true</allow-extensions>
+                <tls>
+                    <protocols>
+                        {{range .Values.hivemqce.service.wss.tls_versions}}
+                        <protocol>{{.}}</protocol>
+                        {{end}}
+                    </protocols>
+                    <keystore>
+                        <path>/path/to/the/key/store.jks</path>
+                        <password>password-keystore</password>
+                        <private-key-password>password-key</private-key-password>
+                    </keystore>
+                    <cipher-suites>
+                        {{range .Values.hivemqce.service.wss.cipher_suites}}
+                        <cipher-suite>{{.}}</cipher-suite>
+                        {{end}}
+                    </cipher-suites>
+                    <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
+                </tls>
+            </tls-websocket-listener>
+            {{- end}}
         </listeners>
         <persistence>
             <client-session>
