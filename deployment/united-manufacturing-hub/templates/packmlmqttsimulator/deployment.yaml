@@ -24,7 +24,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
-          image: {{.Values.packmlmqttsimulator.image.repository}}@sha256:{{.Values.packmlmqttsimulator.hash}}
+          image: {{.Values.packmlmqttsimulator.image.repository}}@sha256:{{.Values.packmlmqttsimulator.image.hash}}
           imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
           env:
             - name: SITE
@@ -35,6 +35,10 @@ spec:
               value: {{.Values.packmlmqttsimulator.env.productionline}}
             - name: MQTT_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service
+            - name: MQTT_USERNAME
+              value: {{.Values.packmlmqttsimulator.env.mqtt.username}}
+            - name: MQTT_PASSWORD
+              value: {{.Values.packmlmqttsimulator.env.mqtt.password}}
           resources:
             limits:
               cpu: {{.Values.packmlmqttsimulator.resources.limits.cpu}}

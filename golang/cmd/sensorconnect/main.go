@@ -110,7 +110,8 @@ func main() {
 		MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
 		MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
 		podName := os.Getenv("MY_POD_NAME")
-		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName)
+		mqttPassword := os.Getenv("MQTT_PASSWORD")
+		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName, mqttPassword)
 	}
 
 	if useKafka {

@@ -86,10 +86,16 @@ func setupMQTT(
 	subMQTTTopic string,
 	SSLEnabled bool,
 	pg *goque.Queue,
-	subscribeToTopic bool) (MQTTClient MQTT.Client) {
+	subscribeToTopic bool,
+	password string) (MQTTClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+
+	opts.SetUsername("MQTT_BRIDGE")
+	if password != "" {
+		opts.SetPassword(password)
+	}
 
 	if SSLEnabled {
 		tlsconfig := newTLSConfig(mode)

@@ -97,13 +97,16 @@ func SetupMQTT(
 	mqttTopic string,
 	health healthcheck.Handler,
 	podName string,
-	pg *goque.Queue) {
+	pg *goque.Queue, password string) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	opts.SetUsername("MQTT_KAFKA_BRIDGE")
+	if password != "" {
+		opts.SetPassword(password)
+	}
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("MQTT_KAFKA_BRIDGE")
 
 		if mqttTopic == "" {
 			mqttTopic = "$share/MQTT_KAFKA_BRIDGE/ia/#"

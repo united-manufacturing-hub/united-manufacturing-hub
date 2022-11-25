@@ -72,13 +72,17 @@ func ShutdownMQTT() {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) MQTT.Client {
+func SetupMQTT(certificateName string, mqttBrokerURL string, podName string, password string) MQTT.Client {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	opts.SetUsername("FACTORYINPUT")
+	if password != "" {
+		opts.SetPassword(password)
+	}
+
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("FACTORYINPUT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 

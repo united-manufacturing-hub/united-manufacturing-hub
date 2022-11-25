@@ -67,16 +67,20 @@ func onConnectionLost(c MQTT.Client, err error) {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) {
+func SetupMQTT(certificateName string, mqttBrokerURL string, podName string, password string) {
 	if !useMQTT {
 		return
 	}
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	opts.SetUsername("SENSORCONNECT")
+	if password != "" {
+		opts.SetPassword(password)
+	}
+
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("SENSORCONNECT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
