@@ -362,6 +362,8 @@ mqttbridge:
     limits:
       cpu: "200m"
       memory: "100Mi"
+  mqtt:
+    password: INSECURE_INSECURE_INSECURE
 
 ### barcodereader ###
 barcodereader:
@@ -403,6 +405,8 @@ sensorconnect:
     limits:
       cpu: "100m"
       memory: "200Mi"
+  mqtt:
+    password: INSECURE_INSECURE_INSECURE
 
 ### cameraconnect ###
 cameraconnect:
@@ -731,6 +735,8 @@ factoryinsight:
       requests:
         cpu: 50m
         memory: 50Mi
+  mqtt:
+    password: INSECURE_INSECURE_INSECURE
 
 ### factoryinput ###
 factoryinput:
@@ -743,17 +749,6 @@ factoryinput:
     pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
-  pdb:
-    enabled: true
-    minAvailable: 1
-
-### mqtt-to-blob ###
-mqtttoblob:
-  enabled: false
-  image:
-    repository: unitedmanufacturinghub/mqtt-to-blob
-    pullPolicy: IfNotPresent
-  replicas: 1
   pdb:
     enabled: true
     minAvailable: 1
@@ -2211,6 +2206,8 @@ mqttkafkabridge:
   initContainer:
     repository: unitedmanufacturinghub/kafka-init
     pullPolicy: IfNotPresent
+  mqtt:
+    password: INSECURE_INSECURE_INSECURE
 
 ### kafka-to-blob ###
 kafkatoblob:

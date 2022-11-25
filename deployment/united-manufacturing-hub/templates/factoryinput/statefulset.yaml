@@ -86,6 +86,9 @@ spec:
                   name: factoryinput-secret
                   key: password
 
+            - name: MQTT_PASSWORD
+              value: {{.Values.factoryinsight.mqtt.password | quote}}
+
             {{$index := 1}}
             {{range $customerName, $password := .Values.customers | default dict}}
             - name: CUSTOMER_NAME_{{$index}}
