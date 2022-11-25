@@ -87,7 +87,7 @@ spec:
                   key: password
 
             - name: MQTT_PASSWORD
-              value: {{.Values.factoryinsight.mqtt.password | quote}}
+              value: {{.Values.factoryinput.mqtt.password | quote}}
 
             {{$index := 1}}
             {{range $customerName, $password := .Values.customers | default dict}}

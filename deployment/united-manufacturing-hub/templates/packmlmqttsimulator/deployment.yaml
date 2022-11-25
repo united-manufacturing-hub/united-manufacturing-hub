@@ -36,7 +36,7 @@ spec:
             - name: MQTT_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service
             - name: MQTT_USERNAME
-              value: {{.Values.packmlmqttsimulator.env.mqtt.username}}
+              value: PACKMLSIMULATOR
             - name: MQTT_PASSWORD
               value: {{.Values.packmlmqttsimulator.env.mqtt.password}}
           resources:
