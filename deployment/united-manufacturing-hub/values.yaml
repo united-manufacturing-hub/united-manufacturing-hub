@@ -2485,7 +2485,7 @@ hivemqce:
       enabled: true
       port: 1883
     mqtts:
-      enabled: true
+      enabled: false
       port: 8883
       tls_versions:
         - "TLSv1.3"
