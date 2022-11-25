@@ -51,7 +51,7 @@ spec:
             - mountPath: /opt/hivemq/conf # This is a symlink to /opt/hivemq-ce-VERSION/conf
               name: hivemqce-mqtt-config
             - mountPath: /opt/hivemq/conf/data
-              name: {{include "united-manufacturing-hub.fullname" .}}-hivemq-data
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
           ports:
             {{- if .Values.hivemqce.service.mqtt.enabled}}
             - name: mqtt
