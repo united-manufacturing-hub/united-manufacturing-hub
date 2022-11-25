@@ -15,7 +15,7 @@ done
 go install golang.org/x/vuln/cmd/govulncheck@latest
 govulncheck ./...
 
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.1-0.20220903190357-db4955a3bb7e
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 golangci-lint run ./...
 
 cd "$cwd" || exit 1
