@@ -45,12 +45,26 @@ spec:
             - mountPath: /configs
               name: hivemqce-mqtt-config
           ports:
+            {{- if .Values.hivemqce.service.mqtt.enabled}}
             - name: mqtt
               containerPort: 1883
               protocol: TCP
+            {{- end}}
+            {{- if .Values.hivemqce.service.mqtts.enabled}}
             - name: mqtts
               containerPort: 8883
               protocol: TCP
+            {{- end}}
+            {{- if .Values.hivemqce.service.ws.enabled}}
+            - name: ws
+              containerPort: 8080
+              protocol: TCP
+            {{- end}}
+            {{- if .Values.hivemqce.service.wss.enabled}}
+            - name: wss
+              containerPort: 8443
+              protocol: TCP
+            {{- end}}
 
 
 {{end}}

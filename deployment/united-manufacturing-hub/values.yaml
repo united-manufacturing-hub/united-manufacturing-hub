@@ -2459,51 +2459,20 @@ hivemqce:
       cpu: 100m
       memory: 100Mi
   service:
-    annotations:
-      prometheus.io/port: "8888"
-      prometheus.io/scrape: "true"
-    labels: { }
     mqtt:
       enabled: true
-      nodePort: 1883
       port: 1883
     mqtts:
       enabled: true
-      nodePort: 8883
       port: 8883
     type: LoadBalancer
     ws:
       enabled: false
-      nodePort: 8080
       port: 8080
     wss:
       enabled: false
-      nodePort: 8443
       port: 8443
-  serviceMonitor:
-    create: false
-  statefulset:
-    annotations: { }
-    labels: { }
-    lifecycle: { }
-    livenessProbe:
-      failureThreshold: 3
-      initialDelaySeconds: 600
-      periodSeconds: 10
-      successThreshold: 1
-      timeoutSeconds: 5
-    podAnnotations: { }
-    podManagementPolicy: OrderedReady
-    prometheus.io/port: "8888"
-    prometheus.io/scrape: "true"
-    readinessProbe:
-      failureThreshold: 3
-      initialDelaySeconds: 90
-      periodSeconds: 10
-      successThreshold: 1
-      timeoutSeconds: 5
-    terminationGracePeriodSeconds: 60
-    updateStrategy: RollingUpdate
+
 
 ##### CONFIG FOR VERNEMQ #####
 vernemq:

@@ -12,14 +12,30 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 8883
-      targetPort: 8883
-      protocol: TCP
-      name: mqtts
-    - port: 1883
-      targetPort: 1883
+    {{- if .Values.hivemqce.service.mqtt.enabled }}
+    - port: {{ .Values.hivemqce.service.mqtt.port }}
+      targetPort: mqtt
       protocol: TCP
       name: mqtt
+    {{- end }}
+    {{- if .Values.hivemqce.service.mqtts.enabled }}
+    - port: {{ .Values.hivemqce.service.mqtts.port }}
+      targetPort: mqtts
+      protocol: TCP
+      name: mqtts
+    {{- end }}
+    {{- if .Values.hivemqce.service.ws.enabled }}
+    - port: {{ .Values.hivemqce.service.ws.port }}
+      targetPort: ws
+      protocol: TCP
+      name: ws
+    {{- end }}
+    {{- if .Values.hivemqce.service.wss.enabled }}
+    - port: {{ .Values.hivemqce.service.wss.port }}
+      targetPort: wss
+      protocol: TCP
+      name: wss
+    {{- end }}
   selector:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 {{end}}
