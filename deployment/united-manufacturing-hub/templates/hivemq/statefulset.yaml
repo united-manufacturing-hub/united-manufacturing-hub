@@ -119,7 +119,7 @@ spec:
                     command: [
                       "/bin/sh",
                       "-c",
-                      "cp /configs/credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml && cp /configs/heartbeat.xml  /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
+                      "cp /configs/credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml && cp /configs/heartbeat.xml  /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.properties /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
                     ]
 
 {{end}}
