@@ -64,7 +64,7 @@ spec:
               value: PRODUCTION
 
             - name: BROKER_URL
-              value: tcp://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+              value: tcp://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
 
             - name: MY_POD_NAME
               valueFrom:
