@@ -48,7 +48,7 @@ dependencies:
 
   - name: timescaledb-single
     version: 0.10.0
-    repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+    repository: https://charts.timescale.com/
     condition: _000_commonConfig.datastorage.enabled
 
   - name: operator
