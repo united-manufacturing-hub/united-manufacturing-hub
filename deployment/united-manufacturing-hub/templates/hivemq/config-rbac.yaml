@@ -5,7 +5,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-rbac
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extension
 data:
   # https://github.com/hivemq/hivemq-file-rbac-extension
   credentials.xml: |
@@ -116,5 +116,25 @@ data:
             </role>
         </roles>
     </file-rbac>
+
+
+  heartbeat.xml: |
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <heartbeat-extension-configuration>
+        <port>9090</port>
+        <bind-address>0.0.0.0</bind-address>
+        <path>/heartbeat</path>
+    </heartbeat-extension-configuration>
+
+
+
+  prometheus.xml: |
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <heartbeat-extension-configuration>
+        <port>9399</port>
+        <host>0.0.0.0</host>
+        <metric_path>/heartbeat</metric_path>
+    </heartbeat-extension-configuration>
+
 
 {{end}}
