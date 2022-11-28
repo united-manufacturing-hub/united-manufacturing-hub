@@ -5,7 +5,7 @@ import (
 )
 
 /*
-	only works with functioning test device on correct ip: http://192.168.10.17
+only works with functioning test device on correct ip: http://192.168.10.17
 
 	func TestGetPortModeMap(t *testing.T) {
 		var deviceInfo DiscoveredDeviceInformation

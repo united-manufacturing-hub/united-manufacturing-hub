@@ -5,15 +5,17 @@ import (
 	"testing"
 )
 
-/* Test ist dependant on pysical testing environment with device with ip inside of the specified ipRange
-func TestDiscoverDevices(t *testing.T) {
-	ipRange := "192.168.10.17/32" //CIDR Notation
-	discoveredDeviceInformation, err := DiscoverDevices(ipRange)
-	if err != nil {
-		t.Error(err)
+/*
+Test ist dependant on pysical testing environment with device with ip inside of the specified ipRange
+
+	func TestDiscoverDevices(t *testing.T) {
+		ipRange := "192.168.10.17/32" //CIDR Notation
+		discoveredDeviceInformation, err := DiscoverDevices(ipRange)
+		if err != nil {
+			t.Error(err)
+		}
+		fmt.Println(discoveredDeviceInformation)
 	}
-	fmt.Println(discoveredDeviceInformation)
-}
 */
 func TestConvertCidrToIpRange(t *testing.T) {
 	cidr := "10.0.0.0/24"

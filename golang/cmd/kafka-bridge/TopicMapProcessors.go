@@ -64,25 +64,25 @@ func CreateTopicMapElementProcessor(
 	if element.Bidirectional {
 		var localConsumer, err = kafka.NewConsumer(&localConfigMap)
 		if err != nil {
-			zap.S().Fatalf("Failed to create localConsumer: %v for element %v", err, element)))
+			zap.S().Fatalf("Failed to create localConsumer: %v for element %v", err, element)
 		}
 
 		var localProducer *kafka.Producer
 		localProducer, err = kafka.NewProducer(&localConfigMap)
 		if err != nil {
-			zap.S().Fatalf("Failed to create localProducer: %v for element %v", err, element)))
+			zap.S().Fatalf("Failed to create localProducer: %v for element %v", err, element)
 		}
 
 		var remoteConsumer *kafka.Consumer
 		remoteConsumer, err = kafka.NewConsumer(&remoteConfigMap)
 		if err != nil {
-			zap.S().Fatalf("Failed to create localConsumer: %v for element %v", err, element)))
+			zap.S().Fatalf("Failed to create localConsumer: %v for element %v", err, element)
 		}
 
 		var remoteProducer *kafka.Producer
 		remoteProducer, err = kafka.NewProducer(&remoteConfigMap)
 		if err != nil {
-			zap.S().Fatalf("Failed to create localProducer: %v for element %v", err, element)))
+			zap.S().Fatalf("Failed to create localProducer: %v for element %v", err, element)
 		}
 
 		localMsgChan := make(chan *kafka.Message, 100)
@@ -131,32 +131,32 @@ func CreateTopicMapElementProcessor(
 		if element.SendDirection == ToLocal {
 			consumer, err = kafka.NewConsumer(&remoteConfigMap)
 			if err != nil {
-				zap.S().Fatalf("Failed to create consumer: %v for element %v", err, element)))
+				zap.S().Fatalf("Failed to create consumer: %v for element %v", err, element)
 			}
 			putBackProducer, err = kafka.NewProducer(&remoteConfigMap)
 			if err != nil {
-				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 			producer, err = kafka.NewProducer(&localConfigMap)
 			if err != nil {
-				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 
 		} else if element.SendDirection == ToRemote {
 			consumer, err = kafka.NewConsumer(&localConfigMap)
 			if err != nil {
-				zap.S().Fatalf("Failed to create consumer: %v for element %v", err, element)))
+				zap.S().Fatalf("Failed to create consumer: %v for element %v", err, element)
 			}
 			putBackProducer, err = kafka.NewProducer(&localConfigMap)
 			if err != nil {
-				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 			producer, err = kafka.NewProducer(&remoteConfigMap)
 			if err != nil {
-				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 		} else {
-			zap.S().Fatalf("Invalid send direction %v for element %v", element.SendDirection, element)))
+			zap.S().Fatalf("Invalid send direction %v for element %v", element.SendDirection, element)
 		}
 
 		msgChan := make(chan *kafka.Message, 100)
