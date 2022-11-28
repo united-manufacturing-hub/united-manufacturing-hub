@@ -21,13 +21,13 @@ func newTLSConfig() *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/mqtt/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/tls.crt", "/SSL_certs/tls.key")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/tls.crt", "/SSL_certs/mqtt/tls.key")
 	if err != nil {
 		panic(err)
 	}
@@ -39,7 +39,6 @@ func newTLSConfig() *tls.Config {
 	}
 
 	// Create tls.Config with desired tls properties
-	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -51,7 +50,7 @@ func newTLSConfig() *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: false,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
 	}

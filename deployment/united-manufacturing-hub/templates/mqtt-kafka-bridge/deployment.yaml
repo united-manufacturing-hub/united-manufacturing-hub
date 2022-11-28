@@ -74,15 +74,19 @@ spec:
             failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
 
           volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
-              mountPath: /SSL_certs
+            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-certificates
+              mountPath: /SSL_certs/kafka
               readOnly: true
           env:
             - name: MQTT_BROKER_URL
               value: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
 
             - name: MQTT_CERTIFICATE_NAME
+              {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+              value: "USE_TLS"
+              {{- else}}
               value: "NO_CERT"
+              {{- end}}
 
             - name: MQTT_TOPIC
               value: "ia/#"
@@ -132,17 +136,23 @@ spec:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
-            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
-              mountPath: /SSL_certs
+            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-certificates
+              mountPath: /SSL_certs/kafka
+              readOnly: true
+            - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-mqtt-certificates
+              mountPath: /SSL_certs/mqtt
               readOnly: true
 
       volumes:
         - name: kubernetes-ca
           configMap:
             name: kube-root-ca.crt
-        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-certificates
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-certificates
           secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-secrets
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-secrets
+        - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-mqtt-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-mqtt-secrets
 
       serviceAccountName: ""
       restartPolicy: Always

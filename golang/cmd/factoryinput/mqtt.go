@@ -18,13 +18,15 @@ func newTLSConfig(certificateName string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/intermediate_CA.pem")
+	pemCerts, err := os.ReadFile("/SSL_certs/kafka/intermediate_CA.pem")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/"+certificateName+".pem", "/SSL_certs/"+certificateName+"-privkey.pem")
+	cert, err := tls.LoadX509KeyPair(
+		"/SSL_certs/kafka/"+certificateName+".pem",
+		"/SSL_certs/kafka/"+certificateName+"-privkey.pem")
 	if err != nil {
 		panic(err)
 	}

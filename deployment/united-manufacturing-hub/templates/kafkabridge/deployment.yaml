@@ -39,10 +39,10 @@ spec:
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
-              mountPath: /SSL_certs/local
+              mountPath: /SSL_certs/kafka/local
               readOnly: true
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
-              mountPath: /SSL_certs/remote
+              mountPath: /SSL_certs/kafka/remote
               readOnly: true
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
@@ -65,10 +65,10 @@ spec:
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
-              mountPath: /SSL_certs/local
+              mountPath: /SSL_certs/kafka/local
               readOnly: true
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
-              mountPath: /SSL_certs/remote
+              mountPath: /SSL_certs/kafka/remote
               readOnly: true
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
@@ -118,10 +118,10 @@ spec:
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
-              mountPath: /SSL_certs/local
+              mountPath: /SSL_certs/kafka/local
               readOnly: true
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
-              mountPath: /SSL_certs/remote
+              mountPath: /SSL_certs/kafka/remote
               readOnly: true
       volumes:
         - name: kubernetes-ca
