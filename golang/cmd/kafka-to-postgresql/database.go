@@ -53,7 +53,7 @@ func SetupDB(
 	var ok bool
 	var perr error
 	if ok, perr = IsPostgresSQLAvailable(); !ok {
-		zap.S().Fatalf("Postgres not yet available: %s", perr)))
+		zap.S().Fatalf("Postgres not yet available: %s", perr)
 	}
 
 	db.SetMaxOpenConns(20)

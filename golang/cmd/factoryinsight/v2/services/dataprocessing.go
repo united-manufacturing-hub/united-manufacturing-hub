@@ -374,7 +374,7 @@ func CalculatateLowSpeedStates(
 				lastState = datamodel.ProducingAtFullSpeedState
 				processedStateArray = append(processedStateArray, fullRow)
 			}
-		} else {                                                     // if this minute is "LowSpeed"
+		} else { // if this minute is "LowSpeed"
 			if !datamodel.IsProducingLowerThanFullSpeed(lastState) { // if the state is not already LowSpeed, create new state
 				fullRow := datamodel.StateEntry{
 					State:     datamodel.ProducingAtLowerThanFullSpeedState,
@@ -2077,7 +2077,7 @@ func CalculateAccumulatedProducts(
 			timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
 			product, ok := productCache[productId]
 			if !ok {
-				zap.S().Fatalf("Product %d not found", productId)))
+				zap.S().Fatalf("Product %d not found", productId)
 			}
 
 			expectedProducedFromCurrentOrder = timeSinceStartInMilliSec / int64(product.TimePerProductUnitInSec*1000)
@@ -2090,7 +2090,7 @@ func CalculateAccumulatedProducts(
 			timeSinceStartInMilliSec := i - insideOrder.BeginTimeStamp.UnixMilli()
 			product, ok := productCache[insideOrder.ProductId]
 			if !ok {
-				zap.S().Fatalf("Product %d not found", productId)))
+				zap.S().Fatalf("Product %d not found", productId)
 			}
 
 			expectedProducedFromCurrentOrder += timeSinceStartInMilliSec / int64(product.TimePerProductUnitInSec*1000)

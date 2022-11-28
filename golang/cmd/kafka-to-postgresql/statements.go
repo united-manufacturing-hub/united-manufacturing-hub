@@ -301,11 +301,11 @@ func NewStatementRegistry() *StatementRegistry {
 
 func prep(query string) *sql.Stmt {
 	if db == nil {
-		zap.S().Fatal
+		zap.S().Fatal("db is nil")
 	}
 	prepare, err := db.Prepare(query)
 	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement: %s (%s)", query, err.Error)()))
+		zap.S().Fatalf("Failed to prepare statement: %s (%s)", query, err.Error)
 	}
 	return prepare
 }

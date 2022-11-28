@@ -63,7 +63,7 @@ func onConnect(c MQTT.Client) {
 // onConnectionLost outputs warn message
 func onConnectionLost(c MQTT.Client, err error) {
 	optionsReader := c.OptionsReader()
-	zap.S().Fatalf("Connection to MQTT broker lost, restarting ! %#v", optionsReader)))
+	zap.S().Fatalf("Connection to MQTT broker lost, restarting ! %#v", optionsReader)
 }
 
 // SetupMQTT setups MQTT and connect to the broker
