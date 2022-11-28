@@ -34,6 +34,12 @@ spec:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-extensions
+        {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
+            optional: false
+        {{- end}}
       initContainers:
         - name: hivemqce-extension-init
           image: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.repository}}:{{.Values.hivemqce.initContainer.hivemqextensioninit.image.tag}}
@@ -67,6 +73,11 @@ spec:
             - mountPath: /configs
               name: hivemqce-extension-config
               readOnly: true
+            {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
+            - mountPath: /keystore.jks
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
+              readOnly: true
+            {{- end}}
           livenessProbe:
             httpGet:
               port: 9090

@@ -30,9 +30,9 @@ data:
                         {{end}}
                     </protocols>
                     <keystore>
-                        <path>/path/to/the/key/store.jks</path>
-                        <password>password-keystore</password>
-                        <private-key-password>password-key</private-key-password>
+                        <path>/keystore.jks</path>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
+                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
                     </keystore>
                     <cipher-suites>
                         {{range .Values.hivemqce.service.mqtts.cipher_suites}}
@@ -74,9 +74,9 @@ data:
                         {{end}}
                     </protocols>
                     <keystore>
-                        <path>/path/to/the/key/store.jks</path>
-                        <password>password-keystore</password>
-                        <private-key-password>password-key</private-key-password>
+                        <path>/keystore.jks</path>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
+                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
                     </keystore>
                     <cipher-suites>
                         {{range .Values.hivemqce.service.wss.cipher_suites}}
