@@ -29,7 +29,7 @@ spec:
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
           mountPath: /data/queue
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-certificates
-          mountPath: /SSL_certs/remote
+          mountPath: /SSL_certs/kafka/remote
           readOnly: true
         resources:
           limits:

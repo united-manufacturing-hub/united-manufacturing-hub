@@ -43,7 +43,7 @@ spec:
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
-              mountPath: /SSL_certs
+              mountPath: /SSL_certs/kafka
               readOnly: true
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
@@ -67,7 +67,7 @@ spec:
           imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
-              mountPath: /SSL_certs
+              mountPath: /SSL_certs/kafka
               readOnly: true
           ports:
             - name: metrics

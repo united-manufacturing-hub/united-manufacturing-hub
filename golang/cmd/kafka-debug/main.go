@@ -47,15 +47,15 @@ func main() {
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/tls.key")
+		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
 			panic("SSL key file not found")
 		}
-		_, err = os.Open("/SSL_certs/tls.crt")
+		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
 			panic("SSL cert file not found")
 		}
-		_, err = os.Open("/SSL_certs/ca.crt")
+		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
 			panic("SSL CA cert file not found")
 		}
@@ -64,10 +64,10 @@ func main() {
 	internal.SetupKafka(
 		kafka.ConfigMap{
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"group.id":                 "kafka-debug",
 			"metadata.max.age.ms":      180000,

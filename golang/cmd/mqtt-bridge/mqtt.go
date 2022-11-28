@@ -16,13 +16,13 @@ func newTLSConfig(mode string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/" + mode + "/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/kafka/" + mode + "/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/"+mode+"/tls.crt", "/SSL_certs/"+mode+"/tls.key")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/kafka/"+mode+"/tls.crt", "/SSL_certs/kafka/"+mode+"/tls.key")
 	if err != nil {
 		panic(err)
 	}

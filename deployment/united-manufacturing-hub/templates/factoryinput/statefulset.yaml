@@ -102,7 +102,7 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-data
               mountPath: /data
               # - name: secret-volume
-              #   mountPath: /SSL_certs
+              #   mountPath: /SSL_certs/kafka
 
 
           livenessProbe:

@@ -54,7 +54,7 @@ spec:
 
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates
-              mountPath: /SSL_certs
+              mountPath: /SSL_certs/kafka
               readOnly: true
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
