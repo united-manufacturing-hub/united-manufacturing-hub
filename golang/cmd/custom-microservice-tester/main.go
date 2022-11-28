@@ -18,7 +18,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}(log)
 
@@ -40,7 +40,7 @@ func main() {
 		zap.S().Debugf("Creating hello-world file")
 		err := os.WriteFile("/data/hello-world", []byte("Hello World"), 0600)
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	} else {
 		zap.S().Debugf("hello-world file exists")

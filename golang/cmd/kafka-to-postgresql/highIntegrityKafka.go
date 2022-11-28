@@ -25,17 +25,17 @@ func SetupHIKafka(configMap kafka.ConfigMap) {
 	var err error
 	HIKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	HIKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	HIKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 }
@@ -46,7 +46,7 @@ func CloseHIKafka() {
 	zap.S().Infof("[HI]Closing Kafka Consumer")
 
 	if err := HIKafkaConsumer.Close(); err != nil {
-		panic("Failed do close HIKafkaConsumer client !")
+		zap.S().Fatal
 	}
 
 	zap.S().Infof("[HI]Closing Kafka Producer")

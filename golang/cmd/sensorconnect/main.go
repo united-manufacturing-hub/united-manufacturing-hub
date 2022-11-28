@@ -65,7 +65,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}(log)
 
@@ -134,7 +134,7 @@ func main() {
 		if subTwentyMs {
 			zap.S().Warnf("Going under 20MS is not recommendet with IFM IO-Link Masters")
 		} else {
-			panic("LOWER_POLLING_TIME under 20 can IFM IO-Link Master failures, set SUB_TWENTY_MS to 1 to continue !")
+			zap.S().Fatal
 		}
 	}
 
@@ -189,7 +189,7 @@ func main() {
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
-		panic("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_TIME_SEC")
+		zap.S().Fatal
 	}
 
 	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)

@@ -31,17 +31,17 @@ func SetupActivityKafka(configMap kafka.ConfigMap) {
 	var err error
 	ActivityKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	ActivityKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	ActivityKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 }
@@ -54,7 +54,7 @@ func CloseActivityKafka() {
 	zap.S().Infof("[Activity]Closing Kafka Consumer")
 	err := ActivityKafkaConsumer.Close()
 	if err != nil {
-		panic("Failed do close ActivityKafkaConsumer client !")
+		zap.S().Fatal
 	}
 
 	zap.S().Infof("[Activity]Closing Kafka Producer")
@@ -110,7 +110,11 @@ func startActivityProcessor() {
 			continue
 		}
 
-		stateTopic := fmt.Sprintf("ia.%s.%s.%s.state", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
+		stateTopic := fmt.Sprintf(
+			"ia.%s.%s.%s.state",
+			parsedMessage.CustomerId,
+			parsedMessage.Location,
+			parsedMessage.AssetId)
 		msgS := &kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &stateTopic, Partition: kafka.PartitionAny},
 			Value:          jsonStateMessage,

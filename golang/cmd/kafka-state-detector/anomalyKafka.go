@@ -31,17 +31,17 @@ func SetupAnomalyKafka(configMap kafka.ConfigMap) {
 	var err error
 	AnomalyKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	AnomalyKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	AnomalyKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 }
@@ -54,7 +54,7 @@ func CloseAnomalyKafka() {
 	zap.S().Infof("[Anomaly]Closing Kafka Consumer")
 	err := AnomalyKafkaConsumer.Close()
 	if err != nil {
-		panic("Failed do close AnomalyKafkaConsumer client !")
+		zap.S().Fatal
 	}
 
 	zap.S().Infof("[Anomaly]Closing Kafka Producer")
@@ -110,7 +110,9 @@ func startAnomalyActivityProcessor() {
 
 				stateNumber := datamodel.GetStateFromString(detectedAnomalyMessage.DetectedAnomaly)
 				if stateNumber == 0 {
-					zap.S().Errorf("[AN] Failed to get state number from string: %s", detectedAnomalyMessage.DetectedAnomaly)
+					zap.S().Errorf(
+						"[AN] Failed to get state number from string: %s",
+						detectedAnomalyMessage.DetectedAnomaly)
 					continue
 				}
 
@@ -121,7 +123,11 @@ func startAnomalyActivityProcessor() {
 					continue
 				}
 
-				stateTopic := fmt.Sprintf("ia.%s.%s.%s.state", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId)
+				stateTopic := fmt.Sprintf(
+					"ia.%s.%s.%s.state",
+					parsedMessage.CustomerId,
+					parsedMessage.Location,
+					parsedMessage.AssetId)
 
 				msgS := &kafka.Message{
 					TopicPartition: kafka.TopicPartition{Topic: &stateTopic, Partition: kafka.PartitionAny},
