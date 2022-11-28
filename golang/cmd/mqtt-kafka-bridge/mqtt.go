@@ -31,7 +31,13 @@ func newTLSConfig() *tls.Config {
 	// Import client certificate/key pair
 	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/tls.crt", "/SSL_certs/mqtt/tls.key")
 	if err != nil {
-		zap.S().Fatalf("Error reading client certificate: %s", err)
+		// Read /SSL_certs/mqtt/tls.crt
+		var file []byte
+		file, err = os.ReadFile("/SSL_certs/mqtt/tls.crt")
+		if err != nil {
+			zap.S().Errorf("Error reading client certificate: %s", err)
+		}
+		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
 	}
 
 	// Just to print out the client certificate..
