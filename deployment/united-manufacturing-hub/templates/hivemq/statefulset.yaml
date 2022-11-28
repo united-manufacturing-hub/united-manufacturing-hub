@@ -74,7 +74,7 @@ spec:
               name: hivemqce-extension-config
               readOnly: true
             {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
-            - mountPath: /keystore.jks
+            - mountPath: /stores
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
               readOnly: true
             {{- end}}
