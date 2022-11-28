@@ -34,6 +34,7 @@ data:
                         <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
                         <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
                     </keystore>
+                    <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
                         {{range .Values.hivemqce.service.mqtts.cipher_suites}}
                         <cipher-suite>{{.}}</cipher-suite>
@@ -78,6 +79,7 @@ data:
                         <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
                         <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
                     </keystore>
+                    <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
                         {{range .Values.hivemqce.service.wss.cipher_suites}}
                         <cipher-suite>{{.}}</cipher-suite>
