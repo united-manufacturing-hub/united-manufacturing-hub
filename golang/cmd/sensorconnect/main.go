@@ -134,7 +134,7 @@ func main() {
 		if subTwentyMs {
 			zap.S().Warnf("Going under 20MS is not recommendet with IFM IO-Link Masters")
 		} else {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 	}
 
@@ -189,7 +189,7 @@ func main() {
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)

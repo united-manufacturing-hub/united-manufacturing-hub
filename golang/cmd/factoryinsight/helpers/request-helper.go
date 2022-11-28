@@ -14,7 +14,7 @@ import (
 
 func HandleInternalServerError(c *gin.Context, err error) {
 	if c == nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 	if err == nil {
 		err = errors.New("unknown error")
@@ -57,7 +57,7 @@ func HandleInternalServerError(c *gin.Context, err error) {
 
 func HandleTypeNotFound(c *gin.Context, t any) {
 	if c == nil {
-		zap.S().Fatal
+		zap.S().Fatal("context is nil")
 	}
 
 	zap.S().Errorw(
@@ -80,7 +80,7 @@ func HandleTypeNotFound(c *gin.Context, t any) {
 
 func HandleInvalidInputError(c *gin.Context, err error) {
 	if c == nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 	if err == nil {
 		err = errors.New("unknown error")

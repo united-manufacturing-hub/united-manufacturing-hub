@@ -38,7 +38,7 @@ func CloseHTKafka() {
 	zap.S().Infof("[HT]Closing Kafka Consumer")
 
 	if err := HTKafkaConsumer.Close(); err != nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	zap.S().Infof("[HT]Closing Kafka Producer")

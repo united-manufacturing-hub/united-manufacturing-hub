@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go.uber.org/zap"
 	"net"
 	"net/http"
 	"sync"
@@ -29,7 +30,7 @@ func GetHTTPClient(url string) (client http.Client) {
 	var ok bool
 	client, ok = rawClient.(http.Client)
 	if !ok {
-		zap.S().Fatal
+		zap.S().Fatal("Failed to cast http.Client")
 	}
 	return
 }
