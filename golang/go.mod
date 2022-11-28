@@ -15,7 +15,6 @@ require (
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6
-	github.com/hashicorp/golang-lru v0.5.1
 	github.com/heptiolabs/healthcheck v0.0.0-20211123025425-613501dd5deb
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.7
