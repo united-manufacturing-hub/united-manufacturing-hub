@@ -35,7 +35,7 @@ spec:
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-extensions
         {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
-        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-keystores
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
             optional: false
@@ -75,7 +75,7 @@ spec:
               readOnly: true
             {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
             - mountPath: /stores
-              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-keystores
               readOnly: true
             {{- end}}
           livenessProbe:
