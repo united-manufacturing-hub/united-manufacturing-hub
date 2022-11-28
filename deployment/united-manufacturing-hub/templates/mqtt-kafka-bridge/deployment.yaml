@@ -1,5 +1,5 @@
 ---
-{{if or .Values.mqttkafkabridge.enabled .Values._000_commonConfig.infrastructure.kafka.enabled}}
+{{if or .Values.mqttkafkabridge.enabled (and .Values._000_commonConfig.infrastructure.mqtt.enabled .Values._000_commonConfig.infrastructure.kafka.enabled)}}
 
 apiVersion: apps/v1
 kind: Deployment
