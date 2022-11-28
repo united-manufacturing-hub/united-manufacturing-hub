@@ -24,7 +24,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}(log)
 	zap.S().Infof("This is kafka-init build date: %s", buildtime)
@@ -53,15 +53,15 @@ func main() {
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatal
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatal
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatal
 		}
 	} else {
 		zap.S().Infof("Using plaintext")

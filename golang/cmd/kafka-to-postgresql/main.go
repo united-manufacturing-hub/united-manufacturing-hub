@@ -28,7 +28,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}(log)
 
@@ -91,7 +91,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	if KafkaBoostrapServer == "" {
-		panic("KAFKA_BOOTSTRAP_SERVER not set")
+		zap.S().Fatal
 	}
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
@@ -103,15 +103,15 @@ func main() {
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatal
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatal
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatal
 		}
 	}
 

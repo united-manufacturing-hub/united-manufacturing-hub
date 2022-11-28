@@ -33,7 +33,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}(log)
 
@@ -80,7 +80,7 @@ func main() {
 			})
 		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 
 		go internal.StartEventHandler("barcodereader", internal.KafkaProducer.Events(), nil)

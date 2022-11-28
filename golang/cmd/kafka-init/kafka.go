@@ -13,7 +13,7 @@ func initKafkaTopics(topics string) {
 	for _, topic := range topiclist {
 		err := internal.CreateTopicIfNotExists(topic)
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}
 }

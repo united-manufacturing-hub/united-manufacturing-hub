@@ -25,7 +25,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}(log)
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
@@ -75,7 +75,7 @@ func main() {
 		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}()
 

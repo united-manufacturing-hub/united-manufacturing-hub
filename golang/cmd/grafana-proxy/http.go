@@ -54,7 +54,7 @@ func SetupRestAPI() {
 
 	err := router.Run(":80")
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 }
 

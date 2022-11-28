@@ -18,7 +18,13 @@ var (
 )
 
 // Connect setups the Db and stores the handler in a global variable in database.go
-func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, gracefulShutdownChannel chan os.Signal) {
+func Connect(
+	PQUser string,
+	PQPassword string,
+	PWDBName string,
+	PQHost string,
+	PQPort int,
+	gracefulShutdownChannel chan os.Signal) {
 
 	GracefulShutdownChannel = gracefulShutdownChannel
 
@@ -32,7 +38,7 @@ func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	var err error
 	Db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	Mutex = mapmutex.NewCustomizedMapMutex(
@@ -46,7 +52,7 @@ func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 // Shutdown closes all database connections
 func Shutdown() {
 	if err := Db.Close(); err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 }
 

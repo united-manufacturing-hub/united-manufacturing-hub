@@ -29,7 +29,7 @@ func GetHTTPClient(url string) (client http.Client) {
 	var ok bool
 	client, ok = rawClient.(http.Client)
 	if !ok {
-		panic("Invalid type in client pool")
+		zap.S().Fatal
 	}
 	return
 }

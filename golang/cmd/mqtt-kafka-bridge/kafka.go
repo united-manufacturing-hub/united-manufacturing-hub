@@ -58,7 +58,7 @@ func processIncomingMessages() {
 func kafkaToQueue(topic string) {
 	err := internal.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	stuck := 0

@@ -8,29 +8,36 @@ import (
 	"time"
 )
 
-func setupMinio(MinioUrl string, MinioAccessKey string, MinioSecretKey string, MinioSecure bool, MinioBucketName string) (mioClient *minio.Client) {
+func setupMinio(
+	MinioUrl string,
+	MinioAccessKey string,
+	MinioSecretKey string,
+	MinioSecure bool,
+	MinioBucketName string) (mioClient *minio.Client) {
 	if !MinioSecure {
 		zap.S().Warnf("Minio is not running in secure mode !")
 	}
-	mioClient, err := minio.New(MinioUrl, &minio.Options{
-		Creds:  credentials.NewStaticV4(MinioAccessKey, MinioSecretKey, ""),
-		Secure: MinioSecure,
-	})
+	mioClient, err := minio.New(
+		MinioUrl, &minio.Options{
+			Creds:  credentials.NewStaticV4(MinioAccessKey, MinioSecretKey, ""),
+			Secure: MinioSecure,
+		})
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	bucketExists, err := mioClient.BucketExists(context.Background(), MinioBucketName)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 	if !bucketExists {
-		err := mioClient.MakeBucket(context.Background(), MinioBucketName, minio.MakeBucketOptions{
-			ObjectLocking: false,
-		})
+		err := mioClient.MakeBucket(
+			context.Background(), MinioBucketName, minio.MakeBucketOptions{
+				ObjectLocking: false,
+			})
 		if err != nil {
 			zap.S().Errorf("Bucket '%s' does not exist and failed to create !", MinioBucketName)
-			panic(err)
+			zap.S().Fatalf("Error: %s", err)
 		}
 	}
 	return

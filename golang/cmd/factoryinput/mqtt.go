@@ -28,13 +28,13 @@ func newTLSConfig(certificateName string) *tls.Config {
 		"/SSL_certs/kafka/"+certificateName+".pem",
 		"/SSL_certs/kafka/"+certificateName+"-privkey.pem")
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties

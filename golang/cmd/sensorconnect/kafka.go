@@ -29,7 +29,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	err := internal.CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
-		panic("Failed to create topic, restarting")
+		zap.S().Fatal
 	}
 
 	err = kafkaProducerClient.Produce(
@@ -58,15 +58,15 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatal
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatal
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatal
 		}
 	}
 	configMap := kafka.ConfigMap{
@@ -81,12 +81,12 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 	producer, err := kafka.NewProducer(&configMap)
 
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	adminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	internal.KafkaProducer = producer

@@ -24,13 +24,13 @@ func newTLSConfig(mode string) *tls.Config {
 	// Import client certificate/key pair
 	cert, err := tls.LoadX509KeyPair("/SSL_certs/kafka/"+mode+"/tls.crt", "/SSL_certs/kafka/"+mode+"/tls.key")
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties

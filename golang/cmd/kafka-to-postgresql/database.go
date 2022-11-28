@@ -41,7 +41,7 @@ func SetupDB(
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	if dryRun == "True" || dryRun == "true" {
@@ -53,7 +53,7 @@ func SetupDB(
 	var ok bool
 	var perr error
 	if ok, perr = IsPostgresSQLAvailable(); !ok {
-		panic(fmt.Sprintf("Postgres not yet available: %s", perr))
+		zap.S().Fatalf("Postgres not yet available: %s", perr)))
 	}
 
 	db.SetMaxOpenConns(20)
@@ -89,7 +89,7 @@ func ShutdownDB() {
 	zap.S().Infof("Closing database connection")
 
 	if err := db.Close(); err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 }
 

@@ -18,17 +18,17 @@ func SetupHTKafka(configMap kafka.ConfigMap) {
 	var err error
 	HTKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	HTKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	HTKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 }
@@ -38,7 +38,7 @@ func CloseHTKafka() {
 	zap.S().Infof("[HT]Closing Kafka Consumer")
 
 	if err := HTKafkaConsumer.Close(); err != nil {
-		panic("Failed do close HTKafkaConsumer client !")
+		zap.S().Fatal
 	}
 
 	zap.S().Infof("[HT]Closing Kafka Producer")

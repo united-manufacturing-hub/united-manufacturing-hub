@@ -23,17 +23,17 @@ func SetupKafka(configMap kafka.ConfigMap) {
 	var err error
 	KafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	KafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	KafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 	zap.S().Debugf("KafkaConsumer: %+v", KafkaConsumer)
 	zap.S().Debugf("KafkaProducer: %+v", KafkaProducer)
@@ -48,12 +48,12 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 	var err error
 	KafkaTopicProbeConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	err = KafkaTopicProbeConsumer.Subscribe(probeTopicName, nil)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	zap.S().Debugf("KafkaTopicProbeConsumer: %+v", KafkaTopicProbeConsumer)
@@ -62,7 +62,7 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 func CloseKafka() {
 
 	if err := KafkaConsumer.Close(); err != nil {
-		panic("Failed do close KafkaConsumer client !")
+		zap.S().Fatal
 	}
 
 	KafkaProducer.Flush(100)
@@ -74,7 +74,7 @@ func CloseKafka() {
 func CloseKafkaTopicProbeConsumer() {
 	err := KafkaTopicProbeConsumer.Close()
 	if err != nil {
-		panic("Failed do close KafkaTopicProbeConsumer client !")
+		zap.S().Fatal
 	}
 }
 

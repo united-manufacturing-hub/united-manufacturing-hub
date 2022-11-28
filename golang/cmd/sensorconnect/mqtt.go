@@ -26,13 +26,13 @@ func newTLSConfig() *tls.Config {
 	// Import client certificate/key pair
 	cert, err := tls.LoadX509KeyPair("/SSL_certs/kafka/tls.crt", "/SSL_certs/kafka/tls.key")
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties
@@ -63,7 +63,7 @@ func onConnect(c MQTT.Client) {
 // onConnectionLost outputs warn message
 func onConnectionLost(c MQTT.Client, err error) {
 	optionsReader := c.OptionsReader()
-	panic(fmt.Sprintf("Connection to MQTT broker lost, restarting ! %#v", optionsReader))
+	zap.S().Fatalf("Connection to MQTT broker lost, restarting ! %#v", optionsReader)))
 }
 
 // SetupMQTT setups MQTT and connect to the broker

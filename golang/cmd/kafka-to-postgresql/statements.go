@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"go.uber.org/zap"
 )
 
@@ -302,11 +301,11 @@ func NewStatementRegistry() *StatementRegistry {
 
 func prep(query string) *sql.Stmt {
 	if db == nil {
-		panic("Attempting to prepare statement before opening database !")
+		zap.S().Fatal
 	}
 	prepare, err := db.Prepare(query)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to prepare statement: %s (%s)", query, err.Error()))
+		zap.S().Fatalf("Failed to prepare statement: %s (%s)", query, err.Error)()))
 	}
 	return prepare
 }
