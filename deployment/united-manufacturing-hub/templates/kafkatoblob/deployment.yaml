@@ -83,7 +83,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.kafkatoblob.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatoblob.sslKeyPassword | quote}}
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:

@@ -111,7 +111,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.sensorconnect.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.sensorconnect.sslKeyPassword | quote}}
             - name: MQTT_PASSWORD
               value: {{.Values.sensorconnect.mqtt.password | quote}}
 

@@ -31,12 +31,12 @@ data:
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
-                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.keystorePassword}}</password>
+                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.privateKeyPassword}}</private-key-password>
                     </keystore>
                     <truststore>
                         <path>/stores/truststore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.truststorePassword}}</password>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.truststorePassword}}</password>
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
@@ -80,12 +80,12 @@ data:
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
-                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.keystorePassword}}</password>
+                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.privateKeyPassword}}</private-key-password>
                     </keystore>
                     <truststore>
                         <path>/stores/truststore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.truststorePassword}}</password>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.truststorePassword}}</password>
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>

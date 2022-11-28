@@ -50,7 +50,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.mqttkafkabridge.sslKeyPassword | quote}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
           {{if .Values.mqttkafkabridge.image.tag}}
@@ -107,7 +107,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.mqttkafkabridge.sslKeyPassword | quote}}
 
             - name: MQTT_PASSWORD
               value: {{.Values.mqttkafkabridge.mqtt.password | quote}}
