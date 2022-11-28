@@ -74,7 +74,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.kafkastatedetector.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkastatedetector.sslKeyPassword | quote}}
           resources: {}
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates

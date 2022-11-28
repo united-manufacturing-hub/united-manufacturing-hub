@@ -55,7 +55,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordLocal | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordLocal | quote}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-remote
           {{if .Values.kafkabridge.image.tag}}
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
@@ -79,7 +79,7 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordRemote | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordRemote | quote}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
           {{if .Values.kafkabridge.image.tag}}
@@ -109,9 +109,9 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD_LOCAL
-              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordLocal | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordLocal | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD_REMOTE
-              value: {{.Values._000_commonConfig.certificates.kafkabridge.sslKeyPasswordRemote | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordRemote | quote}}
           resources: {}
           volumeMounts:
             - name: kubernetes-ca
