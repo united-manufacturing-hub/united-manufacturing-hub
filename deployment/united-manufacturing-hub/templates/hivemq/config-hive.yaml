@@ -30,10 +30,14 @@ data:
                         {{end}}
                     </protocols>
                     <keystore>
-                        <path>/keystore.jks</path>
+                        <path>/stores/keystore.jks</path>
                         <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
                         <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
                     </keystore>
+                    <truststore>
+                        <path>/stores/truststore.jks</path>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.truststorePassword}}</password>
+                    </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
                         {{range .Values.hivemqce.service.mqtts.cipher_suites}}
@@ -75,10 +79,14 @@ data:
                         {{end}}
                     </protocols>
                     <keystore>
-                        <path>/keystore.jks</path>
+                        <path>/stores/keystore.jks</path>
                         <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.keystorePassword}}</password>
                         <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.privateKeyPassword}}</private-key-password>
                     </keystore>
+                    <truststore>
+                        <path>/stores/truststore.jks</path>
+                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.mqtts.truststorePassword}}</password>
+                    </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
                         {{range .Values.hivemqce.service.wss.cipher_suites}}
