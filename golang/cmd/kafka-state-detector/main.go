@@ -63,7 +63,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	if KafkaBoostrapServer == "" {
-		zap.S().Fatal
+		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER not set")
 	}
 
 	allowedMemorySize := 1073741824 // 1GB
@@ -87,15 +87,15 @@ func main() {
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 	}
 	if ActivityEnabled {
@@ -180,7 +180,7 @@ func main() {
 	}
 
 	if !ActivityEnabled && !AnomalyEnabled {
-		zap.S().Fatal
+		zap.S().Fatal("No activity or anomaly processing enabled")
 	}
 
 	// Allow graceful shutdown

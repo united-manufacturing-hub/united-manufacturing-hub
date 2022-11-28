@@ -107,7 +107,7 @@ func main() {
 	LocalKafkaBootstrapServers = os.Getenv("LOCAL_KAFKA_BOOTSTRAP_SERVER")
 	RemoteKafkaBootstrapServers = os.Getenv("REMOTE_KAFKA_BOOTSTRAP_SERVER")
 	if LocalKafkaBootstrapServers == "" || RemoteKafkaBootstrapServers == "" {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	GroupIdSuffic := os.Getenv("KAFKA_GROUP_ID_SUFFIX")
@@ -118,15 +118,15 @@ func main() {
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 	}
 	CreateTopicMapProcessors(topicMap, GroupIdSuffic, securityProtocol)

@@ -29,7 +29,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	err := internal.CreateTopicIfNotExists(kafkaTopicName)
 	if err != nil {
 		zap.S().Errorf("Failed to create topic %s", err)
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	err = kafkaProducerClient.Produce(
@@ -58,15 +58,15 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			zap.S().Fatal
+			zap.S().Fatal(err)
 		}
 	}
 	configMap := kafka.ConfigMap{

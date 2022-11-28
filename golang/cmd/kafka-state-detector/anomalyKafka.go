@@ -54,7 +54,7 @@ func CloseAnomalyKafka() {
 	zap.S().Infof("[Anomaly]Closing Kafka Consumer")
 	err := AnomalyKafkaConsumer.Close()
 	if err != nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	zap.S().Infof("[Anomaly]Closing Kafka Producer")

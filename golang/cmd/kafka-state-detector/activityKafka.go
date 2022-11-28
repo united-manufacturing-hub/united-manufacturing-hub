@@ -54,7 +54,7 @@ func CloseActivityKafka() {
 	zap.S().Infof("[Activity]Closing Kafka Consumer")
 	err := ActivityKafkaConsumer.Close()
 	if err != nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	zap.S().Infof("[Activity]Closing Kafka Producer")

@@ -62,7 +62,7 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 func CloseKafka() {
 
 	if err := KafkaConsumer.Close(); err != nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 
 	KafkaProducer.Flush(100)
@@ -74,7 +74,7 @@ func CloseKafka() {
 func CloseKafkaTopicProbeConsumer() {
 	err := KafkaTopicProbeConsumer.Close()
 	if err != nil {
-		zap.S().Fatal
+		zap.S().Fatal(err)
 	}
 }
 
