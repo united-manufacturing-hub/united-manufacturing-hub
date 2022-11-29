@@ -123,20 +123,20 @@ func SetupMQTT(
 
 	} else {
 		tlsconfig := newTLSConfig()
-		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
+		opts.SetClientID(podName).SetTLSConfig(tlsconfig)
 
 		if mqttTopic == "" {
 			mqttTopic = "ia/#"
 		}
 
-		zap.S().Infof("Running in normal mode", mqttTopic, certificateName)
+		zap.S().Infof("Running in normal mode", mqttTopic, podName)
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
 	opts.SetOrderMatters(false)
 
-	zap.S().Debugf("Broker configured", mqttBrokerURL, certificateName)
+	zap.S().Debugf("Broker configured", mqttBrokerURL, podName)
 
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
