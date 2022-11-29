@@ -16,25 +16,32 @@ func newTLSConfig(mode string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/kafka/" + mode + "/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/mqtt/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
+	} else {
+		zap.S().Errorf("Error reading CA certificate: %s", err)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/kafka/"+mode+"/tls.crt", "/SSL_certs/kafka/"+mode+"/tls.key")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/"+mode+"tls.crt", "/SSL_certs/mqtt/"+mode+"tls.key")
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		// Read /SSL_certs/mqtt/tls.crt
+		var file []byte
+		file, err = os.ReadFile("/SSL_certs/mqtt/" + mode + "tls.crt")
+		if err != nil {
+			zap.S().Errorf("Error reading client certificate: %s", err)
+		}
+		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
 	}
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties
-	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,
@@ -46,7 +53,7 @@ func newTLSConfig(mode string) *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: false,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
 	}
