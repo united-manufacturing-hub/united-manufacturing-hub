@@ -52,11 +52,11 @@ spec:
         - name: LOCAL_CERTIFICATE_NAME
           value: {{.Values._000_commonConfig.mqttBridge.localCertificateName}}
         - name: LOCAL_BROKER_URL
-              {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:8883
-              {{- else}}
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
-              {{- end}}'
+          {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+          value: ssl://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:8883
+          {{- else}}
+          value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
+          {{- end}}
         - name: LOCAL_SUB_TOPIC
           value: {{.Values._000_commonConfig.mqttBridge.localSubTopic}}
         - name: LOCAL_PUB_TOPIC

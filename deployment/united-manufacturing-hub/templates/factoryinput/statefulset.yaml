@@ -65,7 +65,7 @@ spec:
 
             - name: BROKER_URL
               {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:8883
+              value: ssl://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:8883
               {{- else}}
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
               {{- end}}
