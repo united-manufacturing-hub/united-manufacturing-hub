@@ -141,12 +141,12 @@ func SetupMQTT(
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 
 	// Subscribe
 	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to subscribe: %s", token.Error())
 	}
 	zap.S().Infof("MQTT subscribed", mqttTopic)
 
