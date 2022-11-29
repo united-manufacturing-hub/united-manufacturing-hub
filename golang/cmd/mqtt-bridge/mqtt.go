@@ -94,7 +94,7 @@ func setupMQTT(
 	SSLEnabled bool,
 	pg *goque.Queue,
 	subscribeToTopic bool,
-	password string) (MQTTClient MQTT.Client) {
+	password string) (mqttClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -118,9 +118,9 @@ func setupMQTT(
 	zap.S().Infof("MQTT connection configured", clientID, mode, mqttBrokerURL, subMQTTTopic, SSLEnabled)
 
 	// Start the connection
-	MQTTClient = MQTT.NewClient(opts)
-	if token := MQTTClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+	mqttClient = MQTT.NewClient(opts)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 
 	// Can be deactivated, e.g. if one does not want to receive all data from remote broker
@@ -128,11 +128,11 @@ func setupMQTT(
 
 		zap.S().Infof("MQTT subscribed", mode, subMQTTTopic)
 		// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-		if token := MQTTClient.Subscribe(
+		if token := mqttClient.Subscribe(
 			subMQTTTopic+"/#",
 			2,
 			getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
-			panic(token.Error())
+			zap.S().Fatalf("Failed to subscribe: %s", token.Error())
 		}
 	}
 

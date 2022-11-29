@@ -103,7 +103,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string, pas
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 
 	return mqttClient
