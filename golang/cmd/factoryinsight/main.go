@@ -49,7 +49,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			zap.S().Fatalf("Error: %s", err)
+			panic(err)
 		}
 	}(log)
 	zap.S().Infof("This is factoryinsight build date: %s", buildtime)

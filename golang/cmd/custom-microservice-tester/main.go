@@ -18,7 +18,7 @@ func main() {
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
-			zap.S().Fatalf("Error: %s", err)
+			panic(err)
 		}
 	}(log)
 
