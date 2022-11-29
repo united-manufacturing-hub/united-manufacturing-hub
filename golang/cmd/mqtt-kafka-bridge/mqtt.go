@@ -53,6 +53,8 @@ func newTLSConfig() *tls.Config {
 		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
 
+	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY") == "true"
+
 	// Create tls.Config with desired tls properties
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
@@ -65,7 +67,7 @@ func newTLSConfig() *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: skipVerify,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
