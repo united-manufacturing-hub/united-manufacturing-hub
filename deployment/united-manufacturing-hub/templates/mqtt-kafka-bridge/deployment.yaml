@@ -119,6 +119,8 @@ spec:
 
             - name: MQTT_PASSWORD
               value: {{.Values.mqttkafkabridge.mqtt.password | quote}}
+            - name: INSECURE_SKIP_VERIFY
+              value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
 
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds

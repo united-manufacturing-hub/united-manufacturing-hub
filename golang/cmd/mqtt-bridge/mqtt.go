@@ -18,11 +18,15 @@ func newTLSConfig(mode string) *tls.Config {
 	certpool := x509.NewCertPool()
 	pemCerts, err := os.ReadFile("/SSL_certs/mqtt/ca.crt")
 	if err == nil {
-		certpool.AppendCertsFromPEM(pemCerts)
+		ok := certpool.AppendCertsFromPEM(pemCerts)
+		if !ok {
+			zap.S().Errorf("Failed to parse root certificate")
+		}
 	} else {
 		zap.S().Errorf("Error reading CA certificate: %s", err)
 	}
 
+	zap.S().Debugf("CA cert: %s", pemCerts)
 	// Import client certificate/key pair
 	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/"+mode+"tls.crt", "/SSL_certs/mqtt/"+mode+"tls.key")
 	if err != nil {
@@ -34,12 +38,15 @@ func newTLSConfig(mode string) *tls.Config {
 		}
 		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
 	}
+	zap.S().Debugf("Client cert: %v", cert)
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
 		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
+
+	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY_"+mode) == "true"
 
 	// Create tls.Config with desired tls properties
 	return &tls.Config{
@@ -53,9 +60,10 @@ func newTLSConfig(mode string) *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
-		InsecureSkipVerify: false,
+		InsecureSkipVerify: skipVerify,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
 }
 
