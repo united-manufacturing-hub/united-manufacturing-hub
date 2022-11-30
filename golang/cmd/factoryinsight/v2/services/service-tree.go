@@ -7,6 +7,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -172,7 +174,7 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 	}
 
 	for _, customer := range customers {
-		var siteTree []interface{}
+		var siteTree map[string]*models.TreeEntryFormat
 		siteTree, err = GetSiteTreeStructure(customer)
 		if err != nil {
 			return nil, err
@@ -187,86 +189,90 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 	return te, err
 }
 
-func GetSiteTreeStructure(customer string) (te []interface{}, err error) {
+func GetSiteTreeStructure(customer string) (te map[string]*models.TreeEntryFormat, err error) {
 	var sites []string
+	te = make(map[string]*models.TreeEntryFormat)
 	sites, err = GetSites(customer)
 	if err != nil {
 		return nil, err
 	}
 	for _, site := range sites {
-		var areaTree []interface{}
+		var areaTree map[string]*models.TreeEntryFormat
 		areaTree, err = GetAreaTreeStructure(customer, site)
 		if err != nil {
 			return nil, err
 		}
-		te = append(
-			te, models.TreeEntryFormat{
-				Label:   site,
-				Value:   customer + "/" + site,
-				Entries: areaTree,
-			})
+		value := customer + "/" + site
+		te[site] = &models.TreeEntryFormat{
+			Label:   site,
+			Value:   value,
+			Entries: areaTree,
+		}
 	}
 	return te, err
 }
 
-func GetAreaTreeStructure(customer string, site string) (te []interface{}, err error) {
+func GetAreaTreeStructure(customer string, site string) (te map[string]*models.TreeEntryFormat, err error) {
 	var areas []string
+	te = make(map[string]*models.TreeEntryFormat)
 	areas, err = GetAreas(customer, site)
 	if err != nil {
 		return nil, err
 	}
 	for _, area := range areas {
-		var lineTree []interface{}
+		var lineTree map[string]*models.TreeEntryFormat
 		lineTree, err = GetLineTreeStructure(customer, site, area)
 		if err != nil {
 			return nil, err
 		}
-		te = append(
-			te, models.TreeEntryFormat{
-				Label:   area,
-				Value:   customer + "/" + site + "/" + area,
-				Entries: lineTree,
-			})
+		value := customer + "/" + site + "/" + area
+		te[area] = &models.TreeEntryFormat{
+			Label:   area,
+			Value:   value,
+			Entries: lineTree,
+		}
 	}
 	return te, err
 }
 
-func GetLineTreeStructure(customer string, site string, area string) (te []interface{}, err error) {
+func GetLineTreeStructure(customer string, site string, area string) (te map[string]*models.TreeEntryFormat, err error) {
 	var lines []string
+	te = make(map[string]*models.TreeEntryFormat)
 	lines, err = GetProductionLines(customer, site, area)
 	if err != nil {
 		return nil, err
 	}
 	for _, line := range lines {
-		var machineTree []interface{}
+		var machineTree map[string]*models.TreeEntryFormat
 		machineTree, err = GetWorkCellTreeStructure(customer, site, area, line)
 		if err != nil {
 			return nil, err
 		}
-		te = append(
-			te, models.TreeEntryFormat{
-				Label:   line,
-				Value:   customer + "/" + site + "/" + area + "/" + line,
-				Entries: machineTree,
-			})
+		value := customer + "/" + site + "/" + area + "/" + line
+		te[line] = &models.TreeEntryFormat{
+			Label:   line,
+			Value:   value,
+			Entries: machineTree,
+		}
 	}
 	return te, err
 }
 
 func GetWorkCellTreeStructure(customer string, site string, area string, line string) (
-	te []interface{},
+	te map[string]*models.TreeEntryFormat,
 	err error) {
 	var workCells []string
+	te = make(map[string]*models.TreeEntryFormat)
 	workCells, err = GetWorkCells(customer, site, area, line)
 	if err != nil {
 		return nil, err
 	}
 	for _, workCell := range workCells {
-		te = append(
-			te, models.TreeEntryFormat{
-				Label: workCell,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + workCell,
-			})
+		value := customer + "/" + site + "/" + area + "/" + line + "/" + workCell
+		te[workCell] = &models.TreeEntryFormat{
+			Label: workCell,
+			Value: value,
+		}
 	}
 	return te, err
 }
@@ -275,13 +281,14 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 	te []models.TreeEntryFormat,
 	err error) {
 
+	zap.S().Infof("[GetTagsTreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var tags []string
 	tags, err = GetTagGroups(customer, site, area, line, cell)
 	if err != nil {
 		return nil, err
 	}
 	for _, tagGroup := range tags {
-		var structure []interface{}
+		var structure = make(map[string]*models.TreeEntryFormat)
 		if tagGroup == models.StandardTagGroup {
 			structure, err = GetStandardTagsTree(customer, site, area, line, cell, tagGroup)
 		} else if tagGroup == models.CustomTagGroup {
@@ -309,57 +316,91 @@ func GetCustomTagsTree(
 	area string,
 	line string,
 	cell string,
-	group string) (te []interface{}, err error) {
+	group string) (te map[string]*models.TreeEntryFormat, err error) {
 
+	te = make(map[string]*models.TreeEntryFormat)
 	var id uint32
 	id, err = GetWorkCellId(customer, site, cell)
 	if err != nil {
 		return nil, err
 	}
-	var tags map[string][]string
+	var tags []string
 	tags, err = GetCustomTags(id)
 	if err != nil {
 		return nil, err
 	}
 
-	// flatten the map
-	for tag, values := range tags {
-		if len(values) == 0 {
-			te = append(
-				te, models.TreeEntryFormat{
-					Label: tag,
-					Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag,
-				})
+	slices.Sort(tags)
 
-		} else {
-			for _, value := range values {
-				te = append(
-					te, models.TreeEntryFormat{
-						Label: tag + "_" + value,
-						Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag + "_" + value,
-					})
-			}
+	for _, tag := range tags {
+
+		value := customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + group + "/" + tag
+
+		// ignore tag that are only made of underscores
+		if slices.Compact([]rune(tag))[0] == '_' {
+			continue
 		}
+
+		splitTag := strings.Split(tag, "_")
+		// ignore underscores at the beginning or end of the tag or if there are multiple underscores in a row
+		sanitizedSplitTag := removeEmpty(splitTag)
+		// remove unused capacity to save memory
+		sanitizedSplitTag = slices.Clip(sanitizedSplitTag)
+
+		// create the mapping
+		te[splitTag[0]] = mapTagGrouping(te, splitTag, value)
 	}
 
 	return te, err
 }
 
+func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value string) (a *models.TreeEntryFormat) {
+	a, exists := pte[st[0]]
+	// if the tag group does not exist, create it
+	if !exists {
+		a = &models.TreeEntryFormat{
+			Label:   st[0],
+			Value:   st[0],
+			Entries: map[string]*models.TreeEntryFormat{},
+		}
+	}
+	// if the tag group is a leaf, set value and end the recursion
+	if len(st) > 1 {
+		a.Entries[st[1]] = mapTagGrouping(a.Entries, st[1:], value)
+	} else {
+		a.Value = value
+		a.Entries = nil
+	}
+	return
+}
+
+func removeEmpty(s []string) []string {
+	var r []string
+	idx := slices.Index(s, "")
+	if idx != -1 {
+		r = append(s[:idx], s[idx+1:]...)
+		// recursively remove empty strings
+		return removeEmpty(r)
+	}
+	return s
+}
+
 func GetStandardTagsTree(customer string, site string, area string, line string, cell string, tagGroup string) (
-	te []interface{},
+	te map[string]*models.TreeEntryFormat,
 	err error) {
 
+	te = make(map[string]*models.TreeEntryFormat)
 	var tags []string
 	tags, err = GetStandardTags(customer, site, cell)
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range tags {
-		te = append(
-			te, models.TreeEntryFormat{
-				Label: t,
-				Value: customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + tagGroup + "/" + t,
-			})
+	for _, tag := range tags {
+		value := customer + "/" + site + "/" + area + "/" + line + "/" + cell + "/" + "tags" + "/" + tagGroup + "/" + tag
+		te[tag] = &models.TreeEntryFormat{
+			Label: tag,
+			Value: value,
+		}
 	}
 	return te, err
 }
@@ -368,6 +409,7 @@ func GetKPITreeStructure(customer string, site string, area string, line string,
 	te []models.TreeEntryFormat,
 	err error) {
 
+	zap.S().Debugf("[GetKPITreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var kpis models.GetKpisMethodsResponse
 	kpis, err = GetKpisMethods(customer, site, cell)
 	if err != nil {
@@ -387,6 +429,7 @@ func GetTableTreeStructure(customer string, site string, area string, line strin
 	te []models.TreeEntryFormat,
 	err error) {
 
+	zap.S().Debugf("[GetTableTreeStructure] customer: %s, site: %s, area: %s, line: %s, cell: %s", customer, site, area, line, cell)
 	var types models.GetTableTypesResponse
 	types, err = GetTableTypes(customer, site, cell)
 	if err != nil {
