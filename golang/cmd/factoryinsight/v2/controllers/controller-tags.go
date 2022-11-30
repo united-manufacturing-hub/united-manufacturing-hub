@@ -41,9 +41,7 @@ func GetTagGroupsHandler(c *gin.Context) {
 
 func GetTagsHandler(c *gin.Context) {
 	var request models.GetTagsRequest
-	var tags []string
-	var grouping map[string][]string
-	var response any
+	var response models.GetTagsResponse
 
 	err := c.BindUri(&request)
 	if err != nil {
@@ -66,16 +64,9 @@ func GetTagsHandler(c *gin.Context) {
 
 	switch request.TagGroupName {
 	case models.CustomTagGroup:
-		grouping, err = services.GetCustomTags(workCellId)
-		var r models.GetTagsResponse[map[string][]string]
-		r.Tags = make(map[string][]string)
-		r.Tags = grouping
-		response = r
+		response.Tags, err = services.GetCustomTags(workCellId)
 	case models.StandardTagGroup:
-		tags, err = services.GetStandardTags(request.EnterpriseName, request.SiteName, request.WorkCellName)
-		var r models.GetTagsResponse[[]string]
-		r.Tags = tags
-		response = r
+		response.Tags, err = services.GetStandardTags(request.EnterpriseName, request.SiteName, request.WorkCellName)
 	default:
 		helpers.HandleTypeNotFound(c, request.TagGroupName)
 		return
