@@ -40,7 +40,7 @@ func main() {
 		zap.S().Debugf("Creating hello-world file")
 		err := os.WriteFile("/data/hello-world", []byte("Hello World"), 0600)
 		if err != nil {
-			zap.S().Fatalf("Error: %s", err)
+			zap.S().Fatalf("Failed to create hello-world file: %s", err)
 		}
 	} else {
 		zap.S().Debugf("hello-world file exists")

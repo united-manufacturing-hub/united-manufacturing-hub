@@ -25,17 +25,17 @@ func SetupHIKafka(configMap kafka.ConfigMap) {
 	var err error
 	HIKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create KafkaConsumer: %s", err)
 	}
 
 	HIKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create KafkaProducer: %s", err)
 	}
 
 	HIKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create KafkaAdminClient: %s", err)
 	}
 
 }

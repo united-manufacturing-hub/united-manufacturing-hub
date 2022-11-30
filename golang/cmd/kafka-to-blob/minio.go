@@ -23,12 +23,12 @@ func setupMinio(
 			Secure: MinioSecure,
 		})
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create MinioClient: %s", err)
 	}
 
 	bucketExists, err := mioClient.BucketExists(context.Background(), MinioBucketName)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to check if bucket %s exists: %s", MinioBucketName, err)
 	}
 	if !bucketExists {
 		err := mioClient.MakeBucket(
@@ -36,8 +36,7 @@ func setupMinio(
 				ObjectLocking: false,
 			})
 		if err != nil {
-			zap.S().Errorf("Bucket '%s' does not exist and failed to create !", MinioBucketName)
-			zap.S().Fatalf("Error: %s", err)
+			zap.S().Fatalf("Failed to create bucket: %s (%s)", err, MinioBucketName)
 		}
 	}
 	return

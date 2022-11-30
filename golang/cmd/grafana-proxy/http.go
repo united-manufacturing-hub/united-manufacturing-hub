@@ -54,7 +54,7 @@ func SetupRestAPI() {
 
 	err := router.Run(":80")
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to start rest api: %s", err)
 	}
 }
 

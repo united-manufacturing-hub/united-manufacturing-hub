@@ -83,8 +83,7 @@ func ProcessKafkaQueue(
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
 	err := kafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
-		zap.S().Errorf("%s Failed to subscribe to topic %s: %s", identifier, topic, err)
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("%s Failed to subscribe to topic %s: %s", identifier, topic, err)
 	}
 
 	for !ShuttingDownKafka {

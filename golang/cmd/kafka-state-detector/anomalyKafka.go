@@ -31,17 +31,17 @@ func SetupAnomalyKafka(configMap kafka.ConfigMap) {
 	var err error
 	AnomalyKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create consumer: %s", err)
 	}
 
 	AnomalyKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create producer: %s", err)
 	}
 
 	AnomalyKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create new admin client: %s", err)
 	}
 
 }

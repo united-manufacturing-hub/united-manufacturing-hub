@@ -157,7 +157,7 @@ func UnmarshalIoddFile(ioddFile []byte, absoluteFilePath string) (IoDevice, erro
 		if err != nil {
 			zap.S().Errorf("Removing file: %#v failed. Stopping container now. Error: %v", absoluteFilePath, err)
 		}
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to unmarshal iodd.xml file. Stopping container now. Error: %v", err)
 	}
 	return payload, err
 }

@@ -41,7 +41,7 @@ func SetupDB(
 	var err error
 	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to open database connection: %s", err)
 	}
 
 	if dryRun == "True" || dryRun == "true" {
@@ -89,7 +89,7 @@ func ShutdownDB() {
 	zap.S().Infof("Closing database connection")
 
 	if err := db.Close(); err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to close database connection: %s", err)
 	}
 }
 

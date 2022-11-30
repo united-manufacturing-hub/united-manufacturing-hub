@@ -189,7 +189,7 @@ func main() {
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
-		zap.S().Fatal(err)
+		zap.S().Fatal("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_TIME_SEC")
 	}
 
 	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)

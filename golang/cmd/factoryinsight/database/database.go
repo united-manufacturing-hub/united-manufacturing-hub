@@ -38,7 +38,7 @@ func Connect(
 	var err error
 	Db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to open database: %s", err)
 	}
 
 	Mutex = mapmutex.NewCustomizedMapMutex(
@@ -52,7 +52,7 @@ func Connect(
 // Shutdown closes all database connections
 func Shutdown() {
 	if err := Db.Close(); err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to close database: %s", err)
 	}
 }
 

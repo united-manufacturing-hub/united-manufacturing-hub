@@ -81,12 +81,12 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 	producer, err := kafka.NewProducer(&configMap)
 
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create kafka producer: %s", err)
 	}
 
 	adminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create Admin client: %s", err)
 	}
 
 	internal.KafkaProducer = producer

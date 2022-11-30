@@ -148,7 +148,7 @@ func main() {
 
 	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create topic %s: %v", KafkaBaseTopic, err)
 	}
 
 	zap.S().Debugf("Start Queue processors")

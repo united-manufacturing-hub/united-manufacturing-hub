@@ -31,17 +31,17 @@ func SetupActivityKafka(configMap kafka.ConfigMap) {
 	var err error
 	ActivityKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create consumer: %s", err)
 	}
 
 	ActivityKafkaProducer, err = kafka.NewProducer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create producer: %s", err)
 	}
 
 	ActivityKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Error: %s", err)
+		zap.S().Fatalf("Failed to create new admin client: %s", err)
 	}
 
 }

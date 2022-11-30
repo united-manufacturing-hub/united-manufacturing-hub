@@ -80,7 +80,7 @@ func main() {
 			})
 		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
 		if err != nil {
-			zap.S().Fatalf("Error: %s", err)
+			zap.S().Fatalf("Failed to create topic: %v", err)
 		}
 
 		go internal.StartEventHandler("barcodereader", internal.KafkaProducer.Events(), nil)

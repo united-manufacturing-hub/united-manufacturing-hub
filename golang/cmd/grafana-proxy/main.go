@@ -75,7 +75,7 @@ func main() {
 		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
-			zap.S().Fatalf("Error: %s", err)
+			zap.S().Fatalf("Failed to start healthcheck: %s", err)
 		}
 	}()
 
