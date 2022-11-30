@@ -112,10 +112,9 @@ func GetStandardTags(enterpriseName, siteName, workCellName string) (tags []stri
 	return
 }
 
-func GetCustomTags(workCellId uint32) (grouping map[string][]string, err error) {
-	grouping = make(map[string][]string)
+func GetCustomTags(workCellId uint32) (tags []string, err error) {
 	zap.S().Infof(
-		"[GetTags] Getting custom tags for work cell %s", workCellId)
+		"[GetTags] Getting custom tags for work cell %d", workCellId)
 
 	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
 
@@ -135,17 +134,15 @@ func GetCustomTags(workCellId uint32) (grouping map[string][]string, err error) 
 			return
 		}
 
-		if strings.Count(valueName, "_") == 1 {
-			if !strings.HasPrefix(valueName, "_") && !strings.HasSuffix(valueName, "_") {
-				left, right, _ := strings.Cut(valueName, "_")
-				grouping[left] = append(grouping[left], right)
-			}
-		} else if strings.Count(valueName, "_") == 0 {
-			grouping[valueName] = []string{}
-		}
+		tags = append(tags, valueName)
 	}
 
 	return
+}
+
+type Parent struct {
+	Value    string
+	Children []Parent
 }
 
 func ProcessJobTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
