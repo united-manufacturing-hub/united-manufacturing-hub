@@ -49,6 +49,7 @@ func newTLSConfig(mode string) *tls.Config {
 	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY_"+mode) == "true"
 
 	// Create tls.Config with desired tls properties
+	/* #nosec G402 -- Remote verification is not yet implemented*/
 	return &tls.Config{
 		// RootCAs = certs used to verify server cert.
 		RootCAs: certpool,

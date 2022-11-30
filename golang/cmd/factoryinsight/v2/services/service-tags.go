@@ -577,7 +577,8 @@ ORDER BY timestamp
 			selectClause = ", " + selectClause
 		}
 
-		bucketToDuration, err := timeBucketToDuration(timeBucket)
+		var bucketToDuration time.Duration
+		bucketToDuration, err = timeBucketToDuration(timeBucket)
 		if err != nil {
 			helpers.HandleInvalidInputError(c, err)
 			return

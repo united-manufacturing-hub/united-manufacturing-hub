@@ -50,6 +50,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
+		/* #nosec G402 -- Remote verification is not yet implemented*/
 		InsecureSkipVerify: true,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},

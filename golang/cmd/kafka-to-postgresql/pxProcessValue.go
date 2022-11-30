@@ -204,12 +204,12 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 
 					// This function can parse any float, int and bool values.
 					// It will discard any other values with a warning.
-					switch v.(type) {
+					switch t := v.(type) {
 					case float64:
 						// This converts normal int and float values to float64
-						value = v.(float64)
+						value = t
 					case string:
-						valAsStr := v.(string)
+						valAsStr := t
 						// https://go.dev/ref/spec#Floating-point_literals
 						value, err = strconv.ParseFloat(valAsStr, 64)
 						if err != nil {
@@ -237,7 +237,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 							}
 						}
 					case bool:
-						boolVal := v.(bool)
+						boolVal := t
 						if boolVal {
 							value = 1
 						} else {
