@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-ingress
+  labels:
+    {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
+spec:
+  rules:
+    - host: {{ .Values._000_commonConfig.tulipconnector.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "united-manufacturing-hub.fullname" . }}-tulip-connector-service
+                port:
+                  number: 80

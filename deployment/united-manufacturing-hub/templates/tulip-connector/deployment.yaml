@@ -1,0 +1,41 @@
+---
+{{if or .Values._000_commonConfig.tulipconnector.enabled}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
+  labels:
+    {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.tulipconnector.replicas }}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
+        {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 8 }}
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector
+        {{if .Values.tulipconnector.image.tag}}
+          image: {{ .Values.tulipconnector.image.repository }}:{{ .Values.tulipconnector.image.tag }}
+        {{else}}
+          image: {{ .Values.tulipconnector.image.repository }}:latest
+        {{end}}
+          imagePullPolicy: {{ .Values.tulipconnector.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          resources:
+            limits:
+              cpu: {{ .Values.tulipconnector.resources.limits.cpu }}
+            requests:
+              cpu: {{ .Values.tulipconnector.resources.requests.cpu }}
+  {{end}}
