@@ -29,6 +29,9 @@ spec:
           image: {{ .Values.tulipconnector.image.repository }}:latest
         {{end}}
           imagePullPolicy: {{ .Values.tulipconnector.image.pullPolicy }}
+          env:
+            - name: MODE
+              value: {{ .Values.tulipconnector.env.mode }}
           ports:
             - name: http
               containerPort: 80
