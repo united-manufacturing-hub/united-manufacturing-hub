@@ -57,7 +57,7 @@ _000_commonConfig:
   # Infrastructure
   infrastructure:
 
-    # vernemq
+    # hivemq
     mqtt:
       enabled: true
       adminUser:
@@ -231,7 +231,6 @@ _000_commonConfig:
           sslCertificatePem: |-
             -----BEGIN CERTIFICATE-----
             -----END CERTIFICATE-----
-  kafka_certificates:
 
 
 
