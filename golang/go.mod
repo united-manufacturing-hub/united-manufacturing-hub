@@ -15,6 +15,7 @@ require (
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6
+	github.com/hashicorp/golang-lru v0.5.1
 	github.com/heptiolabs/healthcheck v0.0.0-20211123025425-613501dd5deb
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.7
@@ -25,7 +26,7 @@ require (
 	github.com/rung/go-safecast v1.0.1
 	github.com/united-manufacturing-hub/umh-utils v0.0.3
 	github.com/zeebo/xxh3 v1.0.2
-	go.uber.org/zap v1.23.0
+	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20221106115401-f9659909a136
 	gonum.org/v1/gonum v0.12.0
 	k8s.io/apimachinery v0.25.4
