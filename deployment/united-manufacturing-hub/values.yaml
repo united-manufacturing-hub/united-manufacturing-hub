@@ -258,6 +258,10 @@ _000_commonConfig:
   kafkaStateDetector:
     enabled: false
 
+  tulipconnector:
+    enabled: true
+    domain: "tulip-connector.changeme.com"
+
 _001_customMicroservices:
   -
       name: example
@@ -2197,6 +2201,22 @@ packmlmqttsimulator:
     limits:
       cpu: "100m"
       memory: "100Mi"
+
+### tulip-connector ###
+tulipconnector:
+  image:
+    repository: unitedmanufacturinghub/tulip-connector
+    pullPolicy: IfNotPresent
+    # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
+    tag: main
+  replicas: 2
+  resources:
+    limits:
+      cpu: 200m
+      memory: 200Mi
+    requests:
+      cpu: 50m
+      memory: 50Mi
 
 ### mqtt-kafka-bridge ###
 mqttkafkabridge:

@@ -245,6 +245,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kowl
 {{- end }}
 
 {{/*
+Labels for tulip-connector
+*/}}
+{{- define "united-manufacturing-hub.labels.tulip-connector" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-tulip-connector
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
