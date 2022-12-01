@@ -102,7 +102,7 @@ data:
                 <id>packmlsimulator</id>
                 <permissions>
                     <permission>
-                        <topic>testLocation/DefaultArea/DefaultProductionLine/#</topic>
+                        <topic>{{.Values.packmlmqttsimulator.env.site}}/{{.Values.packmlmqttsimulator.env.area}}/{{.Values.packmlmqttsimulator.env.productionline}}/#</topic>
                     </permission>
                 </permissions>
             </role>
