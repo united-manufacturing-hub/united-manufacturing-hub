@@ -288,7 +288,7 @@ _000_commonConfig:
     enabled: false
 
   tulipconnector:
-    enabled: true
+    enabled: false
     domain: "tulip-connector.changeme.com"
 
 _001_customMicroservices:
