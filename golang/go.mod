@@ -25,7 +25,7 @@ require (
 	github.com/rung/go-safecast v1.0.1
 	github.com/united-manufacturing-hub/umh-utils v0.0.3
 	github.com/zeebo/xxh3 v1.0.2
-	go.uber.org/zap v1.23.0
+	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20221106115401-f9659909a136
 	gonum.org/v1/gonum v0.12.0
 	k8s.io/apimachinery v0.25.4
