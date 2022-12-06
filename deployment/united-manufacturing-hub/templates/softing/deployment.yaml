@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: softing-deployment
+  name: {{include "united-manufacturing-hub.fullname" .}}-softing-deployment
   namespace: united-manufacturing-hub
   labels:
-    app: softing-deployment
+    app: {{include "united-manufacturing-hub.fullname" .}}-softing-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: softing-deployment
+      app: {{include "united-manufacturing-hub.fullname" .}}-softing-deployment
   template:
     metadata:
       labels:
-        app: softing-deployment
+        app: {{include "united-manufacturing-hub.fullname" .}}-softing-deployment
     spec:
       containers:
         - name: edgeaggregator

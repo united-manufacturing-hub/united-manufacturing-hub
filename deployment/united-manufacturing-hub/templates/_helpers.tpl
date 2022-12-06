@@ -257,7 +257,7 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kowl
 Labels for softing
 */}}
 {{- define "united-manufacturing-hub.labels.softing" -}}
-app: softing-deployment
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-softing
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
