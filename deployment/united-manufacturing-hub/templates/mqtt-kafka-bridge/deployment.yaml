@@ -109,22 +109,24 @@ spec:
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.certificates.mqttkafkabridge.sslKeyPassword | quote}}
 
+            - name: RAW_MESSAGE_LRU_SIZE
+              value: {{.Values.mqttkafkabridge.rawMessageLRUSize | quote}}
+            - name: MESSAGE_LRU_SIZE
+              value: {{.Values.mqttkafkabridge.messageLRUSize | quote}}
+            - name: MQTT_SENDER_THREADS
+              value: {{.Values.mqttkafkabridge.mqttSenderThreads | quote}}
+            - name: KAFKA_SENDER_THREADS
+              value: {{.Values.mqttkafkabridge.kafkaSenderThreads | quote}}
+            - name: KAFKA_ACCEPT_NO_ORIGIN
+              value: {{.Values.mqttkafkabridge.kafkaAcceptNoOrigin | quote}}
 
-          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
-          # livenessProbe:
-          #   httpGet:
-          #     path: /live
-          #     port: 8086
-          #   initialDelaySeconds: 30
-          #   periodSeconds: 5
-
-          # define a readiness probe that checks every 5 seconds
-          #readinessProbe:
-          #  httpGet:
-          #    path: /ready
-          #    port: 8086
-          #  periodSeconds: 5
-          resources: {}
+          resources:
+            limits:
+              cpu: {{.Values.mqttkafkabridge.resources.limits.cpu}}
+              memory: {{.Values.mqttkafkabridge.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.mqttkafkabridge.resources.requests.cpu}}
+              memory: {{.Values.mqttkafkabridge.resources.requests.memory}}
           volumeMounts:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem

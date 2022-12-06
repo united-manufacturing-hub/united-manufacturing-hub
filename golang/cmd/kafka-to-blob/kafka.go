@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/cristalhq/base64"
 	"github.com/minio/minio-go/v7"
@@ -74,14 +75,13 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 
 	if err != nil {
 		zap.S().Warnf("Failed to put item into blob-storage: %s", err)
-		err = internal.KafkaProducer.Produce(
-			&kafka.Message{
-				TopicPartition: kafka.TopicPartition{
-					Topic:     msg.TopicPartition.Topic,
-					Partition: kafka.PartitionAny,
-				},
-				Value: msg.Value,
-			}, nil)
+		err = internal.Produce(internal.KafkaProducer, &kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     msg.TopicPartition.Topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value: msg.Value,
+		}, nil, fmt.Sprintf("kafka-to-blob-%s", "TODO"))
 		if err != nil {
 			zap.S().Warnf("Failed to resend message: %s", err)
 		}

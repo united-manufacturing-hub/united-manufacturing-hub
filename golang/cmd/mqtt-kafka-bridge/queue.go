@@ -36,14 +36,13 @@ func closeQueue(pq *goque.Queue) (err error) {
 func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	// Prevents recursion
 	if !CheckIfNewMessageOrStore(message, topic) {
-		zap.S().Debugf("Message is old !")
 		return
 	}
 	storeMessageIntoQueue(topic, message, pq)
 }
 
 func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
-	zap.S().Debugf("Stored message in queue")
+	zap.S().Debugf("Stored new message in queue (%s) (%s)", topic, message)
 	newElement := queueObject{
 		Topic:   topic,
 		Message: message,
@@ -55,7 +54,7 @@ func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	}
 }
 
-func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error) {
+func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error, gotItem bool) {
 	if pq.Length() == 0 {
 		zap.S().Debugf("pq.Length == 0")
 		return
@@ -63,7 +62,10 @@ func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error)
 	var item *goque.Item
 	item, err = pq.Dequeue()
 	if err != nil || item == nil {
-		zap.S().Errorf("Failed to dequeue message", err)
+		if err != nil && err.Error() != "goque: Stack or queue is empty" {
+			zap.S().Errorf("Failed to dequeue message: %v", err)
+			return queueObj, err, false
+		}
 		return
 	}
 
@@ -71,5 +73,6 @@ func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error)
 	if err != nil {
 		return
 	}
+	gotItem = true
 	return
 }

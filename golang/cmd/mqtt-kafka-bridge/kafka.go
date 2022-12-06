@@ -2,14 +2,28 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"os"
+	"strings"
 	"time"
 )
 
+var sn = os.Getenv("SERIAL_NUMBER")
+
+var KafkaSenderThreads int
+var KafkaAcceptNoOrigin bool
+
 func processIncomingMessages() {
+	for i := 0; i < KafkaSenderThreads; i++ {
+		go SendKafkaMessages()
+	}
+}
+
+func SendKafkaMessages() {
 	var err error
 
 	for !ShuttingDown {
@@ -20,8 +34,13 @@ func processIncomingMessages() {
 		}
 
 		var object queueObject
-		object, err = retrieveMessageFromQueue(mqttIncomingQueue)
+		var gotItem bool
+		object, err, gotItem = retrieveMessageFromQueue(mqttIncomingQueue)
 		if err != nil {
+			if !gotItem {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
 			zap.S().Errorf("Failed to dequeue message: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
@@ -39,14 +58,22 @@ func processIncomingMessages() {
 		}
 
 		zap.S().Debugf("Sending with Topic: %s", kafkaTopicName)
-		err = internal.KafkaProducer.Produce(
-			&kafka.Message{
-				TopicPartition: kafka.TopicPartition{
-					Topic:     &kafkaTopicName,
-					Partition: kafka.PartitionAny,
-				},
-				Value: object.Message,
-			}, nil)
+
+		msg := &kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     &kafkaTopicName,
+				Partition: kafka.PartitionAny,
+			},
+			Value: object.Message,
+		}
+		err = internal.AddTrace(msg, "x-origin", sn)
+		if err != nil {
+			zap.S().Errorf("Failed to add trace: %s", err)
+			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
+			continue
+		}
+		err = internal.Produce(internal.KafkaProducer, msg, nil, fmt.Sprintf("mqtt-kafka-bridge-%s", sn))
+
 		if err != nil {
 			zap.S().Errorf("Failed to send Kafka message: %s", err)
 			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
@@ -63,6 +90,7 @@ func kafkaToQueue(topic string) {
 
 	stuck := 0
 
+	var msg *kafka.Message
 	for !ShuttingDown {
 		if mqttOutGoingQueue.Length() >= 100 {
 			// MQTT can't keep up with Kafka
@@ -78,7 +106,7 @@ func kafkaToQueue(topic string) {
 			continue
 		}
 		stuck = 0
-		msg, err := internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
+		msg, err = internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
 		if err != nil {
 			// This is fine, and expected behaviour
 			var kafkaError kafka.Error
@@ -97,21 +125,34 @@ func kafkaToQueue(topic string) {
 			}
 		}
 
+		trace := internal.GetTrace(msg, "x-origin")
+		if trace != nil {
+			for _, v := range trace.Traces {
+				if v == sn {
+					// Ignore messages that our cluster created
+					continue
+				}
+			}
+		} else if !KafkaAcceptNoOrigin {
+			// Ignore messages without defined origin !
+			continue
+		}
+
 		payload := msg.Value
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-		if json.Valid(payload) {
-			kafkaTopic := msg.TopicPartition.Topic
-			validTopic, mqttTopic := internal.KafkaTopicToMqtt(*kafkaTopic)
+		kafkaTopic := *msg.TopicPartition.Topic
+		if json.Valid(payload) || strings.HasPrefix(kafkaTopic, "ia.raw") {
+			validTopic, mqttTopic := internal.KafkaTopicToMqtt(kafkaTopic)
 
 			if validTopic {
 				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
-				zap.S().Debugf("kafkaToQueue", topic, payload)
+				zap.S().Debugf("kafkaToQueue (%s) (%s)", kafkaTopic, payload)
 			}
 		} else {
 			zap.S().Warnf(
-				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
-				topic, payload)
+				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON (%s) [%s]",
+				kafkaTopic, payload)
 		}
 	}
 }

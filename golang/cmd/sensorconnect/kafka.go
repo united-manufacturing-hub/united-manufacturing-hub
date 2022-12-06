@@ -30,13 +30,14 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 		panic("Failed to create topic, restarting")
 	}
 
-	err = kafkaProducerClient.Produce(&kafka.Message{
+	err = internal.Produce(kafkaProducerClient, &kafka.Message{
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &kafkaTopicName,
 			Partition: kafka.PartitionAny,
 		},
 		Value: message,
-	}, nil)
+	}, nil, fmt.Sprintf("sensorconnect-%s", "TODO"))
+
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
 	} else {

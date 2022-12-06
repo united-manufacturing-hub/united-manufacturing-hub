@@ -2210,6 +2210,18 @@ mqttkafkabridge:
   initContainer:
     repository: unitedmanufacturinghub/kafka-init
     pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "500Mi"
+    limits:
+      cpu: "500m"
+      memory: "750Mi"
+  rawMessageLRUSize: 100000
+  messageLRUSize: 100000
+  mqttSenderThreads: 1
+  kafkaSenderThreads: 1
+  kafkaAcceptNoOrigin: "false"
 
 ### kafka-to-blob ###
 kafkatoblob:

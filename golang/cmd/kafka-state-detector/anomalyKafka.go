@@ -127,7 +127,7 @@ func startAnomalyActivityProcessor() {
 					TopicPartition: kafka.TopicPartition{Topic: &stateTopic, Partition: kafka.PartitionAny},
 					Value:          jsonStateMessage,
 				}
-				err = AnomalyKafkaProducer.Produce(msgS, nil)
+				err = internal.Produce(AnomalyKafkaProducer, msgS, nil, fmt.Sprintf("kafka-state-detector-anomaly-state-%s", "TODO"))
 				if err != nil {
 					errS := err.Error()
 					AnomalyPutBackChannel <- internal.PutBackChanMsg{

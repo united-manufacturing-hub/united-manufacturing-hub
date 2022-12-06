@@ -243,46 +243,6 @@ func startAtoBSender(
 			continue
 		}
 
-		var foundPreviousBridges bool
-		for i, header := range msg.Headers {
-			if header.Key == "x-bridges" {
-				bridges, err := UnmarshalBridges(header.Value)
-				if err == nil {
-					bridges = append(bridges, identifier)
-					var val []byte
-					val, err = bridges.Marshal()
-					if err == nil {
-						msg.Headers[i].Value = val
-						foundPreviousBridges = true
-					}
-				}
-				break
-			}
-		}
-		if !foundPreviousBridges {
-			bridges := Bridges{identifier}
-			var val []byte
-			val, err := bridges.Marshal()
-			if err == nil {
-				msg.Headers = append(
-					msg.Headers, kafka.Header{
-						Key:   "x-bridges",
-						Value: val,
-					})
-			}
-		}
-
-		msg.Headers = append(
-			msg.Headers, kafka.Header{
-				Key:   "x-last-bridge-id",
-				Value: []byte(identifier),
-			})
-		msg.Headers = append(
-			msg.Headers, kafka.Header{
-				Key:   "x-last-bridge-time-ms",
-				Value: []byte(fmt.Sprintf("%d", time.Now().UnixMilli())),
-			})
-
 		msgX := kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     msg.TopicPartition.Topic,
@@ -292,8 +252,8 @@ func startAtoBSender(
 			Key:     msg.Key,
 			Headers: msg.Headers,
 		}
+		err := internal.Produce(producer, &msgX, nil, fmt.Sprintf("kafka-bridge-%s", identifier))
 
-		err := producer.Produce(&msgX, nil)
 		if err != nil {
 			errS := err.Error()
 			backChan <- internal.PutBackChanMsg{
