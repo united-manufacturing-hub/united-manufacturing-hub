@@ -453,7 +453,7 @@ opcuasimulator:
     annotations: {}
     # certadds can add hostnames and ip addresses to the certificate for the simulator so connection to the opcua client is easier
   certadds:
-    hosts: "opcua"
+    hosts: "united-manufacturing-hub-opcuasimulator-service"
     #ips: "1.1.1.1"
 
 ### kafkabridge ###
