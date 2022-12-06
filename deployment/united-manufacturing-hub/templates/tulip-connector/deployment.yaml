@@ -32,6 +32,15 @@ spec:
           env:
             - name: MODE
               value: {{ .Values.tulipconnector.env.mode }}
+            - name: FACTORYINSIGHT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: factoryinsight-secret
+                  key: password
+            - name: FACTORYINSIGHT_URL
+              value: 'http://{{include "united-manufacturing-hub.fullname" .}}-factoryinsight-service'
+            - name: FACTORYINSIGHT_USER
+              value: '{{ .Values.factoryinsight.user }}'
           ports:
             - name: http
               containerPort: 80
