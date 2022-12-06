@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: softing-deployment
+  namespace: united-manufacturing-hub
+  labels:
+    app: softing-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: softing-deployment
+  template:
+    metadata:
+      labels:
+        app: softing-deployment
+    spec:
+      containers:
+        - name: edgeaggregator
+          image: softingindustrial/edgeaggregator
+          ports:
+            - containerPort: 443
+            - containerPort: 8099
+            - containerPort: 4897

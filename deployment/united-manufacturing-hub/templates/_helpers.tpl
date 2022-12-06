@@ -254,6 +254,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kowl
 {{- end }}
 
 {{/*
+Labels for softing
+*/}}
+{{- define "united-manufacturing-hub.labels.softing" -}}
+app: softing-deployment
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
