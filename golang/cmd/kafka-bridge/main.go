@@ -107,7 +107,7 @@ func main() {
 	LocalKafkaBootstrapServers = os.Getenv("LOCAL_KAFKA_BOOTSTRAP_SERVER")
 	RemoteKafkaBootstrapServers = os.Getenv("REMOTE_KAFKA_BOOTSTRAP_SERVER")
 	if LocalKafkaBootstrapServers == "" || RemoteKafkaBootstrapServers == "" {
-		zap.S().Fatal(err)
+		zap.S().Fatalf("Kafka bootstrap servers are not set")
 	}
 
 	GroupIdSuffic := os.Getenv("KAFKA_GROUP_ID_SUFFIX")
@@ -116,17 +116,17 @@ func main() {
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Failed to open kafka tls.key: %v", err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening certificate: %s", err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening CA certificate: %s", err)
 		}
 	}
 	CreateTopicMapProcessors(topicMap, GroupIdSuffic, securityProtocol)

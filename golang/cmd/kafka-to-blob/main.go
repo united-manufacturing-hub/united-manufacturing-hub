@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
-	"github.com/minio/minio-go/v7"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -76,15 +75,15 @@ func main() {
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening Kafka TLS key: %s", err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening certificate: %s", err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening ca.crt: %v", err)
 		}
 	}
 	internal.SetupKafka(

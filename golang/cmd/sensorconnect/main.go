@@ -132,9 +132,9 @@ func main() {
 
 	if lowestSensorTickTime < 20 {
 		if subTwentyMs {
-			zap.S().Warnf("Going under 20MS is not recommendet with IFM IO-Link Masters")
+			zap.S().Warnf("Going under 20MS is not recommended with IFM IO-Link Masters")
 		} else {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Going under 20MS is not recommended with IFM IO-Link Masters, set SUB_TWENTY_MS to 1 to override")
 		}
 	}
 

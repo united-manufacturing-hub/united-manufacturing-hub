@@ -53,15 +53,15 @@ func main() {
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening key file: %s", err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening certificate: %s", err)
 		}
 		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			zap.S().Fatal(err)
+			zap.S().Fatalf("Error opening ca.crt: %s", err)
 		}
 	} else {
 		zap.S().Infof("Using plaintext")
