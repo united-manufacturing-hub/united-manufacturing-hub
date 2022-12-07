@@ -49,6 +49,7 @@ func main() {
 	MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
 	MQTTTopic := os.Getenv("MQTT_TOPIC")
 	podName := os.Getenv("MY_POD_NAME")
+	mqttPassword := os.Getenv("MQTT_PASSWORD")
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
@@ -97,34 +98,33 @@ func main() {
 	}()
 
 	zap.S().Debugf("Setting up MQTT")
-	// mqttClient = setupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, MQTTBrokerSSLEnabled, mqttIncomingQueue)
-	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue)
+	SetupMQTT(MQTTCertificateName, MQTTBrokerURL, MQTTTopic, health, podName, mqttIncomingQueue, mqttPassword)
 
 	zap.S().Debugf("Setting up Kafka")
 	securityProtocol := "plaintext"
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err = os.Open("/SSL_certs/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatalf("Error opening kafka key file: %v", err)
 		}
-		_, err = os.Open("/SSL_certs/tls.crt")
+		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatalf("Error opening kafka cert %v", err)
 		}
-		_, err = os.Open("/SSL_certs/ca.crt")
+		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatalf("Error opening ca.crt: %v", err)
 		}
 	}
 	internal.SetupKafka(
 		kafka.ConfigMap{
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"group.id":                 "mqtt-kafka-bridge",
 			"metadata.max.age.ms":      180000,
@@ -135,10 +135,10 @@ func main() {
 		kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-blob-topic-probe",
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",
@@ -148,7 +148,7 @@ func main() {
 
 	err = internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to create topic %s: %v", KafkaBaseTopic, err)
 	}
 
 	zap.S().Debugf("Start Queue processors")

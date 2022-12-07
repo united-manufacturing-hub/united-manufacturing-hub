@@ -95,10 +95,10 @@ func (c ModifyState) ProcessMessages(msg internal.ParsedMessage) (putback bool, 
 
 	if val.Next() {
 		var (
-			LastRowTimestamp float64
+			LastRowTimestamp    float64
 			LastRowTimestampInt int64
-			LastRowAssetId int64
-			LastRowState int64
+			LastRowAssetId      int64
+			LastRowState        int64
 		)
 		err = val.Scan(&LastRowTimestamp, &LastRowAssetId, &LastRowState)
 		if err != nil {

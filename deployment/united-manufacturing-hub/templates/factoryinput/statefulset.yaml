@@ -64,7 +64,11 @@ spec:
               value: PRODUCTION
 
             - name: BROKER_URL
-              value: tcp://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+              {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+              value: ssl://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:8883
+              {{- else}}
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
+              {{- end}}
 
             - name: MY_POD_NAME
               valueFrom:
@@ -86,6 +90,9 @@ spec:
                   name: factoryinput-secret
                   key: password
 
+            - name: MQTT_PASSWORD
+              value: {{.Values.factoryinput.mqtt.password | quote}}
+
             {{$index := 1}}
             {{range $customerName, $password := .Values.customers | default dict}}
             - name: CUSTOMER_NAME_{{$index}}
@@ -99,7 +106,7 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-data
               mountPath: /data
               # - name: secret-volume
-              #   mountPath: /SSL_certs
+              #   mountPath: /SSL_certs/kafka
 
 
           livenessProbe:

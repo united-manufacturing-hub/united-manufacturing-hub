@@ -1,0 +1,41 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service
+  labels:
+    app.kubernetes.io/name: hivemqce
+    app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
+    app.kubernetes.io/managed-by: helm
+    app.kubernetes.io/component: "hivemqce"
+spec:
+  type: ClusterIP
+  ports:
+    {{- if .Values.hivemqce.service.mqtt.enabled }}
+    - port: {{ .Values.hivemqce.service.mqtt.port }}
+      targetPort: mqtt
+      protocol: TCP
+      name: mqtt
+    {{- end }}
+    {{- if .Values.hivemqce.service.mqtts.enabled }}
+    - port: {{ .Values.hivemqce.service.mqtts.port }}
+      targetPort: mqtts
+      protocol: TCP
+      name: mqtts
+    {{- end }}
+    {{- if .Values.hivemqce.service.ws.enabled }}
+    - port: {{ .Values.hivemqce.service.ws.port }}
+      targetPort: ws
+      protocol: TCP
+      name: ws
+    {{- end }}
+    {{- if .Values.hivemqce.service.wss.enabled }}
+    - port: {{ .Values.hivemqce.service.wss.port }}
+      targetPort: wss
+      protocol: TCP
+      name: wss
+    {{- end }}
+  selector:
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+{{end}}

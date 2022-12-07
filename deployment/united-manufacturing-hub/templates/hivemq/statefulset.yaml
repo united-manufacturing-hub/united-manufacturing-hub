@@ -1,0 +1,136 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
+  labels:
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+    app.kubernetes.io/component: "hivemqce"
+spec:
+  serviceName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 6}}
+      app.kubernetes.io/component: "hivemqce"
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 8}}
+        app.kubernetes.io/component: "hivemqce"
+    spec:
+      volumes:
+        - name: hivemqce-mqtt-config
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-hive
+        - name: hivemqce-extension-config
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extension
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
+          persistentVolumeClaim:
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-data
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
+          persistentVolumeClaim:
+            claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-extensions
+        {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-keystores
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
+            optional: false
+        {{- end}}
+      initContainers:
+        - name: hivemqce-extension-init
+          image: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.repository}}:{{.Values.hivemqce.initContainer.hivemqextensioninit.image.tag}}
+          imagePullPolicy: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.pullPolicy}}
+          volumeMounts:
+            - mountPath: /opt/hivemq-ce-2022.1/extensions
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
+          {{if .Values.hivemqce.image.tag}}
+          image: {{.Values.hivemqce.image.repository}}:{{.Values.hivemqce.image.tag}}
+          {{- else}}
+          image: {{.Values.hivemqce.image.repository}}:2022.1
+          {{end}}
+          imagePullPolicy: {{.Values.hivemqce.image.pullPolicy}}
+          resources:
+            limits:
+              cpu: {{.Values.hivemqce.resources.limits.cpu}}
+              memory: {{.Values.hivemqce.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.hivemqce.resources.requests.cpu}}
+              memory: {{.Values.hivemqce.resources.requests.memory}}
+          volumeMounts:
+            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/conf
+              name: hivemqce-mqtt-config
+              readOnly: true
+            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/data
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
+            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
+            - mountPath: /configs
+              name: hivemqce-extension-config
+              readOnly: true
+            {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
+            - mountPath: /stores
+              name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-keystores
+              readOnly: true
+            {{- end}}
+          livenessProbe:
+            httpGet:
+              port: 9090
+              path: /heartbeat
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              port: 9090
+              path: /heartbeat
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          ports:
+            {{- if .Values.hivemqce.service.mqtt.enabled}}
+            - name: mqtt
+              containerPort: 1883
+              protocol: TCP
+            {{- end}}
+            {{- if .Values.hivemqce.service.mqtts.enabled}}
+            - name: mqtts
+              containerPort: 8883
+              protocol: TCP
+            {{- end}}
+            {{- if .Values.hivemqce.service.ws.enabled}}
+            - name: ws
+              containerPort: 8080
+              protocol: TCP
+            {{- end}}
+            {{- if .Values.hivemqce.service.wss.enabled}}
+            - name: wss
+              containerPort: 8443
+              protocol: TCP
+            {{- end}}
+            - name: prometheus
+              containerPort: 9399
+              protocol: TCP
+            - name: health
+              containerPort: 9090
+              protocol: TCP
+
+          lifecycle:
+            postStart:
+                exec:
+                    command: [
+                      "/bin/sh",
+                      "-c",
+                      "cp /configs/credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml && cp /configs/heartbeat.xml  /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.properties /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
+                    ]
+
+{{end}}

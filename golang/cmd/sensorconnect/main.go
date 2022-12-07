@@ -110,7 +110,8 @@ func main() {
 		MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
 		MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
 		podName := os.Getenv("MY_POD_NAME")
-		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName)
+		mqttPassword := os.Getenv("MQTT_PASSWORD")
+		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName, mqttPassword)
 	}
 
 	if useKafka {
@@ -131,9 +132,9 @@ func main() {
 
 	if lowestSensorTickTime < 20 {
 		if subTwentyMs {
-			zap.S().Warnf("Going under 20MS is not recommendet with IFM IO-Link Masters")
+			zap.S().Warnf("Going under 20MS is not recommended with IFM IO-Link Masters")
 		} else {
-			panic("LOWER_POLLING_TIME under 20 can IFM IO-Link Master failures, set SUB_TWENTY_MS to 1 to continue !")
+			zap.S().Fatalf("Going under 20MS is not recommended with IFM IO-Link Masters, set SUB_TWENTY_MS to 1 to override")
 		}
 	}
 
@@ -188,7 +189,7 @@ func main() {
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
-		panic("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_TIME_SEC")
+		zap.S().Fatal("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_TIME_SEC")
 	}
 
 	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)
