@@ -18,21 +18,23 @@ func newTLSConfig(certificateName string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/intermediate_CA.pem")
+	pemCerts, err := os.ReadFile("/SSL_certs/kafka/intermediate_CA.pem")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/"+certificateName+".pem", "/SSL_certs/"+certificateName+"-privkey.pem")
+	cert, err := tls.LoadX509KeyPair(
+		"/SSL_certs/kafka/"+certificateName+".pem",
+		"/SSL_certs/kafka/"+certificateName+"-privkey.pem")
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to load client certificate: %s", err)
 	}
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to parse client certificate: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties
@@ -48,6 +50,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
+		/* #nosec G402 -- Remote verification is not yet implemented*/
 		InsecureSkipVerify: true,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
@@ -72,13 +75,17 @@ func ShutdownMQTT() {
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) MQTT.Client {
+func SetupMQTT(certificateName string, mqttBrokerURL string, podName string, password string) MQTT.Client {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	opts.SetUsername("FACTORYINPUT")
+	if password != "" {
+		opts.SetPassword(password)
+	}
+
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("FACTORYINPUT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
@@ -97,7 +104,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) MQT
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 
 	return mqttClient

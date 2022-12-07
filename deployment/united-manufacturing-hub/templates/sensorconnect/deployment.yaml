@@ -99,10 +99,18 @@ spec:
               value: PRODUCTION
 
             - name: MQTT_BROKER_URL
-              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service:1883
+              {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+              value: ssl://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:8883
+              {{- else}}
+              value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service:1883
+              {{- end}}
 
             - name: MQTT_CERTIFICATE_NAME
+              {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+              value: "USE_TLS"
+              {{- else}}
               value: "NO_CERT"
+              {{- end}}
 
             - name: MY_POD_NAME
               valueFrom:
@@ -111,22 +119,32 @@ spec:
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.certificates.sensorconnect.sslKeyPassword | quote}}
-
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.sensorconnect.sslKeyPassword | quote}}
+            - name: MQTT_PASSWORD
+              value: {{.Values.sensorconnect.mqtt.password | quote}}
+            - name: INSECURE_SKIP_VERIFY
+              value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}c
 
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values.sensorconnect.ioddfilepath}}
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
-              mountPath: /SSL_certs
+              mountPath: /SSL_certs/kafka
+              readOnly: true
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
+              mountPath: /SSL_certs/mqtt
               readOnly: true
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-claim
-        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-certificates
           secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-secrets
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-secrets
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-secrets
+
 
 
       serviceAccountName: {{include "united-manufacturing-hub.serviceAccountName" .}}

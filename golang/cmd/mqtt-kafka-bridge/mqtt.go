@@ -21,22 +21,39 @@ func newTLSConfig() *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/mqtt/ca.crt")
 	if err == nil {
-		certpool.AppendCertsFromPEM(pemCerts)
+		ok := certpool.AppendCertsFromPEM(pemCerts)
+		if !ok {
+			zap.S().Errorf("Failed to parse root certificate")
+		}
+	} else {
+		zap.S().Errorf("Error reading CA certificate: %s", err)
 	}
 
+	zap.S().Debugf("CA cert: %s", pemCerts)
+
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/tls.crt", "/SSL_certs/tls.key")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/tls.crt", "/SSL_certs/mqtt/tls.key")
 	if err != nil {
-		panic(err)
+		// Read /SSL_certs/mqtt/tls.crt
+		var file []byte
+		file, err = os.ReadFile("/SSL_certs/mqtt/tls.crt")
+		if err != nil {
+			zap.S().Errorf("Error reading client certificate: %s", err)
+		}
+		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
 	}
+
+	zap.S().Debugf("Client cert: %v", cert)
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
+
+	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY") == "true"
 
 	// Create tls.Config with desired tls properties
 	/* #nosec G402 -- Remote verification is not yet implemented*/
@@ -51,9 +68,11 @@ func newTLSConfig() *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
-		InsecureSkipVerify: true,
+		/* #nosec G402 -- Remote verification is not yet implemented*/
+		InsecureSkipVerify: skipVerify,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
 }
 
@@ -97,13 +116,16 @@ func SetupMQTT(
 	mqttTopic string,
 	health healthcheck.Handler,
 	podName string,
-	pg *goque.Queue) {
+	pg *goque.Queue, password string) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	opts.SetUsername("MQTT_KAFKA_BRIDGE")
+	if password != "" {
+		opts.SetPassword(password)
+	}
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("MQTT_KAFKA_BRIDGE")
 
 		if mqttTopic == "" {
 			mqttTopic = "$share/MQTT_KAFKA_BRIDGE/ia/#"
@@ -113,30 +135,30 @@ func SetupMQTT(
 
 	} else {
 		tlsconfig := newTLSConfig()
-		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
+		opts.SetClientID(podName).SetTLSConfig(tlsconfig)
 
 		if mqttTopic == "" {
 			mqttTopic = "ia/#"
 		}
 
-		zap.S().Infof("Running in normal mode", mqttTopic, certificateName)
+		zap.S().Infof("Running in normal mode", mqttTopic, podName)
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
 	opts.SetOrderMatters(false)
 
-	zap.S().Debugf("Broker configured", mqttBrokerURL, certificateName)
+	zap.S().Debugf("Broker configured", mqttBrokerURL, podName)
 
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 
 	// Subscribe
 	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to subscribe: %s", token.Error())
 	}
 	zap.S().Infof("MQTT subscribed", mqttTopic)
 
