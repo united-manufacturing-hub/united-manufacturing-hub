@@ -1,0 +1,19 @@
+---
+{{if .Values._000_commonConfig.datasources.opcuasimulator.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator-service
+  labels:
+    {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 4}}
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 46010
+      targetPort: 46010
+      protocol: TCP
+      name: opctcp
+  selector:
+     {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 4}}
+
+{{end}}
