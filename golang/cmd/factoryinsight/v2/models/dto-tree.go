@@ -32,9 +32,9 @@ type TreeStructureTags struct {
 }*/
 
 type TreeEntryFormat struct {
+	Entries map[string]*TreeEntryFormat `json:"entries"`
 	Label   string                      `json:"label"`
 	Value   string                      `json:"value"`
-	Entries map[string]*TreeEntryFormat `json:"entries"`
 }
 
 type TreeEntryValues struct {

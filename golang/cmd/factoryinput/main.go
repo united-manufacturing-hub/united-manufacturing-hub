@@ -130,7 +130,8 @@ func main() {
 	// Setup MQTT
 	zap.S().Debugf("Setting up MQTT")
 	podName := GetEnv("MY_POD_NAME")
-	SetupMQTT(certificateName, mqttBrokerURL, podName)
+	mqttPassword := os.Getenv("MQTT_PASSWORD")
+	SetupMQTT(certificateName, mqttBrokerURL, podName, mqttPassword)
 	zap.S().Debugf("Finished setting up MQTT")
 
 	// Setup rest

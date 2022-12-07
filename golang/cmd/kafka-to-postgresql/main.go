@@ -91,7 +91,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	if KafkaBoostrapServer == "" {
-		panic("KAFKA_BOOTSTRAP_SERVER not set")
+		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER is not set")
 	}
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
@@ -101,17 +101,17 @@ func main() {
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/tls.key")
+		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatalf("Error opening Kafka TLS key: %s", err)
 		}
-		_, err = os.Open("/SSL_certs/tls.crt")
+		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatalf("Error opening kafka cert: %s", err)
 		}
-		_, err = os.Open("/SSL_certs/ca.crt")
+		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatalf("Error opening ca.crt: %s", err)
 		}
 	}
 
@@ -123,10 +123,10 @@ func main() {
 		kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-postgresql-hi-processor",
 			"enable.auto.commit":       true,
 			"enable.auto.offset.store": false,
@@ -141,10 +141,10 @@ func main() {
 		kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-postgresql-ht-processor",
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",
@@ -158,10 +158,10 @@ func main() {
 		kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-postgresql-topic-probe",
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",

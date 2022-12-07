@@ -15,7 +15,7 @@ import (
 func processKafkaQueue(topic string, bucketName string) {
 	err := internal.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to subscribe to topic: %s", err)
 	}
 
 	for !ShuttingDown {

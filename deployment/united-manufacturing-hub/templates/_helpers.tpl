@@ -171,13 +171,12 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-iotsenso
 {{- end }}
 
 {{/*
-Labels for vernemq
+Labels for hivemqce
 */}}
-{{- define "united-manufacturing-hub.labels.vernemq" -}}
-app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-vernemq
+{{- define "united-manufacturing-hub.labels.hivemqce" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-hivemqce
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
-
 
 {{/*
 Labels for emqxedge

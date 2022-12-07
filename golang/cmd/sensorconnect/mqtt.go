@@ -18,21 +18,21 @@ func newTLSConfig() *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/kafka/ca.crt")
 	if err == nil {
 		certpool.AppendCertsFromPEM(pemCerts)
 	}
 
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/tls.crt", "/SSL_certs/tls.key")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/kafka/tls.crt", "/SSL_certs/kafka/tls.key")
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to load client certificate: %s", err)
 	}
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to parse certificate: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties
@@ -63,20 +63,24 @@ func onConnect(c MQTT.Client) {
 // onConnectionLost outputs warn message
 func onConnectionLost(c MQTT.Client, err error) {
 	optionsReader := c.OptionsReader()
-	panic(fmt.Sprintf("Connection to MQTT broker lost, restarting ! %#v", optionsReader))
+	zap.S().Fatalf("Connection to MQTT broker lost, restarting ! %#v", optionsReader)
 }
 
 // SetupMQTT setups MQTT and connect to the broker
-func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) {
+func SetupMQTT(certificateName string, mqttBrokerURL string, podName string, password string) {
 	if !useMQTT {
 		return
 	}
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+	opts.SetUsername("SENSORCONNECT")
+	if password != "" {
+		opts.SetPassword(password)
+	}
+
 	if certificateName == "NO_CERT" {
 		opts.SetClientID(podName)
-		opts.SetUsername("SENSORCONNECT")
 
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
@@ -96,7 +100,7 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string) {
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 }
 
