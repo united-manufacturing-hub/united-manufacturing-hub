@@ -25,10 +25,10 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 	localConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        LocalKafkaBootstrapServers,
 		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 		"group.id":                 fmt.Sprintf("kafka-bridge-local-%s", kafkaGroupIdSuffic),
 		"auto.offset.reset":        "earliest",
 		"enable.auto.commit":       true,
@@ -38,10 +38,10 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 	remoteConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        RemoteKafkaBootstrapServers,
 		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/tls.key",
+		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-		"ssl.certificate.location": "/SSL_certs/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/ca.crt",
+		"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+		"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 		"group.id":                 fmt.Sprintf("kafka-bridge-remote-%s", kafkaGroupIdSuffic),
 		"auto.offset.reset":        "earliest",
 		"enable.auto.commit":       true,
@@ -64,25 +64,25 @@ func CreateTopicMapElementProcessor(
 	if element.Bidirectional {
 		var localConsumer, err = kafka.NewConsumer(&localConfigMap)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to create localConsumer: %v for element %v", err, element))
+			zap.S().Fatalf("Failed to create localConsumer: %v for element %v", err, element)
 		}
 
 		var localProducer *kafka.Producer
 		localProducer, err = kafka.NewProducer(&localConfigMap)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to create localProducer: %v for element %v", err, element))
+			zap.S().Fatalf("Failed to create localProducer: %v for element %v", err, element)
 		}
 
 		var remoteConsumer *kafka.Consumer
 		remoteConsumer, err = kafka.NewConsumer(&remoteConfigMap)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to create localConsumer: %v for element %v", err, element))
+			zap.S().Fatalf("Failed to create localConsumer: %v for element %v", err, element)
 		}
 
 		var remoteProducer *kafka.Producer
 		remoteProducer, err = kafka.NewProducer(&remoteConfigMap)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to create localProducer: %v for element %v", err, element))
+			zap.S().Fatalf("Failed to create localProducer: %v for element %v", err, element)
 		}
 
 		localMsgChan := make(chan *kafka.Message, 100)
@@ -131,32 +131,32 @@ func CreateTopicMapElementProcessor(
 		if element.SendDirection == ToLocal {
 			consumer, err = kafka.NewConsumer(&remoteConfigMap)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to create consumer: %v for element %v", err, element))
+				zap.S().Fatalf("Failed to create consumer: %v for element %v", err, element)
 			}
 			putBackProducer, err = kafka.NewProducer(&remoteConfigMap)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to create producer: %v for element %v", err, element))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 			producer, err = kafka.NewProducer(&localConfigMap)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to create producer: %v for element %v", err, element))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 
 		} else if element.SendDirection == ToRemote {
 			consumer, err = kafka.NewConsumer(&localConfigMap)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to create consumer: %v for element %v", err, element))
+				zap.S().Fatalf("Failed to create consumer: %v for element %v", err, element)
 			}
 			putBackProducer, err = kafka.NewProducer(&localConfigMap)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to create producer: %v for element %v", err, element))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 			producer, err = kafka.NewProducer(&remoteConfigMap)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to create producer: %v for element %v", err, element))
+				zap.S().Fatalf("Failed to create producer: %v for element %v", err, element)
 			}
 		} else {
-			panic(fmt.Sprintf("Invalid send direction %v for element %v", element.SendDirection, element))
+			zap.S().Fatalf("Invalid send direction %v for element %v", element.SendDirection, element)
 		}
 
 		msgChan := make(chan *kafka.Message, 100)

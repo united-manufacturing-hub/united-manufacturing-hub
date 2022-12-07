@@ -2140,7 +2140,7 @@ func CalculateAccumulatedProducts(
 			timeSinceStartInMilliSec := i - beginTimeStamp.UnixMilli()
 			product, ok := productCache[productId]
 			if !ok {
-				panic(fmt.Sprintf("Product %d not found", productId))
+				zap.S().Fatalf("Product %d not found", productId)
 			}
 
 			expectedProducedFromCurrentOrder = timeSinceStartInMilliSec / int64(product.timePerProductUnitInSec*1000)
@@ -2153,7 +2153,7 @@ func CalculateAccumulatedProducts(
 			timeSinceStartInMilliSec := i - insideOrder.beginTimeStamp.UnixMilli()
 			product, ok := productCache[insideOrder.productId]
 			if !ok {
-				panic(fmt.Sprintf("Product %d not found", productId))
+				zap.S().Fatalf("Product %d not found", productId)
 			}
 
 			expectedProducedFromCurrentOrder += timeSinceStartInMilliSec / int64(product.timePerProductUnitInSec*1000)

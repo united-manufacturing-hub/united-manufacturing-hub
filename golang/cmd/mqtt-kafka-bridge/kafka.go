@@ -85,7 +85,7 @@ func SendKafkaMessages() {
 func kafkaToQueue(topic string) {
 	err := internal.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to subscribe to topic %s: %s", topic, err)
 	}
 
 	stuck := 0

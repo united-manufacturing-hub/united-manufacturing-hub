@@ -1,0 +1,137 @@
+
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extension
+data:
+  # https://github.com/hivemq/hivemq-file-rbac-extension
+  credentials.xml: |
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <file-rbac>
+        <users>
+            <user>
+                <name>FACTORYINPUT</name>
+                <password>{{.Values.factoryinput.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>MQTT_KAFKA_BRIDGE</name>
+                <password>{{.Values.mqttkafkabridge.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>MQTT_BRIDGE</name>
+                <password>{{.Values.mqttbridge.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>SENSORCONNECT</name>
+                <password>{{.Values.sensorconnect.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            <user>
+                <name>IOTSENSORSMQTT</name>
+                <password>{{.Values.iotsensorsmqtt.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>ia_raw</id>
+                </roles>
+            </user>
+            <user>
+                <name>PACKMLSIMULATOR</name>
+                <password>{{.Values.packmlmqttsimulator.env.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>packmlsimulator</id>
+                </roles>
+            </user>
+            <user>
+                <name>node-red</name>
+                <password>{{.Values.nodered.mqtt.encryptedPassword}}</password>
+                <roles>
+                    <id>packmlsimulator</id>
+                    <id>umh_read_write</id>
+                    <id>ia_read_write</id>
+                </roles>
+            </user>
+            {{if .Values._000_commonConfig.infrastructure.mqtt.adminUser.enabled}}
+            <user>
+                <name>{{.Values._000_commonConfig.infrastructure.mqtt.adminUser.name}}</name>
+                <password>{{.Values._000_commonConfig.infrastructure.mqtt.adminUser.encryptedPassword}}</password>
+                <roles>
+                    <id>superuser</id>
+                </roles>
+            </user>
+            {{end}}
+        </users>
+        <roles>
+            <role>
+                <id>umh_read_write</id>
+                <permissions>
+                    <permission>
+                        <topic>umh/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>ia_read_write</id>
+                <permissions>
+                    <permission>
+                        <topic>ia/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>ia_raw</id>
+                <permissions>
+                    <permission>
+                        <topic>ia/raw/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>packmlsimulator</id>
+                <permissions>
+                    <permission>
+                        <topic>{{.Values.packmlmqttsimulator.env.site}}/{{.Values.packmlmqttsimulator.env.area}}/{{.Values.packmlmqttsimulator.env.productionline}}/#</topic>
+                    </permission>
+                </permissions>
+            </role>
+            <role>
+                <id>superuser</id>
+                <permissions>
+                    <permission>
+                        <topic>#</topic>
+                    </permission>
+                </permissions>
+            </role>
+        </roles>
+    </file-rbac>
+
+
+  heartbeat.xml: |
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <heartbeat-extension-configuration>
+        <port>9090</port>
+        <bind-address>0.0.0.0</bind-address>
+        <path>/heartbeat</path>
+    </heartbeat-extension-configuration>
+
+
+
+  prometheus.properties: |
+    ip=0.0.0.0
+    port=9399
+    metric_path=/metrics
+
+
+{{end}}
