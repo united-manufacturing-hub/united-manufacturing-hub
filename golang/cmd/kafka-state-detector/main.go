@@ -63,7 +63,7 @@ func main() {
 	// Read environment variables for Kafka
 	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
 	if KafkaBoostrapServer == "" {
-		panic("KAFKA_BOOTSTRAP_SERVER not set")
+		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER not set")
 	}
 
 	allowedMemorySize := 1073741824 // 1GB
@@ -85,27 +85,27 @@ func main() {
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/tls.key")
+		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatalf("Error opening kafka tls.key: %s", err)
 		}
-		_, err = os.Open("/SSL_certs/tls.crt")
+		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatalf("Error opening certificate: %s", err)
 		}
-		_, err = os.Open("/SSL_certs/ca.crt")
+		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatalf("Error opening ca.crt: %s", err)
 		}
 	}
 	if ActivityEnabled {
 		SetupActivityKafka(
 			kafka.ConfigMap{
 				"security.protocol":        securityProtocol,
-				"ssl.key.location":         "/SSL_certs/tls.key",
+				"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 				"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-				"ssl.certificate.location": "/SSL_certs/tls.crt",
-				"ssl.ca.location":          "/SSL_certs/ca.crt",
+				"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+				"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 				"bootstrap.servers":        KafkaBoostrapServer,
 				"group.id":                 "kafka-state-detector-activity",
 				"enable.auto.commit":       true,
@@ -145,10 +145,10 @@ func main() {
 			kafka.ConfigMap{
 				"bootstrap.servers":        KafkaBoostrapServer,
 				"security.protocol":        securityProtocol,
-				"ssl.key.location":         "/SSL_certs/tls.key",
+				"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 				"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-				"ssl.certificate.location": "/SSL_certs/tls.crt",
-				"ssl.ca.location":          "/SSL_certs/ca.crt",
+				"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+				"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 				"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
 				"enable.auto.commit":       true,
 				"auto.offset.reset":        "earliest",
@@ -180,7 +180,7 @@ func main() {
 	}
 
 	if !ActivityEnabled && !AnomalyEnabled {
-		panic("No activity or anomaly detection enabled")
+		zap.S().Fatal("No activity or anomaly processing enabled")
 	}
 
 	// Allow graceful shutdown
