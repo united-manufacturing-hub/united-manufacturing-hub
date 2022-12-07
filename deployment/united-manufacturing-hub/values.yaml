@@ -43,6 +43,12 @@ _000_commonConfig:
     iotsensorsmqtt:
       enabled: true
 
+
+    # iotsensorsmqtt simulates IoT sensor data as over OPC UA.
+    # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsOPCUA
+    opcuasimulator:
+       enabled: true
+
     # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
     # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
     packmlmqttsimulator:
@@ -463,6 +469,23 @@ iotsensorsmqtt:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==
 
+### opcuasimulator ###
+opcuasimulator:
+  image: unitedmanufacturinghub/opcuasimulator
+  tag: 0.1.0
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "20Mi"
+    limits:
+      cpu: "100m"
+      memory: "100Mi"
+  service:
+    annotations: {}
+    # certadds can add hostnames and ip addresses to the certificate for the simulator so connection to the opcua client is easier
+  certadds:
+    hosts: "united-manufacturing-hub-opcuasimulator-service"
+    #ips: "1.1.1.1"
 
 ### kafkabridge ###
 kafkabridge:
