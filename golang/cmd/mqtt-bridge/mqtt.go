@@ -16,22 +16,37 @@ func newTLSConfig(mode string) *tls.Config {
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/" + mode + "/ca.crt")
+	pemCerts, err := os.ReadFile("/SSL_certs/mqtt/ca.crt")
 	if err == nil {
-		certpool.AppendCertsFromPEM(pemCerts)
+		ok := certpool.AppendCertsFromPEM(pemCerts)
+		if !ok {
+			zap.S().Errorf("Failed to parse root certificate")
+		}
+	} else {
+		zap.S().Errorf("Error reading CA certificate: %s", err)
 	}
 
+	zap.S().Debugf("CA cert: %s", pemCerts)
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair("/SSL_certs/"+mode+"/tls.crt", "/SSL_certs/"+mode+"/tls.key")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/"+mode+"tls.crt", "/SSL_certs/mqtt/"+mode+"tls.key")
 	if err != nil {
-		panic(err)
+		// Read /SSL_certs/mqtt/tls.crt
+		var file []byte
+		file, err = os.ReadFile("/SSL_certs/mqtt/" + mode + "tls.crt")
+		if err != nil {
+			zap.S().Errorf("Error reading client certificate: %s", err)
+		}
+		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
 	}
+	zap.S().Debugf("Client cert: %v", cert)
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
+
+	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY_"+mode) == "true"
 
 	// Create tls.Config with desired tls properties
 	/* #nosec G402 -- Remote verification is not yet implemented*/
@@ -46,9 +61,10 @@ func newTLSConfig(mode string) *tls.Config {
 		// ClientCAs: nil,
 		// InsecureSkipVerify = verify that cert contents
 		// match server. IP matches what is in cert etc.
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: skipVerify,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
 }
 
@@ -86,10 +102,16 @@ func setupMQTT(
 	subMQTTTopic string,
 	SSLEnabled bool,
 	pg *goque.Queue,
-	subscribeToTopic bool) (MQTTClient MQTT.Client) {
+	subscribeToTopic bool,
+	password string) (mqttClient MQTT.Client) {
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
+
+	opts.SetUsername("MQTT_BRIDGE")
+	if password != "" {
+		opts.SetPassword(password)
+	}
 
 	if SSLEnabled {
 		tlsconfig := newTLSConfig(mode)
@@ -105,9 +127,9 @@ func setupMQTT(
 	zap.S().Infof("MQTT connection configured", clientID, mode, mqttBrokerURL, subMQTTTopic, SSLEnabled)
 
 	// Start the connection
-	MQTTClient = MQTT.NewClient(opts)
-	if token := MQTTClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+	mqttClient = MQTT.NewClient(opts)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		zap.S().Fatalf("Failed to connect: %s", token.Error())
 	}
 
 	// Can be deactivated, e.g. if one does not want to receive all data from remote broker
@@ -115,11 +137,11 @@ func setupMQTT(
 
 		zap.S().Infof("MQTT subscribed", mode, subMQTTTopic)
 		// subscribe (important: cleansession needs to be false, otherwise it must be specified in OnConnect
-		if token := MQTTClient.Subscribe(
+		if token := mqttClient.Subscribe(
 			subMQTTTopic+"/#",
 			2,
 			getOnMessageRecieved(mode, pg)); token.Wait() && token.Error() != nil {
-			panic(token.Error())
+			zap.S().Fatalf("Failed to subscribe: %s", token.Error())
 		}
 	}
 

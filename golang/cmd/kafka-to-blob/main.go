@@ -74,27 +74,27 @@ func main() {
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/tls.key")
+		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
-			panic("SSL key file not found")
+			zap.S().Fatalf("Error opening Kafka TLS key: %s", err)
 		}
-		_, err = os.Open("/SSL_certs/tls.crt")
+		_, err = os.Open("/SSL_certs/kafka/tls.crt")
 		if err != nil {
-			panic("SSL cert file not found")
+			zap.S().Fatalf("Error opening certificate: %s", err)
 		}
-		_, err = os.Open("/SSL_certs/ca.crt")
+		_, err = os.Open("/SSL_certs/kafka/ca.crt")
 		if err != nil {
-			panic("SSL CA cert file not found")
+			zap.S().Fatalf("Error opening ca.crt: %v", err)
 		}
 	}
 	internal.SetupKafka(
 		kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-blob",
 			"metadata.max.age.ms":      180000,
 		})
@@ -104,10 +104,10 @@ func main() {
 		kafka.ConfigMap{
 			"bootstrap.servers":        KafkaBoostrapServer,
 			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/tls.key",
+			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
-			"ssl.certificate.location": "/SSL_certs/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/ca.crt",
+			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
+			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-blob-topic-probe",
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",
@@ -117,7 +117,7 @@ func main() {
 
 	err := internal.CreateTopicIfNotExists(KafkaBaseTopic)
 	if err != nil {
-		panic(err)
+		zap.S().Fatalf("Failed to create topic %s: %s", KafkaBaseTopic, err)
 	}
 
 	zap.S().Debugf("Setting up Minio")

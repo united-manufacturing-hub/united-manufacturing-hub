@@ -34,5 +34,5 @@ services:
               max-size: "10m"
       restart: unless-stopped
       volumes:
-        - ../../golang/test/mqtt-bridge/config/certificates:/SSL_certs
+        - ../../golang/test/mqtt-bridge/config/certificates:/SSL_certs/kafka
         - ../../golang/test/mqtt-bridge/data/queue:/data/queue
