@@ -4,7 +4,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator-deployment
   labels:
     {{- include "united-manufacturing-hub.labels.opcuasimulator" . | nindent 4}}
     app.kubernetes.io/component: "opcuasimulator"
@@ -25,7 +25,7 @@ spec:
       volumes:
         - name: opcuasimulator-config
           configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
+            name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator-config
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
           {{if .Values.opcuasimulator.tag}}

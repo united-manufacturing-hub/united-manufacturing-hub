@@ -52,7 +52,6 @@ _000_commonConfig:
     # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
     # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
     packmlmqttsimulator:
-
       enabled: true
 
   # dataprocessing involves microservices, whose main purpose is to process the data
@@ -473,7 +472,7 @@ iotsensorsmqtt:
 ### opcuasimulator ###
 opcuasimulator:
   image: unitedmanufacturinghub/opcuasimulator
-  tag: development
+  tag: v0.1.0
   resources:
     requests:
       cpu: "10m"
