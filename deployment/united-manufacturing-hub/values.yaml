@@ -472,7 +472,7 @@ iotsensorsmqtt:
 ### opcuasimulator ###
 opcuasimulator:
   image: unitedmanufacturinghub/opcuasimulator
-  tag: v0.1.0
+  tag: 0.1.0
   resources:
     requests:
       cpu: "10m"
