@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/cristalhq/base64"
 	"github.com/minio/minio-go/v7"
@@ -81,7 +80,7 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 				Partition: kafka.PartitionAny,
 			},
 			Value: msg.Value,
-		}, nil, fmt.Sprintf("kafka-to-blob-%s", "TODO"))
+		}, nil)
 		if err != nil {
 			zap.S().Warnf("Failed to resend message: %s", err)
 		}

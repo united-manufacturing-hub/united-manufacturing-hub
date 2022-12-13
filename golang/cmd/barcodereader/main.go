@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
@@ -18,8 +19,6 @@ import (
 	"os"
 	"time"
 )
-
-var serialNumber string
 
 var kafkaSendTopic string
 
@@ -65,7 +64,6 @@ func main() {
 	customerID := os.Getenv("CUSTOMER_ID")
 	location := os.Getenv("LOCATION")
 	assetID := os.Getenv("ASSET_ID")
-	serialNumber = os.Getenv("SERIAL_NUMBER")
 	scanOnly = os.Getenv("SCAN_ONLY") == "true"
 
 	if !scanOnly {
@@ -173,7 +171,7 @@ func OnScan(scanned string) {
 		},
 		Value: bytes,
 	}
-	err = internal.Produce(internal.KafkaProducer, &msg, nil, fmt.Sprintf("barcodereader-%s", serialNumber))
+	err = internal.Produce(internal.KafkaProducer, &msg, nil)
 	if err != nil {
 		zap.S().Warnf("Error producing message: %v (%v)", err, scanned)
 		return

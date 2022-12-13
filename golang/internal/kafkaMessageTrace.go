@@ -4,22 +4,59 @@ import (
 	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
+	"os"
 	"time"
 )
+
+var SerialNumber = os.Getenv("SERIAL_NUMBER")
+var PodName = os.Getenv("MY_POD_NAME")
 
 type TraceValue struct {
 	Traces map[int64]string `json:"trace"`
 }
 
-func Produce(producer *kafka.Producer, msg *kafka.Message, deliveryChan chan kafka.Event, identifier string) error {
-	err := AddTrace(msg, "x-trace", identifier)
+func Produce(producer *kafka.Producer, msg *kafka.Message, deliveryChan chan kafka.Event) error {
+	if PodName == "" {
+		zap.S().Error("PodName is empty")
+	}
+	if SerialNumber == "" {
+		zap.S().Error("SerialNumber is empty")
+	}
+	identifier := PodName + "-" + SerialNumber
+	err := AddXTrace(msg, identifier)
 	if err != nil {
 		return err
 	}
 	return producer.Produce(msg, deliveryChan)
 }
 
-func AddTrace(message *kafka.Message, key, value string) error {
+func addXOrigin(message *kafka.Message, origin string) error {
+	return addHeaderTrace(message, "x-origin", origin)
+}
+
+func AddXOriginIfMissing(message *kafka.Message, value string) error {
+	trace := GetTrace(message, "x-origin")
+	if trace == nil {
+		err := addXOrigin(message, SerialNumber)
+		return err
+	}
+	return nil
+}
+
+func AddXTrace(message *kafka.Message, value string) error {
+	err := addHeaderTrace(message, "x-trace", value)
+	if err != nil {
+		return err
+	}
+	err = AddXOriginIfMissing(message, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func addHeaderTrace(message *kafka.Message, key, value string) error {
 	if message.Headers == nil {
 		message.Headers = make([]kafka.Header, 0)
 	}

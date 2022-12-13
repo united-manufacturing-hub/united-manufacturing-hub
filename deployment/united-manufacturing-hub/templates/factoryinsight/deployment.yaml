@@ -96,6 +96,14 @@ spec:
             - name: VERSION
               value: {{.Values.factoryinsight.version | default 2 | quote}}
 
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber}}
+
           livenessProbe:
             httpGet:
               path: /live

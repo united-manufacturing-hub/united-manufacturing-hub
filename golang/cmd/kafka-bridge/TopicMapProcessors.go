@@ -252,7 +252,7 @@ func startAtoBSender(
 			Key:     msg.Key,
 			Headers: msg.Headers,
 		}
-		err := internal.Produce(producer, &msgX, nil, fmt.Sprintf("kafka-bridge-%s", identifier))
+		err := internal.Produce(producer, &msgX, nil)
 
 		if err != nil {
 			errS := err.Error()

@@ -2,17 +2,13 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"os"
 	"strings"
 	"time"
 )
-
-var sn = os.Getenv("SERIAL_NUMBER")
 
 var KafkaSenderThreads int
 var KafkaAcceptNoOrigin bool
@@ -66,13 +62,7 @@ func SendKafkaMessages() {
 			},
 			Value: object.Message,
 		}
-		err = internal.AddTrace(msg, "x-origin", sn)
-		if err != nil {
-			zap.S().Errorf("Failed to add trace: %s", err)
-			storeMessageIntoQueue(object.Topic, object.Message, mqttIncomingQueue)
-			continue
-		}
-		err = internal.Produce(internal.KafkaProducer, msg, nil, fmt.Sprintf("mqtt-kafka-bridge-%s", sn))
+		err = internal.Produce(internal.KafkaProducer, msg, nil)
 
 		if err != nil {
 			zap.S().Errorf("Failed to send Kafka message: %s", err)
@@ -128,7 +118,7 @@ func kafkaToQueue(topic string) {
 		trace := internal.GetTrace(msg, "x-origin")
 		if trace != nil {
 			for _, v := range trace.Traces {
-				if v == sn {
+				if v == internal.SerialNumber {
 					// Ignore messages that our cluster created
 					continue
 				}

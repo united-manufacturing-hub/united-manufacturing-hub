@@ -37,7 +37,7 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 			Partition: kafka.PartitionAny,
 		},
 		Value: message,
-	}, nil, fmt.Sprintf("sensorconnect-%s", "TODO"))
+	}, nil)
 
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
