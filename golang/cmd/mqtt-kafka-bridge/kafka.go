@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -73,6 +74,7 @@ func SendKafkaMessages() {
 }
 
 func kafkaToQueue(topic string) {
+	zap.S().Infof("Starting Kafka consumer for topic: %s", topic)
 	err := internal.KafkaConsumer.Subscribe(topic, nil)
 	if err != nil {
 		zap.S().Fatalf("Failed to subscribe to topic %s: %s", topic, err)
@@ -97,33 +99,50 @@ func kafkaToQueue(topic string) {
 		}
 		stuck = 0
 		msg, err = internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
+		zap.S().Debugf("Received Kafka message: %v (%v)", msg, err)
 		if err != nil {
 			// This is fine, and expected behaviour
 			var kafkaError kafka.Error
 			ok := errors.As(err, &kafkaError)
 			if ok && kafkaError.Code() == kafka.ErrTimedOut {
+				zap.S().Debugf("Kafka consumer timed out")
 				// Sleep to reduce CPU usage
 				time.Sleep(internal.OneSecond)
 				continue
 			} else if ok && kafkaError.Code() == kafka.ErrUnknownTopicOrPart {
+				zap.S().Errorf("Kafka consumer failed with unknown topic or partition: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			} else {
+				zap.S().Errorf("Kafka consumer failed: %s", err)
 				zap.S().Warnf("Failed to read kafka message: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
 		}
 
-		trace := internal.GetTrace(msg, "x-origin")
+		// Ignore every message from the same producer.
+		trace := internal.GetTrace(msg, "x-trace")
+		zap.S().Debugf("Trace: %v", trace)
+		zap.S().Debugf("MicroserviceName: %s, SerialNumber: %s", internal.MicroserviceName, internal.SerialNumber)
 		if trace != nil {
+			foundTrace := false
 			for _, v := range trace.Traces {
-				if v == internal.SerialNumber {
+				zap.S().Debugf("Kafka trace: %s vs %s-%s", v, internal.MicroserviceName, internal.SerialNumber)
+				if v == fmt.Sprintf("%s-%s", internal.MicroserviceName, internal.SerialNumber) {
+					zap.S().Debugf("Skipping message from own producer & cluster")
+					pathTraces := internal.GetTrace(msg, "x-trace")
+					zap.S().Debugf("Path traces: %v", pathTraces)
 					// Ignore messages that our cluster created
-					continue
+					foundTrace = true
+					break
 				}
 			}
+			if foundTrace {
+				continue
+			}
 		} else if !KafkaAcceptNoOrigin {
+			zap.S().Debugf("Skipping message without origin")
 			// Ignore messages without defined origin !
 			continue
 		}
@@ -145,4 +164,5 @@ func kafkaToQueue(topic string) {
 				kafkaTopic, payload)
 		}
 	}
+	zap.S().Infof("Kafka consumer for topic %s stopped", topic)
 }

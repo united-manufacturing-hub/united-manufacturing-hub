@@ -141,7 +141,7 @@ func SetupMQTT(
 			mqttTopic = "ia/#"
 		}
 
-		zap.S().Infof("Running in normal mode (%s) (%s) (%s)", mqttTopic, certificateName,podName)
+		zap.S().Infof("Running in normal mode (%s) (%s) (%s)", mqttTopic, certificateName, podName)
 
 	}
 	opts.SetAutoReconnect(true)
@@ -149,7 +149,7 @@ func SetupMQTT(
 	opts.SetConnectionLostHandler(onConnectionLost)
 	opts.SetOrderMatters(false)
 
-	zap.S().Debugf("Broker configured (%s) (%s) (%s)", mqttBrokerURL, certificateName,podName)
+	zap.S().Debugf("Broker configured (%s) (%s) (%s)", mqttBrokerURL, certificateName, podName)
 
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
@@ -226,4 +226,5 @@ func SendMQTTMessages() {
 		}
 		SentMQTTMessages++
 	}
+	zap.S().Infof("MQTT sender thread stopped")
 }

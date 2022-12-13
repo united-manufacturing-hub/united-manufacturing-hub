@@ -10,20 +10,22 @@ import (
 )
 
 var SerialNumber = os.Getenv("SERIAL_NUMBER")
-var PodName = os.Getenv("MY_POD_NAME")
+var MicroserviceName = os.Getenv("MICROSERVICE_NAME")
 
 type TraceValue struct {
 	Traces map[int64]string `json:"trace"`
 }
 
 func Produce(producer *kafka.Producer, msg *kafka.Message, deliveryChan chan kafka.Event) error {
-	if PodName == "" {
-		zap.S().Error("PodName is empty")
+	if MicroserviceName == "" {
+		zap.S().Error("MicroserviceName is empty")
+		return errors.New("microservice name is empty")
 	}
 	if SerialNumber == "" {
 		zap.S().Error("SerialNumber is empty")
+		return errors.New("microservice name is empty")
 	}
-	identifier := PodName + "-" + SerialNumber
+	identifier := MicroserviceName + "-" + SerialNumber
 	err := AddXTrace(msg, identifier)
 	if err != nil {
 		return err
@@ -35,7 +37,7 @@ func addXOrigin(message *kafka.Message, origin string) error {
 	return addHeaderTrace(message, "x-origin", origin)
 }
 
-func AddXOriginIfMissing(message *kafka.Message, value string) error {
+func AddXOriginIfMissing(message *kafka.Message) error {
 	trace := GetTrace(message, "x-origin")
 	if trace == nil {
 		err := addXOrigin(message, SerialNumber)
@@ -49,7 +51,7 @@ func AddXTrace(message *kafka.Message, value string) error {
 	if err != nil {
 		return err
 	}
-	err = AddXOriginIfMissing(message, value)
+	err = AddXOriginIfMissing(message)
 	if err != nil {
 		return err
 	}
@@ -120,8 +122,9 @@ func GetTrace(message *kafka.Message, key string) *TraceValue {
 		if header.Key == key {
 			// Json decode
 			var traceValue TraceValue
-			err := jsoniter.Unmarshal(header.Value, traceValue)
+			err := jsoniter.Unmarshal(header.Value, &traceValue)
 			if err != nil {
+				zap.S().Errorf("Failed to unmarshal trace header: %s (%s)", err, key)
 				return nil
 			}
 			return &traceValue

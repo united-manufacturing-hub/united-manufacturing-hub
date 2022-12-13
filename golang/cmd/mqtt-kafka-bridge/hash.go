@@ -15,6 +15,8 @@ func CheckIfNewMessageOrStore(message []byte, topic string) (isNewMessage bool) 
 	topic = strings.ToLower(topic)
 	topic = strings.ReplaceAll(topic, "/", ".")
 
+	zap.S().Debugf("Checking if new message: %s [%s]", topic, message)
+
 	if strings.HasPrefix(topic, "ia.raw") {
 		return checkRawMessage(message, topic)
 	} else {
