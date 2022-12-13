@@ -32,7 +32,7 @@ func main() {
 	// Initialize zap logging
 	log := logger.New("LOGGING_LEVEL")
 	defer func(logger *zap.SugaredLogger) {
-		err := logger.Sync()
+		err = logger.Sync()
 		if err != nil {
 			panic(err)
 		}
@@ -43,7 +43,7 @@ func main() {
 	// pprof
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
+		err = http.ListenAndServe("localhost:1337", nil)
 		if err != nil {
 			zap.S().Errorf("Error starting pprof: %v", err)
 		}
@@ -99,6 +99,9 @@ func main() {
 		zap.S().Fatalf("Error parsing MESSAGE_LRU_SIZE: %v", err)
 	}
 	MessageLRU, err = lru.NewARC(LruSize)
+	if err != nil {
+		zap.S().Fatalf("Error creating LRU: %v", err)
+	}
 
 	zap.S().Debugf("Setting up Queues")
 	mqttIncomingQueue, err = setupQueue("incoming")
