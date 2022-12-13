@@ -1512,8 +1512,8 @@ grafana:
     failureThreshold: 10
 
   image:
-    repository: grafana/grafana
-    tag: 8.5.9
+    repository: unitedmanufacturinghub/grafana-umh
+    tag: 1.0.0
     sha: ""
     pullPolicy: IfNotPresent
 
@@ -1675,17 +1675,17 @@ grafana:
   ##
   affinity: {}
 
-  extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.1.5
-      imagePullPolicy: IfNotPresent
-      name: init-umh-datasource
-      volumeMounts:
-        - mountPath: /var/lib/grafana
-          name: storage
+#  extraInitContainers:
+#    - image: unitedmanufacturinghub/grafana-plugin-extractor:0.1.5
+#      imagePullPolicy: IfNotPresent
+#      name: init-umh-datasource
+#      volumeMounts:
+#        - mountPath: /var/lib/grafana
+#          name: storage
 
           # subPath: ia-factoryinsight-datasource.zip
   ## Enable a Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
-  extraContainers: |
+  # extraContainers: |
   # - name: proxy
   #   image: quay.io/gambol99/keycloak-proxy:latest
   #   args:
@@ -1878,18 +1878,18 @@ grafana:
 
   ## Pass the plugins you want installed as a list.
   ##
-  plugins:
-    - grafana-worldmap-panel
-    - grafana-piechart-panel
-    - aceiot-svg-panel
-    - grafana-worldmap-panel
-    - natel-discrete-panel
-    - isaozler-paretochart-panel
-    - williamvenner-timepickerbuttons-panel
-    - agenty-flowcharting-panel
-    - marcusolsson-dynamictext-panel
-    - factry-untimely-panel
-    - cloudspout-button-panel
+#  plugins:
+#    - grafana-worldmap-panel
+#    - grafana-piechart-panel
+#    - aceiot-svg-panel
+#    - grafana-worldmap-panel
+#    - natel-discrete-panel
+#    - isaozler-paretochart-panel
+#    - williamvenner-timepickerbuttons-panel
+#    - agenty-flowcharting-panel
+#    - marcusolsson-dynamictext-panel
+#    - factry-untimely-panel
+#    - cloudspout-button-panel
 
   ## Configure grafana datasources
   ## ref: http://docs.grafana.org/administration/provisioning/#datasources
@@ -1906,7 +1906,6 @@ grafana:
           # <int> org id. will default to orgId 1 if not specified
           orgId: 1
           url: "http://united-manufacturing-hub-factoryinsight-service/"
-          # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
           jsonData:
             customerID: $FACTORYINSIGHT_CUSTOMERID
             apiKey: $FACTORYINSIGHT_PASSWORD
@@ -1925,7 +1924,6 @@ grafana:
           # <int> org id. will default to orgId 1 if not specified
           orgId: 1
           url: "http://united-manufacturing-hub-factoryinsight-service/"
-          # <string> custom UID which can be used to reference this datasource in other parts of the configuration, if not specified will be generated automatically
           jsonData:
             customerId: $FACTORYINSIGHT_CUSTOMERID
             apiKey: $FACTORYINSIGHT_PASSWORD
@@ -2017,7 +2015,7 @@ grafana:
     paths:
       data: /var/lib/grafana/data
       logs: /var/log/grafana
-      plugins: /var/lib/grafana/plugins
+      plugins: /etc/grafana/plugins
       provisioning: /etc/grafana/provisioning
     analytics:
       check_for_updates: true
