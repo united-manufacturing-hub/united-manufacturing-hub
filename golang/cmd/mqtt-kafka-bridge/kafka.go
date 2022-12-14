@@ -99,13 +99,11 @@ func kafkaToQueue(topic string) {
 		}
 		stuck = 0
 		msg, err = internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
-		zap.S().Debugf("Received Kafka message: %v (%v)", msg, err)
 		if err != nil {
 			// This is fine, and expected behaviour
 			var kafkaError kafka.Error
 			ok := errors.As(err, &kafkaError)
 			if ok && kafkaError.Code() == kafka.ErrTimedOut {
-				zap.S().Debugf("Kafka consumer timed out")
 				// Sleep to reduce CPU usage
 				time.Sleep(internal.OneSecond)
 				continue
@@ -120,6 +118,7 @@ func kafkaToQueue(topic string) {
 				continue
 			}
 		}
+		zap.S().Debugf("Received Kafka message: %v (%v)", msg, err)
 
 		// Ignore every message from the same producer.
 		trace := internal.GetTrace(msg, "x-trace")

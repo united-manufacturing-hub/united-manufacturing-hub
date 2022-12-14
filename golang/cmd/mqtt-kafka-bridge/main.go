@@ -183,7 +183,7 @@ func main() {
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
 			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-			"group.id":                 "kafka-to-blob-topic-probe",
+			"group.id":                 "mqtt-kafka-bridge-topic-probe",
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",
 			// "debug":                    "security,broker",
