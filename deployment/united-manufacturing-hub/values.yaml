@@ -2319,10 +2319,11 @@ kafka:
   resources:
     limits:
       cpu: 1000m
-      memory: 1Gi
+      memory: 4Gi
     requests:
       cpu: 100m
-      memory: 250Mi
+      memory: 2560Mi
+  heapOpts: -Xmx2048m -Xms2048m
   logRetentionHours: 168
   logSegmentBytes: _10485760 # 10MiB
   logRetentionBytes: _26214400 # 25MiB
