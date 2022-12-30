@@ -2,14 +2,15 @@ package main
 
 import (
 	"database/sql"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"os"
-	"strconv"
-	"time"
 )
 
 // Contains timestamp_ms and 1 other key, which is a string
@@ -226,6 +227,10 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 							}
 							return messages, true, "Error inserting into temporary table", err
 						}
+
+						// Calculate the lag
+						CalculateMessageProcessingLag(timestampMs)
+
 						toCommit += 1
 					}
 				}
