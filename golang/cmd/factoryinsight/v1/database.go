@@ -931,23 +931,34 @@ func GetProductionSpeed(
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
 			if timeDifference > 60 { // bigger than one minute
+				unixTimestamp1 := previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000 // 60 = adding 60 seconds
+				t1 := time.Unix(unixTimestamp1, 0)
+				formatted1 := t1.Format(time.RFC3339) //formatting the Unix time to RFC3339
+
+				unixTimestamp2 := timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1 // -1 = subtracting one s
+				t2 := time.Unix(unixTimestamp2, 0)
+				formatted2 := t2.Format(time.RFC3339) //formatting the Unix time to RFC3339
+
 				// add zero speed one minute after previous timestamp
 				fullRow := []interface{}{
 					0,
-					float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
+					formatted1}
 				data.Datapoints = append(data.Datapoints, fullRow)
 
 				// add zero speed one ms before timestamp
 				fullRow = []interface{}{
 					0,
-					float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
+					formatted2}
 				data.Datapoints = append(data.Datapoints, fullRow)
 			}
 		}
 		// add datapoint
+		unixTimestamp3 := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t3 := time.Unix(unixTimestamp3, 0)
+		formatted3 := t3.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			dataPoint * 60,
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))} // *60 to get the production speed per hour
+			formatted3} // *60 to get the production speed per hour
 		data.Datapoints = append(data.Datapoints, fullRow)
 
 		previousTimestamp = timestamp
