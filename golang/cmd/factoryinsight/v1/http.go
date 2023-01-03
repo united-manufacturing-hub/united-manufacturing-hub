@@ -380,14 +380,20 @@ func processStatesRequest(c *gin.Context, getDataRequest getDataRequest) {
 	// Loop through all datapoints
 	for _, dataPoint := range processedStates {
 		if keepStatesInteger {
+			unixTimestamp := dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+			t := time.Unix(unixTimestamp, 0)
+			formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 			fullRow := []interface{}{
 				dataPoint.State,
-				float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+				formatted}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		} else {
+			unixTimestamp := dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+			t := time.Unix(unixTimestamp, 0)
+			formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 			fullRow := []interface{}{
 				ConvertStateToString(dataPoint.State, configuration),
-				float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+				formatted}
 			data.Datapoints = append(data.Datapoints, fullRow)
 		}
 	}

@@ -758,8 +758,11 @@ func GetOrdersTimeline(
 
 	// Loop through all datapoints
 	for _, dataPoint := range processedOrders {
+		unixTimestamp := dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t := time.Unix(unixTimestamp, 0)
+		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			float64(dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			formatted,
 			dataPoint.OrderType}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}

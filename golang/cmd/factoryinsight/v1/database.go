@@ -428,8 +428,11 @@ func GetShifts(
 	// Loop through all datapoints
 	for _, dataPoint := range processedShifts {
 		// TODO: #86 Return timestamps in RFC3339 in /shifts
+		unixTimestampBegin := dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		tBegin := time.Unix(unixTimestampBegin, 0)
+		formattedBegin := tBegin.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			float64(dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			formattedBegin,
 			dataPoint.ShiftType}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
@@ -488,8 +491,11 @@ func GetProcessValue(
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
+		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t := time.Unix(unixTimestamp, 0)
+		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			formatted,
 			dataPoint}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
@@ -556,8 +562,11 @@ func GetProcessValueString(
 
 			return
 		}
+		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t := time.Unix(unixTimestamp, 0)
+		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			formatted,
 			dataPoint}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
@@ -625,14 +634,20 @@ func GetCurrentState(
 	dataPoint = datamodel.ConvertOldToNew(dataPoint)
 
 	if keepStatesInteger {
+		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t := time.Unix(unixTimestamp, 0)
+		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			dataPoint,
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			formatted}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
+		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t := time.Unix(unixTimestamp, 0)
+		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			ConvertStateToString(dataPoint, configuration),
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			formatted}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -806,10 +821,13 @@ func GetCounts(
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
+		unixTimestamp := dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t := time.Unix(unixTimestamp, 0)
+		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			dataPoint.Count,
 			dataPoint.Scrap,
-			float64(dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			formatted}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	}
 
@@ -1231,8 +1249,11 @@ func GetRecommendations(customerID string, location string, asset string) (
 		}
 
 		// TODO: #87 Return timestamps in RFC3339 in /recommendations
+		unixTimestamp4 := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+		t4 := time.Unix(unixTimestamp4, 0)
+		formatted4 := t4.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))),
+			formatted4,
 			recommendationType,
 			recommendationValues,
 			recommendationTextEN,
