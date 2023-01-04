@@ -1,6 +1,6 @@
 ARG GRAFANA_VERSION="8.5.9"
 
-FROM grafana/grafana:${GRAFANA_VERSION}
+FROM grafana/grafana:${GRAFANA_VERSION} as builder
 
 ARG GF_INSTALL_IMAGE_RENDERER_PLUGIN="false"
 
@@ -54,3 +54,7 @@ RUN if [ ! -z "${GF_INSTALL_PLUGINS}" ]; then \
         fi \
       done \
     fi
+
+FROM alpine as final
+
+COPY --from=builder /etc/grafana/plugins /plugins
