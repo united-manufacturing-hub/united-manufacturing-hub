@@ -1,0 +1,45 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-service
+  labels:
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+  {{if .Values.hivemqce.service.annotations}}
+  annotations:
+    {{- toYaml .Values.hivemqce.service.annotations | nindent 4}}
+  {{end}}
+spec:
+  type: LoadBalancer
+  ports:
+    {{- if .Values.hivemqce.service.mqtt.enabled}}
+    - port: 1883
+      targetPort: 1883
+      protocol: TCP
+      name: http
+    {{- end}}
+    {{- if .Values.hivemqce.service.mqtts.enabled}}
+    - port: 8883
+      targetPort: 8883
+      protocol: TCP
+      name: http
+    {{- end}}
+    {{- if .Values.hivemqce.service.mqtts.enabled}}
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+    {{- end}}
+    {{- if .Values.hivemqce.service.mqtts.enabled}}
+    - port: 8443
+      targetPort: 8443
+      protocol: TCP
+      name: http
+    {{- end}}
+  selector:
+     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+
+{{end}}
