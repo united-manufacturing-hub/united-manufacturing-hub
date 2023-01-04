@@ -934,12 +934,17 @@ func calculateOrderInformation(
 			}
 
 		}
+		UnixBeginTimestampMs := time.Unix(int64(beginTimestampInMs), 0)
+		formattedBeginTimestampMs := UnixBeginTimestampMs.Format(time.RFC3339)
+
+		UnixEndTimestampMs := time.Unix(int64(endTimestampInMs), 0)
+		formattedEndTimestampMs := UnixEndTimestampMs.Format(time.RFC3339)
 
 		fullRow := []interface{}{
 			rawOrder.OrderName,
 			rawOrder.ProductName,
-			beginTimestampInMs,
-			endTimestampInMs,
+			formattedBeginTimestampMs,
+			formattedEndTimestampMs,
 			rawOrder.TargetUnits,
 			actualUnits,
 			targetDuration,
