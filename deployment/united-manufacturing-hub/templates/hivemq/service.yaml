@@ -27,13 +27,13 @@ spec:
       protocol: TCP
       name: http
     {{- end}}
-    {{- if .Values.hivemqce.service.mqtts.enabled}}
+    {{- if .Values.hivemqce.service.ws.enabled}}
     - port: 8080
       targetPort: 8080
       protocol: TCP
       name: http
     {{- end}}
-    {{- if .Values.hivemqce.service.mqtts.enabled}}
+    {{- if .Values.hivemqce.service.wss.enabled}}
     - port: 8443
       targetPort: 8443
       protocol: TCP
