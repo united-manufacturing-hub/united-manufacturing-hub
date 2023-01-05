@@ -1513,7 +1513,7 @@ grafana:
 
   image:
     repository: grafana/grafana
-    tag: 8.5.9
+    tag: 9.3.2
     sha: ""
     pullPolicy: IfNotPresent
 
