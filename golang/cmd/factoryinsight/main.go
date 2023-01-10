@@ -67,12 +67,16 @@ func main() {
 	// Read environment variables
 	if os.Getenv("POSTGRES_HOST") != "" {
 		PQHost = os.Getenv("POSTGRES_HOST")
+	} else {
+		zap.S().Infof("Postgres_Host [POSTGRES_HOST] not set, using default (%s)", PQHost)
 	}
 
 	// Read port and convert to integer
 	PQPortString := "5432"
 	if os.Getenv("POSTGRES_PORT") != "" {
 		PQPortString = os.Getenv("POSTGRES_PORT")
+	} else {
+		zap.S().Infof("Postgres_Port [POSTGRES_PORT] not set, using default(%s)", PQPortString)
 	}
 	PQPort, err := strconv.Atoi(PQPortString)
 	if err != nil {
@@ -81,9 +85,18 @@ func main() {
 	}
 
 	// Read in other environment variables
-	PQUser := os.Getenv("POSTGRES_USER")
-	PQPassword := os.Getenv("POSTGRES_PASSWORD")
-	PWDBName := os.Getenv("POSTGRES_DATABASE")
+	PQUser, PQUserEnvSet := os.LookupEnv("POSTGRES_USER")
+	if !PQUserEnvSet {
+		zap.S().Fatal("PQ User (PQ_USER) must be set")
+	}
+	PQPassword, PQPasswordEnvSet := os.LookupEnv("POSTGRES_PASSWORD")
+	if !PQPasswordEnvSet {
+		zap.S().Fatal("PQ Password (PQ_PASSWORD) must be set")
+	}
+	PWDBName, PWDBNameEnvSet := os.LookupEnv("POSTGRES_DATABASE")
+	if !PWDBNameEnvSet {
+		zap.S().Fatal("PWDB Name (PWDB_NAME) must be set")
+	}
 
 	// Loading up user accounts
 	accounts := gin.Accounts{}
@@ -91,8 +104,14 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser := os.Getenv("CUSTOMER_NAME_" + strconv.Itoa(i))
-		tempPassword := os.Getenv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
+		tempUser, tempUserEnvSet := os.LookupEnv("CUSTOMER_NAME_" + strconv.Itoa(i))
+		if !tempUserEnvSet {
+			zap.S().Fatal("Temp User (TEMP_USER) must be set")
+		}
+		tempPassword, tempPasswordEnvSet := os.LookupEnv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
+		if !tempPasswordEnvSet {
+			zap.S().Fatal("Temp Password (TEMP_PASSWORD) must be set")
+		}
 		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
@@ -100,12 +119,21 @@ func main() {
 	}
 
 	// also add admin access
-	RESTUser := os.Getenv("FACTORYINSIGHT_USER")
-	RESTPassword := os.Getenv("FACTORYINSIGHT_PASSWORD")
+	RESTUser, RESTUserEnvSet := os.LookupEnv("FACTORYINSIGHT_USER")
+	if !RESTUserEnvSet {
+		zap.S().Fatal("Rest User (REST_USER) must be set")
+	}
+	RESTPassword, RESTPasswordEnvSet := os.LookupEnv("FACTORYINSIGHT_PASSWORD")
+	if !RESTPasswordEnvSet {
+		zap.S().Fatal("REST Password (REST_PASSWORD) must be set")
+	}
 	accounts[RESTUser] = RESTPassword
 
 	// get currentVersion
-	version := os.Getenv("VERSION")
+	version, versionEnvSet := os.LookupEnv("VERSION")
+	if !versionEnvSet {
+		zap.S().Fatal("Version (VERSION) must be set")
+	}
 	// parse as int
 	currentVersion, err := strconv.Atoi(version)
 	if err != nil {
@@ -115,13 +143,28 @@ func main() {
 
 	zap.S().Debugf("Starting program..")
 
-	redisURI := os.Getenv("REDIS_URI")
-	redisURI2 := os.Getenv("REDIS_URI2")
-	redisURI3 := os.Getenv("REDIS_URI3")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisURI, redisURIEnvSet := os.LookupEnv("REDIS_URI")
+	if !redisURIEnvSet {
+		zap.S().Fatal("RedisURI (REDIS_URI) must be set")
+	}
+	redisURI2, redisURI2EnvSet := os.LookupEnv("REDIS_URI2")
+	if !redisURI2EnvSet {
+		zap.S().Fatal("redisURI2 (REDIS_URI2) must be set")
+	}
+	redisURI3, redisURI3EnvSet := os.LookupEnv("REDIS_URI3")
+	if !redisURI3EnvSet {
+		zap.S().Fatal("RedisURI3 (REDIS_URI3) must be set")
+	}
+	redisPassword, redisPasswordEnvSet := os.LookupEnv("REDIS_PASSWORD")
+	if !redisPasswordEnvSet {
+		zap.S().Fatal("RedisPassword (REDIS_PASSWORD) must be set")
+	}
 	redisDB := 0 // default database
 
-	dryRun := os.Getenv("DRY_RUN")
+	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
+	if !dryRunEnvSet {
+		zap.S().Fatal("dryRun (DRY_RUN) must be set")
+	}
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized..", redisURI)
