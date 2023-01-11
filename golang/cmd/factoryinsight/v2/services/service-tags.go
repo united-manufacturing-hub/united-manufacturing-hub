@@ -37,7 +37,12 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 		return nil, err
 	}
 	var customTagGroupExists bool
+	var customTagGroupStringExists bool
 	customTagGroupExists, err = GetCustomTagsExists(id)
+	if err != nil {
+		return nil, err
+	}
+	customTagGroupStringExists, err = GetCustomTagsStringExists(id)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +56,9 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 	tagGroups = make([]string, 0)
 	if customTagGroupExists {
 		tagGroups = append(tagGroups, models.CustomTagGroup)
+	}
+	if customTagGroupStringExists {
+		tagGroups = append(tagGroups, models.CustomStringTagGroup)
 	}
 	if len(standardTags) > 0 {
 		tagGroups = append(tagGroups, models.StandardTagGroup)
