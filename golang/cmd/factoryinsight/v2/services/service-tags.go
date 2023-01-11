@@ -148,6 +148,34 @@ func GetCustomTags(workCellId uint32) (tags []string, err error) {
 	return
 }
 
+func GetCustomStringTags(workCellId uint32) (tags []string, err error) {
+	zap.S().Infof(
+		"[GetTags] Getting custom tags for work cell %d", workCellId)
+
+	sqlStatement := `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
+
+	rows, err := database.Db.Query(sqlStatement, workCellId)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var valueName string
+		err = rows.Scan(&valueName)
+		if err != nil {
+			database.ErrorHandling(sqlStatement, err, false)
+			return
+		}
+
+		tags = append(tags, valueName)
+	}
+
+	return
+}
+
 type Parent struct {
 	Value    string
 	Children []Parent

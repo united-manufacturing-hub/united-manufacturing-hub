@@ -293,6 +293,8 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 			structure, err = GetStandardTagsTree(customer, site, area, line, cell, tagGroup)
 		} else if tagGroup == models.CustomTagGroup {
 			structure, err = GetCustomTagsTree(customer, site, area, line, cell, tagGroup)
+		} else if tagGroup == models.CustomStringTagGroup {
+			structure, err = GetCustomTagsTree(customer, site, area, line, cell, tagGroup)
 		} else {
 			err = errors.New("unknown tag group")
 			return nil, err
