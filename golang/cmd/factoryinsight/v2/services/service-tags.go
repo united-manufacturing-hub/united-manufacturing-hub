@@ -429,7 +429,7 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	c.JSON(http.StatusOK, counts)
 }
 
-func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, useProcessValueString bool) {
 
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -440,7 +440,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	var data datamodel.DataResponseAny
 
-	if request.TagGroupName != models.CustomTagGroup {
+	if request.TagGroupName != models.CustomTagGroup && request.TagGroupName != models.CustomStringTagGroup {
 		helpers.HandleInvalidInputError(c, errors.New("invalid tag group"))
 		return
 	}
@@ -473,8 +473,9 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-values"
 		data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-		// #nosec G201
-		sqlStatement = `
+		if useProcessValueString == false {
+			// #nosec G201
+			sqlStatement = `
 SELECT
 	asset_id,
 	timestamp,
@@ -489,6 +490,23 @@ WHERE
 GROUP BY asset_id, timestamp, value
 ORDER BY timestamp
 `
+		} else {
+			sqlStatement = `
+SELECT
+	asset_id,
+	timestamp,
+	value
+FROM
+	processvaluestringtable
+WHERE
+    asset_id = $1 AND
+    valuename = $2 AND
+    timestamp >= $3 AND
+    timestamp <= $4
+GROUP BY asset_id, timestamp, value
+ORDER BY timestamp
+`
+		}
 	} else {
 		gapFilling := getCustomTagDataRequest.GapFilling
 

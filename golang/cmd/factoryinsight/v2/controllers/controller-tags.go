@@ -114,8 +114,10 @@ func GetTagsDataHandler(c *gin.Context) {
 			return
 		}
 	case models.CustomTagGroup:
-		services.ProcessCustomTagRequest(c, request)
+		services.ProcessCustomTagRequest(c, request, false)
 
+	case models.CustomStringTagGroup:
+		services.ProcessCustomTagRequest(c, request, true)
 	default:
 		helpers.HandleTypeNotFound(c, request.TagGroupName)
 		return
