@@ -4,15 +4,15 @@ import (
 	"github.com/beeker1121/goque"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/felixge/fgtrace"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -35,12 +35,27 @@ func main() {
 
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
-	// pprof
 	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
+		val, set := os.LookupEnv("ENABLE_DEBUG_TRACING")
+		if !set {
+			zap.S().Infof("ENABLE_DEBUG_TRACING not set. Not enabling debug tracing")
+			return
+		}
+
+		enabled, err := strconv.ParseBool(val)
 		if err != nil {
-			zap.S().Errorf("Error starting pprof: %v", err)
+			zap.S().Errorf("ENABLE_DEBUG_TRACING is not a valid boolean: %s", val)
+			return
+		}
+		if enabled {
+			zap.S().Warnf("Debug Tracing is enabled. This might hurt performance !. Set ENABLE_DEBUG_TRACING to false to disable.")
+			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
+			err := http.ListenAndServe(":1337", nil)
+			if err != nil {
+				zap.S().Errorf("Failed to start fgtrace: %s", err)
+			}
+		} else {
+			zap.S().Debugf("Debug Tracing is disabled. Set ENABLE_DEBUG_TRACING to true to enable.")
 		}
 	}()
 

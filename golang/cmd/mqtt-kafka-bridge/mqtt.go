@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"os"
 	"time"
 
@@ -179,24 +180,24 @@ func checkConnected(c MQTT.Client) healthcheck.Check {
 func processOutgoingMessages() {
 	var err error
 
+	var loopsSinceLastMessage = int64(0)
 	for !ShuttingDown {
-		if mqttOutGoingQueue.Length() == 0 {
-			// Skip if empty
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-
+		internal.SleepBackedOff(loopsSinceLastMessage, 1*time.Millisecond, 1*time.Second)
+		loopsSinceLastMessage += 1
 		if !mqttClient.IsConnected() {
 			zap.S().Warnf("MQTT not connected, restarting service")
 			ShutdownApplicationGraceful()
 			return
 		}
 
-		var mqttData queueObject
+		var mqttData *queueObject
 		mqttData, err = retrieveMessageFromQueue(mqttOutGoingQueue)
 		if err != nil {
 			zap.S().Errorf("Failed to dequeue message: %s", err)
-			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		if mqttData == nil {
 			continue
 		}
 
@@ -206,6 +207,7 @@ func processOutgoingMessages() {
 		for i := 0; i < 10; i++ {
 			sendMQTT = token.WaitTimeout(10 * time.Second)
 			if sendMQTT {
+				loopsSinceLastMessage = 0
 				break
 			}
 		}
@@ -216,8 +218,6 @@ func processOutgoingMessages() {
 			zap.S().Warnf("Failed to send MQTT message", err, sendMQTT)
 			// Try to re-enqueue the message
 			storeMessageIntoQueue(mqttData.Topic, mqttData.Message, mqttOutGoingQueue)
-			// After an error, just wait a bit
-			time.Sleep(1 * time.Millisecond)
 			continue
 		}
 	}

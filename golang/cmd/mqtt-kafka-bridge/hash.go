@@ -13,9 +13,8 @@ func CheckIfNewMessageOrStore(message []byte, topic string) (isNewMessage bool) 
 	hashString := strconv.FormatUint(hashStringMessage, 10) + strconv.FormatUint(hashStringTopic, 10)
 	zap.S().Debugf("Hash: %d", hashString)
 	_, old := internal.GetMemcached(hashString)
-	isNewMessage = !old
-	zap.S().Debugf("New: %s", isNewMessage)
-	if isNewMessage {
+	zap.S().Debugf("New: %s", !old)
+	if !old {
 		go internal.SetMemcached(hashString, "")
 	}
 	return

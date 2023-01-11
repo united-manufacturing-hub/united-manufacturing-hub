@@ -17,14 +17,13 @@ Then the results are bundled together and a return JSON is created.
 import (
 	"fmt"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/felixge/fgtrace"
 	"github.com/gin-gonic/gin"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"net/http"
 
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -58,12 +57,17 @@ func main() {
 		}
 	}(log)
 	zap.S().Infof("This is factoryinput build date: %s", buildtime)
-	// pprof
+
 	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Failed to start pprof", err)
+		val, set := os.LookupEnv("ENABLE_DEBUG_TRACING")
+		enabled, err := strconv.ParseBool(val)
+		if set && err == nil && enabled {
+			zap.S().Warnf("Debug Tracing is enabled. This might hurt performance !. Set ENABLE_DEBUG_TRACING to false to disable.")
+			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
+			err := http.ListenAndServe(":1337", nil)
+			if err != nil {
+				zap.S().Errorf("Failed to start fgtrace: %s", err)
+			}
 		}
 	}()
 
@@ -111,7 +115,7 @@ func main() {
 	zap.S().Debugf("Healthcheck initialized..")
 
 	// Setup queue
-	err := setupQueue()
+	err = setupQueue()
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue", err)
 		return
