@@ -87,6 +87,12 @@ spec:
           {{- else}}
           image: {{.Values.kafkabridge.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           imagePullPolicy: {{.Values.kafkabridge.image.pullPolicy}}
           env:
             - name: LOCAL_KAFKA_BOOTSTRAP_SERVER
@@ -112,6 +118,11 @@ spec:
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordLocal | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD_REMOTE
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordRemote | quote}}
+
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
           resources: {}
           volumeMounts:
             - name: kubernetes-ca

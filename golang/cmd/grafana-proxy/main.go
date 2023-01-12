@@ -2,13 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/felixge/fgtrace"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-	"strconv"
-
 	"os"
 	"os/signal"
 	"strings"
@@ -29,18 +27,8 @@ func main() {
 		}
 	}(log)
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
-	go func() {
-		val, set := os.LookupEnv("ENABLE_DEBUG_TRACING")
-		enabled, err := strconv.ParseBool(val)
-		if set && err == nil && enabled {
-			zap.S().Warnf("Debug Tracing is enabled. This might hurt performance !. Set ENABLE_DEBUG_TRACING to false to disable.")
-			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
-			err := http.ListenAndServe(":1337", nil)
-			if err != nil {
-				zap.S().Errorf("Failed to start fgtrace: %s", err)
-			}
-		}
-	}()
+
+	internal.Initfgtrace()
 
 	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
 	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")

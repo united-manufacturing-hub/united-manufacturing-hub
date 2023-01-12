@@ -7,11 +7,9 @@ Important principles: stateless as much as possible
 import (
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-	"github.com/felixge/fgtrace"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"net/http"
-
 	"os"
 	"os/signal"
 	"strconv"
@@ -36,18 +34,8 @@ func main() {
 	}(log)
 
 	zap.S().Infof("This is mqtt-bridge build date: %s", buildtime)
-	go func() {
-		val, set := os.LookupEnv("ENABLE_DEBUG_TRACING")
-		enabled, err := strconv.ParseBool(val)
-		if set && err == nil && enabled {
-			zap.S().Warnf("Debug Tracing is enabled. This might hurt performance !. Set ENABLE_DEBUG_TRACING to false to disable.")
-			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
-			err := http.ListenAndServe(":1337", nil)
-			if err != nil {
-				zap.S().Errorf("Failed to start fgtrace: %s", err)
-			}
-		}
-	}()
+
+	internal.Initfgtrace()
 
 	// dryRun := os.Getenv("DRY_RUN")
 

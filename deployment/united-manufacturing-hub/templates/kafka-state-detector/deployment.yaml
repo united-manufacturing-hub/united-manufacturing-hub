@@ -39,6 +39,12 @@ spec:
           image: {{.Values.kafkastatedetector.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.kafkastatedetector.image.pullPolicy}}
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:
@@ -75,6 +81,11 @@ spec:
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkastatedetector.sslKeyPassword | quote}}
+
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
           resources: {}
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector-certificates

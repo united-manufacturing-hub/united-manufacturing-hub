@@ -17,10 +17,10 @@ Then the results are bundled together and a return JSON is created.
 import (
 	"fmt"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-	"github.com/felixge/fgtrace"
 	"github.com/gin-gonic/gin"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
 
@@ -58,18 +58,7 @@ func main() {
 	}(log)
 	zap.S().Infof("This is factoryinput build date: %s", buildtime)
 
-	go func() {
-		val, set := os.LookupEnv("ENABLE_DEBUG_TRACING")
-		enabled, err := strconv.ParseBool(val)
-		if set && err == nil && enabled {
-			zap.S().Warnf("Debug Tracing is enabled. This might hurt performance !. Set ENABLE_DEBUG_TRACING to false to disable.")
-			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
-			err := http.ListenAndServe(":1337", nil)
-			if err != nil {
-				zap.S().Errorf("Failed to start fgtrace: %s", err)
-			}
-		}
-	}()
+	internal.Initfgtrace()
 
 	shutdownEnabled = false
 
@@ -115,7 +104,7 @@ func main() {
 	zap.S().Debugf("Healthcheck initialized..")
 
 	// Setup queue
-	err = setupQueue()
+	err := setupQueue()
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue", err)
 		return

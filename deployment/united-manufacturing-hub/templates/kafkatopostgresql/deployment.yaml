@@ -73,9 +73,11 @@ spec:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-            - name: pprof
-              containerPort: 1337
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - containerPort: 1337
+              name: fgtrace
               protocol: TCP
+          {{end}}
           env:
 
             - name: POSTGRES_HOST
@@ -105,6 +107,10 @@ spec:
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresql.sslKeyPassword | quote}}
 
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:

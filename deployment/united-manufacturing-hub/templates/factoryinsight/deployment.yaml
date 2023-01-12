@@ -46,6 +46,11 @@ spec:
               - name: http
                 containerPort: 80
                 protocol: TCP
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+              - containerPort: 1337
+                name: fgtrace
+                protocol: TCP
+          {{end}}
           resources:
             limits:
               cpu: {{.Values.factoryinsight.resources.limits.cpu}}
@@ -96,6 +101,10 @@ spec:
             - name: VERSION
               value: {{.Values.factoryinsight.version | default 2 | quote}}
 
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
           livenessProbe:
             httpGet:
               path: /live

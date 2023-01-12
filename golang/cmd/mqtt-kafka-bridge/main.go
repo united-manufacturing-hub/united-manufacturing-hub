@@ -36,26 +36,26 @@ func main() {
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
 	go func() {
-		val, set := os.LookupEnv("ENABLE_DEBUG_TRACING")
+		val, set := os.LookupEnv("DEBUG_ENABLE_FGTRACE")
 		if !set {
-			zap.S().Infof("ENABLE_DEBUG_TRACING not set. Not enabling debug tracing")
+			zap.S().Infof("DEBUG_ENABLE_FGTRACE not set. Not enabling debug tracing")
 			return
 		}
 
 		enabled, err := strconv.ParseBool(val)
 		if err != nil {
-			zap.S().Errorf("ENABLE_DEBUG_TRACING is not a valid boolean: %s", val)
+			zap.S().Errorf("DEBUG_ENABLE_FGTRACE is not a valid boolean: %s", val)
 			return
 		}
 		if enabled {
-			zap.S().Warnf("Debug Tracing is enabled. This might hurt performance !. Set ENABLE_DEBUG_TRACING to false to disable.")
+			zap.S().Warnf("fgtrace is enabled. This might hurt performance !. Set DEBUG_ENABLE_FGTRACE to false to disable.")
 			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
 			err := http.ListenAndServe(":1337", nil)
 			if err != nil {
 				zap.S().Errorf("Failed to start fgtrace: %s", err)
 			}
 		} else {
-			zap.S().Debugf("Debug Tracing is disabled. Set ENABLE_DEBUG_TRACING to true to enable.")
+			zap.S().Debugf("Debug Tracing is disabled. Set DEBUG_ENABLE_FGTRACE to true to enable.")
 		}
 	}()
 
