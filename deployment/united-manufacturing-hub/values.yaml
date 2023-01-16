@@ -1,4 +1,5 @@
 ---
+clusterName: "testCluster"
 # Please adjust the following lines
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
 _000_commonConfig:
