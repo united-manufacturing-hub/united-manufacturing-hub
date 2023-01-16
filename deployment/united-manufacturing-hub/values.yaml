@@ -965,6 +965,8 @@ database:
     - secret:
         name: timescale-post-init-pw
         optional: false
+  serviceAccount:
+    create: false
 
 ### grafana ###
 web-ui:
