@@ -855,7 +855,7 @@ kafkatopostgresql:
       memory: 50Mi
 
 ### minio ###
-blobstorage-operator:
+operator:
   operator:
     replicaCount: 2
     resources:
@@ -864,7 +864,7 @@ blobstorage-operator:
         memory: 256Mi
         ephemeral-storage: 500Mi
 
-blobstorage-tenant:
+tenant:
   ## MinIO Tenant Definition
   tenants:
     # Tenant name
@@ -955,7 +955,7 @@ blobstorage-tenant:
       priorityClassName: ""
 
 ### timescaleDB ###
-database:
+timescaledb-single:
   replicaCount: 1
 
   postInit:
@@ -969,7 +969,7 @@ database:
     create: false
 
 ### grafana ###
-web-ui:
+grafana:
   rbac:
     create: true
     ## Use an existing ClusterRole/Role (depending on rbac.namespaced false/true)
@@ -1714,7 +1714,7 @@ web-ui:
   #     memory: 50Mi
 
 ### kowl ###enhancement/1401/UpdateAllHelmDependencies
-kafka-ui:
+console:
   serviceAccount:
     create: false
   console:
@@ -1846,7 +1846,7 @@ kafka:
         - united-manufacturing-hub-kafka-broker-secrets
 
 ##### CONFIG FOR REDIS #####
-cache:
+redis:
   cluster:
     enabled: true
     slaveCount: 1
