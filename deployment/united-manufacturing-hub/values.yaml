@@ -1786,6 +1786,8 @@ kafkatoblob:
 
 ##### CONFIG FOR APACHE KAFKA #####
 kafka:
+  serviceAccount:
+    create: false
   livenessProbe:
     failureThreshold: 10
     timeoutSeconds: 10
