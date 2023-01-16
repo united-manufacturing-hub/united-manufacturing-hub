@@ -1,7 +1,6 @@
 ---
 # Please adjust the following lines
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
-clusterName: "test"
 _000_commonConfig:
   serialNumber: "default"  # usually the hostname
   # This allows to specify data sources, which is mostly used for instances running on the edge
@@ -371,7 +370,7 @@ _001_customMicroservices:
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
 serviceAccount:
-  create: false
+  create: true
 
 ### kafkastatedetector ###
 kafkastatedetector:
