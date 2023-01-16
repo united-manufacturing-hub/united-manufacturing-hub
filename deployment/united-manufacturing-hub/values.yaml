@@ -967,7 +967,7 @@ database:
   # The default Patroni name of the cluster ("scope") is derived from the name of the release,
   # but you can override this behaviour here
   # https://patroni.readthedocs.io/en/latest/SETTINGS.html#global-universal
-  clusterName:
+  clusterName: ""
 
   # The major PostgreSQL version to use, defaults to the default version of the Docker image
   # However, in pg_upgrade scenarios, you may need to specify an explicit version
@@ -2206,7 +2206,7 @@ web-ui:
   #     cpu: 50m
   #     memory: 50Mi
 
-### kowl ###
+### kowl ###enhancement/1401/UpdateAllHelmDependencies
 kafka-ui:
   console:
     config:
