@@ -371,7 +371,7 @@ _001_customMicroservices:
 ##### DO NOT CHANGE ANYTHING BELOW HERE (except when you know what you are doing) #####
 
 serviceAccount:
-  create: true
+  create: false
 
 ### kafkastatedetector ###
 kafkastatedetector:
