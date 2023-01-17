@@ -790,6 +790,7 @@ factoryinsight:
       requests:
         cpu: 50m
         memory: 50Mi
+  insecure_no_auth: false # DO NOT ENABLE IN PRODUCTION. This will disable authentication and authorization
 
 ### factoryinput ###
 factoryinput:
