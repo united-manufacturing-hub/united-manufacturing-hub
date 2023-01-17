@@ -190,7 +190,7 @@ func GetDatabaseSizeInBytes() (size int64) {
 	return size
 }
 
-func GetVacuumAndAnalyzeStats(tableName string) (lastAutoanalyze, lastAnalyze, lastVacuum, lastAutovacuum string) {
+func GetVacuumAndAnalyzeStats(tableName string) (lastAutoanalyze, lastAnalyze, lastVacuum, lastAutovacuum sql.NullString) {
 	sqlStatement := `-- noinspection SqlResolveForFile @ table/"pg_stat_all_tables"
 
 		SELECT schemaname, relname, last_autoanalyze, last_analyze, last_vacuum, last_autovacuum FROM pg_stat_all_tables WHERE relname = $1;`

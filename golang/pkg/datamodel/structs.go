@@ -55,10 +55,10 @@ type DatabaseStatistics struct {
 // DatabaseTableStatistics holds statistics for a table in a database, including the number of approximate rows, the last time the table was auto-analyzed and auto-vacuumed, and whether or not the table is a hypertable
 type DatabaseTableStatistics struct {
 	ApproximateRows  int64
-	LastAutoAnalyze  string
-	LastAutoVacuum   string
-	LastAnalyze      string
-	LastVacuum       string
+	LastAutoAnalyze  sql.NullString
+	LastAutoVacuum   sql.NullString
+	LastAnalyze      sql.NullString
+	LastVacuum       sql.NullString
 	IsHyperTable     bool
 	NormalStats      DatabaseNormalTableStatistics
 	HyperStats       []DatabaseHyperTableStatistics
@@ -83,7 +83,7 @@ type DatabaseHyperTableStatistics struct {
 	IndexBytes int64
 	ToastBytes int64
 	TotalBytes int64
-	NodeName   string
+	NodeName   sql.NullString
 }
 
 // DatabaseHyperTableRetention holds information about the retention policy for a hypertable
