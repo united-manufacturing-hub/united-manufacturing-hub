@@ -88,13 +88,13 @@ type DatabaseHyperTableStatistics struct {
 
 // DatabaseHyperTableRetention holds information about the retention policy for a hypertable
 type DatabaseHyperTableRetention struct {
-	ScheduleInterval int64
+	ScheduleInterval string
 	Config           string
 }
 
 // DatabaseHyperTableCompression holds information about the compression policy for a hypertable
 type DatabaseHyperTableCompression struct {
-	ScheduleInterval int64
+	ScheduleInterval string
 	Config           string
 }
 

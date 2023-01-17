@@ -200,11 +200,12 @@ func GetVacuumAndAnalyzeStats(tableName string) (lastAutoanalyze, lastAnalyze, l
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
-		return "", "", "", ""
+		return lastAutoanalyze, lastAnalyze, lastVacuum, lastAutovacuum
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 
-		return "", "", "", ""
+		return lastAutoanalyze, lastAnalyze, lastVacuum, lastAutovacuum
+
 	}
 
 	return lastAutoanalyze, lastAnalyze, lastVacuum, lastAutovacuum
