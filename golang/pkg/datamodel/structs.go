@@ -46,6 +46,57 @@ type EnterpriseConfiguration struct {
 	AutomaticallyIdentifyChangeovers             bool
 }
 
+type DatabaseStatistics struct {
+	DatabaseSizeInBytes int64
+	TableStatistics     map[string]DatabaseTableStatistics
+}
+
+type DatabaseTableStatistics struct {
+	ApproximateRows  int64
+	LastAutoAnalyze  string
+	LastAutoVacuum   string
+	LastAnalyze      string
+	LastVacuum       string
+	IsHyperTable     bool
+	NormalStats      DatabaseNormalTableStatistics
+	HyperStats       []DatabaseHyperTableStatistics
+	HyperRetention   DatabaseHyperTableRetention
+	HyperCompression DatabaseHyperTableCompression
+}
+
+type DatabaseNormalTableStatistics struct {
+	PgTableSize         int64
+	PgTotalRelationSize int64
+	PgIndexesSize       int64
+	PgRelationSizeMain  int64
+	PgRelationSizeFsm   int64
+	PgRelationSizeVm    int64
+	PgRelationSizeInit  int64
+}
+
+type DatabaseHyperTableStatistics struct {
+	TableBytes int64
+	IndexBytes int64
+	ToastBytes int64
+	TotalBytes int64
+	NodeName   string
+}
+
+type DatabaseHyperTableRetention struct {
+	ScheduleInterval int64
+	Config           string
+}
+
+type DatabaseHyperTableCompression struct {
+	ScheduleInterval int64
+	Config           string
+}
+
+type DatabaseHyperTableDataRetention struct {
+	ScheduleInterval int64
+	Config           string
+}
+
 // DataResponseAny is the format of the returned JSON.
 type DataResponseAny struct {
 	ColumnNames []string        `json:"columnNames"`

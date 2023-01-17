@@ -261,6 +261,7 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 			v2.GET("/treeStructure", v2controllers.GetTreeStructureHandler)
 			v2.GET("/:enterpriseName", v2controllers.GetSitesHandler)
 			v2.GET("/:enterpriseName/configuration", v2controllers.GetConfigurationHandler)
+			v2.GET("/:enterpriseName/database-stats", v2controllers.GetDatabaseStatisticsHandler)
 			v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
 			v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
 			v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v2controllers.GetWorkCellsHandler)
