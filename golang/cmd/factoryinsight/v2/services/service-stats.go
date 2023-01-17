@@ -23,11 +23,53 @@ func GetDatabaseStatistics() (datamodel.DatabaseStatistics, error) {
 			dbTableStats.HyperStats = GetHypertableStats(tableName)
 			dbTableStats.HyperRetention = GetHyperRetentionSettings(tableName)
 			dbTableStats.HyperCompression = GetHyperCompressionSettings(tableName)
+			dbTableStats.ApproximateRows = GetApproximateHyperRows(tableName)
 		}
 
 		dbStats.TableStatistics[tableName] = dbTableStats
 	}
 	return dbStats, nil
+}
+
+func GetApproximateHyperRows(tableName string) (approximateRows int64) {
+	sqlStatement := `-- noinspection SqlResolveForFile @ routine/"hypertable_approximate_row_count"
+		SELECT hypertable_approximate_row_count($1);`
+
+	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
+	if errors.Is(err, sql.ErrNoRows) {
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
+		return approximateRows
+	} else if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return approximateRows
+	}
+	return approximateRows
+}
+
+func GetApproximateNormalRows(tableName string) (approximateRows int64) {
+	//https://stackoverflow.com/questions/7943233/fast-way-to-discover-the-row-count-of-a-table-in-postgresql
+	sqlStatement := `-- noinspection SqlResolveForFile @ any/"pg_catalog"
+	
+		SELECT (CASE WHEN c.reltuples < 0 THEN NULL       -- never vacuumed	
+	WHEN c.relpages = 0 THEN float8 '0'  -- empty table
+	ELSE c.reltuples / c.relpages END
+	* (pg_catalog.pg_relation_size(c.oid)	
+	  / pg_catalog.current_setting('block_size')::int)
+		  )::bigint
+	FROM   pg_catalog.pg_class c
+	WHERE  c.oid = $1::regclass;      -- schema-qualified table here
+		`
+	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
+	if errors.Is(err, sql.ErrNoRows) {
+		// it can happen, no need to escalate error
+		zap.S().Debugf("No Results Found")
+		return approximateRows
+	} else if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return approximateRows
+	}
+	return approximateRows
 }
 
 func GetNormalTableStatistics(tableName string) datamodel.DatabaseNormalTableStatistics {
