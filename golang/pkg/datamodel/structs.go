@@ -46,11 +46,13 @@ type EnterpriseConfiguration struct {
 	AutomaticallyIdentifyChangeovers             bool
 }
 
+// DatabaseStatistics holds statistics for a database, including the size of the database in bytes and statistics for each table in the database
 type DatabaseStatistics struct {
 	DatabaseSizeInBytes int64
 	TableStatistics     map[string]DatabaseTableStatistics
 }
 
+// DatabaseTableStatistics holds statistics for a table in a database, including the number of approximate rows, the last time the table was auto-analyzed and auto-vacuumed, and whether or not the table is a hypertable
 type DatabaseTableStatistics struct {
 	ApproximateRows  int64
 	LastAutoAnalyze  string
@@ -64,6 +66,7 @@ type DatabaseTableStatistics struct {
 	HyperCompression DatabaseHyperTableCompression
 }
 
+// DatabaseNormalTableStatistics holds statistics for a normal table in a database, including the sizes of various components of the table
 type DatabaseNormalTableStatistics struct {
 	PgTableSize         int64
 	PgTotalRelationSize int64
@@ -74,6 +77,7 @@ type DatabaseNormalTableStatistics struct {
 	PgRelationSizeInit  int64
 }
 
+// DatabaseHyperTableStatistics holds statistics for a hypertable in a database, including the sizes of various components of the table and the name of the node hosting the table
 type DatabaseHyperTableStatistics struct {
 	TableBytes int64
 	IndexBytes int64
@@ -82,17 +86,14 @@ type DatabaseHyperTableStatistics struct {
 	NodeName   string
 }
 
+// DatabaseHyperTableRetention holds information about the retention policy for a hypertable
 type DatabaseHyperTableRetention struct {
 	ScheduleInterval int64
 	Config           string
 }
 
+// DatabaseHyperTableCompression holds information about the compression policy for a hypertable
 type DatabaseHyperTableCompression struct {
-	ScheduleInterval int64
-	Config           string
-}
-
-type DatabaseHyperTableDataRetention struct {
 	ScheduleInterval int64
 	Config           string
 }
