@@ -34,10 +34,9 @@ func GetDatabaseStatistics() (datamodel.DatabaseStatistics, error) {
 }
 
 func GetApproximateHyperRows(tableName string) (approximateRows int64) {
-	sqlStatement := `-- noinspection SqlResolveForFile
-	
-	-- noinspection SqlResolveForFile @ routine/"hypertable_approximate_row_count"
-			SELECT approximate_row_count FROM hypertable_approximate_row_count($1);`
+	sqlStatement := `
+				-- noinspection SqlResolve
+	SELECT approximate_row_count FROM approximate_row_count($1);`
 
 	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
 	if errors.Is(err, sql.ErrNoRows) {
