@@ -48,22 +48,22 @@ type EnterpriseConfiguration struct {
 
 // DatabaseStatistics holds statistics for a database, including the size of the database in bytes and statistics for each table in the database
 type DatabaseStatistics struct {
-	DatabaseSizeInBytes int64
 	TableStatistics     map[string]DatabaseTableStatistics
+	DatabaseSizeInBytes int64
 }
 
 // DatabaseTableStatistics holds statistics for a table in a database, including the number of approximate rows, the last time the table was auto-analyzed and auto-vacuumed, and whether or not the table is a hypertable
 type DatabaseTableStatistics struct {
-	ApproximateRows  int64
+	HyperRetention   DatabaseHyperTableRetention
+	HyperCompression DatabaseHyperTableCompression
 	LastAutoAnalyze  sql.NullString
 	LastAutoVacuum   sql.NullString
 	LastAnalyze      sql.NullString
 	LastVacuum       sql.NullString
-	IsHyperTable     bool
-	NormalStats      DatabaseNormalTableStatistics
 	HyperStats       []DatabaseHyperTableStatistics
-	HyperRetention   DatabaseHyperTableRetention
-	HyperCompression DatabaseHyperTableCompression
+	NormalStats      DatabaseNormalTableStatistics
+	ApproximateRows  int64
+	IsHyperTable     bool
 }
 
 // DatabaseNormalTableStatistics holds statistics for a normal table in a database, including the sizes of various components of the table
@@ -79,11 +79,11 @@ type DatabaseNormalTableStatistics struct {
 
 // DatabaseHyperTableStatistics holds statistics for a hypertable in a database, including the sizes of various components of the table and the name of the node hosting the table
 type DatabaseHyperTableStatistics struct {
+	NodeName   sql.NullString
 	TableBytes int64
 	IndexBytes int64
 	ToastBytes int64
 	TotalBytes int64
-	NodeName   sql.NullString
 }
 
 // DatabaseHyperTableRetention holds information about the retention policy for a hypertable
