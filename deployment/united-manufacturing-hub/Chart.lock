@@ -16,9 +16,9 @@ dependencies:
   version: 4.5.0
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
-  version: 20.0.1
-- name: console
-  repository: https://dl.redpanda.com/public/console/helm/charts/
-  version: 0.3.1
-digest: sha256:a18577a4f32532907c81e8c6dce134f7dde5e879f7686984f7992cfef77e3c61
-generated: "2023-01-16T15:41:20.3657123+01:00"
+  version: 20.0.2
+- name: kowl
+  repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+  version: 2.3.0
+digest: sha256:a829c056b3a7416f4db5df04338008503284177d687b99520265924ab2a9554f
+generated: "2023-01-02T11:13:34.0289806+01:00"
