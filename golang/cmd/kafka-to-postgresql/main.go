@@ -10,9 +10,6 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -34,16 +31,12 @@ func main() {
 
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
-	dryRun := os.Getenv("DRY_RUN")
+	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
+	if !dryRunEnvSet {
+		zap.S().Fatal("Dry Run (DRY_RUN) must be set")
+	}
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -73,12 +66,27 @@ func main() {
 	}()
 
 	// Postgres
-	PQHost := os.Getenv("POSTGRES_HOST")
+	PQHost, PQHostEnvSet := os.LookupEnv("POSTGRES_HOST")
+	if !PQHostEnvSet {
+		zap.S().Fatal("Pq Host (POSTGRES_HOST) must be set")
+	}
 	PQPort := 5432
-	PQUser := os.Getenv("POSTGRES_USER")
-	PQPassword := os.Getenv("POSTGRES_PASSWORD")
-	PWDBName := os.Getenv("POSTGRES_DATABASE")
-	PQSSLMode := os.Getenv("POSTGRES_SSLMODE")
+	PQUser, PQUserEnvSet := os.LookupEnv("POSTGRES_USER")
+	if !PQUserEnvSet {
+		zap.S().Fatal("PQ User (POSTGRES_USER) must be set")
+	}
+	PQPassword, PQPasswordEnvSet := os.LookupEnv("POSTGRES_PASSWORD")
+	if !PQPasswordEnvSet {
+		zap.S().Fatal("PQ Password (POSTGRES_PASSWORD) must be set")
+	}
+	PWDBName, PWDBNameEnvSet := os.LookupEnv("POSTGRES_DATABASE")
+	if !PWDBNameEnvSet {
+		zap.S().Fatal("PWDB Name (POSTGRES_DATABASE) must be set")
+	}
+	PQSSLMode, PQSSLModeEnvSet := os.LookupEnv("POSTGRES_SSLMODE")
+	if !PQSSLModeEnvSet {
+		zap.S().Fatal("PQSSL Mode (POSTGRES_SSLMODE) must be set")
+	}
 	if PQSSLMode == "" {
 		PQSSLMode = "require"
 	} else {
@@ -89,7 +97,10 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	if KafkaBoostrapServer == "" {
 		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER is not set")
 	}
@@ -176,6 +187,8 @@ func main() {
 		if b {
 			allowedMemorySize = int(i) // truncated !
 		}
+	} else {
+		zap.S().Infof("Memory request [MEMORY_REQUEST] not set")
 	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 

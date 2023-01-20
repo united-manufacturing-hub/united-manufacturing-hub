@@ -4,14 +4,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/heptiolabs/healthcheck"
-	jsoniter "github.com/json-iterator/go"
-	"os"
-	"time"
-
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/heptiolabs/healthcheck"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"os"
+	"strings"
+	"time"
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
@@ -80,32 +81,32 @@ func newTLSConfig() *tls.Config {
 func getOnMessageReceived(pg *goque.Queue) func(MQTT.Client, MQTT.Message) {
 
 	return func(client MQTT.Client, message MQTT.Message) {
-		topic := message.Topic()
-		payload := message.Payload()
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		go func() {
+			topic := message.Topic()
+			payload := message.Payload()
 
-		if json.Valid(payload) {
-			zap.S().Debugf("onMessageReceived", topic, payload)
-			go storeNewMessageIntoQueue(topic, payload, pg)
-		} else {
-			zap.S().Warnf(
-				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON",
-				topic,
-				payload)
-		}
+			if jsoniter.Valid(payload) || strings.HasPrefix(topic, "ia/raw") {
+				storeNewMessageIntoQueue(topic, payload, pg)
+			} else {
+				zap.S().Warnf(
+					"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON (%s) [%s]",
+					topic,
+					payload)
+			}
+		}()
 	}
 }
 
 // onConnect subscribes once the connection is established. Required to re-subscribe when cleansession is True
 func onConnect(c MQTT.Client) {
 	optionsReader := c.OptionsReader()
-	zap.S().Infof("Connected to MQTT broker", optionsReader.ClientID())
+	zap.S().Infof("Connected to MQTT broker (%s)", optionsReader.ClientID())
 }
 
 // onConnectionLost outputs warn message
 func onConnectionLost(c MQTT.Client, err error) {
 	optionsReader := c.OptionsReader()
-	zap.S().Warnf("Connection lost, restarting", err, optionsReader.ClientID())
+	zap.S().Warnf("Connection lost, restarting (%v) (%s)", err, optionsReader.ClientID())
 	ShutdownApplicationGraceful()
 }
 
@@ -131,7 +132,7 @@ func SetupMQTT(
 			mqttTopic = "$share/MQTT_KAFKA_BRIDGE/ia/#"
 		}
 
-		zap.S().Infof("Running in Kubernetes mode", podName, mqttTopic)
+		zap.S().Infof("Running in Kubernetes mode (%s) (%s)", podName, mqttTopic)
 
 	} else {
 		tlsconfig := newTLSConfig()
@@ -141,14 +142,15 @@ func SetupMQTT(
 			mqttTopic = "ia/#"
 		}
 
-		zap.S().Infof("Running in normal mode", mqttTopic, podName)
+		zap.S().Infof("Running in normal mode (%s) (%s) (%s)", mqttTopic, certificateName, podName)
+
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetOnConnectHandler(onConnect)
 	opts.SetConnectionLostHandler(onConnectionLost)
 	opts.SetOrderMatters(false)
 
-	zap.S().Debugf("Broker configured", mqttBrokerURL, podName)
+	zap.S().Debugf("Broker configured (%s) (%s) (%s)", mqttBrokerURL, certificateName, podName)
 
 	// Start the connection
 	mqttClient = MQTT.NewClient(opts)
@@ -157,10 +159,10 @@ func SetupMQTT(
 	}
 
 	// Subscribe
-	if token := mqttClient.Subscribe(mqttTopic, 2, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
+	if token := mqttClient.Subscribe(mqttTopic, 1, getOnMessageReceived(pg)); token.Wait() && token.Error() != nil {
 		zap.S().Fatalf("Failed to subscribe: %s", token.Error())
 	}
-	zap.S().Infof("MQTT subscribed", mqttTopic)
+	zap.S().Infof("MQTT subscribed (%s)", mqttTopic)
 
 	// Implement a custom check with a 50 millisecond timeout.
 	health.AddReadinessCheck("mqtt-check", checkConnected(mqttClient))
@@ -176,49 +178,59 @@ func checkConnected(c MQTT.Client) healthcheck.Check {
 	}
 }
 
+var SentMQTTMessages = int64(0)
+var MQTTSenderThreads int
+
 func processOutgoingMessages() {
+	for i := 0; i < MQTTSenderThreads; i++ {
+		go SendMQTTMessages()
+	}
+}
+
+func SendMQTTMessages() {
 	var err error
 
+	var loopsSinceLastMessage = int64(0)
 	for !ShuttingDown {
-		if mqttOutGoingQueue.Length() == 0 {
-			// Skip if empty
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-
+		internal.SleepBackedOff(loopsSinceLastMessage, 1*time.Millisecond, 1*time.Second)
+		loopsSinceLastMessage += 1
 		if !mqttClient.IsConnected() {
 			zap.S().Warnf("MQTT not connected, restarting service")
 			ShutdownApplicationGraceful()
 			return
 		}
 
-		var mqttData queueObject
-		mqttData, err = retrieveMessageFromQueue(mqttOutGoingQueue)
+		var mqttData *queueObject
+		mqttData, err, _ = retrieveMessageFromQueue(mqttOutGoingQueue)
 		if err != nil {
 			zap.S().Errorf("Failed to dequeue message: %s", err)
-			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		token := mqttClient.Publish(mqttData.Topic, 2, false, mqttData.Message)
+		if mqttData == nil {
+			continue
+		}
+
+		token := mqttClient.Publish(mqttData.Topic, 1, false, mqttData.Message)
 
 		var sendMQTT = false
 		for i := 0; i < 10; i++ {
 			sendMQTT = token.WaitTimeout(10 * time.Second)
 			if sendMQTT {
+				loopsSinceLastMessage = 0
 				break
 			}
 		}
 
-		// Failed to send MQTT message (or 10x timeout)
+		// Failed to send MQTT message
 		err = token.Error()
-		if err != nil || !sendMQTT {
-			zap.S().Warnf("Failed to send MQTT message", err, sendMQTT)
+		if err != nil {
+			zap.S().Warnf("Failed to send MQTT message (%v)", err)
 			// Try to re-enqueue the message
 			storeMessageIntoQueue(mqttData.Topic, mqttData.Message, mqttOutGoingQueue)
-			// After an error, just wait a bit
-			time.Sleep(1 * time.Millisecond)
 			continue
 		}
+		SentMQTTMessages++
 	}
+	zap.S().Infof("MQTT sender thread stopped")
 }

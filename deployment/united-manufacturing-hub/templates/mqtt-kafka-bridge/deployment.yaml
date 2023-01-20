@@ -59,7 +59,12 @@ spec:
           image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
-
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:
@@ -104,6 +109,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
 
             - name: SERIAL_NUMBER
               value: {{.Values._000_commonConfig.serialNumber}}
@@ -118,22 +127,28 @@ spec:
             - name: INSECURE_SKIP_VERIFY
               value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
 
+            - name: RAW_MESSAGE_LRU_SIZE
+              value: {{.Values.mqttkafkabridge.rawMessageLRUSize | quote}}
+            - name: MESSAGE_LRU_SIZE
+              value: {{.Values.mqttkafkabridge.messageLRUSize | quote}}
+            - name: MQTT_SENDER_THREADS
+              value: {{.Values.mqttkafkabridge.mqttSenderThreads | quote}}
+            - name: KAFKA_SENDER_THREADS
+              value: {{.Values.mqttkafkabridge.kafkaSenderThreads | quote}}
+            - name: KAFKA_ACCEPT_NO_ORIGIN
+              value: {{.Values.mqttkafkabridge.kafkaAcceptNoOrigin | quote}}
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
 
-          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
-          # livenessProbe:
-          #   httpGet:
-          #     path: /live
-          #     port: 8086
-          #   initialDelaySeconds: 30
-          #   periodSeconds: 5
-
-          # define a readiness probe that checks every 5 seconds
-          #readinessProbe:
-          #  httpGet:
-          #    path: /ready
-          #    port: 8086
-          #  periodSeconds: 5
-          resources: {}
+          resources:
+            limits:
+              cpu: {{.Values.mqttkafkabridge.resources.limits.cpu}}
+              memory: {{.Values.mqttkafkabridge.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.mqttkafkabridge.resources.requests.cpu}}
+              memory: {{.Values.mqttkafkabridge.resources.requests.memory}}
           volumeMounts:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem

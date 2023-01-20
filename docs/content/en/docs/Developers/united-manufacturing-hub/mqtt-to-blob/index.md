@@ -2,7 +2,7 @@
 title: "mqtt-to-blob"
 linkTitle: "mqtt-to-blob"
 description: >
-  The following guide describes how to catch data from the MQTT-Broker and push them to the MIN.io blob storage
+  The following guide describes how to catch data from the mqtt_broker and push them to the MIN.io blob storage
 aliases:
   - /docs/Developers/factorycube-server/mqtt-to-blob
   - /docs/developers/factorycube-server/mqtt-to-blob
@@ -31,8 +31,8 @@ This chapter explains all used environment variables.
 
 | Variable | Type | Description | Possible values | Example value |
 |----|----|----|----|----|
-| BROKER_URL | str | Specifies the address to connect to the MQTT-Broker | all DNS names or IP address | 127.0.0.1 |
-| BROKER_PORT| int | Specifies the port for the MQTT-Broker | valid port number | 1883 |
+| BROKER_URL | str | Specifies the address to connect to the mqtt_broker | all DNS names or IP address | 127.0.0.1 |
+| BROKER_PORT| int | Specifies the port for the mqtt_broker | valid port number | 1883 |
 | TOPIC | str | MQTT Topic name | Published MQTT Topic name | ia/rawImage/# |
 | MINIO_URL | str | Specifies the database DNS name / IP-address for the MIN.io server | all DNS names or IP address with its port number | play.min.io |
 | MINIO_SECURE | bool | Select `True` or `False` to activate HTTPS connection or not | `True` or `False` | `True` |

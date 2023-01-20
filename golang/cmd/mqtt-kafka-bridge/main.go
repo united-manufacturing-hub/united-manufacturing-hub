@@ -4,15 +4,21 @@ import (
 	"github.com/beeker1121/goque"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/felixge/fgtrace"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
+	"runtime/debug"
+	"strconv"
+
 	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -24,10 +30,11 @@ var mqttOutGoingQueue *goque.Queue
 var buildtime string
 
 func main() {
+	var err error
 	// Initialize zap logging
 	log := logger.New("LOGGING_LEVEL")
 	defer func(logger *zap.SugaredLogger) {
-		err := logger.Sync()
+		err = logger.Sync()
 		if err != nil {
 			panic(err)
 		}
@@ -35,34 +42,111 @@ func main() {
 
 	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
-	// pprof
 	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
+		val, set := os.LookupEnv("DEBUG_ENABLE_FGTRACE")
+		if !set {
+			zap.S().Infof("DEBUG_ENABLE_FGTRACE not set. Not enabling debug tracing")
+			return
+		}
+
+		enabled, err = strconv.ParseBool(val)
 		if err != nil {
-			zap.S().Errorf("Error starting pprof: %v", err)
+			zap.S().Errorf("DEBUG_ENABLE_FGTRACE is not a valid boolean: %s", val)
+			return
+		}
+		if enabled {
+			zap.S().Warnf("fgtrace is enabled. This might hurt performance !. Set DEBUG_ENABLE_FGTRACE to false to disable.")
+			http.DefaultServeMux.Handle("/debug/fgtrace", fgtrace.Config{})
+			err := http.ListenAndServe(":1337", nil)
+			if err != nil {
+				zap.S().Errorf("Failed to start fgtrace: %s", err)
+			}
+		} else {
+			zap.S().Debugf("Debug Tracing is disabled. Set DEBUG_ENABLE_FGTRACE to true to enable.")
 		}
 	}()
 
 	// Read environment variables for MQTT
-	MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
-	MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
-	MQTTTopic := os.Getenv("MQTT_TOPIC")
-	podName := os.Getenv("MY_POD_NAME")
-	mqttPassword := os.Getenv("MQTT_PASSWORD")
+	MQTTCertificateName, MQTTCertificateNameEnvSet := os.LookupEnv("MQTT_CERTIFICATE_NAME")
+	if !MQTTCertificateNameEnvSet {
+		zap.S().Fatal("Mqtt certificate name (MQTT_CERTIFICATE_NAME) must be set")
+	}
+	MQTTBrokerURL, MQTTBrokerURLEnvSet := os.LookupEnv("MQTT_BROKER_URL")
+	if !MQTTBrokerURLEnvSet {
+		zap.S().Fatal("Mqtt broker url (MQTT_BROKER_URL) must be set")
+	}
+	MQTTTopic, MQTTTopicEnvSet := os.LookupEnv("MQTT_TOPIC")
+	if !MQTTTopicEnvSet {
+		zap.S().Fatal("Mqtt topic (MQTT_TOPIC) must be set")
+	}
+	podName, podNameEnvSet := os.LookupEnv("MY_POD_NAME")
+	if !podNameEnvSet {
+		zap.S().Fatal("Pod name (MY_POD_NAME) must be set")
+	}
+	mqttPassword, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
+	if !mqttPasswordEnvSet {
+		zap.S().Fatal("Mqtt password (MQTT_PASSWORD) must be set")
+	}
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
-	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
-	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Bootstrap server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
+	KafkaTopic, KafkaTopicEnvSet := os.LookupEnv("KAFKA_LISTEN_TOPIC")
+	if !KafkaTopicEnvSet {
+		zap.S().Fatal("Kafka topic (KAFKA_LISTEN_TOPIC) must be set")
+	}
+	KafkaBaseTopic, KafkaBaseTopicEnvSet := os.LookupEnv("KAFKA_BASE_TOPIC")
+	if !KafkaBaseTopicEnvSet {
+		zap.S().Fatal("Kafka base topic (KAFKA_BASE_TOPIC) must be set")
+	}
+	KafkaAcceptNoOriginStr := os.Getenv("KAFKA_ACCEPT_NO_ORIGIN")
+	KafkaAcceptNoOrigin, err = strconv.ParseBool(KafkaAcceptNoOriginStr)
+	if err != nil {
+		zap.S().Errorf("Error parsing KAFKA_ACCEPT_NO_ORIGIN: %v", err)
+		KafkaAcceptNoOrigin = false
+	}
 
-	zap.S().Debugf("Setting up memorycache")
-	internal.InitMemcache()
+	MQTTSenderThreads, err = strconv.Atoi(os.Getenv("MQTT_SENDER_THREADS"))
+	if err != nil {
+		MQTTSenderThreads = 4
+	}
+
+	KafkaSenderThreads, err = strconv.Atoi(os.Getenv("KAFKA_SENDER_THREADS"))
+	if err != nil {
+		KafkaSenderThreads = 4
+	}
+
+	zap.S().Debugf("Setting up LRU")
+	RawLruSizeStr, foundRawLruSizeStr := os.LookupEnv("RAW_MESSAGE_LRU_SIZE")
+	if !foundRawLruSizeStr {
+		RawLruSizeStr = "100000"
+	}
+	var RawLruSize int
+	RawLruSize, err = strconv.Atoi(RawLruSizeStr)
+	if err != nil {
+		zap.S().Fatalf("Error parsing RAW_MESSAGE_LRU_SIZE: %v", err)
+	}
+	RawMessageLRU, err = lru.NewARC(RawLruSize)
+
+	LruSizeStr, foundLruSizeStr := os.LookupEnv("MESSAGE_LRU_SIZE")
+	if !foundLruSizeStr {
+		LruSizeStr = "100000"
+	}
+	var LruSize int
+	LruSize, err = strconv.Atoi(LruSizeStr)
+	if err != nil {
+		zap.S().Fatalf("Error parsing MESSAGE_LRU_SIZE: %v", err)
+	}
+	MessageLRU, err = lru.NewARC(LruSize)
+	if err != nil {
+		zap.S().Fatalf("Error creating LRU: %v", err)
+	}
 
 	zap.S().Debugf("Setting up Queues")
-	var err error
 	mqttIncomingQueue, err = setupQueue("incoming")
 	if err != nil {
-		zap.S().Fatalf("Error setting up incoming queue", err)
+		zap.S().Fatalf("Error setting up incoming queue: %v", err)
 		return
 	}
 	defer func(pq *goque.Queue) {
@@ -74,7 +158,7 @@ func main() {
 
 	mqttOutGoingQueue, err = setupQueue("outgoing")
 	if err != nil {
-		zap.S().Fatalf("Error setting up outgoing queue", err)
+		zap.S().Fatalf("Error setting up outgoing queue: %v", err)
 		return
 	}
 	defer func(pq *goque.Queue) {
@@ -139,7 +223,7 @@ func main() {
 			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
 			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-			"group.id":                 "kafka-to-blob-topic-probe",
+			"group.id":                 "mqtt-kafka-bridge-topic-probe",
 			"enable.auto.commit":       true,
 			"auto.offset.reset":        "earliest",
 			// "debug":                    "security,broker",
@@ -153,8 +237,8 @@ func main() {
 
 	zap.S().Debugf("Start Queue processors")
 	go internal.StartEventHandler("MQTTKafkaBridge", internal.KafkaProducer.Events(), nil)
-	go processIncomingMessages()
-	go processOutgoingMessages()
+	processIncomingMessages()
+	processOutgoingMessages()
 	go kafkaToQueue(KafkaTopic)
 
 	// Start topic probe processor
@@ -181,14 +265,15 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Received SIGTERM", sig)
+		zap.S().Infof("Received SIGTERM: %v", sig)
+		zap.S().Infof("Stacktrace: %v", string(debug.Stack()))
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
 
 	}()
 
-	go ReportStats()
+	go ReportStats(RawLruSize, LruSize)
 
 	select {} // block forever
 }
@@ -212,19 +297,29 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
-func ReportStats() {
+func ReportStats(rawLruSize int, LruSize int) {
 	lastConfirmed := 0.0
 	for !ShuttingDown {
 		zap.S().Infof(
 			"Reporting stats"+
 				"| MQTT->Kafka queue length: %d"+
 				"| Kafka->MQTT queue length: %d"+
-				"| Produces Kafka messages: %f"+
-				"| Produces Kafka messages/s: %f",
+				"| Produced Kafka messages: %f"+
+				"| Produced Kafka messages/s: %f"+
+				"| Produced MQTT messages: %d"+
+				"| Produced MQTT messages/s: %f"+
+				"| Message LRU size: %d/%d"+
+				"| Raw Message LRU size: %d/%d",
 			mqttIncomingQueue.Length(),
 			mqttOutGoingQueue.Length(),
 			internal.KafkaConfirmed,
 			(internal.KafkaConfirmed-lastConfirmed)/5,
+			SentMQTTMessages,
+			float64(SentMQTTMessages)/5,
+			MessageLRU.Len(),
+			LruSize,
+			RawMessageLRU.Len(),
+			rawLruSize,
 		)
 		lastConfirmed = internal.KafkaConfirmed
 		time.Sleep(internal.FiveSeconds)

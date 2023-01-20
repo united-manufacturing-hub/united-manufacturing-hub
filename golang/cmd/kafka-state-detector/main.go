@@ -10,9 +10,6 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,14 +34,7 @@ func main() {
 
 	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
@@ -61,7 +51,10 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	if KafkaBoostrapServer == "" {
 		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER not set")
 	}
@@ -73,6 +66,8 @@ func main() {
 		if b {
 			allowedMemorySize = int(i) // truncated !
 		}
+	} else {
+		zap.S().Infof("Memory request [MEMORY_REQUEST] not set")
 	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
@@ -137,6 +132,7 @@ func main() {
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
 	}
+
 	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
 
 	if AnomalyEnabled {
