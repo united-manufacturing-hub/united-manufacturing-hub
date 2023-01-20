@@ -469,7 +469,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	var sqlStatement string
 	if timeBucket == "none" {
-
+		zap.S().Debug("timeBucket: none")
 		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-values"
 		data.ColumnNames = []string{"timestamp", JSONColumnName}
 
@@ -694,17 +694,25 @@ ORDER BY bucket;
 		}
 
 		// row without asset_id
+		hasValue := false
 		n := 0
 		for i := range row {
-			if i == internal.IndexOf(cols, "asset_id") {
+			if i == internal.IndexOf(cols, "asset_id") { //This skips row 0
 				continue
 			}
 			rowX[n] = row[i]
 			n++
+			if row[i] != nil {
+				hasValue = true
+			}
 		}
 
-		data.Datapoints = append(data.Datapoints, rowX)
+		// Prevents null value inclusion
+		if hasValue {
+			data.Datapoints = append(data.Datapoints, rowX)
+		}
 	}
+
 	c.JSON(http.StatusOK, data)
 }
 

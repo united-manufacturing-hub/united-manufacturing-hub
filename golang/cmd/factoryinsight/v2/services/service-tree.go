@@ -288,7 +288,7 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 		return nil, err
 	}
 	for _, tagGroup := range tags {
-		var structure = make(map[string]*models.TreeEntryFormat)
+		var structure map[string]*models.TreeEntryFormat
 		if tagGroup == models.StandardTagGroup {
 			structure, err = GetStandardTagsTree(customer, site, area, line, cell, tagGroup)
 		} else if tagGroup == models.CustomTagGroup {
@@ -345,10 +345,10 @@ func GetCustomTagsTree(
 		// ignore underscores at the beginning or end of the tag or if there are multiple underscores in a row
 		sanitizedSplitTag := removeEmpty(splitTag)
 		// remove unused capacity to save memory
-		sanitizedSplitTag = slices.Clip(sanitizedSplitTag)
+		sanitizedSplitTag = slices.Clip(sanitizedSplitTag) // WTF is this?
 
 		// create the mapping
-		te[splitTag[0]] = mapTagGrouping(te, splitTag, value)
+		te[splitTag[0]] = mapTagGrouping(te, sanitizedSplitTag, value)
 	}
 
 	return te, err
@@ -376,8 +376,7 @@ func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value s
 
 func removeEmpty(s []string) []string {
 	var r []string
-	idx := slices.Index(s, "")
-	if idx != -1 {
+	if idx := slices.Index(s, ""); idx != -1 {
 		r = append(s[:idx], s[idx+1:]...)
 		// recursively remove empty strings
 		return removeEmpty(r)
