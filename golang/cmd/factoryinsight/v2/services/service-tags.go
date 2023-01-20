@@ -37,7 +37,12 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 		return nil, err
 	}
 	var customTagGroupExists bool
+	var customTagGroupStringExists bool
 	customTagGroupExists, err = GetCustomTagsExists(id)
+	if err != nil {
+		return nil, err
+	}
+	customTagGroupStringExists, err = GetCustomTagsStringExists(id)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +56,9 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 	tagGroups = make([]string, 0)
 	if customTagGroupExists {
 		tagGroups = append(tagGroups, models.CustomTagGroup)
+	}
+	if customTagGroupStringExists {
+		tagGroups = append(tagGroups, models.CustomStringTagGroup)
 	}
 	if len(standardTags) > 0 {
 		tagGroups = append(tagGroups, models.StandardTagGroup)
@@ -117,6 +125,34 @@ func GetCustomTags(workCellId uint32) (tags []string, err error) {
 		"[GetTags] Getting custom tags for work cell %d", workCellId)
 
 	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
+
+	rows, err := database.Db.Query(sqlStatement, workCellId)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var valueName string
+		err = rows.Scan(&valueName)
+		if err != nil {
+			database.ErrorHandling(sqlStatement, err, false)
+			return
+		}
+
+		tags = append(tags, valueName)
+	}
+
+	return
+}
+
+func GetCustomStringTags(workCellId uint32) (tags []string, err error) {
+	zap.S().Infof(
+		"[GetTags] Getting custom tags for work cell %d", workCellId)
+
+	sqlStatement := `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
 
 	rows, err := database.Db.Query(sqlStatement, workCellId)
 	if err != nil {
@@ -429,7 +465,7 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	c.JSON(http.StatusOK, counts)
 }
 
-func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, useProcessValueString bool) {
 
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -440,7 +476,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	var data datamodel.DataResponseAny
 
-	if request.TagGroupName != models.CustomTagGroup {
+	if request.TagGroupName != models.CustomTagGroup && request.TagGroupName != models.CustomStringTagGroup {
 		helpers.HandleInvalidInputError(c, errors.New("invalid tag group"))
 		return
 	}
@@ -473,8 +509,9 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-values"
 		data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-		// #nosec G201
-		sqlStatement = `
+		if useProcessValueString == false {
+			// #nosec G201
+			sqlStatement = `
 SELECT
 	asset_id,
 	timestamp,
@@ -489,6 +526,23 @@ WHERE
 GROUP BY asset_id, timestamp, value
 ORDER BY timestamp
 `
+		} else {
+			sqlStatement = `
+SELECT
+	asset_id,
+	timestamp,
+	value
+FROM
+	processvaluestringtable
+WHERE
+    asset_id = $1 AND
+    valuename = $2 AND
+    timestamp >= $3 AND
+    timestamp <= $4
+GROUP BY asset_id, timestamp, value
+ORDER BY timestamp
+`
+		}
 	} else {
 		gapFilling := getCustomTagDataRequest.GapFilling
 

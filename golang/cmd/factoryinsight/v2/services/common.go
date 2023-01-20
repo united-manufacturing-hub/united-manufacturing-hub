@@ -60,6 +60,24 @@ func GetCustomTagsExists(workCellId uint32) (bool, error) {
 	return customExists, err
 }
 
+func GetCustomTagsStringExists(workCellId uint32) (bool, error) {
+	_, ok := lruExistCache.Get(fmt.Sprintf("custom-tags-string-exists-%d", workCellId))
+	if ok {
+		return true, nil
+	}
+	sqlStatement := `SELECT EXISTS(SELECT 1 FROM processvaluestringtable WHERE asset_id = $1)`
+	var customExists bool
+	err := database.Db.QueryRow(sqlStatement, workCellId).Scan(&customExists)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return false, err
+	}
+	if customExists {
+		lruExistCache.Add(fmt.Sprintf("custom-tags-string-exists-%d", workCellId), true)
+	}
+	return customExists, err
+}
+
 func GetJobsExists(workCellid uint32) (bool, error) {
 	_, ok := lruExistCache.Get(fmt.Sprintf("jobs-exists-%d", workCellid))
 	if ok {
