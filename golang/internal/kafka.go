@@ -194,23 +194,19 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 }
 
 func MqttTopicToKafka(MqttTopicName string) (validTopic bool, KafkaTopicName string) {
-	if strings.Contains(MqttTopicName, ".") {
-		zap.S().Errorf("MQTT topic name %s Contains illegal character (.)", MqttTopicName)
-		return false, ""
-	}
 	MqttTopicName = strings.TrimSpace(MqttTopicName)
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, "/", ".")
 	MqttTopicName = strings.ReplaceAll(MqttTopicName, " ", "")
 	if !IsKafkaTopicValid(MqttTopicName) {
-		zap.S().Errorf("Topic is not valid: %s, does not match %s", MqttTopicName, KafkaUMHTopicRegex)
+		zap.S().Errorf("Topic is not valid: (%s), does not match %s", MqttTopicName, KafkaUMHTopicRegex)
 		return false, ""
 	}
 	if len(strings.Split(MqttTopicName, ".")) >= 10 {
-		zap.S().Errorf("Illegal Topic name: %s (max topic depth)", MqttTopicName)
+		zap.S().Errorf("Illegal Topic name: (%s) (max topic depth)", MqttTopicName)
 		return false, ""
 	}
 	if len(MqttTopicName) >= 200 {
-		zap.S().Errorf("Illegal Topic name: %s (max topic length)", MqttTopicName)
+		zap.S().Errorf("Illegal Topic name: (%s) (max topic length)", MqttTopicName)
 		return false, ""
 	}
 	return true, MqttTopicName

@@ -6,7 +6,7 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/gvalkov/golang-evdev"
+	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
@@ -16,8 +16,6 @@ import (
 	"os"
 	"time"
 )
-
-var serialNumber string
 
 var kafkaSendTopic string
 
@@ -190,10 +188,9 @@ func OnScan(scanned string) {
 		TopicPartition: kafka.TopicPartition{
 			Topic: &kafkaSendTopic,
 		},
-		Value:   bytes,
-		Headers: []kafka.Header{{Key: "origin", Value: []byte(serialNumber)}},
+		Value: bytes,
 	}
-	err = internal.KafkaProducer.Produce(&msg, nil)
+	err = internal.Produce(internal.KafkaProducer, &msg, nil)
 	if err != nil {
 		zap.S().Warnf("Error producing message: %v (%v)", err, scanned)
 		return

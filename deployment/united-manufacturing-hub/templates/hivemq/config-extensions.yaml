@@ -111,6 +111,9 @@ data:
                 <permissions>
                     <permission>
                         <topic>#</topic>
+                        <topic>$dropped/#</topic>
+                        <topic>$expired/#</topic>
+                        <topic>$dead/#</topic>
                     </permission>
                 </permissions>
             </role>

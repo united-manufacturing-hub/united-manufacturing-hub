@@ -141,5 +141,16 @@ data:
                 <enabled>true</enabled>
             </utf8-validation>
         </security>
+        <mqtt-addons>
+            <dead-messages-topic>
+                <enabled>true</enabled>
+            </dead-messages-topic>
+            <expired-messages-topic>
+                <enabled>true</enabled>
+            </expired-messages-topic>
+            <dropped-messages-topic>
+                <enabled>true</enabled>
+            </dropped-messages-topic>
+        </mqtt-addons>
     </hivemq>
 {{end}}
