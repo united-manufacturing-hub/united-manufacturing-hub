@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -70,15 +71,16 @@ func main() {
 	if !assetIDEnvSet {
 		zap.S().Fatal("Asset ID (ASSET_ID) must be set")
 	}
-	var serialNumberEnvSet bool
-	serialNumber, serialNumberEnvSet = os.LookupEnv("SERIAL_NUMBER")
-	if !serialNumberEnvSet {
-		zap.S().Fatal("Serial Number (SERIAL_NUMBER must be set")
-	}
 	var scanOnlyEnvSet bool
-	scanOnly, scanOnlyEnvSet = os.LookupEnv("SCAN_ONLY") == "true"
+	var scanOnlyString string
+	scanOnlyString, scanOnlyEnvSet = os.LookupEnv("SCAN_ONLY")
 	if !scanOnlyEnvSet {
 		zap.S().Fatal("scan only (SCAN_ONLY) must be set")
+	}
+	var err error
+	scanOnly, err = strconv.ParseBool(scanOnlyString)
+	if err != nil {
+		zap.S().Fatal("scan only (SCAN_ONLY) must be set to true or false")
 	}
 
 	if !scanOnly {
@@ -112,10 +114,12 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	devicePath, devicePathEnvSet := os.LookupEnv("INPUT_DEVICE_PATH")
 	if !devicePathEnvSet {
 		zap.S().Fatal("Device Path (DEVICE_PATH) must be set")
+	}
 	// This could be "Datalogic ADC, Inc. Handheld Barcode Scanner"
 	deviceName, deviceNameEnvSet := os.LookupEnv("INPUT_DEVICE_NAME")
-		if !deviceNameEnvSet {
-			zap.S().Fatal("Device Name (DEVICE_NAME) must be set")
+	if !deviceNameEnvSet {
+		zap.S().Fatal("Device Name (DEVICE_NAME) must be set")
+	}
 	unset := false
 	if devicePath == "" && deviceName == "" {
 		zap.S().Warnf("No device path or name specified (INPUT_DEVICE_PATH and INPUT_DEVICE_NAME)")

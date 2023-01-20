@@ -14,7 +14,7 @@ RUN unzip -n hivemq-file-rbac-extension.zip
 RUN unzip -n hivemq-prometheus-extension.zip
 RUN unzip -n hivemq-heartbeat-extension.zip
 
-COPY runner.sh /runner.sh
+COPY ./deployment/hivemq-init/runner.sh /runner.sh
 RUN dos2unix /runner.sh
 
 FROM alpine as runner

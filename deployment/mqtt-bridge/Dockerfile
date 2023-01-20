@@ -1,6 +1,8 @@
 FROM docker.io/golang:1.19-alpine3.16 as builder
 
 RUN mkdir /build
+# Add build requirements for librdkafka
+RUN apk add build-base
 
 # Get dependencies
 WORKDIR /build
