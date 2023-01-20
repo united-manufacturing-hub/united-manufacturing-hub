@@ -10,9 +10,6 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -34,14 +31,7 @@ func main() {
 
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
 	if !dryRunEnvSet {

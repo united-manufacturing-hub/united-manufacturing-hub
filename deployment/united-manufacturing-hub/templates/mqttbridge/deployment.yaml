@@ -25,6 +25,12 @@ spec:
         {{- else}}
         image: {{.Values.mqttbridge.image}}:{{.Chart.AppVersion}}
         {{end}}
+        {{if .Values._000_commonConfig.debug.enableFGTrace}}
+        ports:
+          - containerPort: 1337
+            name: fgtrace
+            protocol: TCP
+        {{end}}
         volumeMounts:
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data
           mountPath: /data/queue
@@ -75,6 +81,10 @@ spec:
           value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
         - name: INSECURE_SKIP_VERIFY_REMOTE
           value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
+        {{if .Values._000_commonConfig.debug.enableFGTrace}}
+        - name: DEBUG_ENABLE_FGTRACE
+          value: "true"
+        {{end}}
 
       volumes:
       - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge-data

@@ -59,7 +59,12 @@ spec:
           image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
-
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:
@@ -118,6 +123,10 @@ spec:
             - name: INSECURE_SKIP_VERIFY
               value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
 
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           # livenessProbe:

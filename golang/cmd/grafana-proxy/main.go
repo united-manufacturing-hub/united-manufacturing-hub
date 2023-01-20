@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -29,14 +27,8 @@ func main() {
 		}
 	}(log)
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+
+	internal.Initfgtrace()
 	var FactoryInpitAPIKeyEnvSet bool
 	FactoryInputAPIKey, FactoryInpitAPIKeyEnvSet = os.LookupEnv("FACTORYINPUT_KEY")
 	if !FactoryInpitAPIKeyEnvSet {

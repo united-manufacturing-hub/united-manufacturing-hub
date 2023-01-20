@@ -12,8 +12,6 @@ import (
 	"io/fs"
 	"net/http"
 
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -71,14 +69,7 @@ func main() {
 
 	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error while starting pprof: %s", err.Error())
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")

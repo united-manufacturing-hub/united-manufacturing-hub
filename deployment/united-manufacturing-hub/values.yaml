@@ -288,9 +288,13 @@ _000_commonConfig:
   kafkaStateDetector:
     enabled: false
 
+  debug:
+    enableFGTrace: false # Enables https://github.com/felixge/fgtrace. DO NOT USE IN PRODUCTION!
+
   tulipconnector:
     enabled: false
     domain: "tulip-connector.changeme.com"
+
 
 _001_customMicroservices:
   -

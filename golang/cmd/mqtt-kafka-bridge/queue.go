@@ -55,7 +55,7 @@ func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	}
 }
 
-func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error) {
+func retrieveMessageFromQueue(pq *goque.Queue) (queueObj *queueObject, err error) {
 	if pq.Length() == 0 {
 		zap.S().Debugf("pq.Length == 0")
 		return
@@ -67,7 +67,7 @@ func retrieveMessageFromQueue(pq *goque.Queue) (queueObj queueObject, err error)
 		return
 	}
 
-	err = item.ToObject(&queueObj)
+	err = item.ToObject(queueObj)
 	if err != nil {
 		return
 	}

@@ -10,9 +10,6 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,14 +34,7 @@ func main() {
 
 	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")

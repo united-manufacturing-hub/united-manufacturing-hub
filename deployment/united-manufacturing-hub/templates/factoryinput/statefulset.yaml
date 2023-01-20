@@ -55,6 +55,11 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           imagePullPolicy: {{.Values.factoryinput.image.pullPolicy}}
           env:
             - name: CERTIFICATE_NAME
@@ -100,6 +105,10 @@ spec:
             - name: CUSTOMER_PASSWORD_{{$index}}
               value: {{$password}}
               {{$index = add $index 1}}
+            {{end}}
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
             {{end}}
 
           volumeMounts:

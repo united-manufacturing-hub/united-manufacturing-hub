@@ -8,9 +8,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,14 +31,7 @@ func main() {
 
 	zap.S().Infof("This is kafka-to-blob build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof %v", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
