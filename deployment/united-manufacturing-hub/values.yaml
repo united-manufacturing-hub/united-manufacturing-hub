@@ -964,9 +964,6 @@ tenant:
 ### timescaleDB ###
 timescaledb-single:
   replicaCount: 1
-  # To prevent very long names, we override the name, otherwise it would default to
-  # timescaledb-single (the name of the chart)
-  nameOverride: timescaledb
 
   # The default Patroni name of the cluster ("scope") is derived from the name of the release,
   # but you can override this behaviour here
@@ -983,23 +980,6 @@ timescaledb-single:
     repository: timescale/timescaledb-ha
     tag: pg13.8-ts2.8.0-p1
     pullPolicy: IfNotPresent
-
-  # These secrets should exist before the Helm is used to deploy this TimescaleDB.
-  # You can use generate_kustomization.sh to help in creating these secrets, or have
-  # a look at kustomize/example to see how you could install them.
-  secretNames:
-    # This secret should contain environment variables that influence Patroni,
-    # for example PATRONI_SUPERUSER_PASSWORD or PATRONI_REPLICATION_PASSWORD
-    # https://patroni.readthedocs.io/en/latest/ENVIRONMENT.html#postgresql
-    credentials:  # defaults to RELEASE-credentials
-
-    # This secret should be a Secret of type kubernetes.io/tls, containing
-    # both a tls.key and a tls.crt
-    certificate:  # defaults to RELEASE-certificate
-
-    # This secret should contain environment variables that influence pgBackRest,
-    # for example, PGBACKREST_REPO1_S3_KEY or PGBACKREST_REPO1_S3_KEY_SECRET
-    pgbackrest:  # defaults to RELEASE-pgbackrest
 
   backup:
     enabled: false
