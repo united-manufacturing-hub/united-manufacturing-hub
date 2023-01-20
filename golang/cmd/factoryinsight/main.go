@@ -96,14 +96,8 @@ func main() {
 
 	for i := 1; i <= 100; i++ {
 		tempUser, tempUserEnvSet := os.LookupEnv("CUSTOMER_NAME_" + strconv.Itoa(i))
-		if !tempUserEnvSet {
-			zap.S().Fatal("Temp User (TEMP_USER) must be set")
-		}
 		tempPassword, tempPasswordEnvSet := os.LookupEnv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
-		if !tempPasswordEnvSet {
-			zap.S().Fatal("Temp Password (TEMP_PASSWORD) must be set")
-		}
-		if tempUser != "" && tempPassword != "" {
+		if tempUserEnvSet && tempPasswordEnvSet {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
 		}
