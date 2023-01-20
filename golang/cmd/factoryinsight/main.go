@@ -148,7 +148,7 @@ func main() {
 
 	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
 	if !dryRunEnvSet {
-		zap.S().Fatal("dryRun (DRY_RUN) must be set")
+		dryRun = "false"
 	}
 	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
 

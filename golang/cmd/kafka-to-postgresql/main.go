@@ -35,7 +35,7 @@ func main() {
 
 	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
 	if !dryRunEnvSet {
-		zap.S().Fatal("Dry Run (DRY_RUN) must be set")
+		dryRun = "false"
 	}
 
 	// Prometheus
