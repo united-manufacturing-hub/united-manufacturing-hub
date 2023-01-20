@@ -40,7 +40,10 @@ func main() {
 	}()
 
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	zap.S().Debugf("Setting up Kafka")
 
 	securityProtocol := "plaintext"
