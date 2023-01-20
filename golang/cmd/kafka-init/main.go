@@ -28,10 +28,16 @@ func main() {
 	internal.Initfgtrace()
 
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Bootstrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	zap.S().Infof("KafkaBoostrapServer: %s", KafkaBoostrapServer)
 	// Semicolon separated list of topic to create
-	KafkaTopics := os.Getenv("KAFKA_TOPICS")
+	KafkaTopics, KafkaTopicsEnvSet := os.LookupEnv("KAFKA_TOPICS")
+	if !KafkaTopicsEnvSet {
+		zap.S().Fatal("Kafka Topics (KAFKA_TOPICS) must be set")
+	}
 	zap.S().Infof("KafkaTopics: %s", KafkaTopics)
 
 	zap.S().Debugf("Setting up Kafka")

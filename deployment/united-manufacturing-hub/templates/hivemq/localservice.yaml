@@ -12,26 +12,26 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    {{- if .Values.hivemqce.service.mqtt.enabled }}
-    - port: {{ .Values.hivemqce.service.mqtt.port }}
+    {{- if .Values.mqtt_broker.service.mqtt.enabled }}
+    - port: {{ .Values.mqtt_broker.service.mqtt.port }}
       targetPort: mqtt
       protocol: TCP
       name: mqtt
     {{- end }}
-    {{- if .Values.hivemqce.service.mqtts.enabled }}
-    - port: {{ .Values.hivemqce.service.mqtts.port }}
+    {{- if .Values.mqtt_broker.service.mqtts.enabled }}
+    - port: {{ .Values.mqtt_broker.service.mqtts.port }}
       targetPort: mqtts
       protocol: TCP
       name: mqtts
     {{- end }}
-    {{- if .Values.hivemqce.service.ws.enabled }}
-    - port: {{ .Values.hivemqce.service.ws.port }}
+    {{- if .Values.mqtt_broker.service.ws.enabled }}
+    - port: {{ .Values.mqtt_broker.service.ws.port }}
       targetPort: ws
       protocol: TCP
       name: ws
     {{- end }}
-    {{- if .Values.hivemqce.service.wss.enabled }}
-    - port: {{ .Values.hivemqce.service.wss.port }}
+    {{- if .Values.mqtt_broker.service.wss.enabled }}
+    - port: {{ .Values.mqtt_broker.service.wss.port }}
       targetPort: wss
       protocol: TCP
       name: wss

@@ -16,6 +16,6 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{.Values.hivemqce.persistence.storage.size}}
+      storage: {{.Values.mqtt_broker.persistence.storage.size}}
 
 {{end}}

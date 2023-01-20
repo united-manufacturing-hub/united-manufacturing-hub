@@ -51,7 +51,10 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	if KafkaBoostrapServer == "" {
 		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER not set")
 	}
@@ -63,6 +66,8 @@ func main() {
 		if b {
 			allowedMemorySize = int(i) // truncated !
 		}
+	} else {
+		zap.S().Infof("Memory request [MEMORY_REQUEST] not set")
 	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
@@ -127,6 +132,7 @@ func main() {
 		go internal.StartEventHandler("[AC]", activityEventChannel, ActivityPutBackChannel)
 		go startActivityProcessor()
 	}
+
 	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
 
 	if AnomalyEnabled {

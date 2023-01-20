@@ -56,12 +56,32 @@ func main() {
 	}
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
-	customerID := os.Getenv("CUSTOMER_ID")
-	location := os.Getenv("LOCATION")
-	assetID := os.Getenv("ASSET_ID")
-	serialNumber = os.Getenv("SERIAL_NUMBER")
-	scanOnly = os.Getenv("SCAN_ONLY") == "true"
+	KafkaBoostrapServer, KafkaBootstrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBootstrapServerEnvSet {
+		zap.S().Fatal("Kafka bootstrap server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
+	customerID, customerIDEnvSet := os.LookupEnv("CUSTOMER_ID")
+	if !customerIDEnvSet {
+		zap.S().Fatal("Customer ID (CUSTOMER_ID) must be set")
+	}
+	location, locationEnvSet := os.LookupEnv("LOCATION")
+	if !locationEnvSet {
+		zap.S().Fatal("location (LOCATION) must be set")
+	}
+	assetID, assetIDEnvSet := os.LookupEnv("ASSET_ID")
+	if !assetIDEnvSet {
+		zap.S().Fatal("Asset ID (ASSET_ID) must be set")
+	}
+	var serialNumberEnvSet bool
+	serialNumber, serialNumberEnvSet = os.LookupEnv("SERIAL_NUMBER")
+	if !serialNumberEnvSet {
+		zap.S().Fatal("Serial Number (SERIAL_NUMBER must be set")
+	}
+	var scanOnlyEnvSet bool
+	scanOnly, scanOnlyEnvSet = os.LookupEnv("SCAN_ONLY") == "true"
+	if !scanOnlyEnvSet {
+		zap.S().Fatal("scan only (SCAN_ONLY) must be set")
+	}
 
 	if !scanOnly {
 		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
@@ -91,9 +111,13 @@ func main() {
 // If no device is found, it will print all available devices and return false, nil.
 func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	// This could be /dev/input/event0, /dev/input/event1, etc.
-	devicePath := os.Getenv("INPUT_DEVICE_PATH")
+	devicePath, devicePathEnvSet := os.LookupEnv("INPUT_DEVICE_PATH")
+	if !devicePathEnvSet {
+		zap.S().Fatal("Device Path (DEVICE_PATH) must be set")
 	// This could be "Datalogic ADC, Inc. Handheld Barcode Scanner"
-	deviceName := os.Getenv("INPUT_DEVICE_NAME")
+	deviceName, deviceNameEnvSet := os.LookupEnv("INPUT_DEVICE_NAME")
+		if !deviceNameEnvSet {
+			zap.S().Fatal("Device Name (DEVICE_NAME) must be set")
 	unset := false
 	if devicePath == "" && deviceName == "" {
 		zap.S().Warnf("No device path or name specified (INPUT_DEVICE_PATH and INPUT_DEVICE_NAME)")

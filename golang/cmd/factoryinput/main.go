@@ -40,7 +40,11 @@ func GetEnv(variableName string) (envValue string) {
 	if len(variableName) == 0 {
 		zap.S().Warnf("Attempting to get env variable without name")
 	}
-	envValue = os.Getenv(variableName)
+	var envValueEnvSet bool
+	envValue, envValueEnvSet = os.LookupEnv(variableName)
+	if !envValueEnvSet {
+		zap.S().Fatal("env value (ENV_VALUE) must be set")
+	}
 	if len(envValue) == 0 {
 		zap.S().Warnf("Env variable %s is empty", variableName)
 	}
@@ -68,8 +72,14 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser := os.Getenv("CUSTOMER_NAME_" + strconv.Itoa(i))
-		tempPassword := os.Getenv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
+		tempUser, tempUserEnvSet := os.LookupEnv("CUSTOMER_NAME_" + strconv.Itoa(i))
+		if !tempUserEnvSet {
+			zap.S().Fatal("temp user (TEMP_USER) must be set")
+		}
+		tempPassword, tempPasswordEnvSet := os.LookupEnv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
+		if !tempPasswordEnvSet {
+			zap.S().Fatal("temp Password (TEMPT_PASSWORD) must be set")
+		}
 		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
@@ -123,7 +133,10 @@ func main() {
 	// Setup MQTT
 	zap.S().Debugf("Setting up MQTT")
 	podName := GetEnv("MY_POD_NAME")
-	mqttPassword := os.Getenv("MQTT_PASSWORD")
+	mqttPassword, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
+	if !mqttPasswordEnvSet {
+		zap.S().Fatal("mqtt Password (MQTT_PASSWORD) must be set")
+	}
 	SetupMQTT(certificateName, mqttBrokerURL, podName, mqttPassword)
 	zap.S().Debugf("Finished setting up MQTT")
 

@@ -60,15 +60,39 @@ func main() {
 	}()
 
 	// Read environment variables for MQTT
-	MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
-	MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
-	MQTTTopic := os.Getenv("MQTT_TOPIC")
-	podName := os.Getenv("MY_POD_NAME")
-	mqttPassword := os.Getenv("MQTT_PASSWORD")
+	MQTTCertificateName, MQTTCertificateNameEnvSet := os.LookupEnv("MQTT_CERTIFICATE_NAME")
+	if !MQTTCertificateNameEnvSet {
+		zap.S().Fatal("Mqtt certificate name (MQTT_CERTIFICATE_NAME) must be set")
+	}
+	MQTTBrokerURL, MQTTBrokerURLEnvSet := os.LookupEnv("MQTT_BROKER_URL")
+	if !MQTTBrokerURLEnvSet {
+		zap.S().Fatal("Mqtt broker url (MQTT_BROKER_URL) must be set")
+	}
+	MQTTTopic, MQTTTopicEnvSet := os.LookupEnv("MQTT_TOPIC")
+	if !MQTTTopicEnvSet {
+		zap.S().Fatal("Mqtt topic (MQTT_TOPIC) must be set")
+	}
+	podName, podNameEnvSet := os.LookupEnv("MY_POD_NAME")
+	if !podNameEnvSet {
+		zap.S().Fatal("Pod name (MY_POD_NAME) must be set")
+	}
+	mqttPassword, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
+	if !mqttPasswordEnvSet {
+		zap.S().Fatal("Mqtt password (MQTT_PASSWORD) must be set")
+	}
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
-	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
-	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Bootstrap server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
+	KafkaTopic, KafkaTopicEnvSet := os.LookupEnv("KAFKA_LISTEN_TOPIC")
+	if !KafkaTopicEnvSet {
+		zap.S().Fatal("Kafka topic (KAFKA_LISTEN_TOPIC) must be set")
+	}
+	KafkaBaseTopic, KafkaBaseTopicEnvSet := os.LookupEnv("KAFKA_BASE_TOPIC")
+	if !KafkaBaseTopicEnvSet {
+		zap.S().Fatal("Kafka base topic (KAFKA_BASE_TOPIC) must be set")
+	}
 
 	zap.S().Debugf("Setting up memorycache")
 	internal.InitMemcache()

@@ -40,11 +40,26 @@ func main() {
 	// dryRun := os.Getenv("DRY_RUN")
 
 	// Read environment variables for remote broker
-	remoteCertificateName := os.Getenv("REMOTE_CERTIFICATE_NAME")
-	remoteMQTTBrokerURL := os.Getenv("REMOTE_BROKER_URL")
-	remoteSubMQTTTopic := os.Getenv("REMOTE_SUB_TOPIC")
-	remotePubMQTTTopic := os.Getenv("REMOTE_PUB_TOPIC")
-	remoteMQTTPassword := os.Getenv("REMOTE_BROKER_PASSWORD")
+	remoteCertificateName, remotecertificateNameEnvSet := os.LookupEnv("REMOTE_CERTIFICATE_NAME")
+	if !remotecertificateNameEnvSet {
+		zap.S().Fatal("Remote certificate name (REMOTE_CERTIFICATE_NAME) must be set")
+	}
+	remoteMQTTBrokerURL, remoteMQTTBrokerURLEnvSet := os.LookupEnv("REMOTE_BROKER_URL")
+	if !remoteMQTTBrokerURLEnvSet {
+		zap.S().Fatal("Remote MQTT Broker URL (REMOTE_BROKER_URL) must be set")
+	}
+	remoteSubMQTTTopic, remoteSubMQTTTopicEnvSet := os.LookupEnv("REMOTE_SUB_TOPIC")
+	if !remoteSubMQTTTopicEnvSet {
+		zap.S().Fatal("Remote sub mqtt topic (REMOTE_SUB_TOPIC) must be set")
+	}
+	remotePubMQTTTopic, remotePubMQTTTopicEnvSet := os.LookupEnv("REMOTE_PUB_TOPIC")
+	if !remotePubMQTTTopicEnvSet {
+		zap.S().Fatal("Remote pub mqtt topic (REMOTE_PUB_TOPIC) must be set")
+	}
+	remoteMQTTPassword, remoteMQTTPasswordEnvSet := os.LookupEnv("REMOTE_BROKER_PASSWORD")
+	if !remoteMQTTPasswordEnvSet {
+		zap.S().Fatal("Remote mqtt password (REMOTE_BROKER_PASSWORD) must be set")
+	}
 	remoteMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("REMOTE_BROKER_SSL_ENABLED"))
 	if err != nil {
 		zap.S().Errorf("Error parsing bool from environment variable", err)
@@ -52,11 +67,26 @@ func main() {
 	}
 
 	// Read environment variables for local broker
-	localCertificateName := os.Getenv("LOCAL_CERTIFICATE_NAME")
-	localMQTTBrokerURL := os.Getenv("LOCAL_BROKER_URL")
-	localSubMQTTTopic := os.Getenv("LOCAL_SUB_TOPIC")
-	localPubMQTTTopic := os.Getenv("LOCAL_PUB_TOPIC")
-	localMQTTPassword := os.Getenv("LOCAL_BROKER_PASSWORD")
+	localCertificateName, localCertificateNameEnvSet := os.LookupEnv("LOCAL_CERTIFICATE_NAME")
+	if !localCertificateNameEnvSet {
+		zap.S().Fatal("Local certificate name (LOCAL_CERTIFICATE_NAME) must be set")
+	}
+	localMQTTBrokerURL, localMQTTBrokerURLEnvSet := os.LookupEnv("LOCAL_BROKER_URL")
+	if !localMQTTBrokerURLEnvSet {
+		zap.S().Fatal("Local mqtt broker URL (LOCAL_BROKER_URL) must be set")
+	}
+	localSubMQTTTopic, localSubMQTTTopicsEnvSet := os.LookupEnv("LOCAL_SUB_TOPIC")
+	if !localSubMQTTTopicsEnvSet {
+		zap.S().Fatal("Local sub mqtt topic (LOCAL_SUB_TOPIC) must be set")
+	}
+	localPubMQTTTopic, localPubMQTTTopicEnvSet := os.LookupEnv("LOCAL_PUB_TOPIC")
+	if !localPubMQTTTopicEnvSet {
+		zap.S().Fatal("Local pub mqtt topic (LOCAL_PUB_TOPIC) must be set")
+	}
+	localMQTTPassword, localMQTTPasswordEnvSet := os.LookupEnv("LOCAL_BROKER_PASSWORD")
+	if !localMQTTPasswordEnvSet {
+		zap.S().Fatal("Local mqtt password (LOCAL_BROKER_PASSWORD) must be set")
+	}
 	localMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("LOCAL_BROKER_SSL_ENABLED"))
 	if err != nil {
 		zap.S().Errorf("Error parsing bool from environment variable", err)

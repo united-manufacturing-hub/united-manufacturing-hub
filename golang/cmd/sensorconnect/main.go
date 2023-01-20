@@ -98,17 +98,32 @@ func main() {
 	if useMQTT {
 		zap.S().Infof("Starting with MQTT")
 		// Read environment variables for MQTT
-		MQTTCertificateName := os.Getenv("MQTT_CERTIFICATE_NAME")
-		MQTTBrokerURL := os.Getenv("MQTT_BROKER_URL")
-		podName := os.Getenv("MY_POD_NAME")
-		mqttPassword := os.Getenv("MQTT_PASSWORD")
+		MQTTCertificateName, MQTTCertificateNameEnvSet := os.LookupEnv("MQTT_CERTIFICATE_NAME")
+		if !MQTTCertificateNameEnvSet {
+			zap.S().Fatal("Mqtt Certificate name (MQTT_VERTIFICATE_NAME) must be set")
+		}
+		MQTTBrokerURL, MQTTBROKERURLEnvSet := os.LookupEnv("MQTT_BROKER_URL")
+		if !MQTTBROKERURLEnvSet {
+			zap.S().Fatal("Mqtt broker URL (MQTT_BROKER_URL) must be set")
+		}
+		podName, podNameEnvSet := os.LookupEnv("MY_POD_NAME")
+		if !podNameEnvSet {
+			zap.S().Fatal("Pod name (MY_POD_NAME) must be set")
+		}
+		mqttPassword, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
+		if !mqttPasswordEnvSet {
+			zap.S().Fatal("Mqtt password (MQTT_PASSWORD) must be set")
+		}
 		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName, mqttPassword)
 	}
 
 	if useKafka {
 		zap.S().Infof("Starting with Kafka")
 		// Read environment variables for Kafka
-		KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+		KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+		if !KafkaBoostrapServerEnvSet {
+			zap.S().Fatal("Kafka Boostrap server (KAFKA_BOOSTRAP_SERVER) must be set")
+		}
 		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
@@ -197,7 +212,10 @@ func main() {
 	}
 	type SlowDownMapJSON []SlowDownMapJSONElement
 
-	slowdownMapRaw := os.Getenv("ADDITIONAL_SLOWDOWN_MAP")
+	slowdownMapRaw, slowdownMapRawEnvSet := os.LookupEnv("ADDITIONAL_SLOWDOWN_MAP")
+	if !slowdownMapRawEnvSet {
+		zap.S().Fatal("Slow down map raw (ADDITIONAL_SLOWDOWN_MAP) must be set")
+	}
 	slowDownMap = sync.Map{}
 	if slowdownMapRaw != "" {
 		var r SlowDownMapJSON
@@ -230,12 +248,22 @@ func main() {
 		}
 	}
 
-	ipRange := os.Getenv("IP_RANGE")
+	ipRange, ipRangeEnvSet := os.LookupEnv("IP_RANGE")
+	if !ipRangeEnvSet {
+		zap.S().Fatal("IP range (IP_RANGE) must be set")
+	}
 	zap.S().Infof("Scanning IP range: %s", ipRange)
 
-	transmitterId = os.Getenv("TRANSMITTERID")
+	var transmitterIdEnvSet bool
+	transmitterId, transmitterIdEnvSet = os.LookupEnv("TRANSMITTERID")
+	if !transmitterIdEnvSet {
+		zap.S().Fatal("TransmitterID (TRANSMITTERID) must be set")
+	}
 
-	relativeDirectoryPath := os.Getenv("IODD_FILE_PATH")
+	relativeDirectoryPath, relativeDirectoryPathEnvSet := os.LookupEnv("IODD_FILE_PATH")
+	if !relativeDirectoryPathEnvSet {
+		zap.S().Fatal("Relative directory path (IODD_FILE_PATH) must be set")
+	}
 
 	ioDeviceMap = sync.Map{}
 
