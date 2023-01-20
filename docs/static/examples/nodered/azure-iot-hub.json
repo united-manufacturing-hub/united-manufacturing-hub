@@ -79,7 +79,7 @@
     },
     {
         "id": "89086b538a91a7a3",
-        "type": "mqtt-broker",
+        "type": "mqtt_broker",
         "name": "",
         "broker": "contoso-test.azure-devices.net",
         "port": "8883",
@@ -105,7 +105,7 @@
     },
     {
         "id": "5dff9791.d1b278",
-        "type": "mqtt-broker",
+        "type": "mqtt_broker",
         "name": "",
         "broker": "factorycube-edge-emqxedge-service",
         "port": "1883",

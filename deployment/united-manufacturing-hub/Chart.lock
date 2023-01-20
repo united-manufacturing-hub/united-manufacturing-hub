@@ -1,24 +1,24 @@
 dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 17.1.7
+  version: 17.3.17
 - name: grafana
   repository: https://grafana.github.io/helm-charts
   version: 6.21.1
 - name: timescaledb-single
   repository: https://charts.timescale.com/
-  version: 0.10.0
+  version: 0.27.4
 - name: operator
   repository: https://operator.min.io/
-  version: 4.4.17
+  version: 4.5.0
 - name: tenant
   repository: https://operator.min.io/
-  version: 4.4.17
+  version: 4.5.0
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
-  version: 15.0.1
-- name: kowl
-  repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
-  version: 2.3.0
-digest: sha256:821032d159de1221dca0e8232895ccaad29647ec9910af43cf4d434bb0cd41db
-generated: "2022-11-25T10:14:49.9213419+01:00"
+  version: 20.0.1
+- name: console
+  repository: https://dl.redpanda.com/public/console/helm/charts/
+  version: 0.3.1
+digest: sha256:a18577a4f32532907c81e8c6dce134f7dde5e879f7686984f7992cfef77e3c61
+generated: "2023-01-16T15:41:20.3657123+01:00"
