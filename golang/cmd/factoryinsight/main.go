@@ -20,6 +20,7 @@ import (
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	apiV1 "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v1"
 	v2controllers "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/controllers"
 	"net/http"
@@ -145,6 +146,21 @@ func main() {
 
 	zap.S().Debugf("DB initialized..", PQHost)
 
+	insecureNoAuthString, insecureNotAuthSet := os.LookupEnv("INSECURE_NO_AUTH")
+	if insecureNotAuthSet {
+		helpers.InsecureNoAuth, err = strconv.ParseBool(insecureNoAuthString)
+		if err != nil {
+			zap.S().Errorf("Cannot parse INSECURE_NO_AUTH: %s (%s)", err, insecureNoAuthString)
+		}
+		if helpers.InsecureNoAuth {
+			for i := 0; i < 50; i++ {
+				zap.S().Warnf("INSECURE_NO_AUTH is set to true. This is a security risk. Do not use in production.")
+			}
+			zap.S().Warnf("Sleeping for 10 seconds to allow you to cancel the program.")
+			time.Sleep(10 * time.Second)
+		}
+	}
+
 	setupRestAPI(accounts, currentVersion)
 
 	// Allow graceful shutdown
@@ -223,6 +239,9 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 	if version >= 1 {
 		zap.S().Infof("Starting API version 1")
 		v1 := router.Group("/api/v1", gin.BasicAuth(accounts))
+		if helpers.InsecureNoAuth {
+			v1 = router.Group("/api/v1")
+		}
 		{
 			// WARNING: Need to check in each specific handler whether the user is actually allowed to access it, so that valid user "ia" cannot access data for customer "abc"
 			v1.GET("/:customer", apiV1.GetLocationsHandler)
@@ -235,9 +254,14 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 	if version >= 2 {
 		zap.S().Infof("Starting API version 2")
 		v2 := router.Group("/api/v2", gin.BasicAuth(accounts))
+		if helpers.InsecureNoAuth {
+			v2 = router.Group("/api/v2")
+		}
 		{
 			v2.GET("/treeStructure", v2controllers.GetTreeStructureHandler)
 			v2.GET("/:enterpriseName", v2controllers.GetSitesHandler)
+			v2.GET("/:enterpriseName/configuration", v2controllers.GetConfigurationHandler)
+			v2.GET("/:enterpriseName/database-stats", v2controllers.GetDatabaseStatisticsHandler)
 			v2.GET("/:enterpriseName/:siteName", v2controllers.GetAreasHandler)
 			v2.GET("/:enterpriseName/:siteName/:areaName", v2controllers.GetProductionLinesHandler)
 			v2.GET("/:enterpriseName/:siteName/:areaName/:productionLineName", v2controllers.GetWorkCellsHandler)
@@ -273,6 +297,9 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 
 	/*
 		v3 := router.Group("/api/v3", gin.BasicAuth(accounts))
+		if helpers.InsecureNoAuth {
+			v2 = router.Group("/api/v3")
+		}
 		{
 			// Get all sites for a given enterprise
 			v3.GET("/:enterpriseName", v3controllers.GetSitesHandler)

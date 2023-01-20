@@ -95,6 +95,8 @@ spec:
                   key: password
             - name: VERSION
               value: {{.Values.factoryinsight.version | default 2 | quote}}
+            - name: INSECURE_NO_AUTH
+              value: {{.Values.factoryinsight.insecure_no_auth | default "false" | quote}}
 
           livenessProbe:
             httpGet:
