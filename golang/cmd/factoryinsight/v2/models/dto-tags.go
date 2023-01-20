@@ -72,8 +72,9 @@ type GetThroughputTagRequest struct {
 }
 
 const (
-	CustomTagGroup   string = "custom"
-	StandardTagGroup string = "standard"
+	CustomTagGroup       string = "custom"
+	StandardTagGroup     string = "standard"
+	CustomStringTagGroup string = "customString"
 )
 
 const (

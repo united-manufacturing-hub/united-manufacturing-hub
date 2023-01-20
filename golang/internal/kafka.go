@@ -53,7 +53,23 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 
 	err = KafkaTopicProbeConsumer.Subscribe(probeTopicName, nil)
 	if err != nil {
-		zap.S().Fatalf("Failed to subscribe to topic %s: %s", probeTopicName, err)
+		tempAdmin, errX := kafka.NewAdminClient(&configMap)
+		if errX != nil {
+			zap.S().Errorf("Failed to create KafkaAdminClient: %s", errX)
+			zap.S().Fatalf("Failed to subscribe to topic %s: %s", probeTopicName, err)
+		}
+		_, errX = tempAdmin.CreateTopics(context.Background(), []kafka.TopicSpecification{
+			{
+				Topic:         probeTopicName,
+				NumPartitions: 1,
+			},
+		})
+		if errX != nil {
+			zap.S().Errorf("Failed to create topic %s: %s", probeTopicName, errX)
+			zap.S().Fatalf("Failed to subscribe to topic %s: %s", probeTopicName, err)
+		}
+
+		zap.S().Fatalf("Restarting service, to subscribe to new topic %s", probeTopicName)
 	}
 
 	zap.S().Debugf("KafkaTopicProbeConsumer: %+v", KafkaTopicProbeConsumer)
