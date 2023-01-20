@@ -272,7 +272,7 @@ _000_commonConfig:
   kafkaBridge:
     enabled: false
     remotebootstrapServer: ""
-    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic# ; seperated list of topics to create on local broker, if they do not exist
+    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on local broker, if they do not exist
     topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on remote broker, if they do not exist
     topicmap:
 # Example topic map
