@@ -965,7 +965,7 @@ tenant:
 timescaledb-single:
   replicaCount: 1
 
-  fullnameOverride: "testCluster"
+  fullnameOverride: "timescaledb"
 
   # The default Patroni name of the cluster ("scope") is derived from the name of the release,
   # but you can override this behaviour here
