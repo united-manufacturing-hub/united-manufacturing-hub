@@ -3,7 +3,7 @@ entries:
   united-manufacturing-hub:
   - apiVersion: v2
     appVersion: 0.9.10
-    created: "2023-01-27T14:33:48.8444205+01:00"
+    created: "2023-01-27T15:01:00.875485+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -34,7 +34,7 @@ entries:
       repository: https://dl.redpanda.com/public/console/helm/charts/
       version: 0.3.1
     description: A Helm chart for Kubernetes
-    digest: a1e4d738a47c8e63648b003f0d86fd94e71a5eca75cdafef220b9a25ad6816ab
+    digest: 08831dafa6de196fc8603b60184df26d66ea3098af4c46fce7e617ad30e2e021
     home: https://www.umh.app
     icon: https://avatars.githubusercontent.com/u/77492553
     name: united-manufacturing-hub
@@ -132,7 +132,7 @@ entries:
     version: 0.9.10-prelease1
   - apiVersion: v2
     appVersion: 0.9.9
-    created: "2023-01-27T14:33:49.0638875+01:00"
+    created: "2023-01-27T15:01:01.0395328+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -226,7 +226,7 @@ entries:
     version: 0.9.9-prerelease1
   - apiVersion: v2
     appVersion: 0.9.8
-    created: "2023-01-27T14:33:49.038323+01:00"
+    created: "2023-01-27T15:01:01.0179292+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -273,7 +273,7 @@ entries:
     version: 0.9.8
   - apiVersion: v2
     appVersion: 0.9.7
-    created: "2023-01-27T14:33:49.0132388+01:00"
+    created: "2023-01-27T15:01:00.9983717+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -320,7 +320,7 @@ entries:
     version: 0.9.7
   - apiVersion: v2
     appVersion: 0.9.6
-    created: "2023-01-27T14:33:48.9864653+01:00"
+    created: "2023-01-27T15:01:00.9793141+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -367,7 +367,7 @@ entries:
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.5
-    created: "2023-01-27T14:33:48.9593467+01:00"
+    created: "2023-01-27T15:01:00.9585919+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -414,7 +414,7 @@ entries:
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.4
-    created: "2023-01-27T14:33:48.9332781+01:00"
+    created: "2023-01-27T15:01:00.9369375+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -461,7 +461,7 @@ entries:
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.3
-    created: "2023-01-27T14:33:48.9011118+01:00"
+    created: "2023-01-27T15:01:00.9151663+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -504,7 +504,7 @@ entries:
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.2
-    created: "2023-01-27T14:33:48.8740216+01:00"
+    created: "2023-01-27T15:01:00.895308+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -547,7 +547,7 @@ entries:
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
-    created: "2023-01-27T14:33:48.8132878+01:00"
+    created: "2023-01-27T15:01:00.8448921+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -590,7 +590,7 @@ entries:
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
-    created: "2023-01-27T14:33:48.7906351+01:00"
+    created: "2023-01-27T15:01:00.8208318+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -633,7 +633,7 @@ entries:
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2023-01-27T14:33:48.7662644+01:00"
+    created: "2023-01-27T15:01:00.8032871+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -676,7 +676,7 @@ entries:
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2023-01-27T14:33:48.7422539+01:00"
+    created: "2023-01-27T15:01:00.7842447+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -719,7 +719,7 @@ entries:
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2023-01-27T14:33:48.7180477+01:00"
+    created: "2023-01-27T15:01:00.7671006+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -762,7 +762,7 @@ entries:
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2023-01-27T14:33:48.6950621+01:00"
+    created: "2023-01-27T15:01:00.7499886+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -805,7 +805,7 @@ entries:
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2023-01-27T14:33:48.6706903+01:00"
+    created: "2023-01-27T15:01:00.7313639+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -848,7 +848,7 @@ entries:
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2023-01-27T14:33:48.6463526+01:00"
+    created: "2023-01-27T15:01:00.7147487+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -891,7 +891,7 @@ entries:
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2023-01-27T14:33:48.6233518+01:00"
+    created: "2023-01-27T15:01:00.6962008+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -934,7 +934,7 @@ entries:
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2023-01-27T14:33:48.5983985+01:00"
+    created: "2023-01-27T15:01:00.6761474+01:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -975,4 +975,4 @@ entries:
     urls:
     - https://0-9-10.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
-generated: "2023-01-27T14:33:48.5698364+01:00"
+generated: "2023-01-27T15:01:00.656608+01:00"
