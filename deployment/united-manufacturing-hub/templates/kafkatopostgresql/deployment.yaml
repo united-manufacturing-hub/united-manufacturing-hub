@@ -88,6 +88,8 @@ spec:
               value: {{.Values.factoryinsight.db_user}}
             - name: POSTGRES_PASSWORD
               value: {{.Values._000_commonConfig.datastorage.db_password}}
+            - name: POSTGRES_SSLMODE
+              value: "require"
 
             - name: LOGGING_LEVEL
               value: PRODUCTION
