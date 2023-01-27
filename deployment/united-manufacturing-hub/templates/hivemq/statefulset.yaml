@@ -47,6 +47,9 @@ spec:
           volumeMounts:
             - mountPath: /opt/hivemq-ce-2022.1/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
+          env:
+            - name: RBAC_ENABLED
+              value: {{ .Values.mqtt_broker.initContainer.hivemqextensioninit.rbacEnabled | quote }}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
           {{if .Values.mqtt_broker.image.tag}}
