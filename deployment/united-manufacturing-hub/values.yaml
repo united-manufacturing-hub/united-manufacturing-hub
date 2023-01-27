@@ -2277,6 +2277,7 @@ mqtt_broker:
         #tag: 0.0.1-hivemqrbac4.5.3
         tag: latest
         pullPolicy: IfNotPresent
+      rbacEnabled: false
   resources:
     limits:
       cpu: 500m
