@@ -160,9 +160,9 @@ func main() {
 	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe("0.0.0.0:8086", health)
-		if err != nil {
-			zap.S().Errorf("Error starting healthcheck: %s", err)
+		errX := http.ListenAndServe("0.0.0.0:8086", health)
+		if errX != nil {
+			zap.S().Errorf("Error starting healthcheck: %s", errX)
 		}
 	}()
 

@@ -509,7 +509,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, 
 		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-values"
 		data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-		if useProcessValueString == false {
+		if !useProcessValueString {
 			// #nosec G201
 			sqlStatement = `
 SELECT

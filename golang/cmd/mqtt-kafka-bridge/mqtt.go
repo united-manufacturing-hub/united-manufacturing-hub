@@ -8,8 +8,8 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
-	"go.uber.org/zap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 	"os"
 	"strings"
 	"time"
@@ -213,10 +213,8 @@ func SendMQTTMessages() {
 
 		token := mqttClient.Publish(mqttData.Topic, 1, false, mqttData.Message)
 
-		var sendMQTT = false
 		for i := 0; i < 10; i++ {
-			sendMQTT = token.WaitTimeout(10 * time.Second)
-			if sendMQTT {
+			if token.WaitTimeout(10 * time.Second) {
 				loopsSinceLastMessage = 0
 				break
 			}

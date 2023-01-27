@@ -374,24 +374,24 @@ func ShutdownApplicationGraceful() {
 }
 
 type reportData struct {
-	Commits                            float64
-	CommitsPerSecond                   float64
-	Messages                           float64
-	MessagesPerSecond                  float64
-	PutBacks                           float64
+	LastKafkaMessageReceived           string
+	ProcessorQueueLength               int
 	PutBacksPerSecond                  float64
+	PutBackQueueLength                 int
+	PutBacks                           float64
+	CommitQueueLength                  int
 	Confirmed                          float64
 	ConfirmedPerSecond                 float64
-	ProcessorQueueLength               int
-	PutBackQueueLength                 int
-	CommitQueueLength                  int
 	MessagecacheHitRate                float64
+	MessagesPerSecond                  float64
+	Messages                           float64
+	Commits                            float64
 	DbcacheHitRate                     float64
 	ProcessValueQueueLength            int
 	ProcessValueStringQueueLength      int
 	HighThroughputProcessorQueueLength int
 	HighThroughputPutBackQueueLength   int
-	LastKafkaMessageReceived           string
+	CommitsPerSecond                   float64
 }
 
 const reportTemplate = `Performance report

@@ -85,6 +85,8 @@ linters-settings:
       - time
       - unicode
       - github.com/gin-contrib/gzip
+      - text/template
+      - github.com/felixge/fgtrace
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
@@ -255,7 +257,6 @@ linters:
     - goconst
     - gosec
     - govet
-    - ifshort
     - makezero
     - misspell
     - noctx

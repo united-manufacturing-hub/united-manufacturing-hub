@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"github.com/go-redis/redis/v8"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
 	_ "github.com/patrickmn/go-cache"
 	"github.com/rung/go-safecast"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 	"strconv"
 	"time"
@@ -22,8 +22,6 @@ var memCache *cache.Cache
 
 var redisDataExpiration time.Duration
 var memoryDataExpiration time.Duration
-
-var redisInitialized bool
 
 const NullStr = "null"
 
@@ -47,13 +45,11 @@ func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPasswor
 	memoryDataExpiration = 10 * time.Second
 
 	memCache = cache.New(memoryDataExpiration, 20*time.Second)
-	redisInitialized = true
 }
 
 func InitCacheWithoutRedis() {
 	memoryDataExpiration = 10 * time.Second
 	memCache = cache.New(memoryDataExpiration, 20*time.Second)
-	redisInitialized = false
 }
 
 // https://github.com/united-manufacturing-hub/structHashCmp
@@ -69,8 +65,12 @@ func AsHash(o interface{}) string {
 		zap.S().Fatalf("Failed to marshal object: %v", err)
 	}
 
-	digester := xxhash.New()
-	_, _ = digester.Write(marshal)
+	digester := xxh3.New()
+	_, err = digester.Write(marshal)
+	if err != nil {
+		// err is always nil
+		zap.S().Fatalf("Failed to write to digester: %v", err)
+	}
 	return fmt.Sprintf("%x", digester.Sum(nil))
 }
 

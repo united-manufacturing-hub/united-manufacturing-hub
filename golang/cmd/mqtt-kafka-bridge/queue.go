@@ -70,10 +70,11 @@ func retrieveMessageFromQueue(pq *goque.Queue) (queueObj *queueObject, err error
 		return
 	}
 
-	err = item.ToObject(queueObj)
+	var qO queueObject
+	err = item.ToObject(&qO)
 	if err != nil {
 		return
 	}
 	gotItem = true
-	return
+	return &qO, nil, gotItem
 }
