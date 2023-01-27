@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -14,6 +15,7 @@ import (
 	"os/signal"
 	"runtime/debug"
 	"syscall"
+	"text/template"
 	"time"
 )
 
@@ -291,6 +293,7 @@ var ShuttingDown bool
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
 	if ShuttingDown {
+		zap.S().Infof("Application is already shutting down")
 		// Already shutting down
 		return
 	}
@@ -303,7 +306,7 @@ func ShutdownApplicationGraceful() {
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
-	zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
+	zap.S().Infof("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
 
 	if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 
@@ -326,7 +329,7 @@ func ShutdownApplicationGraceful() {
 	}
 
 	// This is behind HI to allow a higher chance of a clean shutdown
-	zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
+	zap.S().Infof("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
 
 	if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
 		time.Sleep(internal.FiveSeconds)
@@ -370,12 +373,57 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
+type reportData struct {
+	Commits                            float64
+	CommitsPerSecond                   float64
+	Messages                           float64
+	MessagesPerSecond                  float64
+	PutBacks                           float64
+	PutBacksPerSecond                  float64
+	Confirmed                          float64
+	ConfirmedPerSecond                 float64
+	ProcessorQueueLength               int
+	PutBackQueueLength                 int
+	CommitQueueLength                  int
+	MessagecacheHitRate                float64
+	DbcacheHitRate                     float64
+	ProcessValueQueueLength            int
+	ProcessValueStringQueueLength      int
+	HighThroughputProcessorQueueLength int
+	HighThroughputPutBackQueueLength   int
+	LastKafkaMessageReceived           string
+}
+
+const reportTemplate = `Performance report
+| Commits: {{.Commits}}, Commits/s: {{.CommitsPerSecond}}
+| Messages: {{.Messages}}, Messages/s: {{.MessagesPerSecond}}
+| PutBacks: {{.PutBacks}}, PutBacks/s: {{.PutBacksPerSecond}}
+| Confirmed: {{.Confirmed}}, Confirmed/s: {{.ConfirmedPerSecond}}
+| [HI] Processor queue length: {{.ProcessorQueueLength}}
+| [HI] PutBack queue length: {{.PutBackQueueLength}}
+| [HI] Commit queue length: {{.CommitQueueLength}}
+| Messagecache hitrate {{.MessagecacheHitRate}}
+| Dbcache hitrate {{.DbcacheHitRate}}
+| [HT] ProcessValue queue length: {{.ProcessValueQueueLength}}
+| [HT] ProcessValueString queue length: {{.ProcessValueStringQueueLength}}
+| [HT] Processor queue length: {{.HighThroughputProcessorQueueLength}}
+| [HT] PutBack queue length: {{.HighThroughputPutBackQueueLength}}
+| Last Kafka message received: {{.LastKafkaMessageReceived}}`
+
 func PerformanceReport() {
 	lastCommits := float64(0)
 	lastMessages := float64(0)
 	lastPutbacks := float64(0)
 	lastConfirmed := float64(0)
 	sleepS := 10.0
+
+	t, err := template.New("report").Parse(reportTemplate)
+	if err != nil {
+		zap.S().Errorf("Error parsing template: %s", err.Error())
+		ShutdownApplicationGraceful()
+		return
+	}
+
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
 		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
@@ -387,35 +435,33 @@ func PerformanceReport() {
 		lastPutbacks = internal.KafkaPutBacks
 		lastConfirmed = internal.KafkaConfirmed
 
-		zap.S().Infof(
-			"Performance report"+
-				"| Commits: %f, Commits/s: %f"+
-				"| Messages: %f, Messages/s: %f"+
-				"| PutBacks: %f, PutBacks/s: %f"+
-				"| Confirmed: %f, Confirmed/s: %f"+
-				"| [HI] Processor queue length: %d"+
-				"| [HI] PutBack queue length: %d"+
-				"| [HI] Commit queue length: %d"+
-				"| Messagecache hitrate %f"+
-				"| Dbcache hitrate %f"+
-				"| [HT] ProcessValue queue length: %d"+
-				"| [HT] ProcessValueString queue length: %d"+
-				"| [HT] Processor queue length: %d"+
-				"| [HT] PutBack queue length: %d",
-			internal.KafkaCommits, commitsPerSecond,
-			internal.KafkaMessages, messagesPerSecond,
-			internal.KafkaPutBacks, putbacksPerSecond,
-			internal.KafkaConfirmed, confirmedPerSecond,
-			len(highIntegrityProcessorChannel),
-			len(highIntegrityPutBackChannel),
-			len(highIntegrityCommitChannel),
-			internal.Messagecache.HitRate(),
-			dbcache.HitRate(),
-			len(processValueChannel),
-			len(processValueStringChannel),
-			len(highThroughputProcessorChannel),
-			len(highThroughputPutBackChannel),
-		)
+		data := reportData{
+			Commits:                            internal.KafkaCommits,
+			CommitsPerSecond:                   commitsPerSecond,
+			Messages:                           internal.KafkaMessages,
+			MessagesPerSecond:                  messagesPerSecond,
+			PutBacks:                           internal.KafkaPutBacks,
+			PutBacksPerSecond:                  putbacksPerSecond,
+			Confirmed:                          internal.KafkaConfirmed,
+			ConfirmedPerSecond:                 confirmedPerSecond,
+			ProcessorQueueLength:               len(highIntegrityProcessorChannel),
+			PutBackQueueLength:                 len(highIntegrityPutBackChannel),
+			CommitQueueLength:                  len(highIntegrityCommitChannel),
+			MessagecacheHitRate:                internal.Messagecache.HitRate(),
+			DbcacheHitRate:                     dbcache.HitRate(),
+			ProcessValueQueueLength:            len(processValueChannel),
+			ProcessValueStringQueueLength:      len(processValueStringChannel),
+			HighThroughputProcessorQueueLength: len(highThroughputProcessorChannel),
+			HighThroughputPutBackQueueLength:   len(highThroughputPutBackChannel),
+			LastKafkaMessageReceived:           internal.LastKafkaMessageReceived.Format(time.RFC3339),
+		}
+		var report bytes.Buffer
+		err := t.Execute(&report, data)
+		if err != nil {
+			zap.S().Errorf("Error executing performance report template: %v", err)
+			return
+		}
+		zap.S().Infof("Performance report: %s", report.String())
 
 		if internal.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
 			internal.KafkaCommits = 0

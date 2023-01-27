@@ -84,7 +84,7 @@ func main() {
 		}
 	}()
 
-	internal.InitMemcache()
+	internal.InitCacheWithoutRedis()
 	cP = sync.Map{}
 
 	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
