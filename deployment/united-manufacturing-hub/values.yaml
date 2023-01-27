@@ -1408,7 +1408,7 @@ grafana:
   affinity: {}
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-umh:1.1.0
+    - image: unitedmanufacturinghub/grafana-umh:1.1.1
       name: init-plugins
       imagePullPolicy: IfNotPresent
       command: ['sh', '-c', 'cp -r /plugins /var/lib/grafana/']
