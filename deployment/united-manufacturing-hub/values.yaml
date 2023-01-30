@@ -845,6 +845,9 @@ kafkatopostgresql:
     repository: unitedmanufacturinghub/kafka-to-postgresql
     pullPolicy: Always
     # tag: latest
+  initContainer:
+    repository: unitedmanufacturinghub/kafka-init
+    pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
   listenTopic:
