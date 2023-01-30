@@ -37,16 +37,16 @@ spec:
       terminationGracePeriodSeconds: 180
       initContainers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
-          {{if .Values.kafkabridge.image.tag}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
+          {{if .Values.kafkatopostgresql.image.tag}}
+          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Values.kafkatopostgresql.initContainer.tag}}
           {{- else}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Chart.AppVersion}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
           {{end}}
-          imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkatopostgresql.initContainer.pullPolicy}}
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
