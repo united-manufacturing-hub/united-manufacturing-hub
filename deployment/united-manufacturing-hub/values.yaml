@@ -2270,14 +2270,14 @@ mqtt_broker:
     repository: hivemq/hivemq-ce
     tag: 2022.1
     pullPolicy: IfNotPresent
+  rbacEnabled: false
   initContainer:
     hivemqextensioninit:
       image:
-        repository: unitedmanufacturinghub/hivemq-init
+        repository: matteoumh/hivemq-init
         #tag: 0.0.1-hivemqrbac4.5.3
         tag: latest
         pullPolicy: IfNotPresent
-      rbacEnabled: false
   resources:
     limits:
       cpu: 500m

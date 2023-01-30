@@ -1,3 +1,4 @@
+FROM hivemq/hivemq-ce:2022.1 as hivemq
 FROM alpine as base
 
 # Download hivemq-file-rbac-extension
@@ -18,6 +19,7 @@ COPY ./deployment/hivemq-init/runner.sh /runner.sh
 RUN dos2unix /runner.sh
 
 FROM alpine as runner
+COPY --from=hivemq /opt/hivemq/extensions/hivemq-allow-all-extension /hivemq-allow-all-extension
 COPY --from=base /hivemq-file-rbac-extension /hivemq-file-rbac-extension
 COPY --from=base /hivemq-prometheus-extension /hivemq-prometheus-extension
 COPY --from=base /hivemq-heartbeat-extension /hivemq-heartbeat-extension
