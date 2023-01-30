@@ -499,6 +499,12 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, 
 		return
 	}
 
+	if useProcessValueString {
+		getCustomTagDataRequest.TimeBucket = "none"
+		getCustomTagDataRequest.TagAggregates = "null"
+		getCustomTagDataRequest.GapFilling = "none"
+	}
+
 	timeBucket := getCustomTagDataRequest.TimeBucket
 
 	from := getCustomTagDataRequest.From
@@ -698,6 +704,10 @@ ORDER BY bucket;
 	}
 
 	zap.S().Debugf("sqlStatement: %s", sqlStatement)
+	zap.S().Debugf("workCellId: %d", workCellId)
+	zap.S().Debugf("tagName: %s", tagName)
+	zap.S().Debugf("from: %s", from)
+	zap.S().Debugf("to: %s", to)
 	var rows *sql.Rows
 	rows, err = database.Db.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
