@@ -292,9 +292,9 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 		if tagGroup == models.StandardTagGroup {
 			structure, err = GetStandardTagsTree(customer, site, area, line, cell, tagGroup)
 		} else if tagGroup == models.CustomTagGroup {
-			structure, err = GetCustomTagsTree(customer, site, area, line, cell, tagGroup)
+			structure, err = GetCustomTagsTree(customer, site, area, line, cell, tagGroup, false)
 		} else if tagGroup == models.CustomStringTagGroup {
-			structure, err = GetCustomTagsTree(customer, site, area, line, cell, tagGroup)
+			structure, err = GetCustomTagsTree(customer, site, area, line, cell, tagGroup, true)
 		} else {
 			err = errors.New("unknown tag group")
 			return nil, err
@@ -312,13 +312,7 @@ func GetTagsTreeStructure(customer string, site string, area string, line string
 	return te, err
 }
 
-func GetCustomTagsTree(
-	customer string,
-	site string,
-	area string,
-	line string,
-	cell string,
-	group string) (te map[string]*models.TreeEntryFormat, err error) {
+func GetCustomTagsTree(customer string, site string, area string, line string, cell string, group string, isProcessValueStrings bool) (te map[string]*models.TreeEntryFormat, err error) {
 
 	te = make(map[string]*models.TreeEntryFormat)
 	var id uint32
@@ -327,7 +321,7 @@ func GetCustomTagsTree(
 		return nil, err
 	}
 	var tags []string
-	tags, err = GetCustomTags(id)
+	tags, err = GetCustomTags(id, isProcessValueStrings)
 	if err != nil {
 		return nil, err
 	}

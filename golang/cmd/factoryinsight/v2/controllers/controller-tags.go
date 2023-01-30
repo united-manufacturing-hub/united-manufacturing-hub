@@ -64,7 +64,7 @@ func GetTagsHandler(c *gin.Context) {
 
 	switch request.TagGroupName {
 	case models.CustomTagGroup:
-		response.Tags, err = services.GetCustomTags(workCellId)
+		response.Tags, err = services.GetCustomTags(workCellId, false)
 	case models.CustomStringTagGroup:
 		response.Tags, err = services.GetCustomStringTags(workCellId)
 	case models.StandardTagGroup:

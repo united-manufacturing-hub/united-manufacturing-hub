@@ -120,12 +120,16 @@ func GetStandardTags(enterpriseName, siteName, workCellName string) (tags []stri
 	return
 }
 
-func GetCustomTags(workCellId uint32) (tags []string, err error) {
+func GetCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
 	zap.S().Infof(
 		"[GetTags] Getting custom tags for work cell %d", workCellId)
 
-	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
-
+	var sqlStatement string
+	if isPVS {
+		sqlStatement = `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
+	} else {
+		sqlStatement = `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
+	}
 	rows, err := database.Db.Query(sqlStatement, workCellId)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
