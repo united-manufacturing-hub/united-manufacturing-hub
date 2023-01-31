@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -10,13 +11,11 @@ import (
 	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"syscall"
+	"text/template"
 	"time"
 )
 
@@ -34,16 +33,12 @@ func main() {
 
 	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
-	dryRun := os.Getenv("DRY_RUN")
+	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
+	if !dryRunEnvSet {
+		dryRun = "false"
+	}
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -73,12 +68,27 @@ func main() {
 	}()
 
 	// Postgres
-	PQHost := os.Getenv("POSTGRES_HOST")
+	PQHost, PQHostEnvSet := os.LookupEnv("POSTGRES_HOST")
+	if !PQHostEnvSet {
+		zap.S().Fatal("Pq Host (POSTGRES_HOST) must be set")
+	}
 	PQPort := 5432
-	PQUser := os.Getenv("POSTGRES_USER")
-	PQPassword := os.Getenv("POSTGRES_PASSWORD")
-	PWDBName := os.Getenv("POSTGRES_DATABASE")
-	PQSSLMode := os.Getenv("POSTGRES_SSLMODE")
+	PQUser, PQUserEnvSet := os.LookupEnv("POSTGRES_USER")
+	if !PQUserEnvSet {
+		zap.S().Fatal("PQ User (POSTGRES_USER) must be set")
+	}
+	PQPassword, PQPasswordEnvSet := os.LookupEnv("POSTGRES_PASSWORD")
+	if !PQPasswordEnvSet {
+		zap.S().Fatal("PQ Password (POSTGRES_PASSWORD) must be set")
+	}
+	PWDBName, PWDBNameEnvSet := os.LookupEnv("POSTGRES_DATABASE")
+	if !PWDBNameEnvSet {
+		zap.S().Fatal("PWDB Name (POSTGRES_DATABASE) must be set")
+	}
+	PQSSLMode, PQSSLModeEnvSet := os.LookupEnv("POSTGRES_SSLMODE")
+	if !PQSSLModeEnvSet {
+		zap.S().Fatal("PQSSL Mode (POSTGRES_SSLMODE) must be set")
+	}
 	if PQSSLMode == "" {
 		PQSSLMode = "require"
 	} else {
@@ -89,7 +99,10 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	if KafkaBoostrapServer == "" {
 		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER is not set")
 	}
@@ -176,6 +189,8 @@ func main() {
 		if b {
 			allowedMemorySize = int(i) // truncated !
 		}
+	} else {
+		zap.S().Infof("Memory request [MEMORY_REQUEST] not set")
 	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
@@ -278,6 +293,7 @@ var ShuttingDown bool
 // ShutdownApplicationGraceful shutsdown the entire application including MQTT and database
 func ShutdownApplicationGraceful() {
 	if ShuttingDown {
+		zap.S().Infof("Application is already shutting down")
 		// Already shutting down
 		return
 	}
@@ -290,7 +306,7 @@ func ShutdownApplicationGraceful() {
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
 
-	zap.S().Debugf("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
+	zap.S().Infof("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
 
 	if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 
@@ -313,7 +329,7 @@ func ShutdownApplicationGraceful() {
 	}
 
 	// This is behind HI to allow a higher chance of a clean shutdown
-	zap.S().Debugf("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
+	zap.S().Infof("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
 
 	if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
 		time.Sleep(internal.FiveSeconds)
@@ -357,12 +373,57 @@ func ShutdownApplicationGraceful() {
 	os.Exit(0)
 }
 
+type reportData struct {
+	LastKafkaMessageReceived           string
+	ProcessorQueueLength               int
+	PutBacksPerSecond                  float64
+	PutBackQueueLength                 int
+	PutBacks                           float64
+	CommitQueueLength                  int
+	Confirmed                          float64
+	ConfirmedPerSecond                 float64
+	MessagecacheHitRate                float64
+	MessagesPerSecond                  float64
+	Messages                           float64
+	Commits                            float64
+	DbcacheHitRate                     float64
+	ProcessValueQueueLength            int
+	ProcessValueStringQueueLength      int
+	HighThroughputProcessorQueueLength int
+	HighThroughputPutBackQueueLength   int
+	CommitsPerSecond                   float64
+}
+
+const reportTemplate = `Performance report
+| Commits: {{.Commits}}, Commits/s: {{.CommitsPerSecond}}
+| Messages: {{.Messages}}, Messages/s: {{.MessagesPerSecond}}
+| PutBacks: {{.PutBacks}}, PutBacks/s: {{.PutBacksPerSecond}}
+| Confirmed: {{.Confirmed}}, Confirmed/s: {{.ConfirmedPerSecond}}
+| [HI] Processor queue length: {{.ProcessorQueueLength}}
+| [HI] PutBack queue length: {{.PutBackQueueLength}}
+| [HI] Commit queue length: {{.CommitQueueLength}}
+| Messagecache hitrate {{.MessagecacheHitRate}}
+| Dbcache hitrate {{.DbcacheHitRate}}
+| [HT] ProcessValue queue length: {{.ProcessValueQueueLength}}
+| [HT] ProcessValueString queue length: {{.ProcessValueStringQueueLength}}
+| [HT] Processor queue length: {{.HighThroughputProcessorQueueLength}}
+| [HT] PutBack queue length: {{.HighThroughputPutBackQueueLength}}
+| Last Kafka message received: {{.LastKafkaMessageReceived}}`
+
 func PerformanceReport() {
 	lastCommits := float64(0)
 	lastMessages := float64(0)
 	lastPutbacks := float64(0)
 	lastConfirmed := float64(0)
 	sleepS := 10.0
+
+	t, err := template.New("report").Parse(reportTemplate)
+	if err != nil {
+		zap.S().Errorf("Error parsing template: %s", err.Error())
+		ShutdownApplicationGraceful()
+		return
+	}
+
 	for !ShuttingDown {
 		preExecutionTime := time.Now()
 		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
@@ -374,35 +435,33 @@ func PerformanceReport() {
 		lastPutbacks = internal.KafkaPutBacks
 		lastConfirmed = internal.KafkaConfirmed
 
-		zap.S().Infof(
-			"Performance report"+
-				"| Commits: %f, Commits/s: %f"+
-				"| Messages: %f, Messages/s: %f"+
-				"| PutBacks: %f, PutBacks/s: %f"+
-				"| Confirmed: %f, Confirmed/s: %f"+
-				"| [HI] Processor queue length: %d"+
-				"| [HI] PutBack queue length: %d"+
-				"| [HI] Commit queue length: %d"+
-				"| Messagecache hitrate %f"+
-				"| Dbcache hitrate %f"+
-				"| [HT] ProcessValue queue length: %d"+
-				"| [HT] ProcessValueString queue length: %d"+
-				"| [HT] Processor queue length: %d"+
-				"| [HT] PutBack queue length: %d",
-			internal.KafkaCommits, commitsPerSecond,
-			internal.KafkaMessages, messagesPerSecond,
-			internal.KafkaPutBacks, putbacksPerSecond,
-			internal.KafkaConfirmed, confirmedPerSecond,
-			len(highIntegrityProcessorChannel),
-			len(highIntegrityPutBackChannel),
-			len(highIntegrityCommitChannel),
-			internal.Messagecache.HitRate(),
-			dbcache.HitRate(),
-			len(processValueChannel),
-			len(processValueStringChannel),
-			len(highThroughputProcessorChannel),
-			len(highThroughputPutBackChannel),
-		)
+		data := reportData{
+			Commits:                            internal.KafkaCommits,
+			CommitsPerSecond:                   commitsPerSecond,
+			Messages:                           internal.KafkaMessages,
+			MessagesPerSecond:                  messagesPerSecond,
+			PutBacks:                           internal.KafkaPutBacks,
+			PutBacksPerSecond:                  putbacksPerSecond,
+			Confirmed:                          internal.KafkaConfirmed,
+			ConfirmedPerSecond:                 confirmedPerSecond,
+			ProcessorQueueLength:               len(highIntegrityProcessorChannel),
+			PutBackQueueLength:                 len(highIntegrityPutBackChannel),
+			CommitQueueLength:                  len(highIntegrityCommitChannel),
+			MessagecacheHitRate:                internal.Messagecache.HitRate(),
+			DbcacheHitRate:                     dbcache.HitRate(),
+			ProcessValueQueueLength:            len(processValueChannel),
+			ProcessValueStringQueueLength:      len(processValueStringChannel),
+			HighThroughputProcessorQueueLength: len(highThroughputProcessorChannel),
+			HighThroughputPutBackQueueLength:   len(highThroughputPutBackChannel),
+			LastKafkaMessageReceived:           internal.LastKafkaMessageReceived.Format(time.RFC3339),
+		}
+		var report bytes.Buffer
+		err := t.Execute(&report, data)
+		if err != nil {
+			zap.S().Errorf("Error executing performance report template: %v", err)
+			return
+		}
+		zap.S().Infof("Performance report: %s", report.String())
 
 		if internal.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
 			internal.KafkaCommits = 0

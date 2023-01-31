@@ -39,6 +39,12 @@ spec:
           image: {{.Values.barcodereader.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.barcodereader.image.pullPolicy}}
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           securityContext:
             privileged: true
           volumeMounts:
@@ -56,6 +62,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
             - name: CUSTOMER_ID
               value: {{.Values._000_commonConfig.datasources.barcodereader.customerID | quote}}
             - name: LOCATION
@@ -68,6 +78,10 @@ spec:
 
             - name: SCAN_ONLY
               value: {{.Values.barcodereader.scanOnly | quote}}
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
 
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:

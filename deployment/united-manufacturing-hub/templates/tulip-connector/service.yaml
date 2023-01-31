@@ -1,0 +1,18 @@
+---
+{{if or .Values._000_commonConfig.tulipconnector.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" . }}-tulip-connector-service
+  labels:
+    {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+{{end}}

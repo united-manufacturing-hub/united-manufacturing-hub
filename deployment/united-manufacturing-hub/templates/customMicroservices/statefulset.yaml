@@ -34,6 +34,17 @@ spec:
             - name: {{$env_value.name}}
               value: {{$env_value.value}}
             {{end}}
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
+
+            - name: SERIAL_NUMBER
+              value: {{$.Values._000_commonConfig.serialNumber}}
           {{end}}
 
   {{if $value.statefulEnabled}}

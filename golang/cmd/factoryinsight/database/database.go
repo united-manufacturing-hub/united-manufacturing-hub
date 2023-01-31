@@ -58,7 +58,7 @@ func Shutdown() {
 
 // ErrorHandling logs and handles postgresql errors
 func ErrorHandling(sqlStatement string, err error, isCritical bool) {
-
+	zap.S().Debugf("ErrorHandling: sqlStatement: %s, err: %s, isCritical: %t", sqlStatement, err, isCritical)
 	if e := pgerror.ConnectionException(err); e != nil {
 		zap.S().Errorw(
 			"PostgreSQL failed: ConnectionException",

@@ -8,9 +8,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,14 +31,7 @@ func main() {
 
 	zap.S().Infof("This is kafka-to-blob build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof %v", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
@@ -57,17 +47,41 @@ func main() {
 	}()
 
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
-	KafkaTopic := os.Getenv("KAFKA_LISTEN_TOPIC")
-	KafkaBaseTopic := os.Getenv("KAFKA_BASE_TOPIC")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
+	KafkaTopic, KafkaTopicEnvSet := os.LookupEnv("KAFKA_LISTEN_TOPIC")
+	if !KafkaTopicEnvSet {
+		zap.S().Fatal("Kafka Topic (KAFKA_LISTEN_TOPIC) must be set")
+	}
+	KafkaBaseTopic, KafkaBaseTopicEnvSet := os.LookupEnv("KAFKA_BASE_TOPIC")
+	if !KafkaBaseTopicEnvSet {
+		zap.S().Fatal("Kafka Base Topic (KAFKA_BASE_TOPIC) must be set")
+	}
 
 	// Read environment variables for Minio
-	MinioUrl := os.Getenv("MINIO_URL")
-	MinioAccessKey := os.Getenv("MINIO_ACCESS_KEY")
-	MinioSecretKey := os.Getenv("MINIO_SECRET_KEY")
-	MinioSecureStr := os.Getenv("MINIO_SECURE")
+	MinioUrl, MinioUrlEnvSet := os.LookupEnv("MINIO_URL")
+	if !MinioUrlEnvSet {
+		zap.S().Fatal("Minio URL (MINIO_URL) must be set")
+	}
+	MinioAccessKey, MinioAccessKeyEnvSet := os.LookupEnv("MINIO_ACCESS_KEY")
+	if !MinioAccessKeyEnvSet {
+		zap.S().Fatal("Minio Acces Key (MINIO_ACCESS_KEY) must be set")
+	}
+	MinioSecretKey, MinioSecretKeyEnvSet := os.LookupEnv("MINIO_SECRET_KEY")
+	if !MinioSecretKeyEnvSet {
+		zap.S().Fatal("Minio Secret Key (MINIO_SECRET_KEY) must be set")
+	}
+	MinioSecureStr, MinioSecureStrEnvSet := os.LookupEnv("MINIO_SECURE")
+	if !MinioSecureStrEnvSet {
+		zap.S().Fatal("Minio SecureStr (MINIO_SECURE) must be set")
+	}
 	MinioSecure := MinioSecureStr == "1" || strings.EqualFold(MinioSecureStr, "true")
-	MinioBucketName := os.Getenv("BUCKET_NAME")
+	MinioBucketName, MinioBucketNameEnvSet := os.LookupEnv("BUCKET_NAME")
+	if !MinioBucketNameEnvSet {
+		zap.S().Fatal("Minio Bucket name (BUCKET_NAME) must be set")
+	}
 
 	zap.S().Debugf("Setting up Kafka")
 	securityProtocol := "plaintext"

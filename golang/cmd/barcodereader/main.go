@@ -6,21 +6,17 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/gvalkov/golang-evdev"
+	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"time"
 )
-
-var serialNumber string
 
 var kafkaSendTopic string
 
@@ -37,10 +33,7 @@ func main() {
 		}
 	}(log)
 
-	// pprof
-	/* #nosec G114 */
-	go http.ListenAndServe("localhost:1337", nil)
-
+	internal.Initfgtrace()
 	// Prometheus
 	zap.S().Debugf("Setting up healthcheck")
 
@@ -62,12 +55,33 @@ func main() {
 	}
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
-	customerID := os.Getenv("CUSTOMER_ID")
-	location := os.Getenv("LOCATION")
-	assetID := os.Getenv("ASSET_ID")
-	serialNumber = os.Getenv("SERIAL_NUMBER")
-	scanOnly = os.Getenv("SCAN_ONLY") == "true"
+	KafkaBoostrapServer, KafkaBootstrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBootstrapServerEnvSet {
+		zap.S().Fatal("Kafka bootstrap server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
+	customerID, customerIDEnvSet := os.LookupEnv("CUSTOMER_ID")
+	if !customerIDEnvSet {
+		zap.S().Fatal("Customer ID (CUSTOMER_ID) must be set")
+	}
+	location, locationEnvSet := os.LookupEnv("LOCATION")
+	if !locationEnvSet {
+		zap.S().Fatal("location (LOCATION) must be set")
+	}
+	assetID, assetIDEnvSet := os.LookupEnv("ASSET_ID")
+	if !assetIDEnvSet {
+		zap.S().Fatal("Asset ID (ASSET_ID) must be set")
+	}
+	var scanOnlyEnvSet bool
+	var scanOnlyString string
+	scanOnlyString, scanOnlyEnvSet = os.LookupEnv("SCAN_ONLY")
+	if !scanOnlyEnvSet {
+		zap.S().Fatal("scan only (SCAN_ONLY) must be set")
+	}
+	var err error
+	scanOnly, err = strconv.ParseBool(scanOnlyString)
+	if err != nil {
+		zap.S().Fatal("scan only (SCAN_ONLY) must be set to true or false")
+	}
 
 	if !scanOnly {
 		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
@@ -97,9 +111,15 @@ func main() {
 // If no device is found, it will print all available devices and return false, nil.
 func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	// This could be /dev/input/event0, /dev/input/event1, etc.
-	devicePath := os.Getenv("INPUT_DEVICE_PATH")
+	devicePath, devicePathEnvSet := os.LookupEnv("INPUT_DEVICE_PATH")
+	if !devicePathEnvSet {
+		zap.S().Fatal("Device Path (DEVICE_PATH) must be set")
+	}
 	// This could be "Datalogic ADC, Inc. Handheld Barcode Scanner"
-	deviceName := os.Getenv("INPUT_DEVICE_NAME")
+	deviceName, deviceNameEnvSet := os.LookupEnv("INPUT_DEVICE_NAME")
+	if !deviceNameEnvSet {
+		zap.S().Fatal("Device Name (DEVICE_NAME) must be set")
+	}
 	unset := false
 	if devicePath == "" && deviceName == "" {
 		zap.S().Warnf("No device path or name specified (INPUT_DEVICE_PATH and INPUT_DEVICE_NAME)")
@@ -172,10 +192,9 @@ func OnScan(scanned string) {
 		TopicPartition: kafka.TopicPartition{
 			Topic: &kafkaSendTopic,
 		},
-		Value:   bytes,
-		Headers: []kafka.Header{{Key: "origin", Value: []byte(serialNumber)}},
+		Value: bytes,
 	}
-	err = internal.KafkaProducer.Produce(&msg, nil)
+	err = internal.Produce(internal.KafkaProducer, &msg, nil)
 	if err != nil {
 		zap.S().Warnf("Error producing message: %v (%v)", err, scanned)
 		return
