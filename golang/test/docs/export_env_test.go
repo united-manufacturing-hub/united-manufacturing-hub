@@ -49,7 +49,7 @@ func ScanPath(t *testing.T, err error, path string) {
 	}
 }
 
-var re = regexp.MustCompile(`((logger\.New)|(os.((LookupEnv)|(GetEnv))))\("(.+)"\)`)
+var re = regexp.MustCompile(`((logger\.New)|(os.((LookupEnv)|(Getenv))))\("(.+)"\)`)
 
 func scanDir(t *testing.T, path string) []string {
 
