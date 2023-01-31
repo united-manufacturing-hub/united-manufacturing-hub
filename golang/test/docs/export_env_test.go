@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"testing"
 )
 
@@ -31,12 +32,16 @@ func ScanPath(t *testing.T, err error, path string) {
 		if dirEntry.IsDir() {
 			t.Logf("\t=== %s ===", dirEntry.Name())
 			envVars := scanDir(t, path+"\\"+dirEntry.Name())
+			// Sort alphabetically
+			sort.Strings(envVars)
 			for _, envVar := range envVars {
 				t.Logf("\t\t%s", envVar)
 			}
 		} else {
 			t.Logf("\t=== %s ===", dirEntry.Name())
 			envVars := extractVar(path+"\\"+dirEntry.Name(), t)
+			// Sort alphabetically
+			sort.Strings(envVars)
 			for _, envVar := range envVars {
 				t.Logf("\t\t%s", envVar)
 			}
