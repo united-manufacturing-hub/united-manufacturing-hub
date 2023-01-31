@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -29,19 +27,28 @@ func main() {
 		}
 	}(log)
 	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
 
-	FactoryInputAPIKey = os.Getenv("FACTORYINPUT_KEY")
-	FactoryInputUser = os.Getenv("FACTORYINPUT_USER")
-	FactoryInputBaseURL = os.Getenv("FACTORYINPUT_BASE_URL")
-	FactoryInsightBaseUrl = os.Getenv("FACTORYINSIGHT_BASE_URL")
+	internal.Initfgtrace()
+	var FactoryInpitAPIKeyEnvSet bool
+	FactoryInputAPIKey, FactoryInpitAPIKeyEnvSet = os.LookupEnv("FACTORYINPUT_KEY")
+	if !FactoryInpitAPIKeyEnvSet {
+		zap.S().Fatal("Factory Input API Key (FACTORYINPUT_KEY) must be set")
+	}
+	var FactoryInputUserEnvSet bool
+	FactoryInputUser, FactoryInputUserEnvSet = os.LookupEnv("FACTORYINPUT_USER")
+	if !FactoryInputUserEnvSet {
+		zap.S().Fatal("Factory Input User (FACTORYINPUT_USER) must be set")
+	}
+	var FactoryInputBaseURLEnvSet bool
+	FactoryInputBaseURL, FactoryInputBaseURLEnvSet = os.LookupEnv("FACTORYINPUT_BASE_URL")
+	if !FactoryInputBaseURLEnvSet {
+		zap.S().Fatal("Factory Input Base URL (FACTORYINPUT_BASE_URL) must be set")
+	}
+	var FactoryInsightBaseUrlEnvSet bool
+	FactoryInsightBaseUrl, FactoryInsightBaseUrlEnvSet = os.LookupEnv("FACTORYINSIGHT_BASE_URL")
+	if !FactoryInsightBaseUrlEnvSet {
+		zap.S().Fatal("Factory Insight Base Url (FACTORYINSIGHT_BASE_URL) must be set")
+	}
 
 	if len(FactoryInputAPIKey) == 0 {
 		zap.S().Error("Factoryinput API Key not set")

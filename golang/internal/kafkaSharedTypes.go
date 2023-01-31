@@ -42,10 +42,13 @@ var KafkaPutBacks = float64(0)
 // KafkaConfirmed is a counter for the number of messages confirmed to kafka, this is used for stats only
 var KafkaConfirmed = float64(0)
 
+var LastKafkaMessageReceived = time.Now()
+
 var ShuttingDownKafka bool
 var ShutdownPutback bool
 var nearMemoryLimit = false
 
+//goland:noinspection GoUnusedExportedFunction
 func MemoryLimiter(allowedMemorySize int) {
 	allowedSeventyFivePerc := uint64(float64(allowedMemorySize) * 0.9)
 	allowedNintyPerc := uint64(float64(allowedMemorySize) * 0.75)
@@ -106,6 +109,7 @@ func ProcessKafkaQueue(
 			}
 			continue
 		}
+		LastKafkaMessageReceived = time.Now()
 		// Insert received message into the processor channel
 		processorChannel <- msg
 		// This is for stats only, it counts the number of messages received
