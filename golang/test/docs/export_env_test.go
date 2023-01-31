@@ -14,18 +14,31 @@ func TestExportEnvVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Go two levels up and into cmd
-	path = path[:len(path)-len("test\\docs")] + "cmd"
+	path = path[:len(path)-len("test\\docs")]
 
+	ScanPath(t, err, path+"cmd")
+	ScanPath(t, err, path+"internal")
+	ScanPath(t, err, path+"pkg")
+}
+
+func ScanPath(t *testing.T, err error, path string) {
+	t.Logf("==== %s ====", path)
 	dirEntries, err := os.ReadDir(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, dirEntry := range dirEntries {
 		if dirEntry.IsDir() {
-			t.Logf("=== %s ===", dirEntry.Name())
+			t.Logf("\t=== %s ===", dirEntry.Name())
 			envVars := scanDir(t, path+"\\"+dirEntry.Name())
 			for _, envVar := range envVars {
-				t.Logf("\t%s", envVar)
+				t.Logf("\t\t%s", envVar)
+			}
+		} else {
+			t.Logf("\t=== %s ===", dirEntry.Name())
+			envVars := extractVar(path+"\\"+dirEntry.Name(), t)
+			for _, envVar := range envVars {
+				t.Logf("\t\t%s", envVar)
 			}
 		}
 	}
@@ -35,7 +48,7 @@ var re = regexp.MustCompile(`os.((LookupEnv)|(GetEnv))\("(.+)"\)`)
 
 func scanDir(t *testing.T, path string) []string {
 
-	envVariables := make([]string, 0)
+	var envVariables []string
 
 	filepath.WalkDir(path, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -47,23 +60,29 @@ func scanDir(t *testing.T, path string) []string {
 		if filepath.Ext(path) != ".go" {
 			return nil
 		}
-		file, err := os.Open(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer file.Close()
-
-		// Read file line by line
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			line := scanner.Text()
-			matches := re.FindStringSubmatch(line)
-			if len(matches) > 0 {
-				envVariables = append(envVariables, matches[4])
-			}
-		}
+		envVariables = append(envVariables, extractVar(path, t)...)
 		return nil
 	})
 
+	return envVariables
+}
+
+func extractVar(path string, t *testing.T) []string {
+	envVariables := make([]string, 0)
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	// Read file line by line
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		matches := re.FindStringSubmatch(line)
+		if len(matches) > 0 {
+			envVariables = append(envVariables, matches[4])
+		}
+	}
 	return envVariables
 }
