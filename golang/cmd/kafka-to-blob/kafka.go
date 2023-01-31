@@ -74,14 +74,13 @@ func pushToMinio(imgBytes []byte, uid string, bucketName string, msg *kafka.Mess
 
 	if err != nil {
 		zap.S().Warnf("Failed to put item into blob-storage: %s", err)
-		err = internal.KafkaProducer.Produce(
-			&kafka.Message{
-				TopicPartition: kafka.TopicPartition{
-					Topic:     msg.TopicPartition.Topic,
-					Partition: kafka.PartitionAny,
-				},
-				Value: msg.Value,
-			}, nil)
+		err = internal.Produce(internal.KafkaProducer, &kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     msg.TopicPartition.Topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value: msg.Value,
+		}, nil)
 		if err != nil {
 			zap.S().Warnf("Failed to resend message: %s", err)
 		}

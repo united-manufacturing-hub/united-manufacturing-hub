@@ -37,7 +37,12 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 		return nil, err
 	}
 	var customTagGroupExists bool
+	var customTagGroupStringExists bool
 	customTagGroupExists, err = GetCustomTagsExists(id)
+	if err != nil {
+		return nil, err
+	}
+	customTagGroupStringExists, err = GetCustomTagsStringExists(id)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +56,9 @@ func GetTagGroups(enterpriseName, siteName, areaName, productionLineName, workCe
 	tagGroups = make([]string, 0)
 	if customTagGroupExists {
 		tagGroups = append(tagGroups, models.CustomTagGroup)
+	}
+	if customTagGroupStringExists {
+		tagGroups = append(tagGroups, models.CustomStringTagGroup)
 	}
 	if len(standardTags) > 0 {
 		tagGroups = append(tagGroups, models.StandardTagGroup)
@@ -112,11 +120,43 @@ func GetStandardTags(enterpriseName, siteName, workCellName string) (tags []stri
 	return
 }
 
-func GetCustomTags(workCellId uint32) (tags []string, err error) {
+func GetCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
 	zap.S().Infof(
 		"[GetTags] Getting custom tags for work cell %d", workCellId)
 
-	sqlStatement := `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
+	var sqlStatement string
+	if isPVS {
+		sqlStatement = `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
+	} else {
+		sqlStatement = `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
+	}
+	rows, err := database.Db.Query(sqlStatement, workCellId)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var valueName string
+		err = rows.Scan(&valueName)
+		if err != nil {
+			database.ErrorHandling(sqlStatement, err, false)
+			return
+		}
+
+		tags = append(tags, valueName)
+	}
+
+	return
+}
+
+func GetCustomStringTags(workCellId uint32) (tags []string, err error) {
+	zap.S().Infof(
+		"[GetTags] Getting custom tags for work cell %d", workCellId)
+
+	sqlStatement := `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
 
 	rows, err := database.Db.Query(sqlStatement, workCellId)
 	if err != nil {
@@ -429,7 +469,7 @@ func ProcessThroughputTagRequest(c *gin.Context, request models.GetTagsDataReque
 	c.JSON(http.StatusOK, counts)
 }
 
-func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
+func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, useProcessValueString bool) {
 
 	enterpriseName := request.EnterpriseName
 	siteName := request.SiteName
@@ -440,7 +480,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	var data datamodel.DataResponseAny
 
-	if request.TagGroupName != models.CustomTagGroup {
+	if request.TagGroupName != models.CustomTagGroup && request.TagGroupName != models.CustomStringTagGroup {
 		helpers.HandleInvalidInputError(c, errors.New("invalid tag group"))
 		return
 	}
@@ -459,6 +499,12 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 		return
 	}
 
+	if useProcessValueString {
+		getCustomTagDataRequest.TimeBucket = "none"
+		getCustomTagDataRequest.TagAggregates = "null"
+		getCustomTagDataRequest.GapFilling = "none"
+	}
+
 	timeBucket := getCustomTagDataRequest.TimeBucket
 
 	from := getCustomTagDataRequest.From
@@ -469,12 +515,13 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest) 
 
 	var sqlStatement string
 	if timeBucket == "none" {
-
+		zap.S().Debug("timeBucket: none")
 		JSONColumnName := enterpriseName + "-" + siteName + "-" + areaName + "-" + productionLineName + "-" + workCellName + "-" + tagName + "-values"
 		data.ColumnNames = []string{"timestamp", JSONColumnName}
 
-		// #nosec G201
-		sqlStatement = `
+		if !useProcessValueString {
+			// #nosec G201
+			sqlStatement = `
 SELECT
 	asset_id,
 	timestamp,
@@ -489,6 +536,23 @@ WHERE
 GROUP BY asset_id, timestamp, value
 ORDER BY timestamp
 `
+		} else {
+			sqlStatement = `
+SELECT
+	asset_id,
+	timestamp,
+	value
+FROM
+	processvaluestringtable
+WHERE
+    asset_id = $1 AND
+    valuename = $2 AND
+    timestamp >= $3 AND
+    timestamp <= $4
+GROUP BY asset_id, timestamp, value
+ORDER BY timestamp
+`
+		}
 	} else {
 		gapFilling := getCustomTagDataRequest.GapFilling
 
@@ -640,6 +704,10 @@ ORDER BY bucket;
 	}
 
 	zap.S().Debugf("sqlStatement: %s", sqlStatement)
+	zap.S().Debugf("workCellId: %d", workCellId)
+	zap.S().Debugf("tagName: %s", tagName)
+	zap.S().Debugf("from: %s", from)
+	zap.S().Debugf("to: %s", to)
 	var rows *sql.Rows
 	rows, err = database.Db.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
@@ -665,6 +733,7 @@ ORDER BY bucket;
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
+		zap.S().Debugf("row (A): %v", row)
 
 		var rowX = make([]interface{}, len(row)-1)
 
@@ -693,18 +762,29 @@ ORDER BY bucket;
 
 		}
 
+		zap.S().Debugf("row (B): %v", row)
 		// row without asset_id
+		hasValue := false
 		n := 0
 		for i := range row {
-			if i == internal.IndexOf(cols, "asset_id") {
+			if i == internal.IndexOf(cols, "asset_id") { //This skips row 0
 				continue
 			}
 			rowX[n] = row[i]
 			n++
+			if row[i] != nil {
+				hasValue = true
+			}
 		}
 
-		data.Datapoints = append(data.Datapoints, rowX)
+		// Prevents null value inclusion
+		if hasValue {
+			zap.S().Debugf("hasValue: %v", hasValue)
+			data.Datapoints = append(data.Datapoints, rowX)
+		}
 	}
+	zap.S().Debugf("dp.Datapoints: %d", len(data.Datapoints))
+
 	c.JSON(http.StatusOK, data)
 }
 

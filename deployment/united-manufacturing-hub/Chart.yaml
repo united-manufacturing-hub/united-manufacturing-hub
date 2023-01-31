@@ -1,7 +1,7 @@
 ---
 apiVersion: v2
 name: united-manufacturing-hub
-description: A Helm chart for Kubernetes
+description: Transform manufacturing with UMH Systems united-manufacturing-hub Helm chart, simplifying access to powerful technology for engineers.
 icon: https://avatars.githubusercontent.com/u/77492553
 
 # A chart can be either an 'application' or a 'library' chart.
@@ -18,13 +18,13 @@ type: application
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
 
-version: 0.9.9
+version: 0.9.10
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 
-appVersion: "0.9.9"
+appVersion: "0.9.10"
 
 home: https://www.umh.app
 sources:
@@ -32,12 +32,12 @@ sources:
 
 dependencies:
   - name: redis
-    version: 17.1.7
+    version: 17.3.17
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
   - name: grafana
-    version: 6.21.1
+    version: 6.49.0
     repository: https://grafana.github.io/helm-charts
     condition: _000_commonConfig.datastorage.enabled
 
@@ -47,21 +47,21 @@ dependencies:
     condition: _000_commonConfig.datastorage.enabled
 
   - name: operator
-    version: 4.4.17
+    version: 4.5.0
     repository: https://operator.min.io/
     condition: _000_commonConfig.blobstorage.enabled
 
   - name: tenant
-    version: 4.4.17
+    version: 4.5.0
     repository: https://operator.min.io/
     condition: _000_commonConfig.blobstorage.enabled
 
   - name: kafka
-    version: 15.0.1
+    version: 20.0.2
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.infrastructure.kafka.enabled
 
-  - name: kowl
-    repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
-    version: 2.3.0
+  - name: console
+    repository: https://dl.redpanda.com/public/console/helm/charts/
+    version: 0.3.1
     condition: _000_commonConfig.infrastructure.kafka.enabled

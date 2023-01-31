@@ -10,8 +10,8 @@ import (
 	_ "github.com/patrickmn/go-cache"
 	"github.com/rung/go-safecast"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
-	"hash/crc32"
 	"strconv"
 	"time"
 )
@@ -22,8 +22,6 @@ var memCache *cache.Cache
 
 var redisDataExpiration time.Duration
 var memoryDataExpiration time.Duration
-
-var redisInitialized bool
 
 const NullStr = "null"
 
@@ -47,37 +45,33 @@ func InitCache(redisURI string, redisURI2 string, redisURI3 string, redisPasswor
 	memoryDataExpiration = 10 * time.Second
 
 	memCache = cache.New(memoryDataExpiration, 20*time.Second)
-	redisInitialized = true
 }
 
-func InitMemcache() {
+func InitCacheWithoutRedis() {
 	memoryDataExpiration = 10 * time.Second
 	memCache = cache.New(memoryDataExpiration, 20*time.Second)
-	redisInitialized = false
 }
 
-func IsRedisAvailable() bool {
-	if !redisInitialized {
-		return false
-	}
-	if rdb != nil {
-		statusCmd := rdb.Ping(ctx)
+// https://github.com/united-manufacturing-hub/structHashCmp
 
-		if statusCmd != nil && statusCmd.Val() == "PONG" {
-			return true
-		}
-		zap.S().Debugf("Redis Error: ", statusCmd)
-	}
-	return false
-}
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // AsHash returns a hash for a given interface
+// Note: this is not a cryptographic hash, but a hash for comparison purposes
+// Also note: do not use this with structs that contain channels or functions, it will panic
 func AsHash(o interface{}) string {
-	h := crc32.NewIEEE() // modified for quicker hashing
-	// This cannot fail
-	_, _ = fmt.Fprintf(h, "%v", o)
+	marshal, err := json.Marshal(o)
+	if err != nil {
+		zap.S().Fatalf("Failed to marshal object: %v", err)
+	}
 
-	return fmt.Sprintf("%x", h.Sum(nil))
+	digester := xxh3.New()
+	_, err = digester.Write(marshal)
+	if err != nil {
+		// err is always nil
+		zap.S().Fatalf("Failed to write to digester: %v", err)
+	}
+	return fmt.Sprintf("%x", digester.Sum(nil))
 }
 
 // GetProcessStatesFromCache gets process states from cache

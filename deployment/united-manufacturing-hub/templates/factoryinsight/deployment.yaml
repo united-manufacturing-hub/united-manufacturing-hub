@@ -46,6 +46,11 @@ spec:
               - name: http
                 containerPort: 80
                 protocol: TCP
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+              - containerPort: 1337
+                name: fgtrace
+                protocol: TCP
+          {{end}}
           resources:
             limits:
               cpu: {{.Values.factoryinsight.resources.limits.cpu}}
@@ -95,6 +100,25 @@ spec:
                   key: password
             - name: VERSION
               value: {{.Values.factoryinsight.version | default 2 | quote}}
+            - name: INSECURE_NO_AUTH
+              value: {{.Values.factoryinsight.insecure_no_auth | default "false" | quote}}
+
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber}}
 
           livenessProbe:
             httpGet:
