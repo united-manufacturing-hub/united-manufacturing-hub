@@ -37,16 +37,16 @@ spec:
       terminationGracePeriodSeconds: 180
       initContainers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
-          {{if .Values.kafkabridge.image.tag}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
+          {{if .Values.kafkatopostgresql.image.tag}}
+          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Values.kafkatopostgresql.initContainer.tag}}
           {{- else}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Chart.AppVersion}}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
           {{end}}
-          imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkatopostgresql.initContainer.pullPolicy}}
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
@@ -73,9 +73,11 @@ spec:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-            - name: pprof
-              containerPort: 1337
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - containerPort: 1337
+              name: fgtrace
               protocol: TCP
+          {{end}}
           env:
 
             - name: POSTGRES_HOST
@@ -86,6 +88,8 @@ spec:
               value: {{.Values.factoryinsight.db_user}}
             - name: POSTGRES_PASSWORD
               value: {{.Values._000_commonConfig.datastorage.db_password}}
+            - name: POSTGRES_SSLMODE
+              value: "require"
 
             - name: LOGGING_LEVEL
               value: PRODUCTION
@@ -99,12 +103,20 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
 
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresql.sslKeyPassword | quote}}
 
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:

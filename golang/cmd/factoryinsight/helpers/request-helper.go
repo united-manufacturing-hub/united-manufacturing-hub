@@ -12,6 +12,8 @@ import (
 	"runtime/debug"
 )
 
+var InsecureNoAuth bool
+
 func HandleInternalServerError(c *gin.Context, err error) {
 	if c == nil {
 		zap.S().Fatal("context is nil")
@@ -103,6 +105,10 @@ func HandleInvalidInputError(c *gin.Context, err error) {
 
 // CheckIfUserIsAllowed checks if the user is allowed to access the data for the given customer
 func CheckIfUserIsAllowed(c *gin.Context, customer string) error {
+	if InsecureNoAuth {
+		zap.S().Debug("InsecureNoAuth is set to true. Skipping user check.")
+		return nil
+	}
 
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
