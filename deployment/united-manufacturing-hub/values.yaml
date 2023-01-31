@@ -1218,7 +1218,7 @@ grafana:
     port: 8080
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-umh:1.1.2
+    - image: unitedmanufacturinghub/grafana-umh:1.2.0
       name: init-plugins
       imagePullPolicy: IfNotPresent
       command: ['sh', '-c', 'cp -r /plugins /var/lib/grafana/']
@@ -1695,8 +1695,9 @@ mqtt_broker:
   initContainer:
     hivemqextensioninit:
       image:
-        repository: unitedmanufacturinghub/hivemq-init
-        tag: 1.0.0
+        repository: matteoumh/hivemq-init
+        #tag: 0.0.1-hivemqrbac4.5.3
+        tag: latest
         pullPolicy: IfNotPresent
   resources:
     limits:
