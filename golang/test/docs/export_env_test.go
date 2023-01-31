@@ -49,7 +49,7 @@ func ScanPath(t *testing.T, err error, path string) {
 	}
 }
 
-var re = regexp.MustCompile(`os.((LookupEnv)|(GetEnv))\("(.+)"\)`)
+var re = regexp.MustCompile(`((logger\.New)|(os.((LookupEnv)|(GetEnv))))\("(.+)"\)`)
 
 func scanDir(t *testing.T, path string) []string {
 
@@ -86,7 +86,7 @@ func extractVar(path string, t *testing.T) []string {
 		line := scanner.Text()
 		matches := re.FindStringSubmatch(line)
 		if len(matches) > 0 {
-			envVariables = append(envVariables, matches[4])
+			envVariables = append(envVariables, matches[7])
 		}
 	}
 	return envVariables
