@@ -1695,9 +1695,8 @@ mqtt_broker:
   initContainer:
     hivemqextensioninit:
       image:
-        repository: matteoumh/hivemq-init
-        #tag: 0.0.1-hivemqrbac4.5.3
-        tag: latest
+        repository: unitedmanufacturinghub/hivemq-init
+        tag: 2.0.0
         pullPolicy: IfNotPresent
   resources:
     limits:
