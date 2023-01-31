@@ -733,6 +733,7 @@ ORDER BY bucket;
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		}
+		zap.S().Debugf("row (A): %v", row)
 
 		var rowX = make([]interface{}, len(row)-1)
 
@@ -761,6 +762,7 @@ ORDER BY bucket;
 
 		}
 
+		zap.S().Debugf("row (B): %v", row)
 		// row without asset_id
 		hasValue := false
 		n := 0
@@ -777,9 +779,11 @@ ORDER BY bucket;
 
 		// Prevents null value inclusion
 		if hasValue {
+			zap.S().Debugf("hasValue: %v", hasValue)
 			data.Datapoints = append(data.Datapoints, rowX)
 		}
 	}
+	zap.S().Debugf("dp.Datapoints: %d", len(data.Datapoints))
 
 	c.JSON(http.StatusOK, data)
 }

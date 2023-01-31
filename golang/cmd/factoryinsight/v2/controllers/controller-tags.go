@@ -5,6 +5,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/services"
+	"go.uber.org/zap"
 	"net/http"
 )
 
@@ -85,6 +86,8 @@ func GetTagsHandler(c *gin.Context) {
 func GetTagsDataHandler(c *gin.Context) {
 	var request models.GetTagsDataRequest
 
+	zap.S().Debugf("GetTagsDataHandler: %v", request)
+
 	err := c.BindUri(&request)
 	if err != nil {
 		helpers.HandleInvalidInputError(c, err)
@@ -116,9 +119,11 @@ func GetTagsDataHandler(c *gin.Context) {
 			return
 		}
 	case models.CustomTagGroup:
+		zap.S().Debugf("CustomTagGroup")
 		services.ProcessCustomTagRequest(c, request, false)
 
 	case models.CustomStringTagGroup:
+		zap.S().Debugf("CustomStringTagGroup")
 		services.ProcessCustomTagRequest(c, request, true)
 	default:
 		helpers.HandleTypeNotFound(c, request.TagGroupName)
