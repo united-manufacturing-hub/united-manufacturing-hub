@@ -341,7 +341,7 @@ func GetCustomTagsTree(customer string, site string, area string, line string, c
 		// ignore underscores at the beginning or end of the tag or if there are multiple underscores in a row
 		sanitizedSplitTag := removeEmpty(splitTag)
 		// remove unused capacity to save memory
-		sanitizedSplitTag = slices.Clip(sanitizedSplitTag) // WTF is this?
+		sanitizedSplitTag = slices.Clip(sanitizedSplitTag)
 
 		// create the mapping
 		te[splitTag[0]] = mapTagGrouping(te, sanitizedSplitTag, value)
