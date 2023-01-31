@@ -1,4 +1,4 @@
-ARG GRAFANA_VERSION="8.5.9"
+ARG GRAFANA_VERSION="9.3.1"
 
 FROM docker.io/grafana/grafana:${GRAFANA_VERSION} as builder
 
