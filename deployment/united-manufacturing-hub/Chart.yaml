@@ -1,7 +1,7 @@
 ---
 apiVersion: v2
 name: united-manufacturing-hub
-description: A Helm chart for Kubernetes
+description: Transform manufacturing with UMH Systems united-manufacturing-hub Helm chart, simplifying access to powerful technology for engineers.
 icon: https://avatars.githubusercontent.com/u/77492553
 
 # A chart can be either an 'application' or a 'library' chart.

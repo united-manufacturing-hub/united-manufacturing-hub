@@ -60,7 +60,10 @@ func SetupKafkaTopicProbeConsumer(configMap kafka.ConfigMap) {
 		}
 		_, errX = tempAdmin.CreateTopics(context.Background(), []kafka.TopicSpecification{
 			{
-				Topic:         probeTopicName,
+				Topic: probeTopicName,
+				// Kafka topic probe, only needs one partition.
+				// While the default for other topics is 6, it's only used for faster detection of new topics.
+				// Kafka listeners will eventually detect the new topic, even if they are not listening to the probe topic.
 				NumPartitions: 1,
 			},
 		})
