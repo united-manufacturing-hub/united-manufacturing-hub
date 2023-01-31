@@ -1,0 +1,42 @@
+---
+{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+# this is meant as a backwards compatibility layer for the old mqtt broker. services that are still using the old broker should be migrated to the new one
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
+  labels:
+    app.kubernetes.io/name: hivemqce
+    app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
+    app.kubernetes.io/managed-by: helm
+    app.kubernetes.io/component: "hivemqce"
+spec:
+  type: ClusterIP
+  ports:
+    {{- if .Values.mqtt_broker.service.mqtt.enabled }}
+    - port: {{ .Values.mqtt_broker.service.mqtt.port }}
+      targetPort: mqtt
+      protocol: TCP
+      name: mqtt
+    {{- end }}
+    {{- if .Values.mqtt_broker.service.mqtts.enabled }}
+    - port: {{ .Values.mqtt_broker.service.mqtts.port }}
+      targetPort: mqtts
+      protocol: TCP
+      name: mqtts
+    {{- end }}
+    {{- if .Values.mqtt_broker.service.ws.enabled }}
+    - port: {{ .Values.mqtt_broker.service.ws.port }}
+      targetPort: ws
+      protocol: TCP
+      name: ws
+    {{- end }}
+    {{- if .Values.mqtt_broker.service.wss.enabled }}
+    - port: {{ .Values.mqtt_broker.service.wss.port }}
+      targetPort: wss
+      protocol: TCP
+      name: wss
+    {{- end }}
+  selector:
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+{{end}}

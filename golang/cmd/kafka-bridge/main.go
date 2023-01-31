@@ -9,9 +9,6 @@ import (
 	"go.uber.org/zap"
 	"math"
 	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -58,14 +55,7 @@ func main() {
 	}(log)
 	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -95,7 +85,10 @@ func main() {
 	}()
 
 	zap.S().Debugf("Starting queue processor")
-	KafkaTopicMap := os.Getenv("KAFKA_TOPIC_MAP")
+	KafkaTopicMap, KafkaTopicMapEnvSet := os.LookupEnv("KAFKA_TOPIC_MAP")
+	if !KafkaTopicMapEnvSet {
+		zap.S().Fatal("Kafka Topic Map (KAFKA_TOPIC_MAP) must be set")
+	}
 	if KafkaTopicMap == "" {
 		zap.S().Fatal("Kafka topic map is not set")
 	}
@@ -104,13 +97,24 @@ func main() {
 		zap.S().Fatal("Failed to unmarshal topic map: %v", err)
 	}
 
-	LocalKafkaBootstrapServers = os.Getenv("LOCAL_KAFKA_BOOTSTRAP_SERVER")
-	RemoteKafkaBootstrapServers = os.Getenv("REMOTE_KAFKA_BOOTSTRAP_SERVER")
+	var LocalKafkaBootsrapServersEnvSet bool
+	LocalKafkaBootstrapServers, LocalKafkaBootsrapServersEnvSet = os.LookupEnv("LOCAL_KAFKA_BOOTSTRAP_SERVER")
+	if !LocalKafkaBootsrapServersEnvSet {
+		zap.S().Fatal("PQ User (PQ_USER) must be set")
+	}
+	var RemoteKafkaBootstrapServersEnvSet bool
+	RemoteKafkaBootstrapServers, RemoteKafkaBootstrapServersEnvSet = os.LookupEnv("REMOTE_KAFKA_BOOTSTRAP_SERVER")
+	if !RemoteKafkaBootstrapServersEnvSet {
+		zap.S().Fatal("Remote Kafka Bootstrap Servers (REMOTE_KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	if LocalKafkaBootstrapServers == "" || RemoteKafkaBootstrapServers == "" {
 		zap.S().Fatalf("Kafka bootstrap servers are not set")
 	}
 
-	GroupIdSuffic := os.Getenv("KAFKA_GROUP_ID_SUFFIX")
+	GroupIdSuffic, GroupIdSufficEnvSet := os.LookupEnv("KAFKA_GROUP_ID_SUFFIX")
+	if !GroupIdSufficEnvSet {
+		zap.S().Fatal("GroupIdSuffic (KAFKA_GROUP_ID_SUFFIX) must be set")
+	}
 
 	securityProtocol := "plaintext"
 	if internal.EnvIsTrue("KAFKA_USE_SSL") {

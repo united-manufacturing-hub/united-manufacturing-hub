@@ -31,14 +31,14 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 		zap.S().Fatal("Failed to create topic %s", err)
 	}
 
-	err = kafkaProducerClient.Produce(
-		&kafka.Message{
-			TopicPartition: kafka.TopicPartition{
-				Topic:     &kafkaTopicName,
-				Partition: kafka.PartitionAny,
-			},
-			Value: message,
-		}, nil)
+	err = internal.Produce(kafkaProducerClient, &kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &kafkaTopicName,
+			Partition: kafka.PartitionAny,
+		},
+		Value: message,
+	}, nil)
+
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
 	} else {

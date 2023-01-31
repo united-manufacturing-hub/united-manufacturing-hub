@@ -6,10 +6,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net"
-	"net/http"
-
-	/* #nosec G108 -- Replace with https://github.com/felixge/fgtrace later*/
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,20 +25,19 @@ func main() {
 	}(log)
 	zap.S().Infof("This is kafka-init build date: %s", buildtime)
 
-	// pprof
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("localhost:1337", nil)
-		if err != nil {
-			zap.S().Errorf("Error starting pprof: %s", err)
-		}
-	}()
+	internal.Initfgtrace()
 
 	// Read environment variables for Kafka
-	KafkaBoostrapServer := os.Getenv("KAFKA_BOOTSTRAP_SERVER")
+	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
+	if !KafkaBoostrapServerEnvSet {
+		zap.S().Fatal("Kafka Bootstrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	}
 	zap.S().Infof("KafkaBoostrapServer: %s", KafkaBoostrapServer)
 	// Semicolon separated list of topic to create
-	KafkaTopics := os.Getenv("KAFKA_TOPICS")
+	KafkaTopics, KafkaTopicsEnvSet := os.LookupEnv("KAFKA_TOPICS")
+	if !KafkaTopicsEnvSet {
+		zap.S().Fatal("Kafka Topics (KAFKA_TOPICS) must be set")
+	}
 	zap.S().Infof("KafkaTopics: %s", KafkaTopics)
 
 	zap.S().Debugf("Setting up Kafka")

@@ -119,7 +119,7 @@ func startActivityProcessor() {
 			TopicPartition: kafka.TopicPartition{Topic: &stateTopic, Partition: kafka.PartitionAny},
 			Value:          jsonStateMessage,
 		}
-		err = ActivityKafkaProducer.Produce(msgS, nil)
+		err = internal.Produce(ActivityKafkaProducer, msgS, nil)
 		if err != nil {
 			errS := err.Error()
 			ActivityPutBackChannel <- internal.PutBackChanMsg{

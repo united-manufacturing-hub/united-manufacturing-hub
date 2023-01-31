@@ -34,7 +34,7 @@ spec:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-extensions
-        {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
+        {{- if or .Values.mqtt_broker.service.mqtts.enabled .Values.mqtt_broker.service.wss.enabled}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-keystores
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-secret-keystore
@@ -42,38 +42,52 @@ spec:
         {{- end}}
       initContainers:
         - name: hivemqce-extension-init
-          image: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.repository}}:{{.Values.hivemqce.initContainer.hivemqextensioninit.image.tag}}
-          imagePullPolicy: {{.Values.hivemqce.initContainer.hivemqextensioninit.image.pullPolicy}}
+          image: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.repository}}:{{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.tag}}
+          imagePullPolicy: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.pullPolicy}}
           volumeMounts:
             - mountPath: /opt/hivemq-ce-2022.1/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
+          env:
+            - name: RBAC_ENABLED
+              {{- if .Values.mqtt_broker.rbacEnabled }}
+              value: "true"
+              {{- else }}
+              value: "false"
+              {{- end }}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
-          {{if .Values.hivemqce.image.tag}}
-          image: {{.Values.hivemqce.image.repository}}:{{.Values.hivemqce.image.tag}}
+          {{if .Values.mqtt_broker.image.tag}}
+          image: {{.Values.mqtt_broker.image.repository}}:{{.Values.mqtt_broker.image.tag}}
           {{- else}}
-          image: {{.Values.hivemqce.image.repository}}:2022.1
+          image: {{.Values.mqtt_broker.image.repository}}:2022.1
           {{end}}
-          imagePullPolicy: {{.Values.hivemqce.image.pullPolicy}}
+          imagePullPolicy: {{.Values.mqtt_broker.image.pullPolicy}}
+          env:
+            - name: HIVEMQ_ALLOW_ALL_CLIENTS
+              {{- if .Values.mqtt_broker.rbacEnabled }}
+              value: "false"
+              {{- else }}
+              value: "true"
+              {{- end }}
           resources:
             limits:
-              cpu: {{.Values.hivemqce.resources.limits.cpu}}
-              memory: {{.Values.hivemqce.resources.limits.memory}}
+              cpu: {{.Values.mqtt_broker.resources.limits.cpu}}
+              memory: {{.Values.mqtt_broker.resources.limits.memory}}
             requests:
-              cpu: {{.Values.hivemqce.resources.requests.cpu}}
-              memory: {{.Values.hivemqce.resources.requests.memory}}
+              cpu: {{.Values.mqtt_broker.resources.requests.cpu}}
+              memory: {{.Values.mqtt_broker.resources.requests.memory}}
           volumeMounts:
-            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/conf
+            - mountPath: /opt/hivemq-ce-{{.Values.mqtt_broker.image.tag}}/conf
               name: hivemqce-mqtt-config
               readOnly: true
-            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/data
+            - mountPath: /opt/hivemq-ce-{{.Values.mqtt_broker.image.tag}}/data
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
-            - mountPath: /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions
+            - mountPath: /opt/hivemq-ce-{{.Values.mqtt_broker.image.tag}}/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
             - mountPath: /configs
               name: hivemqce-extension-config
               readOnly: true
-            {{- if or .Values.hivemqce.service.mqtts.enabled .Values.hivemqce.service.wss.enabled}}
+            {{- if or .Values.mqtt_broker.service.mqtts.enabled .Values.mqtt_broker.service.wss.enabled}}
             - mountPath: /stores
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-keystores
               readOnly: true
@@ -97,22 +111,22 @@ spec:
             successThreshold: 1
             failureThreshold: 3
           ports:
-            {{- if .Values.hivemqce.service.mqtt.enabled}}
+            {{- if .Values.mqtt_broker.service.mqtt.enabled}}
             - name: mqtt
               containerPort: 1883
               protocol: TCP
             {{- end}}
-            {{- if .Values.hivemqce.service.mqtts.enabled}}
+            {{- if .Values.mqtt_broker.service.mqtts.enabled}}
             - name: mqtts
               containerPort: 8883
               protocol: TCP
             {{- end}}
-            {{- if .Values.hivemqce.service.ws.enabled}}
+            {{- if .Values.mqtt_broker.service.ws.enabled}}
             - name: ws
               containerPort: 8080
               protocol: TCP
             {{- end}}
-            {{- if .Values.hivemqce.service.wss.enabled}}
+            {{- if .Values.mqtt_broker.service.wss.enabled}}
             - name: wss
               containerPort: 8443
               protocol: TCP
@@ -130,7 +144,7 @@ spec:
                     command: [
                       "/bin/sh",
                       "-c",
-                      "cp /configs/credentials.xml /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml && cp /configs/heartbeat.xml  /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.properties /opt/hivemq-ce-{{.Values.hivemqce.image.tag}}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
+                      "{{ if .Values.mqtt_broker.rbacEnabled }}cp /configs/credentials.xml /opt/hivemq-ce-{{.Values.mqtt_broker.image.tag}}/extensions/hivemq-file-rbac-extension/credentials.xml && {{end}} cp /configs/heartbeat.xml  /opt/hivemq-ce-{{.Values.mqtt_broker.image.tag}}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.properties /opt/hivemq-ce-{{.Values.mqtt_broker.image.tag}}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
                     ]
 
 {{end}}

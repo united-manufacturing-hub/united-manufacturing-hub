@@ -14,7 +14,7 @@ import (
 const relativeIODDFilePath = "../sensorconnect/IoddFiles/"
 
 func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
-	internal.InitMemcache()
+	internal.InitCacheWithoutRedis()
 	// first remove all files from specified path
 	err := removeFilesFromDirectory()
 	if err != nil {
@@ -48,7 +48,7 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 }
 
 func TestRequestSaveIoddFile(t *testing.T) {
-	internal.InitMemcache()
+	internal.InitCacheWithoutRedis()
 	var ioddFilemapKey IoddFilemapKey
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
@@ -70,7 +70,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 }
 
 func TestReadIoddFiles(t *testing.T) {
-	internal.InitMemcache()
+	internal.InitCacheWithoutRedis()
 	var fileInfoSlice []fs.DirEntry
 	// first remove all files from specified path
 	err := removeFilesFromDirectory()
@@ -122,7 +122,7 @@ func removeFilesFromDirectory() error {
 }
 
 func TestUnmarshalIoddFiles(t *testing.T) {
-	internal.InitMemcache()
+	internal.InitCacheWithoutRedis()
 	// first remove all files from specified path
 	err := removeFilesFromDirectory()
 	if err != nil {
