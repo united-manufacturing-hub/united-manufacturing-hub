@@ -1,0 +1,23 @@
+name: Test Kubernetes Deployment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  kubernetes-component-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Prepare KIND cluster
+        run: . setup-kind.sh
+        working-directory: ./test
+      - name: Kubernetes Component Test
+        run: . k8s-component-test.sh
+        working-directory: ./test
+      - name: Tear down KIND cluster
+        run: . teardown-kind.sh
+        working-directory: ./test
