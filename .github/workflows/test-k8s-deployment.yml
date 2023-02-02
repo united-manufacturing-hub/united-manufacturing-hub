@@ -18,6 +18,3 @@ jobs:
       - name: Kubernetes Component Test
         run: . k8s-component-test.sh
         working-directory: ./test
-      - name: Tear down KIND cluster
-        run: . teardown-kind.sh
-        working-directory: ./test
