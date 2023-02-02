@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: curl-factoryinsight-test
           configMap:
-            name: component-test
+            name: data-flow-test
       restartPolicy: Never
 
 ---
