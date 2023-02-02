@@ -1,15 +1,15 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: component-test
+  name: data-flow-test
 spec:
   template:
     metadata:
       labels:
-        type: component-test
+        type: data-flow-test
     spec:
       containers:
-        - name: component-test
+        - name: data-flow-test
           image: alpine
           imagePullPolicy: IfNotPresent
           envFrom:
@@ -30,7 +30,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: component-test
+  name: data-flow-test
 data:
   curl-factoryinsight-test.sh: |
     #!/usr/bin/env sh

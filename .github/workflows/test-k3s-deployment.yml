@@ -1,0 +1,37 @@
+name: Test Kubernetes Deployment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  data-flow-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Prepare k3s cluster
+        uses: AbsaOSS/k3d-action@v2
+        with:
+          cluster-name: "united-manufacturing-hub"
+          args: --agents 1 --image rancher/k3s:v1.24.4-k3s1
+      - name: Install UMH
+        run: |
+          kubectl create ns united-manufacturing-hub
+          helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait
+          kubectl get po,svc -n united-manufacturing-hub
+      - name: Run Data Flow Test Job
+        run: |
+          kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
+          kubectl wait --for=condition=complete --timeout=60s job/component-test -n united-manufacturing-hub
+          kubectl logs job/component-test -n united-manufacturing-hub
+          SUCCESS=$(kubectl get job/component-test -n united-manufacturing-hub -o jsonpath='{.status.succeeded}')
+          if [ "$SUCCESS" -eq 1 ]; then
+              echo "Data Flow Test Job succeeded"
+          else
+              echo "Data Flow Test Job failed"
+              exit 1
+          fi
+          kubectl delete -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
