@@ -25,12 +25,15 @@ jobs:
       - name: Run Data Flow Test Job
         run: |
           kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
-          kubectl wait --for=condition=complete job/data-flow-test -n united-manufacturing-hub
-          kubectl logs job/data-flow-test -n united-manufacturing-hub
-          SUCCESS=$(kubectl get job/data-flow-test -n united-manufacturing-hub -o jsonpath='{.status.succeeded}')
-          if [ "$SUCCESS" -eq 1 ]; then
+          kubectl wait --for=condition=complete job/data-flow-test -n united-manufacturing-hub &
+          completed=$!
+          kubectl wait --for=condition=failed job/data-flow-test -n united-manufacturing-hub && exit 1 &
+          failed=$!
+          if wait $completed; then
               echo "Data Flow Test Job succeeded"
-          else
+              kubectl logs job/data-flow-test -n united-manufacturing-hub
+          elif wait $failed; then
               echo "Data Flow Test Job failed"
+              kubectl logs job/data-flow-test -n united-manufacturing-hub
               exit 1
           fi
