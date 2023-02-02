@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
-TIMESTAMP_TO=$(date +%FT%TZ | sed 's/+//g')
-TIMESTAMP_FROM=$(date +%FT%TZ --date='5 min ago' | sed 's/+//g')
+TIMESTAMP_TO=$(date +%FT%TZ)
+TIMESTAMP_FROM=$(date +%FT%TZ --date='5 min ago')
 
 AUTH_HEADER="Authorization: ${FACTORYINSIGHT_APIKEY}"
 URL="${FACTORYINSIGHT_BASEURL}/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/Pressure?from=${TIMESTAMP_FROM}&to=${TIMESTAMP_TO}&gapFilling=null&tagAggregates=avg&timeBucket=1m&includePrevious=true&includeNext=true&includeRunning=true&keepStatesInteger=true'"
