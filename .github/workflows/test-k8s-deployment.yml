@@ -12,9 +12,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Prepare KIND cluster
-        run: . setup-kind.sh
-        working-directory: ./test
+      - name: Prepare k3s cluster
+        uses: AbsaOSS/k3d-action@v2
+        with:
+          cluster-name: "united-manufacturing-hub"
+          k3s-version: "v1.21.5-k3s2"
+          args: --agents 1
       - name: Kubernetes Component Test
         run: . k8s-component-test.sh
         working-directory: ./test
