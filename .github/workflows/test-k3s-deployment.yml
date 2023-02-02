@@ -22,6 +22,10 @@ jobs:
           kubectl create ns united-manufacturing-hub
           helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait
           kubectl get po,svc -n united-manufacturing-hub
+      - name: Build test image
+        run: |
+          docker build -t data-flow-test -f ./test/Dockerfile ./test
+          k3d image import data-flow-test -c united-manufacturing-hub
       - name: Run Data Flow Test Job
         run: |
           kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
