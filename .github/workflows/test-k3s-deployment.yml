@@ -20,14 +20,14 @@ jobs:
       - name: Install UMH
         run: |
           kubectl create ns united-manufacturing-hub
-          helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait --debug
+          helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait
           kubectl get po,svc -n united-manufacturing-hub
       - name: Run Data Flow Test Job
         run: |
           kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
-          kubectl wait --for=condition=complete job/data-flow-test -n united-manufacturing-hub &
+          kubectl wait --for=condition=complete job/data-flow-test -n united-manufacturing-hub --timeout=-1s &
           completed=$!
-          kubectl wait --for=condition=failed job/data-flow-test -n united-manufacturing-hub && exit 1 &
+          kubectl wait --for=condition=failed job/data-flow-test -n united-manufacturing-hub --timeout=-1s && exit 1 &
           failed=$!
           if wait $completed; then
               echo "Data Flow Test Job succeeded"
