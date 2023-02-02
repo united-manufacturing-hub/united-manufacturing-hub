@@ -2,6 +2,8 @@
 
 set -xe
 
+kubectl create ns united-manufacturing-hub
+
 helm install united-manufacturing-hub ../deployment/united-manufacturing-hub -n united-manufacturing-hub --wait
 
 kubectl get po,svc -n united-manufacturing-hub
