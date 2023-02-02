@@ -17,6 +17,6 @@ kind version
 kubectl version --client=true
 helm version
 
-kind -q create cluster --wait 10m
+kind -q create cluster
 
 kubectl get nodes
