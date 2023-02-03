@@ -55,7 +55,7 @@ jobs:
               mkdir -p ./test-logs
               kubectl logs job/data-flow-test -n united-manufacturing-hub > ./test-logs/jobs-data-flow-test.log
               kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-factoryinsight.log
-              kubectl logs deployment/united-manufacturing-hub-iotsensormqtt -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-iotsensormqtt.log
+              kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-iotsensormqtt.log
               kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-grafana.log
               kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-mqttkafkabridge.log
               kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-console.log
