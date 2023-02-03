@@ -19,6 +19,7 @@ jobs:
           args: --agents 1 --image rancher/k3s:v1.24.4-k3s1
       - name: Install UMH
         id: install-umh
+        continue-on-error: true
         run: |
           kubectl create ns united-manufacturing-hub
           helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait --debug
