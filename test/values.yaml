@@ -362,7 +362,7 @@ cameraconnect:
 
 ### iotsensorsmqtt ###
 iotsensorsmqtt:
-  image: amineamaach/sensors-mqt
+  image: amineamaach/sensors-mqtt
   tag: v1.0.0
   resources:
     requests:
