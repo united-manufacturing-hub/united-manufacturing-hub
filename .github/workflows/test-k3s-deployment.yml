@@ -79,3 +79,6 @@ jobs:
         with:
           name: test-logs
           path: ./test-logs
+      - name: Fail if any test failed
+        if: steps.install-umh.outcome == 'failure' || steps.run-data-flow-test.outcome == 'failure'
+        run: exit 1
