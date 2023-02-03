@@ -4,7 +4,7 @@ TIMESTAMP_TO=$(date +%FT%TZ --date='1 day ago')
 TIMESTAMP_FROM=$(date +%FT%TZ --date='5 day ago')
 
 AUTH_HEADER="Authorization: ${FACTORYINSIGHT_APIKEY}"
-URL="${FACTORYINSIGHT_BASEURL}/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/Pressure?from=${TIMESTAMP_FROM}&to=${TIMESTAMP_TO}&gapFilling=null&tagAggregates=avg&timeBucket=1m&includePrevious=true&includeNext=true&includeRunning=true&keepStatesInteger=true'"
+URL="${FACTORYINSIGHT_BASEURL}/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/Pressure?from=${TIMESTAMP_FROM}&to=${TIMESTAMP_TO}&gapFilling=null&tagAggregates=avg&timeBucket=none&includePrevious=true&includeNext=true&includeRunning=true&keepStatesInteger=true"
 
 echo "URL: ${URL}"
 
