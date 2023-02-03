@@ -21,6 +21,7 @@ jobs:
         run: |
           kubectl create ns united-manufacturing-hub
           helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait
+          helm status united-manufacturing-hub -n united-manufacturing-hub
           kubectl get po,svc -n united-manufacturing-hub
       - name: Build test image
         run: |
