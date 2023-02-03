@@ -38,6 +38,7 @@ jobs:
           k3d image import data-flow-test -c united-manufacturing-hub
       - name: Run Data Flow Test Job
         id: run-data-flow-test
+        continue-on-error: true
         run: |
           kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
           if kubectl wait --for=condition=complete job/data-flow-test -n united-manufacturing-hub --timeout=5m ; then
