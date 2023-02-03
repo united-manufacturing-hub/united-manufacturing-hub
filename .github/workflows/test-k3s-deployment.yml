@@ -13,6 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Prepare k3s cluster
+        id: prepare-k3d
         uses: AbsaOSS/k3d-action@v2
         with:
           cluster-name: "united-manufacturing-hub"
@@ -25,6 +26,7 @@ jobs:
           helm install united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/values.yaml -n united-manufacturing-hub --wait --debug
           kubectl get po,svc -n united-manufacturing-hub
       - name: Debug Helm install failure
+        id: debug-helm-install-failure
         if: steps.install-umh.outcome == 'failure'
         run: |
           mkdir -p ./test-logs
@@ -34,11 +36,14 @@ jobs:
           kubectl describe svc -n united-manufacturing-hub > ./test-logs/svc-describe.log
           kubectl get events -n united-manufacturing-hub > ./test-logs/events.log
       - name: Build test image
+        id: build-test-image
+        if: steps.install-umh.outcome == 'success'
         run: |
           docker build -t data-flow-test -f ./test/Dockerfile ./test
           k3d image import data-flow-test -c united-manufacturing-hub
       - name: Run Data Flow Test Job
         id: run-data-flow-test
+        if: steps.install-umh.outcome == 'success'
         continue-on-error: true
         run: |
           kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
@@ -68,6 +73,7 @@ jobs:
               exit 1
           fi
       - name: Upload failed test logs
+        id: upload-failed-test-logs
         if: steps.install-umh.outcome == 'failure' || steps.run-data-flow-test.outcome == 'failure'
         uses: actions/upload-artifact@v2
         with:
