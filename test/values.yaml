@@ -27,12 +27,12 @@ _000_commonConfig:
     # iotsensorsmqtt simulates IoT sensor data as over OPC UA.
     # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsOPCUA
     opcuasimulator:
-       enabled: true
+       enabled: false
 
     # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
     # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
     packmlmqttsimulator:
-      enabled: true
+      enabled: false
 
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
@@ -668,7 +668,7 @@ factoryinsight:
     pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
   # tag: 0.3.2
-  replicas: 2
+  replicas: 1
   user: "factoryinsight"
   version: 2  # Minimum api version to host (e.g: 2 will host v1 and v2, 3 will host v1, v2 and v3)
   # Password will be generated automatically
