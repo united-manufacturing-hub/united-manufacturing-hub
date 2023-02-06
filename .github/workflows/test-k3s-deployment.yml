@@ -35,10 +35,9 @@ jobs:
           kubectl describe po -n united-manufacturing-hub > ./data-flow-test-installation-logs/po-describe.log
           kubectl describe svc -n united-manufacturing-hub > ./data-flow-test-installation-logs/svc-describe.log
           kubectl get events -n united-manufacturing-hub > ./data-flow-test-installation-logs/events.log
-          exit 1
       - name: Upload failed installation logs
         id: upload-failed-installation-logs
-        if: failure()
+        if: steps.install-umh.outcome == 'failure'
         uses: actions/upload-artifact@v2
         with:
           name: data-flow-test-installation-logs
