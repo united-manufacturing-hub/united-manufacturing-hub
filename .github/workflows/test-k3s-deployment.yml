@@ -153,7 +153,7 @@ jobs:
           elif kubectl wait --for=condition=failed job/data-flow-test -n united-manufacturing-hub --timeout=5m ; then
               echo "Data Flow Test Job failed"
               mkdir -p ./upgrade-test-logs
-              kubectl logs job/data-flow-test -n united-manufacturing-hub > ./test-logs/jobs-data-flow-test.log
+              kubectl logs job/data-flow-test -n united-manufacturing-hub > ./upgrade-test-logs/jobs-data-flow-test.log
               kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./upgrade-test-logs/deployment-factoryinsight.log
               kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./upgrade-test-logs/deployment-iotsensormqtt.log
               kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./upgrade-test-logs/deployment-grafana.log
