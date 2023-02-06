@@ -8,6 +8,7 @@ on:
 
 jobs:
   data-flow-test:
+    name: Data Flow Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -82,3 +83,103 @@ jobs:
       - name: Fail if any test failed
         if: steps.install-umh.outcome == 'failure' || steps.run-data-flow-test.outcome == 'failure'
         run: exit 1
+
+  upgrade-test:
+    name: Upgrade Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Prepare k3s cluster
+        id: prepare-k3d
+        uses: AbsaOSS/k3d-action@v2
+        with:
+          cluster-name: "united-manufacturing-hub"
+          args: --agents 1 --image rancher/k3s:v1.24.4-k3s1
+      - name: Install UMH latest
+        id: install-umh-latest
+        continue-on-error: true
+        run: |
+          helm repo add umh https://repo.umh.app
+          helm repo update
+          helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --namespace united-manufacturing-hub --create-namespace --wait --debug
+      - name: Debug Install UMH failure
+        id: debug-install-umh-failure
+        if: steps.install-umh-latest.outcome == 'failure'
+        run: |
+          mkdir -p ./test-logs
+          helm status united-manufacturing-hub -n united-manufacturing-hub > ./test-logs/helm-status.log
+          kubectl get po,svc -n united-manufacturing-hub > ./test-logs/po-svc.log
+          kubectl describe po -n united-manufacturing-hub > ./test-logs/po-describe.log
+          kubectl describe svc -n united-manufacturing-hub > ./test-logs/svc-describe.log
+          kubectl get events -n united-manufacturing-hub > ./test-logs/events.log
+      - name: Upgrade UMH
+        id: upgrade-umh
+        if: steps.install-umh-latest.outcome == 'success'
+        continue-on-error: true
+        run: |
+          kubectl delete deployment united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub 
+          kubectl delete deployment united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub 
+          kubectl delete deployment united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub 
+          kubectl delete deployment united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub 
+          kubectl delete statefulset united-manufacturing-hub-nodered -n united-manufacturing-hub 
+          helm upgrade united-manufacturing-hub ./deployment/united-manufacturing-hub --namespace united-manufacturing-hub --wait --debug
+          kubectl get po,svc -n united-manufacturing-hub
+      - name: Debug Upgrade UMH failure
+        id: debug-upgrade-umh-failure
+        if: steps.upgrade-umh.outcome == 'failure'
+        run: |
+          mkdir -p ./test-logs
+          helm status united-manufacturing-hub -n united-manufacturing-hub > ./test-logs/helm-status.log
+          kubectl get po,svc -n united-manufacturing-hub > ./test-logs/po-svc.log
+          kubectl describe po -n united-manufacturing-hub > ./test-logs/po-describe.log
+          kubectl describe svc -n united-manufacturing-hub > ./test-logs/svc-describe.log
+          kubectl get events -n united-manufacturing-hub > ./test-logs/events.log
+      - name: Build test image
+        id: build-test-image
+        if: steps.upgrade-umh.outcome == 'success'
+        run: |
+          docker build -t data-flow-test -f ./test/Dockerfile ./test
+          k3d image import data-flow-test -c united-manufacturing-hub
+      - name: Run Data Flow Test Job
+        id: run-data-flow-test
+        if: steps.upgrade-umh.outcome == 'success'
+        continue-on-error: true
+        run: |
+          kubectl apply -f ./test/data-flow-test-job.yaml -n united-manufacturing-hub
+          if kubectl wait --for=condition=complete job/data-flow-test -n united-manufacturing-hub --timeout=5m ; then
+              echo "Data Flow Test Job succeeded"
+              kubectl logs job/data-flow-test -n united-manufacturing-hub
+          elif kubectl wait --for=condition=failed job/data-flow-test -n united-manufacturing-hub --timeout=5m ; then
+              echo "Data Flow Test Job failed"
+              mkdir -p ./test-logs
+              kubectl logs job/data-flow-test -n united-manufacturing-hub > ./test-logs/jobs-data-flow-test.log
+              kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-factoryinsight.log
+              kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-iotsensormqtt.log
+              kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-grafana.log
+              kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-mqttkafkabridge.log
+              kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-console.log
+              kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./test-logs/deployment-kafkatopostgresql.log
+              kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./test-logs/statefulset-hivemqce.log
+              kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./test-logs/statefulset-kafka.log
+              kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./test-logs/statefulset-nodered.log
+              kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./test-logs/statefulset-redis-node.log
+              kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./test-logs/statefulset-timescaledb.log
+              kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./test-logs/statefulset-zookeeper.log
+              kubectl get po,svc -n united-manufacturing-hub > ./test-logs/po-svc.log
+              kubectl describe po -n united-manufacturing-hub > ./test-logs/po-describe.log
+              kubectl describe svc -n united-manufacturing-hub > ./test-logs/svc-describe.log
+              kubectl get events -n united-manufacturing-hub > ./test-logs/events.log
+              exit 1
+          fi
+      - name: Upload failed test logs
+        id: upload-failed-test-logs
+        if: steps.install-umh-latest.outcome == 'failure' || steps.upgrade-umh.outcome == 'failure' || steps.run-data-flow-test.outcome == 'failure'
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-logs
+          path: ./test-logs
+      - name: Fail if any test failed
+        if: steps.install-umh-latest.outcome == 'failure' || steps.upgrade-umh.outcome == 'failure' || steps.run-data-flow-test.outcome == 'failure'
+        run: exit 1
+
