@@ -102,12 +102,12 @@ jobs:
         id: debug-install-umh-failure
         if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
         run: |
-          mkdir -p ./install-umh-latest
-          helm status united-manufacturing-hub -n united-manufacturing-hub > ./install-umh-latest/helm-status.log
-          kubectl get po,svc -n united-manufacturing-hub > ./install-umh-latest/po-svc.log
-          kubectl describe po -n united-manufacturing-hub > ./install-umh-latest/po-describe.log
-          kubectl describe svc -n united-manufacturing-hub > ./install-umh-latest/svc-describe.log
-          kubectl get events -n united-manufacturing-hub > ./install-umh-latest/events.log
+          mkdir -p ./install-umh-latest-step
+          helm status united-manufacturing-hub -n united-manufacturing-hub > ./install-umh-latest-step/helm-status.log
+          kubectl get po,svc -n united-manufacturing-hub > ./install-umh-latest-step/po-svc.log
+          kubectl describe po -n united-manufacturing-hub > ./install-umh-latest-step/po-describe.log
+          kubectl describe svc -n united-manufacturing-hub > ./install-umh-latest-step/svc-describe.log
+          kubectl get events -n united-manufacturing-hub > ./install-umh-latest-step/events.log
       - name: Upgrade UMH
         id: upgrade-umh
         run: |
@@ -169,7 +169,7 @@ jobs:
         with:
           name: upgrade-test-logs
           path: |
-            ./install-umh-step
+            ./install-umh-latest-step
             ./upgrade-umh-step
             ./run-data-flow-test-step
           if-no-files-found: ignore
