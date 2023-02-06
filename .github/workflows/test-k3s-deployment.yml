@@ -27,7 +27,7 @@ jobs:
           kubectl get po,svc -n united-manufacturing-hub
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
-        if: steps.install-umh.outcome == 'failure'
+        if: ${{ failure() && steps.install-umh.outcome == 'failure' }}
         run: |
           mkdir -p ./data-flow-test-installation-logs
           helm status united-manufacturing-hub -n united-manufacturing-hub > ./data-flow-test-installation-logs/helm-status.log
@@ -49,7 +49,7 @@ jobs:
           kubectl logs job/data-flow-test -n united-manufacturing-hub
       - name: Debug Data Flow failure
         id: debug-data-flow-failure
-        if: steps.run-data-flow-test.outcome == 'failure'
+        if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure'  }}
         run: |
           mkdir -p ./data-flow-test-logs
           kubectl logs job/data-flow-test -n united-manufacturing-hub > ./data-flow-test-logs/jobs-data-flow-test.log
@@ -100,7 +100,7 @@ jobs:
           helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --namespace united-manufacturing-hub --create-namespace --wait --debug
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
-        if: steps.install-umh-latest.outcome == 'failure'
+        if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
         run: |
           mkdir -p ./upgrade-test-installation-logs
           helm status united-manufacturing-hub -n united-manufacturing-hub > ./upgrade-test-installation-logs/helm-status.log
@@ -120,7 +120,7 @@ jobs:
           kubectl get po,svc -n united-manufacturing-hub
       - name: Debug Upgrade UMH failure
         id: debug-upgrade-umh-failure
-        if: steps.upgrade-umh.outcome == 'failure'
+        if: ${{ failure() && steps.upgrade-umh.outcome == 'failure' }}
         run: |
           mkdir -p ./upgrade-test-upgrade-logs
           helm status united-manufacturing-hub -n united-manufacturing-hub > ./upgrade-test-upgrade-logs/helm-status.log
@@ -142,7 +142,7 @@ jobs:
           kubectl logs job/data-flow-test -n united-manufacturing-hub
       - name: Debug Data Flow failure
         id: debug-data-flow-failure
-        if: steps.run-data-flow-test.outcome == 'failure'
+        if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure' }}
         run: |
           mkdir -p ./data-flow-test-logs
           kubectl logs job/data-flow-test -n united-manufacturing-hub > ./data-flow-test-logs/jobs-data-flow-test.log
