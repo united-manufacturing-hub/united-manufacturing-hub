@@ -100,7 +100,7 @@ jobs:
         id: install-umh-latest
         continue-on-error: true
         run: |
-          helm repo add umh https://repo.umh.app
+          helm repo add united-manufacturing-hub https://repo.umh.app/
           helm repo update
           helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --namespace united-manufacturing-hub --create-namespace --wait --debug
       - name: Debug Install UMH failure
