@@ -63,7 +63,11 @@ spec:
           imagePullPolicy: {{.Values.factoryinput.image.pullPolicy}}
           env:
             - name: CERTIFICATE_NAME
-              value: {{.Values.factoryinput.env.certificateName}}
+              {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+              value: "USE_TLS"
+              {{- else}}
+              value: "NO_CERT"
+              {{- end}}
 
             - name: LOGGING_LEVEL
               value: {{.Values.factoryinput.env.loggingLevel}}
@@ -88,7 +92,7 @@ spec:
               value: {{.Values._000_commonConfig.serialNumber}}
 
             - name: VERSION
-              value: {{.Values.factoryinput.env.version}}
+              value: {{.Values.factoryinput.env.version | quote}}
 
             - name: FACTORYINPUT_USER
               valueFrom:
@@ -106,7 +110,7 @@ spec:
               value: {{.Values.factoryinput.mqtt.password | quote}}
 
             - name: MQTT_QUEUE_HANDLER
-              value: {{.Values.factoryinput.env.mqttQueueHandler }}
+              value: {{.Values.factoryinput.env.mqttQueueHandler | quote}}
 
             {{$index := 1}}
             {{range $customerName, $password := .Values.customers | default dict}}
@@ -124,8 +128,9 @@ spec:
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-data
               mountPath: /data
-              # - name: secret-volume
-              #   mountPath: /SSL_certs/kafka
+            - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-mqtt-certificates
+              mountPath: /SSL_certs/mqtt
+              readOnly: true
 
 
           livenessProbe:
@@ -152,6 +157,10 @@ spec:
           #- name: secret-volume
           #secret:
           #secretName: factoryinput-secret
+      volumes:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-mqtt-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-mqtt-secrets
       serviceAccountName: ""
       restartPolicy: Always
   {{end}}
