@@ -127,7 +127,7 @@ jobs:
         run: |
           helm repo add united-manufacturing-hub https://repo.umh.app/
           helm repo update
-          helm install ${{ env.UMH }} united-manufacturing-hub/united-manufacturing-hub -f ./test/test-values-full.yaml --namespace ${{ env.UMH }} --create-namespace --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm install ${{ env.UMH }} united-manufacturing-hub/united-manufacturing-hub -f ./test/test-values-full.yaml --set _000_commonConfig.infrastructure.mqtt.tls.useTLS=false --namespace ${{ env.UMH }} --create-namespace --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
         if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
@@ -162,7 +162,7 @@ jobs:
           kubectl delete deployment ${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} 
           kubectl delete deployment ${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} 
           kubectl delete statefulset ${{ env.UMH }}-nodered -n ${{ env.UMH }} 
-          helm upgrade ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ./test/test-values-full.yaml --set _000_commonConfig.infrastructure.mqtt.tls.useTLS=true --namespace ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm upgrade ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ./test/test-values-full.yaml --namespace ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Upgrade UMH failure
         id: debug-upgrade-umh-failure
