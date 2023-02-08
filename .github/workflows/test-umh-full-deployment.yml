@@ -157,8 +157,7 @@ jobs:
           kubectl delete deployment united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub 
           kubectl delete deployment united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub 
           kubectl delete statefulset united-manufacturing-hub-nodered -n united-manufacturing-hub 
-          kubectl delete statefulset united-manufacturing-hub-factoryinput -n united-manufacturing-hub 
-          helm upgrade united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/test-values-full.yaml --namespace united-manufacturing-hub --wait --timeout 7m --debug
+          helm upgrade united-manufacturing-hub ./deployment/united-manufacturing-hub -f ./test/test-values-full.yaml --set _000_commonConfig.infrastructure.mqtt.tls.useTLS=true --namespace united-manufacturing-hub --wait --timeout 7m --debug
           kubectl get po,svc -n united-manufacturing-hub
       - name: Debug Upgrade UMH failure
         id: debug-upgrade-umh-failure
