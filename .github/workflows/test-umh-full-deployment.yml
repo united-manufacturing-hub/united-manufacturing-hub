@@ -30,27 +30,27 @@ jobs:
         if: ${{ failure() && steps.install-umh.outcome == 'failure' }}
         run: |
           mkdir -p ./install-umh-step
-          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-opcuasimulator.log
-          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-factoryinsight.log
-          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-grafanaproxy.log
-          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-iotsensormqtt.log
-          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-grafana.log
-          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-kafkatopostgresql.log
-          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-mqttkafkabridge.log
-          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-console.log
-          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-packmlmqttsimulator.log
-          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-factoryinput.log
-          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-hivemqce.log
-          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-kafka.log
-          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-nodered.log
-          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-redis-node.log
-          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-timescaledb.log
-          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-zookeeper.log
-          helm status united-manufacturing-hub -n united-manufacturing-hub > ./install-umh-step/helm-status.log
-          kubectl get po,svc -n united-manufacturing-hub > ./install-umh-step/po-svc.log
-          kubectl describe po -n united-manufacturing-hub > ./install-umh-step/po-describe.log
-          kubectl describe svc -n united-manufacturing-hub > ./install-umh-step/svc-describe.log
-          kubectl get events -n united-manufacturing-hub > ./install-umh-step/events.log
+          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-opcuasimulator.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-factoryinsight.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-grafanaproxy.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-iotsensormqtt.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-grafana.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-kafkatopostgresql.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-mqttkafkabridge.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-console.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/deployment-packmlmqttsimulator.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-factoryinput.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-hivemqce.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-kafka.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-nodered.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-redis-node.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-timescaledb.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./install-umh-step/statefulset-zookeeper.log 2> /dev/null
+          helm status united-manufacturing-hub -n united-manufacturing-hub > ./install-umh-step/helm-status.log 2> /dev/null
+          kubectl get po,svc -n united-manufacturing-hub > ./install-umh-step/po-svc.log 2> /dev/null
+          kubectl describe po -n united-manufacturing-hub > ./install-umh-step/po-describe.log 2> /dev/null
+          kubectl describe svc -n united-manufacturing-hub > ./install-umh-step/svc-describe.log 2> /dev/null
+          kubectl get events -n united-manufacturing-hub > ./install-umh-step/events.log 2> /dev/null
       - name: Build test image
         id: build-test-image
         run: |
@@ -68,27 +68,27 @@ jobs:
         if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure'  }}
         run: |
           mkdir -p ./run-data-flow-step
-          kubectl logs job/data-flow-test -n united-manufacturing-hub > ./run-data-flow-step/job-data-flow-test.log
-          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-opcuasimulator.log
-          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-factoryinsight.log
-          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafanaproxy.log
-          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-iotsensormqtt.log
-          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafana.log
-          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-kafkatopostgresql.log
-          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-mqttkafkabridge.log
-          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-console.log
-          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-packmlmqttsimulator.log
-          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-factoryinput.log
-          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-hivemqce.log
-          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-kafka.log
-          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-nodered.log
-          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-redis-node.log
-          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-timescaledb.log
-          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-zookeeper.log
-          kubectl get po,svc -n united-manufacturing-hub > ./run-data-flow-step/po-svc.log
-          kubectl describe po -n united-manufacturing-hub > ./run-data-flow-step/po-describe.log
-          kubectl describe svc -n united-manufacturing-hub > ./run-data-flow-step/svc-describe.log
-          kubectl get events -n united-manufacturing-hub > ./run-data-flow-step/events.log
+          kubectl logs job/data-flow-test -n united-manufacturing-hub > ./run-data-flow-step/job-data-flow-test.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-opcuasimulator.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-factoryinsight.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafanaproxy.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-iotsensormqtt.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafana.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-kafkatopostgresql.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-mqttkafkabridge.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-console.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-packmlmqttsimulator.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-factoryinput.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-hivemqce.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-kafka.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-nodered.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-redis-node.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-timescaledb.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-zookeeper.log 2> /dev/null
+          kubectl get po,svc -n united-manufacturing-hub > ./run-data-flow-step/po-svc.log 2> /dev/null
+          kubectl describe po -n united-manufacturing-hub > ./run-data-flow-step/po-describe.log 2> /dev/null
+          kubectl describe svc -n united-manufacturing-hub > ./run-data-flow-step/svc-describe.log 2> /dev/null
+          kubectl get events -n united-manufacturing-hub > ./run-data-flow-step/events.log 2> /dev/null
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
@@ -128,27 +128,27 @@ jobs:
         if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
         run: |
           mkdir -p ./install-umh-latest-step
-          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-opcuasimulator.log
-          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-factoryinsight.log
-          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-grafanaproxy.log
-          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-iotsensormqtt.log
-          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-grafana.log
-          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-kafkatopostgresql.log
-          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-mqttkafkabridge.log
-          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-console.log
-          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-packmlmqttsimulator.log
-          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-factoryinput.log
-          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-hivemqce.log
-          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-kafka.log
-          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-nodered.log
-          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-redis-node.log
-          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-timescaledb.log
-          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-zookeeper.log
-          helm status united-manufacturing-hub -n united-manufacturing-hub > ./install-umh-latest-step/helm-status.log
-          kubectl get po,svc -n united-manufacturing-hub > ./install-umh-latest-step/po-svc.log
-          kubectl describe po -n united-manufacturing-hub > ./install-umh-latest-step/po-describe.log
-          kubectl describe svc -n united-manufacturing-hub > ./install-umh-latest-step/svc-describe.log
-          kubectl get events -n united-manufacturing-hub > ./install-umh-latest-step/events.log
+          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-opcuasimulator.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-factoryinsight.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-grafanaproxy.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-iotsensormqtt.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-grafana.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-kafkatopostgresql.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-mqttkafkabridge.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-console.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/deployment-packmlmqttsimulator.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-factoryinput.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-hivemqce.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-kafka.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-nodered.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-redis-node.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-timescaledb.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./install-umh-latest-step/statefulset-zookeeper.log 2> /dev/null
+          helm status united-manufacturing-hub -n united-manufacturing-hub > ./install-umh-latest-step/helm-status.log 2> /dev/null
+          kubectl get po,svc -n united-manufacturing-hub > ./install-umh-latest-step/po-svc.log 2> /dev/null
+          kubectl describe po -n united-manufacturing-hub > ./install-umh-latest-step/po-describe.log 2> /dev/null
+          kubectl describe svc -n united-manufacturing-hub > ./install-umh-latest-step/svc-describe.log 2> /dev/null
+          kubectl get events -n united-manufacturing-hub > ./install-umh-latest-step/events.log 2> /dev/null
       - name: Upgrade UMH
         id: upgrade-umh
         run: |
@@ -164,27 +164,27 @@ jobs:
         if: ${{ failure() && steps.upgrade-umh.outcome == 'failure' }}
         run: |
           mkdir -p ./upgrade-umh-step
-          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-opcuasimulator.log
-          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-factoryinsight.log
-          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-grafanaproxy.log
-          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-iotsensormqtt.log
-          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-grafana.log
-          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-kafkatopostgresql.log
-          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-mqttkafkabridge.log
-          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-console.log
-          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-packmlmqttsimulator.log
-          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-factoryinput.log
-          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-hivemqce.log
-          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-kafka.log
-          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-nodered.log
-          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-redis-node.log
-          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-timescaledb.log
-          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-zookeeper.log
-          helm status united-manufacturing-hub -n united-manufacturing-hub > ./upgrade-umh-step/helm-status.log
-          kubectl get po,svc -n united-manufacturing-hub > ./upgrade-umh-step/po-svc.log
-          kubectl describe po -n united-manufacturing-hub > ./upgrade-umh-step/po-describe.log
-          kubectl describe svc -n united-manufacturing-hub > ./upgrade-umh-step/svc-describe.log
-          kubectl get events -n united-manufacturing-hub > ./upgrade-umh-step/events.log
+          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-opcuasimulator.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-factoryinsight.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-grafanaproxy.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-iotsensormqtt.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-grafana.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-kafkatopostgresql.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-mqttkafkabridge.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-console.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/deployment-packmlmqttsimulator.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-factoryinput.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-hivemqce.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-kafka.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-nodered.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-redis-node.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-timescaledb.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./upgrade-umh-step/statefulset-zookeeper.log 2> /dev/null
+          helm status united-manufacturing-hub -n united-manufacturing-hub > ./upgrade-umh-step/helm-status.log 2> /dev/null
+          kubectl get po,svc -n united-manufacturing-hub > ./upgrade-umh-step/po-svc.log 2> /dev/null
+          kubectl describe po -n united-manufacturing-hub > ./upgrade-umh-step/po-describe.log 2> /dev/null
+          kubectl describe svc -n united-manufacturing-hub > ./upgrade-umh-step/svc-describe.log 2> /dev/null
+          kubectl get events -n united-manufacturing-hub > ./upgrade-umh-step/events.log 2> /dev/null
       - name: Build test image
         id: build-test-image
         run: |
@@ -202,27 +202,27 @@ jobs:
         if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure' }}
         run: |
           mkdir -p ./run-data-flow-test-step
-          kubectl logs job/data-flow-test -n united-manufacturing-hub > ./run-data-flow-test-step/jobs-data-flow-test.log
-          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-opcuasimulator.log
-          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-factoryinsight.log
-          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafanaproxy.log
-          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-iotsensormqtt.log
-          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafana.log
-          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-kafkatopostgresql.log
-          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-mqttkafkabridge.log
-          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-console.log
-          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-packmlmqttsimulator.log
-          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-factoryinput.log
-          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-hivemqce.log
-          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-kafka.log
-          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-nodered.log
-          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-redis-node.log
-          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-timescaledb.log
-          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-zookeeper.log
-          kubectl get po,svc -n united-manufacturing-hub > ./run-data-flow-test-step/po-svc.log
-          kubectl describe po -n united-manufacturing-hub > ./run-data-flow-test-step/po-describe.log
-          kubectl describe svc -n united-manufacturing-hub > ./run-data-flow-test-step/svc-describe.log
-          kubectl get events -n united-manufacturing-hub > ./run-data-flow-test-step/events.log
+          kubectl logs job/data-flow-test -n united-manufacturing-hub > ./run-data-flow-test-step/jobs-data-flow-test.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-opcuasimulator-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-opcuasimulator.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-factoryinsight-deployment -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-factoryinsight.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafanaproxy -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafanaproxy.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-iotsensorsmqtt -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-iotsensormqtt.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-grafana -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-grafana.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-kafkatopostgresql -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-kafkatopostgresql.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-mqttkafkabridge -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-mqttkafkabridge.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-console -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-console.log 2> /dev/null
+          kubectl logs deployment/united-manufacturing-hub-packmlmqttsimulator -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/deployment-packmlmqttsimulator.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-factoryinput -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-factoryinput.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-hivemqce -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-hivemqce.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-kafka -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-kafka.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-nodered -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-nodered.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-redis-node -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-redis-node.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-timescaledb -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-timescaledb.log 2> /dev/null
+          kubectl logs statefulset/united-manufacturing-hub-zookeeper -n united-manufacturing-hub --all-containers --prefix > ./run-data-flow-step/statefulset-zookeeper.log 2> /dev/null
+          kubectl get po,svc -n united-manufacturing-hub > ./run-data-flow-test-step/po-svc.log 2> /dev/null
+          kubectl describe po -n united-manufacturing-hub > ./run-data-flow-test-step/po-describe.log 2> /dev/null
+          kubectl describe svc -n united-manufacturing-hub > ./run-data-flow-test-step/svc-describe.log 2> /dev/null
+          kubectl get events -n united-manufacturing-hub > ./run-data-flow-test-step/events.log 2> /dev/null
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
