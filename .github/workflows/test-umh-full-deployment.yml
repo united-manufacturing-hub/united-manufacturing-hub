@@ -8,7 +8,7 @@ on:
 
 env:
   K3S_VERSION: v1.24.4-k3s1
-  HELM_TIMEOUT: 7m
+  HELM_TIMEOUT: 10m
   UMH: united-manufacturing-hub
 
 jobs:
