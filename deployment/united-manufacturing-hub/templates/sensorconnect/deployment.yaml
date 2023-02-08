@@ -142,7 +142,7 @@ spec:
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values.sensorconnect.ioddfilepath}}
-            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
