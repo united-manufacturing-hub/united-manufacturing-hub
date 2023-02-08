@@ -92,7 +92,7 @@ jobs:
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: data-flow-test-logs
           path: |
@@ -226,7 +226,7 @@ jobs:
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: upgrade-test-logs
           path: |
