@@ -51,7 +51,7 @@ jobs:
         id: build-test-image
         run: |
           docker build -t data-flow-test -f ./test/Dockerfile ./test
-          k3d image import data-flow-test -c united-manufacturing-hub
+          k3d image import data-flow-test -c umh-tiny
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
@@ -173,7 +173,7 @@ jobs:
         id: build-test-image
         run: |
           docker build -t data-flow-test -f ./test/Dockerfile ./test
-          k3d image import data-flow-test -c united-manufacturing-hub
+          k3d image import data-flow-test -c umh-tiny
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
