@@ -7,8 +7,9 @@ on:
   pull_request:
 
 env:
-  K3S_VERSION: v1.24.4-k3s1
   HELM_TIMEOUT: 10m
+  K3S_VERSION: v1.24.4-k3s1
+  VALUES_FILE: ./test/test-values-full.yaml
   UMH: united-manufacturing-hub
 
 jobs:
@@ -28,7 +29,7 @@ jobs:
         id: install-umh
         run: |
           kubectl create ns ${{ env.UMH }}
-          helm install ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ./test/test-values-full.yaml -n ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm install ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ${{ env.VALUES_FILE }} -n ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
@@ -59,12 +60,12 @@ jobs:
       - name: Build test image
         id: build-test-image
         run: |
-          docker build -t data-flow-test -f ./test/Dockerfile ./test
+          docker build -t data-flow-test -f ./test/data-flow-test/Dockerfile ./test/data-flow-test
           k3d image import data-flow-test -c umh-full
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
-          kubectl apply -f ./test/data-flow-test-job.yaml -n ${{ env.UMH }}
+          kubectl apply -f ./test/data-flow-test/data-flow-test-job.yaml -n ${{ env.UMH }}
           kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=5m
           echo "Data Flow Test Job succeeded"
           kubectl logs job/data-flow-test -n ${{ env.UMH }}
@@ -127,7 +128,7 @@ jobs:
         run: |
           helm repo add united-manufacturing-hub https://repo.umh.app/
           helm repo update
-          helm install ${{ env.UMH }} united-manufacturing-hub/united-manufacturing-hub -f ./test/test-values-full.yaml --set _000_commonConfig.infrastructure.mqtt.tls.useTLS=false --set _000_commonConfig.datasources.sensorconnect.enabled=false --namespace ${{ env.UMH }} --create-namespace --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm install ${{ env.UMH }} united-manufacturing-hub/united-manufacturing-hub -f ${{ env.VALUES_FILE }} --set _000_commonConfig.infrastructure.mqtt.tls.useTLS=false --set _000_commonConfig.datasources.sensorconnect.enabled=false --namespace ${{ env.UMH }} --create-namespace --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
         if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
@@ -162,7 +163,7 @@ jobs:
           kubectl delete deployment ${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} 
           kubectl delete deployment ${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} 
           kubectl delete statefulset ${{ env.UMH }}-nodered -n ${{ env.UMH }} 
-          helm upgrade ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ./test/test-values-full.yaml --namespace ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm upgrade ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ${{ env.VALUES_FILE }} --namespace ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Upgrade UMH failure
         id: debug-upgrade-umh-failure
@@ -193,12 +194,12 @@ jobs:
       - name: Build test image
         id: build-test-image
         run: |
-          docker build -t data-flow-test -f ./test/Dockerfile ./test
+          docker build -t data-flow-test -f ./test/data-flow-test/Dockerfile ./test/data-flow-test
           k3d image import data-flow-test -c umh-full
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
-          kubectl apply -f ./test/data-flow-test-job.yaml -n ${{ env.UMH }}
+          kubectl apply -f ./test/data-flow-test/data-flow-test-job.yaml -n ${{ env.UMH }}
           kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=5m
           echo "Data Flow Test Job succeeded"
           kubectl logs job/data-flow-test -n ${{ env.UMH }}
