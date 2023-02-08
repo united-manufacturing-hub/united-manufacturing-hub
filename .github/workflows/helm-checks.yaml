@@ -1,0 +1,62 @@
+name: Helm Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  CHART_DIR: ./deployment/united-manufacturing-hub
+  VALUES_TINY: ./test/test-values-tiny.yaml
+  VALUES_FULL: ./test/test-values-full.yaml
+
+jobs:
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup Helm
+      uses: azure/setup-helm@v1
+    - name: Helm Lint Default Values
+      run: helm lint ${{ env.CHART_DIR }}
+    - name: Helm Lint Tiny Values
+      run: helm lint ${{ env.CHART_DIR }} --values ${{ env.VALUES_TINY }}
+    - name: Helm Lint Full Values
+      run: helm lint ${{ env.CHART_DIR }} --values ${{ env.VALUES_FULL }}
+
+  checkov:
+    name: Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - name: Test Checkov Default Values
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.CHART_DIR }}
+          framework: helm
+          quiet: true
+          output_format: github_failed_only
+      - name: Test Checkov Tiny Values
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.CHART_DIR }}
+          framework: helm
+          quiet: true
+          output_format: github_failed_only
+          var_file: ${{ env.VALUES_TINY }}
+      - name: Test Checkov Full Values
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.CHART_DIR }}
+          framework: helm
+          quiet: true
+          output_format: github_failed_only
+          var_file: ${{ env.VALUES_FULL }}
