@@ -705,7 +705,8 @@ factoryinput:
   service:
     annotations: {}
   image:
-    repository: unitedmanufacturinghub/factoryinput
+    repository: matteoumh/factoryinput
+    tag: latest
     pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
@@ -715,6 +716,10 @@ factoryinput:
   mqtt:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: emQ1NHEzcWN3ajVNZnRkaXphbzJDZ1V6aEFsMnlxTlU=:100:wR0Br1UBGt5i2oruSbzNXJEicUEpcSwY/RmR8igExshAuEeLeFeWy82a9AOkkiGVBP2N2IMTBFRvY0W/lvQ8gA==
+  env:
+    loggingLevel: "DEVELOPMENT"
+    version: "2"
+    mqttQueueHandler: "10"
 
 ### grafanaproxy ###
 grafanaproxy:
