@@ -19,13 +19,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
     - name: Setup Helm
-      uses: azure/setup-helm@v1
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.11.0
     - name: Helm Lint Default Values
-      run: helm lint ${{ env.CHART_DIR }}
+      run: helm lint ${{ env.CHART_DIR }} --quiet
     - name: Helm Lint Tiny Values
-      run: helm lint ${{ env.CHART_DIR }} --values ${{ env.VALUES_TINY }}
+      run: helm lint ${{ env.CHART_DIR }} --values ${{ env.VALUES_TINY }} --quiet
     - name: Helm Lint Full Values
-      run: helm lint ${{ env.CHART_DIR }} --values ${{ env.VALUES_FULL }}
+      run: helm lint ${{ env.CHART_DIR }} --values ${{ env.VALUES_FULL }} --quiet
 
   checkov:
     name: Checkov
