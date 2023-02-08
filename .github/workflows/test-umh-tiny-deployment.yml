@@ -13,11 +13,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Prepare k3s cluster
+      - name: Prepare k3d cluster
         id: prepare-k3d
         uses: AbsaOSS/k3d-action@v2
         with:
-          cluster-name: "united-manufacturing-hub"
+          cluster-name: "umh-tiny"
           args: --agents 1 --image rancher/k3s:v1.24.4-k3s1
       - name: Install UMH
         id: install-umh
@@ -79,6 +79,11 @@ jobs:
             ./install-umh-step
             ./run-data-flow-step
           if-no-files-found: ignore
+      - name: Delete k3d cluster
+        id: delete-k3d
+        if: always()
+        run: |
+          k3d cluster delete umh-tiny
 
   upgrade-test:
     name: Upgrade Test
@@ -86,11 +91,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Prepare k3s cluster
+      - name: Prepare k3d cluster
         id: prepare-k3d
         uses: AbsaOSS/k3d-action@v2
         with:
-          cluster-name: "united-manufacturing-hub"
+          cluster-name: "umh-tiny"
           args: --agents 1 --image rancher/k3s:v1.24.4-k3s1
       - name: Install UMH latest
         id: install-umh-latest
@@ -173,3 +178,8 @@ jobs:
             ./upgrade-umh-step
             ./run-data-flow-test-step
           if-no-files-found: ignore
+      - name: Delete k3d cluster
+        id: delete-k3d
+        if: always()
+        run: |
+          k3d cluster delete umh-tiny
