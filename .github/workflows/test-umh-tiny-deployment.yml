@@ -64,7 +64,7 @@ jobs:
         id: run-data-flow-test
         run: |
           kubectl apply -f ./test/data-flow-test/data-flow-test-job.yaml -n ${{ env.UMH }}
-          kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=5m
+          kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=2m
           echo "Data Flow Test Job succeeded"
           kubectl logs job/data-flow-test -n ${{ env.UMH }} || true
       - name: Debug Data Flow failure
@@ -193,7 +193,7 @@ jobs:
         id: run-data-flow-test
         run: |
           kubectl apply -f ./test/data-flow-test/data-flow-test-job.yaml -n ${{ env.UMH }}
-          kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=5m
+          kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=2m
           echo "Data Flow Test Job succeeded"
           kubectl logs job/data-flow-test -n ${{ env.UMH }} || true
       - name: Debug Data Flow failure
