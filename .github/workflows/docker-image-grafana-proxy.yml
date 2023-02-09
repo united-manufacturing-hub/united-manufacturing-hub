@@ -12,7 +12,7 @@ jobs:
 
 
       - name: Build the tagged Docker image
-        run: docker build . --file deployment/grafana-proxy/Dockerfile --tag unitedmanufacturinghub/grafana-proxy:${GITHUB_REF##*/}
+        run: docker build . --file deployment/grafana-proxy/Dockerfile --tag unitedmanufacturinghub/grafana-proxy:${{ github.head_ref }}
 
       - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/grafana-proxy:${GITHUB_REF##*/}
+        run: docker push unitedmanufacturinghub/grafana-proxy:${{ github.head_ref }}
