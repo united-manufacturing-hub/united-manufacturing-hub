@@ -120,6 +120,7 @@ jobs:
             ./install-umh-step
             ./run-data-flow-test-step
           if-no-files-found: ignore
+          retention-days: 5
       - name: Delete k3d cluster
         id: delete-k3d
         if: always()
@@ -274,6 +275,7 @@ jobs:
             ./upgrade-umh-step
             ./run-data-flow-test-step
           if-no-files-found: ignore
+          retention-days: 5
       - name: Delete k3d cluster
         id: delete-k3d
         if: always()
