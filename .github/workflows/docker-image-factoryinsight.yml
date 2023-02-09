@@ -12,7 +12,7 @@ jobs:
 
 
       - name: Build the tagged Docker image
-        run: docker build . --file deployment/factoryinsight/Dockerfile --tag unitedmanufacturinghub/factoryinsight:${GITHUB_REF##*/}
+        run: docker build . --file deployment/factoryinsight/Dockerfile --tag unitedmanufacturinghub/factoryinsight:${{ github.head_ref }}
 
       - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/factoryinsight:${GITHUB_REF##*/}
+        run: docker push unitedmanufacturinghub/factoryinsight:${{ github.head_ref }}

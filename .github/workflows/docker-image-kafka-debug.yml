@@ -12,7 +12,7 @@ jobs:
 
 
       - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-debug/Dockerfile --tag unitedmanufacturinghub/kafka-debug:${GITHUB_REF##*/}
+        run: docker build . --file deployment/kafka-debug/Dockerfile --tag unitedmanufacturinghub/kafka-debug:${{ github.head_ref }}
 
       - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-debug:${GITHUB_REF##*/}
+        run: docker push unitedmanufacturinghub/kafka-debug:${{ github.head_ref }}

@@ -12,7 +12,7 @@ jobs:
 
 
       - name: Build the tagged Docker image
-        run: docker build . --file deployment/mqtt-bridge/Dockerfile --tag unitedmanufacturinghub/mqtt-bridge:${GITHUB_REF##*/}
+        run: docker build . --file deployment/mqtt-bridge/Dockerfile --tag unitedmanufacturinghub/mqtt-bridge:${{ github.head_ref }}
 
       - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/mqtt-bridge:${GITHUB_REF##*/}
+        run: docker push unitedmanufacturinghub/mqtt-bridge:${{ github.head_ref }}
