@@ -4,6 +4,7 @@ on:
   pull_request:
 
 env:
+  CHART_DIR: ./deployment/united-manufacturing-hub
   HELM_TIMEOUT: 10m
   K3D_VERSION: v5.4.6
   K3S_VERSION: v1.24.4-k3s1
@@ -28,7 +29,7 @@ jobs:
         id: install-umh
         run: |
           kubectl create ns ${{ env.UMH }} || true
-          helm install ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ${{ env.VALUES_FILE }} -n ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm install ${{ env.UMH }} ${{ env.CHART_DIR }} -f ${{ env.VALUES_FILE }} -n ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
@@ -169,7 +170,7 @@ jobs:
           kubectl delete deployment ${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} || true
           kubectl delete deployment ${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} || true
           kubectl delete statefulset ${{ env.UMH }}-nodered -n ${{ env.UMH }} || true
-          helm upgrade ${{ env.UMH }} ./deployment/united-manufacturing-hub -f ${{ env.VALUES_FILE }} --namespace ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm upgrade ${{ env.UMH }} ${{ env.CHART_DIR }} -f ${{ env.VALUES_FILE }} --namespace ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Upgrade UMH failure
         id: debug-upgrade-umh-failure
