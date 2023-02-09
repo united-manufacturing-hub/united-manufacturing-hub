@@ -1,4 +1,0 @@
-remote: origin
-target-branch: main
-chart-dirs:
-  - deployment/united-manufacturing-hub
