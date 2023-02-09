@@ -8,6 +8,7 @@ on:
 
 env:
   HELM_TIMEOUT: 10m
+  K3D_VERSION: v5.4.6
   K3S_VERSION: v1.24.4-k3s1
   VALUES_FILE: ./test/test-values-full.yaml
   UMH: united-manufacturing-hub
@@ -24,6 +25,7 @@ jobs:
         uses: AbsaOSS/k3d-action@v2
         with:
           cluster-name: "umh-full"
+          k3d-version: ${{ env.K3D_VERSION }}
           args: --agents 1 --image rancher/k3s:${{ env.K3S_VERSION }}
       - name: Install UMH
         id: install-umh
@@ -122,6 +124,7 @@ jobs:
         uses: AbsaOSS/k3d-action@v2
         with:
           cluster-name: "umh-full"
+          k3d-version: ${{ env.K3D_VERSION }}
           args: --agents 1 --image rancher/k3s:${{ env.K3S_VERSION }}
       - name: Install UMH latest
         id: install-umh-latest
