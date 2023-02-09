@@ -708,8 +708,7 @@ factoryinput:
   service:
     annotations: {}
   image:
-    repository: matteoumh/factoryinput
-    tag: latest
+    repository: unitedmanufacturinghub/factoryinput
     pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
