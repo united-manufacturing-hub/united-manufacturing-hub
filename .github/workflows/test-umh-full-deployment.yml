@@ -31,17 +31,19 @@ jobs:
           helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
             --set "kafkastatedetector.image.tag=${GITHUB_REF##*/}" \
-            --set "mqttbridge.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttbridge.tag=${GITHUB_REF##*/}" \
             --set "barcodereader.image.tag=${GITHUB_REF##*/}" \
             --set "sensorconnect.tag=${GITHUB_REF##*/}" \
-            --set "cameraconnect.image.tag=${GITHUB_REF##*/}" \
+            --set "cameraconnect.tag=${GITHUB_REF##*/}" \
             --set "kafkabridge.image.tag=${GITHUB_REF##*/}" \
             --set "factoryinsight.image.tag=${GITHUB_REF##*/}" \
             --set "factoryinput.image.tag=${GITHUB_REF##*/}" \
             --set "grafanaproxy.image.tag=${GITHUB_REF##*/}" \
             --set "kafkatopostgresql.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkatopostgresql.initContainer.tag=${GITHUB_REF##*/}" \
             --set "tulipconnector.image.tag=${GITHUB_REF##*/}" \
             --set "mqttkafkabridge.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttkafkabridge.initContainer.tag=${GITHUB_REF##*/}" \
             --set "kafkatoblob.image.tag=${GITHUB_REF##*/}" \
             --namespace ${{ env.UMH }} \
             --create-namespace \
@@ -153,17 +155,19 @@ jobs:
           helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
             --set "kafkastatedetector.image.tag=${GITHUB_REF##*/}" \
-            --set "mqttbridge.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttbridge.tag=${GITHUB_REF##*/}" \
             --set "barcodereader.image.tag=${GITHUB_REF##*/}" \
             --set "sensorconnect.tag=${GITHUB_REF##*/}" \
-            --set "cameraconnect.image.tag=${GITHUB_REF##*/}" \
+            --set "cameraconnect.tag=${GITHUB_REF##*/}" \
             --set "kafkabridge.image.tag=${GITHUB_REF##*/}" \
             --set "factoryinsight.image.tag=${GITHUB_REF##*/}" \
             --set "factoryinput.image.tag=${GITHUB_REF##*/}" \
             --set "grafanaproxy.image.tag=${GITHUB_REF##*/}" \
             --set "kafkatopostgresql.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkatopostgresql.initContainer.tag=${GITHUB_REF##*/}" \
             --set "tulipconnector.image.tag=${GITHUB_REF##*/}" \
             --set "mqttkafkabridge.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttkafkabridge.initContainer.tag=${GITHUB_REF##*/}" \
             --set "kafkatoblob.image.tag=${GITHUB_REF##*/}" \
             --namespace ${{ env.UMH }} \
             --create-namespace \
