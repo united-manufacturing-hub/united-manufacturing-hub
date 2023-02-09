@@ -12,7 +12,7 @@ jobs:
 
 
       - name: Build the tagged Docker image
-        run: docker build . --file deployment/factoryinput/Dockerfile --tag unitedmanufacturinghub/factoryinput:${GITHUB_REF##refs/*/}
+        run: docker build . --file deployment/factoryinput/Dockerfile --tag unitedmanufacturinghub/factoryinput:${GITHUB_REF#refs/*/}
 
       - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/factoryinput:${GITHUB_REF##refs/*/}
+        run: docker push unitedmanufacturinghub/factoryinput:${GITHUB_REF#refs/*/}
