@@ -1,9 +1,6 @@
 name: Test UMH Full Deployment
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
 
 env:
