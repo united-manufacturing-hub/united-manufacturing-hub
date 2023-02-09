@@ -28,7 +28,6 @@ jobs:
       - name: Install UMH
         id: install-umh
         run: |
-          kubectl create ns ${{ env.UMH }} || true
           helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
             --set "kafkastatedetector.image.tag=${GITHUB_REF##*/}" \
@@ -44,8 +43,9 @@ jobs:
             --set "tulipconnector.image.tag=${GITHUB_REF##*/}" \
             --set "mqttkafkabridge.image.tag=${GITHUB_REF##*/}" \
             --set "kafkatoblob.image.tag=${GITHUB_REF##*/}" \
-            --namespace ${{ env.UMH }} \ 
-            --wait --timeout ${{ env.HELM_TIMEOUT }} \ 
+            --namespace ${{ env.UMH }} \
+            --create-namespace \
+            --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Install UMH failure
@@ -157,9 +157,9 @@ jobs:
             --set "tulipconnector.image.tag=${GITHUB_REF##*/}" \
             --set "mqttkafkabridge.image.tag=${GITHUB_REF##*/}" \
             --set "kafkatoblob.image.tag=${GITHUB_REF##*/}" \
-            --namespace ${{ env.UMH }} \ 
+            --namespace ${{ env.UMH }} \
             --create-namespace \
-            --wait --timeout ${{ env.HELM_TIMEOUT }} \ 
+            --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
