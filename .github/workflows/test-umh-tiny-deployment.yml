@@ -29,7 +29,24 @@ jobs:
         id: install-umh
         run: |
           kubectl create ns ${{ env.UMH }} || true
-          helm install ${{ env.UMH }} ${{ env.CHART_DIR }} -f ${{ env.VALUES_FILE }} -n ${{ env.UMH }} --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
+            --values ${{ env.VALUES_FILE }} \
+            --set "kafkastatedetector.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttbridge.image.tag=${GITHUB_REF##*/}" \
+            --set "barcodereader.image.tag=${GITHUB_REF##*/}" \
+            --set "sensorconnect.tag=${GITHUB_REF##*/}" \
+            --set "cameraconnect.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkabridge.image.tag=${GITHUB_REF##*/}" \
+            --set "factoryinsight.image.tag=${GITHUB_REF##*/}" \
+            --set "factoryinput.image.tag=${GITHUB_REF##*/}" \
+            --set "grafanaproxy.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkatopostgresql.image.tag=${GITHUB_REF##*/}" \
+            --set "tulipconnector.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttkafkabridge.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkatoblob.image.tag=${GITHUB_REF##*/}" \
+            --namespace ${{ env.UMH }} \ 
+            --wait --timeout ${{ env.HELM_TIMEOUT }} \ 
+            --debug
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
@@ -125,7 +142,25 @@ jobs:
         run: |
           helm repo add united-manufacturing-hub https://repo.umh.app/
           helm repo update
-          helm install ${{ env.UMH }} united-manufacturing-hub/united-manufacturing-hub -f ${{ env.VALUES_FILE }} --namespace ${{ env.UMH }} --create-namespace --wait --timeout ${{ env.HELM_TIMEOUT }} --debug
+          helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
+            --values ${{ env.VALUES_FILE }} \
+            --set "kafkastatedetector.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttbridge.image.tag=${GITHUB_REF##*/}" \
+            --set "barcodereader.image.tag=${GITHUB_REF##*/}" \
+            --set "sensorconnect.tag=${GITHUB_REF##*/}" \
+            --set "cameraconnect.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkabridge.image.tag=${GITHUB_REF##*/}" \
+            --set "factoryinsight.image.tag=${GITHUB_REF##*/}" \
+            --set "factoryinput.image.tag=${GITHUB_REF##*/}" \
+            --set "grafanaproxy.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkatopostgresql.image.tag=${GITHUB_REF##*/}" \
+            --set "tulipconnector.image.tag=${GITHUB_REF##*/}" \
+            --set "mqttkafkabridge.image.tag=${GITHUB_REF##*/}" \
+            --set "kafkatoblob.image.tag=${GITHUB_REF##*/}" \
+            --namespace ${{ env.UMH }} \ 
+            --create-namespace \
+            --wait --timeout ${{ env.HELM_TIMEOUT }} \ 
+            --debug
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
         if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
