@@ -2,7 +2,7 @@ name: Test UMH Tiny Deployment
 
 on:
   workflow_run:
-    workflows: ["Build Docker Images"]
+    workflows: [Build Docker Images]
     types:
       - completed
 
