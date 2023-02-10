@@ -1,0 +1,149 @@
+name: Build Docker Images
+
+on:
+  push
+
+jobs:
+  barcodereader:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/barcodereader/Dockerfile --tag unitedmanufacturinghub/barcodereader:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/barcodereader:${GITHUB_REF##refs/*/}
+
+  factoryinput:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/factoryinput/Dockerfile --tag unitedmanufacturinghub/factoryinput:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/factoryinput:${GITHUB_REF##refs/*/}
+
+  factoryinsight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/factoryinsight/Dockerfile --tag unitedmanufacturinghub/factoryinsight:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/factoryinsight:${GITHUB_REF##refs/*/}
+
+  grafana-proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/grafana-proxy/Dockerfile --tag unitedmanufacturinghub/grafana-proxy:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/grafana-proxy:${GITHUB_REF##refs/*/}
+
+  kafka-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-bridge/Dockerfile --tag unitedmanufacturinghub/kafka-bridge:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-bridge:${GITHUB_REF##refs/*/}
+
+  kafka-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-debug/Dockerfile --tag unitedmanufacturinghub/kafka-debug:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-debug:${GITHUB_REF##refs/*/}
+
+  kafka-init:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-init/Dockerfile --tag unitedmanufacturinghub/kafka-init:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-init:${GITHUB_REF##refs/*/}
+
+  kafka-state-detector:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-state-detector/Dockerfile --tag unitedmanufacturinghub/kafka-state-detector:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-state-detector:${GITHUB_REF##refs/*/}
+
+  kafka-to-blob:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-to-blob/Dockerfile --tag unitedmanufacturinghub/kafka-to-blob:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-to-blob:${GITHUB_REF##refs/*/}
+
+  kafka-to-postgresql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/kafka-to-postgresql/Dockerfile --tag unitedmanufacturinghub/kafka-to-postgresql:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/kafka-to-postgresql:${GITHUB_REF##refs/*/}
+
+  mqtt-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/mqtt-bridge/Dockerfile --tag unitedmanufacturinghub/mqtt-bridge:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/mqtt-bridge:${GITHUB_REF##refs/*/}
+
+  mqtt-kafka-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/mqtt-kafka-bridge/Dockerfile --tag unitedmanufacturinghub/mqtt-kafka-bridge:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/mqtt-kafka-bridge:${GITHUB_REF##refs/*/}
+
+  sensorconnect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub Registry
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the tagged Docker image
+        run: docker build . --file deployment/sensorconnect/Dockerfile --tag unitedmanufacturinghub/sensorconnect:${GITHUB_REF##refs/*/}
+      - name: Push the tagged Docker image
+        run: docker push unitedmanufacturinghub/sensorconnect:${GITHUB_REF##refs/*/}
+
