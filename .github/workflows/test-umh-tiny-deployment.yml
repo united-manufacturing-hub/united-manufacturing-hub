@@ -2,6 +2,10 @@ name: Test UMH Tiny Deployment
 
 on:
   pull_request:
+  workflow_run:
+    workflows: ["Build Docker Images"]
+    types:
+      - completed
 
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
@@ -15,6 +19,7 @@ jobs:
   data-flow-test:
     name: Data Flow Test
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -130,6 +135,7 @@ jobs:
   upgrade-test:
     name: Upgrade Test
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
