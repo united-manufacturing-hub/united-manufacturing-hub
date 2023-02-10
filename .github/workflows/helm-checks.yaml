@@ -1,7 +1,7 @@
 name: Helm Checks
 
 on:
-  pull_request:
+  push:
 
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
