@@ -43,7 +43,7 @@ func GetEnv(variableName string) (envValue string) {
 	var envValueEnvSet bool
 	envValue, envValueEnvSet = os.LookupEnv(variableName)
 	if !envValueEnvSet {
-		zap.S().Fatal("env value (ENV_VALUE) must be set")
+		zap.S().Warnf("Env variable %s not set", variableName)
 	}
 	if len(envValue) == 0 {
 		zap.S().Warnf("Env variable %s is empty", variableName)
