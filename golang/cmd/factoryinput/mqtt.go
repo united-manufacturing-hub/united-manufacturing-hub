@@ -12,29 +12,42 @@ import (
 	"time"
 )
 
-func newTLSConfig(certificateName string) *tls.Config {
+func newTLSConfig() *tls.Config {
 
 	// Import trusted certificates from CAfile.pem.
 	// Alternatively, manually add CA certificates to
 	// default openssl CA bundle.
 	certpool := x509.NewCertPool()
-	pemCerts, err := os.ReadFile("/SSL_certs/kafka/intermediate_CA.pem")
+	pemCerts, err := os.ReadFile("/SSL_certs/mqtt/ca.crt")
 	if err == nil {
-		certpool.AppendCertsFromPEM(pemCerts)
+		ok := certpool.AppendCertsFromPEM(pemCerts)
+		if !ok {
+			zap.S().Errorf("Failed to parse root certificate")
+		}
+	} else {
+		zap.S().Errorf("Error reading CA certificate: %s", err)
 	}
 
+	zap.S().Debugf("CA cert: %s", pemCerts)
+
 	// Import client certificate/key pair
-	cert, err := tls.LoadX509KeyPair(
-		"/SSL_certs/kafka/"+certificateName+".pem",
-		"/SSL_certs/kafka/"+certificateName+"-privkey.pem")
+	cert, err := tls.LoadX509KeyPair("/SSL_certs/mqtt/tls.crt", "/SSL_certs/mqtt/tls.key")
 	if err != nil {
-		zap.S().Fatalf("Failed to load client certificate: %s", err)
+		// Read /SSL_certs/mqtt/tls.crt
+		var file []byte
+		file, err = os.ReadFile("/SSL_certs/mqtt/tls.crt")
+		if err != nil {
+			zap.S().Errorf("Error reading client certificate: %s", err)
+		}
+		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
 	}
+
+	zap.S().Debugf("Client cert: %v", cert)
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		zap.S().Fatalf("Failed to parse client certificate: %s", err)
+		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
 
 	// Create tls.Config with desired tls properties
@@ -54,6 +67,7 @@ func newTLSConfig(certificateName string) *tls.Config {
 		InsecureSkipVerify: true,
 		// Certificates = list of certs client sends to server.
 		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
 }
 
@@ -90,8 +104,8 @@ func SetupMQTT(certificateName string, mqttBrokerURL string, podName string, pas
 		zap.S().Infof("Running in Kubernetes mode", podName)
 
 	} else {
-		tlsconfig := newTLSConfig(certificateName)
-		opts.SetClientID(certificateName).SetTLSConfig(tlsconfig)
+		tlsconfig := newTLSConfig()
+		opts.SetClientID(podName).SetTLSConfig(tlsconfig)
 
 		zap.S().Infof("Running in normal mode", certificateName)
 	}
