@@ -125,7 +125,7 @@ spec:
             - name: MICROSERVICE_NAME
               valueFrom:
                 fieldRef:
-                    fieldPath: metadata.labels['app.kubernetes.io/name']
+                  fieldPath: metadata.labels['app.kubernetes.io/name']
             - name: KAFKA_USE_SSL
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
@@ -133,7 +133,7 @@ spec:
             - name: MQTT_PASSWORD
               value: {{.Values.sensorconnect.mqtt.password | quote}}
             - name: INSECURE_SKIP_VERIFY
-              value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}c
+              value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
 
             {{if .Values._000_commonConfig.debug.enableFGTrace}}
             - name: DEBUG_ENABLE_FGTRACE
@@ -142,7 +142,7 @@ spec:
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values.sensorconnect.ioddfilepath}}
-            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-certificates
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
