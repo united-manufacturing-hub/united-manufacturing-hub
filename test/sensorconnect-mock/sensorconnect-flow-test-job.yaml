@@ -1,15 +1,15 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: data-flow-test
+  name: sensorconnect-flow-test
 spec:
   template:
     metadata:
       labels:
-        type: data-flow-test
+        type: sensorconnect-flow-test
     spec:
       containers:
-        - name: data-flow-test
+        - name: sensorconnect-flow-test
           image: alpine:latest
           imagePullPolicy: Always
           command:
@@ -28,17 +28,17 @@ spec:
                     name: factoryinsight-secret
                     key: apiKey
             - name: QUERY
-              value: "/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/Pressure"
+              value: "/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/ButtonPressed"
             - name: PARAMETERS
-              value: "&gapFilling=null&tagAggregates=avg&timeBucket=none&includePrevious=true&includeNext=true&includeRunning=true&keepStatesInteger=true"
+              value: "&gapFilling=null&tagAggregates=count&timeBucket=none&includePrevious=true&includeNext=true&includeRunning=true&keepStatesInteger=true"
           envFrom:
             - secretRef:
                 name: factoryinsight-secret
           volumeMounts:
-            - mountPath: /data-flow-test-script
-              name: data-flow-test-script
+            - mountPath: /sensorconnect-flow-test-script
+              name: sensorconnect-flow-test-script
       volumes:
-        - name: data-flow-test-script
+        - name: sensorconnect-flow-test-script
           configMap:
             name: generic-data-flow-test-script
       restartPolicy: Never
