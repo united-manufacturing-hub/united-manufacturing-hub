@@ -165,8 +165,9 @@ spec:
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-secrets
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
-          configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
+          hostPath:
+            path: /test-ioddfiles
+            type: Directory
 
 
 
