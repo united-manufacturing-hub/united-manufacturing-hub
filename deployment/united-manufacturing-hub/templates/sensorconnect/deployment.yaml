@@ -134,6 +134,10 @@ spec:
               value: {{.Values.sensorconnect.mqtt.password | quote}}
             - name: INSECURE_SKIP_VERIFY
               value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
+            - name: TEST
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.testMode | quote}}
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
 
             {{if .Values._000_commonConfig.debug.enableFGTrace}}
             - name: DEBUG_ENABLE_FGTRACE
@@ -148,6 +152,8 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
               mountPath: /SSL_certs/mqtt
               readOnly: true
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
+              mountPath: /test-ioddfiles
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
@@ -158,6 +164,9 @@ spec:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-secrets
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
+          configMap:
+            name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
 
 
 
