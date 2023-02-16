@@ -48,8 +48,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const context = ${{ steps.extract-iodd-context.outputs.value }};
-            fs.writeFileSync('/tmp/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1-context.json', JSON.stringify(context));
+            const output = ${{ steps.extract-iodd-context.outputs.value }};
+            fs.writeFileSync('/tmp/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1-context.json', JSON.stringify(output));
       - name: Download IODD File
         id: download-iodd-file
         run: |
