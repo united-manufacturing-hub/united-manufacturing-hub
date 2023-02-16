@@ -139,6 +139,7 @@ spec:
             - name: SERIAL_NUMBER
               value: {{.Values._000_commonConfig.serialNumber | quote}}
 
+
             {{if .Values._000_commonConfig.debug.enableFGTrace}}
             - name: DEBUG_ENABLE_FGTRACE
               value: "true"
