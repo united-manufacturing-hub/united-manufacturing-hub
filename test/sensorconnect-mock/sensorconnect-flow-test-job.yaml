@@ -35,10 +35,13 @@ spec:
             - secretRef:
                 name: factoryinsight-secret
           volumeMounts:
-            - mountPath: /sensorconnect-flow-test-script
+            - mountPath: $HOME/sensorconnect-flow-test-script
               name: sensorconnect-flow-test-script
       volumes:
         - name: sensorconnect-flow-test-script
           configMap:
             name: generic-data-flow-test-script
+            items:
+              - key: data-flow-test-script
+                path: data-flow-test-script
       restartPolicy: Never
