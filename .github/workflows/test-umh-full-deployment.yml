@@ -33,9 +33,8 @@ jobs:
           args: --agents 1 --image rancher/k3s:${{ env.K3S_VERSION }}
       - name: Download IODD Context
         id: download-iodd-context
-        uses: wei/curl@master
-        with:
-          args: -sL --request GET --url https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531 --output 'context.json'
+        run: |
+          curl -sL --request GET --url https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531 --output 'context.json'
       - name: Extract IODD Context Content
         id: extract-iodd-context
         uses: sergeysova/jq-action@v2
@@ -52,9 +51,8 @@ jobs:
             fs.writeFileSync('/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1-context.json', JSON.stringify(context));
       - name: Download IODD File
         id: download-iodd-file
-        uses: wei/curl@master
-        with:
-          args: -sL --request GET --url https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated --output '/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip'
+        run: |
+          curl -sL --request GET --url https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated --output '/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip'
       - name: Extract IODD File
         id: extract-iodd-file
         uses: montudor/action-zip@v1
