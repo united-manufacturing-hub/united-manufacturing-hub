@@ -2,6 +2,10 @@ name: Helm Checks
 
 on:
   push:
+    paths:
+      - 'deployment/**'
+      - 'test/**'
+      - '.github/workflows/helm-checks.yaml'
 
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
