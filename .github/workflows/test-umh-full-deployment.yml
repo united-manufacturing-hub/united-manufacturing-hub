@@ -34,7 +34,7 @@ jobs:
       - name: Download IODD Context
         id: download-iodd-context
         run: |
-          curl -sL --request GET --url "https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531" --output "/tmp/context.json"
+          curl --request GET --url "https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531" --output "/tmp/context.json"
           mkdir -p /tmp/test-ioddfiles
       - name: Extract IODD Context Content
         id: extract-iodd-context
@@ -53,7 +53,7 @@ jobs:
       - name: Download IODD File
         id: download-iodd-file
         run: |
-          curl -sL --request GET --url "https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated" --output "/tmp/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip"
+          curl --request GET --url "https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated" --output "/tmp/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip"
       - name: Extract IODD File
         id: extract-iodd-file
         uses: montudor/action-zip@v1
