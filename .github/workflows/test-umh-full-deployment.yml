@@ -40,7 +40,7 @@ jobs:
         id: extract-iodd-context
         uses: sergeysova/jq-action@v2
         with:
-          cmd: "jq '.content[] | select(.ioddId == 515)' context.json"
+          cmd: "jq -c '.content[] | select(.ioddId == 515)' context.json"
           multiline: true
       - name: Save IODD Context
         id: save-iodd-context
