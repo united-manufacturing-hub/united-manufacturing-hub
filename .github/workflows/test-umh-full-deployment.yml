@@ -34,12 +34,12 @@ jobs:
       - name: Download IODD Context
         id: download-iodd-context
         run: |
-          curl -sL --request GET --url "https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531" --output '/context.json'
+          curl -sL --request GET --url "https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531" --output "$HOME/context.json"
       - name: Extract IODD Context Content
         id: extract-iodd-context
         uses: sergeysova/jq-action@v2
         with:
-          cmd: "jq '.content[] | select(.ioddId == 515)' /context.json"
+          cmd: "jq '.content[] | select(.ioddId == 515)' $HOME/context.json"
           multiline: true
       - name: Save IODD Context
         id: save-iodd-context
@@ -52,16 +52,16 @@ jobs:
       - name: Download IODD File
         id: download-iodd-file
         run: |
-          curl -sL --request GET --url https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated --output '/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip'
+          curl -sL --request GET --url "https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated" --output "$HOME/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip"
       - name: Extract IODD File
         id: extract-iodd-file
         uses: montudor/action-zip@v1
         with:
-          args: unzip /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip
+          args: unzip $HOME/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip
       - name: Move IODD File
         id: move-iodd-file
         run: |
-          mv /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml /test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml
+          mv $HOME/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml /test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml
       - name: Install UMH
         id: install-umh
         run: |
