@@ -140,7 +140,7 @@ jobs:
           args: -sL --request GET --url https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated --output '/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip'
       - name: Extract IODD File
         id: extract-iodd-file
-        uses: montudor/action-zip@1
+        uses: montudor/action-zip@v1
         with:
           args: unzip /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip
       - name: Move IODD File
