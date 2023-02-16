@@ -36,6 +36,7 @@ jobs:
         run: |
           curl --request GET --url "https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531" --output "/tmp/context.json"
           mkdir -p /tmp/test-ioddfiles
+          ls -la /tmp
       - name: Extract IODD Context Content
         id: extract-iodd-context
         uses: sergeysova/jq-action@v2
