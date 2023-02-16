@@ -15,7 +15,7 @@ spec:
           command:
             - /bin/sh
             - -c
-            - apk add --no-cache curl jq coreutils && /tmp/data-flow-test-script
+            - apk add --no-cache curl jq coreutils && chmod +x /tmp/data-flow-test-script && /tmp/data-flow-test-script
           env:
             - name: FACTORYINSIGHT_BASEURL
               valueFrom:
