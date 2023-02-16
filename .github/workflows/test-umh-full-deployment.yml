@@ -162,6 +162,7 @@ jobs:
           mkdir -p ./run-sensorconnect-test-step
           cd ./run-sensorconnect-test-step
           kubectl logs job/sensorconnect-flow-test -n ${{ env.UMH }} > job-sensorconnect-flow-test.log || true
+          kubectl logs deployment/sensorconnect-mock-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-sensorconnect-mock.log || true
           kubectl logs deployment/${{ env.UMH }}-opcuasimulator-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-opcuasimulator.log || true
           kubectl logs deployment/${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-factoryinsight.log || true
           kubectl logs deployment/${{ env.UMH }}-grafanaproxy -n ${{ env.UMH }} --all-containers --prefix > deployment-grafanaproxy.log || true
@@ -171,7 +172,6 @@ jobs:
           kubectl logs deployment/${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} --all-containers --prefix > deployment-mqttkafkabridge.log || true
           kubectl logs deployment/${{ env.UMH }}-console -n ${{ env.UMH }} --all-containers --prefix > deployment-console.log || true
           kubectl logs deployment/${{ env.UMH }}-packmlmqttsimulator -n ${{ env.UMH }} --all-containers --prefix > deployment-packmlmqttsimulator.log || true
-          kubectl logs deployment/${{ env.UMH }}-sensorconnect-mock-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-sensorconnect-mock.log || true
           kubectl logs statefulset/${{ env.UMH }}-factoryinput -n ${{ env.UMH }} --all-containers --prefix > statefulset-factoryinput.log || true
           kubectl logs statefulset/${{ env.UMH }}-hivemqce -n ${{ env.UMH }} --all-containers --prefix > statefulset-hivemqce.log || true
           kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
