@@ -352,18 +352,24 @@ func GetCustomTagsTree(customer string, site string, area string, line string, c
 
 func mapTagGrouping(pte map[string]*models.TreeEntryFormat, st []string, value string) (a *models.TreeEntryFormat) {
 	a, exists := pte[st[0]]
+	zap.S().Debugf("mapTagGrouping: %s, %s, %s, %t", st[0], st[1:], value, exists)
 	// if the tag group does not exist, create it
 	if !exists {
 		a = &models.TreeEntryFormat{
 			Label:   st[0],
 			Value:   st[0],
-			Entries: map[string]*models.TreeEntryFormat{},
+			Entries: make(map[string]*models.TreeEntryFormat),
 		}
 	}
 	// if the tag group is a leaf, set value and end the recursion
 	if len(st) > 1 {
+		zap.S().Debugf("len(st) > 1: %s, %s, %s", st[0], st[1:], value)
+		if a.Entries == nil {
+			a.Entries = make(map[string]*models.TreeEntryFormat)
+		}
 		a.Entries[st[1]] = mapTagGrouping(a.Entries, st[1:], value)
 	} else {
+		zap.S().Debugf("len(st) <= 1: %s, %s, %s", st[0], st[1:], value)
 		a.Value = value
 		a.Entries = nil
 	}
