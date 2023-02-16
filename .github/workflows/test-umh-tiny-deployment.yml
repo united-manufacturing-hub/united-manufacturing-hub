@@ -2,6 +2,12 @@ name: Test UMH Tiny Deployment
 
 on:
   pull_request:
+    paths:
+      - 'deployment/**'
+      - 'golang/**'
+      - 'test/**'
+      - '!test/test-values-full.yaml'
+      - '.github/workflows/test-umh-tiny-deployment.yml'
 
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
