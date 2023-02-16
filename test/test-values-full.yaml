@@ -16,6 +16,7 @@ _000_commonConfig:
       iprange: "10.43.13.37/24"  # IP Range in CIDR notation
       enableKafka: false
       enableMQTT: true
+      testMode: true
 
     # Warning: unstable
     # cameraconnect searches for GenICam compatible cameras and reads out the pictures

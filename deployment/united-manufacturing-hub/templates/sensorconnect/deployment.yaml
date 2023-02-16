@@ -153,8 +153,10 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
               mountPath: /SSL_certs/mqtt
               readOnly: true
+              {{if .Values._000_commonConfig.datasources.sensorconnect.testMode}}
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
               mountPath: /test-ioddfiles
+              {{end}}
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
