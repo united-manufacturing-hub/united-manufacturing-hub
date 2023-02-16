@@ -25,6 +25,39 @@ jobs:
           cluster-name: "umh-full"
           k3d-version: ${{ env.K3D_VERSION }}
           args: --agents 1 --image rancher/k3s:${{ env.K3S_VERSION }}
+      - name: Download IODD Context
+        id: download-iodd-context
+        uses: wei/curl@master
+        with:
+          args: -sL --request GET --url https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531 --output '/context.json'
+      - name: Extract IODD Context Content
+        id: extract-iodd-context
+        uses: sergeysova/jq-action@v2
+        with:
+          cmd: "jq '.content[] | select(.ioddId == 515)' /context.json"
+          multiline: true
+      - name: Save IODD Context
+        id: save-iodd-context
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const context = ${{ steps.extract-iodd-context.outputs.value }};
+            fs.writeFileSync('/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1-context.json', JSON.stringify(context));
+      - name: Download IODD File
+        id: download-iodd-file
+        uses: wei/curl@master
+        with:
+          args: -sL --request GET --url https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated --output '/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip'
+      - name: Extract IODD File
+        id: extract-iodd-file
+        uses: montudor/action-zip@v1
+        with:
+          args: unzip /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip
+      - name: Move IODD File
+        id: move-iodd-file
+        run: |
+          mv /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml /test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml
       - name: Install UMH
         id: install-umh
         run: |
@@ -107,6 +140,7 @@ jobs:
           kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
           kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
           kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
+          kubectl logs statefulset/${{ env.UMH }}-sensorconnect -n ${{ env.UMH }} --all-containers --prefix > statefulset-sensorconnect.log || true
           kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
           kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
           kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
@@ -114,39 +148,6 @@ jobs:
           kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
           kubectl get events -n ${{ env.UMH }} > events.log || true
           cd ..
-      - name: Download IODD Context
-        id: download-iodd-context
-        uses: wei/curl@master
-        with:
-          args: -sL --request GET --url https://ioddfinder.io-link.com/api/drivers?page=0&size=2000&status=APPROVED&status=UPLOADED&deviceIdString=278531 --output '/context.json'
-      - name: Extract IODD Context Content
-        id: extract-iodd-context
-        uses: sergeysova/jq-action@v2
-        with:
-          cmd: "jq '.content[] | select(.ioddId == 515)' /context.json"
-          multiline: true
-      - name: Save IODD Context
-        id: save-iodd-context
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const context = ${{ steps.extract-iodd-context.outputs.value }};
-            fs.writeFileSync('/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1-context.json', JSON.stringify(context));
-      - name: Download IODD File
-        id: download-iodd-file
-        uses: wei/curl@master
-        with:
-          args: -sL --request GET --url https://ioddfinder.io-link.com/api/vendors/42/iodds/515/files/zip/rated --output '/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip'
-      - name: Extract IODD File
-        id: extract-iodd-file
-        uses: montudor/action-zip@v1
-        with:
-          args: unzip /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip
-      - name: Move IODD File
-        id: move-iodd-file
-        run: |
-          mv /Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml /test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml
       - name: Run Sensorconnect test
         id: run-sensorconnect-test
         run: |
@@ -174,6 +175,7 @@ jobs:
           kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
           kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
           kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
+          kubectl logs statefulset/${{ env.UMH }}-sensorconnect -n ${{ env.UMH }} --all-containers --prefix > statefulset-sensorconnect.log || true
           kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
           kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
           kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
@@ -243,6 +245,7 @@ jobs:
           kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
           kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
           kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
+          kubectl logs statefulset/${{ env.UMH }}-sensorconnect -n ${{ env.UMH }} --all-containers --prefix > statefulset-sensorconnect.log || true
           kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
           kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
           helm status ${{ env.UMH }} -n ${{ env.UMH }} > helm-status.log || true
@@ -300,6 +303,7 @@ jobs:
           kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
           kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
           kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
+          kubectl logs statefulset/${{ env.UMH }}-sensorconnect -n ${{ env.UMH }} --all-containers --prefix > statefulset-sensorconnect.log || true
           kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
           kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
           helm status ${{ env.UMH }} -n ${{ env.UMH }} > helm-status.log || true
@@ -341,6 +345,7 @@ jobs:
           kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
           kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
           kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
+          kubectl logs statefulset/${{ env.UMH }}-sensorconnect -n ${{ env.UMH }} --all-containers --prefix > statefulset-sensorconnect.log || true
           kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
           kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
           kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
