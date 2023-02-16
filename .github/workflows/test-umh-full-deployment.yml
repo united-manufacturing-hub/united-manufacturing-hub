@@ -30,7 +30,7 @@ jobs:
         with:
           cluster-name: "umh-full"
           k3d-version: ${{ env.K3D_VERSION }}
-          args: --agents 1 --image rancher/k3s:${{ env.K3S_VERSION }}
+          args: --agents 1 --image rancher/k3s:${{ env.K3S_VERSION }} --volume '/tmp:/tmp'
       - name: Download IODD Context
         id: download-iodd-context
         run: |
