@@ -3,19 +3,10 @@
 # By default, Jeremy is Codeowner for everything
 *       @JeremyTheocharis
 
-# Furthermore, Jeremy is responsible for the documentation and Kubernetes / Helm 
-/docs/       @JeremyTheocharis
-/deployment/ @JeremyTheocharis
-
 # Ferdinand is responsible for the Go code
 /golang/ @Scarjit
-
-# Python code is shared between Ferdinand and Jeremy
-/mqtt-to-blob/ @JeremyTheocharis @Scarjit
-/barcodereader/ @JeremyTheocharis @Scarjit
-/cameraconnect/ @JeremyTheocharis @Scarjit
-/python-sdk/ @JeremyTheocharis @Scarjit
-/sensorconnect/ @JeremyTheocharis @Scarjit
+/deployment/ @Scarjit
+/tools/ @Scarjit
 
 # Remaining files are owned by Jeremy
 AUTHORS @JeremyTheocharis
