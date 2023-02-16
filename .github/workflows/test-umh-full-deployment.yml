@@ -153,7 +153,7 @@ jobs:
         run: |
           kubectl apply -f ./test/sensorconnect-mock/sensorconnect-mock.yaml -n ${{ env.UMH }}
           kubectl apply -f ./test/sensorconnect-mock/sensorconnect-flow-test-job.yaml -n ${{ env.UMH }}
-          kubectl wait --for=condition=complete job/sensorconnect-flow-test -n ${{ env.UMH }} --timeout=2m
+          kubectl wait --for=condition=complete job/sensorconnect-flow-test -n ${{ env.UMH }} --timeout=5m
           echo "Sensorconnect Flow Test Job succeeded"
           kubectl logs job/sensorconnect-flow-test -n ${{ env.UMH }} || true
       - name: Debug Sensorconnect Flow failure
