@@ -53,11 +53,11 @@ jobs:
       - name: Extract IODD File
         id: extract-iodd-file
         run: |
-          unzip /tmp/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip
+          unzip /tmp/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.zip -d /tmp
       - name: Move IODD File
         id: move-iodd-file
         run: |
-          mv /tmp/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml /tmp/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml
+          mv /tmp/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml /tmp/test-ioddfiles/Siemens-SIRIUS-3SU1-4DI4DQ-20160602-IODD1.1.xml
       - name: Install UMH
         id: install-umh
         run: |
