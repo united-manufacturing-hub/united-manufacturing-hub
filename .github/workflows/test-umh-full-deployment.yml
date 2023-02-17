@@ -192,11 +192,6 @@ jobs:
             ./run-sensorconnect-test-step
           if-no-files-found: ignore
           retention-days: 5
-      - name: Delete k3d cluster
-        id: delete-k3d
-        if: always()
-        run: |
-          k3d cluster delete umh-full
 
   upgrade-test:
     name: Upgrade Test
@@ -417,8 +412,3 @@ jobs:
             ./run-data-flow-test-step
           if-no-files-found: ignore
           retention-days: 5
-      - name: Delete k3d cluster
-        id: delete-k3d
-        if: always()
-        run: |
-          k3d cluster delete umh-full
