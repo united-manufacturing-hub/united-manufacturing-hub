@@ -74,7 +74,7 @@ jobs:
         id: debug-data-flow-failure
         if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure'  }}
         run: |
-          ./tools/ssave_logs.sh run-data-flow-test-step
+          ./tools/save_logs.sh run-data-flow-test-step
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
