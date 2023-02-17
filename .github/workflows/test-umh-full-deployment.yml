@@ -95,7 +95,7 @@ jobs:
         id: debug-data-flow-failure
         if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure'  }}
         run: |
-          ./tools/ssave_logs.sh run-data-flow-test-step
+          ./tools/save_logs.sh run-data-flow-test-step
       - name: Run Sensorconnect test
         id: run-sensorconnect-test
         run: |
