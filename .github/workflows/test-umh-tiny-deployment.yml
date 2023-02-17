@@ -56,6 +56,7 @@ jobs:
             --create-namespace \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
+          kubectl apply -f ./test/generic-data-flow-test-script.yaml -n ${{ env.UMH }}
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Install UMH failure
         id: debug-install-umh-failure
@@ -81,11 +82,6 @@ jobs:
           kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
           kubectl get events -n ${{ env.UMH }} > events.log || true
           cd ..
-      - name: Build test image
-        id: build-test-image
-        run: |
-          docker build -t data-flow-test -f ./test/data-flow-test/Dockerfile ./test/data-flow-test
-          k3d image import data-flow-test -c umh-tiny
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
@@ -128,11 +124,6 @@ jobs:
             ./run-data-flow-test-step
           if-no-files-found: ignore
           retention-days: 5
-      - name: Delete k3d cluster
-        id: delete-k3d
-        if: always()
-        run: |
-          k3d cluster delete umh-tiny
 
   upgrade-test:
     name: Upgrade Test
@@ -210,6 +201,7 @@ jobs:
             --namespace ${{ env.UMH }} \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
+          kubectl apply -f ./test/generic-data-flow-test-script.yaml -n ${{ env.UMH }}
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Upgrade UMH failure
         id: debug-upgrade-umh-failure
@@ -235,11 +227,6 @@ jobs:
           kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
           kubectl get events -n ${{ env.UMH }} > events.log || true
           cd ..
-      - name: Build test image
-        id: build-test-image
-        run: |
-          docker build -t data-flow-test -f ./test/data-flow-test/Dockerfile ./test/data-flow-test
-          k3d image import data-flow-test -c umh-tiny
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
@@ -283,8 +270,3 @@ jobs:
             ./run-data-flow-test-step
           if-no-files-found: ignore
           retention-days: 5
-      - name: Delete k3d cluster
-        id: delete-k3d
-        if: always()
-        run: |
-          k3d cluster delete umh-tiny
