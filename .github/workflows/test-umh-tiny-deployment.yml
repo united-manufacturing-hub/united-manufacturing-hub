@@ -35,6 +35,7 @@ jobs:
       - name: Install UMH
         id: install-umh
         run: |
+          chmod +x ./tools/save_logs.sh
           helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
             --set "kafkastatedetector.image.tag=${GITHUB_HEAD_REF##*/}" \
@@ -103,6 +104,7 @@ jobs:
       - name: Install UMH latest
         id: install-umh-latest
         run: |
+          chmod +x ./tools/save_logs.sh
           helm repo add united-manufacturing-hub https://repo.umh.app/
           helm repo update
           helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
