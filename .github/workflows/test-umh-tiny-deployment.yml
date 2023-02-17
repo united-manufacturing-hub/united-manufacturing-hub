@@ -62,26 +62,7 @@ jobs:
         id: debug-install-umh-failure
         if: ${{ failure() && steps.install-umh.outcome == 'failure' }}
         run: |
-          mkdir -p ./install-umh-step
-          cd ./install-umh-step
-          kubectl logs deployment/${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-factoryinsight.log || true
-          kubectl logs deployment/${{ env.UMH }}-iotsensorsmqtt -n ${{ env.UMH }} --all-containers --prefix > deployment-iotsensormqtt.log || true
-          kubectl logs deployment/${{ env.UMH }}-grafana -n ${{ env.UMH }} --all-containers --prefix > deployment-grafana.log || true
-          kubectl logs deployment/${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} --all-containers --prefix > deployment-mqttkafkabridge.log || true
-          kubectl logs deployment/${{ env.UMH }}-console -n ${{ env.UMH }} --all-containers --prefix > deployment-console.log || true
-          kubectl logs deployment/${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} --all-containers --prefix > deployment-kafkatopostgresql.log || true
-          kubectl logs statefulset/${{ env.UMH }}-hivemqce -n ${{ env.UMH }} --all-containers --prefix > statefulset-hivemqce.log || true
-          kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
-          kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
-          kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
-          kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
-          kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
-          helm status ${{ env.UMH }} -n ${{ env.UMH }} > helm-status.log || true
-          kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
-          kubectl describe po -n ${{ env.UMH }} > po-describe.log || true
-          kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
-          kubectl get events -n ${{ env.UMH }} > events.log || true
-          cd ..
+          ./tools/save_logs.sh install-umh-step
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
@@ -93,26 +74,7 @@ jobs:
         id: debug-data-flow-failure
         if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure'  }}
         run: |
-          mkdir -p ./run-data-flow-test-step
-          cd ./run-data-flow-test-step
-          kubectl logs job/data-flow-test -n ${{ env.UMH }} > job-data-flow-test.log || true
-          kubectl logs deployment/${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-factoryinsight.log || true
-          kubectl logs deployment/${{ env.UMH }}-iotsensorsmqtt -n ${{ env.UMH }} --all-containers --prefix > deployment-iotsensormqtt.log || true
-          kubectl logs deployment/${{ env.UMH }}-grafana -n ${{ env.UMH }} --all-containers --prefix > deployment-grafana.log || true
-          kubectl logs deployment/${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} --all-containers --prefix > deployment-mqttkafkabridge.log || true
-          kubectl logs deployment/${{ env.UMH }}-console -n ${{ env.UMH }} --all-containers --prefix > deployment-console.log || true
-          kubectl logs deployment/${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} --all-containers --prefix > deployment-kafkatopostgresql.log || true
-          kubectl logs statefulset/${{ env.UMH }}-hivemqce -n ${{ env.UMH }} --all-containers --prefix > statefulset-hivemqce.log || true
-          kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
-          kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
-          kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
-          kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
-          kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
-          kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
-          kubectl describe po -n ${{ env.UMH }} > po-describe.log || true
-          kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
-          kubectl get events -n ${{ env.UMH }} > events.log || true
-          cd ..
+          ./tools/ssave_logs.sh run-data-flow-test-step
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
@@ -153,26 +115,7 @@ jobs:
         id: debug-install-umh-failure
         if: ${{ failure() && steps.install-umh-latest.outcome == 'failure' }}
         run: |
-          mkdir -p ./install-umh-latest-step
-          cd ./install-umh-latest-step
-          kubectl logs deployment/${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-factoryinsight.log || true
-          kubectl logs deployment/${{ env.UMH }}-iotsensorsmqtt -n ${{ env.UMH }} --all-containers --prefix > deployment-iotsensormqtt.log || true
-          kubectl logs deployment/${{ env.UMH }}-grafana -n ${{ env.UMH }} --all-containers --prefix > deployment-grafana.log || true
-          kubectl logs deployment/${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} --all-containers --prefix > deployment-mqttkafkabridge.log || true
-          kubectl logs deployment/${{ env.UMH }}-console -n ${{ env.UMH }} --all-containers --prefix > deployment-console.log || true
-          kubectl logs deployment/${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} --all-containers --prefix > deployment-kafkatopostgresql.log || true
-          kubectl logs statefulset/${{ env.UMH }}-hivemqce -n ${{ env.UMH }} --all-containers --prefix > statefulset-hivemqce.log || true
-          kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
-          kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
-          kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
-          kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
-          kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
-          helm status ${{ env.UMH }} -n ${{ env.UMH }} > helm-status.log || true
-          kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
-          kubectl describe po -n ${{ env.UMH }} > po-describe.log || true
-          kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
-          kubectl get events -n ${{ env.UMH }} > events.log || true
-          cd ..
+          ./tools/save_logs.sh install-umh-latest-step
       - name: Upgrade UMH
         id: upgrade-umh
         run: |
@@ -207,26 +150,7 @@ jobs:
         id: debug-upgrade-umh-failure
         if: ${{ failure() && steps.upgrade-umh.outcome == 'failure' }}
         run: |
-          mkdir -p ./upgrade-umh-step
-          cd ./upgrade-umh-step
-          kubectl logs deployment/${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-factoryinsight.log || true
-          kubectl logs deployment/${{ env.UMH }}-iotsensorsmqtt -n ${{ env.UMH }} --all-containers --prefix > deployment-iotsensormqtt.log || true
-          kubectl logs deployment/${{ env.UMH }}-grafana -n ${{ env.UMH }} --all-containers --prefix > deployment-grafana.log || true
-          kubectl logs deployment/${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} --all-containers --prefix > deployment-mqttkafkabridge.log || true
-          kubectl logs deployment/${{ env.UMH }}-console -n ${{ env.UMH }} --all-containers --prefix > deployment-console.log || true
-          kubectl logs deployment/${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} --all-containers --prefix > deployment-kafkatopostgresql.log || true
-          kubectl logs statefulset/${{ env.UMH }}-hivemqce -n ${{ env.UMH }} --all-containers --prefix > statefulset-hivemqce.log || true
-          kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
-          kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
-          kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
-          kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
-          kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
-          helm status ${{ env.UMH }} -n ${{ env.UMH }} > helm-status.log || true
-          kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
-          kubectl describe po -n ${{ env.UMH }} > po-describe.log || true
-          kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
-          kubectl get events -n ${{ env.UMH }} > events.log || true
-          cd ..
+          ./tools/save_logs.sh upgrade-umh-step
       - name: Run Data Flow Test Job
         id: run-data-flow-test
         run: |
@@ -238,26 +162,7 @@ jobs:
         id: debug-data-flow-failure
         if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure' }}
         run: |
-          mkdir -p ./run-data-flow-test-step
-          cd ./run-data-flow-test-step
-          kubectl logs job/data-flow-test -n ${{ env.UMH }} > jobs-data-flow-test.log || true
-          kubectl logs deployment/${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} --all-containers --prefix > deployment-factoryinsight.log || true
-          kubectl logs deployment/${{ env.UMH }}-iotsensorsmqtt -n ${{ env.UMH }} --all-containers --prefix > deployment-iotsensormqtt.log || true
-          kubectl logs deployment/${{ env.UMH }}-grafana -n ${{ env.UMH }} --all-containers --prefix > deployment-grafana.log || true
-          kubectl logs deployment/${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} --all-containers --prefix > deployment-mqttkafkabridge.log || true
-          kubectl logs deployment/${{ env.UMH }}-console -n ${{ env.UMH }} --all-containers --prefix > deployment-console.log || true
-          kubectl logs deployment/${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} --all-containers --prefix > deployment-kafkatopostgresql.log || true
-          kubectl logs statefulset/${{ env.UMH }}-hivemqce -n ${{ env.UMH }} --all-containers --prefix > statefulset-hivemqce.log || true
-          kubectl logs statefulset/${{ env.UMH }}-kafka -n ${{ env.UMH }} --all-containers --prefix > statefulset-kafka.log || true
-          kubectl logs statefulset/${{ env.UMH }}-nodered -n ${{ env.UMH }} --all-containers --prefix > statefulset-nodered.log || true
-          kubectl logs statefulset/${{ env.UMH }}-redis-node -n ${{ env.UMH }} --all-containers --prefix > statefulset-redis-node.log || true
-          kubectl logs statefulset/${{ env.UMH }}-timescaledb -n ${{ env.UMH }} --all-containers --prefix > statefulset-timescaledb.log || true
-          kubectl logs statefulset/${{ env.UMH }}-zookeeper -n ${{ env.UMH }} --all-containers --prefix > statefulset-zookeeper.log || true
-          kubectl get po,svc -n ${{ env.UMH }} > po-svc.log || true
-          kubectl describe po -n ${{ env.UMH }} > po-describe.log || true
-          kubectl describe svc -n ${{ env.UMH }} > svc-describe.log || true
-          kubectl get events -n ${{ env.UMH }} > events.log || true
-          cd ..
+          ./tools/save_logs.sh run-data-flow-test-step
       - name: Upload failed test logs
         id: upload-failed-test-logs
         if: failure()
