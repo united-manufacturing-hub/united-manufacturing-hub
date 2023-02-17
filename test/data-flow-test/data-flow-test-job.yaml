@@ -28,7 +28,7 @@ spec:
                     name: factoryinsight-secret
                     key: apiKey
             - name: QUERY
-              value: "/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/Pressure"
+              value: "/api/v2/factoryinsight/testLocation/DefaultArea/DefaultProductionLine/testMachine/tags/custom/Temperature"
             - name: PARAMETERS
               value: "&gapFilling=null&tagAggregates=avg&timeBucket=none&includePrevious=true&includeNext=true&includeRunning=true&keepStatesInteger=true"
           envFrom:
