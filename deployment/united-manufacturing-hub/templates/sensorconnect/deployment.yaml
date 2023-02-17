@@ -102,7 +102,7 @@ spec:
             - name: ADDITIONAL_SLOWDOWN_MAP
               value: {{.Values.sensorconnect.additionalSlowDownMap| quote}}
             - name: LOGGING_LEVEL
-              value: PRODUCTION
+              value: DEVELOPMENT
 
             - name: MQTT_BROKER_URL
               {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
