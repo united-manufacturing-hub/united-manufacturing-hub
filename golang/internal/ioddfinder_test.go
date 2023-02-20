@@ -46,13 +46,13 @@ func TestSaveIoddFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// test if writing iodd file works
-	err = SaveIoddFile(42, 278531, relativeDirectoryPath)
+	err = SaveIoddFile(42, 278531, relativeDirectoryPath, false)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// test if existing file is detected and corresponding error is thrown
-	err = SaveIoddFile(42, 278531, relativeDirectoryPath)
+	err = SaveIoddFile(42, 278531, relativeDirectoryPath, false)
 	if err != nil {
 		t.Error(err)
 	}
