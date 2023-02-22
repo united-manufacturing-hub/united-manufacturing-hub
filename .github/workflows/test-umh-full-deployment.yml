@@ -243,5 +243,6 @@ jobs:
             ./install-umh-latest-step
             ./upgrade-umh-step
             ./run-data-flow-test-step
+            ./run-sensorconnect-test-step
           if-no-files-found: ignore
           retention-days: 5
