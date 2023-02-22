@@ -19,7 +19,7 @@ spec:
         spec:
             containers:
                 - name: sensorconnect-mock
-                  image: matteoumh/sensorconnect-mock:latest
+                  image: unitedmanufacturinghub/sensorconnect-mock:latest
                   imagePullPolicy: Always
                   ports:
                       - name: http
