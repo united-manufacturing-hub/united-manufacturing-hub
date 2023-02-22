@@ -26,7 +26,9 @@ data:
     # Check if the datapoints array is empty
     if [ "$(jq -r '.datapoints | length' ./output)" -eq 0 ]; then
     printf "\nNo data found in the database"
-    pg_dump -h united-manufacturing-hub -p 5432 -U postgres -W changeme -d factoryinsight
+    cat "united-manufacturing-hub:5432:factoryinsight:postgres:changeme" > ~/.pgpass
+    chmod 600 ~/.pgpass
+    pg_dump -t "processvaluetable"
     exit 1
     fi
     printf "\nData found in the database"
