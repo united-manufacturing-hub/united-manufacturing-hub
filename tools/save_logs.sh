@@ -18,21 +18,21 @@ jobs=$(kubectl get jobs -n united-manufacturing-hub -o name)
 for deployment in $deployments; do
     log="${deployment##*/}"
     log="${log//*united-manufacturing-hub-}"
-    kubectl logs "$deployment" -n united-manufacturing-hub --all-containers --prefix --previous > deployment-"$log".log || true
+    kubectl logs "$deployment" -n united-manufacturing-hub --all-containers --prefix > deployment-"$log".log || true
 done
 
 # Get logs for all statefulsets
 for statefulset in $statefulsets; do
     log="${statefulset##*/}"
     log="${log//*united-manufacturing-hub-}"
-    kubectl logs "$statefulset" -n united-manufacturing-hub --all-containers --prefix --previous > statefulset-"$log".log || true
+    kubectl logs "$statefulset" -n united-manufacturing-hub --all-containers --prefix > statefulset-"$log".log || true
 done
 
 # Get logs for all jobs
 for job in $jobs; do
     log="${job##*/}"
     log="${log//*united-manufacturing-hub-}"
-    kubectl logs "$job" -n united-manufacturing-hub --all-containers --prefix --previous > job-"$log".log || true
+    kubectl logs "$job" -n united-manufacturing-hub --all-containers --prefix > job-"$log".log || true
 done
 
 # Get all pods and services
