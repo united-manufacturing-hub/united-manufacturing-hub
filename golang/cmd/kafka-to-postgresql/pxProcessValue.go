@@ -193,6 +193,11 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 			timestampMs := uint64(tsF64)
 			// zap.S().Debugf("[HT][PV] Timestamp: %d", timestampMs)
 			for k, v := range sC {
+				// Ignore null values
+				if v == nil {
+					zap.S().Debugf("[HT][PV] Ignoring null value [%s/%s/%s/%s]", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, k)
+					continue
+				}
 				switch k {
 				case "timestamp_ms":
 				// Copied these exceptions from mqtt-to-postgresql
@@ -230,8 +235,19 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 								value = 1
 							} else if valAsStr == "false" {
 								value = 0
+								// German float style
+							} else if strings.Contains(valAsStr, ",") {
+								valAsStr = strings.ReplaceAll(valAsStr, ",", ".")
+								value, err = strconv.ParseFloat(valAsStr, 64)
+								if err != nil {
+									zap.S().Warnf("error parsing %s as float64: %s [%s/%s/%s/%s]\n", valAsStr, err, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, k)
+									discardCounter++
+									continue
+								} else {
+									zap.S().Warnf("Encountered german float style: %s [%s/%s/%s/%s]\n", valAsStr, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, k)
+								}
 							} else {
-								zap.S().Warnf("error parsing %s as float64: %s\n", valAsStr, err)
+								zap.S().Warnf("error parsing %s as float64: %s [%s/%s/%s/%s]\n", valAsStr, err, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, k)
 								discardCounter++
 								continue
 							}
@@ -244,7 +260,7 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 							value = 0
 						}
 					default:
-						zap.S().Warnf("[HT][PV] Value is not a string, float64 or boolean (%v)", v)
+						zap.S().Warnf("[HT][PV] Value is not a string, float64 or boolean (%v) [%s/%s/%s/%s]", v, parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, k)
 					}
 
 					// This coversion is necessary for postgres

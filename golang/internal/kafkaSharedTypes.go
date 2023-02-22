@@ -73,6 +73,8 @@ func MemoryLimiter(allowedMemorySize int) {
 	}
 }
 
+var putBackRetries = 0
+
 // ProcessKafkaQueue processes the kafka queue and sends the messages to the processorChannel.
 // It uses topic as regex for subscribing to kafka topics.
 // If the putback channel is full, it will block until the channel is free.
@@ -93,7 +95,15 @@ func ProcessKafkaQueue(
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
 			zap.S().Debugf("%s Waiting for put back channel to empty: %d", identifier, len(putBackChannel))
+			putBackRetries += 1
 			time.Sleep(OneSecond)
+			if putBackRetries > 10 {
+				zap.S().Errorf("%s Put back channel is full for too long, shutting down", identifier)
+				for i := 0; i < 100; i++ {
+					zap.S().Errorf("We just lost data !")
+				}
+				gracefulShutdown()
+			}
 			continue
 		}
 

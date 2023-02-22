@@ -6,23 +6,29 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"go.uber.org/zap"
 	"net/http"
 )
 
 func GetKpisMethods(enterpriseName, siteName, workCellName string) (kpis models.GetKpisMethodsResponse, err error) {
 
+	zap.S().Debugf("[GetKpisMethods] Getting KPIs for enterprise %s, site %s and work cell %s", enterpriseName, siteName, workCellName)
+
 	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
+		zap.S().Debugf("[GetKpisMethods] Work cell %s not found", workCellName)
 		return
 	}
 	var stateExists bool
 	stateExists, err = GetStateExists(workCellId)
 	if err != nil {
+		zap.S().Debugf("[GetKpisMethods] Error while checking if state exists")
 		return
 	}
 	// All KPI's require state
 
 	if stateExists {
+		zap.S().Debugf("[GetKpisMethods] State exists")
 		kpis.Kpis = append(kpis.Kpis, models.OeeKpi, models.AvailabilityKpi, models.PerformanceKpi, models.QualityKpi)
 	}
 
