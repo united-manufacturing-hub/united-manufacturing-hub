@@ -1,0 +1,18 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: UMH Systems GmbH
+    software-name: United Manufacturing Hub
+
+  paths-ignore:
+    - '**/*.md'
+    - 'LICENSE'
+    - 'NOTICE'
+    - 'CODEOWNERS'
+    - 'AUTHORS'
+    - '.git'
+    - 'deployment/united-manufacturing-hub/_mqttDevCertificates/'
+    - 'deployment/united-manufacturing-hub/developmentCertificates/'
+    - 'golang/test/factoryinsight/testfiles/'
+
+  comment: on-failure
