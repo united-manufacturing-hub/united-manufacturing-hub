@@ -36,7 +36,7 @@ RUN mkdir -p "$GF_PATHS_PLUGINS" && \
         curl -sLO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
         DEBIAN_FRONTEND=noninteractive && \
         apt-get update -q && \
-        apt-get install -q -y ./google-chrome-stable_current_amd64.deb && \
+        apt-get install -q -y --no-install-recommends ./google-chrome-stable_current_amd64.deb && \
         rm -rf /var/lib/apt/lists/* && \
         rm ./google-chrome-stable_current_amd64.deb && \
         ln -s /usr/bin/google-chrome "$GF_PLUGIN_RENDERING_CHROME_BIN"; \
