@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
----
-{{if .Values.serviceAccount.create}}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{include "united-manufacturing-hub.serviceAccountName" .}}
-  labels:
-    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-  {{- with .Values.serviceAccount.annotations}}
-  annotations:
-    {{- toYaml . | nindent 4}}
-  {{end}}
-{{end}}
+name: license-eye-header
+on:
+  pull_request:
+    branches:
+      - main
+jobs:
+  license-eye-header:
+    name: License Eye Header
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: apache/skywalking-eyes@v0.4.0
+        name: License Eye Header
