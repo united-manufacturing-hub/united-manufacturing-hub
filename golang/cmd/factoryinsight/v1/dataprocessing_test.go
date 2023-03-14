@@ -41,28 +41,28 @@ func TestAddLowSpeedStates_1(t *testing.T) {
 	var processedStateArray []datamodel.StateEntry
 
 	err := internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601391491.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601391491.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601391491.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601391491.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601391491.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601391491.golden",
 		&countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601391491.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601391491.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -93,28 +93,28 @@ func TestAddLowSpeedStates_2(t *testing.T) { // Complex
 	var processedStateArray []datamodel.StateEntry
 
 	err := internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392511.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392511.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392511.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392511.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392511.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392511.golden",
 		&countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392511.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392511.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -145,28 +145,28 @@ func TestAddLowSpeedStates_NoLowSpeed_1(t *testing.T) {
 	var processedStateArray []datamodel.StateEntry
 
 	err := internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392325.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_stateArray_1601392325.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392325.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_configuration_1601392325.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392325.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_countSlice_1601392325.golden",
 		&countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392325.golden",
+		"../../../test/factoryinsight/testfiles/addLowSpeedStates_processedStateArray_1601392325.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -196,21 +196,21 @@ func TestAddUnknownMicrostops_OnlyMicrostops(t *testing.T) {
 	var processedStateArray []datamodel.StateEntry
 
 	err := internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323210.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323210.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323210.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323210.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323210.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323210.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -240,21 +240,21 @@ func TestAddUnknownMicrostops_OnlyMicrostopsOneStop(t *testing.T) {
 	var processedStateArray []datamodel.StateEntry
 
 	err := internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323241.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323241.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323241.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323241.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323241.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323241.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -283,21 +283,21 @@ func TestAddUnknownMicrostops_Complex(t *testing.T) {
 	var processedStateArray []datamodel.StateEntry
 
 	err := internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323170.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_stateArray_1601323170.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323170.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_configuration_1601323170.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323170.golden",
+		"../../../test/factoryinsight/testfiles/addUnknownMicrostops_processedStateArray_1601323170.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -403,28 +403,28 @@ func TestAutomaticallyIdentifyChangeovers_Disabled_1(t *testing.T) {
 	}
 
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712.golden",
 		&orderArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -462,28 +462,28 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_1(t *testing.T) {
 	}
 
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712_v2.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610629712_v2.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712_v2.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610629712_v2.golden",
 		&orderArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712_v2.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610629712_v2.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712_v2.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610629712_v2.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -521,28 +521,28 @@ func TestAutomaticallyIdentifyChangeovers_Enabled_2(t *testing.T) {
 	}
 
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_stateArray_1610630858.golden",
 		&stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610630858.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_orderArray_1610630858.golden",
 		&orderArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610630858.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_configuration_1610630858.golden",
 		&configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 	err = internal.Load(
-		"../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610630858.golden",
+		"../../../test/factoryinsight/testfiles/AutomaticallyIdentifyChangeovers_processedStateArray_1610630858.golden",
 		&processedStateArray)
 	if err != nil {
 		fmt.Println(err)
@@ -572,38 +572,38 @@ func TestProcessStates_Complex_1(t *testing.T) {
 
 	var processedStateArray []datamodel.StateEntry
 
-	err := internal.Load("../../test/factoryinsight/testfiles/processStates_stateArray_1601585625.golden", &stateArray)
+	err := internal.Load("../../../test/factoryinsight/testfiles/processStates_stateArray_1601585625.golden", &stateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/processStates_rawShifts_1601585625.golden", &rawShifts)
+	err = internal.Load("../../../test/factoryinsight/testfiles/processStates_rawShifts_1601585625.golden", &rawShifts)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/processStates_countSlice_1601585625.golden", &countSlice)
+	err = internal.Load("../../../test/factoryinsight/testfiles/processStates_countSlice_1601585625.golden", &countSlice)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/processStates_configuration_1601585625.golden", &configuration)
+	err = internal.Load("../../../test/factoryinsight/testfiles/processStates_configuration_1601585625.golden", &configuration)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/processStates_from_1601585625.golden", &from)
+	err = internal.Load("../../../test/factoryinsight/testfiles/processStates_from_1601585625.golden", &from)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
-	err = internal.Load("../../test/factoryinsight/testfiles/processStates_to_1601585625.golden", &to)
+	err = internal.Load("../../../test/factoryinsight/testfiles/processStates_to_1601585625.golden", &to)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
 	}
 
-	err = internal.Load("../../test/factoryinsight/testfiles/processStates_processedStateArray_1601585625.golden", &processedStateArray)
+	err = internal.Load("../../../test/factoryinsight/testfiles/processStates_processedStateArray_1601585625.golden", &processedStateArray)
 	if err != nil {
 		fmt.Println(err)
 		t.Error()
@@ -656,7 +656,7 @@ func Test_processStatesOptimized(t *testing.T) {
 	for _, tt := range tests {
 		// loading golden files
 		err := internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_processedStateArray_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_processedStateArray_"+tt.goldenTimestamp+".golden",
 			&tt.wantProcessedStateArray)
 		if err != nil {
 			fmt.Println(err)
@@ -664,7 +664,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_stateArray_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_stateArray_"+tt.goldenTimestamp+".golden",
 			&tt.args.stateArray)
 		if err != nil {
 			fmt.Println(err)
@@ -672,7 +672,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_rawShifts_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_rawShifts_"+tt.goldenTimestamp+".golden",
 			&tt.args.rawShifts)
 		if err != nil {
 			fmt.Println(err)
@@ -680,7 +680,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_countSlice_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_countSlice_"+tt.goldenTimestamp+".golden",
 			&tt.args.countSlice)
 		if err != nil {
 			fmt.Println(err)
@@ -688,7 +688,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_orderArray_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_orderArray_"+tt.goldenTimestamp+".golden",
 			&tt.args.orderArray)
 		if err != nil {
 			fmt.Println(err)
@@ -696,7 +696,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_from_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_from_"+tt.goldenTimestamp+".golden",
 			&tt.args.from)
 		if err != nil {
 			fmt.Println(err)
@@ -704,7 +704,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_to_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_to_"+tt.goldenTimestamp+".golden",
 			&tt.args.to)
 		if err != nil {
 			fmt.Println(err)
@@ -712,7 +712,7 @@ func Test_processStatesOptimized(t *testing.T) {
 		}
 
 		err = internal.Load(
-			"../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_configuration_"+tt.goldenTimestamp+".golden",
+			"../../../test/factoryinsight/testfiles/"+"processStatesOptimized"+"_configuration_"+tt.goldenTimestamp+".golden",
 			&tt.args.configuration)
 		if err != nil {
 			fmt.Println(err)
