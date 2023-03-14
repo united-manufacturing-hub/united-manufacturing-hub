@@ -1,3 +1,17 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 ARG GRAFANA_VERSION="9.3.1"
 
 FROM docker.io/grafana/grafana:${GRAFANA_VERSION} as builder
@@ -22,7 +36,7 @@ RUN mkdir -p "$GF_PATHS_PLUGINS" && \
         curl -sLO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
         DEBIAN_FRONTEND=noninteractive && \
         apt-get update -q && \
-        apt-get install -q -y ./google-chrome-stable_current_amd64.deb && \
+        apt-get install -q -y --no-install-recommends ./google-chrome-stable_current_amd64.deb && \
         rm -rf /var/lib/apt/lists/* && \
         rm ./google-chrome-stable_current_amd64.deb && \
         ln -s /usr/bin/google-chrome "$GF_PLUGIN_RENDERING_CHROME_BIN"; \
