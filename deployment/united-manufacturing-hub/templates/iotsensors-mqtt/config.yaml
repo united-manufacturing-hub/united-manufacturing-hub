@@ -23,7 +23,7 @@ data:
   config.json: |
     {
       "MQTT_BROKER": {
-      "SERVER_URL":"mqtt://united-manufacturing-hub-hivemqce-local-service:1883",
+      "SERVER_URL":"mqtt://united-manufacturing-hub-mqtt:1883",
       "SERVER_USER": "IOTSENSORSMQTT",
       "SERVER_PWD": {{.Values.iotsensorsmqtt.mqtt.password | quote}},
       "SERVER_RETAIN": "true",
