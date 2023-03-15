@@ -60,7 +60,11 @@ spec:
             memory: {{.Values.mqttbridge.resources.requests.memory}}
         env:
         - name: REMOTE_CERTIFICATE_NAME
-          value: {{.Values._000_commonConfig.serialNumber}}
+          {{- if .Values._000_commonConfig.infrastructure.mqtt.tls.useTLS}}
+          value: "USE_TLS"
+          {{- else}}
+          value: "NO_CERT"
+          {{- end}}
         - name: REMOTE_BROKER_URL
           value: {{.Values._000_commonConfig.mqttBridge.remoteBrokerURL}}
         - name: REMOTE_SUB_TOPIC
