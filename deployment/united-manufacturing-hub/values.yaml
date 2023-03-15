@@ -36,22 +36,6 @@ _000_commonConfig:
       enableKafka: true
       enableMQTT: false
 
-    # Warning: unstable
-    # cameraconnect searches for GenICam compatible cameras and reads out the pictures
-    cameraconnect:
-      enabled: false
-      trigger: "MQTT"
-      acquisitionDelay: "0.0"
-      cycleTime: "4"
-      cameraInterface: "GenICam"
-      imageWidth: "800"
-      imageHeight: "800"
-      imageChannels: "3"
-      macAddress: "02-2625A-09849"
-      exposureTime: "1000"
-      exposureAuto: "Off"
-      pixelFormat: "Mono8"
-
     # iotsensorsmqtt simulates IoT sensor data and publishes it over MQTT.
     # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsMQTT
     iotsensorsmqtt:
@@ -460,19 +444,6 @@ sensorconnect:
   mqtt:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==
-
-### cameraconnect ###
-cameraconnect:
-  image: unitedmanufacturinghub/cameraconnect
-  # tag: development
-  loggingLevel: "INFO"
-  resources:
-    requests:
-      cpu: "10m"
-      memory: "25Mi"
-    limits:
-      cpu: "100m"
-      memory: "100Mi"
 
 ### iotsensorsmqtt ###
 iotsensorsmqtt:
