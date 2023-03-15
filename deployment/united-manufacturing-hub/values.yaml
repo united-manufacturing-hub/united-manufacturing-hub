@@ -1265,8 +1265,14 @@ kafka:
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
+  externalAccess:
+    enabled: true
+    autoDiscovery:
+      enabled: true
+  rbac:
+    create: true
   service:
-    type: LoadBalancer
+    type: ClusterIP
     ports:
       client: 9092
       internal: 9093
