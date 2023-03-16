@@ -30,6 +30,6 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{.Values.mqtt_broker.persistence.storage.size}}
+      storage: {{.Values.mqtt_broker.persistence.extension.size}}
 
 {{end}}
