@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package internal
 
 import (
@@ -125,7 +139,7 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -195,7 +209,7 @@ func StoreCalculatateLowSpeedStatesToCache(
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %+v", err)
 		return
@@ -267,7 +281,8 @@ func StoreRawStatesToCache(
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
+
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -339,7 +354,7 @@ func StoreRawShiftsToCache(
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -401,7 +416,7 @@ func StoreRawCountsToCache(assetID uint32, from time.Time, to time.Time, data []
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -461,7 +476,7 @@ func StoreAverageStateTimeToCache(key string, data []interface{}) {
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -505,7 +520,7 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 	return
 }
 
-// GetDistinctProcessValuesFromCache gets distinct process values from cache
+// GetDistinctProcessValuesStringFromCache gets distinct process values from cache
 func GetDistinctProcessValuesStringFromCache(customerID string, location string, assetID string) (
 	data []string,
 	cacheHit bool) {
@@ -542,7 +557,7 @@ func GetDistinctProcessValuesStringFromCache(customerID string, location string,
 	return
 }
 
-// StoreDistinctProcessValuesToCache stores distinct process values to cache
+// StoreDistinctProcessValuesStringToCache stores distinct process values to cache
 func StoreDistinctProcessValuesStringToCache(customerID string, location string, assetID string, data []string) {
 
 	if rdb == nil { // only the case during tests
@@ -564,7 +579,7 @@ func StoreDistinctProcessValuesStringToCache(customerID string, location string,
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, 5*time.Minute).Err()
+	err = RedisSafeSet(ctx, key, b, 5*time.Minute)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -587,9 +602,8 @@ func StoreCustomerConfigurationToCache(customerID string, data datamodel.Custome
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
-		zap.S().Errorf("redis failed")
 		zap.S().Errorf("redis failed: %#v", err)
 		return
 	}
@@ -617,7 +631,7 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, 5*time.Minute).Err()
+	err = RedisSafeSet(ctx, key, b, 5*time.Minute)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -715,7 +729,7 @@ func StoreAssetIDToCache(customerID string, location string, assetID string, DBa
 
 	b := strconv.Itoa(int(DBassetID))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -778,7 +792,7 @@ func StoreUniqueProductIDToCache(aid string, DBassetID uint32, uid uint32) {
 
 	b := strconv.Itoa(int(uid))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -841,7 +855,7 @@ func StoreProductIDToCache(productName int32, DBassetID uint32, DBProductId uint
 
 	b := strconv.Itoa(int(DBProductId))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -864,7 +878,7 @@ func StoreEnterpriseIDToCache(enterpriseName string, enterpriseID uint32) {
 
 	b := strconv.Itoa(int(enterpriseID))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -929,7 +943,7 @@ func StoreSiteIDToCache(enterpriseId uint32, siteName string, siteID uint32) {
 
 	b := strconv.Itoa(int(siteID))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -996,7 +1010,7 @@ func StoreAreaIDToCache(siteId uint32, areaName string, areaID uint32) {
 
 	b := strconv.Itoa(int(areaID))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -1063,7 +1077,7 @@ func StoreProductionLineIDToCache(areaId uint32, productionLineName string, prod
 
 	b := strconv.Itoa(int(productionLineID))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -1130,7 +1144,7 @@ func StoreWorkCellIDToCache(productionLineId uint32, workCellName string, workCe
 
 	b := strconv.Itoa(int(workCellID))
 
-	err := rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err := RedisSafeSet(ctx, key, []byte(b), redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed: %#v", err)
 		return
@@ -1196,7 +1210,7 @@ func StoreEnterpriseConfigurationToCache(enterpriseName string, data datamodel.E
 		return
 	}
 
-	err = rdb.Set(ctx, key, b, redisDataExpiration).Err()
+	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
 		zap.S().Errorf("redis failed")
 		zap.S().Errorf("redis failed: %#v", err)
@@ -1271,25 +1285,6 @@ func GetTiered(key string) (cached bool, value interface{}) {
 	return
 }
 
-// SetTiered sets memcache and redis with expiration
-func SetTiered(key string, value interface{}, redisExpiration time.Duration) {
-	if memCache == nil && rdb == nil {
-		return
-	}
-	memCache.SetDefault(key, value)
-	rdb.Set(ctx, key, value, redisExpiration)
-}
-
-// SetTieredLongTerm is an helper, that calls SetTiered with default redis expiration
-func SetTieredLongTerm(key string, value interface{}) {
-	SetTiered(key, value, redisDataExpiration)
-}
-
-// SetTieredShortTerm is an helper, that calls SetTiered with default memory expiration
-func SetTieredShortTerm(key string, value interface{}) {
-	SetTiered(key, value, memoryDataExpiration)
-}
-
 func SetMemcached(key string, value interface{}) {
 	memCache.SetDefault(key, value)
 }
@@ -1301,4 +1296,15 @@ func GetMemcached(key string) (value interface{}, found bool) {
 
 func SetMemcachedLong(key string, value interface{}, d time.Duration) {
 	memCache.Set(key, value, d)
+}
+
+func RedisSafeSet(ctx context.Context, k string, v []byte, t time.Duration) error {
+	// If v > 512MB, don't store it in redis
+	// To be safe, we'll use 500MB as a cutoff
+	if len(v) > 500*1024*1024 {
+		zap.S().Warnf("RedisSafeSet: value too large to store in redis (%s)", k)
+		return nil
+	}
+	err := rdb.Set(ctx, k, v, t).Err()
+	return err
 }
