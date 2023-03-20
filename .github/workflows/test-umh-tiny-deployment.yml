@@ -140,6 +140,8 @@ jobs:
           kubectl delete deployment ${{ env.UMH }}-kafkatopostgresql -n ${{ env.UMH }} || true
           kubectl delete deployment ${{ env.UMH }}-mqttkafkabridge -n ${{ env.UMH }} || true
           kubectl delete statefulset ${{ env.UMH }}-nodered -n ${{ env.UMH }} || true
+          kubectl delete statefulset ${{ env.UMH }}-hivemqce -n ${{ env.UMH }} || true
+          kubectl delete pvc ${{ env.UMH }}-hivemqce-claim-extensions -n ${{ env.UMH }} || true
           helm upgrade ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
             --set "kafkastatedetector.image.tag=${GITHUB_HEAD_REF##*/}" \
