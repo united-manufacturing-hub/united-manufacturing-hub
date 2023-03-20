@@ -1,7 +1,7 @@
 <!-- PROJECT LOGO -->
 # United Manufacturing Hub
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![License: AGPL v3](https://img.shields.io/badge/License-Apache2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Go Report Card](https://goreportcard.com/badge/github.com/united-manufacturing-hub/united-manufacturing-hub)](https://goreportcard.com/report/github.com/united-manufacturing-hub/united-manufacturing-hub)
 ![Docker Pulls](https://img.shields.io/docker/pulls/unitedmanufacturinghub/factoryinsight)
 ![Website](https://img.shields.io/website?up_message=online&url=https%3A%2F%2Fwww.united-manufacturing-hub.com)
@@ -25,7 +25,7 @@ The United Manufacturing Hub is an Open-Source [Helm chart for Kubernetes](https
 <!-- LICENSE -->
 ## License
 
-All source code is distributed under the GNU AFFERO GENERAL PUBLIC LICENSE. See [`LICENSE`](LICENSE) for more information. All other components (e.g. trademarks, images, logos, documentation, publications), especially those in the `/docs` folder, are property of the respective owner.
+All source code is distributed under the APACHE LICENSE, VERSION 2.0. See [`LICENSE`](LICENSE) for more information. All other components (e.g. trademarks, images, logos, documentation, publications), especially those in the `/docs` folder, are property of the respective owner.
 
 ## About our current version 0.x.x.
 Our current release, has been deployed and tested at a number of industrial sites worldwide and has proven to be stable in a variety of environments. While we have not yet reached a final version 1.0.0, this is typical for infrastructure projects that require extensive year-long testing and evaluation before a release. We are confident in the stability and reliability of our current release, which has been thoroughly tested over the past few years. As an open-source project, we welcome community involvement and feedback in the ongoing development and refinement of our software. We are committed to ensuring that our software is reliable and ready for deployment in industrial settings.

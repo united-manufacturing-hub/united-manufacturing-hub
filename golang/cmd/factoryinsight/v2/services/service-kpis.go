@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package services
 
 import (
@@ -6,23 +20,29 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
+	"go.uber.org/zap"
 	"net/http"
 )
 
 func GetKpisMethods(enterpriseName, siteName, workCellName string) (kpis models.GetKpisMethodsResponse, err error) {
 
+	zap.S().Debugf("[GetKpisMethods] Getting KPIs for enterprise %s, site %s and work cell %s", enterpriseName, siteName, workCellName)
+
 	workCellId, err := GetWorkCellId(enterpriseName, siteName, workCellName)
 	if err != nil {
+		zap.S().Debugf("[GetKpisMethods] Work cell %s not found", workCellName)
 		return
 	}
 	var stateExists bool
 	stateExists, err = GetStateExists(workCellId)
 	if err != nil {
+		zap.S().Debugf("[GetKpisMethods] Error while checking if state exists")
 		return
 	}
 	// All KPI's require state
 
 	if stateExists {
+		zap.S().Debugf("[GetKpisMethods] State exists")
 		kpis.Kpis = append(kpis.Kpis, models.OeeKpi, models.AvailabilityKpi, models.PerformanceKpi, models.QualityKpi)
 	}
 
