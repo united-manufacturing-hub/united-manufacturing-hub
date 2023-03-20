@@ -52,7 +52,7 @@ RUN if [ $GF_INSTALL_IMAGE_RENDERER_PLUGIN = "true" ]; then \
         plugins install grafana-image-renderer; \
     fi
 
-ARG GF_INSTALL_PLUGINS="https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/download/v1.2.1/umh-datasource.zip;umh-datasource,https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/download/v1.0.3/umh-factoryinput-panel.zip;umh-factoryinput-panel,https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/download/v1.1.1/umh-v2-datasource.zip;umh-v2-datasource,grafana-worldmap-panel,grafana-piechart-panel,aceiot-svg-panel,grafana-worldmap-panel,natel-discrete-panel,isaozler-paretochart-panel,williamvenner-timepickerbuttons-panel,agenty-flowcharting-panel,marcusolsson-dynamictext-panel,factry-untimely-panel,cloudspout-button-panel"
+ARG GF_INSTALL_PLUGINS="https://github.com/united-manufacturing-hub/united-manufacturing-hub-datasource/releases/download/v1.2.1/umh-datasource.zip;umh-datasource,https://github.com/united-manufacturing-hub/umh-factoryinput-panel/releases/download/v1.0.3/umh-factoryinput-panel.zip;umh-factoryinput-panel,https://github.com/united-manufacturing-hub/umh-datasource-v2/releases/download/v1.1.4/umh-v2-datasource.zip;umh-v2-datasource,grafana-worldmap-panel,grafana-piechart-panel,aceiot-svg-panel,grafana-worldmap-panel,natel-discrete-panel,isaozler-paretochart-panel,williamvenner-timepickerbuttons-panel,agenty-flowcharting-panel,marcusolsson-dynamictext-panel,factry-untimely-panel,cloudspout-button-panel"
 
 RUN if [ ! -z "${GF_INSTALL_PLUGINS}" ]; then \
       OLDIFS=$IFS; \
@@ -63,6 +63,10 @@ RUN if [ ! -z "${GF_INSTALL_PLUGINS}" ]; then \
           pluginUrl=$(echo "$plugin" | cut -d';' -f 1); \
           pluginInstallFolder=$(echo "$plugin" | cut -d';' -f 2); \
           grafana-cli --pluginUrl ${pluginUrl} --pluginsDir "${GF_PATHS_PLUGINS}" plugins install "${pluginInstallFolder}"; \
+          # Fail build if this has failed ! \
+            if [ $? -ne 0 ]; then \
+                exit 1; \
+            fi \
         else \
           grafana-cli --pluginsDir "${GF_PATHS_PLUGINS}" plugins install ${plugin}; \
         fi \

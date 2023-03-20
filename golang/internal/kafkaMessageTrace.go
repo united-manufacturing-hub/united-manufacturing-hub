@@ -32,12 +32,12 @@ type TraceValue struct {
 
 func Produce(producer *kafka.Producer, msg *kafka.Message, deliveryChan chan kafka.Event) error {
 	if MicroserviceName == "" {
-		zap.S().Error("MicroserviceName is empty")
-		return errors.New("microservice name is empty")
+		zap.S().Error("MICROSERVICE_NAME is empty")
+		return errors.New("MICROSERVICE_NAME name is empty")
 	}
 	if SerialNumber == "" {
-		zap.S().Error("SerialNumber is empty")
-		return errors.New("microservice name is empty")
+		zap.S().Error("SERIAL_NUMBER is empty")
+		return errors.New("SERIAL_NUMBER name is empty")
 	}
 	identifier := MicroserviceName + "-" + SerialNumber
 	err := AddXTrace(msg, identifier)

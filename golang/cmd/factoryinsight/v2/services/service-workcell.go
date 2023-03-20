@@ -70,3 +70,39 @@ func GetWorkCells(
 
 	return
 }
+
+func GetAllWorkCellIds() (workCellIds []uint32, err error) {
+	workCellIds = make([]uint32, 0)
+
+	sqlStatement := `SELECT id FROM assetTable;`
+
+	var rows *sql.Rows
+	rows, err = database.Db.Query(sqlStatement)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		zap.S().Warnf("[GetAllWorkCellIds] No work cells found")
+		return
+	} else if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var assetId uint32
+		err = rows.Scan(&assetId)
+		if err != nil {
+			database.ErrorHandling(sqlStatement, err, false)
+			return
+		}
+		workCellIds = append(workCellIds, assetId)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+	return
+}
