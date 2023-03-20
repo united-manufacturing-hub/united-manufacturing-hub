@@ -37,6 +37,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	apiV1 "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v1"
 	v2controllers "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/controllers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/services"
 	"net/http"
 	"os"
 	"os/signal"
@@ -334,6 +335,7 @@ func setupRestAPI(accounts gin.Accounts, version int) {
 				"/:enterpriseName/:siteName/:areaName/:productionLineName/:workCellName/tables/:tableType",
 				v2controllers.GetTableDataHandler)
 		}
+		go services.TagPrefetch()
 	}
 
 	/*

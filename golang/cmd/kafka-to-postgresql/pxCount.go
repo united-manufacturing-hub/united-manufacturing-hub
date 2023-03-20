@@ -119,11 +119,14 @@ func (c Count) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 		var pqErr *pq.Error
 		ok := errors.As(err, &pqErr)
 
-		if ok {
+		if !ok {
 			zap.S().Errorf("Failed to convert error to pq.Error: %s", err.Error())
+
 		} else {
 			zap.S().Errorf("Error executing statement: %s -> %s", pqErr.Code, pqErr.Message)
 			if pqErr.Code == Sql23p01ExclusionViolation {
+				return true, err, true
+			} else if pqErr.Code == Sql23505UniqueViolation {
 				return true, err, true
 			}
 		}
