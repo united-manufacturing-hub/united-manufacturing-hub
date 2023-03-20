@@ -25,7 +25,7 @@ metadata:
     app.kubernetes.io/managed-by: helm
     app.kubernetes.io/component: "hivemqce"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
     {{- if .Values.mqtt_broker.service.mqtt.enabled }}
     - port: {{ .Values.mqtt_broker.service.mqtt.port }}
