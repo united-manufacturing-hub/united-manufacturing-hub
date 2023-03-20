@@ -1004,7 +1004,7 @@ grafana:
     port: 8080
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-umh:1.2.0
+    - image: unitedmanufacturinghub/grafana-umh:1.2.1
       name: init-plugins
       imagePullPolicy: IfNotPresent
       command: ['sh', '-c', 'cp -r /plugins /var/lib/grafana/']
