@@ -26,11 +26,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
+	"math/rand"
 	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -138,60 +140,20 @@ func GetCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
 	zap.S().Infof(
 		"[GetTags] Getting custom tags for work cell %d", workCellId)
 
-	var sqlStatement string
-	if isPVS {
-		sqlStatement = `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
-	} else {
-		sqlStatement = `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
+	var b bool
+	tags, b = GetPrefetchedTags(workCellId, isPVS)
+	if b {
+		// Retriggers the prefetching of the tags in the background
+		go prefetch(workCellId)
+		return tags, nil
 	}
-	rows, err := database.Db.Query(sqlStatement, workCellId)
+
+	tags, err = getCustomTags(workCellId, isPVS)
 	if err != nil {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
+		return nil, err
 	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var valueName string
-		err = rows.Scan(&valueName)
-		if err != nil {
-			database.ErrorHandling(sqlStatement, err, false)
-			return
-		}
-
-		tags = append(tags, valueName)
-	}
-
-	return
-}
-
-func GetCustomStringTags(workCellId uint32) (tags []string, err error) {
-	zap.S().Infof(
-		"[GetTags] Getting custom tags for work cell %d", workCellId)
-
-	sqlStatement := `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
-
-	rows, err := database.Db.Query(sqlStatement, workCellId)
-	if err != nil {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var valueName string
-		err = rows.Scan(&valueName)
-		if err != nil {
-			database.ErrorHandling(sqlStatement, err, false)
-			return
-		}
-
-		tags = append(tags, valueName)
-	}
-
-	return
+	updateWorkCellTag(workCellId, tags, isPVS)
+	return tags, err
 }
 
 type Parent struct {
@@ -368,30 +330,66 @@ func ProcessStateTagRequest(c *gin.Context, request models.GetTagsDataRequest) {
 		return
 	}
 
-	// raw states from database
-	rawStates, err := GetStatesRaw(workCellId, from, to, configuration)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(4)
 
-	// get shifts for noShift detection
-	rawShifts, err := GetShiftsRaw(workCellId, from, to, configuration)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
+	var rawStates []datamodel.StateEntry
+	var rawStatesError error
 
-	// get counts for lowSpeed detection
-	countSlice, err := GetCountsRaw(workCellId, from, to)
-	if err != nil {
-		helpers.HandleInternalServerError(c, err)
-		return
-	}
+	var rawShifts []datamodel.ShiftEntry
+	var rawShiftsError error
+
+	var countSlice []datamodel.CountEntry
+	var countSliceError error
+
+	var orderArray []datamodel.OrdersRaw
+	var orderArrayError error
+
+	go func() {
+		defer waitGroup.Done()
+		// raw states from database
+		rawStates, rawStatesError = GetStatesRaw(workCellId, from, to, configuration)
+	}()
+
+	go func() {
+		// get shifts for noShift detection
+		defer waitGroup.Done()
+		// get shifts for noShift detection
+		rawShifts, rawShiftsError = GetShiftsRaw(workCellId, from, to, configuration)
+	}()
+
+	go func() {
+		// get counts for lowSpeed detection
+		defer waitGroup.Done()
+		// get counts for lowSpeed detection
+		countSlice, countSliceError = GetCountsRaw(workCellId, from, to)
+	}()
 
 	// get orders for changeover detection
-	orderArray, err := GetOrdersRaw(workCellId, from, to)
-	if err != nil {
+	go func() {
+		// get orders for changeover detection
+		defer waitGroup.Done()
+		// get orders for changeover detection
+		orderArray, orderArrayError = GetOrdersRaw(workCellId, from, to)
+	}()
+
+	waitGroup.Wait()
+
+	if rawStatesError != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+	if rawShiftsError != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	if countSliceError != nil {
+		helpers.HandleInternalServerError(c, err)
+		return
+	}
+
+	if orderArrayError != nil {
 		helpers.HandleInternalServerError(c, err)
 		return
 	}
@@ -882,4 +880,179 @@ SELECT
 		return timestamp, nil
 	}
 	return timestamp, err
+}
+
+type TagsWithExpiry struct {
+	tag    []string
+	expiry time.Time
+}
+
+var prefetchedTags = make(map[uint32]TagsWithExpiry)
+var prefetchedStringTags = make(map[uint32]TagsWithExpiry)
+
+func GetPrefetchedTags(workCellId uint32, isPVS bool) ([]string, bool) {
+	if isPVS {
+		// Check if tags are in map
+		if tags, ok := prefetchedTags[workCellId]; ok {
+			// Check if tags are still valid
+			if time.Now().Before(tags.expiry) {
+				return tags.tag, true
+			}
+		}
+	} else {
+		// Check if tags are in map
+		if tags, ok := prefetchedStringTags[workCellId]; ok {
+			// Check if tags are still valid
+			if time.Now().Before(tags.expiry) {
+				return tags.tag, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func TagPrefetch() {
+	// Prefetch all at startup
+	workCellIds, err := GetAllWorkCellIds()
+	if err != nil {
+		zap.S().Errorf("Error while prefetching tags: %v", err)
+		return
+	}
+
+	var waitGroupPrefetch sync.WaitGroup
+	waitGroupPrefetch.Add(len(workCellIds))
+
+	// Split for into 16 goroutines
+
+	for i := 0; i < len(workCellIds); i += 16 {
+		end := i + 16
+		if end > len(workCellIds) {
+			end = len(workCellIds)
+		}
+		go func(workCellIds []uint32) {
+			for _, workCellId := range workCellIds {
+				err = prefetch(workCellId)
+				if err != nil {
+					zap.S().Errorf("Error while prefetching tag for workCellId %d: %v", workCellIds, err)
+				}
+			}
+			waitGroupPrefetch.Done()
+		}(workCellIds[i:end])
+	}
+
+	waitGroupPrefetch.Wait()
+
+	zap.S().Infof("Prefetching tags finished")
+
+	for {
+		// Sleep for 10 seconds
+		time.Sleep(10 * time.Second)
+		workCellIds, err = GetAllWorkCellIds()
+		if err != nil {
+			zap.S().Errorf("Error while prefetching tags: %v", err)
+			continue
+		}
+
+		// Select all workCellIds that are not in the map
+		for _, workCellId := range workCellIds {
+			if _, ok := prefetchedTags[workCellId]; !ok {
+				zap.S().Debugf("Prefetching new workCellId %d", workCellId)
+				err = prefetch(workCellId)
+				if err != nil {
+					zap.S().Errorf("Error while prefetching tag for workCellId %d: %v", workCellIds, err)
+				}
+			}
+		}
+
+		// Select all expired workCellIds
+		for workCellId, tags := range prefetchedTags {
+			if time.Now().After(tags.expiry) {
+				zap.S().Debugf("Prefetching expired workCellId %d", workCellId)
+				err = prefetch(workCellId)
+				if err != nil {
+					zap.S().Errorf("Error while prefetching tag for workCellId %d: %v", workCellIds, err)
+				}
+			}
+		}
+	}
+}
+
+var inProgressUpdate = make(map[uint32]bool)
+var inProgressUpdateMutex = &sync.Mutex{}
+
+func prefetch(workCellId uint32) error {
+	// Check if workCellId is already in progress
+	inProgressUpdateMutex.Lock()
+	if _, ok := inProgressUpdate[workCellId]; ok {
+		zap.S().Debugf("Prefetching tags for workCellId %d already in progress", workCellId)
+		inProgressUpdateMutex.Unlock()
+		return nil
+	}
+	inProgressUpdate[workCellId] = true
+	inProgressUpdateMutex.Unlock()
+
+	zap.S().Debugf("Prefetching tags for workCellId %d", workCellId)
+	tags, err := getCustomTags(workCellId, false)
+	if err != nil {
+		return err
+	}
+
+	updateWorkCellTag(workCellId, tags, false)
+
+	stringTags, err := getCustomTags(workCellId, true)
+	if err != nil {
+		return err
+	}
+	updateWorkCellTag(workCellId, stringTags, true)
+
+	inProgressUpdateMutex.Lock()
+	delete(inProgressUpdate, workCellId)
+	inProgressUpdateMutex.Unlock()
+	return nil
+}
+
+func updateWorkCellTag(workCellId uint32, tag []string, isPVS bool) {
+
+	tenMinutesPlusRandom := time.Now().Add(10 * time.Minute).Add(time.Duration(rand.Intn(300)) * time.Second)
+
+	if isPVS {
+		prefetchedTags[workCellId] = TagsWithExpiry{
+			tag:    tag,
+			expiry: tenMinutesPlusRandom,
+		}
+	} else {
+		prefetchedStringTags[workCellId] = TagsWithExpiry{
+			tag:    tag,
+			expiry: tenMinutesPlusRandom,
+		}
+	}
+}
+
+func getCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
+	var sqlStatement string
+	if isPVS {
+		sqlStatement = `SELECT DISTINCT valueName FROM processValueStringTable WHERE asset_id = $1`
+	} else {
+		sqlStatement = `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
+	}
+	rows, err := database.Db.Query(sqlStatement, workCellId)
+	if err != nil {
+		database.ErrorHandling(sqlStatement, err, false)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var valueName string
+		err = rows.Scan(&valueName)
+		if err != nil {
+			database.ErrorHandling(sqlStatement, err, false)
+			return
+		}
+
+		tags = append(tags, valueName)
+	}
+
+	return
 }
