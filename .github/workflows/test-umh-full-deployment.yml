@@ -26,8 +26,8 @@ on:
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
   HELM_TIMEOUT: 10m
-  K3D_VERSION: v5.4.6
-  K3S_VERSION: v1.24.4-k3s1
+  K3D_VERSION: v5.4.9
+  K3S_VERSION: v1.25.7-k3s1
   VALUES_FILE: ./test/test-values-full.yaml
   UMH: united-manufacturing-hub
 
