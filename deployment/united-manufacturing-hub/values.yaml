@@ -493,7 +493,7 @@ kafkabridge:
 nodered:
   mqtt:
     encryptedPassword: aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==
-  tag: 2.0.6
+  tag: 3.0.2
   port: 1880
   storageRequest: 1Gi
   env:
