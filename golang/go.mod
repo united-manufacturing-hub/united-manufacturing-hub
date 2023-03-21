@@ -44,7 +44,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20230118134722-a68e582fa157
 	gonum.org/v1/gonum v0.12.0
-	k8s.io/apimachinery v0.26.1
+	k8s.io/apimachinery v0.26.3
 )
 
 require (
