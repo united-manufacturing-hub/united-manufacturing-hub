@@ -36,9 +36,7 @@ func setupQueue(direction string) (pq *goque.Queue, err error) {
 }
 
 func closeQueue(pq *goque.Queue) (err error) {
-
 	err = pq.Close()
-
 	if err != nil {
 		zap.S().Errorf("Error closing queue", err)
 		return
@@ -50,14 +48,12 @@ func closeQueue(pq *goque.Queue) (err error) {
 func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	// Prevents recursion
 	if !CheckIfNewMessageOrStore(message, topic) {
-		zap.S().Debugf("Message already in queue (%s) (%s)", topic, message)
 		return
 	}
 	storeMessageIntoQueue(topic, message, pq)
 }
 
 func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
-	zap.S().Debugf("Stored new message in queue (%s) (%s)", topic, message)
 	newElement := queueObject{
 		Topic:   topic,
 		Message: message,
@@ -71,7 +67,6 @@ func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 
 func retrieveMessageFromQueue(pq *goque.Queue) (queueObj *queueObject, err error, gotItem bool) {
 	if pq.Length() == 0 {
-		zap.S().Debugf("pq.Length == 0")
 		return
 	}
 	var item *goque.Item
