@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -22,9 +36,7 @@ func setupQueue(direction string) (pq *goque.Queue, err error) {
 }
 
 func closeQueue(pq *goque.Queue) (err error) {
-
 	err = pq.Close()
-
 	if err != nil {
 		zap.S().Errorf("Error closing queue", err)
 		return
@@ -36,14 +48,12 @@ func closeQueue(pq *goque.Queue) (err error) {
 func storeNewMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 	// Prevents recursion
 	if !CheckIfNewMessageOrStore(message, topic) {
-		zap.S().Debugf("Message already in queue (%s) (%s)", topic, message)
 		return
 	}
 	storeMessageIntoQueue(topic, message, pq)
 }
 
 func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
-	zap.S().Debugf("Stored new message in queue (%s) (%s)", topic, message)
 	newElement := queueObject{
 		Topic:   topic,
 		Message: message,
@@ -57,7 +67,6 @@ func storeMessageIntoQueue(topic string, message []byte, pq *goque.Queue) {
 
 func retrieveMessageFromQueue(pq *goque.Queue) (queueObj *queueObject, err error, gotItem bool) {
 	if pq.Length() == 0 {
-		zap.S().Debugf("pq.Length == 0")
 		return
 	}
 	var item *goque.Item

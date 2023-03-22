@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package internal
 
 import (
@@ -17,13 +31,22 @@ import (
 	"go.uber.org/zap"
 )
 
-func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (err error) {
+func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string, isTest bool) (err error) {
 	// download iodd file
-	filemap, err := GetIoddFile(vendorId, deviceId)
-	if err != nil {
-		return err
+	var filemap []IoDDFile
+	if !isTest {
+		zap.S().Debugf("Downloading iodd file for vendorId: %v, deviceId: %v", vendorId, deviceId)
+		filemap, err = GetIoddFile(vendorId, deviceId)
+		if err != nil {
+			return err
+		}
+	} else {
+		zap.S().Debug("Using test iodd file")
+		filemap, err = getTestIoddFile()
+		if err != nil {
+			return err
+		}
 	}
-
 	// build path for downloaded file
 	absoluteDirectoryPath, err := filepath.Abs(relativeDirectoryPath)
 	if err != nil {
@@ -56,6 +79,65 @@ func SaveIoddFile(vendorId int64, deviceId int, relativeDirectoryPath string) (e
 		return err
 	}
 	return
+}
+
+// getTestIoddFile returns a test iodd file from the file system
+func getTestIoddFile() ([]IoDDFile, error) {
+	var err error
+	var filemap []IoDDFile
+	var dat []byte
+	var ioddContext Content
+	entries, err := os.ReadDir("/test-ioddfiles")
+	if err != nil {
+		zap.S().Errorf("Unable to read test iodd file: %v", err)
+		return filemap, err
+	}
+	for _, entry := range entries {
+		zap.S().Debugf("entry: %v", entry.Name())
+		if !entry.IsDir() {
+			if strings.HasSuffix(entry.Name(), ".xml") {
+				dat, err = os.ReadFile("/test-ioddfiles/" + entry.Name())
+				if err != nil {
+					zap.S().Errorf("Unable to read test iodd file: %v", err)
+					return filemap, err
+				}
+				ioddContext, err = getTestIoddFileContext(entry.Name())
+				if err != nil {
+					zap.S().Errorf("Unable to get test iodd file context: %v", err)
+					return filemap, err
+				}
+				filemap = append(filemap, IoDDFile{
+					Name:    entry.Name(),
+					File:    dat,
+					Context: ioddContext,
+				})
+			} else {
+				continue
+			}
+		} else {
+			continue
+		}
+	}
+	return filemap, nil
+}
+
+// getTestIoddFileContext returns a test iodd file context from the file system
+func getTestIoddFileContext(fileName string) (Content, error) {
+	var err error
+	var content Content
+	var dat []byte
+	fileName = strings.Replace(fileName, ".xml", "-context.json", 1)
+	dat, err = os.ReadFile("/test-ioddfiles/" + fileName)
+	if err != nil {
+		zap.S().Errorf("Unable to read test iodd file context: %v", err)
+		return content, err
+	}
+	err = jsoniter.Unmarshal(dat, &content)
+	if err != nil {
+		zap.S().Errorf("Unable to unmarshal test iodd file context: %v", err)
+		return content, err
+	}
+	return content, nil
 }
 
 // GetIoddFile downloads a ioddfiles from ioddfinder and returns a list of valid files for the request (This can be multiple, if the vendor has multiple languages or versions published)

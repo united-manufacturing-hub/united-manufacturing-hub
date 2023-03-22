@@ -1,3 +1,17 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 ---
 {{if .Values._000_commonConfig.datasources.sensorconnect.enabled}}
 
@@ -134,6 +148,11 @@ spec:
               value: {{.Values.sensorconnect.mqtt.password | quote}}
             - name: INSECURE_SKIP_VERIFY
               value: {{.Values._000_commonConfig.infrastructure.mqtt.tls.insecureSkipVerify | quote}}
+            - name: TEST
+              value: {{.Values._000_commonConfig.datasources.sensorconnect.testMode | quote}}
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
+
 
             {{if .Values._000_commonConfig.debug.enableFGTrace}}
             - name: DEBUG_ENABLE_FGTRACE
@@ -148,6 +167,10 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
               mountPath: /SSL_certs/mqtt
               readOnly: true
+              {{if .Values._000_commonConfig.datasources.sensorconnect.testMode}}
+            - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
+              mountPath: /test-ioddfiles
+              {{end}}
       volumes:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
@@ -158,6 +181,12 @@ spec:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-secrets
+        {{if .Values._000_commonConfig.datasources.sensorconnect.testMode}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-test
+          hostPath:
+            path: /tmp/test-ioddfiles
+            type: Directory
+        {{end}}
 
 
 
