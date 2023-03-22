@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package internal
 
 import (
@@ -73,6 +87,8 @@ func MemoryLimiter(allowedMemorySize int) {
 	}
 }
 
+var putBackRetries = 0
+
 // ProcessKafkaQueue processes the kafka queue and sends the messages to the processorChannel.
 // It uses topic as regex for subscribing to kafka topics.
 // If the putback channel is full, it will block until the channel is free.
@@ -93,7 +109,15 @@ func ProcessKafkaQueue(
 		if len(putBackChannel) > 100 {
 			// We have too many CountMessagesToCommitLater in the put back channel, so we need to wait for some to be processed
 			zap.S().Debugf("%s Waiting for put back channel to empty: %d", identifier, len(putBackChannel))
+			putBackRetries += 1
 			time.Sleep(OneSecond)
+			if putBackRetries > 10 {
+				zap.S().Errorf("%s Put back channel is full for too long, shutting down", identifier)
+				for i := 0; i < 100; i++ {
+					zap.S().Errorf("We just lost data !")
+				}
+				gracefulShutdown()
+			}
 			continue
 		}
 

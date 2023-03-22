@@ -1,3 +1,17 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 ---
 # Please adjust the following lines
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
@@ -21,22 +35,6 @@ _000_commonConfig:
       iprange: "192.168.10.1/24"  # IP Range in CIDR notation
       enableKafka: true
       enableMQTT: false
-
-    # Warning: unstable
-    # cameraconnect searches for GenICam compatible cameras and reads out the pictures
-    cameraconnect:
-      enabled: false
-      trigger: "MQTT"
-      acquisitionDelay: "0.0"
-      cycleTime: "4"
-      cameraInterface: "GenICam"
-      imageWidth: "800"
-      imageHeight: "800"
-      imageChannels: "3"
-      macAddress: "02-2625A-09849"
-      exposureTime: "1000"
-      exposureAuto: "Off"
-      pixelFormat: "Mono8"
 
     # iotsensorsmqtt simulates IoT sensor data and publishes it over MQTT.
     # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsMQTT
@@ -447,19 +445,6 @@ sensorconnect:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==
 
-### cameraconnect ###
-cameraconnect:
-  image: unitedmanufacturinghub/cameraconnect
-  # tag: development
-  loggingLevel: "INFO"
-  resources:
-    requests:
-      cpu: "10m"
-      memory: "25Mi"
-    limits:
-      cpu: "100m"
-      memory: "100Mi"
-
 ### iotsensorsmqtt ###
 iotsensorsmqtt:
   image: amineamaach/sensors-mqtt
@@ -508,7 +493,7 @@ kafkabridge:
 nodered:
   mqtt:
     encryptedPassword: aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==
-  tag: 2.0.6
+  tag: 3.0.2
   port: 1880
   storageRequest: 1Gi
   env:
@@ -1019,7 +1004,7 @@ grafana:
     port: 8080
 
   extraInitContainers:
-    - image: unitedmanufacturinghub/grafana-umh:1.2.0
+    - image: unitedmanufacturinghub/grafana-umh:1.2.1
       name: init-plugins
       imagePullPolicy: IfNotPresent
       command: ['sh', '-c', 'cp -r /plugins /var/lib/grafana/']
@@ -1162,6 +1147,10 @@ grafana:
 console:
   serviceAccount:
     create: false
+  service:
+    type: LoadBalancer
+    port: 8090
+    targetPort: 8080
   console:
     config:
       kafka:
@@ -1276,6 +1265,12 @@ kafka:
   replicas: 1
   storageRequest: 1Gi
   allowPlaintextListener: true
+  externalAccess:
+    enabled: true
+    autoDiscovery:
+      enabled: true
+  rbac:
+    create: true
   service:
     type: ClusterIP
     ports:

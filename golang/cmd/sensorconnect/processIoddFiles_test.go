@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -28,7 +42,7 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	ioddFilemapKey.VendorId = 42
 
 	// execute function and check for errors
-	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeIODDFilePath, fileInfoSlice)
+	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,7 +72,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 		zap.S().Errorf("removeFilesFromDirectory failed: %v", err)
 	}
 	ioDeviceMap.Delete(ioddFilemapKey)
-	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -87,7 +101,7 @@ func TestReadIoddFiles(t *testing.T) {
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
 	ioDeviceMap.Delete(ioddFilemapKey)
-	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -148,24 +162,24 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	ioddFilemapKey_IFMiodd.VendorId = 310
 
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeIODDFilePath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeIODDFilePath, fileInfoSlice)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeIODDFilePath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeIODDFilePath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeIODDFilePath, fileInfoSlice, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// execute function and check for errors
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}

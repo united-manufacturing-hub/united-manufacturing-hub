@@ -1,4 +1,4 @@
-name: kafka-init
+name: grafana-umh
 on:
   push
 jobs:
@@ -12,7 +12,7 @@ jobs:
 
 
       - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-init/Dockerfile --tag unitedmanufacturinghub/kafka-init:${GITHUB_REF##*/}
+        run: docker build . --file deployment/grafana-umh/Dockerfile --tag unitedmanufacturinghub/grafana-umh:${GITHUB_REF##*/}
 
       - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-init:${GITHUB_REF##*/}
+        run: docker push unitedmanufacturinghub/grafana-umh:${GITHUB_REF##*/}

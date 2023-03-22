@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -86,6 +100,8 @@ func main() {
 
 	internal.InitCacheWithoutRedis()
 	cP = sync.Map{}
+
+	isTest := os.Getenv("TEST") == "1" || strings.ToLower(os.Getenv("TEST")) == "true"
 
 	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
 	useMQTT = os.Getenv("USE_MQTT") == "1" || strings.ToLower(os.Getenv("USE_MQTT")) == "true"
@@ -273,7 +289,7 @@ func main() {
 	defer tickerSearchForDevices.Stop()
 	updateIoddIoDeviceMapChan = make(chan IoddFilemapKey)
 
-	go ioddDataDaemon(relativeDirectoryPath)
+	go ioddDataDaemon(relativeDirectoryPath, isTest)
 
 	discoveredDeviceChannel = make(chan DiscoveredDeviceInformation)
 	forgetDeviceChannel = make(chan DiscoveredDeviceInformation)
@@ -473,7 +489,7 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 }
 
 // ioddDataDaemon Starts a demon to download IODD files
-func ioddDataDaemon(relativeDirectoryPath string) {
+func ioddDataDaemon(relativeDirectoryPath string, isTest bool) {
 	zap.S().Debugf("Starting iodd data daemon")
 
 	for {
@@ -487,7 +503,7 @@ func ioddDataDaemon(relativeDirectoryPath string) {
 		internal.SetMemcached(cacheKey, nil)
 		var err error
 		zap.S().Debugf("Addining new device to iodd files and map (%v)", ioddFilemapKey)
-		_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice)
+		_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeDirectoryPath, fileInfoSlice, isTest)
 		zap.S().Debugf("added new ioDevice to map: %v", ioddFilemapKey)
 		if err != nil {
 			zap.S().Errorf("AddNewDeviceToIoddFilesAndMap produced the error: %v", err)

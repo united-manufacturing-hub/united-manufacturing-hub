@@ -1,3 +1,17 @@
+// Copyright 2023 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -127,9 +141,9 @@ type IoddFilemapKey struct {
 func AddNewDeviceToIoddFilesAndMap(
 	ioddFilemapKey IoddFilemapKey,
 	relativeDirectoryPath string,
-	fileInfoSlice []fs.DirEntry) ([]fs.DirEntry, error) {
+	fileInfoSlice []fs.DirEntry, isTest bool) ([]fs.DirEntry, error) {
 	zap.S().Debugf("Requesting IoddFile %v -> %s", ioddFilemapKey, relativeDirectoryPath)
-	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
+	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath, isTest)
 	if err != nil {
 		zap.S().Debugf("File with fileMapKey%v already saved.", ioddFilemapKey)
 	}
@@ -221,7 +235,7 @@ func ReadIoddFiles(oldFileInfoSlice []fs.DirEntry, relativeDirectoryPath string)
 }
 
 // RequestSaveIoddFile will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
-func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string) error {
+func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, isTest bool) error {
 	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
 	if _, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
@@ -229,7 +243,7 @@ func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath st
 		return err
 	}
 	// Execute download and saving of iodd file
-	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
+	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath, isTest)
 	if err != nil {
 		zap.S().Errorf("Saving error: %s", err.Error())
 		return err
