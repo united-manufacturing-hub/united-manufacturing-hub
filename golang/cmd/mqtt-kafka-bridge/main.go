@@ -40,14 +40,44 @@ func main() {
 	kafka_processor.Start(mqttToKafkaChan)
 	mqtt_processor.Start(kafkaToMqttChan)
 
+	go checkDisconnect(shutdownChan)
+	reportStats(shutdownChan)
+
+	zap.S().Info("Shutting down")
+	kafka_processor.Shutdown()
+	mqtt_processor.Shutdown()
+}
+
+func checkDisconnect(shutdownChan chan bool) {
 	var kafkaSent, kafkaRecv, mqttSent, mqttRecv uint64
 	kafkaSent, kafkaRecv = kafka_processor.GetStats()
 	mqttSent, mqttRecv = mqtt_processor.GetStats()
 
 	for {
+		time.Sleep(3 * time.Minute)
+		newKafkaSent, newKafkaRecv := kafka_processor.GetStats()
+		newMqttSent, newMqttRecv := mqtt_processor.GetStats()
+		if newMqttSent == mqttSent && newMqttRecv == mqttRecv {
+			zap.S().Error("MQTT connection lost")
+			shutdownChan <- true
+			return
+		}
+		if newKafkaSent == kafkaSent && newKafkaRecv == kafkaRecv {
+			zap.S().Error("Kafka connection lost")
+			shutdownChan <- true
+			return
+		}
+	}
+}
+
+func reportStats(shutdownChan chan bool) {
+	var kafkaSent, kafkaRecv, mqttSent, mqttRecv uint64
+	kafkaSent, kafkaRecv = kafka_processor.GetStats()
+	mqttSent, mqttRecv = mqtt_processor.GetStats()
+	for {
 		select {
 		case <-shutdownChan:
-			break
+			return
 		case <-time.After(10 * time.Second):
 			// Calculate per second
 			newKafkaSent, newKafkaRecv := kafka_processor.GetStats()
@@ -67,8 +97,4 @@ func main() {
 			mqttRecv = newMqttRecv
 		}
 	}
-
-	zap.S().Info("Shutting down")
-	kafka_processor.Shutdown()
-	mqtt_processor.Shutdown()
 }
