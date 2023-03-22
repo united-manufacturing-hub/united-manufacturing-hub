@@ -39,7 +39,7 @@ func SendKafkaMessages() {
 
 	var loopsSinceLastMessage = int64(0)
 	for !ShuttingDown {
-		internal.SleepBackedOff(loopsSinceLastMessage, 1*time.Millisecond, 1*time.Second)
+		internal.SleepBackedOff(loopsSinceLastMessage, 1*time.Nanosecond, 1*time.Second)
 		loopsSinceLastMessage += 1
 
 		var object *queueObject
@@ -68,8 +68,6 @@ func SendKafkaMessages() {
 			continue
 		}
 
-		zap.S().Debugf("Sending with Topic: %s", kafkaTopicName)
-
 		msg := &kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     &kafkaTopicName,
@@ -96,13 +94,10 @@ func kafkaToQueue(topic string) {
 	}
 
 	stuck := 0
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	var loopsSinceLastMessage = int64(0)
 	var msg *kafka.Message
 	for !ShuttingDown {
-		internal.SleepBackedOff(loopsSinceLastMessage, 1*time.Millisecond, 1*time.Second)
-		loopsSinceLastMessage += 1
+		time.Sleep(time.Duration(mqttOutGoingQueue.Length()) * time.Millisecond)
 		if mqttOutGoingQueue.Length() >= 100 {
 			// MQTT can't keep up with Kafka
 			stuck += 1
@@ -132,19 +127,25 @@ func kafkaToQueue(topic string) {
 				continue
 			}
 		}
-		zap.S().Debugf("Received Kafka message: %v (%v)", msg, err)
+		go processMessage(msg)
+	}
+	zap.S().Infof("Kafka consumer for topic %s stopped", topic)
+}
 
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+func processMessage(msg *kafka.Message) {
+	kafkaTopic := *msg.TopicPartition.Topic
+
+	if !strings.HasPrefix(kafkaTopic, "ia.raw") {
 		// Ignore every message from the same producer.
 		trace := internal.GetTrace(msg, "x-trace")
-		zap.S().Debugf("Trace: %v", trace)
-		zap.S().Debugf("MicroserviceName: %s, SerialNumber: %s", internal.MicroserviceName, internal.SerialNumber)
 		if trace != nil {
 			foundTrace := false
 			for _, v := range trace.Traces {
-				zap.S().Debugf("Kafka trace: %s vs %s-%s", v, internal.MicroserviceName, internal.SerialNumber)
 				if v == fmt.Sprintf("%s-%s", internal.MicroserviceName, internal.SerialNumber) {
-					zap.S().Debugf("Skipping message from own producer & cluster")
 					pathTraces := internal.GetTrace(msg, "x-trace")
+					zap.S().Debugf("Skipping message from own producer & cluster")
 					zap.S().Debugf("Path traces: %v", pathTraces)
 					// Ignore messages that our cluster created
 					foundTrace = true
@@ -152,30 +153,28 @@ func kafkaToQueue(topic string) {
 				}
 			}
 			if foundTrace {
-				continue
+				return
 			}
 		} else if !KafkaAcceptNoOrigin {
 			zap.S().Debugf("Skipping message without origin")
 			// Ignore messages without defined origin !
-			continue
-		}
-
-		payload := msg.Value
-
-		kafkaTopic := *msg.TopicPartition.Topic
-		if json.Valid(payload) || strings.HasPrefix(kafkaTopic, "ia.raw") {
-			validTopic, mqttTopic := internal.KafkaTopicToMqtt(kafkaTopic)
-
-			if validTopic {
-				go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
-				zap.S().Debugf("kafkaToQueue (%s) (%s)", kafkaTopic, payload)
-				loopsSinceLastMessage = 0
-			}
-		} else {
-			zap.S().Warnf(
-				"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON (%s) [%s]",
-				kafkaTopic, payload)
+			return
 		}
 	}
-	zap.S().Infof("Kafka consumer for topic %s stopped", topic)
+
+	payload := msg.Value
+
+	if json.Valid(payload) || strings.HasPrefix(kafkaTopic, "ia.raw") {
+		validTopic, mqttTopic := internal.KafkaTopicToMqtt(kafkaTopic)
+
+		if validTopic {
+			go storeNewMessageIntoQueue(mqttTopic, payload, mqttOutGoingQueue)
+		} else {
+			zap.S().Warnf("kafkaToQueue [INVALID] message not forwarded because the topic is not valid (%s) [%s]", kafkaTopic, payload)
+		}
+	} else {
+		zap.S().Warnf(
+			"kafkaToQueue [INVALID] message not forwarded because the content is not a valid JSON (%s) [%s]",
+			kafkaTopic, payload)
+	}
 }

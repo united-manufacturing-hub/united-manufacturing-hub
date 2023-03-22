@@ -28,9 +28,6 @@ func CheckIfNewMessageOrStore(message []byte, topic string) (isNewMessage bool) 
 	// Convert topic to lowercase and kafka format
 	topic = strings.ToLower(topic)
 	topic = strings.ReplaceAll(topic, "/", ".")
-
-	zap.S().Debugf("Checking if new message: %s [%s]", topic, message)
-
 	if strings.HasPrefix(topic, "ia.raw") {
 		return checkRawMessage(message, topic)
 	} else {
@@ -61,32 +58,31 @@ func checkMessage(message []byte, topic string) bool {
 		return false
 	}
 	timestamp, ok := messageMap["timestamp_ms"]
-	if !ok {
-		// If we can't find the timestamp, we assume it's new
-		zap.S().Errorf("Error parsing message: no timestamp [%v] (%s)", messageMap, topic)
-		return false
-	}
-
-	// Compute hash
-	hash := computeHashB(message, topic)
-
-	// Check if we already have this message
-
 	var cacheKey string
-	switch t := timestamp.(type) {
-	case float64:
-		cacheKey = fmt.Sprintf("%f", t)
-	case int:
-		cacheKey = fmt.Sprintf("%d", t)
-	case int64:
-		cacheKey = fmt.Sprintf("%d", t)
-	case string:
-		cacheKey = t
-	default:
-		zap.S().Errorf("Error parsing message: unknown timestamp type [%v] (%s)", messageMap, topic)
+	if ok {
+		// Compute hash
+		hash := computeHashB(message, topic)
+
+		// Check if we already have this message
+		switch t := timestamp.(type) {
+		case float64:
+			cacheKey = fmt.Sprintf("%f", t)
+		case int:
+			cacheKey = fmt.Sprintf("%d", t)
+		case int64:
+			cacheKey = fmt.Sprintf("%d", t)
+		case string:
+			cacheKey = t
+		default:
+			zap.S().Errorf("Error parsing message: unknown timestamp type [%v] (%s)", messageMap, topic)
+		}
+		cacheKey += hash
+	} else {
+		// If we can't find the timestamp, use the hash of the whole message
+		cacheKey = computeHashB(message, topic)
+		return true
 	}
 
-	cacheKey += hash
 	_, ok = MessageLRU.Get(cacheKey)
 	if ok {
 		// Already seen

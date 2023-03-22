@@ -126,7 +126,6 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 
 	// Check if current metadata cache has topic listed
 	if _, ok := lastMetaData.Topics[kafkaTopicName]; ok {
-		zap.S().Debugf("[CACHED] Topic %s exists", kafkaTopicName)
 		return true, nil
 	}
 
@@ -138,7 +137,6 @@ func TopicExists(kafkaTopicName string) (exists bool, err error) {
 	}
 
 	if _, ok := lastMetaData.Topics[kafkaTopicName]; ok {
-		zap.S().Debugf("[CACHED] Topic %s exists", kafkaTopicName)
 		return true, nil
 	}
 
