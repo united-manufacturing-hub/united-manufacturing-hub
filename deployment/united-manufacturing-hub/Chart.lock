@@ -18,7 +18,7 @@ dependencies:
   repository: https://charts.bitnami.com/bitnami
   version: 20.0.2
 - name: console
-  repository: https://dl.redpanda.com/public/console/helm/charts/
-  version: 0.3.1
-digest: sha256:fa6c498693e631ed5062bf0a328ea6bdb1bd2ebfd1af203a38518d45963e5e70
-generated: "2023-03-22T15:31:15.9936345+01:00"
+  repository: https://charts.redpanda.com/
+  version: 0.5.6
+digest: sha256:af55cea98af6364a8c956cd55be284cc52577796c34038637fb347f87b06a94d
+generated: "2023-03-22T15:32:34.6657142+01:00"
