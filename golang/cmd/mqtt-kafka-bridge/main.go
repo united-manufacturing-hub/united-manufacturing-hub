@@ -41,7 +41,7 @@ func main() {
 	mqtt_processor.Start(kafkaToMqttChan)
 
 	go checkDisconnect(shutdownChan)
-	reportStats(shutdownChan)
+	reportStats(shutdownChan, mqttToKafkaChan, kafkaToMqttChan)
 
 	zap.S().Info("Shutting down")
 	kafka_processor.Shutdown()
@@ -74,7 +74,7 @@ func checkDisconnect(shutdownChan chan bool) {
 	}
 }
 
-func reportStats(shutdownChan chan bool) {
+func reportStats(shutdownChan chan bool, mqttToKafkaChan chan kafka.Message, kafkaToMqttChan chan kafka.Message) {
 	var kafkaSent, kafkaRecv, mqttSent, mqttRecv uint64
 	kafkaSent, kafkaRecv = kafka_processor.GetStats()
 	mqttSent, mqttRecv = mqtt_processor.GetStats()
@@ -91,9 +91,12 @@ func reportStats(shutdownChan chan bool) {
 			kafkaRecvPerSecond := (newKafkaRecv - kafkaRecv) / 10
 			mqttSentPerSecond := (newMqttSent - mqttSent) / 10
 			mqttRecvPerSecond := (newMqttRecv - mqttRecv) / 10
-			cacheUsed, cacheMax := message.GetCacheSize()
+			cacheUsedRaw, cacheMaxRaw, cacheUsed, cacheMax := message.GetCacheSize()
+			cachePercentRaw := float64(cacheUsedRaw) / float64(cacheMaxRaw) * 100
 			cachePercent := float64(cacheUsed) / float64(cacheMax) * 100
-			zap.S().Infof("Kafka sent: %d (%d/s), Kafka recv: %d (%d/s), MQTT sent: %d (%d/s), MQTT recv: %d (%d/s) | Cached: %d/%d (%.2f%%)", newKafkaSent, kafkaSentPerSecond, newKafkaRecv, kafkaRecvPerSecond, newMqttSent, mqttSentPerSecond, newMqttRecv, mqttRecvPerSecond, cacheUsed, cacheMax, cachePercent)
+			zap.S().Infof(
+				"Kafka sent: %d (%d/s), Kafka recv: %d (%d/s), MQTT sent: %d (%d/s), MQTT recv: %d (%d/s) | Cached: %d/%d (%.2f%%) | Cached raw: %d/%d (%.2f%%) | MqttToKafka chan: %d | KafkaToMqtt chan: %d",
+				newKafkaSent, kafkaSentPerSecond, newKafkaRecv, kafkaRecvPerSecond, newMqttSent, mqttSentPerSecond, newMqttRecv, mqttRecvPerSecond, cacheUsed, cacheMax, cachePercent, cacheUsedRaw, cacheMaxRaw, cachePercentRaw, len(mqttToKafkaChan), len(kafkaToMqttChan))
 
 			kafkaSent = newKafkaSent
 			kafkaRecv = newKafkaRecv

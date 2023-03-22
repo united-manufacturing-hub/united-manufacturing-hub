@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,7 +41,7 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 		ListenTopicRegex:  compile,
 		Partitions:        6,
 		ReplicationFactor: 1,
-		EnableTLS:         false,
+		EnableTLS:         os.Getenv("KAFKA_USE_SSL") == "true",
 		StartOffset:       sarama.OffsetOldest,
 	})
 	if err != nil {
@@ -53,14 +54,13 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 func processIncomingMessage(kafkaToMqttChan chan kafka.Message) {
 	for {
 		msg := <-client.GetMessages()
-		if message.IsValidKafkaMessage(msg) {
-			kafkaToMqttChan <- kafka.Message{
-				Topic:  msg.Topic,
-				Value:  msg.Value,
-				Header: msg.Header,
-				Key:    msg.Key,
-			}
+		kafkaToMqttChan <- kafka.Message{
+			Topic:  msg.Topic,
+			Value:  msg.Value,
+			Header: msg.Header,
+			Key:    msg.Key,
 		}
+
 	}
 }
 
@@ -74,12 +74,29 @@ func Shutdown() {
 }
 
 func Start(mqttToKafkaChan chan kafka.Message) {
-	go start(mqttToKafkaChan)
+	KafkaSenderThreads, err := strconv.Atoi(os.Getenv("KAFKA_SENDER_THREADS"))
+	if err != nil {
+		KafkaSenderThreads = 1
+	}
+	if KafkaSenderThreads < 1 {
+		zap.S().Fatal("KAFKA_SENDER_THREADS must be at least 1")
+	}
+	for i := 0; i < KafkaSenderThreads; i++ {
+		go start(mqttToKafkaChan)
+	}
 }
 
 func start(mqttToKafkaChan chan kafka.Message) {
 	for {
 		msg := <-mqttToKafkaChan
+
+		msg.Topic = strings.ReplaceAll(msg.Topic, "$share/MQTT_KAFKA_BRIDGE/", "")
+		if !message.IsValidMQTTMessage(msg.Topic, msg.Value) {
+			continue
+		}
+		// Change MQTT to Kafka topic format
+		msg.Topic = strings.ReplaceAll(msg.Topic, "/", ".")
+
 		internal.AddSXOrigin(&msg)
 		var err error
 		err = internal.AddSXTrace(&msg)
@@ -87,8 +104,6 @@ func start(mqttToKafkaChan chan kafka.Message) {
 			zap.S().Fatalf("Failed to marshal trace")
 			continue
 		}
-		// Change MQTT to Kafka topic format
-		msg.Topic = strings.ReplaceAll(msg.Topic, "/", ".")
 
 		err = client.EnqueueMessage(msg)
 		for err != nil {
