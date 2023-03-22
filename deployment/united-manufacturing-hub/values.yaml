@@ -1225,13 +1225,11 @@ mqttkafkabridge:
     pullPolicy: IfNotPresent
   resources:
     requests:
-      cpu: "100m"
-      memory: "500Mi"
+      cpu: "400m"
+      memory: "300Mi"
     limits:
       cpu: "500m"
-      memory: "750Mi"
-  rawMessageLRUSize: 100000
-  messageLRUSize: 100000
+      memory: "450Mi"
   mqttSenderThreads: 1
   kafkaSenderThreads: 1
   kafkaAcceptNoOrigin: "false"
