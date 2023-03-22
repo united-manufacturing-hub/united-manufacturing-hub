@@ -67,6 +67,10 @@ func checkDisconnect(shutdownChan chan bool) {
 			shutdownChan <- true
 			return
 		}
+		kafkaSent = newKafkaSent
+		kafkaRecv = newKafkaRecv
+		mqttSent = newMqttSent
+		mqttRecv = newMqttRecv
 	}
 }
 
@@ -88,8 +92,7 @@ func reportStats(shutdownChan chan bool) {
 			mqttSentPerSecond := (newMqttSent - mqttSent) / 10
 			mqttRecvPerSecond := (newMqttRecv - mqttRecv) / 10
 
-			zap.S().Infof("Kafka sent: %d/s, Kafka received: %d/s, MQTT sent: %d/s, MQTT received: %d/s", kafkaSentPerSecond, kafkaRecvPerSecond, mqttSentPerSecond, mqttRecvPerSecond)
-			zap.S().Infof("Kafka sent: %d, Kafka received: %d, MQTT sent: %d, MQTT received: %d", newKafkaSent, newKafkaRecv, newMqttSent, newMqttRecv)
+			zap.S().Infof("Kafka sent: %d (%d/s), Kafka recv: %d (%d/s), MQTT sent: %d (%d/s), MQTT recv: %d (%d/s)", newKafkaSent, kafkaSentPerSecond, newKafkaRecv, kafkaRecvPerSecond, newMqttSent, mqttSentPerSecond, newMqttRecv, mqttRecvPerSecond)
 
 			kafkaSent = newKafkaSent
 			kafkaRecv = newKafkaRecv
