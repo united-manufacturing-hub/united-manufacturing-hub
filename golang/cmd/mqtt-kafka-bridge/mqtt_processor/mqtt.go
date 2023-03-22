@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 )
@@ -118,15 +119,11 @@ func getOnMessageReceived(pg chan kafka.Message) MQTT.MessageHandler {
 	return func(client MQTT.Client, msg MQTT.Message) {
 		topic := msg.Topic()
 		payload := msg.Payload()
-
-		if message.IsValidMQTTMessage(topic, payload) {
-			topic = strings.ReplaceAll(topic, "$share/MQTT_KAFKA_BRIDGE/", "")
-			pg <- kafka.Message{
-				Topic: topic,
-				Value: payload,
-			}
-			receivedMessages.Add(1)
+		pg <- kafka.Message{
+			Topic: topic,
+			Value: payload,
 		}
+		receivedMessages.Add(1)
 	}
 }
 
@@ -208,12 +205,24 @@ func Shutdown() {
 }
 
 func Start(kafkaToMqttChan chan kafka.Message) {
-	go start(kafkaToMqttChan)
+	MQTTSenderThreads, err := strconv.Atoi(os.Getenv("MQTT_SENDER_THREADS"))
+	if err != nil {
+		MQTTSenderThreads = 1
+	}
+	if MQTTSenderThreads < 1 {
+		zap.S().Fatalf("MQTT_SENDER_THREADS must be at least 1")
+	}
+	for i := 0; i < MQTTSenderThreads; i++ {
+		go start(kafkaToMqttChan)
+	}
 }
 
 func start(kafkaToMqttChan chan kafka.Message) {
 	for {
 		msg := <-kafkaToMqttChan
+		if !message.IsValidKafkaMessage(msg) {
+			continue
+		}
 		// Change MQTT to Kafka topic format
 		msg.Topic = strings.ReplaceAll(msg.Topic, ".", "/")
 		mqttClient.Publish(msg.Topic, 1, false, msg.Value)

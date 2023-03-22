@@ -1225,16 +1225,16 @@ mqttkafkabridge:
     pullPolicy: IfNotPresent
   resources:
     requests:
-      cpu: "100m"
-      memory: "500Mi"
+      cpu: "400m"
+      memory: "300Mi"
     limits:
       cpu: "500m"
-      memory: "750Mi"
-  rawMessageLRUSize: 100000
-  messageLRUSize: 100000
+      memory: "450Mi"
   mqttSenderThreads: 1
   kafkaSenderThreads: 1
   kafkaAcceptNoOrigin: "false"
+  rawMessageLRUSize: 100000
+  messageLRUSize: 100000
   mqtt:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==
