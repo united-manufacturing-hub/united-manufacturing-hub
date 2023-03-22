@@ -42,7 +42,7 @@ func TestAddNewDeviceToIoddFilesAndMap(t *testing.T) {
 	ioddFilemapKey.VendorId = 42
 
 	// execute function and check for errors
-	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeIODDFilePath, fileInfoSlice)
+	fileInfoSlice, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -72,7 +72,7 @@ func TestRequestSaveIoddFile(t *testing.T) {
 		zap.S().Errorf("removeFilesFromDirectory failed: %v", err)
 	}
 	ioDeviceMap.Delete(ioddFilemapKey)
-	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -101,7 +101,7 @@ func TestReadIoddFiles(t *testing.T) {
 	ioddFilemapKey.DeviceId = 278531
 	ioddFilemapKey.VendorId = 42
 	ioDeviceMap.Delete(ioddFilemapKey)
-	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath)
+	err = RequestSaveIoddFile(ioddFilemapKey, relativeIODDFilePath, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -162,24 +162,24 @@ func TestUnmarshalIoddFiles(t *testing.T) {
 	ioddFilemapKey_IFMiodd.VendorId = 310
 
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeIODDFilePath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFM, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeIODDFilePath, fileInfoSlice)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeIODDFilePath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_rexroth, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// execute function and check for errors
-	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeIODDFilePath, fileInfoSlice)
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_siemens, relativeIODDFilePath, fileInfoSlice, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// execute function and check for errors
+	_, err = AddNewDeviceToIoddFilesAndMap(ioddFilemapKey_IFMiodd, relativeIODDFilePath, fileInfoSlice, false)
 	if err != nil {
 		t.Error(err)
 	}
