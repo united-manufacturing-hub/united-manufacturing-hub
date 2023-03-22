@@ -91,8 +91,9 @@ func reportStats(shutdownChan chan bool) {
 			kafkaRecvPerSecond := (newKafkaRecv - kafkaRecv) / 10
 			mqttSentPerSecond := (newMqttSent - mqttSent) / 10
 			mqttRecvPerSecond := (newMqttRecv - mqttRecv) / 10
-
-			zap.S().Infof("Kafka sent: %d (%d/s), Kafka recv: %d (%d/s), MQTT sent: %d (%d/s), MQTT recv: %d (%d/s)", newKafkaSent, kafkaSentPerSecond, newKafkaRecv, kafkaRecvPerSecond, newMqttSent, mqttSentPerSecond, newMqttRecv, mqttRecvPerSecond)
+			cacheUsed, cacheMax := message.GetCacheSize()
+			cachePercent := float64(cacheUsed) / float64(cacheMax) * 100
+			zap.S().Infof("Kafka sent: %d (%d/s), Kafka recv: %d (%d/s), MQTT sent: %d (%d/s), MQTT recv: %d (%d/s) | Cached: %d/%d (%.2f%%)", newKafkaSent, kafkaSentPerSecond, newKafkaRecv, kafkaRecvPerSecond, newMqttSent, mqttSentPerSecond, newMqttRecv, mqttRecvPerSecond, cacheUsed, cacheMax, cachePercent)
 
 			kafkaSent = newKafkaSent
 			kafkaRecv = newKafkaRecv

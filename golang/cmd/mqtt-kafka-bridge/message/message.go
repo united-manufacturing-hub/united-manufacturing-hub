@@ -12,11 +12,17 @@ import (
 
 var arcCache *lru.ARCCache
 
+const arcSize = 1_000_000
+
 func Init() {
 	if arcCache != nil {
 		return
 	}
-	arcCache, _ = lru.NewARC(10_000_000)
+	arcCache, _ = lru.NewARC(arcSize)
+}
+
+func GetCacheSize() (int, int) {
+	return arcCache.Len(), arcSize
 }
 
 func IsValidMQTTMessage(topic string, payload []byte) bool {
