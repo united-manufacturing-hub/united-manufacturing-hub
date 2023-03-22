@@ -46,9 +46,10 @@ data:
           "StandardDeviation" : 50.0
         }
       ],
+      "HOST": "localhost",
       "CERTIFICATE":
       {
-        "Hosts" : [{{.Values.opcuasimulator.certadds.hosts | quote}}]{{if .Values.opcuasimulator.certadds.ips}},{{end}}
+        "Hosts" : ["localhost", {{.Values.opcuasimulator.certadds.hosts | quote}}]{{if .Values.opcuasimulator.certadds.ips}},{{end}}
         {{if .Values.opcuasimulator.certadds.ips}}
         "IPS" : [{{.Values.opcuasimulator.certadds.ips}}]
         {{end}}
