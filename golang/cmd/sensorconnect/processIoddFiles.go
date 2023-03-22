@@ -141,9 +141,9 @@ type IoddFilemapKey struct {
 func AddNewDeviceToIoddFilesAndMap(
 	ioddFilemapKey IoddFilemapKey,
 	relativeDirectoryPath string,
-	fileInfoSlice []fs.DirEntry) ([]fs.DirEntry, error) {
+	fileInfoSlice []fs.DirEntry, isTest bool) ([]fs.DirEntry, error) {
 	zap.S().Debugf("Requesting IoddFile %v -> %s", ioddFilemapKey, relativeDirectoryPath)
-	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath)
+	err := RequestSaveIoddFile(ioddFilemapKey, relativeDirectoryPath, isTest)
 	if err != nil {
 		zap.S().Debugf("File with fileMapKey%v already saved.", ioddFilemapKey)
 	}
@@ -235,7 +235,7 @@ func ReadIoddFiles(oldFileInfoSlice []fs.DirEntry, relativeDirectoryPath string)
 }
 
 // RequestSaveIoddFile will download iodd file if the ioddFilemapKey is not already in ioddIoDeviceMap
-func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string) error {
+func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath string, isTest bool) error {
 	var err error
 	// Check if IoDevice already in ioddIoDeviceMap
 	if _, ok := ioDeviceMap.Load(ioddFilemapKey); ok {
@@ -243,7 +243,7 @@ func RequestSaveIoddFile(ioddFilemapKey IoddFilemapKey, relativeDirectoryPath st
 		return err
 	}
 	// Execute download and saving of iodd file
-	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath)
+	err = internal.SaveIoddFile(ioddFilemapKey.VendorId, ioddFilemapKey.DeviceId, relativeDirectoryPath, isTest)
 	if err != nil {
 		zap.S().Errorf("Saving error: %s", err.Error())
 		return err
