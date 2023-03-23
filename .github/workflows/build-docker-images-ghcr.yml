@@ -18,11 +18,9 @@ on:
   push:
     paths:
       - 'deployment/**'
-      - '!deployment/helm-repo/**'
-      - '!deployment/united-manufacturing-hub/**'
       - '!deployment/*.ps1'
       - 'golang/**'
-      - '.github/workflows/build-docker-images.yml'
+      - '.github/workflows/build-docker-images-ghcr.yml'
 
 jobs:
   barcodereader:
