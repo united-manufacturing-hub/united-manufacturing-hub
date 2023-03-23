@@ -1161,12 +1161,11 @@ console:
           caFilepath: "/SSL_certs/kafka/ca.crt"
           certFilepath: "/SSL_certs/kafka/tls.crt"
           keyFilepath: "/SSL_certs/kafka/tls.key"
-          passphrase: ""
-  extraVolumes: |-
+  extraVolumes:
     - name: united-manufacturing-hub-kowl-certificates
       secret:
         secretName: united-manufacturing-hub-kowl-secrets
-  extraVolumeMounts: |-
+  extraVolumeMounts:
     - name: united-manufacturing-hub-kowl-certificates
       mountPath: /SSL_certs/kafka
       readOnly: true
