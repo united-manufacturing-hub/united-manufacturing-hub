@@ -30,6 +30,7 @@ env:
   K3S_VERSION: v1.25.7-k3s1
   VALUES_FILE: ./test/test-values-full.yaml
   UMH: united-manufacturing-hub
+  TAG: ${GITHUB_HEAD_REF//\//-}
 
 jobs:
   data-flow-test:
@@ -72,21 +73,21 @@ jobs:
           chmod +x ./tools/save_logs.sh
           helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
-            --set "kafkastatedetector.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "mqttbridge.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "barcodereader.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "sensorconnect.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "cameraconnect.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkabridge.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "factoryinsight.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "factoryinput.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "grafanaproxy.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkatopostgresql.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkatopostgresql.initContainer.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "tulipconnector.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "mqttkafkabridge.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "mqttkafkabridge.initContainer.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkatoblob.image.tag=${GITHUB_HEAD_REF##*/}" \
+            --set "kafkastatedetector.image.tag=${{ env.TAG }}" \
+            --set "mqttbridge.tag=${{ env.TAG }}" \
+            --set "barcodereader.image.tag=${{ env.TAG }}" \
+            --set "sensorconnect.tag=${{ env.TAG }}" \
+            --set "cameraconnect.tag=${{ env.TAG }}" \
+            --set "kafkabridge.image.tag=${{ env.TAG }}" \
+            --set "factoryinsight.image.tag=${{ env.TAG }}" \
+            --set "factoryinput.image.tag=${{ env.TAG }}" \
+            --set "grafanaproxy.image.tag=${{ env.TAG }}" \
+            --set "kafkatopostgresql.image.tag=${{ env.TAG }}" \
+            --set "kafkatopostgresql.initContainer.tag=${{ env.TAG }}" \
+            --set "tulipconnector.image.tag=${{ env.TAG }}" \
+            --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
+            --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
+            --set "kafkatoblob.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --create-namespace \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
@@ -199,21 +200,21 @@ jobs:
           kubectl delete pvc ${{ env.UMH }}-hivemqce-claim-extensions -n ${{ env.UMH }} || true
           helm upgrade ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
-            --set "kafkastatedetector.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "mqttbridge.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "barcodereader.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "sensorconnect.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "cameraconnect.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkabridge.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "factoryinsight.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "factoryinput.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "grafanaproxy.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkatopostgresql.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkatopostgresql.initContainer.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "tulipconnector.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "mqttkafkabridge.image.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "mqttkafkabridge.initContainer.tag=${GITHUB_HEAD_REF##*/}" \
-            --set "kafkatoblob.image.tag=${GITHUB_HEAD_REF##*/}" \
+            --set "kafkastatedetector.image.tag=${{ env.TAG }}" \
+            --set "mqttbridge.tag=${{ env.TAG }}" \
+            --set "barcodereader.image.tag=${{ env.TAG }}" \
+            --set "sensorconnect.tag=${{ env.TAG }}" \
+            --set "cameraconnect.tag=${{ env.TAG }}" \
+            --set "kafkabridge.image.tag=${{ env.TAG }}" \
+            --set "factoryinsight.image.tag=${{ env.TAG }}" \
+            --set "factoryinput.image.tag=${{ env.TAG }}" \
+            --set "grafanaproxy.image.tag=${{ env.TAG }}" \
+            --set "kafkatopostgresql.image.tag=${{ env.TAG }}" \
+            --set "kafkatopostgresql.initContainer.tag=${{ env.TAG }}" \
+            --set "tulipconnector.image.tag=${{ env.TAG }}" \
+            --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
+            --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
+            --set "kafkatoblob.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
