@@ -46,7 +46,7 @@ sources:
 
 dependencies:
   - name: redis
-    version: 17.3.17
+    version: 17.9.0
     repository: https://charts.bitnami.com/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
