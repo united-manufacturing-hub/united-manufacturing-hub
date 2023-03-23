@@ -27,153 +27,503 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/barcodereader/Dockerfile --tag unitedmanufacturinghub/barcodereader:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/barcodereader:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/barcodereader
+            ghcr.io/united-manufacturing-hub/barcodereader
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/barcodereader/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   factoryinput:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/factoryinput/Dockerfile --tag unitedmanufacturinghub/factoryinput:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/factoryinput:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/factoryinput
+            ghcr.io/united-manufacturing-hub/factoryinput
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/factoryinput/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   factoryinsight:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/factoryinsight/Dockerfile --tag unitedmanufacturinghub/factoryinsight:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/factoryinsight:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/factoryinsight
+            ghcr.io/united-manufacturing-hub/factoryinsight
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/factoryinsight/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   grafana-proxy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/grafana-proxy/Dockerfile --tag unitedmanufacturinghub/grafana-proxy:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/grafana-proxy:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/grafana-proxy
+            ghcr.io/united-manufacturing-hub/grafana-proxy
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/grafana-proxy/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   grafana-umh:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/grafana-umh/Dockerfile --tag unitedmanufacturinghub/grafana-umh:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/grafana-umh:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/grafana-umh
+            ghcr.io/united-manufacturing-hub/grafana-umh
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/grafana-umh/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   kafka-bridge:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-bridge/Dockerfile --tag unitedmanufacturinghub/kafka-bridge:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-bridge:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+        images: |
+            unitedmanufacturinghub/kafka-bridge
+            ghcr.io/united-manufacturing-hub/kafka-bridge
+        tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-bridge/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   kafka-debug:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-debug/Dockerfile --tag unitedmanufacturinghub/kafka-debug:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-debug:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/kafka-debug
+            ghcr.io/united-manufacturing-hub/kafka-debug
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-debug/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   kafka-init:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-init/Dockerfile --tag unitedmanufacturinghub/kafka-init:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-init:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/kafka-init
+            ghcr.io/united-manufacturing-hub/kafka-init
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-init/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   kafka-state-detector:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-state-detector/Dockerfile --tag unitedmanufacturinghub/kafka-state-detector:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-state-detector:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/kafka-state-detector
+            ghcr.io/united-manufacturing-hub/kafka-state-detector
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-state-detector/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   kafka-to-blob:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-to-blob/Dockerfile --tag unitedmanufacturinghub/kafka-to-blob:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-to-blob:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/kafka-to-blob
+            ghcr.io/united-manufacturing-hub/kafka-to-blob
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-to-blob/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   kafka-to-postgresql:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/kafka-to-postgresql/Dockerfile --tag unitedmanufacturinghub/kafka-to-postgresql:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/kafka-to-postgresql:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/kafka-to-postgresql
+            ghcr.io/united-manufacturing-hub/kafka-to-postgresql
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-to-postgresql/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-bridge:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/mqtt-bridge/Dockerfile --tag unitedmanufacturinghub/mqtt-bridge:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/mqtt-bridge:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/mqtt-bridge
+            ghcr.io/united-manufacturing-hub/mqtt-bridge
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/mqtt-bridge/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-kafka-bridge:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/mqtt-kafka-bridge/Dockerfile --tag unitedmanufacturinghub/mqtt-kafka-bridge:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/mqtt-kafka-bridge:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/mqtt-kafka-bridge
+            ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/mqtt-kafka-bridge/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
   sensorconnect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to DockerHub Registry
-        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build the tagged Docker image
-        run: docker build . --file deployment/sensorconnect/Dockerfile --tag unitedmanufacturinghub/sensorconnect:${GITHUB_REF##refs/*/}
-      - name: Push the tagged Docker image
-        run: docker push unitedmanufacturinghub/sensorconnect:${GITHUB_REF##refs/*/}
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            unitedmanufacturinghub/sensorconnect
+            ghcr.io/united-manufacturing-hub/sensorconnect
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/sensorconnect/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
