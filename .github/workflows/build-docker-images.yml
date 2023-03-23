@@ -211,12 +211,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-        images: |
-            unitedmanufacturinghub/kafka-bridge
-            ghcr.io/united-manufacturing-hub/kafka-bridge
-        tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+          images: |
+              unitedmanufacturinghub/kafka-bridge
+              ghcr.io/united-manufacturing-hub/kafka-bridge
+          tags: |
+              type=ref,event=branch
+              type=semver,pattern={{version}}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
