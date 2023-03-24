@@ -1317,9 +1317,7 @@ kafka:
 
 ##### CONFIG FOR REDIS #####
 redis:
-  cluster:
-    enabled: true
-    slaveCount: 1
+  architecture: standalone
   commonConfiguration: |-
     # Enable AOF https://redis.io/topics/persistence#append-only-file
     appendonly yes
@@ -1328,30 +1326,12 @@ redis:
     # Backwards compatability with Redis version 6.*
     replica-ignore-disk-write-errors yes
   master:
-    command: /run.sh
     extraFlags:
       - --maxmemory 200mb
     livenessProbe:
-      enabled: true
-      failureThreshold: 5
       initialDelaySeconds: 5
-      periodSeconds: 5
-      successThreshold: 1
-      timeoutSeconds: 5
-    persistence:
-      accessModes:
-        - ReadWriteOnce
-      enabled: true
-      path: /data
-      size: 8Gi
-      subPath: ""
     readinessProbe:
-      enabled: true
-      failureThreshold: 5
       initialDelaySeconds: 120
-      periodSeconds: 5
-      successThreshold: 1
-      timeoutSeconds: 1
     resources:
       limits:
         cpu: 200m
@@ -1359,125 +1339,16 @@ redis:
       requests:
         cpu: 100m
         memory: 100Mi
-    service:
-      annotations: {}
-      externalTrafficPolicy: Cluster
-      ports:
-        redis: 6379
-      type: ClusterIP
   metrics:
     enabled: true
-    podAnnotations:
-      prometheus.io/port: "9121"
-      prometheus.io/scrape: "true"
-    serviceMonitor:
-      enabled: false
-  networkPolicy:
-    enabled: false
-    ingressNSMatchLabels: {}
-    ingressNSPodMatchLabels: {}
   pdb:
     create: true
     minAvailable: 2
-  podSecurityPolicy:
-    create: false
-  rbac:
-    create: false
-    role:
-      rules: []
-  sentinel:
-    downAfterMilliseconds: 1000
-    enabled: true
-    failoverTimeout: 18000
-    initialCheckTimeout: 5
-    livenessProbe:
-      enabled: true
-      failureThreshold: 5
-      initialDelaySeconds: 5
-      periodSeconds: 5
-      successThreshold: 1
-      timeoutSeconds: 5
-    masterSet: mymaster
-    parallelSyncs: 1
-    containerPorts:
-      sentinel: 26379
-    preExecCmds: ""
-    quorum: 1
-    readinessProbe:
-      enabled: true
-      failureThreshold: 5
-      initialDelaySeconds: 120
-      periodSeconds: 5
-      successThreshold: 1
-      timeoutSeconds: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-    service:
-      annotations: {}
-      externalTrafficPolicy: Cluster
-      labels: {}
-      redisPort: 6379
-      sentinelPort: 26379
-      type: ClusterIP
-    startupProbe:
-      enabled: false
   serviceAccount:
     create: false
-  replica:
-    livenessProbe:
-      enabled: true
-      failureThreshold: 5
-      initialDelaySeconds: 30
-      periodSeconds: 10
-      successThreshold: 1
-      timeoutSeconds: 5
-    persistence:
-      accessModes:
-        - ReadWriteOnce
-      enabled: true
-      path: /data
-      size: 8Gi
-      subPath: ""
-    containerPorts:
-      redis: 6379
-    readinessProbe:
-      enabled: true
-      failureThreshold: 5
-      initialDelaySeconds: 120
-      periodSeconds: 10
-      successThreshold: 1
-      timeoutSeconds: 10
-    replicaCount: 1
-    resources:
-      limits:
-        cpu: 200m
-        memory: 200Mi
-      requests:
-        cpu: 100m
-        memory: 100Mi
-    service:
-      annotations: {}
-      externalTrafficPolicy: Cluster
-      ports:
-        redis: 6379
-      type: ClusterIP
-    shareProcessNamespace: false
-    updateStrategy:
-      type: RollingUpdate
-  sysctl:
-    enabled: false
-  tls:
-    authClients: true
-    enabled: false
   auth:
-    enabled: true
-    usePasswordFiles: false
     existingSecret: redis-secret
     existingSecretPasswordKey: redispassword
-  volumePermissions:
-    enabled: false
 
 ##### CONFIG FOR HIVEMQ CE
 ##### you can set a tag if you want a version other than 2022.1
