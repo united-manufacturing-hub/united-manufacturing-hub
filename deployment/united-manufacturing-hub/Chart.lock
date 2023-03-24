@@ -1,7 +1,7 @@
 dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 17.3.17
+  version: 17.9.0
 - name: grafana
   repository: https://grafana.github.io/helm-charts
   version: 6.52.4
@@ -20,5 +20,5 @@ dependencies:
 - name: console
   repository: https://charts.redpanda.com/
   version: 0.5.6
-digest: sha256:26b5b576c7e6e406a6b558e7c243fe8f829ed1bb954303832a84ffb4bf2ff2f9
-generated: "2023-03-23T09:43:38.1791109+01:00"
+digest: sha256:2eb51f44ff748bba52d6b2f4503e46235a1fa19298da0d831ee243ef603a5c1a
+generated: "2023-03-23T09:52:09.1171011+01:00"
