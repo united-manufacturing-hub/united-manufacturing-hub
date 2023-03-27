@@ -4,7 +4,7 @@ dependencies:
   version: 17.9.0
 - name: grafana
   repository: https://grafana.github.io/helm-charts
-  version: 6.49.0
+  version: 6.52.4
 - name: timescaledb-single
   repository: https://charts.timescale.com/
   version: 0.10.0
