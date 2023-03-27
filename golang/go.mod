@@ -40,7 +40,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rung/go-safecast v1.0.1
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.2.4
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.3.0
 	github.com/united-manufacturing-hub/umh-utils v0.0.3
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
