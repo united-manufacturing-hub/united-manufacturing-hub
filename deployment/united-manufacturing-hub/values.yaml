@@ -761,9 +761,7 @@ factoryinsight:
   db_database: "factoryinsight"
   db_user: "factoryinsight"
   redis:
-    URI1: united-manufacturing-hub-redis-node-0.united-manufacturing-hub-redis-headless:26379
-    URI2: united-manufacturing-hub-redis-node-1.united-manufacturing-hub-redis-headless:26379
-    URI3: united-manufacturing-hub-redis-node-2.united-manufacturing-hub-redis-headless:26379
+    URI: united-manufacturing-hub-redis-headless:6379
   service:
     annotations: {}
   pdb:
