@@ -60,16 +60,6 @@ dependencies:
     repository: https://charts.timescale.com/
     condition: _000_commonConfig.datastorage.enabled
 
-  - name: operator
-    version: 4.5.0
-    repository: https://operator.min.io/
-    condition: _000_commonConfig.blobstorage.enabled
-
-  - name: tenant
-    version: 4.5.0
-    repository: https://operator.min.io/
-    condition: _000_commonConfig.blobstorage.enabled
-
   - name: kafka
     version: 20.0.2
     repository: https://charts.bitnami.com/bitnami
