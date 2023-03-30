@@ -286,6 +286,10 @@ _000_commonConfig:
     enabled: false
     domain: "tulip-connector.changeme.com"
 
+  metrics:
+    # Allow sending of non PII metrics to United Manufacturing Hub
+    enabled: true
+
 _001_customMicroservices:
   -
       name: example
@@ -1307,3 +1311,11 @@ mqtt_broker:
         - TLS_RSA_WITH_AES_128_GCM_SHA256
         - TLS_RSA_WITH_AES_128_CBC_SHA
         - TLS_RSA_WITH_AES_256_CBC_SHA
+
+metrics:
+  image:
+    repository: ghcr.io/united-manufacturing-hub/metrics
+    pullPolicy: IfNotPresent
+    tag: latest
+  cronJob:
+    schedule: "0 0 * * *" # Run every day at midnight
