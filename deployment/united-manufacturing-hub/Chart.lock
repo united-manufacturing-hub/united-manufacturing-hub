@@ -8,17 +8,11 @@ dependencies:
 - name: timescaledb-single
   repository: https://charts.timescale.com/
   version: 0.26.9
-- name: operator
-  repository: https://operator.min.io/
-  version: 4.5.0
-- name: tenant
-  repository: https://operator.min.io/
-  version: 4.5.0
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
   version: 20.0.2
 - name: console
   repository: https://charts.redpanda.com/
   version: 0.5.6
-digest: sha256:19109affc0df26958a43bd5681cb45e2e79af8415f1f9855ae51de3e9438aa10
-generated: "2023-03-28T11:05:09.4694404+02:00"
+digest: sha256:e1a283286fddc757998319fd0fa2d649bb5e535576e2c442989c43f2ccc7c40e
+generated: "2023-03-29T14:07:04.5005769+02:00"
