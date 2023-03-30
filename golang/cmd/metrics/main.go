@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
+	"net/http"
 	"runtime"
 	"strings"
 )
@@ -96,11 +97,17 @@ func main() {
 	}
 
 	// JSON serialization
-	jsonMetrics, err := jsoniter.MarshalIndent(s, "", "  ")
+	jsonMetrics, err := jsoniter.Marshal(s)
 	if err != nil {
 		zap.S().Errorf("error: %s", err)
 		return
 	}
 
-	zap.S().Infof("Metrics: %s", jsonMetrics)
+	// POST to https://repo.umh.app/metrics
+
+	_, err = http.DefaultClient.Post("https://repo.umh.app/metrics", "application/json", strings.NewReader(string(jsonMetrics)))
+	if err != nil {
+		zap.S().Errorf("error: %s", err)
+		return
+	}
 }
