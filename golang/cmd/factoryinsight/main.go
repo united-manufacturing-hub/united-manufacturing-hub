@@ -147,14 +147,6 @@ func main() {
 	if !redisURIEnvSet {
 		zap.S().Fatal("RedisURI (REDIS_URI) must be set")
 	}
-	redisURI2, redisURI2EnvSet := os.LookupEnv("REDIS_URI2")
-	if !redisURI2EnvSet {
-		zap.S().Fatal("redisURI2 (REDIS_URI2) must be set")
-	}
-	redisURI3, redisURI3EnvSet := os.LookupEnv("REDIS_URI3")
-	if !redisURI3EnvSet {
-		zap.S().Fatal("RedisURI3 (REDIS_URI3) must be set")
-	}
 	redisPassword, redisPasswordEnvSet := os.LookupEnv("REDIS_PASSWORD")
 	if !redisPasswordEnvSet {
 		zap.S().Fatal("RedisPassword (REDIS_PASSWORD) must be set")
@@ -165,7 +157,7 @@ func main() {
 	if !dryRunEnvSet {
 		dryRun = "false"
 	}
-	internal.InitCache(redisURI, redisURI2, redisURI3, redisPassword, redisDB, dryRun)
+	internal.InitCache(redisURI, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized..", redisURI)
 

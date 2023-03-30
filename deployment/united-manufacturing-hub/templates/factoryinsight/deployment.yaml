@@ -74,11 +74,7 @@ spec:
             - name: LOGGING_LEVEL
               value: PRODUCTION
             - name: REDIS_URI
-              value: {{.Values.factoryinsight.redis.URI1}}
-            - name: REDIS_URI2
-              value: {{.Values.factoryinsight.redis.URI2}}
-            - name: REDIS_URI3
-              value: {{.Values.factoryinsight.redis.URI3}}
+              value: {{.Values.factoryinsight.redis.URI}}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
