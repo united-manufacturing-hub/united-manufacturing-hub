@@ -177,7 +177,7 @@ jobs:
           chmod +x ./tools/save_logs.sh
           helm repo add united-manufacturing-hub https://repo.umh.app/
           helm repo update
-          helm install ${{ env.UMH }} ${{ env.CHART_DIR }} \
+          helm install ${{ env.UMH }} ${{ env.UMH }}/${{ env.UMH }} \
             --values ${{ env.VALUES_FILE }} \
             --namespace ${{ env.UMH }} \
             --create-namespace \
