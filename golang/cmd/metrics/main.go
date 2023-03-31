@@ -41,12 +41,6 @@ type stat struct {
 func main() {
 	// Initialize zap logging
 	log := logger.New("LOGGING_LEVEL")
-	defer func(logger *zap.SugaredLogger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(log)
 
 	// Get OS and architecture
 	os := runtime.GOOS
@@ -103,6 +97,9 @@ func main() {
 		return
 	}
 
+	// Output metrics to stdout
+	zap.S().Infof("%s", string(jsonMetrics))
+
 	// POST to https://repo.umh.app/metrics
 
 	_, err = http.DefaultClient.Post("https://repo.umh.app/metrics", "application/json", strings.NewReader(string(jsonMetrics)))
@@ -110,4 +107,5 @@ func main() {
 		zap.S().Errorf("error: %s", err)
 		return
 	}
+	_ = log.Sync()
 }

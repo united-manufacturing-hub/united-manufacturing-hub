@@ -31,7 +31,8 @@ WORKDIR /build
 
 RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-extldflags '-static'" -o mainFile ./cmd/metrics
 
-FROM scratch
+FROM alpine
 COPY --from=builder /build /app/
 WORKDIR /app
+RUN chmod +x mainFile
 CMD ["./mainFile"]

@@ -1316,6 +1316,6 @@ metrics:
   image:
     repository: ghcr.io/united-manufacturing-hub/metrics
     pullPolicy: IfNotPresent
-    tag: latest
+    #tag: latest
   cronJob:
     schedule: "0 0 * * *" # Run every day at midnight

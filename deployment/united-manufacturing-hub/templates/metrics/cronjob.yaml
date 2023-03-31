@@ -32,7 +32,11 @@ spec:
         spec:
           containers:
             - name: {{include "united-manufacturing-hub.fullname" .}}-metrics-cron
-              image: "{{ .Values.metrics.image.repository }}:{{ .Values.metrics.image.tag }}"
+              {{if .Values.kafkabridge.image.tag}}
+              image: {{.Values.metrics.image.repository}}:{{.Values.metrics.image.tag}}
+              {{- else}}
+              image: {{.Values.metrics.image.repository}}:{{.Chart.AppVersion}}
+              {{end}}
               imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
           restartPolicy: OnFailure
 {{- end }}
