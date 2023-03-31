@@ -3,7 +3,7 @@ entries:
   united-manufacturing-hub:
   - apiVersion: v2
     appVersion: 0.9.12-prerelease2
-    created: "2023-03-31T13:33:38.4222476+02:00"
+    created: "2023-03-31T13:43:36.145474+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -27,15 +27,15 @@ entries:
       version: 0.5.6
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
-    digest: f9f350895796bb39d2611f06c903b07aa13e31987910a5eb0fbb6d17a944aa54
-    home: https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev
+    digest: 1d3fb40638202486afc24f0c79e5170aeeb302dac3ecdad22a890d9981bf9072
+    home: https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev
     icon: https://avatars.githubusercontent.com/u/77492553
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.12-prerelease2.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.12-prerelease2.tgz
     version: 0.9.12-prerelease2
   - apiVersion: v2
     appVersion: 0.9.12-prerelease1
@@ -75,7 +75,7 @@ entries:
     version: 0.9.12-prerelease1
   - apiVersion: v2
     appVersion: 0.9.11
-    created: "2023-03-31T13:33:38.4000411+02:00"
+    created: "2023-03-31T13:43:36.1190983+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -115,11 +115,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.11.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.11.tgz
     version: 0.9.11
   - apiVersion: v2
     appVersion: 0.9.10
-    created: "2023-03-31T13:33:38.3691316+02:00"
+    created: "2023-03-31T13:43:36.0769241+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -159,7 +159,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.10.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.10.tgz
     version: 0.9.10
   - apiVersion: v2
     appVersion: 0.9.10-hf1
@@ -207,7 +207,7 @@ entries:
     version: 0.9.10-hf1
   - apiVersion: v2
     appVersion: 0.9.9
-    created: "2023-03-31T13:33:38.6013406+02:00"
+    created: "2023-03-31T13:43:36.369818+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -250,11 +250,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.9.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.9.tgz
     version: 0.9.9
   - apiVersion: v2
     appVersion: 0.9.8
-    created: "2023-03-31T13:33:38.5792043+02:00"
+    created: "2023-03-31T13:43:36.3414954+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -297,11 +297,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.8.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.8.tgz
     version: 0.9.8
   - apiVersion: v2
     appVersion: 0.9.7
-    created: "2023-03-31T13:33:38.5576767+02:00"
+    created: "2023-03-31T13:43:36.3131017+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -344,11 +344,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.7.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.7.tgz
     version: 0.9.7
   - apiVersion: v2
     appVersion: 0.9.6
-    created: "2023-03-31T13:33:38.5349881+02:00"
+    created: "2023-03-31T13:43:36.2836565+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -391,11 +391,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.6.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.6.tgz
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.5
-    created: "2023-03-31T13:33:38.5147217+02:00"
+    created: "2023-03-31T13:43:36.2548104+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -438,11 +438,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.5.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.5.tgz
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.4
-    created: "2023-03-31T13:33:38.4892017+02:00"
+    created: "2023-03-31T13:43:36.2247695+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -485,11 +485,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.4.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.4.tgz
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.3
-    created: "2023-03-31T13:33:38.4675327+02:00"
+    created: "2023-03-31T13:43:36.1981854+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -528,11 +528,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.3.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.3.tgz
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.2
-    created: "2023-03-31T13:33:38.4423009+02:00"
+    created: "2023-03-31T13:43:36.170583+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -571,11 +571,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.2.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.2.tgz
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
-    created: "2023-03-31T13:33:38.3366686+02:00"
+    created: "2023-03-31T13:43:36.0246553+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -614,11 +614,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.1.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.1.tgz
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
-    created: "2023-03-31T13:33:38.3152706+02:00"
+    created: "2023-03-31T13:43:35.9922619+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -657,11 +657,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.0.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.0.tgz
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2023-03-31T13:33:38.2957392+02:00"
+    created: "2023-03-31T13:43:35.9619255+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -700,11 +700,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.7.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.7.tgz
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2023-03-31T13:33:38.2734536+02:00"
+    created: "2023-03-31T13:43:35.934826+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -743,11 +743,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.6.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.6.tgz
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2023-03-31T13:33:38.2466445+02:00"
+    created: "2023-03-31T13:43:35.9070509+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -786,11 +786,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.5.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.5.tgz
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2023-03-31T13:33:38.2201971+02:00"
+    created: "2023-03-31T13:43:35.8748151+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -829,11 +829,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.4.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.4.tgz
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2023-03-31T13:33:38.1926023+02:00"
+    created: "2023-03-31T13:43:35.8476166+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -872,11 +872,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.3.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.3.tgz
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2023-03-31T13:33:38.1715966+02:00"
+    created: "2023-03-31T13:43:35.8206037+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -915,11 +915,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.2.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.2.tgz
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2023-03-31T13:33:38.1471364+02:00"
+    created: "2023-03-31T13:43:35.7876286+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -958,11 +958,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.1.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.1.tgz
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2023-03-31T13:33:38.1275484+02:00"
+    created: "2023-03-31T13:43:35.757555+02:00"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1001,6 +1001,6 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://v0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.0.tgz
+    - https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
-generated: "2023-03-31T13:33:38.1051903+02:00"
+generated: "2023-03-31T13:43:35.7284119+02:00"
