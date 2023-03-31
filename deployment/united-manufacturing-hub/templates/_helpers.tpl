@@ -277,6 +277,14 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-tulip-co
 {{- end }}
 
 {{/*
+Labels for metrics
+*/}}
+{{- define "united-manufacturing-hub.labels.metrics" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
