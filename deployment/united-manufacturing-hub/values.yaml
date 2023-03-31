@@ -875,6 +875,9 @@ timescaledb-single:
     - secret:
         name: timescale-post-init-pw
         optional: false
+  service:
+    primary:
+      type: LoadBalancer
   serviceAccount:
     create: false
 
