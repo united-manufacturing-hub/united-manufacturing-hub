@@ -13,7 +13,6 @@
   # limitations under the License.
 
 ---
----
 {{- if .Values._000_commonConfig.metrics.enabled }}
 apiVersion: batch/v1
 kind: CronJob
@@ -21,10 +20,6 @@ metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-metrics
   labels:
     {{- include "united-manufacturing-hub.labels.metrics" . | nindent 4}}
-  {{ if .Values.metrics.annotations }}
-  annotations:
-    {{- toYaml .Values.metrics.annotations | nindent 4}}
-  {{ end }}
 spec:
   schedule: {{ .Values.metrics.cronJob.schedule }}
   jobTemplate:
