@@ -40,7 +40,7 @@ version: 0.9.12
 
 appVersion: "0.9.12"
 
-home: https://repo.umh.app
+home: https://www.umh.app
 sources:
   - https://github.com/united-manufacturing-hub/united-manufacturing-hub
 
