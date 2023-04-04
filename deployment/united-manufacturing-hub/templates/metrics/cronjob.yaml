@@ -18,8 +18,6 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-metrics
-  labels:
-    {{- include "united-manufacturing-hub.labels.metrics" . | nindent 4}}
 spec:
   schedule: {{ .Values.metrics.cronJob.schedule }}
   jobTemplate:
