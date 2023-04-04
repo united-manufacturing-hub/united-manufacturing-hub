@@ -67,7 +67,6 @@ jobs:
             --set "tulipconnector.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
-            --set "kafkatoblob.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --create-namespace \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
@@ -159,7 +158,6 @@ jobs:
             --set "tulipconnector.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
-            --set "kafkatoblob.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
