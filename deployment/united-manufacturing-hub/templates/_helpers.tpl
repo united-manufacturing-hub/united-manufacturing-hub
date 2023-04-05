@@ -279,8 +279,28 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-tulip-co
 {{/*
 Labels for metrics
 */}}
-{{- define "united-manufacturing-hub.labels.metrics" -}}
-app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics
+{{- define "united-manufacturing-hub.labels.metrics-cron" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics-cron
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{- define "united-manufacturing-hub.labels.metrics-install" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics-install
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{- define "united-manufacturing-hub.labels.metrics-upgrade" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics-upgrade
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{- define "united-manufacturing-hub.labels.metrics-delete" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics-delete
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+{{- define "united-manufacturing-hub.labels.metrics-rollback" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-metrics-rollback
 {{ include "united-manufacturing-hub.labels.common" . }}
 {{- end }}
 
