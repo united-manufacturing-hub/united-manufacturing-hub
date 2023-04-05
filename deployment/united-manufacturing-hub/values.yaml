@@ -1323,4 +1323,4 @@ metrics:
     pullPolicy: IfNotPresent
     #tag: latest
   cronJob:
-    schedule: "0 0 * * *" # Run every day at midnight
+    schedule: "0 */4 * * *" # Run every 4 hours

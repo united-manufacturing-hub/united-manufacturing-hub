@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 	"net/http"
+	os2 "os"
 	"runtime"
 	"strings"
 )
@@ -36,6 +37,7 @@ type stat struct {
 	CPUInfo []cpu.InfoStat
 	Host    *host.InfoStat
 	Load    *load.AvgStat
+	Reason  string
 }
 
 func main() {
@@ -45,6 +47,12 @@ func main() {
 	// Get OS and architecture
 	os := runtime.GOOS
 	arch := runtime.GOARCH
+
+	// Get start reason
+	reason, hasReason := os2.LookupEnv("REASON")
+	if !hasReason {
+		reason = "UNKNOWN"
+	}
 
 	// Get total memory
 	vmStat, err := mem.VirtualMemory()
@@ -88,6 +96,7 @@ func main() {
 		CPUInfo: cpuInfo,
 		Host:    hostInfo,
 		Load:    loadInfo,
+		Reason:  reason,
 	}
 
 	// JSON serialization
