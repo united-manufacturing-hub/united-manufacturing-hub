@@ -359,7 +359,7 @@ func GetLatestParentUniqueProductID(ParentID string, DBAssetID uint32) (
 		ParentID,
 		DBAssetID).Scan(&LatestparentUniqueProductId)
 	if errors.Is(err, sql.ErrNoRows) {
-		zap.S().Debugf("[GetUniqueProductID] No Results Found for ChildID: %s, DBAssetID: %d", ParentID, DBAssetID)
+		zap.S().Debugf("[GetUniqueProductID] No Results Found for ParentID: %s, DBAssetID: %d", ParentID, DBAssetID)
 
 		return 0, false
 	} else if err != nil {
