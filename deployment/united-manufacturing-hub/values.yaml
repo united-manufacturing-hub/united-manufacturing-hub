@@ -1042,6 +1042,8 @@ grafana:
       password: "changeme"
       ssl_mode: require
       type: postgres
+    log.console:
+      format: json
 
 ### kowl ###enhancement/1401/UpdateAllHelmDependencies
 console:
