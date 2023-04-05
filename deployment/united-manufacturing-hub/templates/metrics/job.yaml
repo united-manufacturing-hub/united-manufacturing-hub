@@ -19,25 +19,25 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-metrics-{{ $reason | lower }}
+  name: {{include "united-manufacturing-hub.fullname" $}}-metrics-{{ $reason | lower }}
   labels:
-    {{- include "united-manufacturing-hub.labels.metrics" . | nindent 4}}
+    {{- include (printf "united-manufacturing-hub.labels.metrics-%s" ($reason | lower)) $ | nindent 4 }}
   annotations:
     helm.sh/hook: {{ $hook }}
-    {{- if .Values.metrics.annotations}}
-    {{- toYaml .Values.metrics.annotations | nindent 4}}
+    {{- if $.Values.metrics.annotations}}
+    {{- toYaml $.Values.metrics.annotations | nindent 4}}
     {{- end}}
 spec:
   template:
     spec:
       containers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-metrics-cron
-          {{if .Values.metrics.image.tag}}
-          image: {{.Values.metrics.image.repository}}:{{.Values.metrics.image.tag}}
+        - name: {{include "united-manufacturing-hub.fullname" $}}-metrics-{{ $reason | lower }}
+          {{if $.Values.metrics.image.tag}}
+          image: {{$.Values.metrics.image.repository}}:{{$.Values.metrics.image.tag}}
           {{- else}}
-          image: {{.Values.metrics.image.repository}}:{{.Chart.AppVersion}}
+          image: {{$.Values.metrics.image.repository}}:{{$.Chart.AppVersion}}
           {{- end}}
-          imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
+          imagePullPolicy: {{ $.Values.metrics.image.pullPolicy }}
           env:
             - name: REASON
               value: {{ $reason }}
