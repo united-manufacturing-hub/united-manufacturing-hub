@@ -19,6 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-iotsensorsmqtt
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 4}}
     app.kubernetes.io/component: "iotsensorsmqtt"

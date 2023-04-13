@@ -18,6 +18,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: timescale-post-init
+  namespace: {{ .Release.Namespace }}
 data:
   0_create_dbs.sh: |-
     #!/bin/bash

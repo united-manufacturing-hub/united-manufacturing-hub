@@ -18,6 +18,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.kafkabridge" . | nindent 4}}
   {{if .Values.kafkabridge.annotations}}

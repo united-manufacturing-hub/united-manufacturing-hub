@@ -19,6 +19,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+  namespace: {{ .Release.Namespace }}
   labels:
   {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
   {{if .Values.factoryinput.annotations}}

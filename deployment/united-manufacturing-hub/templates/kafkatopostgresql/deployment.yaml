@@ -19,6 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 4}}
   {{if .Values.kafkatopostgresql.annotations}}

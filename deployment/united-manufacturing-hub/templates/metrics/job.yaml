@@ -20,6 +20,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{include "united-manufacturing-hub.fullname" $}}-metrics-{{ $reason | lower }}
+  namespace: {{ $.Release.Namespace }}
   labels:
     {{- include (printf "united-manufacturing-hub.labels.metrics-%s" ($reason | lower)) $ | nindent 4 }}
   annotations:

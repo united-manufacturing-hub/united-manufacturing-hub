@@ -18,6 +18,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 4}}
   {{if .Values.kafkastatedetector.annotations}}

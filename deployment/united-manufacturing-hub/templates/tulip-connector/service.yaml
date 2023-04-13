@@ -18,6 +18,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" . }}-tulip-connector-service
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
 spec:

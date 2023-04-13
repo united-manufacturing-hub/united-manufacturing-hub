@@ -19,6 +19,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-nodered
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
 spec:

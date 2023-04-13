@@ -20,6 +20,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-pdb
+  namespace: {{ .Release.Namespace }}
 spec:
   minAvailable: {{.Values.factoryinput.pdb.minAvailable}}
   selector:

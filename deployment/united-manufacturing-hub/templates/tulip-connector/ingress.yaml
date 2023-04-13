@@ -19,6 +19,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-ingress
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
 spec:

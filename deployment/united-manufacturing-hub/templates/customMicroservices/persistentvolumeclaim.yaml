@@ -19,6 +19,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: united-manufacturing-hub-cm-{{$value.name}}-claim
+  namespace: {{ .Release.Namespace }}
   annotations:
     "helm.sh/resource-policy": keep
 spec:

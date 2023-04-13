@@ -19,6 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
 spec:

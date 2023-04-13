@@ -20,6 +20,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.sensorconnect" . | nindent 4}}
 spec:

@@ -19,6 +19,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-nodered-config
+  namespace: {{ .Release.Namespace }}
 data:
   nodered-config: {{.Values.nodered.settings | toPrettyJson}}
 

@@ -19,6 +19,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: united-manufacturing-hub-cm-{{$value.name}}
+  namespace: {{ .Release.Namespace }}
 
 spec:
   replicas: 1

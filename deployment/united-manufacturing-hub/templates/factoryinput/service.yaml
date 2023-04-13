@@ -19,6 +19,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-service
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
   {{if .Values.factoryinput.service.annotations}}

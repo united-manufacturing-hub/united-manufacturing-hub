@@ -20,6 +20,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-claim-extensions
+  namespace: {{ .Release.Namespace }}
   annotations:
     "helm.sh/resource-policy": keep
   labels:

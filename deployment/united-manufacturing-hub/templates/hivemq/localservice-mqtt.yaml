@@ -19,6 +19,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-mqtt
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: hivemqce
     app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
