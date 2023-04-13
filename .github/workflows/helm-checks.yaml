@@ -23,6 +23,7 @@ on:
 
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
+  VALUES_DEFAULT: ./deployment/united-manufacturing-hub/values.yaml
   VALUES_TINY: ./test/test-values-tiny.yaml
   VALUES_FULL: ./test/test-values-full.yaml
 
@@ -57,6 +58,7 @@ jobs:
           framework: helm
           quiet: true
           output_format: github_failed_only
+          var_file: ${{ env.VALUES_DEFAULT }}
       - name: Test Checkov Tiny Values
         uses: bridgecrewio/checkov-action@master
         with:
