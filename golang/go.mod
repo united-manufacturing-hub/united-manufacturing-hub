@@ -47,7 +47,7 @@ require (
 	golang.org/x/crypto v0.8.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	gonum.org/v1/gonum v0.12.0
-	k8s.io/apimachinery v0.27.0
+	k8s.io/apimachinery v0.27.1
 )
 
 require (
