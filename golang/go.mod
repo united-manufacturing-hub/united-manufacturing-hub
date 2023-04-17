@@ -34,7 +34,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/heptiolabs/healthcheck v0.0.0-20211123025425-613501dd5deb
 	github.com/json-iterator/go v1.1.12
-	github.com/lib/pq v1.10.7
+	github.com/lib/pq v1.10.8
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.15.0
@@ -47,7 +47,7 @@ require (
 	golang.org/x/crypto v0.8.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	gonum.org/v1/gonum v0.12.0
-	k8s.io/apimachinery v0.27.0
+	k8s.io/apimachinery v0.27.1
 )
 
 require (
