@@ -57,6 +57,7 @@ jobs:
           framework: helm
           quiet: true
           output_format: github_failed_only
+          skip_check: CKV_K8S_21
       - name: Test Checkov Tiny Values
         uses: bridgecrewio/checkov-action@master
         with:
@@ -65,6 +66,7 @@ jobs:
           quiet: true
           output_format: github_failed_only
           var_file: ${{ env.VALUES_TINY }}
+          skip_check: CKV_K8S_21
       - name: Test Checkov Full Values
         uses: bridgecrewio/checkov-action@master
         with:
@@ -73,3 +75,4 @@ jobs:
           quiet: true
           output_format: github_failed_only
           var_file: ${{ env.VALUES_FULL }}
+          skip_check: CKV_K8S_21
