@@ -1045,33 +1045,6 @@ grafana:
     log.console:
       format: json
 
-### kowl ###enhancement/1401/UpdateAllHelmDependencies
-console:
-  serviceAccount:
-    create: false
-  service:
-    type: LoadBalancer
-    port: 8090
-    targetPort: 8080
-  console:
-    config:
-      kafka:
-        brokers:
-          - united-manufacturing-hub-kafka:9092
-        tls:
-          enabled: false
-          caFilepath: "/SSL_certs/kafka/ca.crt"
-          certFilepath: "/SSL_certs/kafka/tls.crt"
-          keyFilepath: "/SSL_certs/kafka/tls.key"
-  extraVolumes:
-    - name: united-manufacturing-hub-kowl-certificates
-      secret:
-        secretName: united-manufacturing-hub-kowl-secrets
-  extraVolumeMounts:
-    - name: united-manufacturing-hub-kowl-certificates
-      mountPath: /SSL_certs/kafka
-      readOnly: true
-
 ### packmlmqttsimulator ###
 packmlmqttsimulator:
   image:
@@ -1152,70 +1125,58 @@ kafkatoblob:
     minAvailable: 1
 
 ##### CONFIG FOR APACHE KAFKA #####
-kafka:
+redpanda:
   serviceAccount:
     create: false
-  livenessProbe:
-    failureThreshold: 10
-    timeoutSeconds: 10
-  startupProbe:
-    enabled: true
-    failureThreshold: 600
-    periodSeconds: 10
-    timeoutSeconds: 10
-  replicas: 1
-  storageRequest: 1Gi
-  allowPlaintextListener: true
-  externalAccess:
-    enabled: true
-    autoDiscovery:
-      enabled: true
+#  nameOverride: united-manufacturing-hub-kafka
+  fullnameOverride: united-manufacturing-hub-event-broker
+  external:
+    type: LoadBalancer
+  statefulset:
+    replicas: 1
   rbac:
-    create: true
+    enabled: true
   service:
     type: ClusterIP
     ports:
       client: 9092
       internal: 9093
       external: 9094
-  persistence:
-    enabled: true
-    accessModes:
-      - ReadWriteOnce
-    size: 8Gi
-    mountPath: /bitnami/kafka
-  logPersistence:
-    enabled: false
-  provisioning:
-    enabled: false
-    numPartitions: 1
-    replicationFactor: 1
-  zookeeper:
-    enabled: true
-    heapSize: 128
-    auth:
-      enabled: false
-  externalZookeeper:
-    servers: []
-  autoCreateTopicsEnable: true
+  storage:
+    persistentVolume:
+      size: 8Gi
   resources:
-    limits:
-      cpu: 1000m
-      memory: 4Gi
-    requests:
-      cpu: 100m
-      memory: 2560Mi
-  heapOpts: -Xmx2048m -Xms2048m
-  logRetentionHours: 168
-  logSegmentBytes: _10485760 # 10MiB
-  logRetentionBytes: _26214400 # 25MiB
-  numPartitions: 6
-  auth:
-    clientProtocol: plaintext
-    tls:
-      type: pem
-      existingSecrets:
-        - united-manufacturing-hub-kafka-broker-secrets
+    cpu:
+      cores: 2
+    memory:
+      enable_memory_locking: true
+      container:
+        max: 10Gi
+  config:
+    cluster:
+      auto_create_topics_enabled: true
+  tls:
+    enabled: false
+  console:
+    serviceAccount:
+      create: false
+    service:
+      type: LoadBalancer
+      port: 8090
+      targetPort: 8080
+    console:
+      config:
+        kafka:
+          brokers:
+            - united-manufacturing-hub-event-broker:9092
+    extraVolumes:
+      - name: united-manufacturing-hub-kowl-certificates
+        secret:
+          secretName: united-manufacturing-hub-kowl-secrets
+    extraVolumeMounts:
+      - name: united-manufacturing-hub-kowl-certificates
+        mountPath: /SSL_certs/kafka
+        readOnly: true
 
 ##### CONFIG FOR REDIS #####
 redis:

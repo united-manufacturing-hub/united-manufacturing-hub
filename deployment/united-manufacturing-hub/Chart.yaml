@@ -60,12 +60,7 @@ dependencies:
     repository: https://charts.timescale.com/
     condition: _000_commonConfig.datastorage.enabled
 
-  - name: kafka
-    version: 20.0.2
-    repository: https://charts.bitnami.com/bitnami
-    condition: _000_commonConfig.infrastructure.kafka.enabled
-
-  - name: console
+  - name: redpanda
     repository: https://charts.redpanda.com/
-    version: 0.5.6
+    version: 3.0.9
     condition: _000_commonConfig.infrastructure.kafka.enabled
