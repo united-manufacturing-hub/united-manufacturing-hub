@@ -1128,23 +1128,17 @@ kafkatoblob:
 redpanda:
   serviceAccount:
     create: false
-#  nameOverride: united-manufacturing-hub-kafka
-  fullnameOverride: united-manufacturing-hub-event-broker
-  external:
-    type: LoadBalancer
+  fullnameOverride: united-manufacturing-hub-kafka
   statefulset:
     replicas: 1
   rbac:
     enabled: true
-  service:
-    type: ClusterIP
-    ports:
-      client: 9092
-      internal: 9093
-      external: 9094
   storage:
     persistentVolume:
-      size: 8Gi
+      size: 10Gi
+  listeners:
+    kafka:
+      port: 9092
   resources:
     cpu:
       cores: 2
@@ -1168,15 +1162,7 @@ redpanda:
       config:
         kafka:
           brokers:
-            - united-manufacturing-hub-event-broker:9092
-    extraVolumes:
-      - name: united-manufacturing-hub-kowl-certificates
-        secret:
-          secretName: united-manufacturing-hub-kowl-secrets
-    extraVolumeMounts:
-      - name: united-manufacturing-hub-kowl-certificates
-        mountPath: /SSL_certs/kafka
-        readOnly: true
+            - united-manufacturing-hub-kafka:9092
 
 ##### CONFIG FOR REDIS #####
 redis:
