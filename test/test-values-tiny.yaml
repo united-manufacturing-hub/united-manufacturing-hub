@@ -18,16 +18,22 @@ _000_commonConfig:
   datasources:
     iotsensorsmqtt:
       enabled: true
+    opcuasimulator:
+      enabled: false
+    packmlmqttsimulator:
+      enabled: false
 
   dataprocessing:
     nodered:
       defaultFlows: true
 
   infrastructure:
-
     mqtt:
       tls:
         useTLS: true
+
+  metrics:
+    enabled: false
 
 nodered:
   flows: |-
@@ -44,3 +50,5 @@ redpanda:
       enable_memory_locking: true
       container:
         max: 3Gi
+  console:
+    enabled: false
