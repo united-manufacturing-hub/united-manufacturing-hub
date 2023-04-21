@@ -1033,7 +1033,7 @@ redpanda:
     memory:
       enable_memory_locking: true
       container:
-        max: 10Gi
+        max: 5Gi
   config:
     cluster:
       auto_create_topics_enabled: true
