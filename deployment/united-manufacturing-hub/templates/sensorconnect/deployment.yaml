@@ -141,9 +141,13 @@ spec:
                 fieldRef:
                   fieldPath: metadata.labels['app.kubernetes.io/name']
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.sensorconnect.sslKeyPassword | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
             - name: MQTT_PASSWORD
               value: {{.Values.sensorconnect.mqtt.password | quote}}
             - name: INSECURE_SKIP_VERIFY
@@ -161,9 +165,11 @@ spec:
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
               mountPath: {{.Values.sensorconnect.ioddfilepath}}
+            {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
+            {{end}}
             - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
               mountPath: /SSL_certs/mqtt
               readOnly: true
@@ -175,9 +181,11 @@ spec:
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-data
           persistentVolumeClaim:
             claimName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-claim
+        {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-kafka-secrets
+        {{end}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-sensorconnect-mqtt-secrets
