@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -916,17 +917,19 @@ func GetProductionSpeed(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	aggregatedIntervalString := strconv.Itoa(aggregatedInterval) + " minutes"
+
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
+	SELECT time_bucket($1, timestamp) as speedPerIntervall, coalesce(sum(count),0)  
 	FROM countTable 
-	WHERE asset_id=$1 
-		AND timestamp BETWEEN $2 AND $3 
+	WHERE asset_id=$2 
+		AND timestamp BETWEEN $3 AND $4 
 	GROUP BY speedPerIntervall 
 	ORDER BY speedPerIntervall ASC;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, assetID, from, to)
+	rows, err = database.Db.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
