@@ -62,9 +62,13 @@ spec:
               value: umh.v1.kafka.newTopic
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{ .Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.mqttkafkabridge.sslKeyPassword | quote}}
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
+              value: {{ .Values._000_commonConfig.infrastructure.kafka.tls.mqttkafkabridge.sslKeyPassword | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge
           {{if .Values.mqttkafkabridge.image.tag}}
@@ -132,9 +136,13 @@ spec:
               value: {{.Values._000_commonConfig.serialNumber}}
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.mqttkafkabridge.sslKeyPassword | quote}}
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
+              value: {{ .Values._000_commonConfig.infrastructure.kafka.tls.mqttkafkabridge.sslKeyPassword | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
 
             - name: MQTT_PASSWORD
               value: {{.Values.mqttkafkabridge.mqtt.password | quote}}
@@ -167,9 +175,11 @@ spec:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
+            {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
             - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
+            {{end}}
             - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-mqtt-certificates
               mountPath: /SSL_certs/mqtt
               readOnly: true
@@ -178,9 +188,11 @@ spec:
         - name: kubernetes-ca
           configMap:
             name: kube-root-ca.crt
+        {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-kafka-secrets
+        {{end}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-mqtt-certificates
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-mqtt-secrets
