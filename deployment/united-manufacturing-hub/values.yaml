@@ -124,119 +124,7 @@ _000_commonConfig:
     # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
-      useSSL: false
       defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
-      tls:
-        CACert: |-
-          -----BEGIN CERTIFICATE-----
-          -----END CERTIFICATE-----
-        kafka:
-          cert: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-          privkey: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-        barcodereader:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kafkabridge:
-          sslKeyPasswordLocal: ""
-          sslKeyPemLocal: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePemLocal: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-          sslCACertRemote: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-          sslCertificatePemRemote: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslKeyPasswordRemote: ""
-          sslKeyPemRemote: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kafkadebug:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kafkainit:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kafkastatedetector:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kafkatoblob:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kafkatopostgresql:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        kowl:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        mqttkafkabridge:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        nodered:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-        sensorconnect:
-          sslKeyPassword: ""
-          sslKeyPem: |-
-            -----BEGIN PRIVATE KEY-----
-            -----END PRIVATE KEY-----
-          sslCertificatePem: |-
-            -----BEGIN CERTIFICATE-----
-            -----END CERTIFICATE-----
-
-
 
   # timescaledb, factoryinsight, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
@@ -1128,30 +1016,24 @@ kafkatoblob:
 redpanda:
   serviceAccount:
     create: false
-#  nameOverride: united-manufacturing-hub-kafka
-  fullnameOverride: united-manufacturing-hub-event-broker
-  external:
-    type: LoadBalancer
+  fullnameOverride: united-manufacturing-hub-kafka
   statefulset:
     replicas: 1
   rbac:
     enabled: true
-  service:
-    type: ClusterIP
-    ports:
-      client: 9092
-      internal: 9093
-      external: 9094
   storage:
     persistentVolume:
-      size: 8Gi
+      size: 10Gi
+  listeners:
+    kafka:
+      port: 9092
   resources:
     cpu:
       cores: 2
     memory:
       enable_memory_locking: true
       container:
-        max: 10Gi
+        max: 5Gi
   config:
     cluster:
       auto_create_topics_enabled: true
@@ -1168,15 +1050,7 @@ redpanda:
       config:
         kafka:
           brokers:
-            - united-manufacturing-hub-event-broker:9092
-    extraVolumes:
-      - name: united-manufacturing-hub-kowl-certificates
-        secret:
-          secretName: united-manufacturing-hub-kowl-secrets
-    extraVolumeMounts:
-      - name: united-manufacturing-hub-kowl-certificates
-        mountPath: /SSL_certs/kafka
-        readOnly: true
+            - united-manufacturing-hub-kafka:9092
 
 ##### CONFIG FOR REDIS #####
 redis:
