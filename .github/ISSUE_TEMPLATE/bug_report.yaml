@@ -22,11 +22,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report!
+        Thanks for taking the time to fill out this bug report! 🐞
   - type: textarea
     id: expected-behavior
     attributes:
-      label: Expected Behavior
+      label: Expected Behavior 🌈
       description: Tell us what should happen
       placeholder: e.g., when sending a /count message via MQTT it should appear in the database
     validations:
@@ -34,7 +34,7 @@ body:
   - type: textarea
     id: current-behavior
     attributes:
-      label: Current Behavior
+      label: Current Behavior 💥
       description: Tell us what happens instead of the expected behavior
       placeholder: e.g., the message does not appear in the database and instead an error message is thrown
     validations:
@@ -42,15 +42,15 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Relevant log output
+      label: Relevant log output 📝
       description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
       render: shell
   - type: textarea
     id: steps-to-reproduce
     attributes:
-      label: Steps to Reproduce
+      label: Steps to Reproduce 🔍
       description: Provide a link to a live example, or an unambiguous set of steps to reproduce this bug. Include code to reproduce, if relevant. Issues in factoryinsight or mqtt-to-postgresql are usually really good reproducable with the exact request, so please include it here as well.
-      placeholder: | 
+      placeholder: |
         e.g., 
         Step 1: Install the stack, 
         Step 2: send message with payload
@@ -65,7 +65,7 @@ body:
   - type: textarea
     id: context
     attributes:
-      label: Context (Environment)
+      label: Context (Environment) 🌎
       description: How has this issue affected you? What are you trying to accomplish? Providing context helps us come up with a solution that is most useful in the real world
       placeholder: e.g., I am currently integrating the United Manufacturing Hub in the beverage industry and need to connect sensors with IO-link.
     validations:
@@ -73,14 +73,14 @@ body:
   - type: textarea
     id: possible-solution
     attributes:
-      label: Possible Solution
+      label: Possible Solution 🛠️
       description: Not obligatory, but suggest a fix/reason for the bug
     validations:
       required: false
   - type: dropdown
     id: version
     attributes:
-      label: Version
+      label: Version 📦
       description: What version of our software are you running?
       options:
         - v0.4.x
@@ -94,7 +94,7 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Anything else?
+      label: Anything else? 📌
       description: |
         Links? References? Anything that will give us more context about the issue you are encountering!
 
