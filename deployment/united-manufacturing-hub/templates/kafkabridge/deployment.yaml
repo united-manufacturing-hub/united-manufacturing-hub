@@ -51,6 +51,7 @@ spec:
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
           {{- else}}
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
+          {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
               mountPath: /SSL_certs/kafka/local
@@ -58,6 +59,7 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
               mountPath: /SSL_certs/kafka/remote
               readOnly: true
+          {{end}}
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
           env:
@@ -67,9 +69,13 @@ spec:
               value: {{.Values._000_commonConfig.kafkaBridge.topicCreationLocalList}}
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordLocal | quote}}
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
+              value: {{ .Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPassword | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-remote
           {{if .Values.kafkabridge.image.tag}}
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}
@@ -77,6 +83,7 @@ spec:
           image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
+          {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
               mountPath: /SSL_certs/kafka/local
@@ -84,6 +91,7 @@ spec:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
               mountPath: /SSL_certs/kafka/remote
               readOnly: true
+          {{end}}
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{.Values._000_commonConfig.kafkaBridge.remotebootstrapServer}}
@@ -91,9 +99,13 @@ spec:
               value: {{.Values._000_commonConfig.kafkaBridge.topicCreationRemoteList}}
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordRemote | quote}}
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
+              value: {{ .Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPassword | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
           {{if .Values.kafkabridge.image.tag}}
@@ -134,11 +146,19 @@ spec:
                     fieldPath: metadata.labels['app.kubernetes.io/name']
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD_LOCAL
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordLocal | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
             - name: KAFKA_SSL_KEY_PASSWORD_REMOTE
+              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
               value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkabridge.sslKeyPasswordRemote | quote}}
+              {{- else}}
+              value: ""
+              {{- end}}
 
             {{if .Values._000_commonConfig.debug.enableFGTrace}}
             - name: DEBUG_ENABLE_FGTRACE
@@ -149,22 +169,26 @@ spec:
             - name: kubernetes-ca
               mountPath: /certs/kubernetes-ca.pem
               subPath: ca.crt
+            {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
               mountPath: /SSL_certs/kafka/local
               readOnly: true
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
               mountPath: /SSL_certs/kafka/remote
               readOnly: true
+            {{end}}
       volumes:
         - name: kubernetes-ca
           configMap:
             name: kube-root-ca.crt
+        {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-secrets-local
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-remote
           secret:
             secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-secrets-remote
+        {{end}}
 
       serviceAccountName: ""
       restartPolicy: Always
