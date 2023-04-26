@@ -31,6 +31,55 @@ All source code is distributed under the APACHE LICENSE, VERSION 2.0. See [`LICE
 ## About our current version 0.x.x.
 Our current release, has been deployed and tested at a number of industrial sites worldwide and has proven to be stable in a variety of environments. While we have not yet reached a final version 1.0.0, this is typical for infrastructure projects that require extensive year-long testing and evaluation before a release. We are confident in the stability and reliability of our current release, which has been thoroughly tested over the past few years. As an open-source project, we welcome community involvement and feedback in the ongoing development and refinement of our software. We are committed to ensuring that our software is reliable and ready for deployment in industrial settings.
 
+## Development
+
+To get started with development, please refer to our [development guide](https://umh.docs.umh.app/docs/development/contribute/getting-started/).
+
+You can run `make help` to get a list of all available make targets.
+
+### Dependencies
+
+- [Go](https://golang.org/) version v1.19+.
+- [Docker](https://www.docker.com/) version v20.10.11+
+- [Helm](https://helm.sh/) version v3.11.2+
+- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) version v1.26.1+
+- [K3d](https://k3d.io/) version v5.4.6+
+- GNU Make
+- Python (to run some make targets)
+
+### Build
+
+To build the project, run:
+
+```bash
+make docker
+```
+
+### Run
+
+To run the project on a local k3d cluster, run:
+
+```bash
+make install-latest        # Install the latest release
+make install-current       # Install the local version
+```
+
+### Test
+
+To run unit tests, run:
+
+```bash
+make test-go-unit
+```
+
+To run upgrade tests, run:
+
+```bash
+make data-flow-test                 # Run the data flow test Job in the current context
+make test-helm-upgrade              # Spin up a new cluster, install the latest release and upgrade to the local version
+make test-helm-upgrade-with-data    # Spin up a new cluster, install the latest release and upgrade to the local version, then run the data flow test
+```
+
 <!-- CONTACT -->
 ## Contact
 
