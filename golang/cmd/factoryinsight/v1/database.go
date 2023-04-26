@@ -890,7 +890,7 @@ func GetTotalCounts(
 }s
 */
 
-// GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
+// GetProductionSpeed gets the production speed (units/hour) in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(
 	customerID string,
 	location string,
@@ -918,10 +918,12 @@ func GetProductionSpeed(
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	aggregatedIntervalString := "1 minutes" //default time interval
+	speedInterval := float64(1)
 
 	//aggrationInterval is non-required parameter
 	if aggregatedInterval > 0 {
 		aggregatedIntervalString = strconv.Itoa(aggregatedInterval) + " minutes"
+		speedInterval = float64(aggregatedInterval)
 	}
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
@@ -991,8 +993,8 @@ func GetProductionSpeed(
 		// add datapoint
 		formatted3 := timestamp.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			dataPoint * 60,
-			formatted3} // *60 to get the production speed per hour
+			dataPoint * 60 / speedInterval,
+			formatted3} // *60 / speed Interval to get the production speed per hour
 		data.Datapoints = append(data.Datapoints, fullRow)
 
 		previousTimestamp = timestamp
