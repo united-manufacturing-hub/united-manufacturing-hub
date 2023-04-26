@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -917,7 +918,8 @@ func GetProductionSpeed(
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
 	//aggregatedIntervalString := strconv.Itoa(aggregatedInterval) + " minutes"
-	aggregatedIntervalString := "1 minutes"
+	i := 1
+	aggregatedIntervalString := strconv.Itoa(i) + " minutes"
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
