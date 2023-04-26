@@ -922,8 +922,8 @@ func GetProductionSpeed(
 	sqlStatement := `
 	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
 	FROM countTable 
-	WHERE asset_id=$2 
-		AND timestamp BETWEEN $3 AND $4 
+	WHERE asset_id=$1 
+		AND timestamp BETWEEN $2 AND $3 
 	GROUP BY speedPerIntervall 
 	ORDER BY speedPerIntervall ASC;`
 
