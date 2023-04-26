@@ -917,9 +917,7 @@ func GetProductionSpeed(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
-	//aggregatedIntervalString := strconv.Itoa(aggregatedInterval) + " minutes"
-	i := 1
-	aggregatedIntervalString := strconv.Itoa(i) + " minutes"
+	aggregatedIntervalString := strconv.Itoa(aggregatedInterval) + " minutes"
 
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
