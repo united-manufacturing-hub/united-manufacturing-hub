@@ -47,6 +47,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
@@ -58,7 +59,8 @@ var (
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -69,39 +71,22 @@ func main() {
 
 	internal.Initfgtrace()
 
-	PQHost := "db"
-	// Read environment variables
-	if os.Getenv("POSTGRES_HOST") != "" {
-		PQHost = os.Getenv("POSTGRES_HOST")
-	} else {
-		zap.S().Infof("Postgres_Host [POSTGRES_HOST] not set, using default (%s)", PQHost)
-	}
+	PQHost, _ := env.GetAsString("POSTGRES_HOST", false, "db")
 
-	// Read port and convert to integer
-	PQPortString := "5432"
-	if os.Getenv("POSTGRES_PORT") != "" {
-		PQPortString = os.Getenv("POSTGRES_PORT")
-	} else {
-		zap.S().Infof("Postgres_Port [POSTGRES_PORT] not set, using default(%s)", PQPortString)
-	}
-	PQPort, err := strconv.Atoi(PQPortString)
-	if err != nil {
-		zap.S().Errorf("Cannot parse POSTGRES_PORT: not a number", PQPortString)
-		return // Abort program
-	}
+	PQPort, _ := env.GetAsInt("POSTGRES_PORT", false, 5432)
 
 	// Read in other environment variables
-	PQUser, PQUserEnvSet := os.LookupEnv("POSTGRES_USER")
-	if !PQUserEnvSet {
-		zap.S().Fatal("PQ User (PQ_USER) must be set")
+	PQUser, err := env.GetAsString("POSTGRES_USER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	PQPassword, PQPasswordEnvSet := os.LookupEnv("POSTGRES_PASSWORD")
-	if !PQPasswordEnvSet {
-		zap.S().Fatal("PQ Password (PQ_PASSWORD) must be set")
+	PQPassword, err := env.GetAsString("POSTGRES_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	PWDBName, PWDBNameEnvSet := os.LookupEnv("POSTGRES_DATABASE")
-	if !PWDBNameEnvSet {
-		zap.S().Fatal("PWDB Name (PWDB_NAME) must be set")
+	PQDBName, err := env.GetAsString("POSTGRES_DATABASE", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
 	// Loading up user accounts
@@ -110,56 +95,44 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser, tempUserEnvSet := os.LookupEnv("CUSTOMER_NAME_" + strconv.Itoa(i))
-		tempPassword, tempPasswordEnvSet := os.LookupEnv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
-		if tempUserEnvSet && tempPasswordEnvSet {
+		tempUser, _ := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
+		tempPassword, _ := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
 		}
 	}
 
 	// also add admin access
-	RESTUser, RESTUserEnvSet := os.LookupEnv("FACTORYINSIGHT_USER")
-	if !RESTUserEnvSet {
-		zap.S().Fatal("Rest User (REST_USER) must be set")
+	RESTUser, err := env.GetAsString("FACTORYINSIGHT_USER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	RESTPassword, RESTPasswordEnvSet := os.LookupEnv("FACTORYINSIGHT_PASSWORD")
-	if !RESTPasswordEnvSet {
-		zap.S().Fatal("REST Password (REST_PASSWORD) must be set")
+	RESTPassword, err := env.GetAsString("FACTORYINSIGHT_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 	accounts[RESTUser] = RESTPassword
 
-	// get currentVersion
-	version, versionEnvSet := os.LookupEnv("VERSION")
-	if !versionEnvSet {
-		zap.S().Fatal("Version (VERSION) must be set")
-	}
-	// parse as int
-	currentVersion, err := strconv.Atoi(version)
-	if err != nil {
-		zap.S().Fatalf("Cannot parse VERSION: not a number (%s)", version)
-		return // Abort program
-	}
+	// get version
+	version, err := env.GetAsInt("CURRENT_VERSION", true, 2)
 
 	zap.S().Debugf("Starting program..")
 
-	redisURI, redisURIEnvSet := os.LookupEnv("REDIS_URI")
-	if !redisURIEnvSet {
-		zap.S().Fatal("RedisURI (REDIS_URI) must be set")
+	redisURI, err := env.GetAsString("REDIS_URI", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	redisPassword, redisPasswordEnvSet := os.LookupEnv("REDIS_PASSWORD")
-	if !redisPasswordEnvSet {
-		zap.S().Fatal("RedisPassword (REDIS_PASSWORD) must be set")
+	redisPassword, err := env.GetAsString("REDIS_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 	redisDB := 0 // default database
 
-	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
-	if !dryRunEnvSet {
-		dryRun = "false"
-	}
+	dryRun, _ := env.GetAsBool("DRY_RUN", false, false)
 	internal.InitCache(redisURI, redisPassword, redisDB, dryRun)
 
-	zap.S().Debugf("Cache initialized..", redisURI)
+	zap.S().Debugf("Cache initialized at %s", redisURI)
 
 	health := healthcheck.NewHandler()
 	shutdownEnabled = false
@@ -173,29 +146,23 @@ func main() {
 		}
 	}()
 
-	zap.S().Debugf("Healthcheck initialized..", redisURI)
+	zap.S().Debug("Healthcheck initialized at localhost:8086")
 
 	sigs := make(chan os.Signal, 1)
-	database.Connect(PQUser, PQPassword, PWDBName, PQHost, PQPort, sigs)
+	database.Connect(PQUser, PQPassword, PQDBName, PQHost, PQPort, sigs)
 
-	zap.S().Debugf("DB initialized..", PQHost)
+	zap.S().Debug("DB initialized")
 
-	insecureNoAuthString, insecureNotAuthSet := os.LookupEnv("INSECURE_NO_AUTH")
-	if insecureNotAuthSet {
-		helpers.InsecureNoAuth, err = strconv.ParseBool(insecureNoAuthString)
-		if err != nil {
-			zap.S().Errorf("Cannot parse INSECURE_NO_AUTH: %s (%s)", err, insecureNoAuthString)
+	helpers.InsecureNoAuth, _ = env.GetAsBool("INSECURE_NO_AUTH", false, false)
+	if helpers.InsecureNoAuth {
+		for i := 0; i < 50; i++ {
+			zap.S().Warnf("INSECURE_NO_AUTH is set to true. This is a security risk. Do not use in production.")
 		}
-		if helpers.InsecureNoAuth {
-			for i := 0; i < 50; i++ {
-				zap.S().Warnf("INSECURE_NO_AUTH is set to true. This is a security risk. Do not use in production.")
-			}
-			zap.S().Warnf("Sleeping for 10 seconds to allow you to cancel the program.")
-			time.Sleep(10 * time.Second)
-		}
+		zap.S().Warnf("Sleeping for 10 seconds to allow you to cancel the program.")
+		time.Sleep(10 * time.Second)
 	}
 
-	setupRestAPI(accounts, currentVersion)
+	setupRestAPI(accounts, version)
 
 	// Allow graceful shutdown
 	signal.Notify(sigs, syscall.SIGTERM)
@@ -210,7 +177,7 @@ func main() {
 		sig := <-sigs
 
 		// Log the received signal
-		zap.S().Infof("Received SIGTERM", sig)
+		zap.S().Infof("Received %v", sig)
 
 		// ... close TCP connections here.
 		ShutdownApplicationGraceful()
