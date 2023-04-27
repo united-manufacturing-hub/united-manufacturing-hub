@@ -23,12 +23,12 @@ import (
 	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/heptiolabs/healthcheck"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -38,8 +38,12 @@ var scanOnly bool
 var buildtime string
 
 func main() {
+	logLevel, err := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	if err != nil {
+		panic(err)
+	}
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -69,33 +73,23 @@ func main() {
 	}
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 
-	KafkaBoostrapServer, KafkaBootstrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
-	if !KafkaBootstrapServerEnvSet {
-		zap.S().Fatal("Kafka bootstrap server (KAFKA_BOOTSTRAP_SERVER) must be set")
-	}
-	customerID, customerIDEnvSet := os.LookupEnv("CUSTOMER_ID")
-	if !customerIDEnvSet {
-		zap.S().Fatal("Customer ID (CUSTOMER_ID) must be set")
-	}
-	location, locationEnvSet := os.LookupEnv("LOCATION")
-	if !locationEnvSet {
-		zap.S().Fatal("location (LOCATION) must be set")
-	}
-	assetID, assetIDEnvSet := os.LookupEnv("ASSET_ID")
-	if !assetIDEnvSet {
-		zap.S().Fatal("Asset ID (ASSET_ID) must be set")
-	}
-	var scanOnlyEnvSet bool
-	var scanOnlyString string
-	scanOnlyString, scanOnlyEnvSet = os.LookupEnv("SCAN_ONLY")
-	if !scanOnlyEnvSet {
-		zap.S().Fatal("scan only (SCAN_ONLY) must be set")
-	}
-	var err error
-	scanOnly, err = strconv.ParseBool(scanOnlyString)
+	KafkaBoostrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
 	if err != nil {
-		zap.S().Fatal("scan only (SCAN_ONLY) must be set to true or false")
+		zap.S().Fatal(err)
 	}
+	customerID, err := env.GetAsString("CUSTOMER_ID", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	location, err := env.GetAsString("LOCATION", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	assetID, err := env.GetAsString("ASSET_ID", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	scanOnly, err := env.GetAsBool("SCAN_ONLY", true, false)
 
 	if !scanOnly {
 		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
@@ -125,23 +119,14 @@ func main() {
 // If no device is found, it will print all available devices and return false, nil.
 func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	// This could be /dev/input/event0, /dev/input/event1, etc.
-	devicePath, devicePathEnvSet := os.LookupEnv("INPUT_DEVICE_PATH")
-	if !devicePathEnvSet {
-		zap.S().Fatal("Device Path (DEVICE_PATH) must be set")
+	devicePath, err := env.GetAsString("INPUT_DEVICE_PATH", false, "/dev/input/event*")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 	// This could be "Datalogic ADC, Inc. Handheld Barcode Scanner"
-	deviceName, deviceNameEnvSet := os.LookupEnv("INPUT_DEVICE_NAME")
-	if !deviceNameEnvSet {
-		zap.S().Fatal("Device Name (DEVICE_NAME) must be set")
-	}
-	unset := false
-	if devicePath == "" && deviceName == "" {
-		zap.S().Warnf("No device path or name specified (INPUT_DEVICE_PATH and INPUT_DEVICE_NAME)")
-		unset = true
-	}
-
-	if devicePath == "" {
-		devicePath = "/dev/input/event*"
+	deviceName, err := env.GetAsString("INPUT_DEVICE_NAME", false, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
 	zap.S().Infof("Looking for device at path: %v", devicePath)
@@ -151,7 +136,7 @@ func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 		return false, nil
 	}
 
-	if unset {
+	if deviceName == "" {
 		for _, inputDevice := range devices {
 			if err != nil {
 				zap.S().Errorf("Error getting device stat: %v", err)
