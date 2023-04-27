@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"math/rand"
@@ -28,7 +29,8 @@ var buildtime string
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
