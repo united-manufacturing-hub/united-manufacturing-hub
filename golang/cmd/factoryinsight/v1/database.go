@@ -1085,13 +1085,13 @@ func GetQualityRate(
 				// add 100% quality one minute after previous timestamp
 				fullRow := []interface{}{
 					1,
-					previousTimestamp.Add(time.Minute * 60).Format(time.RFC3339)} // 60 = adding 60 seconds
+					previousTimestamp.Add(time.Second * 60).Format(time.RFC3339)} // 60 = adding 60 seconds
 				data.Datapoints = append(data.Datapoints, fullRow)
 
 				// add 100% one ms before timestamp
 				fullRow = []interface{}{
 					1,
-					timestamp.Add(-time.Minute * 1).Format(time.RFC3339)} // -1 = subtracting one s
+					timestamp.Add(-time.Second * 1).Format(time.RFC3339)} // -1 = subtracting one s
 				data.Datapoints = append(data.Datapoints, fullRow)
 			}
 		}
