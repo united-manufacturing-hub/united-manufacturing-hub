@@ -1110,6 +1110,8 @@ func GetQualityRate(
 		return
 	}
 
+	fmt.Println("GetQuality:")
+	fmt.Println(data.Datapoints)
 	return
 }
 
