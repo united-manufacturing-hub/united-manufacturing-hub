@@ -16,8 +16,8 @@ package main
 
 import (
 	"github.com/heptiolabs/healthcheck"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -40,14 +40,6 @@ const (
 
 type TopicMap []TopicMapElement
 
-func UnmarshalTopicMap(data []byte) (TopicMap, error) {
-	var r TopicMap
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-
-	err := json.Unmarshal(data, &r)
-	return r, err
-}
-
 type TopicMapElement struct {
 	Name          string  `json:"name"`
 	Topic         string  `json:"topic"`
@@ -60,7 +52,8 @@ var RemoteKafkaBootstrapServers string
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -99,39 +92,29 @@ func main() {
 	}()
 
 	zap.S().Debugf("Starting queue processor")
-	KafkaTopicMap, KafkaTopicMapEnvSet := os.LookupEnv("KAFKA_TOPIC_MAP")
-	if !KafkaTopicMapEnvSet {
-		zap.S().Fatal("Kafka Topic Map (KAFKA_TOPIC_MAP) must be set")
-	}
-	if KafkaTopicMap == "" {
-		zap.S().Fatal("Kafka topic map is not set")
-	}
-	topicMap, err := UnmarshalTopicMap([]byte(KafkaTopicMap))
+	var topicMap TopicMap
+	err := env.GetAsType("KAFKA_TOPIC_MAP", &topicMap, true, TopicMap{})
 	if err != nil {
-		zap.S().Fatal("Failed to unmarshal topic map: %v", err)
+		zap.S().Fatal(err)
 	}
 
-	var LocalKafkaBootsrapServersEnvSet bool
-	LocalKafkaBootstrapServers, LocalKafkaBootsrapServersEnvSet = os.LookupEnv("LOCAL_KAFKA_BOOTSTRAP_SERVER")
-	if !LocalKafkaBootsrapServersEnvSet {
-		zap.S().Fatal("PQ User (PQ_USER) must be set")
+	LocalKafkaBootstrapServers, err = env.GetAsString("LOCAL_KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	var RemoteKafkaBootstrapServersEnvSet bool
-	RemoteKafkaBootstrapServers, RemoteKafkaBootstrapServersEnvSet = os.LookupEnv("REMOTE_KAFKA_BOOTSTRAP_SERVER")
-	if !RemoteKafkaBootstrapServersEnvSet {
-		zap.S().Fatal("Remote Kafka Bootstrap Servers (REMOTE_KAFKA_BOOTSTRAP_SERVER) must be set")
-	}
-	if LocalKafkaBootstrapServers == "" || RemoteKafkaBootstrapServers == "" {
-		zap.S().Fatalf("Kafka bootstrap servers are not set")
+	RemoteKafkaBootstrapServers, err = env.GetAsString("REMOTE_KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
-	GroupIdSuffic, GroupIdSufficEnvSet := os.LookupEnv("KAFKA_GROUP_ID_SUFFIX")
-	if !GroupIdSufficEnvSet {
-		zap.S().Fatal("GroupIdSuffic (KAFKA_GROUP_ID_SUFFIX) must be set")
+	GroupIdSuffix, err := env.GetAsString("GROUP_ID_SUFFIX", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if useSsl {
 		securityProtocol = "ssl"
 
 		_, err = os.Open("/SSL_certs/kafka/tls.key")
@@ -147,7 +130,7 @@ func main() {
 			zap.S().Fatalf("Error opening CA certificate: %s", err)
 		}
 	}
-	CreateTopicMapProcessors(topicMap, GroupIdSuffic, securityProtocol)
+	CreateTopicMapProcessors(topicMap, GroupIdSuffix, securityProtocol)
 
 	// Allow graceful shutdown
 	sigs := make(chan os.Signal, 1)
