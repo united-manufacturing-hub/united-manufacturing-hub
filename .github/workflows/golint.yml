@@ -26,7 +26,7 @@ jobs:
       - name: Run go fmt
         run: |
           go fmt ./...
-          git diff --exit-code || (
+          git diff --exit-code 2>&1 1>/dev/null || (
             git config user.name "GitHub Action"
             git config user.email "noreply@github.com"
             git add .
@@ -38,7 +38,7 @@ jobs:
       - name: Run fieldalignment with fix
         run: |
           go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment -fix ./...
-          git diff --exit-code || (
+          git diff --exit-code 2>&1 1>/dev/null || (
             git config user.name "GitHub Action"
             git config user.email "noreply@github.com"
             git add .
