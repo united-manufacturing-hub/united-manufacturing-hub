@@ -37,11 +37,6 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-RUN echo "TARGETPLATFORM: $TARGETPLATFORM"
-RUN echo "BUILDPLATFORM: $BUILDPLATFORM"
-RUN echo "GOOS: $(go env GOOS)"
-RUN echo "GOARCH: $(go env GOARCH)"
-
 RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/barcodereader
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
