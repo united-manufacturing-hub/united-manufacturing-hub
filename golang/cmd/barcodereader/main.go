@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -38,11 +39,8 @@ var scanOnly bool
 var buildtime string
 
 func main() {
-	logLevel, err := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
-	if err != nil {
-		panic(err)
-	}
 	// Initialize zap logging
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -67,9 +65,8 @@ func main() {
 
 	foundDevice, inputDevice := GetBarcodeReaderDevice()
 	if !foundDevice || inputDevice == nil {
-		zap.S().Warnf("No barcode reader device found")
 		// Restart if no device is found
-		os.Exit(1)
+		zap.S().Fatalf("No barcode reader device found")
 	}
 	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
 
@@ -119,48 +116,55 @@ func main() {
 // If no device is found, it will print all available devices and return false, nil.
 func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
 	// This could be /dev/input/event0, /dev/input/event1, etc.
-	devicePath, err := env.GetAsString("INPUT_DEVICE_PATH", false, "/dev/input/event*")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
+	devicePath, _ := env.GetAsString("INPUT_DEVICE_PATH", false, "/dev/input/event*")
 	// This could be "Datalogic ADC, Inc. Handheld Barcode Scanner"
-	deviceName, err := env.GetAsString("INPUT_DEVICE_NAME", false, "")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
+	deviceName, _ := env.GetAsString("INPUT_DEVICE_NAME", false, "")
 
-	zap.S().Infof("Looking for device at path: %v", devicePath)
-	devices, err := evdev.ListInputDevices(devicePath)
-	if err != nil {
-		zap.S().Errorf("Error listing devices: %v", err)
-		return false, nil
-	}
-
-	if deviceName == "" {
-		for _, inputDevice := range devices {
-			if err != nil {
-				zap.S().Errorf("Error getting device stat: %v", err)
-				continue
-			}
-			zap.S().Infof("Found device: %v", inputDevice)
-		}
-		return false, nil
-	}
-
-	for _, inputDevice := range devices {
-		var stat os.FileInfo
-		stat, err = inputDevice.File.Stat()
+	// Check if devicePath contains a wildcard and get all devices in the path
+	if strings.Contains(devicePath, "*") {
+		devices, err := evdev.ListInputDevices(devicePath)
 		if err != nil {
-			zap.S().Errorf("Error getting device stat: %v", err)
-			continue
+			zap.S().Errorf("Error listing devices: %v", err)
+			return false, nil
 		}
-		if inputDevice.Name == deviceName || fmt.Sprintf("/dev/input/%v", stat.Name()) == devicePath {
-			zap.S().Infof("Found device: %v", inputDevice)
-			return true, inputDevice
+		// If deviceName is set, look for the device in the path
+		if deviceName != "" {
+			for _, inputDevice := range devices {
+				if inputDevice.Name == deviceName {
+					zap.S().Infof("Found device: %+v", inputDevice)
+					return true, inputDevice
+				}
+			}
+			zap.S().Warnf("Device %s not found in path %s", deviceName, devicePath)
 		}
+
+		// If deviceName is not set or the device is not found, print all devices in the path and return (false, nil)
+		zap.S().Infof("Devices in path %s:", devicePath)
+		for _, inputDevice := range devices {
+			zap.S().Infof("%+v", inputDevice)
+		}
+		return false, nil
 	}
 
-	return true, nil
+	// Check if devicePath is a valid device
+	inputDevice, err := evdev.Open(devicePath)
+	if err != nil {
+		zap.S().Errorf("Error opening device: %v", err)
+		return false, nil
+	}
+
+	// If deviceName is set, check if it matches the device at devicePath
+	switch deviceName {
+	case "":
+		zap.S().Infof("Found device: %v", inputDevice)
+		return true, inputDevice
+	case inputDevice.Name:
+		zap.S().Infof("Found device: %v", inputDevice)
+		return true, inputDevice
+	default:
+		zap.S().Fatalf("Device name (%s) and path (%s) do not refer to the same device", deviceName, devicePath)
+		return false, nil
+	}
 }
 
 // BarcodeMessage is the message sent to Kafka, defined by our documentation.
