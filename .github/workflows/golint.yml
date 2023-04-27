@@ -1,0 +1,28 @@
+name: golangci-lint
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read|write
+
+jobs:
+  golangci-lint:
+    name: Lint Go code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.20.X
+          check-latest: true
+      - name: Get golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        shell: bash
+      - name: Run golangci-lint
+        working-directory: ./golang
+        run: golangci-lint run -v -c ../.golangci.yaml ./...
+        shell: bash
