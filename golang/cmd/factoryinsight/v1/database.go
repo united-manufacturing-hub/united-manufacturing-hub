@@ -1110,8 +1110,6 @@ func GetQualityRate(
 		return
 	}
 
-	zap.S().Infof("GetQuality returns: %v", data.Datapoints)
-
 	return
 }
 
