@@ -1,4 +1,4 @@
-name: golangci-lint
+name: golint
 on:
   pull_request:
     branches:
@@ -7,22 +7,56 @@ on:
 permissions:
   contents: read|write
 
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+
 jobs:
-  golangci-lint:
-    name: Lint Go code
+  lint-and-check:
+    name: Lint and Check Go code
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repo
+      - name: Check out repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ env.GH_TOKEN }}
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.X
-          check-latest: true
-      - name: Get golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go-version: '1.20.*'
+      - name: Run go fmt
+        run: |
+          go fmt ./...
+          git diff --exit-code || (
+            git config user.name "GitHub Action"
+            git config user.email "noreply@github.com"
+            git add .
+            git commit -m "Apply go fmt changes"
+            git push
+          )
+        working-directory: ./golang
+        shell: bash
+      - name: Run fieldalignment with fix
+        run: |
+          go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment -fix ./...
+          git diff --exit-code || (
+            git config user.name "GitHub Action"
+            git config user.email "noreply@github.com"
+            git add .
+            git commit -m "Apply fieldalignment fix changes"
+            git push
+          )
+        working-directory: ./golang
+        shell: bash
+      - name: Run go vulncheck and generate report
+        run: go run golang.org/x/vuln/cmd/govulncheck -o report.json ./...
+        working-directory: ./golang
         shell: bash
       - name: Run golangci-lint
+        run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run -v -c ../.golangci.yaml ./...
         working-directory: ./golang
-        run: golangci-lint run -v -c ../.golangci.yaml ./...
         shell: bash
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v2
+        with:
+          name: vulnerability-report
+          path: ./golang/report.json
