@@ -5,7 +5,7 @@ on:
       - main
 
 permissions:
-  contents: read|write
+  contents: read
 
 env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
@@ -23,40 +23,11 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.20.*'
-      - name: Run go fmt
-        run: |
-          go fmt ./...
-          git diff --exit-code 2>&1 1>/dev/null || (
-            git config user.name "GitHub Action"
-            git config user.email "noreply@github.com"
-            git add .
-            git commit -m "Apply go fmt changes"
-            git push
-          )
-        working-directory: ./golang
-        shell: bash
-      - name: Run fieldalignment with fix
-        run: |
-          go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment -fix ./...
-          git diff --exit-code 2>&1 1>/dev/null || (
-            git config user.name "GitHub Action"
-            git config user.email "noreply@github.com"
-            git add .
-            git commit -m "Apply fieldalignment fix changes"
-            git push
-          )
-        working-directory: ./golang
-        shell: bash
       - name: Run go vulncheck and generate report
-        run: go run golang.org/x/vuln/cmd/govulncheck -o report.json ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck ./...
         working-directory: ./golang
         shell: bash
       - name: Run golangci-lint
         run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run -v -c ../.golangci.yaml ./...
         working-directory: ./golang
         shell: bash
-      - name: Upload vulnerability report
-        uses: actions/upload-artifact@v2
-        with:
-          name: vulnerability-report
-          path: ./golang/report.json
