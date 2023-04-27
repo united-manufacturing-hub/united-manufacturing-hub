@@ -21,12 +21,12 @@ Important principles: stateless as much as possible
 import (
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -39,7 +39,8 @@ var buildtime string
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -54,66 +55,60 @@ func main() {
 	// dryRun := os.Getenv("DRY_RUN")
 
 	// Read environment variables for remote broker
-	remoteCertificateName, remotecertificateNameEnvSet := os.LookupEnv("REMOTE_CERTIFICATE_NAME")
-	if !remotecertificateNameEnvSet {
-		zap.S().Fatal("Remote certificate name (REMOTE_CERTIFICATE_NAME) must be set")
-	}
-	remoteMQTTBrokerURL, remoteMQTTBrokerURLEnvSet := os.LookupEnv("REMOTE_BROKER_URL")
-	if !remoteMQTTBrokerURLEnvSet {
-		zap.S().Fatal("Remote MQTT Broker URL (REMOTE_BROKER_URL) must be set")
-	}
-	remoteSubMQTTTopic, remoteSubMQTTTopicEnvSet := os.LookupEnv("REMOTE_SUB_TOPIC")
-	if !remoteSubMQTTTopicEnvSet {
-		zap.S().Fatal("Remote sub mqtt topic (REMOTE_SUB_TOPIC) must be set")
-	}
-	remotePubMQTTTopic, remotePubMQTTTopicEnvSet := os.LookupEnv("REMOTE_PUB_TOPIC")
-	if !remotePubMQTTTopicEnvSet {
-		zap.S().Fatal("Remote pub mqtt topic (REMOTE_PUB_TOPIC) must be set")
-	}
-	remoteMQTTPassword, remoteMQTTPasswordEnvSet := os.LookupEnv("REMOTE_BROKER_PASSWORD")
-	if !remoteMQTTPasswordEnvSet {
-		zap.S().Fatal("Remote mqtt password (REMOTE_BROKER_PASSWORD) must be set")
-	}
-	remoteMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("REMOTE_BROKER_SSL_ENABLED"))
+	remoteCertificateName, err := env.GetAsString("REMOTE_CERTIFICATE_NAME", true, "")
 	if err != nil {
-		zap.S().Errorf("Error parsing bool from environment variable", err)
-		return
+		zap.S().Fatal(err)
+	}
+	remoteMQTTBrokerURL, err := env.GetAsString("REMOTE_BROKER_URL", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	remoteSubMQTTTopic, err := env.GetAsString("REMOTE_SUB_TOPIC", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	remotePubMQTTTopic, err := env.GetAsString("REMOTE_PUB_TOPIC", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	remoteMQTTPassword, err := env.GetAsString("REMOTE_BROKER_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	remoteMQTTBrokerSSLEnabled, err := env.GetAsBool("REMOTE_BROKER_SSL_ENABLED", true, true)
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
 	// Read environment variables for local broker
-	localCertificateName, localCertificateNameEnvSet := os.LookupEnv("LOCAL_CERTIFICATE_NAME")
-	if !localCertificateNameEnvSet {
-		zap.S().Fatal("Local certificate name (LOCAL_CERTIFICATE_NAME) must be set")
-	}
-	localMQTTBrokerURL, localMQTTBrokerURLEnvSet := os.LookupEnv("LOCAL_BROKER_URL")
-	if !localMQTTBrokerURLEnvSet {
-		zap.S().Fatal("Local mqtt broker URL (LOCAL_BROKER_URL) must be set")
-	}
-	localSubMQTTTopic, localSubMQTTTopicsEnvSet := os.LookupEnv("LOCAL_SUB_TOPIC")
-	if !localSubMQTTTopicsEnvSet {
-		zap.S().Fatal("Local sub mqtt topic (LOCAL_SUB_TOPIC) must be set")
-	}
-	localPubMQTTTopic, localPubMQTTTopicEnvSet := os.LookupEnv("LOCAL_PUB_TOPIC")
-	if !localPubMQTTTopicEnvSet {
-		zap.S().Fatal("Local pub mqtt topic (LOCAL_PUB_TOPIC) must be set")
-	}
-	localMQTTPassword, localMQTTPasswordEnvSet := os.LookupEnv("LOCAL_BROKER_PASSWORD")
-	if !localMQTTPasswordEnvSet {
-		zap.S().Fatal("Local mqtt password (LOCAL_BROKER_PASSWORD) must be set")
-	}
-	localMQTTBrokerSSLEnabled, err := strconv.ParseBool(os.Getenv("LOCAL_BROKER_SSL_ENABLED"))
+	localCertificateName, err := env.GetAsString("LOCAL_CERTIFICATE_NAME", true, "")
 	if err != nil {
-		zap.S().Errorf("Error parsing bool from environment variable", err)
-		return
+		zap.S().Fatal(err)
+	}
+	localMQTTBrokerURL, err := env.GetAsString("LOCAL_BROKER_URL", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	localSubMQTTTopic, err := env.GetAsString("LOCAL_SUB_TOPIC", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	localPubMQTTTopic, err := env.GetAsString("LOCAL_PUB_TOPIC", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	localMQTTPassword, err := env.GetAsString("LOCAL_BROKER_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	localMQTTBrokerSSLEnabled, err := env.GetAsBool("LOCAL_BROKER_SSL_ENABLED", true, true)
+
+	BridgeOneWay, err := env.GetAsBool("BRIDGE_ONE_WAY", true, true)
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
-	BRIDGE_ONE_WAY, err := strconv.ParseBool(os.Getenv("BRIDGE_ONE_WAY"))
-	if err != nil {
-		zap.S().Errorf("Error parsing bool from environment variable", err)
-		return
-	}
 	// Setting up queues
-
 	zap.S().Debugf("Setting up queues")
 
 	remotePg, err := setupQueue("remote")
@@ -150,7 +145,7 @@ func main() {
 		remoteSubMQTTTopic,
 		remoteMQTTBrokerSSLEnabled,
 		remotePg,
-		!BRIDGE_ONE_WAY, remoteMQTTPassword) // make remote subscription dependent on variable
+		!BridgeOneWay, remoteMQTTPassword) // make remote subscription dependent on variable
 	localMQTTClient = setupMQTT(
 		localCertificateName,
 		"local",
