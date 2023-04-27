@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM docker.io/golang:1.20-alpine3.16 as builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
@@ -29,10 +31,14 @@ ADD ./golang/cmd/metrics /build/cmd/metrics
 
 WORKDIR /build
 
-RUN GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-extldflags '-static'" -o mainFile ./cmd/metrics
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-extldflags '-static'" -o mainFile ./cmd/metrics
+
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM alpine
-COPY --from=builder /build /app/
+COPY --from=builder /build/mainFile /app/mainFile
+COPY --from=builder /build/deps /lib
 WORKDIR /app
 RUN chmod +x mainFile
 CMD ["./mainFile"]

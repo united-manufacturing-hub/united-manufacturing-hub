@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM docker.io/golang:1.20-alpine3.16 as builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
@@ -32,8 +34,8 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-#RUN CGO_ENABLED=0 GOOS=linux go test --mod=readonly ./cmd/sensorconnect
-RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/sensorconnect
+#RUN CGO_ENABLED=1 GOOS=linux go test --mod=readonly ./cmd/sensorconnect
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/sensorconnect
 
 FROM alpine:latest as certs
 RUN apk --update add ca-certificates

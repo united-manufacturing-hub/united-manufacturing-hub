@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM docker.io/golang:1.20-alpine3.16 as builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
@@ -30,10 +32,15 @@ ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 ADD ./golang/test/factoryinput /build/test/factoryinput
 
-RUN GOOS=linux go test -tags musl,kafka --mod=readonly ./cmd/factoryinput
-RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/factoryinput
+RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly ./cmd/factoryinput
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/factoryinput
+
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM scratch
-COPY --from=builder /build /app/
+COPY --from=builder /build/mainFile /app/mainFile
+COPY --from=builder /build/deps /lib
+
 WORKDIR /app
 CMD ["./mainFile"]

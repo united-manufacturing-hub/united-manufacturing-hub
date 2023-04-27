@@ -22,7 +22,7 @@ for directory in ./deployment/*/ ; do
 
   if [ -f "$DOCKER_FILE_PATH" ]; then
     echo "Building $directory"
-    docker build -f $DOCKER_FILE_PATH .
+    docker buildx build -f $DOCKER_FILE_PATH .
 
     if [ $? -ne 0 ]; then
         echo "Build failed for $directory"

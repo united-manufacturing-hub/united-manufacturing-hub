@@ -19,7 +19,7 @@ foreach ($directory in (Get-ChildItem -Directory -Path .\deployment\*)) {
 
   if (Test-Path $DOCKER_FILE_PATH) {
     Write-Output "Building $directory"
-    docker build -f $DOCKER_FILE_PATH .
+    docker buildx build -f $DOCKER_FILE_PATH .
 
     if ($LASTEXITCODE -ne 0) {
         Write-Output "Build failed for $directory"
