@@ -1027,20 +1027,27 @@ func GetQualityRate(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	aggregatedIntervalString := "1 minutes" //default time interval
+
+	//aggrationInterval is non-required parameter
+	if aggregatedInterval > 0 {
+		aggregatedIntervalString = strconv.Itoa(aggregatedInterval) + " minutes"
+	}
+
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as ratePerIntervall, 
+	SELECT time_bucket($1, timestamp) as ratePerIntervall, 
 		coalesce(
 			(sum(count)-sum(scrap))::float / sum(count)
 		,1)
 	FROM countTable 
-	WHERE asset_id=$1 
-		AND timestamp BETWEEN $2 AND $3 
+	WHERE asset_id=$2 
+		AND timestamp BETWEEN $3 AND $4 
 	GROUP BY ratePerIntervall 
 	ORDER BY ratePerIntervall ASC;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, assetID, from, to)
+	rows, err = database.Db.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
