@@ -18,7 +18,7 @@ ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
-RUN apk add build-base
+RUN apk add build-base gcc musl-dev
 
 # Get dependencies
 WORKDIR /build
@@ -34,8 +34,10 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-#RUN CGO_ENABLED=1 GOOS=linux go test --mod=readonly ./cmd/sensorconnect
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/sensorconnect
+#RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go test --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
 
 FROM alpine:latest as certs
 RUN apk --update add ca-certificates

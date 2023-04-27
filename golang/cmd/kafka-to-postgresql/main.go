@@ -33,8 +33,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 func main() {
 	// Initialize zap logging
 	log := logger.New("LOGGING_LEVEL")
@@ -44,8 +42,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

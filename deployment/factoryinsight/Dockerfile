@@ -18,7 +18,7 @@ ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
-RUN apk add build-base
+RUN apk add build-base gcc musl-dev
 
 # Get dependencies
 WORKDIR /build
@@ -32,8 +32,10 @@ ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 ADD ./golang/test/factoryinsight /build/test/factoryinsight
 
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-s -w -X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/factoryinsight
-RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka -v --mod=readonly ./cmd/factoryinsight
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/factoryinsight
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka -v --mod=readonly -buildvcs=false -trimpath ./cmd/factoryinsight
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'

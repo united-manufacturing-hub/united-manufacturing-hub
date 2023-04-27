@@ -24,8 +24,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 func main() {
 	// Initialize zap logging
 	log := logger.New("LOGGING_LEVEL")
@@ -35,8 +33,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is custom-microservice-tester build date: %s", buildtime)
 
 	// Print all env variables
 	zap.S().Debugf("Printing all env variables")
@@ -70,7 +66,7 @@ func main() {
 var bg = New()
 
 // Returns random liveness status
-func livenessHandler(w http.ResponseWriter, req *http.Request) {
+func livenessHandler(w http.ResponseWriter, _ *http.Request) {
 	if bg.Bool() {
 		w.WriteHeader(http.StatusOK)
 		_, err := fmt.Fprintf(w, "OK")
@@ -110,13 +106,13 @@ func sampleWebServer() {
 
 // Random bool generation (https://stackoverflow.com/questions/45030618/generate-a-random-bool-in-go)
 
-type boolgen struct {
+type Boolgen struct {
 	src       rand.Source
 	cache     int64
 	remaining int
 }
 
-func (b *boolgen) Bool() bool {
+func (b *Boolgen) Bool() bool {
 	if b.remaining == 0 {
 		b.cache, b.remaining = b.src.Int63(), 63
 	}
@@ -128,6 +124,6 @@ func (b *boolgen) Bool() bool {
 	return result
 }
 
-func New() *boolgen {
-	return &boolgen{src: rand.NewSource(time.Now().UnixNano())}
+func New() *Boolgen {
+	return &Boolgen{src: rand.NewSource(time.Now().UnixNano())}
 }

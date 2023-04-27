@@ -18,7 +18,7 @@ ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
-RUN apk add build-base
+RUN apk add build-base gcc musl-dev
 
 # Get dependencies
 WORKDIR /build
@@ -31,7 +31,8 @@ ADD ./golang/cmd/metrics /build/cmd/metrics
 
 WORKDIR /build
 
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl -a --mod=readonly -installsuffix cgo -ldflags "-extldflags '-static'" -o mainFile ./cmd/metrics
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl--mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/metrics
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'

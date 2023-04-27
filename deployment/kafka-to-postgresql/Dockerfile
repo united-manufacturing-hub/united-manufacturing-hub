@@ -16,7 +16,7 @@ FROM docker.io/golang:1.19-alpine3.16 as builder
 
 RUN mkdir /build
 # Add build requirements for librdkafka
-RUN apk add build-base
+RUN apk add build-base gcc musl-dev
 
 # Get dependencies
 WORKDIR /build
@@ -32,7 +32,8 @@ ADD ./golang/pkg /build/pkg
 
 WORKDIR /build
 
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/kafka-to-postgresql
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/kafka-to-postgresql
 
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory

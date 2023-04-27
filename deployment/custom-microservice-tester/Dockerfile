@@ -25,7 +25,8 @@ RUN go mod download
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/custom-microservice-tester /build/cmd/custom-microservice-tester
 
-RUN CGO_ENABLED=1 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')'" -o mainFile ./cmd/custom-microservice-tester
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go build--mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/custom-microservice-tester
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
