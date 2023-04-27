@@ -18,7 +18,7 @@ ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
-RUN apk add build-base gcc musl-dev
+RUN apk add build-base
 
 # Add requirements for evdev
 RUN apk add linux-headers
