@@ -38,6 +38,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"os"
 	"os/signal"
 	"strconv"
@@ -49,25 +50,10 @@ var shutdownEnabled bool
 var mqttClient MQTT.Client
 var buildtime string
 
-// GetEnv get's env variable, and also outputs warning if not set
-func GetEnv(variableName string) (envValue string) {
-	if len(variableName) == 0 {
-		zap.S().Warnf("Attempting to get env variable without name")
-	}
-	var envValueEnvSet bool
-	envValue, envValueEnvSet = os.LookupEnv(variableName)
-	if !envValueEnvSet {
-		zap.S().Warnf("Env variable %s not set", variableName)
-	}
-	if len(envValue) == 0 {
-		zap.S().Warnf("Env variable %s is empty", variableName)
-	}
-	return
-}
-
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -86,9 +72,9 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser, tempUserEnvSet := os.LookupEnv("CUSTOMER_NAME_" + strconv.Itoa(i))
-		tempPassword, tempPasswordEnvSet := os.LookupEnv("CUSTOMER_PASSWORD_" + strconv.Itoa(i))
-		if tempUserEnvSet && tempPasswordEnvSet {
+		tempUser, _ := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
+		tempPassword, _ := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
 		}
@@ -98,12 +84,18 @@ func main() {
 	}
 
 	// also add admin access
-	RESTUser := GetEnv("FACTORYINPUT_USER")
-	RESTPassword := GetEnv("FACTORYINPUT_PASSWORD")
+	RESTUser, err := env.GetAsString("FACTORYINPUT_USER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	RESTPassword, err := env.GetAsString("FACTORYINPUT_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 	accounts[RESTUser] = RESTPassword
 
 	// get currentVersion
-	version := GetEnv("VERSION")
+	version, _ := env.GetAsString("VERSION", false, "1")
 
 	zap.S().Debugf("Starting program..")
 
@@ -122,7 +114,7 @@ func main() {
 	zap.S().Debugf("Healthcheck initialized..")
 
 	// Setup queue
-	err := setupQueue()
+	err = setupQueue()
 	if err != nil {
 		zap.S().Errorf("Error setting up remote queue", err)
 		return
@@ -135,16 +127,20 @@ func main() {
 	}()
 
 	// Read environment variables
-	certificateName := GetEnv("CERTIFICATE_NAME")
-	mqttBrokerURL := GetEnv("BROKER_URL")
+	certificateName, _ := env.GetAsString("CERTIFICATE_NAME", false, "USE_TLS")
+	mqttBrokerURL, err := env.GetAsString("BROKER_URL", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 
 	// Setup MQTT
 	zap.S().Debugf("Setting up MQTT")
-	podName := GetEnv("MY_POD_NAME")
-	mqttPassword, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
-	if !mqttPasswordEnvSet {
-		zap.S().Fatal("mqtt Password (MQTT_PASSWORD) must be set")
+	podName, err := env.GetAsString("MY_POD_NAME", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
+	mqttPassword, _ := env.GetAsString("MQTT_PASSWORD", false, "")
+
 	SetupMQTT(certificateName, mqttBrokerURL, podName, mqttPassword)
 	zap.S().Debugf("Finished setting up MQTT")
 
@@ -173,18 +169,13 @@ func main() {
 
 	}()
 
-	mqttQueueHandler := GetEnv("MQTT_QUEUE_HANDLER")
-	iMqttQueueHandler, err := strconv.Atoi(mqttQueueHandler)
-	if err != nil {
-		zap.S().Warnf("Failed to read MQTT_QUEUE_HANDLER, defaulting to 10")
-		iMqttQueueHandler = 10
-	}
-	for i := 0; i < iMqttQueueHandler; i++ {
+	mqttQueueHandler, _ := env.GetAsInt("MQTT_QUEUE_HANDLER", false, 10)
+	for i := 0; i < mqttQueueHandler; i++ {
 		zap.S().Debugf("Starting MQTT handlers")
 		go MqttQueueHandler()
 	}
 
-	zap.S().Debugf("Started %d MqTTQueueHandlers", iMqttQueueHandler)
+	zap.S().Debugf("Started %d MqTTQueueHandlers", mqttQueueHandler)
 	select {} // block forever
 }
 
