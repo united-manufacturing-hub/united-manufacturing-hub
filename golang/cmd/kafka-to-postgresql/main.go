@@ -19,10 +19,10 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	r "k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"net/http"
 	"os"
@@ -37,7 +37,8 @@ var buildtime string
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -49,10 +50,7 @@ func main() {
 
 	internal.Initfgtrace()
 
-	dryRun, dryRunEnvSet := os.LookupEnv("DRY_RUN")
-	if !dryRunEnvSet {
-		dryRun = "false"
-	}
+	dryRun, _ := env.GetAsBool("DRY_RUN", false, false)
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -82,50 +80,39 @@ func main() {
 	}()
 
 	// Postgres
-	PQHost, PQHostEnvSet := os.LookupEnv("POSTGRES_HOST")
-	if !PQHostEnvSet {
-		zap.S().Fatal("Pq Host (POSTGRES_HOST) must be set")
+	PQHost, _ := env.GetAsString("POSTGRES_HOST", false, "db")
+	PQPort, _ := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	PQUser, err := env.GetAsString("POSTGRES_USER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	PQPort := 5432
-	PQUser, PQUserEnvSet := os.LookupEnv("POSTGRES_USER")
-	if !PQUserEnvSet {
-		zap.S().Fatal("PQ User (POSTGRES_USER) must be set")
+	PQPassword, err := env.GetAsString("POSTGRES_PASSWORD", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	PQPassword, PQPasswordEnvSet := os.LookupEnv("POSTGRES_PASSWORD")
-	if !PQPasswordEnvSet {
-		zap.S().Fatal("PQ Password (POSTGRES_PASSWORD) must be set")
+	PQDBName, err := env.GetAsString("POSTGRES_DATABASE", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	PWDBName, PWDBNameEnvSet := os.LookupEnv("POSTGRES_DATABASE")
-	if !PWDBNameEnvSet {
-		zap.S().Fatal("PWDB Name (POSTGRES_DATABASE) must be set")
-	}
-	PQSSLMode, PQSSLModeEnvSet := os.LookupEnv("POSTGRES_SSLMODE")
-	if !PQSSLModeEnvSet {
-		zap.S().Fatal("PQSSL Mode (POSTGRES_SSLMODE) must be set")
-	}
-	if PQSSLMode == "" {
-		PQSSLMode = "require"
-	} else {
-		zap.S().Warnf("Postgres SSL mode is set to %s", PQSSLMode)
-	}
+	PQSSLMode, err := env.GetAsString("POSTGRES_SSL_MODE", false, "require")
 
-	SetupDB(PQUser, PQPassword, PWDBName, PQHost, PQPort, health, dryRun, PQSSLMode)
+	SetupDB(PQUser, PQPassword, PQDBName, PQHost, PQPort, health, dryRun, PQSSLMode)
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
-	if !KafkaBoostrapServerEnvSet {
-		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	KafkaBootstrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	if KafkaBoostrapServer == "" {
-		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER is not set")
-	}
+	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
 	HTTopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if useSsl {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
@@ -148,10 +135,10 @@ func main() {
 	// This still provides the at-least-once guarantee.
 	SetupHIKafka(
 		kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBoostrapServer,
+			"bootstrap.servers":        KafkaBootstrapServer,
 			"security.protocol":        securityProtocol,
 			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.key.password":         kafkaSslPassword,
 			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-postgresql-hi-processor",
@@ -166,10 +153,10 @@ func main() {
 	// HT uses enable.auto.commit=true for increased performance.
 	SetupHTKafka(
 		kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBoostrapServer,
+			"bootstrap.servers":        KafkaBootstrapServer,
 			"security.protocol":        securityProtocol,
 			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.key.password":         kafkaSslPassword,
 			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-postgresql-ht-processor",
@@ -183,10 +170,10 @@ func main() {
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	internal.SetupKafkaTopicProbeConsumer(
 		kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBoostrapServer,
+			"bootstrap.servers":        KafkaBootstrapServer,
 			"security.protocol":        securityProtocol,
 			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.key.password":         kafkaSslPassword,
 			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 			"group.id":                 "kafka-to-postgresql-topic-probe",
@@ -196,16 +183,7 @@ func main() {
 			"topic.metadata.refresh.interval.ms": "30000",
 		})
 
-	allowedMemorySize := 1073741824 // 1GB
-	if os.Getenv("MEMORY_REQUEST") != "" {
-		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
-		i, b := memoryRequest.AsInt64()
-		if b {
-			allowedMemorySize = int(i) // truncated !
-		}
-	} else {
-		zap.S().Infof("Memory request [MEMORY_REQUEST] not set")
-	}
+	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
