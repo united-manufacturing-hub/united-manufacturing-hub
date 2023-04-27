@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG BRANCH=normal
+
 FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
@@ -30,18 +32,26 @@ ADD ./golang/cmd/grafana-proxy /build/cmd/grafana-proxy
 ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 
+RUN go mod tidy
 
-RUN go mod tidy
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/grafana-proxy
-RUN go mod tidy
 RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka  -v --mod=readonly -buildvcs=false -trimpath ./cmd/grafana-proxy
+
+FROM builder AS branch-normal
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/grafana-proxy
+
+FROM builder AS branch-race
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/grafana-proxy
+
+FROM branch-${BRANCH} AS final
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM scratch
-COPY --from=builder /build/mainFile /app/mainFile
-COPY --from=builder /build/deps /lib
+COPY --from=final /build/mainFile /app/mainFile
+COPY --from=final /build/deps /lib
 
 WORKDIR /app
 CMD ["./mainFile"]

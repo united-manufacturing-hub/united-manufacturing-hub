@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG BRANCH=normal
+
 FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
@@ -30,14 +32,17 @@ RUN go mod download
 ADD ./golang/cmd/sensorconnect /build/cmd/sensorconnect
 ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
-# ADD ./golang/test/sensorconnect /build/test
 
-WORKDIR /build
-
-#RUN go mod tidy
-RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect
 RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect
+
+FROM builder AS branch-normal
+WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
+
+FROM builder AS branch-race
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
 
 FROM alpine:latest as certs
 RUN apk --update add ca-certificates
