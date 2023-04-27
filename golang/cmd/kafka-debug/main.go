@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -31,7 +32,8 @@ var buildtime string
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -43,14 +45,16 @@ func main() {
 	internal.Initfgtrace()
 
 	// Read environment variables for Kafka
-	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
-	if !KafkaBoostrapServerEnvSet {
-		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	KafkaBootstrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
+	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
 	zap.S().Debugf("Setting up Kafka")
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if useSsl {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
@@ -71,10 +75,10 @@ func main() {
 		kafka.ConfigMap{
 			"security.protocol":        securityProtocol,
 			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+			"ssl.key.password":         kafkaSslPassword,
 			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-			"bootstrap.servers":        KafkaBoostrapServer,
+			"bootstrap.servers":        KafkaBootstrapServer,
 			"group.id":                 "kafka-debug",
 			"metadata.max.age.ms":      180000,
 		})
