@@ -45,8 +45,6 @@ var slowDownMap sync.Map
 var kafkaProducerClient *kafka.Producer
 var transmitterId string
 
-var buildtime string
-
 var useKafka bool
 var useMQTT bool
 
@@ -78,8 +76,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is sensorconnect build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

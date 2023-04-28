@@ -48,7 +48,6 @@ import (
 
 var shutdownEnabled bool
 var mqttClient MQTT.Client
-var buildtime string
 
 func main() {
 	// Initialize zap logging
@@ -60,7 +59,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-	zap.S().Infof("This is factoryinput build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

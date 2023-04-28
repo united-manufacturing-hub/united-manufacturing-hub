@@ -30,8 +30,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 var ActivityEnabled bool
 
 var AnomalyEnabled bool
@@ -46,8 +44,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is kafka-state-detector build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

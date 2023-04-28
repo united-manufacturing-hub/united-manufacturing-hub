@@ -30,8 +30,6 @@ import (
 
 var shutdownEnabled bool
 
-var buildtime string
-
 func main() {
 	// Initialize zap logging
 	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
@@ -42,7 +40,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-	zap.S().Infof("This is grafana-proxy build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

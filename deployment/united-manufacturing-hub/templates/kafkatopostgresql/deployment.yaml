@@ -52,9 +52,9 @@ spec:
       initContainers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
           {{if .Values.kafkatopostgresql.image.tag}}
-          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Values.kafkatopostgresql.initContainer.tag}}
+          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Values.kafkatopostgresql.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
@@ -80,9 +80,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
           {{if .Values.kafkatopostgresql.image.tag}}
-          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Values.kafkatopostgresql.image.tag}}
+          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Values.kafkatopostgresql.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
           imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}

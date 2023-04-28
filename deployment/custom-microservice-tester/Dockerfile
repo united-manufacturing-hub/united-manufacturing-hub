@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM docker.io/golang:1.19-alpine3.16 as builder
+ARG BRANCH
+
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 RUN mkdir /build
 
@@ -25,9 +29,23 @@ RUN go mod download
 # Only copy relevant packages to docker container
 ADD ./golang/cmd/custom-microservice-tester /build/cmd/custom-microservice-tester
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a --mod=readonly -installsuffix cgo -ldflags "-X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/custom-microservice-tester
+RUN go mod tidy
+FROM builder AS branch
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/custom-microservice-tester
+
+FROM builder AS branch-race
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -race -msan -asan --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/custom-microservice-tester
+
+FROM branch${BRANCH} AS final
+
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM scratch
-COPY --from=builder /build /app/
+COPY --from=final /build/mainFile /app/mainFile
+COPY --from=final /build/deps /lib
+
 WORKDIR /app
 CMD ["./mainFile"]

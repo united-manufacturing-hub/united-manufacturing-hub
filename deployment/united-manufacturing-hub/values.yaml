@@ -178,6 +178,9 @@ _000_commonConfig:
     # Allow sending of non PII metrics to United Manufacturing Hub
     enabled: true
 
+  racedetector:
+    enabled: true
+
 _001_customMicroservices:
   -
       name: example

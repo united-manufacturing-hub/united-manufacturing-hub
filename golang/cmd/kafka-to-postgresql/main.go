@@ -33,8 +33,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 func main() {
 	// Initialize zap logging
 	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
@@ -45,8 +43,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is kafka-to-postgresql build date: %s", buildtime)
 
 	internal.Initfgtrace()
 
@@ -417,6 +413,18 @@ func PerformanceReport() {
 	}
 
 	for !ShuttingDown {
+		// Prevent data-race with channel creation
+		if highIntegrityProcessorChannel == nil ||
+			highIntegrityPutBackChannel == nil ||
+			highIntegrityCommitChannel == nil ||
+			processValueChannel == nil ||
+			processValueStringChannel == nil ||
+			highThroughputProcessorChannel == nil ||
+			highThroughputPutBackChannel == nil {
+			time.Sleep(time.Second * 1)
+			continue
+		}
+
 		preExecutionTime := time.Now()
 		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
 		messagesPerSecond := (internal.KafkaMessages - lastMessages) / sleepS

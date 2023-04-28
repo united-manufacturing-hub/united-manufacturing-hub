@@ -24,6 +24,9 @@ on:
 
 jobs:
   barcodereader:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -35,8 +38,8 @@ jobs:
             unitedmanufacturinghub/barcodereader
             ghcr.io/united-manufacturing-hub/barcodereader
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -57,9 +60,14 @@ jobs:
           context: .
           file: ./deployment/barcodereader/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   factoryinput:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -71,8 +79,8 @@ jobs:
             unitedmanufacturinghub/factoryinput
             ghcr.io/united-manufacturing-hub/factoryinput
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -93,9 +101,14 @@ jobs:
           context: .
           file: ./deployment/factoryinput/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   factoryinsight:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -107,8 +120,8 @@ jobs:
             unitedmanufacturinghub/factoryinsight
             ghcr.io/united-manufacturing-hub/factoryinsight
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -129,9 +142,14 @@ jobs:
           context: .
           file: ./deployment/factoryinsight/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-proxy:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -143,8 +161,8 @@ jobs:
             unitedmanufacturinghub/grafana-proxy
             ghcr.io/united-manufacturing-hub/grafana-proxy
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -165,9 +183,14 @@ jobs:
           context: .
           file: ./deployment/grafana-proxy/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-umh:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -179,8 +202,8 @@ jobs:
             unitedmanufacturinghub/grafana-umh
             ghcr.io/united-manufacturing-hub/grafana-umh
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -201,9 +224,14 @@ jobs:
           context: .
           file: ./deployment/grafana-umh/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   hivemq-init:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -215,8 +243,8 @@ jobs:
             unitedmanufacturinghub/hivemq-init
             ghcr.io/united-manufacturing-hub/hivemq-init
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -237,9 +265,14 @@ jobs:
           context: .
           file: ./deployment/hivemq-init/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-bridge:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -248,11 +281,11 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-              unitedmanufacturinghub/kafka-bridge
-              ghcr.io/united-manufacturing-hub/kafka-bridge
+            unitedmanufacturinghub/kafka-bridge
+            ghcr.io/united-manufacturing-hub/kafka-bridge
           tags: |
-              type=ref,event=branch
-              type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -273,9 +306,14 @@ jobs:
           context: .
           file: ./deployment/kafka-bridge/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-debug:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -287,8 +325,8 @@ jobs:
             unitedmanufacturinghub/kafka-debug
             ghcr.io/united-manufacturing-hub/kafka-debug
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -309,9 +347,14 @@ jobs:
           context: .
           file: ./deployment/kafka-debug/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-init:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -323,8 +366,8 @@ jobs:
             unitedmanufacturinghub/kafka-init
             ghcr.io/united-manufacturing-hub/kafka-init
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -345,9 +388,14 @@ jobs:
           context: .
           file: ./deployment/kafka-init/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-state-detector:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -359,8 +407,8 @@ jobs:
             unitedmanufacturinghub/kafka-state-detector
             ghcr.io/united-manufacturing-hub/kafka-state-detector
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -381,9 +429,14 @@ jobs:
           context: .
           file: ./deployment/kafka-state-detector/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-to-postgresql:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -395,8 +448,8 @@ jobs:
             unitedmanufacturinghub/kafka-to-postgresql
             ghcr.io/united-manufacturing-hub/kafka-to-postgresql
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -417,9 +470,14 @@ jobs:
           context: .
           file: ./deployment/kafka-to-postgresql/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   metrics:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -431,8 +489,8 @@ jobs:
             unitedmanufacturinghub/metrics
             ghcr.io/united-manufacturing-hub/metrics
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -453,9 +511,14 @@ jobs:
           context: .
           file: ./deployment/metrics/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-bridge:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -467,8 +530,8 @@ jobs:
             unitedmanufacturinghub/mqtt-bridge
             ghcr.io/united-manufacturing-hub/mqtt-bridge
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -489,9 +552,14 @@ jobs:
           context: .
           file: ./deployment/mqtt-bridge/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-kafka-bridge:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -503,8 +571,8 @@ jobs:
             unitedmanufacturinghub/mqtt-kafka-bridge
             ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -525,9 +593,14 @@ jobs:
           context: .
           file: ./deployment/mqtt-kafka-bridge/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}
 
   sensorconnect:
+    strategy:
+      matrix:
+        branch: ["", "-race"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -539,8 +612,8 @@ jobs:
             unitedmanufacturinghub/sensorconnect
             ghcr.io/united-manufacturing-hub/sensorconnect
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=${{ matrix.branch }}
+            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -561,4 +634,6 @@ jobs:
           context: .
           file: ./deployment/sensorconnect/Dockerfile
           push: true
+          build-args: |
+            BRANCH=${{ matrix.branch }}
           tags: ${{ steps.meta.outputs.tags }}

@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 func main() {
 
 	var err error
@@ -26,8 +24,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

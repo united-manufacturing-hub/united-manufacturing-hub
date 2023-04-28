@@ -278,7 +278,7 @@ else
 docker-build: $(addsuffix -build,$(CTR_IMG))
 $(addsuffix -build,$(CTR_IMG)):
 	@echo "Building $(subst -build,,$@)..."
-	docker build -t $(CTR_REPO)/$(subst -build,,$@):$(CTR_TAG) -f ./deployment/$(subst -build,,$@)/Dockerfile .
+	docker buildx build -t $(CTR_REPO)/$(subst -build,,$@):$(CTR_TAG) -f ./deployment/$(subst -build,,$@)/Dockerfile .
 endif
 
 define DC_P_HELP

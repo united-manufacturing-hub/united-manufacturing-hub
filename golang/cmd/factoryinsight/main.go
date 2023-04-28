@@ -53,7 +53,6 @@ import (
 )
 
 var (
-	buildtime       string
 	shutdownEnabled bool
 )
 
@@ -67,7 +66,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-	zap.S().Infof("This is factoryinsight build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

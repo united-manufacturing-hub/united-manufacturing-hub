@@ -28,8 +28,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 func main() {
 	// Initialize zap logging
 	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
@@ -40,7 +38,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-	zap.S().Infof("This is kafka-debug build date: %s", buildtime)
 
 	internal.Initfgtrace()
 
