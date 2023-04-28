@@ -443,9 +443,7 @@ func GetShifts(
 	// Loop through all datapoints
 	for _, dataPoint := range processedShifts {
 		// TODO: #86 Return timestamps in RFC3339 in /shifts
-		unixTimestampBegin := dataPoint.TimestampBegin.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-		tBegin := time.Unix(unixTimestampBegin, 0)
-		formattedBegin := tBegin.Format(time.RFC3339) //formatting the Unix time to RFC3339
+		formattedBegin := dataPoint.TimestampBegin.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			formattedBegin,
 			dataPoint.ShiftType}
@@ -575,9 +573,8 @@ func GetProcessValueString(
 
 			return
 		}
-		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-		t := time.Unix(unixTimestamp, 0)
-		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
+
+		formatted := timestamp.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			formatted,
 			dataPoint}
@@ -647,17 +644,13 @@ func GetCurrentState(
 	dataPoint = datamodel.ConvertOldToNew(dataPoint)
 
 	if keepStatesInteger {
-		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-		t := time.Unix(unixTimestamp, 0)
-		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
+		formatted := timestamp.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			dataPoint,
 			formatted}
 		data.Datapoints = append(data.Datapoints, fullRow)
 	} else {
-		unixTimestamp := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-		t := time.Unix(unixTimestamp, 0)
-		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
+		formatted := timestamp.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			ConvertStateToString(dataPoint, configuration),
 			formatted}
@@ -834,9 +827,7 @@ func GetCounts(
 
 	// Loop through all datapoints
 	for _, dataPoint := range countSlice {
-		unixTimestamp := dataPoint.Timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-		t := time.Unix(unixTimestamp, 0)
-		formatted := t.Format(time.RFC3339) //formatting the Unix time to RFC3339
+		formatted := dataPoint.Timestamp.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
 			dataPoint.Count,
 			dataPoint.Scrap,
@@ -1036,20 +1027,27 @@ func GetQualityRate(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	aggregatedIntervalString := "1 minutes" //default time interval
+
+	//aggrationInterval is non-required parameter
+	if aggregatedInterval > 0 {
+		aggregatedIntervalString = strconv.Itoa(aggregatedInterval) + " minutes"
+	}
+
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as ratePerIntervall, 
+	SELECT time_bucket($1, timestamp) as ratePerIntervall, 
 		coalesce(
 			(sum(count)-sum(scrap))::float / sum(count)
 		,1)
 	FROM countTable 
-	WHERE asset_id=$1 
-		AND timestamp BETWEEN $2 AND $3 
+	WHERE asset_id=$2 
+		AND timestamp BETWEEN $3 AND $4 
 	GROUP BY ratePerIntervall 
 	ORDER BY ratePerIntervall ASC;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, assetID, from, to)
+	rows, err = database.Db.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
@@ -1087,20 +1085,20 @@ func GetQualityRate(
 				// add 100% quality one minute after previous timestamp
 				fullRow := []interface{}{
 					1,
-					float64(previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000)} // 60 = adding 60 seconds
+					previousTimestamp.Add(time.Second * 60).Format(time.RFC3339)} // 60 = adding 60 seconds
 				data.Datapoints = append(data.Datapoints, fullRow)
 
 				// add 100% one ms before timestamp
 				fullRow = []interface{}{
 					1,
-					float64(timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1)} // -1 = subtracting one s
+					timestamp.Add(-time.Second * 1).Format(time.RFC3339)} // -1 = subtracting one s
 				data.Datapoints = append(data.Datapoints, fullRow)
 			}
 		}
 		// add datapoint
 		fullRow := []interface{}{
 			dataPoint,
-			float64(timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)))}
+			timestamp.Format(time.RFC3339)}
 		data.Datapoints = append(data.Datapoints, fullRow)
 
 		previousTimestamp = timestamp
