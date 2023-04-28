@@ -48,9 +48,9 @@ spec:
       initContainers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-local
           {{if .Values.kafkabridge.image.tag}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-certificates-local
@@ -78,9 +78,9 @@ spec:
               {{- end}}
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge-init-topics-remote
           {{if .Values.kafkabridge.image.tag}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Values.kafkabridge.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkabridge.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
           imagePullPolicy: {{.Values.kafkabridge.initContainer.pullPolicy}}
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
@@ -109,9 +109,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkabridge
           {{if .Values.kafkabridge.image.tag}}
-          image: {{.Values.kafkabridge.image.repository}}:{{.Values.kafkabridge.image.tag}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkabridge.image.repository}}:{{.Values.kafkabridge.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkabridge.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkabridge.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
           {{if .Values._000_commonConfig.debug.enableFGTrace}}
           ports:

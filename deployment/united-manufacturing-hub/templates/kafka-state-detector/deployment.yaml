@@ -48,9 +48,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
           {{if .Values.kafkastatedetector.image.tag}}
-          image: {{.Values.kafkastatedetector.image.repository}}:{{.Values.kafkastatedetector.image.tag}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkastatedetector.image.repository}}:{{.Values.kafkastatedetector.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkastatedetector.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector}}-race{{- end}}
+          image: {{.Values.kafkastatedetector.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
           imagePullPolicy: {{.Values.kafkastatedetector.image.pullPolicy}}
           {{if .Values._000_commonConfig.debug.enableFGTrace}}

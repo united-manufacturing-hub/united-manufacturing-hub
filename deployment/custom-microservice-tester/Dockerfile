@@ -36,7 +36,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build --mod=readonly -buildvcs=false -trimpath -
 
 FROM builder AS branch-race
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -race --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/custom-microservice-tester
+RUN CGO_ENABLED=1 GOOS=linux go build -race -msan -asan --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/custom-microservice-tester
 
 FROM branch${BRANCH} AS final
 
