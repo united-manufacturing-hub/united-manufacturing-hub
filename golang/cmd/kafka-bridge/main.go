@@ -29,8 +29,6 @@ import (
 	"time"
 )
 
-var buildtime string
-
 type SendDir string
 
 const (
@@ -67,7 +65,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-	zap.S().Infof("This is kafka-bridge build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

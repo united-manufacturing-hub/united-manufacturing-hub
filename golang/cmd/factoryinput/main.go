@@ -47,7 +47,6 @@ import (
 
 var shutdownEnabled bool
 var mqttClient MQTT.Client
-var buildtime string
 
 // GetEnv get's env variable, and also outputs warning if not set
 func GetEnv(variableName string) (envValue string) {
@@ -74,7 +73,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-	zap.S().Infof("This is factoryinput build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

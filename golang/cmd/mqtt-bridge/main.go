@@ -35,8 +35,6 @@ import (
 var localMQTTClient MQTT.Client
 var remoteMQTTClient MQTT.Client
 
-var buildtime string
-
 func main() {
 	// Initialize zap logging
 	log := logger.New("LOGGING_LEVEL")
@@ -46,8 +44,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is mqtt-bridge build date: %s", buildtime)
 
 	internal.Initfgtrace()
 
