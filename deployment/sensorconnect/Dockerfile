@@ -44,11 +44,17 @@ FROM builder AS branch-race
 WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
 
+FROM branch${BRANCH} AS final
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
+
 FROM alpine:latest as certs
 RUN apk --update add ca-certificates
 
 FROM scratch
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /build /app/
+COPY --from=final /build/mainFile /app/mainFile
+COPY --from=final /build/deps /lib
+
 WORKDIR /app
 CMD ["./mainFile"]
