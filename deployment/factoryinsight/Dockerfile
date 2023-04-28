@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM docker.io/golang:1.20-alpine3.16 as builder
+ARG BRANCH
+
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 RUN mkdir /build
 # Add build requirements for librdkafka
@@ -30,10 +34,25 @@ ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 ADD ./golang/test/factoryinsight /build/test/factoryinsight
 
-RUN GOOS=linux go build -tags musl,kafka -a --mod=readonly -installsuffix cgo -ldflags "-s -w -X 'main.buildtime=$(date -u '+%Y-%m-%d %H:%M:%S')' -extldflags '-static'" -o mainFile ./cmd/factoryinsight
-RUN GOOS=linux go test -tags musl,kafka -v --mod=readonly ./cmd/factoryinsight
+RUN go mod tidy
+RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka -v --mod=readonly -buildvcs=false -trimpath ./cmd/factoryinsight
+
+FROM builder AS branch
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/factoryinsight
+
+FROM builder AS branch-race
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -race -msan -asan -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/factoryinsight
+
+FROM branch${BRANCH} AS final
+
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM scratch
-COPY --from=builder /build /app/
+COPY --from=final /build/mainFile /app/mainFile
+COPY --from=final /build/deps /lib
+
 WORKDIR /app
 CMD ["./mainFile"]
