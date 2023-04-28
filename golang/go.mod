@@ -41,7 +41,7 @@ require (
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.3.0
-	github.com/united-manufacturing-hub/umh-utils v0.1.0
+	github.com/united-manufacturing-hub/umh-utils v0.1.6
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.8.0
