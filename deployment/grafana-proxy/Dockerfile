@@ -42,7 +42,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=
 
 FROM builder AS branch-race
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -race -msan -asan -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/grafana-proxy
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/grafana-proxy
 
 FROM branch${BRANCH} AS final
 
