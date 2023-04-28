@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -889,7 +890,7 @@ func GetTotalCounts(
 }s
 */
 
-// GetProductionSpeed gets the production speed in a selectable interval (in minutes) for a given time range
+// GetProductionSpeed gets the production speed (units/hour) in a selectable interval (in minutes) for a given time range
 func GetProductionSpeed(
 	customerID string,
 	location string,
@@ -916,17 +917,26 @@ func GetProductionSpeed(
 	JSONColumnName := customerID + "-" + location + "-" + asset + "-" + "speed"
 	data.ColumnNames = []string{JSONColumnName, "timestamp"}
 
+	aggregatedIntervalString := "1 minutes" //default time interval
+	speedInterval := float64(1)
+
+	//aggrationInterval is non-required parameter
+	if aggregatedInterval > 0 {
+		aggregatedIntervalString = strconv.Itoa(aggregatedInterval) + " minutes"
+		speedInterval = float64(aggregatedInterval)
+	}
+
 	// time_bucket_gapfill does not work on Microsoft Azure (license issue)
 	sqlStatement := `
-	SELECT time_bucket('1 minutes', timestamp) as speedPerIntervall, coalesce(sum(count),0)  
+	SELECT time_bucket($1, timestamp) as speedPerIntervall, coalesce(sum(count),0)  
 	FROM countTable 
-	WHERE asset_id=$1 
-		AND timestamp BETWEEN $2 AND $3 
+	WHERE asset_id=$2 
+		AND timestamp BETWEEN $3 AND $4 
 	GROUP BY speedPerIntervall 
 	ORDER BY speedPerIntervall ASC;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, assetID, from, to)
+	rows, err = database.Db.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
@@ -961,12 +971,10 @@ func GetProductionSpeed(
 			timeDifference := timestamp.Unix() - previousTimestamp.Unix()
 
 			if timeDifference > 60 { // bigger than one minute
-				unixTimestamp1 := previousTimestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) + 60*1000 // 60 = adding 60 seconds
-				t1 := time.Unix(unixTimestamp1, 0)
-				formatted1 := t1.Format(time.RFC3339) //formatting the Unix time to RFC3339
+				t1 := previousTimestamp.Add(time.Second * 60) // 60 = adding 60 seconds
+				formatted1 := t1.Format(time.RFC3339)         //formatting the Unix time to RFC3339
 
-				unixTimestamp2 := timestamp.UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)) - 1 // -1 = subtracting one s
-				t2 := time.Unix(unixTimestamp2, 0)
+				t2 := timestamp.Add(-time.Second * 1) // -1 = subtracting one s
 				formatted2 := t2.Format(time.RFC3339) //formatting the Unix time to RFC3339
 
 				// add zero speed one minute after previous timestamp
@@ -983,12 +991,10 @@ func GetProductionSpeed(
 			}
 		}
 		// add datapoint
-		unixTimestamp3 := timestamp.UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-		t3 := time.Unix(unixTimestamp3, 0)
-		formatted3 := t3.Format(time.RFC3339) //formatting the Unix time to RFC3339
+		formatted3 := timestamp.Format(time.RFC3339) //formatting the Unix time to RFC3339
 		fullRow := []interface{}{
-			dataPoint * 60,
-			formatted3} // *60 to get the production speed per hour
+			dataPoint * 60 / speedInterval,
+			formatted3} // *60 / speed Interval to get the production speed per hour
 		data.Datapoints = append(data.Datapoints, fullRow)
 
 		previousTimestamp = timestamp
