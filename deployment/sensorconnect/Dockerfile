@@ -42,7 +42,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=
 
 FROM builder AS branch-race
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -race -asan -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
 
 FROM branch${BRANCH} AS final
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory

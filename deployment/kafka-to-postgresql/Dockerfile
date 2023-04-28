@@ -40,7 +40,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=
 
 FROM builder AS branch-race
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -race -asan -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/kafka-to-postgresql
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/kafka-to-postgresql
 
 
 FROM branch${BRANCH} AS final
