@@ -47,7 +47,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=
 
 FROM builder AS branch-race
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -race -msan -asan -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -buildvcs=false -trimpath -o mainFile ./cmd/barcodereader
+RUN CGO_ENABLED=1 GOOS=linux go build -race -asan -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -buildvcs=false -trimpath -o mainFile ./cmd/barcodereader
 
 FROM branch${BRANCH} AS final
 
