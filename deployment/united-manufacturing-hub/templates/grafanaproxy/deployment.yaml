@@ -49,9 +49,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy
           {{if .Values.grafanaproxy.image.tag}}
-          image: {{.Values.grafanaproxy.image.repository}}:{{.Values.grafanaproxy.image.tag}}
+          image: {{.Values.grafanaproxy.image.repository}}:{{.Values.grafanaproxy.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.grafanaproxy.image.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.grafanaproxy.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
           imagePullPolicy: {{.Values.grafanaproxy.image.pullPolicy}}
           ports:
