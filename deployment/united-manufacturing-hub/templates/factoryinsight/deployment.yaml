@@ -51,9 +51,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
           {{if .Values.factoryinsight.image.tag}}
-          image: {{.Values.factoryinsight.image.repository}}:{{.Values.factoryinsight.image.tag}}
+          image: {{.Values.factoryinsight.image.repository}}:{{.Values.factoryinsight.image.tag}}{{ cond .Values._000_commonConfig.racedetector "-race" ""}}
           {{- else}}
-          image: {{.Values.factoryinsight.image.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.factoryinsight.image.repository}}:{{.Chart.AppVersion}}{{ cond .Values._000_commonConfig.racedetector "-race" ""}}
           {{end}}
           imagePullPolicy: IfNotPresent
           ports:

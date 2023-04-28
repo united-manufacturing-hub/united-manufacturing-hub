@@ -33,9 +33,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" $}}-metrics-{{ $reason | lower }}
           {{if $.Values.metrics.image.tag}}
-          image: {{$.Values.metrics.image.repository}}:{{$.Values.metrics.image.tag}}
+          image: {{$.Values.metrics.image.repository}}:{{$.Values.metrics.image.tag}}{{ cond .Values._000_commonConfig.racedetector "-race" ""}}
           {{- else}}
-          image: {{$.Values.metrics.image.repository}}:{{$.Chart.AppVersion}}
+          image: {{$.Values.metrics.image.repository}}:{{$.Chart.AppVersion}}{{ cond .Values._000_commonConfig.racedetector "-race" ""}}
           {{- end}}
           imagePullPolicy: {{ $.Values.metrics.image.pullPolicy }}
           env:

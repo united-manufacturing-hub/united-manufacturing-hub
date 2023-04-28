@@ -61,9 +61,9 @@ spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
           {{if .Values.factoryinput.image.tag}}
-          image: {{.Values.factoryinput.image.repository}}:{{.Values.factoryinput.image.tag}}
+          image: {{.Values.factoryinput.image.repository}}:{{.Values.factoryinput.image.tag}}{{ cond .Values._000_commonConfig.racedetector "-race" ""}}
           {{- else}}
-          image: {{.Values.factoryinput.image.repository}}:{{.Chart.AppVersion}}
+          image: {{.Values.factoryinput.image.repository}}:{{.Chart.AppVersion}}{{ cond .Values._000_commonConfig.racedetector "-race" ""}}
           {{end}}
           ports:
             - name: http
