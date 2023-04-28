@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BRANCH=normal
+ARG BRANCH
 
 FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
 ARG TARGETPLATFORM
@@ -36,7 +36,7 @@ ADD ./golang/pkg /build/pkg
 RUN go mod tidy
 RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect
 
-FROM builder AS branch-normal
+FROM builder AS branch
 WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
 

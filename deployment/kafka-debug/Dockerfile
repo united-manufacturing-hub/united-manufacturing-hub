@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BRANCH=normal
+ARG BRANCH
 
 FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
 ARG TARGETPLATFORM
@@ -35,7 +35,7 @@ ADD ./golang/pkg /build/pkg
 
 RUN go mod tidy
 
-FROM builder AS branch-normal
+FROM builder AS branch
 WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/kafka-debug
 
@@ -43,7 +43,7 @@ FROM builder AS branch-race
 WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/kafka-debug
 
-FROM branch-${BRANCH} AS final
+FROM branch${BRANCH} AS final
 
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
