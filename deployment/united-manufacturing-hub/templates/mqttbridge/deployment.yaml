@@ -35,9 +35,9 @@ spec:
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-mqttbridge
         {{if .Values.mqttbridge.tag}}
-        image: {{.Values.mqttbridge.image}}:{{.Values.mqttbridge.tag}}
+        image: {{.Values.mqttbridge.image}}:{{.Values.mqttbridge.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
         {{- else}}
-        image: {{.Values.mqttbridge.image}}:{{.Chart.AppVersion}}
+        image: {{.Values.mqttbridge.image}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
         {{end}}
         {{if .Values._000_commonConfig.debug.enableFGTrace}}
         ports:

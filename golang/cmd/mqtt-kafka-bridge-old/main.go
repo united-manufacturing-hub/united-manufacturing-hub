@@ -39,8 +39,6 @@ var mqttClient MQTT.Client
 var mqttIncomingQueue *goque.Queue
 var mqttOutGoingQueue *goque.Queue
 
-var buildtime string
-
 func main() {
 	var err error
 	// Initialize zap logging
@@ -51,8 +49,6 @@ func main() {
 			panic(err)
 		}
 	}(log)
-
-	zap.S().Infof("This is mqtt-kafka-bridge build date: %s", buildtime)
 
 	internal.Initfgtrace()
 

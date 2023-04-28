@@ -35,7 +35,6 @@ import (
 var kafkaSendTopic string
 
 var scanOnly bool
-var buildtime string
 
 func main() {
 	// Initialize zap logging
