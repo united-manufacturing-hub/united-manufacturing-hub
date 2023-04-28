@@ -19,16 +19,13 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io/fs"
 	"net/http"
 
-	"os"
-	"strconv"
-	"strings"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"sync"
 	"time"
 )
@@ -73,7 +70,8 @@ var additionalSleepTimePerActivePort float64
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -101,10 +99,10 @@ func main() {
 	internal.InitCacheWithoutRedis()
 	cP = sync.Map{}
 
-	isTest := os.Getenv("TEST") == "1" || strings.ToLower(os.Getenv("TEST")) == "true"
+	isTest, _ := env.GetAsBool("TEST", false, false)
 
-	useKafka = os.Getenv("USE_KAFKA") == "1" || strings.ToLower(os.Getenv("USE_KAFKA")) == "true"
-	useMQTT = os.Getenv("USE_MQTT") == "1" || strings.ToLower(os.Getenv("USE_MQTT")) == "true"
+	useKafka, _ = env.GetAsBool("USE_KAFKA", false, true)
+	useMQTT, _ = env.GetAsBool("USE_MQTT", false, false)
 
 	if !useKafka && !useMQTT {
 		zap.S().Errorf("Neither kafka nor MQTT output enabled, exiting !")
@@ -114,21 +112,21 @@ func main() {
 	if useMQTT {
 		zap.S().Infof("Starting with MQTT")
 		// Read environment variables for MQTT
-		MQTTCertificateName, MQTTCertificateNameEnvSet := os.LookupEnv("MQTT_CERTIFICATE_NAME")
-		if !MQTTCertificateNameEnvSet {
-			zap.S().Fatal("Mqtt Certificate name (MQTT_VERTIFICATE_NAME) must be set")
+		MQTTCertificateName, err := env.GetAsString("MQTT_CERTIFICATE_NAME", true, "")
+		if err != nil {
+			zap.S().Fatal(err)
 		}
-		MQTTBrokerURL, MQTTBROKERURLEnvSet := os.LookupEnv("MQTT_BROKER_URL")
-		if !MQTTBROKERURLEnvSet {
-			zap.S().Fatal("Mqtt broker URL (MQTT_BROKER_URL) must be set")
+		MQTTBrokerURL, err := env.GetAsString("MQTT_BROKER_URL", true, "")
+		if err != nil {
+			zap.S().Fatal(err)
 		}
-		podName, podNameEnvSet := os.LookupEnv("MY_POD_NAME")
-		if !podNameEnvSet {
-			zap.S().Fatal("Pod name (MY_POD_NAME) must be set")
+		podName, err := env.GetAsString("POD_NAME", true, "")
+		if err != nil {
+			zap.S().Fatal(err)
 		}
-		mqttPassword, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
-		if !mqttPasswordEnvSet {
-			zap.S().Fatal("Mqtt password (MQTT_PASSWORD) must be set")
+		mqttPassword, err := env.GetAsString("MQTT_PASSWORD", true, "")
+		if err != nil {
+			zap.S().Fatal(err)
 		}
 		SetupMQTT(MQTTCertificateName, MQTTBrokerURL, podName, mqttPassword)
 	}
@@ -136,21 +134,20 @@ func main() {
 	if useKafka {
 		zap.S().Infof("Starting with Kafka")
 		// Read environment variables for Kafka
-		KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
-		if !KafkaBoostrapServerEnvSet {
-			zap.S().Fatal("Kafka Boostrap server (KAFKA_BOOSTRAP_SERVER) must be set")
+		KafkaBoostrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+		if err != nil {
+			zap.S().Fatal(err)
 		}
 		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
 	var err error
-	lowestSensorTickTime, err = strconv.ParseUint(os.Getenv("LOWER_POLLING_TIME_MS"), 10, 64)
+	lowestSensorTickTime, err = env.GetAsUint64("LOWER_POLLING_TIME_MS", false, 20)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert LOWER_POLLING_TIME env to int, defaulting to 20. err: %s", err.Error())
-		lowestSensorTickTime = 20
+		zap.S().Error(err)
 	}
 
-	subTwentyMs = os.Getenv("SUB_TWENTY_MS") == "1"
+	subTwentyMs, _ = env.GetAsBool("SUB_TWENTY_MS", false, false)
 
 	if lowestSensorTickTime < 20 {
 		if subTwentyMs {
@@ -160,64 +157,46 @@ func main() {
 		}
 	}
 
-	upperSensorTickTime, err = strconv.ParseUint(os.Getenv("UPPER_POLLING_TIME_MS"), 10, 64)
+	upperSensorTickTime, err = env.GetAsUint64("UPPER_POLLING_TIME_MS", false, 1000)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert UPPER_POLLING_TIME env to int, defaulting to 1000. err: %s", err.Error())
-		upperSensorTickTime = 1000
+		zap.S().Error(err)
 	}
-	sensorTickTimeSteppingUp, err = strconv.ParseUint(os.Getenv("POLLING_SPEED_STEP_UP_MS"), 10, 64)
+	sensorTickTimeSteppingUp, err = env.GetAsUint64("POLLING_SPEED_STEP_UP_MS", false, 20)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert POLLING_SPEED_STEP_UP_MS env to int, defaulting to 20. err: %s", err.Error())
-		sensorTickTimeSteppingUp = 20
+		zap.S().Error(err)
 	}
-	sensorTickTimeSteppingDown, err = strconv.ParseUint(os.Getenv("POLLING_SPEED_STEP_DOWN_MS"), 10, 64)
+	sensorTickTimeSteppingDown, err = env.GetAsUint64("POLLING_SPEED_STEP_DOWN_MS", false, 1)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert POLLING_SPEED_STEP_UP_MS env to int, defaulting to 1. err: %s", err.Error())
-		sensorTickTimeSteppingDown = 1
+		zap.S().Error(err)
 	}
 
-	sensorStartSpeed, err = strconv.ParseUint(os.Getenv("SENSOR_INITIAL_POLLING_TIME_MS"), 10, 64)
+	sensorStartSpeed, err = env.GetAsUint64("SENSOR_INITIAL_POLLING_TIME_MS", false, lowestSensorTickTime)
 	if err != nil {
-		zap.S().Errorf(
-			"Couldn't convert SENSOR_INITIAL_POLLING_TIME_MS env to int, defaulting to LOWER_POLLING_TIME. err: %s",
-			err.Error())
-		sensorStartSpeed = lowestSensorTickTime
+		zap.S().Error(err)
 	}
 
-	additionalSleepTimePerActivePort, err = strconv.ParseFloat(
-		os.Getenv("ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS"),
-		64)
+	additionalSleepTimePerActivePort, err = env.GetAsFloat64("ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS", false, 0)
 	if err != nil {
-		zap.S().Errorf(
-			"Couldn't convert ADDITIONAL_SLEEP_TIME_PER_ACTIVE_PORT_MS env to float, defaulting to 0. err: %s",
-			err.Error())
-		additionalSleepTimePerActivePort = 0
+		zap.S().Error(err)
 	}
 
-	deviceFinderFrequencyInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_TIME_SEC"), 10, 64)
+	deviceFinderFrequencyInS, err = env.GetAsUint64("DEVICE_FINDER_TIME_SEC", false, 20)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert DEVICE_FINDER_TIME_SEC env to int, defaulting to 20 sec. err: %s", err.Error())
-		deviceFinderFrequencyInS = 20
-
+		zap.S().Error(err)
 	}
 
-	deviceFinderTimeoutInS, err = strconv.ParseUint(os.Getenv("DEVICE_FINDER_TIMEOUT_SEC"), 10, 64)
+	deviceFinderTimeoutInS, err = env.GetAsUint64("DEVICE_FINDER_TIMEOUT_SEC", false, 1)
 	if err != nil {
-		zap.S().Errorf(
-			"Couldn't convert DEVICE_FINDER_TIMEOUT_SEC env to int, defaulting to 1 sec. err: %s",
-			err.Error())
-		deviceFinderTimeoutInS = 1
-
+		zap.S().Error(err)
 	}
 
 	if deviceFinderTimeoutInS > deviceFinderFrequencyInS {
 		zap.S().Fatal("DEVICE_FINDER_TIMEOUT_SEC should never be greater then DEVICE_FINDER_TIME_SEC")
 	}
 
-	maxSensorErrorCount, err = strconv.ParseUint(os.Getenv("MAX_SENSOR_ERROR_COUNT"), 10, 64)
+	maxSensorErrorCount, err = env.GetAsUint64("MAX_SENSOR_ERROR_COUNT", false, 50)
 	if err != nil {
-		zap.S().Errorf("Couldn't convert MAX_SENSOR_ERROR_COUNT env to int, defaulting to 50. err: %s", err.Error())
-		maxSensorErrorCount = 50
+		zap.S().Error(err)
 	}
 
 	type SlowDownMapJSONElement struct {
@@ -228,57 +207,47 @@ func main() {
 	}
 	type SlowDownMapJSON []SlowDownMapJSONElement
 
-	slowdownMapRaw, slowdownMapRawEnvSet := os.LookupEnv("ADDITIONAL_SLOWDOWN_MAP")
-	if !slowdownMapRawEnvSet {
-		zap.S().Fatal("Slow down map raw (ADDITIONAL_SLOWDOWN_MAP) must be set")
-	}
 	slowDownMap = sync.Map{}
-	if slowdownMapRaw != "" {
-		var r SlowDownMapJSON
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-
-		err = json.Unmarshal([]byte(slowdownMapRaw), &r)
-		if err != nil {
-			zap.S().Errorf("Failed to convert ADDITIONAL_SLOWDOWN_MAP json to go struct. err: %s", err.Error())
-		} else {
-			for _, element := range r {
-				if element.Serialnumber != nil {
-					slowDownMap.Store(fmt.Sprintf("SN_%s", *element.Serialnumber), element.SlowdownMS)
-					zap.S().Debugf(
-						"Parsed additional sleep time for %s -> %f",
-						*element.Serialnumber,
-						element.SlowdownMS)
-				}
-				if element.Productcode != nil {
-					slowDownMap.Store(fmt.Sprintf("PC_%s", *element.Productcode), element.SlowdownMS)
-					zap.S().Debugf(
-						"Parsed additional sleep time for %s -> %f",
-						*element.Productcode,
-						element.SlowdownMS)
-				}
-				if element.URL != nil {
-					slowDownMap.Store(fmt.Sprintf("URL_%s", *element.URL), element.SlowdownMS)
-					zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.URL, element.SlowdownMS)
-				}
-			}
+	var slowDownMapJSON SlowDownMapJSON
+	err = env.GetAsType("ADDITIONAL_SLOWDOWN_MAP", &slowDownMapJSON, true, SlowDownMapJSON{})
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	for _, element := range slowDownMapJSON {
+		if element.Serialnumber != nil {
+			slowDownMap.Store(fmt.Sprintf("SN_%s", *element.Serialnumber), element.SlowdownMS)
+			zap.S().Debugf(
+				"Parsed additional sleep time for %s -> %f",
+				*element.Serialnumber,
+				element.SlowdownMS)
+		}
+		if element.Productcode != nil {
+			slowDownMap.Store(fmt.Sprintf("PC_%s", *element.Productcode), element.SlowdownMS)
+			zap.S().Debugf(
+				"Parsed additional sleep time for %s -> %f",
+				*element.Productcode,
+				element.SlowdownMS)
+		}
+		if element.URL != nil {
+			slowDownMap.Store(fmt.Sprintf("URL_%s", *element.URL), element.SlowdownMS)
+			zap.S().Debugf("Parsed additional sleep time for %s -> %f", *element.URL, element.SlowdownMS)
 		}
 	}
 
-	ipRange, ipRangeEnvSet := os.LookupEnv("IP_RANGE")
-	if !ipRangeEnvSet {
-		zap.S().Fatal("IP range (IP_RANGE) must be set")
+	ipRange, err := env.GetAsString("IP_RANGE", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 	zap.S().Infof("Scanning IP range: %s", ipRange)
 
-	var transmitterIdEnvSet bool
-	transmitterId, transmitterIdEnvSet = os.LookupEnv("TRANSMITTERID")
-	if !transmitterIdEnvSet {
-		zap.S().Fatal("TransmitterID (TRANSMITTERID) must be set")
+	transmitterId, err = env.GetAsString("TRANSMITTERID", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
-	relativeDirectoryPath, relativeDirectoryPathEnvSet := os.LookupEnv("IODD_FILE_PATH")
-	if !relativeDirectoryPathEnvSet {
-		zap.S().Fatal("Relative directory path (IODD_FILE_PATH) must be set")
+	relativeDirectoryPath, err := env.GetAsString("IODD_FILE_PATH", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
 	ioDeviceMap = sync.Map{}
