@@ -201,6 +201,31 @@ helm-test-upgrade-with-data: helm-test-upgrade
 	@${MAKE} -s kube-test-data-flow-job
 endif
 
+define HL_T_LOC_CT_HELP
+# Build the containers locally, create a cluster and install the latest version of UMH with the local containers
+#
+# Args:
+#   CLUSTER_NAME: Name of the k3d cluster. Defaults to umh-local-containers
+#   CTR_TAG: Tag to use for the local containers. Defaults to helm-test-local-containers
+#   VALUES: Space-separated list of Helm values to pass to the chart, in the form <key>=<value>. Omit the --set flag.
+#           By default sets all the containers to use the same tag as the one passed in CTR_TAG
+#
+# Example:
+#   make helm-test-local-containers
+#   make helm-test-local-containers CLUSTER_NAME=my-cluster
+endef
+.PHONY: helm-test-local-containers
+ifeq ($(PRINT_HELP),y)
+helm-test-local-containers:
+	$(HL_T_LOC_CT_HELP)
+else
+## Build the containers locally, create a cluster and install the latest version of UMH with the local containers
+helm-test-local-containers: CLUSTER_NAME=umh-local-containers
+helm-test-local-containers: CTR_TAG=helm-test-local-containers
+helm-test-local-containers: VALUES=kafkastatedetector.image.repository=$(CTR_REPO)/kafkastatedetector kafkastatedetector.image.tag=$(CTR_TAG) mqttbridge.image=$(CTR_REPO)/mqttbridge mqttbridge.tag=$(CTR_TAG) barcodereader.image.repository=$(CTR_REPO)/barcodereader barcodereader.image.tag=$(CTR_TAG) sensorconnect.image=$(CTR_REPO)/sensorconnect sensorconnect.tag=$(CTR_TAG) kafkabridge.image.repository=$(CTR_REPO)/kafkabridge kafkabridge.image.tag=$(CTR_TAG) kafkabridge.initContainer.repository=$(CTR_REPO)/kafka-init kafkabridge.initContainer.tag=$(CTR_TAG) factoryinsight.image.repository=$(CTR_REPO)/factoryinsight factoryinsight.image.tag=$(CTR_TAG) factoryinput.image.repository=$(CTR_REPO)/factoryinput factoryinput.image.tag=$(CTR_TAG) grafanaproxy.image.repository=$(CTR_REPO)/grafana-proxy grafanaproxy.image.tag=$(CTR_TAG) kafkatopostgresql.image.repository=$(CTR_REPO)/kafka-to-postgresql kafkatopostgresql.image.tag=$(CTR_TAG) kafkatopostgresql.initContainer.repository=$(CTR_REPO)/kafka-init kafkatopostgresql.initContainer.tag=$(CTR_TAG) tulipconnector.image.repository=$(CTR_REPO)/tulip-connector tulipconnector.image.tag=$(CTR_TAG) mqttkafkabridge.image.repository=$(CTR_REPO)/mqtt-kafka-bridge mqttkafkabridge.image.tag=$(CTR_TAG) mqttkafkabridge.initContainer.repository=$(CTR_REPO)/kafka-init mqttkafkabridge.initContainer.tag=$(CTR_TAG) metrics.image.repository=$(CTR_REPO)/metrics metrics.image.tag=$(CTR_TAG)
+helm-test-local-containers: docker cluster-clean cluster-create helm-repo-update helm-install print-ports
+endif
+
 ##@ Kubectl
 
 define KB_CL_HELP
