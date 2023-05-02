@@ -18,26 +18,27 @@ import (
 	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
-	"os"
 	"time"
 )
 
-var SerialNumber = os.Getenv("SERIAL_NUMBER")
-var MicroserviceName = os.Getenv("MICROSERVICE_NAME")
+var SerialNumber, snErr = env.GetAsString("SERIAL_NUMBER", true, "")
+
+var MicroserviceName, mnErr = env.GetAsString("MICROSERVICE_NAME", true, "")
 
 type TraceValue struct {
 	Traces map[int64]string `json:"trace"`
 }
 
 func Produce(producer *kafka.Producer, msg *kafka.Message, deliveryChan chan kafka.Event) error {
-	if MicroserviceName == "" {
-		zap.S().Error("MICROSERVICE_NAME is empty")
-		return errors.New("MICROSERVICE_NAME name is empty")
+	if mnErr != nil {
+		zap.S().Error(mnErr)
+		return mnErr
 	}
-	if SerialNumber == "" {
-		zap.S().Error("SERIAL_NUMBER is empty")
-		return errors.New("SERIAL_NUMBER name is empty")
+	if snErr != nil {
+		zap.S().Error(snErr)
+		return snErr
 	}
 	identifier := MicroserviceName + "-" + SerialNumber
 	err := AddXTrace(msg, identifier)

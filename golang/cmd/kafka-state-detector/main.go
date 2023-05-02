@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	r "k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
 	"os"
@@ -36,7 +36,8 @@ var AnomalyEnabled bool
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -61,33 +62,23 @@ func main() {
 
 	zap.S().Debugf("Setting up Kafka")
 	// Read environment variables for Kafka
-	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
-	if !KafkaBoostrapServerEnvSet {
-		zap.S().Fatal("Kafka Boostrap Server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	KafkaBootstrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	if KafkaBoostrapServer == "" {
-		zap.S().Fatal("KAFKA_BOOTSTRAP_SERVER not set")
-	}
+	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
 
-	allowedMemorySize := 1073741824 // 1GB
-	if os.Getenv("MEMORY_REQUEST") != "" {
-		memoryRequest := r.MustParse(os.Getenv("MEMORY_REQUEST"))
-		i, b := memoryRequest.AsInt64()
-		if b {
-			allowedMemorySize = int(i) // truncated !
-		}
-	} else {
-		zap.S().Infof("Memory request [MEMORY_REQUEST] not set")
-	}
+	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
 	internal.InitMessageCache(allowedMemorySize / 4)
 
-	ActivityEnabled = os.Getenv("ACTIVITY_ENABLED") == "true"
+	ActivityEnabled, _ = env.GetAsBool("ACTIVITY_ENABLED", false, false)
 
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if useSsl {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
@@ -108,10 +99,10 @@ func main() {
 			kafka.ConfigMap{
 				"security.protocol":        securityProtocol,
 				"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-				"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+				"ssl.key.password":         kafkaSslPassword,
 				"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 				"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-				"bootstrap.servers":        KafkaBoostrapServer,
+				"bootstrap.servers":        KafkaBootstrapServer,
 				"group.id":                 "kafka-state-detector-activity",
 				"enable.auto.commit":       true,
 				"enable.auto.offset.store": false,
@@ -143,16 +134,16 @@ func main() {
 		go startActivityProcessor()
 	}
 
-	AnomalyEnabled = os.Getenv("ANOMALY_ENABLED") == "true"
+	AnomalyEnabled, _ = env.GetAsBool("ANOMALY_ENABLED", false, false)
 
 	if AnomalyEnabled {
 		/* #nosec G404 -- This doesn't have to be crypto random */
 		SetupAnomalyKafka(
 			kafka.ConfigMap{
-				"bootstrap.servers":        KafkaBoostrapServer,
+				"bootstrap.servers":        KafkaBootstrapServer,
 				"security.protocol":        securityProtocol,
 				"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-				"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+				"ssl.key.password":         kafkaSslPassword,
 				"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 				"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 				"group.id":                 fmt.Sprintf("kafka-state-detector-anomaly-%d", rand.Uint64()),
