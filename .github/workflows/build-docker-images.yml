@@ -18,7 +18,8 @@ on:
   push:
     paths:
       - 'deployment/**'
-      - '!deployment/*.ps1'
+      - '!deployment/helm-repo/**'
+      - '!deployment/united-manufacturing-hub/**'
       - 'golang/**'
       - '.github/workflows/build-docker-images.yml'
 
