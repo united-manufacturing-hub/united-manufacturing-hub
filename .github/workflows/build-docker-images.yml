@@ -26,7 +26,11 @@ jobs:
   barcodereader:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -38,8 +42,8 @@ jobs:
             unitedmanufacturinghub/barcodereader
             ghcr.io/united-manufacturing-hub/barcodereader
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -66,7 +70,11 @@ jobs:
   factoryinput:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -78,8 +86,8 @@ jobs:
             unitedmanufacturinghub/factoryinput
             ghcr.io/united-manufacturing-hub/factoryinput
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -106,7 +114,11 @@ jobs:
   factoryinsight:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -118,8 +130,8 @@ jobs:
             unitedmanufacturinghub/factoryinsight
             ghcr.io/united-manufacturing-hub/factoryinsight
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -146,7 +158,11 @@ jobs:
   grafana-proxy:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -158,8 +174,8 @@ jobs:
             unitedmanufacturinghub/grafana-proxy
             ghcr.io/united-manufacturing-hub/grafana-proxy
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -195,8 +211,8 @@ jobs:
             unitedmanufacturinghub/grafana-umh
             ghcr.io/united-manufacturing-hub/grafana-umh
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -231,8 +247,8 @@ jobs:
             unitedmanufacturinghub/hivemq-init
             ghcr.io/united-manufacturing-hub/hivemq-init
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -258,7 +274,11 @@ jobs:
   kafka-bridge:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -270,8 +290,8 @@ jobs:
             unitedmanufacturinghub/kafka-bridge
             ghcr.io/united-manufacturing-hub/kafka-bridge
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -298,7 +318,11 @@ jobs:
   kafka-debug:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -310,8 +334,8 @@ jobs:
             unitedmanufacturinghub/kafka-debug
             ghcr.io/united-manufacturing-hub/kafka-debug
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -338,7 +362,11 @@ jobs:
   kafka-init:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -350,8 +378,8 @@ jobs:
             unitedmanufacturinghub/kafka-init
             ghcr.io/united-manufacturing-hub/kafka-init
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -378,7 +406,11 @@ jobs:
   kafka-state-detector:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -390,8 +422,8 @@ jobs:
             unitedmanufacturinghub/kafka-state-detector
             ghcr.io/united-manufacturing-hub/kafka-state-detector
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -418,7 +450,11 @@ jobs:
   kafka-to-postgresql:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -430,8 +466,8 @@ jobs:
             unitedmanufacturinghub/kafka-to-postgresql
             ghcr.io/united-manufacturing-hub/kafka-to-postgresql
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -458,7 +494,11 @@ jobs:
   metrics:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -470,8 +510,8 @@ jobs:
             unitedmanufacturinghub/metrics
             ghcr.io/united-manufacturing-hub/metrics
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -498,7 +538,11 @@ jobs:
   mqtt-bridge:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -510,8 +554,8 @@ jobs:
             unitedmanufacturinghub/mqtt-bridge
             ghcr.io/united-manufacturing-hub/mqtt-bridge
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -538,7 +582,11 @@ jobs:
   mqtt-kafka-bridge:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -550,8 +598,8 @@ jobs:
             unitedmanufacturinghub/mqtt-kafka-bridge
             ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -578,7 +626,11 @@ jobs:
   sensorconnect:
     strategy:
       matrix:
-        target: [ "runner", "runner-race" ]
+        include:
+          - target: runner
+            suffix: ""
+          - target: runner-race
+            suffix: -race
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -590,8 +642,8 @@ jobs:
             unitedmanufacturinghub/sensorconnect
             ghcr.io/united-manufacturing-hub/sensorconnect
           tags: |
-            type=ref,event=branch,suffix=${{ matrix.branch }}
-            type=semver,pattern={{version}},suffix=${{ matrix.branch }}
+            type=ref,event=branch,suffix=${{ matrix.suffix }}
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
