@@ -3,12 +3,11 @@ package kafka_processor
 import (
 	"github.com/Shopify/sarama"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/mqtt-kafka-bridge/message"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -19,14 +18,15 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 	if client != nil {
 		return
 	}
-	KafkaBoostrapServer, KafkaBoostrapServerEnvSet := os.LookupEnv("KAFKA_BOOTSTRAP_SERVER")
-	if !KafkaBoostrapServerEnvSet {
-		zap.S().Fatal("Kafka Bootstrap server (KAFKA_BOOTSTRAP_SERVER) must be set")
+	KafkaBootstrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	KafkaTopic, KafkaTopicEnvSet := os.LookupEnv("KAFKA_LISTEN_TOPIC")
-	if !KafkaTopicEnvSet {
-		zap.S().Fatal("Kafka topic (KAFKA_LISTEN_TOPIC) must be set")
+	KafkaTopic, err := env.GetAsString("KAFKA_LISTEN_TOPIC", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
 
 	compile, err := regexp.Compile(KafkaTopic)
 	if err != nil {
@@ -35,13 +35,13 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 
 	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
 		Brokers: []string{
-			KafkaBoostrapServer,
+			KafkaBootstrapServer,
 		},
 		ConsumerName:      "mqtt-kafka-bridge",
 		ListenTopicRegex:  compile,
 		Partitions:        6,
 		ReplicationFactor: 1,
-		EnableTLS:         os.Getenv("KAFKA_USE_SSL") == "true",
+		EnableTLS:         useSsl,
 		StartOffset:       sarama.OffsetOldest,
 	})
 	if err != nil {
@@ -74,10 +74,7 @@ func Shutdown() {
 }
 
 func Start(mqttToKafkaChan chan kafka.Message) {
-	KafkaSenderThreads, err := strconv.Atoi(os.Getenv("KAFKA_SENDER_THREADS"))
-	if err != nil {
-		KafkaSenderThreads = 1
-	}
+	KafkaSenderThreads, _ := env.GetAsInt("KAFKA_SENDER_THREADS", false, 1)
 	if KafkaSenderThreads < 1 {
 		zap.S().Fatal("KAFKA_SENDER_THREADS must be at least 1")
 	}

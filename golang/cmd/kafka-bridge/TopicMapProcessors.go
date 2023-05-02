@@ -21,6 +21,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
@@ -36,11 +37,12 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 	// 1Gb cache
 	messageCache = freecache.NewCache(1024 * 1024 * 1024)
 
+	localPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD_LOCAL", false, "")
 	localConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        LocalKafkaBootstrapServers,
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.key.password":         localPassword,
 		"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 		"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 		"group.id":                 fmt.Sprintf("kafka-bridge-local-%s", kafkaGroupIdSuffic),
@@ -49,11 +51,12 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 		"enable.auto.offset.store": false,
 	}
 
+	remotePassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD_REMOTE", false, "")
 	remoteConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        RemoteKafkaBootstrapServers,
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.key.password":         remotePassword,
 		"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 		"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 		"group.id":                 fmt.Sprintf("kafka-bridge-remote-%s", kafkaGroupIdSuffic),
