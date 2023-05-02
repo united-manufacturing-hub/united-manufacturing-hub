@@ -37,9 +37,14 @@ var FactoryInputUser string
 var FactoryInputBaseURL string
 var FactoryInsightBaseUrl string
 
-func SetupRestAPI() {
+func SetupRestAPI(factoryInputApiKey, factoryInputUser, factoryInputBaseURL, facoryInsightBaseUrl string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
+
+	FactoryInputAPIKey = factoryInputApiKey
+	FactoryInputUser = factoryInputUser
+	FactoryInputBaseURL = factoryInputBaseURL
+	FactoryInsightBaseUrl = facoryInsightBaseUrl
 
 	// Add a ginzap middleware, which:
 	//   - Logs all requests, like a combined access and error log.
