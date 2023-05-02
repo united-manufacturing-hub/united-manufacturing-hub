@@ -19,8 +19,10 @@ import (
 	"crypto/x509"
 	"github.com/beeker1121/goque"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"os"
+	"strings"
 )
 
 // newTLSConfig returns the TLS config for a given clientID and mode
@@ -60,7 +62,10 @@ func newTLSConfig(mode string) *tls.Config {
 		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
 
-	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY_"+mode) == "true"
+	skipVerify, err := env.GetAsBool("INSECURE_SKIP_VERIFY_"+strings.ToUpper(mode), true, true)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 
 	// Create tls.Config with desired tls properties
 	/* #nosec G402 -- Remote verification is not yet implemented*/

@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
@@ -66,7 +67,8 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		return
 	}
 	securityProtocol := "plaintext"
-	if internal.EnvIsTrue("KAFKA_USE_SSL") {
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if useSsl {
 		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
@@ -82,10 +84,12 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 			zap.S().Fatalf("Failed to open ca.crt: %s", err)
 		}
 	}
+
+	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
 	configMap := kafka.ConfigMap{
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-		"ssl.key.password":         os.Getenv("KAFKA_SSL_KEY_PASSWORD"),
+		"ssl.key.password":         kafkaSslPassword,
 		"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
 		"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
 		"bootstrap.servers":        boostrapServer,

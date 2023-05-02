@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -31,7 +32,8 @@ var shutdownEnabled bool
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
 		if err != nil {
@@ -40,49 +42,29 @@ func main() {
 	}(log)
 
 	internal.Initfgtrace()
-	var FactoryInpitAPIKeyEnvSet bool
-	FactoryInputAPIKey, FactoryInpitAPIKeyEnvSet = os.LookupEnv("FACTORYINPUT_KEY")
-	if !FactoryInpitAPIKeyEnvSet {
-		zap.S().Fatal("Factory Input API Key (FACTORYINPUT_KEY) must be set")
+
+	factoryInputAPIKey, err := env.GetAsString("FACTORYINPUT_KEY", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	var FactoryInputUserEnvSet bool
-	FactoryInputUser, FactoryInputUserEnvSet = os.LookupEnv("FACTORYINPUT_USER")
-	if !FactoryInputUserEnvSet {
-		zap.S().Fatal("Factory Input User (FACTORYINPUT_USER) must be set")
+	factoryInputUser, err := env.GetAsString("FACTORYINPUT_USER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	var FactoryInputBaseURLEnvSet bool
-	FactoryInputBaseURL, FactoryInputBaseURLEnvSet = os.LookupEnv("FACTORYINPUT_BASE_URL")
-	if !FactoryInputBaseURLEnvSet {
-		zap.S().Fatal("Factory Input Base URL (FACTORYINPUT_BASE_URL) must be set")
+	factoryInputBaseURL, err := env.GetAsString("FACTORYINPUT_BASE_URL", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	var FactoryInsightBaseUrlEnvSet bool
-	FactoryInsightBaseUrl, FactoryInsightBaseUrlEnvSet = os.LookupEnv("FACTORYINSIGHT_BASE_URL")
-	if !FactoryInsightBaseUrlEnvSet {
-		zap.S().Fatal("Factory Insight Base Url (FACTORYINSIGHT_BASE_URL) must be set")
+	factoryInsightBaseUrl, err := env.GetAsString("FACTORYINSIGHT_BASE_URL", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
-	if len(FactoryInputAPIKey) == 0 {
-		zap.S().Error("Factoryinput API Key not set")
-		return
+	if !strings.HasSuffix(factoryInputBaseURL, "/") {
+		FactoryInputBaseURL = fmt.Sprintf("%s/", factoryInputBaseURL)
 	}
-	if FactoryInputUser == "" {
-		zap.S().Error("Factoryinput user not set")
-		return
-	}
-	if FactoryInputBaseURL == "" {
-		zap.S().Error("Factoryinput base url not set")
-		return
-	}
-	if FactoryInsightBaseUrl == "" {
-		zap.S().Error("Factoryinsight base url not set")
-		return
-	}
-
-	if !strings.HasSuffix(FactoryInputBaseURL, "/") {
-		FactoryInputBaseURL = fmt.Sprintf("%s/", FactoryInputBaseURL)
-	}
-	if !strings.HasSuffix(FactoryInsightBaseUrl, "/") {
-		FactoryInsightBaseUrl = fmt.Sprintf("%s/", FactoryInsightBaseUrl)
+	if !strings.HasSuffix(factoryInsightBaseUrl, "/") {
+		factoryInsightBaseUrl = fmt.Sprintf("%s/", factoryInsightBaseUrl)
 	}
 
 	health := healthcheck.NewHandler()
@@ -97,7 +79,7 @@ func main() {
 		}
 	}()
 
-	SetupRestAPI()
+	SetupRestAPI(factoryInputBaseURL, factoryInputUser, factoryInputAPIKey, factoryInsightBaseUrl)
 	zap.S().Infof("Ready to proxy connections")
 
 	// Allow graceful shutdown

@@ -41,7 +41,7 @@ func SetupDB(
 	PQHost string,
 	PQPort int,
 	health healthcheck.Handler,
-	dryRun string,
+	dryRun bool,
 	sslmode string) {
 
 	psqlInfo := fmt.Sprintf(
@@ -58,7 +58,7 @@ func SetupDB(
 		zap.S().Fatalf("Failed to open database connection: %s", err)
 	}
 
-	if dryRun == "True" || dryRun == "true" {
+	if dryRun {
 		zap.S().Infof("Running in DRY_RUN mode. ALl statements will be rolled back and printed automatically")
 		isDryRun = true
 	} else {
