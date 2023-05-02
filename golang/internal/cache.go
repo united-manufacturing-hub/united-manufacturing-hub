@@ -40,9 +40,9 @@ var memoryDataExpiration time.Duration
 const NullStr = "null"
 
 // InitCache initializes a redis cache
-func InitCache(redisURI string, redisPassword string, redisDB int, dryRun string) {
+func InitCache(redisURI string, redisPassword string, redisDB int, dryRun bool) {
 
-	if dryRun == "True" || dryRun == "true" {
+	if dryRun {
 		zap.S().Infof("Running cache in DRY_RUN mode. This means that cache will not be used") // "... and it stays nil"
 		return
 	}

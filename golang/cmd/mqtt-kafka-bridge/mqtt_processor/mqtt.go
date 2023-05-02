@@ -7,11 +7,11 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/mqtt-kafka-bridge/message"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync/atomic"
 )
@@ -27,26 +27,23 @@ func Init(mqttToKafkaChan chan kafka.Message, shutdownChan chan bool) {
 		return
 	}
 	sChan = shutdownChan
-	certificateName, MQTTCertificateNameEnvSet := os.LookupEnv("MQTT_CERTIFICATE_NAME")
-	if !MQTTCertificateNameEnvSet {
-		zap.S().Fatal("Mqtt certificate name (MQTT_CERTIFICATE_NAME) must be set")
+	certificateName, err := env.GetAsString("MQTT_CERTIFICATE_NAME", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	mqttBrokerURL, MQTTBrokerURLEnvSet := os.LookupEnv("MQTT_BROKER_URL")
-	if !MQTTBrokerURLEnvSet {
-		zap.S().Fatal("Mqtt broker url (MQTT_BROKER_URL) must be set")
+	mqttBrokerURL, err := env.GetAsString("MQTT_BROKER_URL", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	mqttTopic, MQTTTopicEnvSet := os.LookupEnv("MQTT_TOPIC")
-	if !MQTTTopicEnvSet {
-		zap.S().Fatal("Mqtt topic (MQTT_TOPIC) must be set")
+	mqttTopic, err := env.GetAsString("MQTT_TOPIC", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	podName, podNameEnvSet := os.LookupEnv("MY_POD_NAME")
-	if !podNameEnvSet {
-		zap.S().Fatal("Pod name (MY_POD_NAME) must be set")
+	podName, err := env.GetAsString("MY_POD_NAME", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	password, mqttPasswordEnvSet := os.LookupEnv("MQTT_PASSWORD")
-	if !mqttPasswordEnvSet {
-		zap.S().Fatal("Mqtt password (MQTT_PASSWORD) must be set")
-	}
+	password, _ := env.GetAsString("MQTT_PASSWORD", false, "")
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -175,7 +172,7 @@ func newTLSConfig() *tls.Config {
 		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
 
-	skipVerify := os.Getenv("INSECURE_SKIP_VERIFY") == "true"
+	skipVerify, _ := env.GetAsBool("INSECURE_SKIP_VERIFY", false, true)
 
 	// Create tls.Config with desired tls properties
 	/* #nosec G402 -- Remote verification is not yet implemented*/
@@ -205,10 +202,7 @@ func Shutdown() {
 }
 
 func Start(kafkaToMqttChan chan kafka.Message) {
-	MQTTSenderThreads, err := strconv.Atoi(os.Getenv("MQTT_SENDER_THREADS"))
-	if err != nil {
-		MQTTSenderThreads = 1
-	}
+	MQTTSenderThreads, _ := env.GetAsInt("MQTT_SENDER_THREADS", false, 1)
 	if MQTTSenderThreads < 1 {
 		zap.S().Fatalf("MQTT_SENDER_THREADS must be at least 1")
 	}
