@@ -197,12 +197,9 @@ data:
     ALTER TABLE configurationTable ADD IF NOT EXISTS AutomaticallyIdentifyChangeovers BOOLEAN DEFAULT true;
 
     -- #51 state table
-    -- function called by trigger
-    CREATE FUNCTION rm_duplicate() RETURNS trigger AS \$rm_duplicate\$
-    DECLARE
-    id int;
-    BEGIN
-    SELECT t.asset_id INTO id from statetable t ORDER BY t.timestamp DESC LIMIT 1;
+    -- repairing the old statetable (if it exists)
+    BEGIN TRANSACTION;
+
     WITH cte AS (
     SELECT *
     FROM (
@@ -210,19 +207,34 @@ data:
     *,
     LAG(state) OVER (PARTITION BY asset_id ORDER BY timestamp ASC) AS prev_state
     FROM statetable
-    WHERE asset_id = id
+    WHERE asset_id = (SELECT DISTINCT asset_id FROM statetable)
     ) subq
     WHERE prev_state IS NOT NULL AND prev_state = state
     )
     DELETE FROM statetable
     WHERE (timestamp, asset_id) IN (SELECT timestamp, asset_id FROM cte);
-    RETURN NULL;
+
+    COMMIT;
+
+    -- function called by trigger
+    CREATE FUNCTION rm_duplicate() RETURNS trigger AS \$rm_duplicate\$
+    DECLARE
+    last_state int;
+    next_state int;
+    BEGIN
+    SELECT last(state, timestamp) INTO last_state FROM statetable WHERE asset_id = NEW.asset_id AND timestamp < NEW.timestamp;
+    SELECT first(state, timestamp) INTO next_state FROM statetable WHERE asset_id = NEW.asset_id AND timestamp > NEW.timestamp;
+    if last_state = NEW.state OR next_state = NEW.state THEN
+    RAISE EXCEPTION 'INSERT VALUE --> % % %', NEW.timestamp, NEW.asset_id, NEW.state;
+    END if;
+    RETURN NEW;
     END;
     \$rm_duplicate\$
     LANGUAGE plpgsql;
 
-    -- trigger after insertion
-    CREATE TRIGGER rm_duplicate_trigger AFTER INSERT ON statetable
+    -- trigger before inserting
+    CREATE TRIGGER rm_duplicate_trigger BEFORE INSERT ON statetable
+    FOR EACH ROW
     EXECUTE FUNCTION rm_duplicate();
 
     -- #74
