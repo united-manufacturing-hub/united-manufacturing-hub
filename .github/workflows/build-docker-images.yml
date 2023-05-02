@@ -184,9 +184,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-umh:
-    strategy:
-      matrix:
-        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -220,13 +217,9 @@ jobs:
           context: .
           file: ./deployment/grafana-umh/Dockerfile
           push: true
-          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   hivemq-init:
-    strategy:
-      matrix:
-        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -260,7 +253,6 @@ jobs:
           context: .
           file: ./deployment/hivemq-init/Dockerfile
           push: true
-          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-bridge:
