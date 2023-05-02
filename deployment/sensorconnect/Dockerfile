@@ -16,6 +16,10 @@ FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 AS source
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
+# Add nonroot user
+RUN addgroup -S nonroot \
+    && adduser -S nonroot -G nonroot
+
 RUN mkdir /build
 # Add build requirements for librdkafka
 RUN apk add build-base
@@ -59,6 +63,9 @@ COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build-race /build/mainFile /app/mainFile
 COPY --from=build-race /build/deps /lib
 
+COPY --from=source /etc/passwd /etc/passwd
+USER nonroot
+
 WORKDIR /app
 CMD ["./mainFile"]
 
@@ -67,6 +74,9 @@ FROM scratch AS runner
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /build/mainFile /app/mainFile
 COPY --from=build /build/deps /lib
+
+COPY --from=source /etc/passwd /etc/passwd
+USER nonroot
 
 WORKDIR /app
 CMD ["./mainFile"]
