@@ -189,7 +189,7 @@ data:
         PerformanceLossStates INTEGER[] DEFAULT '{20000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000}'
     );
 
-    
+
     --- MIGRATIONS
     -- Add here your migrations
 
@@ -290,7 +290,7 @@ data:
     SELECT create_hypertable('processValueStringTable', 'timestamp');
     -- creating an index to increase performance
     CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
-    
+
     -- creating an index to increase performance
     CREATE INDEX ON processValueStringTable (valueName);
 
@@ -337,19 +337,6 @@ data:
     ON DELETE CASCADE
     );
 
-    -------------------- TimescaleDB table for process values string --------------------
-    CREATE TABLE IF NOT EXISTS processValueStringTable
-    (
-    timestamp               TIMESTAMPTZ                         NOT NULL,
-    asset_id                SERIAL                              REFERENCES assetTable (id),
-    valueName               TEXT                                NOT NULL,
-    value                   TEXT                                NOT NULL,
-    UNIQUE(timestamp, asset_id, valueName)
-    );
-    -- creating hypertable
-    SELECT create_hypertable('processValueStringTable', 'timestamp');
-    -- creating an index to increase performance
-    CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
 
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
