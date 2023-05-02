@@ -26,7 +26,7 @@ jobs:
   barcodereader:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -60,14 +60,13 @@ jobs:
           context: .
           file: ./deployment/barcodereader/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   factoryinput:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -101,14 +100,13 @@ jobs:
           context: .
           file: ./deployment/factoryinput/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   factoryinsight:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -142,14 +140,13 @@ jobs:
           context: .
           file: ./deployment/factoryinsight/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-proxy:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -183,14 +180,13 @@ jobs:
           context: .
           file: ./deployment/grafana-proxy/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-umh:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -224,14 +220,13 @@ jobs:
           context: .
           file: ./deployment/grafana-umh/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   hivemq-init:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -265,14 +260,13 @@ jobs:
           context: .
           file: ./deployment/hivemq-init/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-bridge:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -306,14 +300,13 @@ jobs:
           context: .
           file: ./deployment/kafka-bridge/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-debug:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -347,14 +340,13 @@ jobs:
           context: .
           file: ./deployment/kafka-debug/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-init:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -388,14 +380,13 @@ jobs:
           context: .
           file: ./deployment/kafka-init/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-state-detector:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -429,14 +420,13 @@ jobs:
           context: .
           file: ./deployment/kafka-state-detector/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-to-postgresql:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -470,14 +460,13 @@ jobs:
           context: .
           file: ./deployment/kafka-to-postgresql/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   metrics:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -511,14 +500,13 @@ jobs:
           context: .
           file: ./deployment/metrics/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-bridge:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -552,14 +540,13 @@ jobs:
           context: .
           file: ./deployment/mqtt-bridge/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-kafka-bridge:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -593,14 +580,13 @@ jobs:
           context: .
           file: ./deployment/mqtt-kafka-bridge/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
 
   sensorconnect:
     strategy:
       matrix:
-        branch: ["", "-race"]
+        target: [ "runner", "runner-race" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -634,6 +620,5 @@ jobs:
           context: .
           file: ./deployment/sensorconnect/Dockerfile
           push: true
-          build-args: |
-            BRANCH=${{ matrix.branch }}
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
