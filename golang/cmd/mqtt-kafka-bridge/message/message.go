@@ -4,12 +4,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
-	"os"
-	"strconv"
 	"strings"
 )
 
@@ -23,24 +22,8 @@ func Init() {
 	if arcRaw != nil {
 		return
 	}
-	arcSizeRawS, foundRawLruSizeStr := os.LookupEnv("RAW_MESSAGE_LRU_SIZE")
-	if foundRawLruSizeStr {
-		atoi, err := strconv.Atoi(arcSizeRawS)
-		if err == nil {
-			arcSizeRaw = atoi
-		} else {
-			zap.S().Warnf("Error parsing RAW_MESSAGE_LRU_SIZE: %v", err)
-		}
-	}
-	arcSizeNonRawS, foundNonRawLruSizeStr := os.LookupEnv("MESSAGE_LRU_SIZE")
-	if foundNonRawLruSizeStr {
-		atoi, err := strconv.Atoi(arcSizeNonRawS)
-		if err == nil {
-			arcSizeNonRaw = atoi
-		} else {
-			zap.S().Warnf("Error parsing MESSAGE_LRU_SIZE: %v", err)
-		}
-	}
+	arcSizeRaw, _ := env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
+	arcSizeNonRaw, _ := env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
 
 	arcRaw, _ = lru.NewARC(arcSizeRaw)
 	arcNonRaw, _ = lru.NewARC(arcSizeNonRaw)
