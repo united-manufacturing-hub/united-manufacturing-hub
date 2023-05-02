@@ -23,6 +23,8 @@ CLUSTER_NAME=umh
 CHART=united-manufacturing-hub/united-manufacturing-hub
 ## Path to the Helm values file
 VALUES_FILE=
+## Space-separated list of Helm values to pass to the chart, in the form <key>=<value>. Omit the --set flag
+VALUES=
 ## Helm chart version
 VERSION=
 ## Container repository
@@ -37,6 +39,8 @@ WORKLOADS=sts:kafka svc:kafka
 TEST_FLAGS=
 ## Space-separated list of directories
 DIRS=./...
+## Space-separated list of build flags to pass to docker buildx, in the form <key>=<value>
+BUILD_FLAGS=
 
 # Local variables. Do not override them
 db_p:=$(shell python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
@@ -46,6 +50,7 @@ opc_ua_p:=$(shell python -c 'import socket; s=socket.socket(); s.bind(("", 0)); 
 gf_p:=$(shell python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
 kafka_p:=$(shell python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
 console_p:=$(shell python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
+set_flags=$(if $(VALUES),$(addprefix --set ,$(VALUES)),)
 values_flag=$(if $(VALUES_FILE),-f $(VALUES_FILE),)
 version_flag=$(if $(VERSION),--version $(VERSION),)
 
@@ -97,9 +102,10 @@ define CL_IN_HELP
 #
 # Args:
 #   CLUSTER_NAME: Name of the k3d cluster
-#   CHART: Helm chart to install. Can be a local path or a remote chart
-#   VALUES_FILE: Helm values file to use
-#   VERSION: Helm chart version
+#   CHART: Helm chart to install. Can be a local path or a remote chart. Defaults to the UMH repository chart
+#   VALUES: Space-separated list of Helm values to pass to the chart, in the form <key>=<value>. Omit the --set flag
+#   VALUES_FILE: Path to the Helm values file to use. Use default values if not specified
+#   VERSION: Helm chart version. Use the latest version if not specified
 #
 # Example:
 #   make cluster-install
@@ -107,6 +113,7 @@ define CL_IN_HELP
 #   make cluster-install CHART=./deployment/united-manufacturing-hub
 #   make cluster-install VERSION=1.0.0
 #   make cluster-install VALUES_FILE=./deployment/united-manufacturing-hub/values.yaml
+#   make cluster-install VALUES="global.image.repository=ghcr.io/united-manufacturing-hub"
 endef
 .PHONY: cluster-install
 ifeq ($(PRINT_HELP),y)
@@ -129,15 +136,17 @@ define HL_IN_HELP
 # By default it installs the latest version of UMH with the default values.
 #
 # Args:
-#   CHART: Helm chart to install. Can be a local path or a remote chart
-#   VALUES_FILE: Helm values file to use
-#   VERSION: Helm chart version
+#   CHART: Helm chart to install. Can be a local path or a remote chart. Defaults to the UMH repository chart
+#   VALUES: Space-separated list of Helm values to pass to the chart, in the form <key>=<value>. Omit the --set flag
+#   VALUES_FILE: Path to the Helm values file to use. Use default values if not specified
+#   VERSION: Helm chart version. Use the latest version if not specified
 #
 # Example:
 #   make helm-install
 #   make helm-install CHART=./deployment/united-manufacturing-hub
 #   make helm-install VERSION=1.0.0
 #   make helm-install VALUES_FILE=./deployment/united-manufacturing-hub/values.yaml
+#   make helm-install VALUES="global.image.tag=1.0.0 global.image.pullPolicy=Always"
 endef
 .PHONY: helm-install
 ifeq ($(PRINT_HELP),y)
@@ -146,8 +155,7 @@ helm-install:
 else
 ## Install or upgrade the UMH release in the current cluster with the given chart, values file and version
 helm-install:
-	@echo "Installing UMH..."
-	helm upgrade united-manufacturing-hub $(CHART) -n united-manufacturing-hub --install --create-namespace $(values_flag) $(version_flag) --cleanup-on-fail
+	helm upgrade united-manufacturing-hub $(CHART) -n united-manufacturing-hub --install --create-namespace $(values_flag) $(version_flag) $(set_flags) --cleanup-on-fail
 endif
 
 define HL_T_UP_HELP
@@ -240,11 +248,13 @@ define DC_B_P_HELP
 #   CTR_IMG: Space-separated list of images to build and push. Defaults to all the images.
 #   CTR_REPO: Docker repository to use. Defaults to "ghcr.io/united-manufacturing-hub"
 #   CTR_TAG: Docker tag to use. Defaults to "latest"
+#   BUILD_FLAGS: Flags to pass to the docker build command
 #
 # Example:
 #   make docker
 #   make docker CTR_IMG="barcodereader factoryinput"
 #   make docker CTR_REPO="my-repo" CTR_TAG="1.0.0"
+#   make docker BUILD_FLAGS="--no-cache"
 endef
 .PHONY: docker
 ifeq ($(PRINT_HELP),y)
@@ -263,11 +273,13 @@ define DC_B_HELP
 #   CTR_IMG: Space-separated list of images to build. Defaults to all the images.
 #   CTR_REPO: Docker repository to use. Defaults to "ghcr.io/united-manufacturing-hub"
 #   CTR_TAG: Docker tag to use. Defaults to "latest"
+#   BUILD_FLAGS: Flags to pass to the docker build command
 #
 # Example:
 #   make docker-build
 #   make docker-build CTR_IMG="barcodereader factoryinput"
 #   make docker-build CTR_REPO="my-repo" CTR_TAG="1.0.0"
+#   make docker-build BUILD_FLAGS="--platform linux/amd64"
 endef
 .PHONY: docker-build
 ifeq ($(PRINT_HELP),y)
@@ -277,8 +289,7 @@ else
 ## Build the docker images
 docker-build: $(addsuffix -build,$(CTR_IMG))
 $(addsuffix -build,$(CTR_IMG)):
-	@echo "Building $(subst -build,,$@)..."
-	docker buildx build -t $(CTR_REPO)/$(subst -build,,$@):$(CTR_TAG) -f ./deployment/$(subst -build,,$@)/Dockerfile .
+	docker buildx build -t $(CTR_REPO)/$(subst -build,,$@):$(CTR_TAG) $(BUILD_FLAGS) -f ./deployment/$(subst -build,,$@)/Dockerfile .
 endif
 
 define DC_P_HELP
@@ -303,7 +314,6 @@ else
 ## Push the docker images
 docker-push: $(addsuffix -push,$(CTR_IMG))
 $(addsuffix -push,$(CTR_IMG)):
-	@echo "Pushing $(subst -push,,$@)..."
 	docker push $(CTR_REPO)/$(subst -push,,$@):$(CTR_TAG)
 endif
 
@@ -313,7 +323,6 @@ endif
 .PHONY: go-deps
 ## Download and install the dependencies
 go-deps:
-	@echo "Getting dependencies..."
 	@cd golang
 	go get -t -d -v ./...
 	go install ./...
@@ -337,7 +346,6 @@ go-test-unit:
 else
 ## Run the unit tests
 go-test-unit: go-deps
-	@echo "Running unit tests..."
 	@cd golang
 	go test $(TEST_FLAGS) $(DIRS)
 endif
