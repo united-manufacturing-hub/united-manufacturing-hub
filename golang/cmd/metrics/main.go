@@ -21,11 +21,11 @@ import (
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 	"net/http"
-	os2 "os"
 	"runtime"
 	"strings"
 )
@@ -42,17 +42,15 @@ type stat struct {
 
 func main() {
 	// Initialize zap logging
-	log := logger.New("LOGGING_LEVEL")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	log := logger.New(logLevel)
 
 	// Get OS and architecture
 	os := runtime.GOOS
 	arch := runtime.GOARCH
 
 	// Get start reason
-	reason, hasReason := os2.LookupEnv("REASON")
-	if !hasReason {
-		reason = "UNKNOWN"
-	}
+	reason, _ := env.GetAsString("REASON", false, "UNKNOWN")
 
 	// Get total memory
 	vmStat, err := mem.VirtualMemory()
