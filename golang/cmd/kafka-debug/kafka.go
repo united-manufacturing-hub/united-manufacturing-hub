@@ -15,38 +15,60 @@
 package main
 
 import (
-	"errors"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/Shopify/sarama"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
-	"time"
+	"regexp"
 )
 
+var client *kafka.Client
+
 func startDebugger() {
-	err := internal.KafkaConsumer.Subscribe("^ia.+", nil)
+	if client != nil {
+		return
+	}
+
+	// Read environment variables for Kafka
+	KafkaBootstrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+
+	//Parsing the topic to subscribe
+	compile, err := regexp.Compile("^ia.+")
+	if err != nil {
+		zap.S().Fatalf("Error compiling regex: %v", err)
+	}
+	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+		Brokers: []string{
+			KafkaBootstrapServer,
+		},
+		ConsumerName:      "kafka-debug",
+		ListenTopicRegex:  compile,
+		Partitions:        6,
+		ReplicationFactor: 1,
+		EnableTLS:         true,
+		StartOffset:       sarama.OffsetOldest,
+	})
 	if err != nil {
 		zap.S().Fatalf("Failed to subscribe to kafka topic: %s", err)
 	}
-	for !ShuttingDown {
+	for {
 
-		msg, err := internal.KafkaConsumer.ReadMessage(5) // No infinitive timeout to be able to cleanly shut down
-		if err != nil {
-			var kafkaError kafka.Error
-			ok := errors.As(err, &kafkaError)
-
-			if ok && kafkaError.Code() == kafka.ErrTimedOut {
-				// Sleep to reduce CPU usage
-				time.Sleep(internal.OneSecond)
-				continue
-			} else {
-				zap.S().Errorf("Failed to read kafka message: %s", err)
-				time.Sleep(5 * time.Second)
-				continue
-			}
-		}
+		msg := <-client.GetMessages()
 
 		zap.S().Infof(" == Received message == ")
-		zap.S().Infof("Topic: ", msg.TopicPartition.Topic)
+		zap.S().Infof("Topic: ", msg.Topic)
 		zap.S().Infof("Value: ", msg.Value)
 	}
+}
+
+func Shutdown() {
+	zap.S().Info("Shutting down kafka client")
+	err := client.Close()
+	if err != nil {
+		zap.S().Fatalf("Error closing kafka client: %v", err)
+	}
+	zap.S().Info("Kafka client shut down")
 }
