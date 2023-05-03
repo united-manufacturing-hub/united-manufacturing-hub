@@ -35,6 +35,8 @@ func startDebugger() {
 		zap.S().Fatal(err)
 	}
 
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+
 	//Parsing the topic to subscribe
 	compile, err := regexp.Compile("^ia.+")
 	if err != nil {
@@ -48,7 +50,7 @@ func startDebugger() {
 		ListenTopicRegex:  compile,
 		Partitions:        6,
 		ReplicationFactor: 1,
-		EnableTLS:         true,
+		EnableTLS:         useSsl,
 		StartOffset:       sarama.OffsetOldest,
 	})
 	if err != nil {
