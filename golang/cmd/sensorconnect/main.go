@@ -18,6 +18,7 @@ import (
 	"fmt"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -29,6 +30,7 @@ import (
 	"time"
 )
 
+var kafkaProducerClient *kafka.Client
 var mqttClient MQTT.Client
 
 var discoveredDeviceChannel chan DiscoveredDeviceInformation
@@ -132,7 +134,7 @@ func main() {
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		setupKafka(KafkaBoostrapServer)
+		setupKafka(kafkaProducerClient, KafkaBoostrapServer)
 	}
 
 	var err error
@@ -428,7 +430,7 @@ func downloadSensorDataMapAndProcess(
 		errChan <- err
 		return
 	}
-	go processSensorData(deviceInfo, portModeMap, sensorDataMap)
+	go processSensorData(deviceInfo, portModeMap, sensorDataMap, kafkaProducerClient)
 }
 
 // continuousDeviceSearch Searches for devices everytime ticker is triggered

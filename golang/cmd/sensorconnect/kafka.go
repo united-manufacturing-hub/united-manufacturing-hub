@@ -24,10 +24,8 @@ import (
 	"go.uber.org/zap"
 )
 
-var kafkaProducerClient *kafka.Client
-
 // SendKafkaMessage tries to send a message via kafka
-func SendKafkaMessage(kafkaTopicName string, message []byte) {
+func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, message []byte) {
 	if !useKafka {
 		return
 	}
@@ -61,13 +59,13 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 }
 
 // setupKafka sets up the connection to the kafka server
-func setupKafka(boostrapServer string) {
+func setupKafka(client *kafka.Client, boostrapServer string) {
 	if !useKafka {
 		return
 	}
 	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
 	var err error
-	kafkaProducerClient, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
 		Brokers: []string{
 			boostrapServer,
 		},
