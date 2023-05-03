@@ -192,8 +192,6 @@ github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnr
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/juju/qthttptest v0.1.1/go.mod h1:aTlAv8TYaflIiTDIQYzxnl1QdPjAg8Q8qJMErpKy6A4=
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
-github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
-github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/klauspost/compress v1.16.5 h1:IFV2oUNUzZaz+XyusxpLzpzS8Pt5rh0Z16For/djlyI=
 github.com/klauspost/compress v1.16.5/go.mod h1:ntbaceVETuRiXiv4DpjP66DpAtAGkEQskQzEyD//IeE=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
@@ -305,6 +303,12 @@ github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4d
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.3.0 h1:65Inq95bePq9oh7IKFttVFC4+MbMZfFI2ZHQuyaj/bU=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.3.0/go.mod h1:SilJcLhE4zXrJ4T4nkEhqpl+AGYoSU1PU7RyYRI0Ic0=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.3.1 h1:66gRJ0pRVy71n7nFr1jJAoYNfVe7ScAZ5HtWeo4LbA0=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.3.1/go.mod h1:SilJcLhE4zXrJ4T4nkEhqpl+AGYoSU1PU7RyYRI0Ic0=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.0 h1:96L6LWIkeidJSymhwlbx2wEJEnaPRo5vKMXOT7YYj7E=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.0/go.mod h1:wvelKvcjalUfJXErhSjGceajIxnk9GINtVovBpT6mjI=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.1 h1:8KC4AUpM1mxHC4rrAFSyBt6cUjJXGQ5qJ1GL6ODG7tY=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.1/go.mod h1:2BOWBGITZvJe7ZqkN/KRu65xUtSfxXnOVAZrQwRrVUQ=
 github.com/united-manufacturing-hub/umh-utils v0.1.6 h1:5t7AR9jF6jaPkJN/El82HY2JWLyzB5qEHwhIHqm0i0E=
 github.com/united-manufacturing-hub/umh-utils v0.1.6/go.mod h1:Hb+nWVVJEj2Bo+xOtcBHwTi6EFTfln9M3ge2BN2X1B8=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

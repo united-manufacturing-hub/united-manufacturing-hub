@@ -1,33 +1,47 @@
-// Copyright 2023 UMH Systems GmbH
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package main
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/Shopify/sarama"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"strings"
 )
 
-func initKafkaTopics(topics string) {
-	zap.S().Debugf("Creating Kafka topics: %s", topics)
+func Init(kafkaBroker string) {
+	kafkaTopics, err := env.GetAsString("KAFKA_TOPICS", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	zap.S().Infof("kafkaTopics: %s", kafkaTopics)
 
-	topiclist := strings.Split(topics, ";")
-	for _, topic := range topiclist {
-		err := internal.CreateTopicIfNotExists(topic)
+	topicList := strings.Split(kafkaTopics, ";")
+
+	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+
+	client, err := kafka.NewKafkaClient(kafka.NewClientOptions{
+		Brokers:           []string{kafkaBroker},
+		ConsumerName:      "kafka-init",
+		Partitions:        6,
+		ReplicationFactor: 1,
+		EnableTLS:         useSsl,
+		StartOffset:       sarama.OffsetOldest,
+	})
+	if err != nil {
+		zap.S().Fatalf("Error creating kafka client: %v", err)
+		return
+	}
+	zap.S().Infof("client: %v", client)
+
+	initKafkaTopics(client, topicList)
+}
+
+func initKafkaTopics(client *kafka.Client, topicList []string) {
+	for _, topic := range topicList {
+		zap.S().Infof("Creating topic %s", topic)
+		err := client.TopicCreator(topic)
 		if err != nil {
-			zap.S().Fatalf("Failed to create topic %s: %s", topic, err)
+			zap.S().Errorf("Error creating topic %s: %v", topic, err)
 		}
 	}
 }
