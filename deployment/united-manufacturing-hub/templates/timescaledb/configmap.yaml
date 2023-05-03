@@ -197,25 +197,6 @@ data:
     ALTER TABLE configurationTable ADD IF NOT EXISTS AutomaticallyIdentifyChangeovers BOOLEAN DEFAULT true;
 
     -- #51 state table
-    -- repairing the old statetable (if it exists)
-    BEGIN TRANSACTION;
-
-    WITH cte AS (
-    SELECT *
-    FROM (
-    SELECT
-    *,
-    LAG(state) OVER (PARTITION BY asset_id ORDER BY timestamp ASC) AS prev_state
-    FROM statetable
-    WHERE asset_id = (SELECT DISTINCT asset_id FROM statetable)
-    ) subq
-    WHERE prev_state IS NOT NULL AND prev_state = state
-    )
-    DELETE FROM statetable
-    WHERE (timestamp, asset_id) IN (SELECT timestamp, asset_id FROM cte);
-
-    COMMIT;
-
     -- function called by trigger
     CREATE FUNCTION rm_duplicate() RETURNS trigger AS \$rm_duplicate\$
     DECLARE
