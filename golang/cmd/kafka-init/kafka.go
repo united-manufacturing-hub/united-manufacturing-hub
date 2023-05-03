@@ -32,6 +32,7 @@ func Init(kafkaBroker string) {
 
 	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
 
+	zap.S().Debug("Creating kafka client")
 	client, err := kafka.NewKafkaClient(kafka.NewClientOptions{
 		Brokers:           []string{kafkaBroker},
 		ConsumerName:      "kafka-init",
@@ -44,7 +45,13 @@ func Init(kafkaBroker string) {
 		zap.S().Fatalf("Error creating kafka client: %v", err)
 		return
 	}
-	zap.S().Infof("client: %v", client)
+	defer func(client *kafka.Client) {
+		zap.S().Debug("Closing kafka client")
+		err := client.Close()
+		if err != nil {
+			zap.S().Fatalf("Error closing kafka client: %v", err)
+		}
+	}(client)
 
 	initKafkaTopics(client, topicList)
 
@@ -56,7 +63,7 @@ func Init(kafkaBroker string) {
 
 func initKafkaTopics(client *kafka.Client, topicList []string) {
 	for _, topic := range topicList {
-		zap.S().Infof("Creating topic %s", topic)
+		zap.S().Debugf("Creating topic %s", topic)
 		err := client.TopicCreator(topic)
 		if err != nil {
 			zap.S().Errorf("Error creating topic %s: %v", topic, err)
