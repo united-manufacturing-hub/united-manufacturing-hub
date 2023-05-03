@@ -16,13 +16,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/Shopify/sarama"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
 	"go.uber.org/zap"
-	"os"
 )
+
+var kafkaProducerClient *kafka.Client
 
 // SendKafkaMessage tries to send a message via kafka
 func SendKafkaMessage(kafkaTopicName string, message []byte) {
@@ -46,13 +48,10 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 		zap.S().Fatal("Failed to create topic %s", err)
 	}
 
-	err = internal.Produce(kafkaProducerClient, &kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic:     &kafkaTopicName,
-			Partition: kafka.PartitionAny,
-		},
+	err = kafkaProducerClient.EnqueueMessage(kafka.Message{
+		Topic: kafkaTopicName,
 		Value: message,
-	}, nil)
+	})
 
 	if err != nil {
 		zap.S().Errorf("Failed to send Kafka message: %s", err)
@@ -62,63 +61,26 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 }
 
 // setupKafka sets up the connection to the kafka server
-func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *kafka.AdminClient) {
+func setupKafka(boostrapServer string) {
 	if !useKafka {
 		return
 	}
-	securityProtocol := "plaintext"
 	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
-	if useSsl {
-		securityProtocol = "ssl"
-
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
-		if err != nil {
-			zap.S().Fatalf("Failed to open /SSL_certs/kafka/tls.key: %s", err)
-		}
-		_, err = os.Open("/SSL_certs/kafka/tls.crt")
-		if err != nil {
-			zap.S().Fatalf("Failed to open /SSL_certs/kafka/tls.crt: %s", err)
-		}
-		_, err = os.Open("/SSL_certs/kafka/ca.crt")
-		if err != nil {
-			zap.S().Fatalf("Failed to open ca.crt: %s", err)
-		}
-	}
-
-	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
-	configMap := kafka.ConfigMap{
-		"security.protocol":        securityProtocol,
-		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-		"ssl.key.password":         kafkaSslPassword,
-		"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
-		"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-		"bootstrap.servers":        boostrapServer,
-		"group.id":                 "sensorconnect",
-	}
-	producer, err := kafka.NewProducer(&configMap)
+	var err error
+	kafkaProducerClient, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+		Brokers: []string{
+			boostrapServer,
+		},
+		ConsumerName:      "sensorconnect",
+		Partitions:        6,
+		ReplicationFactor: 1,
+		EnableTLS:         useSsl,
+		StartOffset:       sarama.OffsetOldest,
+	})
 
 	if err != nil {
 		zap.S().Fatalf("Failed to create kafka producer: %s", err)
 	}
-
-	adminClient, err = kafka.NewAdminClient(&configMap)
-	if err != nil {
-		zap.S().Fatalf("Failed to create Admin client: %s", err)
-	}
-
-	internal.KafkaProducer = producer
-	internal.KafkaAdminClient = adminClient
-
-	go func() {
-		for e := range producer.Events() {
-			switch ev := e.(type) {
-			case *kafka.Message:
-				if ev.TopicPartition.Error != nil {
-					zap.S().Errorf("Delivery failed: %v (%s)", ev.TopicPartition, ev.TopicPartition.Error)
-				}
-			}
-		}
-	}()
 
 	return
 }

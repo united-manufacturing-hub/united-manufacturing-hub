@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
@@ -42,7 +41,6 @@ var fileInfoSlice []fs.DirEntry
 
 var slowDownMap sync.Map
 
-var kafkaProducerClient *kafka.Producer
 var transmitterId string
 
 var useKafka bool
@@ -134,7 +132,7 @@ func main() {
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
+		setupKafka(KafkaBoostrapServer)
 	}
 
 	var err error
