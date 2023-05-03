@@ -46,7 +46,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.8.0
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
-	gonum.org/v1/gonum v0.12.0
+	gonum.org/v1/gonum v0.13.0
 )
 
 require (
