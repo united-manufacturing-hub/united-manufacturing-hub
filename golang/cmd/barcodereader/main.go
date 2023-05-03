@@ -119,6 +119,9 @@ func initKafka() {
 		Partitions:        6,
 		ReplicationFactor: 1,
 		EnableTLS:         false,
+		SenderTag: kafka.SenderTag{
+			Enabled: true,
+		},
 	})
 	if err != nil {
 		zap.S().Fatal(err)
