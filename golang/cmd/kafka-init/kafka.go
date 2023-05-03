@@ -47,6 +47,11 @@ func Init(kafkaBroker string) {
 	zap.S().Infof("client: %v", client)
 
 	initKafkaTopics(client, topicList)
+
+	err = client.Close()
+	if err != nil {
+		zap.S().Fatalf("Error closing kafka client: %v", err)
+	}
 }
 
 func initKafkaTopics(client *kafka.Client, topicList []string) {
