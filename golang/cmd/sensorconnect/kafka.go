@@ -46,6 +46,10 @@ func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, 
 		zap.S().Fatal("Failed to create topic %s", err)
 	}
 
+	if kafkaProducerClient == nil {
+		zap.S().Fatal("Received kafka producer is empty!!")
+	}
+
 	err = kafkaProducerClient.EnqueueMessage(kafka.Message{
 		Topic: kafkaTopicName,
 		Value: message,
