@@ -25,7 +25,7 @@ import (
 )
 
 // SendKafkaMessage tries to send a message via kafka
-func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, message []byte) {
+func SendKafkaMessage(kafkaTopicName string, message []byte) {
 	if !useKafka {
 		return
 	}

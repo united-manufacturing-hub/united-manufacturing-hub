@@ -16,7 +16,6 @@ package main
 
 import (
 	jsoniter "github.com/json-iterator/go"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	// "github.com/cristalhq/base64"
 	"fmt"
@@ -33,8 +32,7 @@ import (
 func processSensorData(
 	currentDeviceInformation DiscoveredDeviceInformation,
 	portModeMap map[int]ConnectedDeviceInfo,
-	sensorDataMap map[string]interface{},
-	kafkaProducerClient *kafka.Client) {
+	sensorDataMap map[string]interface{}) {
 	timestampMs := getUnixTimestampMs()
 
 	for portNumber, portMode := range portModeMap {
@@ -77,7 +75,7 @@ func processSensorData(
 			validKafkaTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
 
 			if validKafkaTopic {
-				go SendKafkaMessage(kafkaProducerClient, kafkaTopic, jsonString)
+				go SendKafkaMessage(kafkaTopic, jsonString)
 			}
 			go SendMQTTMessage(mqttRawTopic, jsonString)
 
@@ -182,7 +180,7 @@ func processSensorData(
 			validKafkaTopic, kafkaTopic := internal.MqttTopicToKafka(mqttRawTopic)
 
 			if validKafkaTopic {
-				go SendKafkaMessage(kafkaProducerClient, kafkaTopic, jsonString)
+				go SendKafkaMessage(kafkaTopic, jsonString)
 			}
 			go SendMQTTMessage(mqttRawTopic, jsonString)
 		case 4: // port inactive or problematic (custom port mode: not transmitted from IO-Link-Gateway, but set by sensorconnect)
