@@ -41,11 +41,6 @@ func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, 
 		return
 	}
 
-	err := internal.CreateTopicIfNotExists(kafkaTopicName)
-	if err != nil {
-		zap.S().Fatal("Failed to create topic %s", err)
-	}
-
 	if kafkaProducerClient == nil {
 		zap.S().Fatal("Received kafka producer is empty!!")
 	}
@@ -53,7 +48,8 @@ func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, 
 	zap.S().Infof("SendKafkaMessage: Received kafkaProducerClient contents %v", kafkaProducerClient)
 	zap.S().Infof("SendKafkaMessage: Received kafkaTopicName is %v", kafkaTopicName)
 
-	err = kafkaProducerClient.EnqueueMessage(kafka.Message{
+	//EnqueueMessage checks if the given topic exists, and then create if it does not exist
+	err := kafkaProducerClient.EnqueueMessage(kafka.Message{
 		Topic: kafkaTopicName,
 		Value: message,
 	})
@@ -86,6 +82,5 @@ func setupKafka(client *kafka.Client, boostrapServer string) {
 	if err != nil {
 		zap.S().Fatalf("Failed to create kafka producer: %s", err)
 	}
-
 	return
 }
