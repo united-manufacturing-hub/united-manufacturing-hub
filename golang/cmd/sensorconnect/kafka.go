@@ -45,9 +45,6 @@ func SendKafkaMessage(kafkaTopicName string, message []byte) {
 		zap.S().Fatal("Received kafka producer is empty!!")
 	}
 
-	zap.S().Infof("SendKafkaMessage: Received kafkaProducerClient contents %v", kafkaProducerClient)
-	zap.S().Infof("SendKafkaMessage: Received kafkaTopicName is %v", kafkaTopicName)
-
 	//EnqueueMessage checks if the given topic exists, and then create if it does not exist
 	err := kafkaProducerClient.EnqueueMessage(kafka.Message{
 		Topic: kafkaTopicName,
