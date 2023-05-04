@@ -134,7 +134,7 @@ func main() {
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		setupKafka(kafkaProducerClient, KafkaBoostrapServer)
+		setupKafka(KafkaBoostrapServer)
 		zap.S().Infof("A new kafkaClient is created: %v", kafkaProducerClient)
 	}
 
