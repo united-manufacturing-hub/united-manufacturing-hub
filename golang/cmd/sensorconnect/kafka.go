@@ -62,13 +62,13 @@ func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, 
 }
 
 // setupKafka sets up the connection to the kafka server
-func setupKafka(client *kafka.Client, boostrapServer string) {
+func setupKafka(boostrapServer string) {
 	if !useKafka {
 		return
 	}
 	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
 	var err error
-	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+	kafkaProducerClient, err = kafka.NewKafkaClient(kafka.NewClientOptions{
 		Brokers: []string{
 			boostrapServer,
 		},
