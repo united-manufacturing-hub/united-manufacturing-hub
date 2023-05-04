@@ -50,6 +50,9 @@ func SendKafkaMessage(kafkaProducerClient *kafka.Client, kafkaTopicName string, 
 		zap.S().Fatal("Received kafka producer is empty!!")
 	}
 
+	zap.S().Infof("SendKafkaMessage: Received kafkaProducerClient contents %v", kafkaProducerClient)
+	zap.S().Infof("SendKafkaMessage: Received kafkaTopicName is %v", kafkaTopicName)
+
 	err = kafkaProducerClient.EnqueueMessage(kafka.Message{
 		Topic: kafkaTopicName,
 		Value: message,
