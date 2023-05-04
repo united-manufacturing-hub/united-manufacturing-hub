@@ -436,7 +436,7 @@ func downloadSensorDataMapAndProcess(
 // continuousDeviceSearch Searches for devices everytime ticker is triggered
 func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	zap.S().Debugf("Starting device search daemon")
-	err := DiscoverDevices(ipRange)
+	err := DiscoverDevices(ipRange, kafkaProducerClient)
 	if err != nil {
 		zap.S().Errorf("Error while searching for devices: %s", err.Error())
 	}
@@ -444,7 +444,7 @@ func continuousDeviceSearch(ticker *time.Ticker, ipRange string) {
 	for {
 		<-ticker.C
 		zap.S().Debugf("Starting device scan..")
-		err = DiscoverDevices(ipRange)
+		err = DiscoverDevices(ipRange, kafkaProducerClient)
 		if err != nil {
 			zap.S().Errorf("DiscoverDevices produced the error: %v", err)
 			continue

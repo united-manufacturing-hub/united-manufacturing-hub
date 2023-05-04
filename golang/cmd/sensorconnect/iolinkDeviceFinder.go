@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io"
 	"net"
@@ -54,7 +55,7 @@ type DiscoveredDeviceInformation struct {
 	Url          string
 }
 
-func DiscoverDevices(cidr string) (err error) {
+func DiscoverDevices(cidr string, kafkaClient *kafka.Client) (err error) {
 	start, finish, err := ConvertCidrToIpRange(cidr)
 	if err != nil {
 		return err
@@ -66,7 +67,7 @@ func DiscoverDevices(cidr string) (err error) {
 	zap.S().Debugf("Scanning %d IP addresses", nDevices)
 	for i := start; i <= finish; i++ {
 		wg.Add(1)
-		go GetDiscoveredDeviceInformation(&wg, i)
+		go GetDiscoveredDeviceInformation(&wg, i, kafkaClient)
 		internal.SleepBackedOff(int64(i), 10*time.Nanosecond, 10*time.Millisecond)
 	}
 
@@ -74,7 +75,7 @@ func DiscoverDevices(cidr string) (err error) {
 	return nil
 }
 
-func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
+func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32, kafkaClient *kafka.Client) {
 	defer wg.Done()
 	body, url, err := CheckGivenIpAddress(i)
 	if err != nil {
@@ -111,12 +112,18 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 			continue
 		}
 		if useKafka {
-			err := internal.CreateTopicIfNotExists(kafkaTopic)
+			if kafkaClient == nil {
+				zap.S().Fatal("Kafka client needs to be setup!")
+			}
+			err := kafkaClient.TopicCreator(kafkaTopic)
 			if err != nil {
 				zap.S().Errorf(
 					"Failed to create topic %s, this can happen during initial startup, it might take up to 5 minutes for Kafka to startup. If you encounter this error, while Kafka is already running, please investigate further",
 					err)
-				internal.ShuttingDownKafka = true
+				err = kafkaClient.Close()
+				if err != nil {
+					zap.S().Fatalf("Closing kafka client failed!: %v", err)
+				}
 				time.Sleep(internal.FiveSeconds)
 				os.Exit(1)
 			}
