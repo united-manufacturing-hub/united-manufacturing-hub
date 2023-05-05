@@ -37,7 +37,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/prometheus/client_golang v1.15.0
+	github.com/prometheus/client_golang v1.15.1
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.4
