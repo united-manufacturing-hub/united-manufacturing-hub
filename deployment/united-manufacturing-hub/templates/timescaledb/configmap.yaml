@@ -196,6 +196,28 @@ data:
     -- #2
     ALTER TABLE configurationTable ADD IF NOT EXISTS AutomaticallyIdentifyChangeovers BOOLEAN DEFAULT true;
 
+    -- #51 state table
+    -- function called by trigger
+    CREATE FUNCTION rm_duplicate() RETURNS trigger AS \$rm_duplicate\$
+    DECLARE
+    last_state int;
+    next_state int;
+    BEGIN
+    SELECT last(state, timestamp) INTO last_state FROM statetable WHERE asset_id = NEW.asset_id AND timestamp < NEW.timestamp;
+    SELECT first(state, timestamp) INTO next_state FROM statetable WHERE asset_id = NEW.asset_id AND timestamp > NEW.timestamp;
+    if last_state = NEW.state OR next_state = NEW.state THEN
+    RAISE EXCEPTION 'INSERT VALUE --> % % %', NEW.timestamp, NEW.asset_id, NEW.state;
+    END if;
+    RETURN NEW;
+    END;
+    \$rm_duplicate\$
+    LANGUAGE plpgsql;
+
+    -- trigger before inserting
+    CREATE TRIGGER rm_duplicate_trigger BEFORE INSERT ON statetable
+    FOR EACH ROW
+    EXECUTE FUNCTION rm_duplicate();
+
     -- #74
     ALTER TABLE counttable ADD IF NOT EXISTS scrap INTEGER DEFAULT 0;
 
