@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -109,6 +110,14 @@ func ProcessKafkaQueue(
 	gracefulShutdown func()) {
 
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
+
+	//Parsing the topic to subscribe
+	compile, err := regexp.Compile(topic)
+	if err != nil {
+		zap.S().Fatalf("Error compiling regex: %v", err)
+	}
+
+	kafkaConsumer.ChangeSubscribedTopics(compile)
 
 	for !ShuttingDownKafka {
 		if len(putBackChannel) > 100 {
