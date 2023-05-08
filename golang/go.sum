@@ -303,6 +303,8 @@ github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4d
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.4 h1:FCA6rklXqaouXpvIqm9z58wtSK2dAArHO85yzshuHmw=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.4/go.mod h1:2BOWBGITZvJe7ZqkN/KRu65xUtSfxXnOVAZrQwRrVUQ=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.5-0.20230505142924-be9e78813340 h1:4ErIpP4m+/q38+KCRzle+sbsTjRGvL+Bt19jakazjkk=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.5-0.20230505142924-be9e78813340/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
 github.com/united-manufacturing-hub/umh-utils v0.1.6 h1:5t7AR9jF6jaPkJN/El82HY2JWLyzB5qEHwhIHqm0i0E=
 github.com/united-manufacturing-hub/umh-utils v0.1.6/go.mod h1:Hb+nWVVJEj2Bo+xOtcBHwTi6EFTfln9M3ge2BN2X1B8=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
@@ -388,6 +390,8 @@ golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.1.0 h1:wsuoTGHzEhffawBOhz5CYhcrV4IdKZbEyZjBMuTp12o=
 golang.org/x/sync v0.1.0/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.2.0 h1:PUR+T4wwASmuSTYdKjYHI5TD22Wy5ogLU5qZCOLxBrI=
+golang.org/x/sync v0.2.0/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20180909124046-d0be0721c37e/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
