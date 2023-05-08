@@ -397,7 +397,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 
 func StartProducerEventHandler(identifier string, errors <-chan *sarama.ProducerError, successes <-chan *sarama.ProducerMessage, backChan chan PutBackProducerChanMsg) {
 	zap.S().Debugf("%s Starting event handler", identifier)
-	var errorProducer sarama.ProducerError
+	var errorProducer *sarama.ProducerError
 	for !ShuttingDownKafka || len(errors) > 0 || len(successes) > 0 {
 		select {
 		case errorProducer = <-errors:
@@ -421,12 +421,11 @@ func StartProducerEventHandler(identifier string, errors <-chan *sarama.Producer
 
 func StartConsumerEventHandler(identifier string, errors <-chan error, msgs <-chan kafka.Message) {
 	zap.S().Debugf("%s Starting event handler", identifier)
-	var errorConsumer sarama.ConsumerError
+	var errorConsumer error
 	for !ShuttingDownKafka || len(errors) > 0 {
 		select {
 		case errorConsumer = <-errors:
-			errS := errorConsumer.Error()
-			zap.S().Errorf("Error for %s: %s", identifier, errS)
+			zap.S().Errorf("Error for %s: %s", identifier, errorConsumer)
 		case _ = <-msgs:
 			KafkaConfirmed += 1
 		default:
