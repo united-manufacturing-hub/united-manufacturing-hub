@@ -16,9 +16,10 @@ package main
 
 import (
 	"bytes"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/Shopify/sarama"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -100,16 +101,13 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
 
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
 	HTTopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
-	securityProtocol := "plaintext"
 	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
 	if useSsl {
-		securityProtocol = "ssl"
 
 		_, err := os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
@@ -129,54 +127,44 @@ func main() {
 	// leads to better performance.
 	// Processed message now will be stored locally and then automatically committed to Kafka.
 	// This still provides the at-least-once guarantee.
+	//TODO: Make equivalent configurations for enble.auto.commit: true and enable.auto.offset.store: false (confluent-kafka-go) in Sarama kafka
 	SetupHIKafka(
-		kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBootstrapServer,
-			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         kafkaSslPassword,
-			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-			"group.id":                 "kafka-to-postgresql-hi-processor",
-			"enable.auto.commit":       true,
-			"enable.auto.offset.store": false,
-			"auto.offset.reset":        "earliest",
-			// "debug":                    "security,broker",
-			"topic.metadata.refresh.interval.ms": "30000",
-			"metadata.max.age.ms":                180000,
+		kafka.NewClientOptions{
+			Brokers: []string{
+				KafkaBootstrapServer,
+			},
+			ConsumerName:      "kafka-to-postgresql-hi-processor",
+			Partitions:        6,
+			ReplicationFactor: 1,
+			EnableTLS:         useSsl,
+			StartOffset:       sarama.OffsetOldest,
 		})
 
 	// HT uses enable.auto.commit=true for increased performance.
+	//TODO: Make a equivalent configuration for enble.auto.commit: true (confluent-kafka-go) in Sarama kafka
 	SetupHTKafka(
-		kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBootstrapServer,
-			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         kafkaSslPassword,
-			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-			"group.id":                 "kafka-to-postgresql-ht-processor",
-			"enable.auto.commit":       true,
-			"auto.offset.reset":        "earliest",
-			// "debug":                    "security,broker",
-			"topic.metadata.refresh.interval.ms": "30000",
-			"metadata.max.age.ms":                180000,
+		kafka.NewClientOptions{
+			Brokers: []string{
+				KafkaBootstrapServer,
+			},
+			ConsumerName:      "kafka-to-postgresql-ht-processor",
+			Partitions:        6,
+			ReplicationFactor: 1,
+			EnableTLS:         useSsl,
+			StartOffset:       sarama.OffsetOldest,
 		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
-	internal.SetupKafkaTopicProbeConsumer(
-		kafka.ConfigMap{
-			"bootstrap.servers":        KafkaBootstrapServer,
-			"security.protocol":        securityProtocol,
-			"ssl.key.location":         "/SSL_certs/kafka/tls.key",
-			"ssl.key.password":         kafkaSslPassword,
-			"ssl.certificate.location": "/SSL_certs/kafka/tls.crt",
-			"ssl.ca.location":          "/SSL_certs/kafka/ca.crt",
-			"group.id":                 "kafka-to-postgresql-topic-probe",
-			"enable.auto.commit":       true,
-			"auto.offset.reset":        "earliest",
-			// "debug":                    "security,broker",
-			"topic.metadata.refresh.interval.ms": "30000",
+	SetupKafkaTopicProbeConsumer(
+		kafka.NewClientOptions{
+			Brokers: []string{
+				KafkaBootstrapServer,
+			},
+			ConsumerName:      "kafka-to-postgresql-topic-probe",
+			Partitions:        6,
+			ReplicationFactor: 1,
+			EnableTLS:         useSsl,
+			StartOffset:       sarama.OffsetOldest,
 		})
 
 	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
@@ -191,47 +179,50 @@ func main() {
 	// Start HI related processors
 	zap.S().Debugf("Starting HI queue processor")
 	highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
-	highIntegrityPutBackChannel = make(chan internal.PutBackChanMsg, 200)
-	highIntegrityCommitChannel = make(chan *kafka.Message)
-	highIntegrityEventChannel := HIKafkaProducer.Events()
+	highIntegrityPutBackChannel = make(chan PutBackProducerChanMsg, 200)
+	highIntegrityCommitChannel = make(chan *sarama.ProducerMessage)
+	//TODO: Get events channel of the HI producer by using Sarama. How to get producer.input() using wrapper??
+	highIntegrityErrorsChannel := HIKafkaClient.Producer.Errors()
+	highIntegritySuccessesChannel := HIKafkaClient.Producer.Successes()
 
-	go internal.StartPutbackProcessor(
+	go StartPutbackProcessor(
 		"[HI]",
 		highIntegrityPutBackChannel,
-		HIKafkaProducer,
+		HIKafkaClient,
 		highIntegrityCommitChannel,
 		200)
-	go internal.ProcessKafkaQueue(
+	go ProcessKafkaQueue(
 		"[HI]",
 		HITopic,
 		highIntegrityProcessorChannel,
-		HIKafkaConsumer,
+		HIKafkaClient,
 		highIntegrityPutBackChannel,
 		ShutdownApplicationGraceful)
-	go internal.StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaConsumer)
+	go StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaClient)
 
 	go startHighIntegrityQueueProcessor()
-	go internal.StartEventHandler("[HI]", highIntegrityEventChannel, highIntegrityPutBackChannel)
+	go StartProducerEventHandler("[HI]", highIntegrityErrorsChannel, highIntegritySuccessesChannel, highIntegrityPutBackChannel)
 	zap.S().Debugf("Started HI queue processor")
 
 	// Start HT related processors
 	zap.S().Debugf("Starting HT queue processor")
 	highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
-	highThroughputPutBackChannel = make(chan internal.PutBackChanMsg, 200)
-	highThroughputEventChannel := HIKafkaProducer.Events()
+	highThroughputPutBackChannel = make(chan PutBackProducerChanMsg, 200)
+	highThroughputErrorsChannel := HIKafkaClient.Producer.Errors()
+	highThroughputSuccessesChannel := HIKafkaClient.Producer.Successes()
 	// HT has no commit channel, it uses auto commit
 
-	go internal.StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaProducer, nil, 200)
-	go internal.ProcessKafkaQueue(
+	go StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaClient, nil, 200)
+	go ProcessKafkaQueue(
 		"[HT]",
 		HTTopic,
 		highThroughputProcessorChannel,
-		HTKafkaConsumer,
+		HTKafkaClient,
 		highThroughputPutBackChannel,
 		nil)
 
 	go startHighThroughputQueueProcessor()
-	go internal.StartEventHandler("[HT]", highThroughputEventChannel, highIntegrityPutBackChannel)
+	go StartProducerEventHandler("[HT]", highThroughputErrorsChannel, highThroughputSuccessesChannel, highIntegrityPutBackChannel)
 
 	go startProcessValueQueueAggregator()
 	go startProcessValueStringQueueAggregator()
@@ -241,10 +232,10 @@ func main() {
 	zap.S().Debugf("Starting TP queue processor")
 	topicProbeProcessorChannel := make(chan *kafka.Message, 100)
 
-	go internal.ProcessKafkaTopicProbeQueue("[TP]", topicProbeProcessorChannel, nil)
-	go internal.StartEventHandler("[TP]", internal.KafkaTopicProbeConsumer.Events(), nil)
+	go ProcessKafkaTopicProbeQueue("[TP]", topicProbeProcessorChannel, nil)
+	go StartConsumerEventHandler("[TP]", KafkaTopicProbeConsumer.Consumer.Errors(), KafkaTopicProbeConsumer.GetMessages())
 
-	go internal.StartTopicProbeQueueProcessor(topicProbeProcessorChannel)
+	go StartTopicProbeQueueProcessor(topicProbeProcessorChannel)
 	zap.S().Debugf("Started TP queue processor")
 
 	// Allow graceful shutdown
@@ -296,7 +287,7 @@ func ShutdownApplicationGraceful() {
 
 	zap.S().Infof("Cleaning up high integrity processor channel (%d)", len(highIntegrityProcessorChannel))
 
-	if !internal.DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
+	if !DrainChannelSimple(highIntegrityProcessorChannel, highIntegrityPutBackChannel) {
 
 		time.Sleep(internal.FiveSeconds)
 	}
@@ -319,13 +310,13 @@ func ShutdownApplicationGraceful() {
 	// This is behind HI to allow a higher chance of a clean shutdown
 	zap.S().Infof("Cleaning up high throughput processor channel (%d)", len(highThroughputProcessorChannel))
 
-	if !internal.DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
+	if !DrainChannelSimple(highThroughputProcessorChannel, highThroughputPutBackChannel) {
 		time.Sleep(internal.FiveSeconds)
 	}
-	if !internal.DrainChannelSimple(processValueChannel, highThroughputPutBackChannel) {
+	if !DrainChannelSimple(processValueChannel, highThroughputPutBackChannel) {
 		time.Sleep(internal.FiveSeconds)
 	}
-	if !internal.DrainChannelSimple(processValueStringChannel, highThroughputPutBackChannel) {
+	if !DrainChannelSimple(processValueStringChannel, highThroughputPutBackChannel) {
 
 		time.Sleep(internal.FiveSeconds)
 	}

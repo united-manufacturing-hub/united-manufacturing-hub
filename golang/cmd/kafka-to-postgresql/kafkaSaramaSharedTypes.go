@@ -15,7 +15,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/Shopify/sarama"
 	jsoniter "github.com/json-iterator/go"
@@ -143,7 +142,7 @@ func ProcessKafkaQueue(
 		// Insert received message into the processor channel
 		processorChannel <- msg
 		// This is for stats only, it counts the number of messages received
-		internal.KafkaMessages += 1
+		KafkaMessages += 1
 	}
 	zap.S().Debugf("%s Shutting down Kafka consumer for topic %s", identifier, topic)
 }
@@ -152,7 +151,7 @@ func ProcessKafkaQueue(
 // It only subscribes to the topic used to announce a new topic.
 func ProcessKafkaTopicProbeQueue(identifier string, processorChannel chan *kafka.Message, gracefulShutdown func()) {
 	for !ShuttingDownKafka {
-		msg, isShuttingDown := waitNewMessages(identifier, internal.KafkaTopicProbeConsumer, gracefulShutdown)
+		msg, isShuttingDown := waitNewMessages(identifier, KafkaTopicProbeConsumer, gracefulShutdown)
 		if msg == nil {
 			if isShuttingDown {
 				return
@@ -162,7 +161,7 @@ func ProcessKafkaTopicProbeQueue(identifier string, processorChannel chan *kafka
 		// Insert received message into the processor channel
 		processorChannel <- msg
 		// This is for stats only, it counts the number of messages received
-		internal.KafkaMessages += 1
+		KafkaMessages += 1
 	}
 	zap.S().Debugf("%s Shutting down Kafka Topic Probe consumer", identifier)
 }
@@ -171,38 +170,14 @@ func ProcessKafkaTopicProbeQueue(identifier string, processorChannel chan *kafka
 func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShutdown func()) (
 	msg *kafka.Message,
 	isShuttingDown bool) {
-	// Wait for new messages
-	// This has a timeout, allowing ShuttingDownKafka to be checked
-	//msg, err := kafkaConsumer.ReadMessage(5000)
-	kafkaConsumer.Consumer.
-	err := kafkaConsumer.Consumer.Errors()
-	if err != nil {
-		var kafkaError sarama.KError
-		ok := errors.As(err, &kafkaError)
-		if ok {
+	// Wait for new messages. A Sarama Kafka Consumer gets timeout length at initialization.
+	var errConsumer <-chan error = kafkaConsumer.Consumer.Errors()
+	var err error
 
-			switch kafkaError {
-			// This is fine, and expected behaviour
-			case sarama.ErrRequestTimedOut:
-				// Sleep to reduce CPU usage
-				time.Sleep(internal.OneSecond)
-				return nil, false
-			// This will occur when no topic for the regex is available !
-			case sarama.ErrUnknownTopicOrPartition:
-				zap.S().Errorf("%s Unknown topic or partition: %s", identifier, err)
-				gracefulShutdown()
-				return nil, true
-			default:
-				zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
-				gracefulShutdown()
-				return nil, true
-			}
-		} else {
-			zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
-			gracefulShutdown()
-			return nil, true
-		}
-
+	select {
+	case err = <-errConsumer:
+		zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
+		gracefulShutdown()
 	}
 	return msg, false
 }
@@ -244,7 +219,7 @@ func StartPutbackProcessor(
 		// Check for new header based putback info
 		msg2.Headers = msg.Headers
 		for i, header := range msg2.Headers {
-			if string(header.Key) == "putback"  {
+			if string(header.Key) == "putback" {
 				rawKafkaKey = header.Value
 				putbackIndex = i
 				break
@@ -323,8 +298,8 @@ func StartPutbackProcessor(
 		}
 
 		msgx := kafka.Message{
-			Topic:   topic,
-			Value:   putBackValue,
+			Topic:  topic,
+			Value:  putBackValue,
 			Header: putbackHeaders,
 		}
 		err = kafkaProducer.EnqueueMessage(msgx)
@@ -334,7 +309,6 @@ func StartPutbackProcessor(
 				// This don't have to be graceful, as putback is already broken
 				panic(fmt.Errorf("putback channel full, shutting down"))
 			}
-			//TODO: Maybe, a function for convertion between sarama.ProducerMessage and kafka.Message would be useful
 			prodMsg := sarama.ProducerMessage{Topic: topic, Value: msg2.Value, Headers: msg2.Headers}
 			putBackChannel <- PutBackProducerChanMsg{&prodMsg, errorString, reason, false}
 		}
@@ -357,7 +331,7 @@ func DrainChannel(
 		select {
 		case msg, ok := <-channelToDrain:
 			if ok {
-				channelToDrainTo <- PutBackProducerChanMsg{msg, nil, fmt.Sprintf("%s Shutting down", identifier), false}
+				channelToDrainTo <- PutBackProducerChanMsg{kafka.MessageToProducerMessage(msg), nil, fmt.Sprintf("%s Shutting down", identifier), false}
 				KafkaPutBacks += 1
 			} else {
 				zap.S().Warnf("%s Channel to drain is closed", identifier)
@@ -388,7 +362,7 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 	select {
 	case msg, ok := <-channelToDrain:
 		if ok {
-			channelToDrainTo <- PutBackProducerChanMsg{msg, nil, "Shutting down", false}
+			channelToDrainTo <- PutBackProducerChanMsg{kafka.MessageToProducerMessage(msg), nil, "Shutting down", false}
 		} else {
 			return false
 		}
@@ -405,17 +379,17 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaConsumer *kafka.Client) {
 	zap.S().Debugf("%s Starting commit processor", identifier)
 	for !ShuttingDownKafka || len(commitChannel) > 0 {
-		msg := <-commitChannel
-
-		_, err := kafkaConsumer.StoreMessage(msg)
+		// TODO: StoreOffset. How can I store messages (offsets) by sarama Kafka?
+		/*msg := <-commitChannel
+		_, err := kafkaConsumer.GetMessages()
 		if err != nil {
 			zap.S().Errorf("%s Error committing %v: %s", identifier, msg, err)
 			commitChannel <- msg
 		} else {
 			// This is for stats only, and counts the amounts of commits done to the kafka queue
 
-			internal.KafkaCommits += 1
-		}
+			KafkaCommits += 1
+		}*/
 
 	}
 	zap.S().Debugf("%s Stopped commit processor", identifier)
@@ -423,7 +397,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 
 func StartProducerEventHandler(identifier string, errors <-chan *sarama.ProducerError, successes <-chan *sarama.ProducerMessage, backChan chan PutBackProducerChanMsg) {
 	zap.S().Debugf("%s Starting event handler", identifier)
-	var  errorProducer sarama.ProducerError
+	var errorProducer sarama.ProducerError
 	for !ShuttingDownKafka || len(errors) > 0 || len(successes) > 0 {
 		select {
 		case errorProducer = <-errors:
@@ -441,6 +415,23 @@ func StartProducerEventHandler(identifier string, errors <-chan *sarama.Producer
 		default:
 			time.Sleep(time.Millisecond * 100)
 		}
- 	}
+	}
+	zap.S().Debugf("%s Stopped event handler", identifier)
+}
+
+func StartConsumerEventHandler(identifier string, errors <-chan error, msgs <-chan kafka.Message) {
+	zap.S().Debugf("%s Starting event handler", identifier)
+	var errorConsumer sarama.ConsumerError
+	for !ShuttingDownKafka || len(errors) > 0 {
+		select {
+		case errorConsumer = <-errors:
+			errS := errorConsumer.Error()
+			zap.S().Errorf("Error for %s: %s", identifier, errS)
+		case _ = <-msgs:
+			KafkaConfirmed += 1
+		default:
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
 	zap.S().Debugf("%s Stopped event handler", identifier)
 }

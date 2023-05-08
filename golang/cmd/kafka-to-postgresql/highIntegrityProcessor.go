@@ -15,7 +15,7 @@
 package main
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"go.uber.org/zap"
 	"time"
 )
@@ -31,7 +31,7 @@ func startHighIntegrityQueueProcessor() {
 			continue
 		}
 		start := time.Now()
-		parsed, parsedMessage := internal.ParseMessage(msg)
+		parsed, parsedMessage := ParseMessage(msg)
 		if !parsed {
 			continue
 		}
@@ -107,38 +107,38 @@ func startHighIntegrityQueueProcessor() {
 			case DatabaseDown:
 				if putback {
 					zap.S().Debugf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
-					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "DatabaseDown", ErrorString: &errStr, ForcePutbackTopic: forcePBTopic}
+					highIntegrityPutBackChannel <- PutBackProducerChanMsg{Msg: kafka.MessageToProducerMessage(msg), Reason: "DatabaseDown", ErrorString: &errStr, ForcePutbackTopic: forcePBTopic}
 				} else {
 					zap.S().Errorf("[HI][DatabaseDown] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
-					highIntegrityCommitChannel <- msg
+					highIntegrityCommitChannel <- kafka.MessageToProducerMessage(msg)
 				}
 
 			case DiscardValue:
 				zap.S().Errorf("[HI][DiscardValue] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
-				highIntegrityCommitChannel <- msg
+				highIntegrityCommitChannel <- kafka.MessageToProducerMessage(msg)
 			case Other:
 				if putback {
 
 					zap.S().Debugf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
 
-					highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (Error)", ErrorString: &errStr, ForcePutbackTopic: forcePBTopic}
+					highIntegrityPutBackChannel <- PutBackProducerChanMsg{Msg: kafka.MessageToProducerMessage(msg), Reason: "Other (Error)", ErrorString: &errStr, ForcePutbackTopic: forcePBTopic}
 				} else {
 					zap.S().Errorf("[HI][Other] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Error: %v. Discarding message", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, err)
-					highIntegrityCommitChannel <- msg
+					highIntegrityCommitChannel <- kafka.MessageToProducerMessage(msg)
 				}
 			}
 		} else {
 			if putback {
 				payloadStr := string(parsedMessage.Payload)
 
-				zap.S().Debugf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s, topic: %s, PayloadType: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, *msg.TopicPartition.Topic, parsedMessage.PayloadType)
-				highIntegrityPutBackChannel <- internal.PutBackChanMsg{Msg: msg, Reason: "Other (No-Error)", ForcePutbackTopic: forcePBTopic}
+				zap.S().Debugf("[HI][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s, topic: %s, PayloadType: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr, msg.Topic, parsedMessage.PayloadType)
+				highIntegrityPutBackChannel <- PutBackProducerChanMsg{Msg: kafka.MessageToProducerMessage(msg), Reason: "Other (No-Error)", ForcePutbackTopic: forcePBTopic}
 			} else {
-				highIntegrityCommitChannel <- msg
+				highIntegrityCommitChannel <- kafka.MessageToProducerMessage(msg)
 			}
 		}
 		if forcePBTopic {
-			highIntegrityCommitChannel <- msg
+			highIntegrityCommitChannel <- kafka.MessageToProducerMessage(msg)
 		}
 
 		zap.S().Debugf("Channel inserting took %s", time.Since(start))
