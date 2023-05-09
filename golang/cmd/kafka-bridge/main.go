@@ -6,11 +6,13 @@ import (
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-bridge/message"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-bridge/processor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
 	"regexp"
+	"time"
 )
 
 type SendDir string
@@ -112,13 +114,70 @@ func main() {
 
 		if topicMap.Direction == ToRemote || topicMap.Direction == Both {
 			var toRemoteChan chan kafka.Message
+			var shutdownChan = make(chan bool, 1)
+
+			message.Init()
 			processor.CreateClient(listenTopicRegex, localClientOptions, remoteClientOptions, toRemoteChan)
 			go processor.Start(toRemoteChan)
+
+			go checkDisconnect(shutdownChan)
+			reportStats(shutdownChan, toRemoteChan, topicMap.Name)
+
+			zap.S().Info("Shutting down")
+			processor.Shutdown()
 		}
 		if topicMap.Direction == ToLocal || topicMap.Direction == Both {
 			var toLocalChan chan kafka.Message
+			var shutdownChan = make(chan bool, 1)
+
+			message.Init()
 			processor.CreateClient(listenTopicRegex, remoteClientOptions, localClientOptions, toLocalChan)
 			go processor.Start(toLocalChan)
+
+			go checkDisconnect(shutdownChan)
+			reportStats(shutdownChan, toLocalChan, topicMap.Name)
+
+			zap.S().Info("Shutting down")
+			processor.Shutdown()
+		}
+	}
+}
+
+func checkDisconnect(shutdownChan chan bool) {
+	initialSent, initialRecived := processor.GetStats()
+	for {
+		time.Sleep(3 * time.Minute)
+		sent, recived := processor.GetStats()
+		if sent == initialSent && recived == initialRecived {
+			zap.S().Info("No messages sent or recived in 3 minutes, shutting down")
+			shutdownChan <- true
+			return
+		}
+		initialSent = sent
+		initialRecived = recived
+	}
+}
+
+func reportStats(shutdownChan chan bool, kafkaChan chan kafka.Message, name string) {
+	initialSent, initialRecived := processor.GetStats()
+	for {
+		select {
+		case <-shutdownChan:
+			zap.S().Info("Shutting down")
+			return
+		case <-time.After(10 * time.Second):
+			sent, recived := processor.GetStats()
+
+			sentPerSecond := (sent - initialSent) / 10
+			recivedPerSecond := (recived - initialRecived) / 10
+			cacheUsedRaw, cacheMaxRaw, cacheUsed, cacheMax := message.GetCacheSize()
+			cachePercentRaw := float64(cacheUsedRaw) / float64(cacheMaxRaw) * 100
+			cachePercent := float64(cacheUsed) / float64(cacheMax) * 100
+			zap.S().Infof(
+				"Processor: %s | Sent: %d (%d/s) Recived: %d (%d/s) | Cached: %d/%d (%.2f%%) | Cached raw: %d/%d (%.2f%%) | Kafka queue: %d",
+				name, sent, sentPerSecond, recived, recivedPerSecond, cacheUsed, cacheMax, cachePercent, cacheUsedRaw, cacheMaxRaw, cachePercentRaw, len(kafkaChan))
+			initialSent = sent
+			initialRecived = recived
 		}
 	}
 }
