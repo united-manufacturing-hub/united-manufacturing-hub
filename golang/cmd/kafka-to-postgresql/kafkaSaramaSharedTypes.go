@@ -189,13 +189,14 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShu
 
 	select {
 	case message = <-msgChan:
-		select {
-		case err = <-errConsumer:
-			zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
-			gracefulShutdown()
-		}
+		return &message, false
+	case err = <-errConsumer:
+		zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
+		gracefulShutdown()
+	default:
+		return nil, false
 	}
-	return msg, false
+	return nil, false
 }
 
 // StartPutbackProcessor starts the putback processor.
