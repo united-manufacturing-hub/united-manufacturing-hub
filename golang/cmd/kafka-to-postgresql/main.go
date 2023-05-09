@@ -138,6 +138,7 @@ func main() {
 			ReplicationFactor: 1,
 			EnableTLS:         useSsl,
 			StartOffset:       sarama.OffsetOldest,
+			AutoCommit:        false,
 		})
 
 	// HT uses enable.auto.commit=true for increased performance.
@@ -152,6 +153,7 @@ func main() {
 			ReplicationFactor: 1,
 			EnableTLS:         useSsl,
 			StartOffset:       sarama.OffsetOldest,
+			AutoCommit:        false,
 		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
@@ -165,6 +167,7 @@ func main() {
 			ReplicationFactor: 1,
 			EnableTLS:         useSsl,
 			StartOffset:       sarama.OffsetOldest,
+			AutoCommit:        false,
 		})
 
 	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)

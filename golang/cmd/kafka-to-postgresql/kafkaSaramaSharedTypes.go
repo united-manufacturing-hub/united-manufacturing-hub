@@ -392,6 +392,11 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 	if err != nil {
 		zap.S().Errorf("Error creating offsetmanager %s", err)
 	}
+
+	if kafkaClient.GetAutoCommitEnableStatus() == true {
+		zap.S().Error("AutoCommit.Enable should be disabled for manual committting")
+	}
+
 	for !ShuttingDownKafka || len(commitChannel) > 0 {
 		// TODO: Check how offsetManager.Commit handles error.
 		//msg := <-commitChannel
