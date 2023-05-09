@@ -180,13 +180,20 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShu
 	msg *kafka.Message,
 	isShuttingDown bool) {
 	// Wait for new messages. A Sarama Kafka Consumer gets timeout length at initialization.
+	msgChan := make(<-chan kafka.Message)
+	msgChan = kafkaConsumer.GetMessages()
+	var message kafka.Message
+
 	var errConsumer <-chan error = kafkaConsumer.Consumer.Errors()
 	var err error
 
 	select {
-	case err = <-errConsumer:
-		zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
-		gracefulShutdown()
+	case message = <-msgChan:
+		select {
+		case err = <-errConsumer:
+			zap.S().Warnf("%s Failed to read kafka message: %s", identifier, err)
+			gracefulShutdown()
+		}
 	}
 	return msg, false
 }
@@ -399,7 +406,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 
 	for !ShuttingDownKafka || len(commitChannel) > 0 {
 		// TODO: Check how offsetManager.Commit handles error.
-		//msg := <-commitChannel
+		_ = <-commitChannel
 
 		offsetManager.Commit()
 
