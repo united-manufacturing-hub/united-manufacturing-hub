@@ -385,20 +385,20 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 
 // StartCommitProcessor starts the commit processor.
 // It will commit messages to the kafka queue.
-func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaConsumer *kafka.Client) {
+func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaClient *kafka.Client, consumerName string) {
 	zap.S().Debugf("%s Starting commit processor", identifier)
-	for !ShuttingDownKafka || len(commitChannel) > 0 {
-		// TODO: StoreOffset. How can I store messages (offsets) by sarama Kafka?
-		/*msg := <-commitChannel
-		_, err := kafkaConsumer.GetMessages()
-		if err != nil {
-			zap.S().Errorf("%s Error committing %v: %s", identifier, msg, err)
-			commitChannel <- msg
-		} else {
-			// This is for stats only, and counts the amounts of commits done to the kafka queue
 
-			KafkaCommits += 1
-		}*/
+	offsetManager, err := kafkaClient.CreateOffsetManager(consumerName)
+	if err != nil {
+		zap.S().Errorf("Error creating offsetmanager %s", err)
+	}
+	for !ShuttingDownKafka || len(commitChannel) > 0 {
+		// TODO: Check how offsetManager.Commit handles error.
+		//msg := <-commitChannel
+
+		offsetManager.Commit()
+
+		KafkaCommits += 1
 
 	}
 	zap.S().Debugf("%s Stopped commit processor", identifier)
