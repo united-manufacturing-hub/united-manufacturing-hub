@@ -198,7 +198,7 @@ func main() {
 		HIKafkaClient,
 		highIntegrityPutBackChannel,
 		ShutdownApplicationGraceful)
-	go StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaClient)
+	go StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaClient, "kafka-to-postgresql-hi-processor")
 
 	go startHighIntegrityQueueProcessor()
 	go StartProducerEventHandler("[HI]", highIntegrityErrorsChannel, highIntegritySuccessesChannel, highIntegrityPutBackChannel)
@@ -280,7 +280,7 @@ func ShutdownApplicationGraceful() {
 	zap.S().Infof("Shutting down application")
 	ShuttingDown = true
 
-	internal.ShuttingDownKafka = true
+	ShuttingDownKafka = true
 
 	// Important, allows high load processors to finish
 	time.Sleep(time.Second * 5)
@@ -333,7 +333,7 @@ func ShutdownApplicationGraceful() {
 		}
 	}
 
-	internal.ShutdownPutback = true
+	ShutdownPutback = true
 
 	time.Sleep(internal.OneSecond)
 
@@ -341,7 +341,7 @@ func ShutdownApplicationGraceful() {
 
 	CloseHTKafka()
 
-	internal.CloseKafkaTopicProbeConsumer()
+	CloseKafkaTopicProbeConsumer()
 
 	ShutdownDB()
 
@@ -417,23 +417,23 @@ func PerformanceReport() {
 		}
 
 		preExecutionTime := time.Now()
-		commitsPerSecond := (internal.KafkaCommits - lastCommits) / sleepS
-		messagesPerSecond := (internal.KafkaMessages - lastMessages) / sleepS
-		putbacksPerSecond := (internal.KafkaPutBacks - lastPutbacks) / sleepS
-		confirmedPerSecond := (internal.KafkaConfirmed - lastConfirmed) / sleepS
-		lastCommits = internal.KafkaCommits
-		lastMessages = internal.KafkaMessages
-		lastPutbacks = internal.KafkaPutBacks
-		lastConfirmed = internal.KafkaConfirmed
+		commitsPerSecond := (KafkaCommits - lastCommits) / sleepS
+		messagesPerSecond := (KafkaMessages - lastMessages) / sleepS
+		putbacksPerSecond := (KafkaPutBacks - lastPutbacks) / sleepS
+		confirmedPerSecond := (KafkaConfirmed - lastConfirmed) / sleepS
+		lastCommits = KafkaCommits
+		lastMessages = KafkaMessages
+		lastPutbacks = KafkaPutBacks
+		lastConfirmed = KafkaConfirmed
 
 		data := reportData{
-			Commits:                            internal.KafkaCommits,
+			Commits:                            KafkaCommits,
 			CommitsPerSecond:                   commitsPerSecond,
-			Messages:                           internal.KafkaMessages,
+			Messages:                           KafkaMessages,
 			MessagesPerSecond:                  messagesPerSecond,
-			PutBacks:                           internal.KafkaPutBacks,
+			PutBacks:                           KafkaPutBacks,
 			PutBacksPerSecond:                  putbacksPerSecond,
-			Confirmed:                          internal.KafkaConfirmed,
+			Confirmed:                          KafkaConfirmed,
 			ConfirmedPerSecond:                 confirmedPerSecond,
 			ProcessorQueueLength:               len(highIntegrityProcessorChannel),
 			PutBackQueueLength:                 len(highIntegrityPutBackChannel),
@@ -454,26 +454,26 @@ func PerformanceReport() {
 		}
 		zap.S().Infof("Performance report: %s", report.String())
 
-		if internal.KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
-			internal.KafkaCommits = 0
+		if KafkaCommits > math.MaxFloat64/2 || lastCommits > math.MaxFloat64/2 {
+			KafkaCommits = 0
 			lastCommits = 0
 			zap.S().Warnf("Resetting commit statistics")
 		}
 
-		if internal.KafkaMessages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
-			internal.KafkaMessages = 0
+		if KafkaMessages > math.MaxFloat64/2 || lastMessages > math.MaxFloat64/2 {
+			KafkaMessages = 0
 			lastMessages = 0
 			zap.S().Warnf("Resetting message statistics")
 		}
 
-		if internal.KafkaPutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
-			internal.KafkaPutBacks = 0
+		if KafkaPutBacks > math.MaxFloat64/2 || lastPutbacks > math.MaxFloat64/2 {
+			KafkaPutBacks = 0
 			lastPutbacks = 0
 			zap.S().Warnf("Resetting putback statistics")
 		}
 
-		if internal.KafkaConfirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
-			internal.KafkaConfirmed = 0
+		if KafkaConfirmed > math.MaxFloat64/2 || lastConfirmed > math.MaxFloat64/2 {
+			KafkaConfirmed = 0
 			lastConfirmed = 0
 			zap.S().Warnf("Resetting confirmed statistics")
 		}
