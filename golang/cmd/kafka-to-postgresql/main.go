@@ -340,6 +340,8 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(internal.OneSecond)
 
+	CloseOffsetManager()
+
 	CloseHIKafka()
 
 	CloseHTKafka()
@@ -353,6 +355,13 @@ func ShutdownApplicationGraceful() {
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
+}
+
+func CloseOffsetManager() {
+	err := KafkaOffsetManager.Close()
+	if err != nil {
+		zap.S().Fatalf("Faild closing kafkaOffsetManager %s", err)
+	}
 }
 
 type reportData struct {

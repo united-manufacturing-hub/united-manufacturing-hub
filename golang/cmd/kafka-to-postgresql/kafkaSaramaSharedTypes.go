@@ -71,6 +71,9 @@ var ShuttingDownKafka bool
 var ShutdownPutback bool
 var nearMemoryLimit = false
 
+// Kafka OffsetManager
+var KafkaOffsetManager sarama.OffsetManager
+
 //goland:noinspection GoUnusedExportedFunction
 func MemoryLimiter(allowedMemorySize int) {
 	allowedSeventyFivePerc := uint64(float64(allowedMemorySize) * 0.9)
@@ -395,7 +398,8 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaClient *kafka.Client, consumerName string) {
 	zap.S().Debugf("%s Starting commit processor", identifier)
 
-	offsetManager, err := kafkaClient.CreateOffsetManager(consumerName)
+	var err error
+	KafkaOffsetManager, err = kafkaClient.CreateOffsetManager(consumerName)
 	if err != nil {
 		zap.S().Errorf("Error creating offsetmanager %s", err)
 	}
@@ -408,7 +412,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 		// TODO: Check how offsetManager.Commit handles error.
 		_ = <-commitChannel
 
-		offsetManager.Commit()
+		KafkaOffsetManager.Commit()
 
 		KafkaCommits += 1
 
