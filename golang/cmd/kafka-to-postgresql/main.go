@@ -175,7 +175,7 @@ func main() {
 
 	// InitCache is initialized with 1Gb of memory for each cache
 	InitCache(allowedMemorySize / 4)
-	internal.InitMessageCache(allowedMemorySize / 4)
+	InitMessageCache(allowedMemorySize / 4)
 
 	zap.S().Debugf("Starting queue processor")
 
@@ -441,7 +441,7 @@ func PerformanceReport() {
 			ProcessorQueueLength:               len(highIntegrityProcessorChannel),
 			PutBackQueueLength:                 len(highIntegrityPutBackChannel),
 			CommitQueueLength:                  len(highIntegrityCommitChannel),
-			MessagecacheHitRate:                internal.Messagecache.HitRate(),
+			MessagecacheHitRate:                Messagecache.HitRate(),
 			DbcacheHitRate:                     dbcache.HitRate(),
 			ProcessValueQueueLength:            len(processValueChannel),
 			ProcessValueStringQueueLength:      len(processValueStringChannel),
