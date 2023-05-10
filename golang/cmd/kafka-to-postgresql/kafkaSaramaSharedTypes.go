@@ -405,17 +405,16 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 	}
 
 	if kafkaClient.GetAutoCommitEnableStatus() == true {
-		zap.S().Error("AutoCommit.Enable should be disabled for manual committting")
+		zap.S().Error("AutoCommit.Enable should be disabled for manual committing")
 	}
 
 	for !ShuttingDownKafka || len(commitChannel) > 0 {
-		// TODO: Check how offsetManager.Commit handles error.
-		_ = <-commitChannel
-
-		KafkaOffsetManager.Commit()
-
-		KafkaCommits += 1
-
+		select {
+		case _ = <-commitChannel:
+			//TODO: error handling of commit.
+			KafkaOffsetManager.Commit()
+			KafkaCommits += 1
+		}
 	}
 	zap.S().Debugf("%s Stopped commit processor", identifier)
 }
