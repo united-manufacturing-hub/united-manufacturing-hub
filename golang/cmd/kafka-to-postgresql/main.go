@@ -338,7 +338,7 @@ func ShutdownApplicationGraceful() {
 
 	ShutdownPutback = true
 
-	time.Sleep(internal.OneSecond)
+	time.Sleep(internal.FiveSeconds)
 
 	CloseOffsetManager()
 
