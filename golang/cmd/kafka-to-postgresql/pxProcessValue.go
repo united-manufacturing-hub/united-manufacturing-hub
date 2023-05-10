@@ -19,7 +19,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"os"
 	"strconv"
@@ -368,8 +367,8 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		if len(putBackMsg) > 0 {
 			return putBackMsg, true, AssetIDnotFound, nil
 		}
-		internal.KafkaPutBacks += float64(len(putBackMsg))
-		internal.KafkaCommits += temporaryCommitCounterAsFloat64
+		KafkaPutBacks += float64(len(putBackMsg))
+		KafkaCommits += temporaryCommitCounterAsFloat64
 	}
 	return putBackMsg, false, "", nil
 }
