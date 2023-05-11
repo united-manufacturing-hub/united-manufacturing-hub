@@ -15,7 +15,6 @@
 package main
 
 import (
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"go.uber.org/zap"
 )
 
@@ -54,7 +53,7 @@ func startHighThroughputQueueProcessor() {
 			payloadStr := string(parsedMessage.Payload)
 
 			zap.S().Debugf("[HT][No-Error Putback] Failed to execute Kafka message. CustomerID: %s, Location: %s, AssetId: %s, payload: %s. Putting back to queue", parsedMessage.CustomerId, parsedMessage.Location, parsedMessage.AssetId, payloadStr)
-			highThroughputPutBackChannel <- PutBackProducerChanMsg{Msg: kafka.MessageToProducerMessage(msg), Reason: "Other"}
+			highThroughputPutBackChannel <- PutBackChanMsg{Msg: msg, Reason: "Other"}
 
 		}
 	}

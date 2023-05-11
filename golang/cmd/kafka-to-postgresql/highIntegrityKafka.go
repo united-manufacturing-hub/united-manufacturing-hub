@@ -15,14 +15,13 @@
 package main
 
 import (
-	"github.com/Shopify/sarama"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"go.uber.org/zap"
 )
 
 var highIntegrityProcessorChannel chan *kafka.Message
-var highIntegrityCommitChannel chan *sarama.ProducerMessage
-var highIntegrityPutBackChannel chan PutBackProducerChanMsg
+var highIntegrityCommitChannel chan *kafka.Message
+var highIntegrityPutBackChannel chan PutBackChanMsg
 
 // HIKafkaClient is a high Integrity Kafka client
 var HIKafkaClient *kafka.Client
@@ -42,7 +41,7 @@ func SetupHIKafka(opts kafka.NewClientOptions) {
 // CloseHIKafka closes the HI Kafka consumer, producer and admin
 func CloseHIKafka() {
 
-	zap.S().Infof("[HI]Closing Kafka Consumer")
+	zap.S().Infof("[HI]Closing Kafka Client")
 
 	if err := HIKafkaClient.Close(); err != nil {
 		zap.S().Fatalf("Failed to close HIKafkaClient: %s", err)

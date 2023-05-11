@@ -143,7 +143,6 @@ func main() {
 		})
 
 	// HT uses enable.auto.commit=true for increased performance.
-	//TODO: Make a equivalent configuration for enble.auto.commit: true (confluent-kafka-go) in Sarama kafka
 	SetupHTKafka(
 		kafka.NewClientOptions{
 			Brokers: []string{
@@ -183,8 +182,8 @@ func main() {
 	// Start HI related processors
 	zap.S().Debugf("Starting HI queue processor")
 	highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
-	highIntegrityPutBackChannel = make(chan PutBackProducerChanMsg, 200)
-	highIntegrityCommitChannel = make(chan *sarama.ProducerMessage)
+	highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
+	highIntegrityCommitChannel = make(chan *kafka.Message)
 	//TODO: Get events channel of the HI producer by using Sarama. How to get producer.input() using wrapper??
 	highIntegrityErrorsChannel := HIKafkaClient.GetProducerErrorsChannel()
 	highIntegritySuccessesChannel := HIKafkaClient.GetProducerSuccessesChannel()
@@ -211,7 +210,7 @@ func main() {
 	// Start HT related processors
 	zap.S().Debugf("Starting HT queue processor")
 	highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
-	highThroughputPutBackChannel = make(chan PutBackProducerChanMsg, 200)
+	highThroughputPutBackChannel = make(chan PutBackChanMsg, 200)
 	highThroughputErrorsChannel := HIKafkaClient.GetProducerErrorsChannel()
 	highThroughputSuccessesChannel := HIKafkaClient.GetProducerSuccessesChannel()
 	// HT has no commit channel, it uses auto commit

@@ -20,7 +20,7 @@ import (
 )
 
 var highThroughputProcessorChannel chan *kafka.Message
-var highThroughputPutBackChannel chan PutBackProducerChanMsg
+var highThroughputPutBackChannel chan PutBackChanMsg
 
 var HTKafkaClient *kafka.Client
 
@@ -37,7 +37,7 @@ func SetupHTKafka(opts kafka.NewClientOptions) {
 
 func CloseHTKafka() {
 
-	zap.S().Infof("[HT]Closing Kafka Consumer")
+	zap.S().Infof("[HT]Closing Kafka Client")
 
 	if err := HTKafkaClient.Close(); err != nil {
 		zap.S().Fatalf("Failed to close HTKafkaClient: %s", err)

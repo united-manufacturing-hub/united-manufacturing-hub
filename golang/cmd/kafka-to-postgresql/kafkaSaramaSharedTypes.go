@@ -40,14 +40,7 @@ type Putback struct {
 }
 
 type PutBackChanMsg struct {
-	Msg               *sarama.Message
-	ErrorString       *string
-	Reason            string
-	ForcePutbackTopic bool
-}
-
-type PutBackProducerChanMsg struct {
-	Msg               *sarama.ProducerMessage
+	Msg               *kafka.Message
 	ErrorString       *string
 	Reason            string
 	ForcePutbackTopic bool
@@ -106,7 +99,7 @@ func ProcessKafkaQueue(
 	topic string,
 	processorChannel chan *kafka.Message,
 	kafkaConsumer *kafka.Client,
-	putBackChannel chan PutBackProducerChanMsg,
+	putBackChannel chan PutBackChanMsg,
 	gracefulShutdown func()) {
 
 	zap.S().Debugf("%s Starting Kafka consumer for topic %s", identifier, topic)
@@ -202,9 +195,9 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShu
 // It will put unprocessable messages back into the kafka queue, modifying there key to include the Reason and error.
 func StartPutbackProcessor(
 	identifier string,
-	putBackChannel chan PutBackProducerChanMsg,
+	putBackChannel chan PutBackChanMsg,
 	kafkaProducer *kafka.Client,
-	commitChannel chan *sarama.ProducerMessage,
+	commitChannel chan *kafka.Message,
 	putbackChanSize int) {
 	zap.S().Debugf("%s Starting putback processor", identifier)
 	// Loops until the shutdown signal is received and the channel is empty
@@ -220,24 +213,20 @@ func StartPutbackProcessor(
 			continue
 		}
 
-		var msg2 sarama.ProducerMessage
+		var msg2 kafka.Message
 		if msg.Value != nil {
 			msg2.Value = msg.Value
 		}
 
-		msg2.Partition = 0
-
 		topic := msg.Topic
 
 		var rawKafkaKey []byte
-		var putbackIndex = -1
 
 		// Check for new header based putback info
-		msg2.Headers = msg.Headers
-		for i, header := range msg2.Headers {
-			if string(header.Key) == "putback" {
-				rawKafkaKey = header.Value
-				putbackIndex = i
+		msg2.Header = msg.Header
+		for index, value := range msg2.Header {
+			if index == "putback" {
+				rawKafkaKey = value
 				break
 			}
 		}
@@ -288,35 +277,13 @@ func StartPutbackProcessor(
 		if err != nil {
 			zap.S().Errorf("%s Failed to marshal key: %v (%s)", identifier, kafkaKey, err)
 		}
-		if putbackIndex == -1 {
-			msg2.Headers = append(
-				msg.Headers, sarama.RecordHeader{
-					Key:   []byte("putback"),
-					Value: header,
-				})
-		} else {
-			msg2.Headers[putbackIndex] = sarama.RecordHeader{
-				Key:   []byte("putback"),
-				Value: header,
-			}
-		}
 
-		putBackValue, err := msg2.Value.Encode()
-
-		if err != nil {
-			zap.S().Errorf("%s Failed to encode putback value: %s", identifier, err)
-		}
-
-		putbackHeaders := make(map[string][]byte)
-
-		for _, v := range msg2.Headers {
-			putbackHeaders[string(v.Key)] = v.Value
-		}
+		msg2.Header["putback"] = header
 
 		msgx := kafka.Message{
 			Topic:  topic,
-			Value:  putBackValue,
-			Header: putbackHeaders,
+			Value:  msg2.Value,
+			Header: msg2.Header,
 		}
 		err = kafkaProducer.EnqueueMessage(msgx)
 		if err != nil {
@@ -325,8 +292,7 @@ func StartPutbackProcessor(
 				// This don't have to be graceful, as putback is already broken
 				panic(fmt.Errorf("putback channel full, shutting down"))
 			}
-			prodMsg := sarama.ProducerMessage{Topic: topic, Value: msg2.Value, Headers: msg2.Headers}
-			putBackChannel <- PutBackProducerChanMsg{&prodMsg, errorString, reason, false}
+			putBackChannel <- PutBackChanMsg{&msgx, errorString, reason, false}
 		}
 		// This is for stats only and counts the amount of messages put back
 		KafkaPutBacks += 1
@@ -341,13 +307,13 @@ func StartPutbackProcessor(
 func DrainChannel(
 	identifier string,
 	channelToDrain chan *kafka.Message,
-	channelToDrainTo chan PutBackProducerChanMsg,
+	channelToDrainTo chan PutBackChanMsg,
 	ShutdownChannel chan bool) bool {
 	for len(channelToDrain) > 0 {
 		select {
 		case msg, ok := <-channelToDrain:
 			if ok {
-				channelToDrainTo <- PutBackProducerChanMsg{kafka.MessageToProducerMessage(msg), nil, fmt.Sprintf("%s Shutting down", identifier), false}
+				channelToDrainTo <- PutBackChanMsg{msg, nil, fmt.Sprintf("%s Shutting down", identifier), false}
 				KafkaPutBacks += 1
 			} else {
 				zap.S().Warnf("%s Channel to drain is closed", identifier)
@@ -374,11 +340,11 @@ func DrainChannel(
 }
 
 // DrainChannelSimple empties a channel into another channel
-func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo chan PutBackProducerChanMsg) bool {
+func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo chan PutBackChanMsg) bool {
 	select {
 	case msg, ok := <-channelToDrain:
 		if ok {
-			channelToDrainTo <- PutBackProducerChanMsg{kafka.MessageToProducerMessage(msg), nil, "Shutting down", false}
+			channelToDrainTo <- PutBackChanMsg{msg, nil, "Shutting down", false}
 		} else {
 			return false
 		}
@@ -392,7 +358,7 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 
 // StartCommitProcessor starts the commit processor.
 // It will commit messages to the kafka queue.
-func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaClient *kafka.Client) {
+func StartCommitProcessor(identifier string, commitChannel chan *kafka.Message, kafkaClient *kafka.Client) {
 	zap.S().Debugf("%s Starting commit processor", identifier)
 
 	//mark current transaction as ready
@@ -422,7 +388,7 @@ func StartCommitProcessor(identifier string, commitChannel chan *sarama.Producer
 	zap.S().Debugf("%s Stopped commit processor", identifier)
 }
 
-func StartProducerEventHandler(identifier string, errors <-chan *sarama.ProducerError, successes <-chan *sarama.ProducerMessage, backChan chan PutBackProducerChanMsg) {
+func StartProducerEventHandler(identifier string, errors <-chan *sarama.ProducerError, successes <-chan *sarama.ProducerMessage, backChan chan PutBackChanMsg) {
 	zap.S().Debugf("%s Starting event handler", identifier)
 	var errorProducer *sarama.ProducerError
 	for !ShuttingDownKafka || len(errors) > 0 || len(successes) > 0 {
@@ -430,11 +396,16 @@ func StartProducerEventHandler(identifier string, errors <-chan *sarama.Producer
 		case errorProducer = <-errors:
 			errS := errorProducer.Error()
 			zap.S().Errorf("Error for %s: %s", identifier, errS)
-			if backChan != nil {
-				backChan <- PutBackProducerChanMsg{
-					Msg:         errorProducer.Msg,
-					Reason:      "ProducerEvent channel error",
-					ErrorString: &errS,
+			message, err := kafka.ProducerMessageToMessage(errorProducer.Msg)
+			if err != nil {
+				zap.S().Errorf("Failed convert ProducerMessage to Message: %s", err)
+			} else {
+				if backChan != nil {
+					backChan <- PutBackChanMsg{
+						Msg:         message,
+						Reason:      "ProducerEvent channel error",
+						ErrorString: &errS,
+					}
 				}
 			}
 		case _ = <-successes:

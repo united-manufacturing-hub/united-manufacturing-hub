@@ -72,8 +72,8 @@ func startProcessValueStringQueueAggregator() {
 							if err != nil {
 								errStr = err.Error()
 							}
-							highThroughputPutBackChannel <- PutBackProducerChanMsg{
-								Msg:         kafka.MessageToProducerMessage(message),
+							highThroughputPutBackChannel <- PutBackChanMsg{
+								Msg:         message,
 								Reason:      reason,
 								ErrorString: &errStr,
 							}
@@ -98,8 +98,8 @@ func startProcessValueStringQueueAggregator() {
 						if err != nil {
 							errStr = err.Error()
 						}
-						highThroughputPutBackChannel <- PutBackProducerChanMsg{
-							Msg:         kafka.MessageToProducerMessage(message),
+						highThroughputPutBackChannel <- PutBackChanMsg{
+							Msg:         message,
 							Reason:      reason,
 							ErrorString: &errStr,
 						}
@@ -112,9 +112,9 @@ func startProcessValueStringQueueAggregator() {
 		}
 	}
 	for _, message := range messages {
-		highThroughputPutBackChannel <- PutBackProducerChanMsg{
+		highThroughputPutBackChannel <- PutBackChanMsg{
 
-			Msg:    kafka.MessageToProducerMessage(message),
+			Msg:    message,
 			Reason: "Shutting down",
 		}
 	}

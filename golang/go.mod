@@ -40,7 +40,7 @@ require (
 	github.com/prometheus/client_golang v1.15.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230511084026-12d102a0ef8a
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230511115533-ebab9b293321
 	github.com/united-manufacturing-hub/umh-utils v0.1.6
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
