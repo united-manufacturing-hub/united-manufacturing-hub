@@ -113,12 +113,14 @@ func main() {
 		}
 
 		if topicMap.Direction == ToRemote || topicMap.Direction == Both {
-			var toRemoteChan chan kafka.Message
+			var toRemoteChan = make(chan kafka.Message, 100)
+			var putbackChan = make(chan processor.PutBackChanMsg, 100)
 			var shutdownChan = make(chan bool, 1)
 
 			message.Init()
 			processor.CreateClient(listenTopicRegex, localClientOptions, remoteClientOptions, toRemoteChan)
 			go processor.Start(toRemoteChan)
+			go processor.StartPutbackProcessor(topicMap.Name, putbackChan, toRemoteChan)
 
 			go checkDisconnect(shutdownChan)
 			reportStats(shutdownChan, toRemoteChan, topicMap.Name)
@@ -127,12 +129,14 @@ func main() {
 			processor.Shutdown()
 		}
 		if topicMap.Direction == ToLocal || topicMap.Direction == Both {
-			var toLocalChan chan kafka.Message
+			var toLocalChan = make(chan kafka.Message, 100)
+			var putbackChan = make(chan processor.PutBackChanMsg, 100)
 			var shutdownChan = make(chan bool, 1)
 
 			message.Init()
 			processor.CreateClient(listenTopicRegex, remoteClientOptions, localClientOptions, toLocalChan)
 			go processor.Start(toLocalChan)
+			go processor.StartPutbackProcessor(topicMap.Name, putbackChan, toLocalChan)
 
 			go checkDisconnect(shutdownChan)
 			reportStats(shutdownChan, toLocalChan, topicMap.Name)
