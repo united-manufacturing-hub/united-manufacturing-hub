@@ -133,12 +133,13 @@ func main() {
 			Brokers: []string{
 				KafkaBootstrapServer,
 			},
-			ConsumerName:      "kafka-to-postgresql-hi-processor",
-			Partitions:        6,
-			ReplicationFactor: 1,
-			EnableTLS:         useSsl,
-			StartOffset:       sarama.OffsetOldest,
-			AutoCommit:        false,
+			ConsumerName:            "kafka-to-postgresql-hi-processor",
+			Partitions:              6,
+			ReplicationFactor:       1,
+			EnableTLS:               useSsl,
+			StartOffset:             sarama.OffsetOldest,
+			AutoCommit:              false,
+			ProducerReturnSuccesses: true,
 		})
 
 	// HT uses enable.auto.commit=true for increased performance.
@@ -185,8 +186,8 @@ func main() {
 	highIntegrityPutBackChannel = make(chan PutBackProducerChanMsg, 200)
 	highIntegrityCommitChannel = make(chan *sarama.ProducerMessage)
 	//TODO: Get events channel of the HI producer by using Sarama. How to get producer.input() using wrapper??
-	highIntegrityErrorsChannel := HIKafkaClient.Producer.Errors()
-	highIntegritySuccessesChannel := HIKafkaClient.Producer.Successes()
+	highIntegrityErrorsChannel := HIKafkaClient.GetProducerErrorsChannel()
+	highIntegritySuccessesChannel := HIKafkaClient.GetProducerSuccessesChannel()
 
 	go StartPutbackProcessor(
 		"[HI]",
@@ -201,7 +202,7 @@ func main() {
 		HIKafkaClient,
 		highIntegrityPutBackChannel,
 		ShutdownApplicationGraceful)
-	go StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaClient, "kafka-to-postgresql-hi-processor")
+	go StartCommitProcessor("[HI]", highIntegrityCommitChannel, HIKafkaClient)
 
 	go startHighIntegrityQueueProcessor()
 	go StartProducerEventHandler("[HI]", highIntegrityErrorsChannel, highIntegritySuccessesChannel, highIntegrityPutBackChannel)
@@ -211,8 +212,8 @@ func main() {
 	zap.S().Debugf("Starting HT queue processor")
 	highThroughputProcessorChannel = make(chan *kafka.Message, 1000)
 	highThroughputPutBackChannel = make(chan PutBackProducerChanMsg, 200)
-	highThroughputErrorsChannel := HIKafkaClient.Producer.Errors()
-	highThroughputSuccessesChannel := HIKafkaClient.Producer.Successes()
+	highThroughputErrorsChannel := HIKafkaClient.GetProducerErrorsChannel()
+	highThroughputSuccessesChannel := HIKafkaClient.GetProducerSuccessesChannel()
 	// HT has no commit channel, it uses auto commit
 
 	go StartPutbackProcessor("[HT]", highThroughputPutBackChannel, HTKafkaClient, nil, 200)
@@ -236,7 +237,7 @@ func main() {
 	topicProbeProcessorChannel := make(chan *kafka.Message, 100)
 
 	go ProcessKafkaTopicProbeQueue("[TP]", topicProbeProcessorChannel, nil)
-	go StartConsumerEventHandler("[TP]", KafkaTopicProbeConsumer.Consumer.Errors(), KafkaTopicProbeConsumer.GetMessages())
+	go StartConsumerEventHandler("[TP]", KafkaTopicProbeConsumer.GetConsumerErrorsChannel(), KafkaTopicProbeConsumer.GetMessages())
 
 	go StartTopicProbeQueueProcessor(topicProbeProcessorChannel)
 	zap.S().Debugf("Started TP queue processor")
@@ -340,8 +341,6 @@ func ShutdownApplicationGraceful() {
 
 	time.Sleep(internal.FiveSeconds)
 
-	CloseOffsetManager()
-
 	CloseHIKafka()
 
 	CloseHTKafka()
@@ -355,13 +354,6 @@ func ShutdownApplicationGraceful() {
 	// Gracefully exit.
 	// (Use runtime.GoExit() if you need to call defers)
 	os.Exit(0)
-}
-
-func CloseOffsetManager() {
-	err := KafkaOffsetManager.Close()
-	if err != nil {
-		zap.S().Fatalf("Faild closing kafkaOffsetManager %s", err)
-	}
 }
 
 type reportData struct {

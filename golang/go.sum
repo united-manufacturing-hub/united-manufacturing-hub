@@ -319,6 +319,14 @@ github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.5-0.20230509133110
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.5-0.20230509133110-7f979ac78cda/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.5-0.20230509133731-68890e5fa66e h1:KYk8oNx3onko5i1Ebxtsjlkcd6yIB7czmNoTQgRRv5U=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.5-0.20230509133731-68890e5fa66e/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230510143429-e967df1fb777 h1:hetmbZ9a1N78SlTnP6+81D573dfcWo4gLrN6n+Tkdfk=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230510143429-e967df1fb777/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230510145001-eec4d545a453 h1:oIqagpNJHhlfIca7mnVJls+hgmZ5llXCryU8J8Q6Y9I=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230510145001-eec4d545a453/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230510154958-525fdca1c74d h1:4CFS/VzSwP0Xp54zgZ8q+aAZnydkrGaMBI1bXhMfVsE=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230510154958-525fdca1c74d/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230511084026-12d102a0ef8a h1:7Dr3y7sk0sZ/QGBLqpB0llpqo8IWqcoNO59voL3N/5k=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.7-0.20230511084026-12d102a0ef8a/go.mod h1:M2DERmrz5+Tb/6JkYTaSir/K5v57+2J6LFrMlRFD0sM=
 github.com/united-manufacturing-hub/umh-utils v0.1.6 h1:5t7AR9jF6jaPkJN/El82HY2JWLyzB5qEHwhIHqm0i0E=
 github.com/united-manufacturing-hub/umh-utils v0.1.6/go.mod h1:Hb+nWVVJEj2Bo+xOtcBHwTi6EFTfln9M3ge2BN2X1B8=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

@@ -71,9 +71,6 @@ var ShuttingDownKafka bool
 var ShutdownPutback bool
 var nearMemoryLimit = false
 
-// Kafka OffsetManager
-var KafkaOffsetManager sarama.OffsetManager
-
 //goland:noinspection GoUnusedExportedFunction
 func MemoryLimiter(allowedMemorySize int) {
 	allowedSeventyFivePerc := uint64(float64(allowedMemorySize) * 0.9)
@@ -187,7 +184,7 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShu
 	msgChan = kafkaConsumer.GetMessages()
 	var message kafka.Message
 
-	var errConsumer <-chan error = kafkaConsumer.Consumer.Errors()
+	var errConsumer <-chan error = kafkaConsumer.GetConsumerErrorsChannel()
 	var err error
 
 	select {
@@ -310,7 +307,7 @@ func StartPutbackProcessor(
 			zap.S().Errorf("%s Failed to encode putback value: %s", identifier, err)
 		}
 
-		var putbackHeaders map[string][]byte
+		putbackHeaders := make(map[string][]byte)
 
 		for _, v := range msg2.Headers {
 			putbackHeaders[string(v.Key)] = v.Value
@@ -395,25 +392,31 @@ func DrainChannelSimple(channelToDrain chan *kafka.Message, channelToDrainTo cha
 
 // StartCommitProcessor starts the commit processor.
 // It will commit messages to the kafka queue.
-func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaClient *kafka.Client, consumerName string) {
+func StartCommitProcessor(identifier string, commitChannel chan *sarama.ProducerMessage, kafkaClient *kafka.Client) {
 	zap.S().Debugf("%s Starting commit processor", identifier)
 
-	var err error
-	KafkaOffsetManager, err = kafkaClient.CreateOffsetManager(consumerName)
+	//mark current transaction as ready
+	err := kafkaClient.BeginTxn()
 	if err != nil {
-		zap.S().Errorf("Error creating offsetmanager %s", err)
-	}
-
-	if kafkaClient.GetAutoCommitEnableStatus() == true {
-		zap.S().Error("AutoCommit.Enable should be disabled for manual committing")
+		zap.S().Errorf("Error begin transaction %s", err)
 	}
 
 	for !ShuttingDownKafka || len(commitChannel) > 0 {
-		select {
-		case _ = <-commitChannel:
-			//TODO: error handling of commit.
-			KafkaOffsetManager.Commit()
-			KafkaCommits += 1
+		msg := <-commitChannel
+		err = kafkaClient.AddMessageToTxn(msg)
+		if err != nil {
+			zap.S().Errorf("Failed add message offsets to current transaction: %s", err)
+			err = kafkaClient.AbortTxn()
+			if err != nil {
+				zap.S().Errorf("Failed abort current transaction: %s", err)
+			}
+		} else {
+			err = kafkaClient.CommitTxn()
+			if err != nil {
+				zap.S().Errorf("Failed commit current transaction: %s", err)
+			} else {
+				KafkaCommits += 1
+			}
 		}
 	}
 	zap.S().Debugf("%s Stopped commit processor", identifier)
