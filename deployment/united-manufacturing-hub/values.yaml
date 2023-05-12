@@ -179,7 +179,7 @@ _000_commonConfig:
     enabled: true
 
   racedetector:
-    enabled: true
+    enabled: false
 
 _001_customMicroservices:
   -

@@ -1,41 +1,48 @@
-// Copyright 2023 UMH Systems GmbH
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-//go:build linux
-// +build linux
-
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/heptiolabs/healthcheck"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
-	"time"
+	"syscall"
+	"unsafe"
 )
 
-var kafkaSendTopic string
+const (
+	inputEventSize = 24
+	eventFilePath  = "/dev/input/event0"
+)
 
-var scanOnly bool
+type inputEvent struct {
+	Time  syscall.Timeval
+	Type  uint16
+	Code  uint16
+	Value int32
+}
+
+// https://en.wikipedia.org/wiki/British_and_American_keyboards#/media/File:KB_United_States-NoAltGr.svg
+var keycodeToChar = map[uint16]rune{
+	2: '1', 3: '2', 4: '3', 5: '4', 6: '5', 7: '6', 8: '7', 9: '8', 10: '9', 11: '0', 12: '-', 13: '=',
+	16: 'q', 17: 'w', 18: 'e', 19: 'r', 20: 't', 21: 'y', 22: 'u', 23: 'i', 24: 'o', 25: 'p', 26: '[', 27: ']',
+	30: 'a', 31: 's', 32: 'd', 33: 'f', 34: 'g', 35: 'h', 36: 'j', 37: 'k', 38: 'l', 39: ';', 40: '\'',
+	44: 'z', 45: 'x', 46: 'c', 47: 'v', 48: 'b', 49: 'n', 50: 'm', 51: ',', 52: '.', 53: '/',
+}
+
+var keycodeToCharShift = map[uint16]rune{
+	2: '!', 3: '@', 4: '#', 5: '$', 6: '%', 7: '^', 8: '&', 9: '*', 10: '(', 11: ')', 12: '_', 13: '+',
+	16: 'Q', 17: 'W', 18: 'E', 19: 'R', 20: 'T', 21: 'Y', 22: 'U', 23: 'I', 24: 'O', 25: 'P', 26: '{', 27: '}',
+	30: 'A', 31: 'S', 32: 'D', 33: 'F', 34: 'G', 35: 'H', 36: 'J', 37: 'K', 38: 'L', 39: ':', 40: '"',
+	44: 'Z', 45: 'X', 46: 'C', 47: 'V', 48: 'B', 49: 'N', 50: 'M', 51: '<', 52: '>', 53: '?',
+}
 
 func main() {
 	// Initialize zap logging
@@ -62,167 +69,181 @@ func main() {
 		}
 	}()
 
-	foundDevice, inputDevice := GetBarcodeReaderDevice()
-	if !foundDevice || inputDevice == nil {
-		// Restart if no device is found
-		zap.S().Fatalf("No barcode reader device found")
-	}
-	zap.S().Infof("Using device: %v -> %v", foundDevice, inputDevice)
+	listDevices()
+	initKafka()
+	scan()
+}
 
-	KafkaBoostrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
-	customerID, err := env.GetAsString("CUSTOMER_ID", true, "")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
-	location, err := env.GetAsString("LOCATION", true, "")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
-	assetID, err := env.GetAsString("ASSET_ID", true, "")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
+var client *kafka.Client
+var kafkaSendTopic string
+
+func initKafka() {
 	scanOnly, err := env.GetAsBool("SCAN_ONLY", true, false)
-
-	if !scanOnly {
-		kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
-
-		internal.SetupKafka(
-			kafka.ConfigMap{
-				"bootstrap.servers": KafkaBoostrapServer,
-				"security.protocol": "plaintext",
-				"group.id":          "barcodereader",
-			})
-		err := internal.CreateTopicIfNotExists(kafkaSendTopic)
-		if err != nil {
-			zap.S().Fatalf("Failed to create topic: %v", err)
-		}
-
-		go internal.StartEventHandler("barcodereader", internal.KafkaProducer.Events(), nil)
-	} else {
-		zap.S().Infof("Scan only mode")
-	}
-
-	go ScanForever(inputDevice, OnScan, OnScanError)
-
-	select {}
-}
-
-// GetBarcodeReaderDevice returns the first barcode reader device found, by name or device path.
-// If no device is found, it will print all available devices and return false, nil.
-func GetBarcodeReaderDevice() (bool, *evdev.InputDevice) {
-	// This could be /dev/input/event0, /dev/input/event1, etc.
-	devicePath, _ := env.GetAsString("INPUT_DEVICE_PATH", false, "/dev/input/event*")
-	// This could be "Datalogic ADC, Inc. Handheld Barcode Scanner"
-	deviceName, _ := env.GetAsString("INPUT_DEVICE_NAME", false, "")
-
-	// Check if devicePath contains a wildcard and get all devices in the path
-	if strings.Contains(devicePath, "*") {
-		devices, err := evdev.ListInputDevices(devicePath)
-		if err != nil {
-			zap.S().Errorf("Error listing devices: %v", err)
-			return false, nil
-		}
-		// If deviceName is set, look for the device in the path
-		if deviceName != "" {
-			for _, inputDevice := range devices {
-				if inputDevice.Name == deviceName {
-					zap.S().Infof("Found device: %+v", inputDevice)
-					return true, inputDevice
-				}
-			}
-			zap.S().Warnf("Device %s not found in path %s", deviceName, devicePath)
-		}
-
-		// If deviceName is not set or the device is not found, print all devices in the path and return (false, nil)
-		zap.S().Infof("Devices in path %s:", devicePath)
-		for _, inputDevice := range devices {
-			zap.S().Infof("%+v", inputDevice)
-		}
-		return false, nil
-	}
-
-	// Check if devicePath is a valid device
-	inputDevice, err := evdev.Open(devicePath)
 	if err != nil {
-		zap.S().Errorf("Error opening device: %v", err)
-		return false, nil
+		zap.S().Fatal(err)
 	}
-
-	// If deviceName is set, check if it matches the device at devicePath
-	switch deviceName {
-	case "":
-		zap.S().Infof("Found device: %v", inputDevice)
-		return true, inputDevice
-	case inputDevice.Name:
-		zap.S().Infof("Found device: %v", inputDevice)
-		return true, inputDevice
-	default:
-		zap.S().Fatalf("Device name (%s) and path (%s) do not refer to the same device", deviceName, devicePath)
-		return false, nil
-	}
-}
-
-// BarcodeMessage is the message sent to Kafka, defined by our documentation.
-type BarcodeMessage struct {
-	TimestampMs int64  `json:"timestamp_ms"`
-	Barcode     string `json:"barcode"`
-}
-
-// OnScan is called when a barcode is scanned, and produces a message to be sent to Kafka.
-func OnScan(scanned string) {
-	zap.S().Infof("Scanned: %s\n", scanned)
-
 	if scanOnly {
+		zap.S().Infof("SCAN_ONLY is set to true, will not connect to Kafka")
 		return
 	}
 
-	message := BarcodeMessage{
-		TimestampMs: time.Now().UnixMilli(),
-		Barcode:     scanned,
-	}
-	bytes, err := jsoniter.Marshal(message)
+	var KafkaBoostrapServer string
+	KafkaBoostrapServer, err = env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
 	if err != nil {
-		zap.S().Warnf("Error marshalling message: %v (%v)", err, scanned)
-		return
+		zap.S().Fatal(err)
+	}
+	var customerID string
+	customerID, err = env.GetAsString("CUSTOMER_ID", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	var location string
+	location, err = env.GetAsString("LOCATION", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	var assetID string
+	assetID, err = env.GetAsString("ASSET_ID", true, "")
+	if err != nil {
+		zap.S().Fatal(err)
 	}
 
-	msg := kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic: &kafkaSendTopic,
+	kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
+	zap.S().Infof("Sending to Kafka topic %s", kafkaSendTopic)
+
+	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+		ListenTopicRegex:  nil,
+		ConsumerName:      "barcodereader",
+		Brokers:           []string{KafkaBoostrapServer},
+		StartOffset:       0,
+		Partitions:        6,
+		ReplicationFactor: 1,
+		EnableTLS:         false,
+		SenderTag: kafka.SenderTag{
+			Enabled: true,
 		},
-		Value: bytes,
-	}
-	err = internal.Produce(internal.KafkaProducer, &msg, nil)
+	})
 	if err != nil {
-		zap.S().Warnf("Error producing message: %v (%v)", err, scanned)
+		zap.S().Fatal(err)
+	}
+}
+
+func sendMessage(payload []byte) {
+	if client == nil {
+		zap.S().Debugf("Kafka client is nil, not sending message")
 		return
 	}
+
+	err := client.EnqueueMessage(kafka.Message{
+		Topic:  kafkaSendTopic,
+		Value:  payload,
+		Header: nil,
+		Key:    nil,
+	})
+	if err != nil {
+		zap.S().Errorf("Error sending message to Kafka: %s", err)
+	}
 }
 
-// OnScanError is called when an error occurs while scanning, it prints the error to stdout, then exits.
-func OnScanError(err error) {
-	if err == os.ErrClosed {
-		zap.S().Errorf("Error: device has been lost :( . Restarting microservice.")
-	} else {
-		zap.S().Errorf("Fatal error: %v", err)
+func listDevices() {
+	file, err := os.Open("/proc/bus/input/devices")
+	if err != nil {
+		zap.S().Info("Error opening /proc/bus/input/devices:", err)
+		return
 	}
-	ShutdownGracefully()
+	defer file.Close()
+
+	keyboardDevices := make(map[string]string)
+
+	scanner := bufio.NewScanner(file)
+	var dev string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "I:") {
+			dev = ""
+		}
+		if strings.HasPrefix(line, "N: Name=") {
+			// remove "N: Name=" prefix
+			dev = line[8:]
+		}
+		if strings.HasPrefix(line, "H: Handlers=") {
+			handlers := strings.Split(line, "=")[1]
+			if strings.Contains(handlers, "kbd") {
+				// strip off the leading and trailing spaces and "
+				dev = strings.TrimSpace(dev)
+				dev = strings.Trim(dev, "\"")
+
+				// get the event number using regex
+				re := regexp.MustCompile(`event\d+`)
+				event := re.FindString(line)
+
+				keyboardDevices[dev] = event
+			}
+		}
+	}
+
+	if err = scanner.Err(); err != nil {
+		zap.S().Fatalf("Error reading /proc/bus/input/devices:", err)
+		return
+	}
+
+	if len(keyboardDevices) == 0 {
+		zap.S().Fatalf("No keyboard devices found")
+	}
+
+	zap.S().Info("Keyboard input devices:")
+	for device, event := range keyboardDevices {
+		zap.S().Infof("%s [/dev/input/%s]\n", device, event)
+	}
 }
 
-// ShutdownGracefully closes kafka and then exists
-func ShutdownGracefully() {
-	if !scanOnly {
-		internal.ShuttingDownKafka = true
-
-		time.Sleep(internal.FiveSeconds)
+func scan() {
+	f, err := os.Open(eventFilePath)
+	if err != nil {
+		zap.S().Infof("Failed to open input event file: %v\n", err)
+		os.Exit(1)
 	}
-	zap.S().Infof("Successfull shutdown. Exiting.")
+	defer f.Close()
 
-	// Gracefully exit.
-	// (Use runtime.GoExit() if you need to call defers)
-	os.Exit(0)
+	buffer := make([]byte, inputEventSize)
+
+	var shiftNext bool
+	var buf []byte
+	for {
+		_, err = f.Read(buffer)
+		if err != nil {
+			zap.S().Infof("Failed to read input event: %v\n", err)
+			os.Exit(1)
+		}
+
+		event := *(*inputEvent)(unsafe.Pointer(&buffer[0]))
+
+		if event.Type == 1 && event.Value == 1 {
+			if event.Code == 28 {
+				// print buf
+				zap.S().Infof("Decoded: %s\n", buf)
+				sendMessage(buf)
+				buf = []byte{}
+				continue
+			}
+			if event.Code == 42 || event.Code == 54 {
+				shiftNext = true
+				continue
+			}
+
+			var char rune
+			if shiftNext {
+				char = keycodeToCharShift[event.Code]
+				shiftNext = false
+			} else {
+				char = keycodeToChar[event.Code]
+			}
+			zap.S().Debugf("%s [%d]\n", string(char), event.Code)
+			if char != 0 {
+				buf = append(buf, byte(char))
+			} else {
+				zap.S().Infof("Unknown key code: %d\n", event.Code)
+			}
+		}
+	}
 }
