@@ -152,7 +152,7 @@ func main() {
 			ReplicationFactor: 1,
 			EnableTLS:         useSsl,
 			StartOffset:       sarama.OffsetOldest,
-			AutoCommit:        false,
+			AutoCommit:        true,
 		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
