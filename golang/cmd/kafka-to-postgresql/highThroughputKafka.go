@@ -24,7 +24,6 @@ var highThroughputPutBackChannel chan PutBackChanMsg
 
 var HTKafkaClient *kafka.Client
 
-// TODO: Check if single KafkaClient is enough to handle rolls of producing, consuming and admin
 func SetupHTKafka(opts kafka.NewClientOptions) {
 
 	var err error

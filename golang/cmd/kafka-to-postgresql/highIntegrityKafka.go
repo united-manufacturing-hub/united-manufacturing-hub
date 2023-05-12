@@ -27,7 +27,6 @@ var highIntegrityPutBackChannel chan PutBackChanMsg
 var HIKafkaClient *kafka.Client
 
 // SetupHIKafka sets up the HI Kafka consumer, producer and admin
-// TODO: Check if single KafkaClient is enough to handle rolls of producing, consuming and admin
 func SetupHIKafka(opts kafka.NewClientOptions) {
 
 	var err error

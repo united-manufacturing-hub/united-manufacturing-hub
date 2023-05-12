@@ -127,7 +127,6 @@ func main() {
 	// leads to better performance.
 	// Processed message now will be stored locally and then automatically committed to Kafka.
 	// This still provides the at-least-once guarantee.
-	//TODO: Make equivalent configurations for enble.auto.commit: true and enable.auto.offset.store: false (confluent-kafka-go) in Sarama kafka
 	SetupHIKafka(
 		kafka.NewClientOptions{
 			Brokers: []string{
@@ -184,7 +183,6 @@ func main() {
 	highIntegrityProcessorChannel = make(chan *kafka.Message, 100)
 	highIntegrityPutBackChannel = make(chan PutBackChanMsg, 200)
 	highIntegrityCommitChannel = make(chan *kafka.Message)
-	//TODO: Get events channel of the HI producer by using Sarama. How to get producer.input() using wrapper??
 	highIntegrityErrorsChannel := HIKafkaClient.GetProducerErrorsChannel()
 	highIntegritySuccessesChannel := HIKafkaClient.GetProducerSuccessesChannel()
 
