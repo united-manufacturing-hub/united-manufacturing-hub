@@ -194,7 +194,8 @@ _001_customMicroservices:
       env:
         - name: LOGGING_LEVEL
           value: PRODUCTION
-
+      # service type. NordPort or LoadBalancer
+      serviceType: LoadBalancer
       # this will expose port 80 on the host on port 8080
       port: 80
       externalPort: 8080
@@ -220,7 +221,8 @@ _001_customMicroservices:
       env:
         - name: LOGGING_LEVEL
           value: PRODUCTION
-
+      # service type. NordPort or LoadBalancer
+      serviceType: LoadBalancer
       # this will expose port 81 on the host on port 8081
       port: 81
       externalPort: 8081
@@ -246,7 +248,8 @@ _001_customMicroservices:
     env:
       - name: LOGGING_LEVEL
         value: PRODUCTION
-
+    # service type. NordPort or LoadBalancer
+    serviceType: LoadBalancer
     # this will expose port 81 on the host on port 8081
     port: 81
     externalPort: 8082
