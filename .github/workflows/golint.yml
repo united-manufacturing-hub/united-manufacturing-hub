@@ -31,11 +31,8 @@ jobs:
         run: govulncheck ./...
         working-directory: ./golang
         shell: bash
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        working-directory: ./golang
-        shell: bash
       - name: Run golangci-lint
-        run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run -v -c ../.golangci.yaml ./...
-        working-directory: ./golang
-        shell: bash
+        uses: golangci/golangci-lint-action@v3
+        with:
+          working-directory: ./golang
+          args: -v -c ../.golangci.yaml
