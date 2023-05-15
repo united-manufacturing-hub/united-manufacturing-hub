@@ -40,7 +40,7 @@ require (
 	github.com/prometheus/client_golang v1.15.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.4.2
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.6
 	github.com/united-manufacturing-hub/umh-utils v0.1.6
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
@@ -106,7 +106,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
