@@ -347,8 +347,8 @@ iotsensorsmqtt:
       cpu: "10m"
       memory: "20Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      cpu: "30m"
+      memory: "50Mi"
   mqtt:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==
@@ -362,8 +362,8 @@ opcuasimulator:
       cpu: "10m"
       memory: "20Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      cpu: "30m"
+      memory: "50Mi"
   service:
     annotations: {}
     # certadds can add hostnames and ip addresses to the certificate for the simulator so connection to the opcua client is easier
@@ -958,8 +958,8 @@ packmlmqttsimulator:
       cpu: "10m"
       memory: "20Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      cpu: "30m"
+      memory: "50Mi"
 
 ### tulip-connector ###
 tulipconnector:
@@ -973,10 +973,10 @@ tulipconnector:
     mode: prod
   resources:
     limits:
-      cpu: 200m
-      memory: 100Mi
+      cpu: 30m
+      memory: 50Mi
     requests:
-      cpu: 100m
+      cpu: 10m
       memory: 20Mi
 
 ### mqtt-kafka-bridge ###
@@ -1077,11 +1077,11 @@ redis:
       initialDelaySeconds: 120
     resources:
       limits:
-        cpu: 200m
-        memory: 200Mi
-      requests:
         cpu: 100m
         memory: 100Mi
+      requests:
+        cpu: 50m
+        memory: 50Mi
   metrics:
     enabled: true
   pdb:
@@ -1110,7 +1110,7 @@ mqtt_broker:
   resources:
     limits:
       cpu: 500m
-      memory: 500Mi
+      memory: 1700Mi
     requests:
       cpu: 100m
       memory: 100Mi
