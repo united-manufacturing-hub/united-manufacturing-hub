@@ -33,7 +33,7 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 		zap.S().Fatalf("Error compiling regex: %v", err)
 	}
 
-	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err = kafka.NewKafkaClient(&kafka.NewClientOptions{
 		Brokers: []string{
 			KafkaBootstrapServer,
 		},

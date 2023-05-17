@@ -33,7 +33,7 @@ func Init(kafkaBroker string) {
 	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
 
 	zap.S().Debug("Creating kafka client")
-	client, err := kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err := kafka.NewKafkaClient(&kafka.NewClientOptions{
 		Brokers:           []string{kafkaBroker},
 		ConsumerName:      "kafka-init",
 		Partitions:        6,

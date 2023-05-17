@@ -111,7 +111,7 @@ func initKafka() {
 	kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
 	zap.S().Infof("Sending to Kafka topic %s", kafkaSendTopic)
 
-	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err = kafka.NewKafkaClient(&kafka.NewClientOptions{
 		ListenTopicRegex:  nil,
 		ConsumerName:      "barcodereader",
 		Brokers:           []string{KafkaBoostrapServer},
