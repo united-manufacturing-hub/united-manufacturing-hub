@@ -113,8 +113,10 @@ func main() {
 	accounts[RESTUser] = RESTPassword
 
 	// get version
-	version, err := env.GetAsInt("CURRENT_VERSION", true, 2)
-
+	version, err := env.GetAsInt("VERSION", true, 2)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 	zap.S().Debugf("Starting program..")
 
 	redisURI, err := env.GetAsString("REDIS_URI", true, "")
@@ -161,6 +163,7 @@ func main() {
 	}
 
 	setupRestAPI(accounts, version)
+	zap.S().Debug("REST API initialized")
 
 	// Allow graceful shutdown
 	signal.Notify(sigs, syscall.SIGTERM)
