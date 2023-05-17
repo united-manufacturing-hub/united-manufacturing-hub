@@ -30,7 +30,6 @@ require (
 	github.com/gin-gonic/gin v1.9.0
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/heptiolabs/healthcheck v0.0.0-20211123025425-613501dd5deb
 	github.com/json-iterator/go v1.1.12
@@ -40,7 +39,7 @@ require (
 	github.com/prometheus/client_golang v1.15.1
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.5.6
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.7.2
 	github.com/united-manufacturing-hub/umh-utils v0.1.6
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
@@ -102,7 +101,7 @@ require (
 	go.elastic.co/ecszap v1.0.1 // indirect
 	go.opentelemetry.io/otel v1.15.1 // indirect
 	go.opentelemetry.io/otel/trace v1.15.1 // indirect
-	go.uber.org/atomic v1.10.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
