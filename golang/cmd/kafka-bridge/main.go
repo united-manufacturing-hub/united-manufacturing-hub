@@ -110,7 +110,10 @@ func main() {
 	}
 
 	securityProtocol := "plaintext"
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if useSsl {
 		securityProtocol = "ssl"
 

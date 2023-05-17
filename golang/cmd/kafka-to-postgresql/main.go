@@ -46,7 +46,10 @@ func main() {
 
 	internal.Initfgtrace()
 
-	dryRun, _ := env.GetAsBool("DRY_RUN", false, false)
+	dryRun, err := env.GetAsBool("DRY_RUN", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -76,8 +79,14 @@ func main() {
 	}()
 
 	// Postgres
-	PQHost, _ := env.GetAsString("POSTGRES_HOST", false, "db")
-	PQPort, _ := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	PQHost, err := env.GetAsString("POSTGRES_HOST", false, "db")
+	if err != nil {
+		zap.S().Error(err)
+	}
+	PQPort, err := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	PQUser, err := env.GetAsString("POSTGRES_USER", true, "")
 	if err != nil {
 		zap.S().Fatal(err)
@@ -91,6 +100,9 @@ func main() {
 		zap.S().Fatal(err)
 	}
 	PQSSLMode, err := env.GetAsString("POSTGRES_SSL_MODE", false, "require")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	SetupDB(PQUser, PQPassword, PQDBName, PQHost, PQPort, health, dryRun, PQSSLMode)
 
@@ -100,14 +112,20 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	kafkaSslPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
 	HTTopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
 	securityProtocol := "plaintext"
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if useSsl {
 		securityProtocol = "ssl"
 

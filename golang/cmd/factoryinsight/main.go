@@ -69,9 +69,15 @@ func main() {
 
 	internal.Initfgtrace()
 
-	PQHost, _ := env.GetAsString("POSTGRES_HOST", false, "db")
+	PQHost, err := env.GetAsString("POSTGRES_HOST", false, "db")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	PQPort, _ := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	PQPort, err := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Read in other environment variables
 	PQUser, err := env.GetAsString("POSTGRES_USER", true, "")
@@ -129,7 +135,10 @@ func main() {
 	}
 	redisDB := 0 // default database
 
-	dryRun, _ := env.GetAsBool("DRY_RUN", false, false)
+	dryRun, err := env.GetAsBool("DRY_RUN", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	internal.InitCache(redisURI, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized at %s", redisURI)
@@ -153,7 +162,10 @@ func main() {
 
 	zap.S().Debug("DB initialized")
 
-	helpers.InsecureNoAuth, _ = env.GetAsBool("INSECURE_NO_AUTH", false, false)
+	helpers.InsecureNoAuth, err = env.GetAsBool("INSECURE_NO_AUTH", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if helpers.InsecureNoAuth {
 		for i := 0; i < 50; i++ {
 			zap.S().Warnf("INSECURE_NO_AUTH is set to true. This is a security risk. Do not use in production.")

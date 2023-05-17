@@ -95,10 +95,20 @@ func main() {
 	internal.InitCacheWithoutRedis()
 	cP = sync.Map{}
 
-	isTest, _ := env.GetAsBool("TEST", false, false)
+	var err error
+	isTest, err := env.GetAsBool("TEST", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	useKafka, _ = env.GetAsBool("USE_KAFKA", false, true)
-	useMQTT, _ = env.GetAsBool("USE_MQTT", false, false)
+	useKafka, err = env.GetAsBool("USE_KAFKA", false, true)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	useMQTT, err = env.GetAsBool("USE_MQTT", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	if !useKafka && !useMQTT {
 		zap.S().Errorf("Neither kafka nor MQTT output enabled, exiting !")
@@ -137,13 +147,15 @@ func main() {
 		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
-	var err error
 	lowestSensorTickTime, err = env.GetAsUint64("LOWER_POLLING_TIME_MS", false, 20)
 	if err != nil {
 		zap.S().Error(err)
 	}
 
-	subTwentyMs, _ = env.GetAsBool("SUB_TWENTY_MS", false, false)
+	subTwentyMs, err = env.GetAsBool("SUB_TWENTY_MS", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	if lowestSensorTickTime < 20 {
 		if subTwentyMs {

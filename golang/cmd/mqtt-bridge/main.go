@@ -98,6 +98,9 @@ func main() {
 		zap.S().Fatal(err)
 	}
 	localMQTTBrokerSSLEnabled, err := env.GetAsBool("LOCAL_BROKER_SSL_ENABLED", true, true)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 
 	BridgeOneWay, err := env.GetAsBool("BRIDGE_ONE_WAY", true, true)
 	if err != nil {

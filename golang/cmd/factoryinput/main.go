@@ -93,7 +93,10 @@ func main() {
 	accounts[RESTUser] = RESTPassword
 
 	// get currentVersion
-	version, _ := env.GetAsString("VERSION", false, "1")
+	version, err := env.GetAsString("VERSION", false, "1")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	zap.S().Debugf("Starting program..")
 
@@ -167,7 +170,10 @@ func main() {
 
 	}()
 
-	mqttQueueHandler, _ := env.GetAsInt("MQTT_QUEUE_HANDLER", false, 10)
+	mqttQueueHandler, err := env.GetAsInt("MQTT_QUEUE_HANDLER", false, 10)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	for i := 0; i < mqttQueueHandler; i++ {
 		zap.S().Debugf("Starting MQTT handlers")
 		go MqttQueueHandler()

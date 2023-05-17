@@ -22,11 +22,23 @@ func Init() {
 	if arcRaw != nil {
 		return
 	}
-	arcSizeRaw, _ := env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
-	arcSizeNonRaw, _ := env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
+	arcSizeRaw, err := env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	arcSizeNonRaw, err := env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	arcRaw, _ = lru.NewARC(arcSizeRaw)
-	arcNonRaw, _ = lru.NewARC(arcSizeNonRaw)
+	arcRaw, err = lru.NewARC(arcSizeRaw)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	arcNonRaw, err = lru.NewARC(arcSizeNonRaw)
+	if err != nil {
+		zap.S().Error(err)
+	}
 }
 
 func GetCacheSize() (int, int, int, int) {
