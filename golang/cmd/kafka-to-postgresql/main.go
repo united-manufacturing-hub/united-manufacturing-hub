@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/umh-utils/parse"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"math"
@@ -197,12 +198,19 @@ func main() {
 			"topic.metadata.refresh.interval.ms": "30000",
 		})
 
-	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
-	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
+	allowedMemorySize, err := env.GetAsString("MEMORY_REQUEST", false, "50Mi")
+	if err != nil {
+		zap.S().Error(err)
+	}
+	allowedMemorySizeInt, err := parse.Quantity(allowedMemorySize)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	zap.S().Infof("Allowed memory size is %d Bytes", allowedMemorySizeInt)
 
 	// InitCache is initialized with 1Gb of memory for each cache
-	InitCache(allowedMemorySize / 4)
-	internal.InitMessageCache(allowedMemorySize / 4)
+	InitCache(allowedMemorySizeInt / 4)
+	internal.InitMessageCache(allowedMemorySizeInt / 4)
 
 	zap.S().Debugf("Starting queue processor")
 
