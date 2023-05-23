@@ -112,7 +112,7 @@ func main() {
 
 	// POST to https://repo.umh.app/metrics
 
-	_, err = http.DefaultClient.Post("https://repo.umh.app/metrics", "application/json", strings.NewReader(string(jsonMetrics)))
+	_, err = http.DefaultClient.Post("https://repo.umh.app/metrics", "application/json", strings.NewReader(string(jsonMetrics))) //nolint:bodyclose
 	if err != nil {
 		zap.S().Errorf("error: %s", err)
 		return
