@@ -116,6 +116,6 @@ func start(mqttToKafkaChan chan kafka.Message) {
 	}
 }
 
-func GetStats() (sent uint64, received uint64) {
+func GetStats() (sent, received, sentBytesA, recvBytesA uint64) {
 	return kafka.GetKafkaStats()
 }

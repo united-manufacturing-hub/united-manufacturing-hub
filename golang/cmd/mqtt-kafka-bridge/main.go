@@ -48,12 +48,12 @@ func main() {
 
 func checkDisconnect(shutdownChan chan bool) {
 	var kafkaSent, kafkaRecv, mqttSent, mqttRecv uint64
-	kafkaSent, kafkaRecv = kafka_processor.GetStats()
+	kafkaSent, kafkaRecv, _, _ = kafka_processor.GetStats()
 	mqttSent, mqttRecv = mqtt_processor.GetStats()
 
 	for {
 		time.Sleep(3 * time.Minute)
-		newKafkaSent, newKafkaRecv := kafka_processor.GetStats()
+		newKafkaSent, newKafkaRecv, _, _ := kafka_processor.GetStats()
 		newMqttSent, newMqttRecv := mqtt_processor.GetStats()
 		if newMqttSent == mqttSent && newMqttRecv == mqttRecv {
 			zap.S().Error("MQTT connection lost")
@@ -74,7 +74,7 @@ func checkDisconnect(shutdownChan chan bool) {
 
 func reportStats(shutdownChan chan bool, mqttToKafkaChan chan kafka.Message, kafkaToMqttChan chan kafka.Message) {
 	var kafkaSent, kafkaRecv, mqttSent, mqttRecv uint64
-	kafkaSent, kafkaRecv = kafka_processor.GetStats()
+	kafkaSent, kafkaRecv, _, _ = kafka_processor.GetStats()
 	mqttSent, mqttRecv = mqtt_processor.GetStats()
 	for {
 		select {
@@ -82,7 +82,7 @@ func reportStats(shutdownChan chan bool, mqttToKafkaChan chan kafka.Message, kaf
 			return
 		case <-time.After(10 * time.Second):
 			// Calculate per second
-			newKafkaSent, newKafkaRecv := kafka_processor.GetStats()
+			newKafkaSent, newKafkaRecv, _, _ := kafka_processor.GetStats()
 			newMqttSent, newMqttRecv := mqtt_processor.GetStats()
 
 			kafkaSentPerSecond := (newKafkaSent - kafkaSent) / 10
@@ -93,7 +93,7 @@ func reportStats(shutdownChan chan bool, mqttToKafkaChan chan kafka.Message, kaf
 			cachePercentRaw := float64(cacheUsedRaw) / float64(cacheMaxRaw) * 100
 			cachePercent := float64(cacheUsed) / float64(cacheMax) * 100
 			zap.S().Infof(
-				"Kafka sent: %d (%d/s), Kafka recv: %d (%d/s), MQTT sent: %d (%d/s), MQTT recv: %d (%d/s) | Cached: %d/%d (%.2f%%) | Cached raw: %d/%d (%.2f%%) | MqttToKafka chan: %d | KafkaToMqtt chan: %d",
+				"Kafka sent: %d (%d/s), Kafka recv: %d (%d/s) | MQTT sent: %d (%d/s), MQTT recv: %d (%d/s) | Cached: %d/%d (%.2f%%), Cached raw: %d/%d (%.2f%%) | MqttToKafka chan: %d | KafkaToMqtt chan: %d",
 				newKafkaSent, kafkaSentPerSecond, newKafkaRecv, kafkaRecvPerSecond, newMqttSent, mqttSentPerSecond, newMqttRecv, mqttRecvPerSecond, cacheUsed, cacheMax, cachePercent, cacheUsedRaw, cacheMaxRaw, cachePercentRaw, len(mqttToKafkaChan), len(kafkaToMqttChan))
 
 			kafkaSent = newKafkaSent
