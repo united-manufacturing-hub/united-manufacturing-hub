@@ -16,7 +16,7 @@ func main() {
 
 	var err error
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err = logger.Sync()

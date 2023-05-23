@@ -42,7 +42,7 @@ type stat struct {
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 
 	// Get OS and architecture
@@ -114,5 +114,5 @@ func main() {
 		zap.S().Errorf("error: %s", err)
 		return
 	}
-	_ = log.Sync()
+	_ = log.Sync() //nolint:errcheck
 }
