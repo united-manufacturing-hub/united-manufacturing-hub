@@ -81,7 +81,7 @@ linters-settings:
       - io/ioutil
       - k8s.io/apimachinery/pkg/api/resource
       - math
-      - math/rand
+      - crypto/rand
       - net
       - net/http
       - net/url

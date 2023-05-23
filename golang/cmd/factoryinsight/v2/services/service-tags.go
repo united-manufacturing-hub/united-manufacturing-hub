@@ -15,6 +15,7 @@
 package services
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -26,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"regexp"
 	"sort"
@@ -1018,7 +1019,12 @@ func prefetch(workCellId uint32) error {
 
 func updateWorkCellTag(workCellId uint32, tag []string, isPVS bool) {
 
-	tenMinutesPlusRandom := time.Now().Add(10 * time.Minute).Add(time.Duration(rand.Intn(300)) * time.Second)
+	rnd, err := rand.Int(rand.Reader, big.NewInt(300))
+	if err != nil {
+		zap.S().Errorf("Error while generating random number: %v", err)
+		return
+	}
+	tenMinutesPlusRandom := time.Now().Add(10 * time.Minute).Add(time.Duration(rnd.Int64()) * time.Second)
 
 	if isPVS {
 		prefetchedTags[workCellId] = TagsWithExpiry{
