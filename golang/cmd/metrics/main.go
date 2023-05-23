@@ -30,7 +30,7 @@ import (
 	"strings"
 )
 
-type stat struct {
+type stat struct { //nolint:govet
 	OS      string
 	Arch    string
 	Memory  *mem.VirtualMemoryStat

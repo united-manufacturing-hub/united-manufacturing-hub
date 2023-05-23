@@ -888,8 +888,8 @@ SELECT
 }
 
 type TagsWithExpiry struct {
-	tag    []string
 	expiry time.Time
+	tag    []string
 }
 
 var prefetchedTags = make(map[uint32]TagsWithExpiry)
