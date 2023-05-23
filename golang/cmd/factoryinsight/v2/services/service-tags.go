@@ -517,7 +517,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, 
 	}
 
 	if useProcessValueString {
-		getCustomTagDataRequest.TimeBucket = "none"
+		getCustomTagDataRequest.TimeBucket = "none" //nolint:goconst
 		getCustomTagDataRequest.TagAggregates = "null"
 		getCustomTagDataRequest.GapFilling = "none"
 	}
