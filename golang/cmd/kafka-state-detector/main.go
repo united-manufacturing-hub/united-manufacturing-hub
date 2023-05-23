@@ -66,18 +66,30 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	kafkaSslPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
+	allowedMemorySize, err := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
 
 	// InitCache is initialized with 1Gb of memory for each cache
 	internal.InitMessageCache(allowedMemorySize / 4)
 
-	ActivityEnabled, _ = env.GetAsBool("ACTIVITY_ENABLED", false, false)
+	ActivityEnabled, err = env.GetAsBool("ACTIVITY_ENABLED", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	securityProtocol := "plaintext"
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if useSsl {
 		securityProtocol = "ssl"
 
@@ -134,7 +146,10 @@ func main() {
 		go startActivityProcessor()
 	}
 
-	AnomalyEnabled, _ = env.GetAsBool("ANOMALY_ENABLED", false, false)
+	AnomalyEnabled, err = env.GetAsBool("ANOMALY_ENABLED", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	if AnomalyEnabled {
 		/* #nosec G404 -- This doesn't have to be crypto random */

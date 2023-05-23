@@ -99,8 +99,18 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser, _ := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
-		tempPassword, _ := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		var tempUser, tempPassword string
+		tempUser, err = env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		tempPassword, err = env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		if err != nil {
+			zap.S().Error(err)
+		}
 		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword

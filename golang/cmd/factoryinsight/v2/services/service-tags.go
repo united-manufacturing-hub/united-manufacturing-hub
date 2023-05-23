@@ -144,7 +144,12 @@ func GetCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
 	tags, b = GetPrefetchedTags(workCellId, isPVS)
 	if b {
 		// Retriggers the prefetching of the tags in the background
-		go prefetch(workCellId)
+		go func() {
+			err = prefetch(workCellId)
+			if err != nil {
+				zap.S().Errorf("Error prefetching tags: %s", err)
+			}
+		}()
 		return tags, nil
 	}
 

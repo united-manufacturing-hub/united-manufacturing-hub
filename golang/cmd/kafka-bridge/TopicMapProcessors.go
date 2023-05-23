@@ -37,7 +37,10 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 	// 1Gb cache
 	messageCache = freecache.NewCache(1024 * 1024 * 1024)
 
-	localPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD_LOCAL", false, "")
+	localPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD_LOCAL", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 	localConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        LocalKafkaBootstrapServers,
 		"security.protocol":        securityProtocol,
@@ -51,7 +54,10 @@ func CreateTopicMapProcessors(tp TopicMap, kafkaGroupIdSuffic string, securityPr
 		"enable.auto.offset.store": false,
 	}
 
-	remotePassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD_REMOTE", false, "")
+	remotePassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD_REMOTE", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 	remoteConfigMap := kafka.ConfigMap{
 		"bootstrap.servers":        RemoteKafkaBootstrapServers,
 		"security.protocol":        securityProtocol,

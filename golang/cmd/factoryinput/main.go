@@ -70,8 +70,14 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser, _ := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
-		tempPassword, _ := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		tempUser, err := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		tempPassword, err := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
 		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
@@ -128,7 +134,10 @@ func main() {
 	}()
 
 	// Read environment variables
-	certificateName, _ := env.GetAsString("CERTIFICATE_NAME", false, "USE_TLS")
+	certificateName, err := env.GetAsString("CERTIFICATE_NAME", false, "USE_TLS")
+	if err != nil {
+		zap.S().Error(err)
+	}
 	mqttBrokerURL, err := env.GetAsString("BROKER_URL", true, "")
 	if err != nil {
 		zap.S().Fatal(err)
@@ -140,7 +149,10 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	mqttPassword, _ := env.GetAsString("MQTT_PASSWORD", false, "")
+	mqttPassword, err := env.GetAsString("MQTT_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	SetupMQTT(certificateName, mqttBrokerURL, podName, mqttPassword)
 	zap.S().Debugf("Finished setting up MQTT")

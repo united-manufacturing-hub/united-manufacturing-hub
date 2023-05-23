@@ -30,7 +30,10 @@ func Init(kafkaBroker string) {
 
 	topicList := strings.Split(kafkaTopics, ";")
 
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	zap.S().Debug("Creating kafka client")
 	client, err := kafka.NewKafkaClient(&kafka.NewClientOptions{

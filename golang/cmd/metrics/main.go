@@ -50,7 +50,10 @@ func main() {
 	arch := runtime.GOARCH
 
 	// Get start reason
-	reason, _ := env.GetAsString("REASON", false, "UNKNOWN")
+	reason, err := env.GetAsString("REASON", false, "UNKNOWN")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Get total memory
 	vmStat, err := mem.VirtualMemory()

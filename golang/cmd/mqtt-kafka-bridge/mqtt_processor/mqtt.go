@@ -43,7 +43,10 @@ func Init(mqttToKafkaChan chan kafka.Message, shutdownChan chan bool) {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	password, _ := env.GetAsString("MQTT_PASSWORD", false, "")
+	password, err := env.GetAsString("MQTT_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBrokerURL)
@@ -172,7 +175,10 @@ func newTLSConfig() *tls.Config {
 		zap.S().Fatalf("Error parsing client certificate: %s", err)
 	}
 
-	skipVerify, _ := env.GetAsBool("INSECURE_SKIP_VERIFY", false, true)
+	skipVerify, err := env.GetAsBool("INSECURE_SKIP_VERIFY", false, true)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Create tls.Config with desired tls properties
 	/* #nosec G402 -- Remote verification is not yet implemented*/
@@ -202,7 +208,10 @@ func Shutdown() {
 }
 
 func Start(kafkaToMqttChan chan kafka.Message) {
-	MQTTSenderThreads, _ := env.GetAsInt("MQTT_SENDER_THREADS", false, 1)
+	MQTTSenderThreads, err := env.GetAsInt("MQTT_SENDER_THREADS", false, 1)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if MQTTSenderThreads < 1 {
 		zap.S().Fatalf("MQTT_SENDER_THREADS must be at least 1")
 	}

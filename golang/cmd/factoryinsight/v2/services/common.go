@@ -33,7 +33,7 @@ var (
 	logData = false
 )
 
-var lruExistCache, _ = lru.New(50)
+var lruExistCache, _ = lru.New(50) //nolint:errcheck
 
 func GetStateExists(workCellId uint32) (bool, error) {
 	_, ok := lruExistCache.Get(fmt.Sprintf("state-exists-%d", workCellId))

@@ -90,8 +90,8 @@ func isValid(topic string, payload []byte) bool {
 	if isRaw {
 		// Check if message is known
 		hasher := xxh3.New()
-		_, _ = hasher.Write([]byte(topic))
-		_, _ = hasher.Write(payload)
+		_, _ = hasher.Write([]byte(topic)) //nolint:errcheck
+		_, _ = hasher.Write(payload)       //nolint:errcheck
 		hash := hasher.Sum64()
 
 		// Uses Get to re-validate the entry
