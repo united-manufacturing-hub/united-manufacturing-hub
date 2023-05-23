@@ -111,7 +111,7 @@ func main() {
 	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe("0.0.0.0:8086", health)
+		err = http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Errorf("Failed to bind healthcheck to port", err)
 			ShutdownApplicationGraceful()

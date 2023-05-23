@@ -93,7 +93,7 @@ func main() {
 	if useSsl {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
 			zap.S().Fatalf("Error opening kafka tls.key: %s", err)
 		}

@@ -74,7 +74,7 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 	if useSsl {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
 			zap.S().Fatalf("Failed to open /SSL_certs/kafka/tls.key: %s", err)
 		}

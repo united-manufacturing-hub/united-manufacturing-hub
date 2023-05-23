@@ -50,7 +50,7 @@ func Init(kafkaBroker string) {
 	}
 	defer func(client *kafka.Client) {
 		zap.S().Debug("Closing kafka client")
-		err := client.Close()
+		err = client.Close()
 		if err != nil {
 			zap.S().Fatalf("Error closing kafka client: %v", err)
 		}

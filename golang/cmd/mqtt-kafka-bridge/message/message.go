@@ -22,11 +22,12 @@ func Init() {
 	if arcRaw != nil {
 		return
 	}
-	arcSizeRaw, err := env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
+	var err error
+	arcSizeRaw, err = env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
 	if err != nil {
 		zap.S().Error(err)
 	}
-	arcSizeNonRaw, err := env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
+	arcSizeNonRaw, err = env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
 	if err != nil {
 		zap.S().Error(err)
 	}

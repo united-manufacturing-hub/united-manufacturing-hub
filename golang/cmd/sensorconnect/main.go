@@ -118,19 +118,20 @@ func main() {
 	if useMQTT {
 		zap.S().Infof("Starting with MQTT")
 		// Read environment variables for MQTT
-		MQTTCertificateName, err := env.GetAsString("MQTT_CERTIFICATE_NAME", true, "")
+		var MQTTCertificateName, MQTTBrokerURL, podName, mqttPassword string
+		MQTTCertificateName, err = env.GetAsString("MQTT_CERTIFICATE_NAME", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		MQTTBrokerURL, err := env.GetAsString("MQTT_BROKER_URL", true, "")
+		MQTTBrokerURL, err = env.GetAsString("MQTT_BROKER_URL", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		podName, err := env.GetAsString("POD_NAME", true, "")
+		podName, err = env.GetAsString("POD_NAME", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		mqttPassword, err := env.GetAsString("MQTT_PASSWORD", true, "")
+		mqttPassword, err = env.GetAsString("MQTT_PASSWORD", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
@@ -140,7 +141,8 @@ func main() {
 	if useKafka {
 		zap.S().Infof("Starting with Kafka")
 		// Read environment variables for Kafka
-		KafkaBoostrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+		var KafkaBoostrapServer string
+		KafkaBoostrapServer, err = env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}

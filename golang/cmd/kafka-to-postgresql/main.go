@@ -60,7 +60,7 @@ func main() {
 	http.Handle(metricsPath, promhttp.Handler())
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe(metricsPort, nil)
+		err = http.ListenAndServe(metricsPort, nil)
 		if err != nil {
 			zap.S().Errorf("Error starting metrics: %s", err)
 		}
@@ -73,7 +73,7 @@ func main() {
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe("0.0.0.0:8086", health)
+		err = http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Errorf("Error starting healthcheck: %s", err)
 		}
@@ -130,7 +130,7 @@ func main() {
 	if useSsl {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
 			zap.S().Fatalf("Error opening Kafka TLS key: %s", err)
 		}
