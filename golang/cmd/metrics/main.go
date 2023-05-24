@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/shirou/gopsutil/cpu"
@@ -112,7 +113,12 @@ func main() {
 
 	// POST to https://repo.umh.app/metrics
 
-	_, err = http.DefaultClient.Post("https://repo.umh.app/metrics", "application/json", strings.NewReader(string(jsonMetrics))) //nolint:bodyclose
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://repo.umh.app/metrics", strings.NewReader(string(jsonMetrics)))
+	if err != nil {
+		zap.S().Errorf("error: %s", err)
+		return
+	}
+	_, err = http.DefaultClient.Do(req) //nolint:bodyclose
 	if err != nil {
 		zap.S().Errorf("error: %s", err)
 		return
