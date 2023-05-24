@@ -1109,11 +1109,11 @@ mqtt_broker:
         pullPolicy: IfNotPresent
   resources:
     limits:
-      cpu: 500m
+      cpu: 700m
       memory: 1700Mi
     requests:
-      cpu: 100m
-      memory: 100Mi
+      cpu: 300m
+      memory: 1000Mi
   persistence:
     extension:
       size: 100Mi
