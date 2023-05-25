@@ -15,6 +15,7 @@
 package services
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -26,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"regexp"
 	"sort"
@@ -144,7 +145,12 @@ func GetCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
 	tags, b = GetPrefetchedTags(workCellId, isPVS)
 	if b {
 		// Retriggers the prefetching of the tags in the background
-		go prefetch(workCellId)
+		go func() {
+			err = prefetch(workCellId)
+			if err != nil {
+				zap.S().Errorf("Error prefetching tags: %s", err)
+			}
+		}()
 		return tags, nil
 	}
 
@@ -512,7 +518,7 @@ func ProcessCustomTagRequest(c *gin.Context, request models.GetTagsDataRequest, 
 	}
 
 	if useProcessValueString {
-		getCustomTagDataRequest.TimeBucket = "none"
+		getCustomTagDataRequest.TimeBucket = "none" //nolint:goconst
 		getCustomTagDataRequest.TagAggregates = "null"
 		getCustomTagDataRequest.GapFilling = "none"
 	}
@@ -883,8 +889,8 @@ SELECT
 }
 
 type TagsWithExpiry struct {
-	tag    []string
 	expiry time.Time
+	tag    []string
 }
 
 var prefetchedTags = make(map[uint32]TagsWithExpiry)
@@ -1013,7 +1019,12 @@ func prefetch(workCellId uint32) error {
 
 func updateWorkCellTag(workCellId uint32, tag []string, isPVS bool) {
 
-	tenMinutesPlusRandom := time.Now().Add(10 * time.Minute).Add(time.Duration(rand.Intn(300)) * time.Second)
+	rnd, err := rand.Int(rand.Reader, big.NewInt(300))
+	if err != nil {
+		zap.S().Errorf("Error while generating random number: %v", err)
+		return
+	}
+	tenMinutesPlusRandom := time.Now().Add(10 * time.Minute).Add(time.Duration(rnd.Int64()) * time.Second)
 
 	if isPVS {
 		prefetchedTags[workCellId] = TagsWithExpiry{

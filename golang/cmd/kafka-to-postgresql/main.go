@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/umh-utils/parse"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"math"
@@ -36,7 +37,7 @@ import (
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -47,7 +48,10 @@ func main() {
 
 	internal.Initfgtrace()
 
-	dryRun, _ := env.GetAsBool("DRY_RUN", false, false)
+	dryRun, err := env.GetAsBool("DRY_RUN", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Prometheus
 	metricsPath := "/metrics"
@@ -57,7 +61,7 @@ func main() {
 	http.Handle(metricsPath, promhttp.Handler())
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe(metricsPort, nil)
+		err = http.ListenAndServe(metricsPort, nil)
 		if err != nil {
 			zap.S().Errorf("Error starting metrics: %s", err)
 		}
@@ -70,15 +74,21 @@ func main() {
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe("0.0.0.0:8086", health)
+		err = http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Errorf("Error starting healthcheck: %s", err)
 		}
 	}()
 
 	// Postgres
-	PQHost, _ := env.GetAsString("POSTGRES_HOST", false, "db")
-	PQPort, _ := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	PQHost, err := env.GetAsString("POSTGRES_HOST", false, "db")
+	if err != nil {
+		zap.S().Error(err)
+	}
+	PQPort, err := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	PQUser, err := env.GetAsString("POSTGRES_USER", true, "")
 	if err != nil {
 		zap.S().Fatal(err)
@@ -92,6 +102,9 @@ func main() {
 		zap.S().Fatal(err)
 	}
 	PQSSLMode, err := env.GetAsString("POSTGRES_SSL_MODE", false, "require")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	SetupDB(PQUser, PQPassword, PQDBName, PQHost, PQPort, health, dryRun, PQSSLMode)
 
@@ -102,14 +115,24 @@ func main() {
 		zap.S().Fatal(err)
 	}
 
+	kafkaSslPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
+
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
 	HTTopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+
+	securityProtocol := "plaintext"
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if useSsl {
 
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
 			zap.S().Fatalf("Error opening Kafka TLS key: %s", err)
 		}
@@ -169,12 +192,19 @@ func main() {
 			AutoCommit:        false,
 		})
 
-	allowedMemorySize, _ := env.GetAsInt("MEMORY_REQUEST", false, 1073741824)
-	zap.S().Infof("Allowed memory size is %d", allowedMemorySize)
+	allowedMemorySize, err := env.GetAsString("MEMORY_REQUEST", false, "50Mi")
+	if err != nil {
+		zap.S().Error(err)
+	}
+	allowedMemorySizeInt, err := parse.Quantity(allowedMemorySize)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
+	zap.S().Infof("Allowed memory size is %d Bytes", allowedMemorySizeInt)
 
 	// InitCache is initialized with 1Gb of memory for each cache
-	InitCache(allowedMemorySize / 4)
-	InitMessageCache(allowedMemorySize / 4)
+	InitCache(allowedMemorySizeInt / 4)
+	internal.InitMessageCache(allowedMemorySizeInt / 4)
 
 	zap.S().Debugf("Starting queue processor")
 

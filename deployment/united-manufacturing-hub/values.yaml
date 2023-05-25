@@ -45,12 +45,12 @@ _000_commonConfig:
     # iotsensorsmqtt simulates IoT sensor data as over OPC UA.
     # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsOPCUA
     opcuasimulator:
-       enabled: true
+       enabled: false
 
     # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
     # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
     packmlmqttsimulator:
-      enabled: true
+      enabled: false
 
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
@@ -179,7 +179,7 @@ _000_commonConfig:
     enabled: true
 
   racedetector:
-    enabled: true
+    enabled: false
 
 _001_customMicroservices:
   -
@@ -194,7 +194,8 @@ _001_customMicroservices:
       env:
         - name: LOGGING_LEVEL
           value: PRODUCTION
-
+      # service type. NordPort or LoadBalancer
+      serviceType: LoadBalancer
       # this will expose port 80 on the host on port 8080
       port: 80
       externalPort: 8080
@@ -220,7 +221,8 @@ _001_customMicroservices:
       env:
         - name: LOGGING_LEVEL
           value: PRODUCTION
-
+      # service type. NordPort or LoadBalancer
+      serviceType: LoadBalancer
       # this will expose port 81 on the host on port 8081
       port: 81
       externalPort: 8081
@@ -246,7 +248,8 @@ _001_customMicroservices:
     env:
       - name: LOGGING_LEVEL
         value: PRODUCTION
-
+    # service type. NordPort or LoadBalancer
+    serviceType: LoadBalancer
     # this will expose port 81 on the host on port 8081
     port: 81
     externalPort: 8082
@@ -344,8 +347,8 @@ iotsensorsmqtt:
       cpu: "10m"
       memory: "20Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      cpu: "30m"
+      memory: "50Mi"
   mqtt:
     password: INSECURE_INSECURE_INSECURE
     encryptedPassword: T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==
@@ -359,8 +362,8 @@ opcuasimulator:
       cpu: "10m"
       memory: "20Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      cpu: "30m"
+      memory: "50Mi"
   service:
     annotations: {}
     # certadds can add hostnames and ip addresses to the certificate for the simulator so connection to the opcua client is easier
@@ -955,8 +958,8 @@ packmlmqttsimulator:
       cpu: "10m"
       memory: "20Mi"
     limits:
-      cpu: "100m"
-      memory: "100Mi"
+      cpu: "30m"
+      memory: "50Mi"
 
 ### tulip-connector ###
 tulipconnector:
@@ -970,10 +973,10 @@ tulipconnector:
     mode: prod
   resources:
     limits:
-      cpu: 200m
-      memory: 100Mi
+      cpu: 30m
+      memory: 50Mi
     requests:
-      cpu: 100m
+      cpu: 10m
       memory: 20Mi
 
 ### mqtt-kafka-bridge ###
@@ -1074,11 +1077,11 @@ redis:
       initialDelaySeconds: 120
     resources:
       limits:
-        cpu: 200m
-        memory: 200Mi
-      requests:
         cpu: 100m
         memory: 100Mi
+      requests:
+        cpu: 50m
+        memory: 50Mi
   metrics:
     enabled: true
   pdb:
@@ -1106,11 +1109,11 @@ mqtt_broker:
         pullPolicy: IfNotPresent
   resources:
     limits:
-      cpu: 500m
-      memory: 500Mi
+      cpu: 700m
+      memory: 1700Mi
     requests:
-      cpu: 100m
-      memory: 100Mi
+      cpu: 300m
+      memory: 1000Mi
   persistence:
     extension:
       size: 100Mi

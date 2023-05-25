@@ -26,14 +26,17 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	compile, err := regexp.Compile(KafkaTopic)
 	if err != nil {
 		zap.S().Fatalf("Error compiling regex: %v", err)
 	}
 
-	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err = kafka.NewKafkaClient(&kafka.NewClientOptions{
 		Brokers: []string{
 			KafkaBootstrapServer,
 		},
@@ -74,7 +77,10 @@ func Shutdown() {
 }
 
 func Start(mqttToKafkaChan chan kafka.Message) {
-	KafkaSenderThreads, _ := env.GetAsInt("KAFKA_SENDER_THREADS", false, 1)
+	KafkaSenderThreads, err := env.GetAsInt("KAFKA_SENDER_THREADS", false, 1)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if KafkaSenderThreads < 1 {
 		zap.S().Fatal("KAFKA_SENDER_THREADS must be at least 1")
 	}
@@ -110,6 +116,6 @@ func start(mqttToKafkaChan chan kafka.Message) {
 	}
 }
 
-func GetStats() (sent uint64, received uint64) {
+func GetStats() (sent, received, sentBytesA, recvBytesA uint64) {
 	return kafka.GetKafkaStats()
 }

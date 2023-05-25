@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/shirou/gopsutil/cpu"
@@ -30,7 +31,7 @@ import (
 	"strings"
 )
 
-type stat struct {
+type stat struct { //nolint:govet
 	OS      string
 	Arch    string
 	Memory  *mem.VirtualMemoryStat
@@ -42,7 +43,7 @@ type stat struct {
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 
 	// Get OS and architecture
@@ -50,7 +51,10 @@ func main() {
 	arch := runtime.GOARCH
 
 	// Get start reason
-	reason, _ := env.GetAsString("REASON", false, "UNKNOWN")
+	reason, err := env.GetAsString("REASON", false, "UNKNOWN")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Get total memory
 	vmStat, err := mem.VirtualMemory()
@@ -109,10 +113,15 @@ func main() {
 
 	// POST to https://repo.umh.app/metrics
 
-	_, err = http.DefaultClient.Post("https://repo.umh.app/metrics", "application/json", strings.NewReader(string(jsonMetrics)))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://repo.umh.app/metrics", strings.NewReader(string(jsonMetrics)))
 	if err != nil {
 		zap.S().Errorf("error: %s", err)
 		return
 	}
-	_ = log.Sync()
+	_, err = http.DefaultClient.Do(req) //nolint:bodyclose
+	if err != nil {
+		zap.S().Errorf("error: %s", err)
+		return
+	}
+	_ = log.Sync() //nolint:errcheck
 }

@@ -22,7 +22,7 @@ metadata:
   name: united-manufacturing-hub-cm-{{$value.name}}
 
 spec:
-  type: NodePort
+  type: {{$value.serviceType}}
   ports:
     - port: {{$value.externalPort}}
       targetPort: {{$value.port}}

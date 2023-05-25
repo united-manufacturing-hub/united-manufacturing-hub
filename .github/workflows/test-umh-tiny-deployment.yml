@@ -67,6 +67,7 @@ jobs:
             --set "tulipconnector.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
+            --set "metrics.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --create-namespace \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
@@ -135,7 +136,12 @@ jobs:
       - name: Upgrade UMH
         id: upgrade-umh
         run: |
+          kubectl delete deployment ${{ env.UMH }}-factoryinsight-deployment -n ${{ env.UMH }} || true
+          kubectl delete deployment ${{ env.UMH }}-opcuasimulator-deployment -n ${{ env.UMH }} || true
+          kubectl delete deployment ${{ env.UMH }}-iotsensorsmqtt -n ${{ env.UMH }} || true
           kubectl delete statefulset ${{ env.UMH }}-kafka -n ${{ env.UMH }} || true
+          kubectl delete statefulset ${{ env.UMH }}-hivemqce -n ${{ env.UMH }} || true
+          kubectl delete statefulset ${{ env.UMH }}-nodered -n ${{ env.UMH }} || true
           kubectl delete service ${{ env.UMH }}-kafka -n ${{ env.UMH }} || true
           helm upgrade ${{ env.UMH }} ${{ env.CHART_DIR }} \
             --values ${{ env.VALUES_FILE }} \
@@ -153,6 +159,7 @@ jobs:
             --set "tulipconnector.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
+            --set "metrics.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
