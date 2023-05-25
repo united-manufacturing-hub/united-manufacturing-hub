@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BRANCH
-
-FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 AS source
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
@@ -34,22 +32,29 @@ ADD ./golang/cmd/metrics /build/cmd/metrics
 
 RUN go mod tidy
 
-FROM builder AS branch
+FROM source AS build
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl--mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/metrics
-
-FROM builder AS branch-race
-WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl--mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/metrics
-
-FROM branch${BRANCH} AS final
-
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/metrics
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
-FROM alpine
-COPY --from=final /build/mainFile /app/mainFile
-COPY --from=final /build/deps /lib
+FROM source AS build-race
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/metrics
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
+
+FROM alpine AS runner-race
+COPY --from=build-race /build/mainFile /app/mainFile
+COPY --from=build-race /build/deps /lib
+
 WORKDIR /app
-RUN chmod +x mainFile
+CMD ["./mainFile"]
+
+FROM alpine AS runner
+
+COPY --from=build /build/mainFile /app/mainFile
+COPY --from=build /build/deps /lib
+
+WORKDIR /app
 CMD ["./mainFile"]
