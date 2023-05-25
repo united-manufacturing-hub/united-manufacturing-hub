@@ -51,7 +51,7 @@ var mqttClient MQTT.Client
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -70,8 +70,14 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser, _ := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
-		tempPassword, _ := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		tempUser, err := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		tempPassword, err := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
 		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
@@ -93,7 +99,10 @@ func main() {
 	accounts[RESTUser] = RESTPassword
 
 	// get currentVersion
-	version, _ := env.GetAsString("VERSION", false, "1")
+	version, err := env.GetAsString("VERSION", false, "1")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	zap.S().Debugf("Starting program..")
 
@@ -102,7 +111,7 @@ func main() {
 	health.AddReadinessCheck("shutdownEnabled", isShutdownEnabled())
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe("0.0.0.0:8086", health)
+		err = http.ListenAndServe("0.0.0.0:8086", health)
 		if err != nil {
 			zap.S().Errorf("Failed to bind healthcheck to port", err)
 			ShutdownApplicationGraceful()
@@ -125,7 +134,10 @@ func main() {
 	}()
 
 	// Read environment variables
-	certificateName, _ := env.GetAsString("CERTIFICATE_NAME", false, "USE_TLS")
+	certificateName, err := env.GetAsString("CERTIFICATE_NAME", false, "USE_TLS")
+	if err != nil {
+		zap.S().Error(err)
+	}
 	mqttBrokerURL, err := env.GetAsString("BROKER_URL", true, "")
 	if err != nil {
 		zap.S().Fatal(err)
@@ -137,7 +149,10 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	mqttPassword, _ := env.GetAsString("MQTT_PASSWORD", false, "")
+	mqttPassword, err := env.GetAsString("MQTT_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	SetupMQTT(certificateName, mqttBrokerURL, podName, mqttPassword)
 	zap.S().Debugf("Finished setting up MQTT")
@@ -167,7 +182,10 @@ func main() {
 
 	}()
 
-	mqttQueueHandler, _ := env.GetAsInt("MQTT_QUEUE_HANDLER", false, 10)
+	mqttQueueHandler, err := env.GetAsInt("MQTT_QUEUE_HANDLER", false, 10)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	for i := 0; i < mqttQueueHandler; i++ {
 		zap.S().Debugf("Starting MQTT handlers")
 		go MqttQueueHandler()

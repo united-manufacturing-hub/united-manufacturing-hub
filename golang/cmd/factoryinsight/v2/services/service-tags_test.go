@@ -20,7 +20,7 @@ func TestTimeBucketToDuration(t *testing.T) {
 	for key, value := range validInputOutputMap {
 		resultDuration, err := timeBucketToDuration(key)
 		if resultDuration != value {
-			t.Errorf("wrong convertion from timeBucket to duration: %v to %v", key, value)
+			t.Errorf("wrong conversion from timeBucket to duration: %v to %v", key, value)
 		}
 		if err != nil {
 			t.Errorf("error detected %v", err)

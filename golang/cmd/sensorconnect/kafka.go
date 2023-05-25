@@ -67,11 +67,14 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		return
 	}
 	securityProtocol := "plaintext"
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if useSsl {
 		securityProtocol = "ssl"
 
-		_, err := os.Open("/SSL_certs/kafka/tls.key")
+		_, err = os.Open("/SSL_certs/kafka/tls.key")
 		if err != nil {
 			zap.S().Fatalf("Failed to open /SSL_certs/kafka/tls.key: %s", err)
 		}
@@ -85,7 +88,10 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		}
 	}
 
-	kafkaSslPassword, _ := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	kafkaSslPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 	configMap := kafka.ConfigMap{
 		"security.protocol":        securityProtocol,
 		"ssl.key.location":         "/SSL_certs/kafka/tls.key",
@@ -95,7 +101,7 @@ func setupKafka(boostrapServer string) (producer *kafka.Producer, adminClient *k
 		"bootstrap.servers":        boostrapServer,
 		"group.id":                 "sensorconnect",
 	}
-	producer, err := kafka.NewProducer(&configMap)
+	producer, err = kafka.NewProducer(&configMap)
 
 	if err != nil {
 		zap.S().Fatalf("Failed to create kafka producer: %s", err)

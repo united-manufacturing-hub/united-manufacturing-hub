@@ -58,7 +58,7 @@ var (
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -69,9 +69,15 @@ func main() {
 
 	internal.Initfgtrace()
 
-	PQHost, _ := env.GetAsString("POSTGRES_HOST", false, "db")
+	PQHost, err := env.GetAsString("POSTGRES_HOST", false, "db")
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	PQPort, _ := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	PQPort, err := env.GetAsInt("POSTGRES_PORT", false, 5432)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	// Read in other environment variables
 	PQUser, err := env.GetAsString("POSTGRES_USER", true, "")
@@ -93,8 +99,18 @@ func main() {
 	zap.S().Debugf("Loading accounts from environment..")
 
 	for i := 1; i <= 100; i++ {
-		tempUser, _ := env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
-		tempPassword, _ := env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		var tempUser, tempPassword string
+		tempUser, err = env.GetAsString("CUSTOMER_NAME_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		tempPassword, err = env.GetAsString("CUSTOMER_PASSWORD_"+strconv.Itoa(i), false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		if err != nil {
+			zap.S().Error(err)
+		}
 		if tempUser != "" && tempPassword != "" {
 			zap.S().Infof("Added account for " + tempUser)
 			accounts[tempUser] = tempPassword
@@ -113,8 +129,10 @@ func main() {
 	accounts[RESTUser] = RESTPassword
 
 	// get version
-	version, err := env.GetAsInt("CURRENT_VERSION", true, 2)
-
+	version, err := env.GetAsInt("VERSION", true, 2)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 	zap.S().Debugf("Starting program..")
 
 	redisURI, err := env.GetAsString("REDIS_URI", true, "")
@@ -127,7 +145,10 @@ func main() {
 	}
 	redisDB := 0 // default database
 
-	dryRun, _ := env.GetAsBool("DRY_RUN", false, false)
+	dryRun, err := env.GetAsBool("DRY_RUN", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	internal.InitCache(redisURI, redisPassword, redisDB, dryRun)
 
 	zap.S().Debugf("Cache initialized at %s", redisURI)
@@ -151,7 +172,10 @@ func main() {
 
 	zap.S().Debug("DB initialized")
 
-	helpers.InsecureNoAuth, _ = env.GetAsBool("INSECURE_NO_AUTH", false, false)
+	helpers.InsecureNoAuth, err = env.GetAsBool("INSECURE_NO_AUTH", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 	if helpers.InsecureNoAuth {
 		for i := 0; i < 50; i++ {
 			zap.S().Warnf("INSECURE_NO_AUTH is set to true. This is a security risk. Do not use in production.")
@@ -161,6 +185,7 @@ func main() {
 	}
 
 	setupRestAPI(accounts, version)
+	zap.S().Debug("REST API initialized")
 
 	// Allow graceful shutdown
 	signal.Notify(sigs, syscall.SIGTERM)
