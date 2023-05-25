@@ -83,6 +83,8 @@ spec:
               {{- else }}
               value: "true"
               {{- end }}
+            - name: JAVA_OPTS
+              value: "-Xmx750m -Xms750m"
           resources:
             limits:
               cpu: {{.Values.mqtt_broker.resources.limits.cpu}}

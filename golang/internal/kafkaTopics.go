@@ -48,7 +48,7 @@ type TopicInformation struct {
 	ExtendedTopics     []string
 }
 
-var regexLruCache, _ = lru.New(100)
+var regexLruCache, _ = lru.New(100) //nolint:errcheck
 
 // GetTopicInformationCached returns the topic information for the given topic.
 // The topic information is cached in an LRU cache, resulting in up to 10x performance improvement.
