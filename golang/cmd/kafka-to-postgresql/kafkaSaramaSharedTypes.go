@@ -173,8 +173,7 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShu
 	msg *kafka.Message,
 	isShuttingDown bool) {
 	// Wait for new messages. A Sarama Kafka Consumer gets timeout length at initialization.
-	msgChan := make(<-chan kafka.Message)
-	msgChan = kafkaConsumer.GetMessages()
+	msgChan := kafkaConsumer.GetMessages()
 	var message kafka.Message
 
 	var errConsumer <-chan error = kafkaConsumer.GetConsumerErrorsChannel()
@@ -188,7 +187,6 @@ func waitNewMessages(identifier string, kafkaConsumer *kafka.Client, gracefulShu
 		gracefulShutdown()
 		return nil, true
 	}
-	return &message, false
 }
 
 // StartPutbackProcessor starts the putback processor.
@@ -408,7 +406,7 @@ func StartProducerEventHandler(identifier string, errors <-chan *sarama.Producer
 					}
 				}
 			}
-		case _ = <-successes:
+		case <-successes:
 			KafkaConfirmed += 1
 		default:
 			time.Sleep(time.Millisecond * 100)
@@ -424,7 +422,7 @@ func StartConsumerEventHandler(identifier string, errors <-chan error, msgs <-ch
 		select {
 		case errorConsumer = <-errors:
 			zap.S().Errorf("Error for %s: %s", identifier, errorConsumer)
-		case _ = <-msgs:
+		case <-msgs:
 			KafkaConfirmed += 1
 		default:
 			time.Sleep(time.Millisecond * 100)
