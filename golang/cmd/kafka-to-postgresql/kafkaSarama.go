@@ -25,7 +25,7 @@ var KafkaTopicProbeConsumer *kafka.Client
 
 var probeTopicName = "umh.v1.kafka.newTopic"
 
-func SetupKafka(opts kafka.NewClientOptions) {
+func SetupKafka(opts *kafka.NewClientOptions) {
 	zap.S().Debugf("Options: %v", opts)
 
 	var err error
@@ -39,7 +39,7 @@ func SetupKafka(opts kafka.NewClientOptions) {
 }
 
 // SetupKafkaTopicProbeConsumer sets up a consumer for detecting new topics
-func SetupKafkaTopicProbeConsumer(opts kafka.NewClientOptions) {
+func SetupKafkaTopicProbeConsumer(opts *kafka.NewClientOptions) {
 	zap.S().Debugf("Options: %v", opts)
 
 	var err error

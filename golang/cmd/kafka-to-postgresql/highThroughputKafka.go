@@ -24,7 +24,7 @@ var highThroughputPutBackChannel chan PutBackChanMsg
 
 var HTKafkaClient *kafka.Client
 
-func SetupHTKafka(opts kafka.NewClientOptions) {
+func SetupHTKafka(opts *kafka.NewClientOptions) {
 
 	var err error
 	HTKafkaClient, err = kafka.NewKafkaClient(opts)

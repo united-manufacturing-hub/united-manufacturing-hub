@@ -27,7 +27,7 @@ var highIntegrityPutBackChannel chan PutBackChanMsg
 var HIKafkaClient *kafka.Client
 
 // SetupHIKafka sets up the HI Kafka consumer, producer and admin
-func SetupHIKafka(opts kafka.NewClientOptions) {
+func SetupHIKafka(opts *kafka.NewClientOptions) {
 
 	var err error
 	HIKafkaClient, err = kafka.NewKafkaClient(opts)

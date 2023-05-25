@@ -115,17 +115,16 @@ func main() {
 		zap.S().Fatal(err)
 	}
 
-	kafkaSslPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
+	/*kafkaSslPassword, err := env.GetAsString("KAFKA_SSL_KEY_PASSWORD", false, "")
 	if err != nil {
 		zap.S().Error(err)
-	}
+	}*/
 
 	// Customer Name cannot begin with raw
 	HITopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$`
 	HTTopic := `^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$`
 
-
-	securityProtocol := "plaintext"
+	//securityProtocol := "plaintext"
 	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
 	if err != nil {
 		zap.S().Error(err)
@@ -151,7 +150,7 @@ func main() {
 	// Processed message now will be stored locally and then automatically committed to Kafka.
 	// This still provides the at-least-once guarantee.
 	SetupHIKafka(
-		kafka.NewClientOptions{
+		&kafka.NewClientOptions{
 			Brokers: []string{
 				KafkaBootstrapServer,
 			},
@@ -166,7 +165,7 @@ func main() {
 
 	// HT uses enable.auto.commit=true for increased performance.
 	SetupHTKafka(
-		kafka.NewClientOptions{
+		&kafka.NewClientOptions{
 			Brokers: []string{
 				KafkaBootstrapServer,
 			},
@@ -180,7 +179,7 @@ func main() {
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
 	SetupKafkaTopicProbeConsumer(
-		kafka.NewClientOptions{
+		&kafka.NewClientOptions{
 			Brokers: []string{
 				KafkaBootstrapServer,
 			},
