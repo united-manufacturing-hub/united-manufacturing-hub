@@ -68,7 +68,7 @@ var additionalSleepTimePerActivePort float64
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -95,10 +95,20 @@ func main() {
 	internal.InitCacheWithoutRedis()
 	cP = sync.Map{}
 
-	isTest, _ := env.GetAsBool("TEST", false, false)
+	var err error
+	isTest, err := env.GetAsBool("TEST", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	useKafka, _ = env.GetAsBool("USE_KAFKA", false, true)
-	useMQTT, _ = env.GetAsBool("USE_MQTT", false, false)
+	useKafka, err = env.GetAsBool("USE_KAFKA", false, true)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	useMQTT, err = env.GetAsBool("USE_MQTT", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	if !useKafka && !useMQTT {
 		zap.S().Errorf("Neither kafka nor MQTT output enabled, exiting !")
@@ -108,19 +118,20 @@ func main() {
 	if useMQTT {
 		zap.S().Infof("Starting with MQTT")
 		// Read environment variables for MQTT
-		MQTTCertificateName, err := env.GetAsString("MQTT_CERTIFICATE_NAME", true, "")
+		var MQTTCertificateName, MQTTBrokerURL, podName, mqttPassword string
+		MQTTCertificateName, err = env.GetAsString("MQTT_CERTIFICATE_NAME", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		MQTTBrokerURL, err := env.GetAsString("MQTT_BROKER_URL", true, "")
+		MQTTBrokerURL, err = env.GetAsString("MQTT_BROKER_URL", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		podName, err := env.GetAsString("POD_NAME", true, "")
+		podName, err = env.GetAsString("POD_NAME", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
-		mqttPassword, err := env.GetAsString("MQTT_PASSWORD", true, "")
+		mqttPassword, err = env.GetAsString("MQTT_PASSWORD", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
@@ -130,20 +141,23 @@ func main() {
 	if useKafka {
 		zap.S().Infof("Starting with Kafka")
 		// Read environment variables for Kafka
-		KafkaBoostrapServer, err := env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
+		var KafkaBoostrapServer string
+		KafkaBoostrapServer, err = env.GetAsString("KAFKA_BOOTSTRAP_SERVER", true, "")
 		if err != nil {
 			zap.S().Fatal(err)
 		}
 		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
-	var err error
 	lowestSensorTickTime, err = env.GetAsUint64("LOWER_POLLING_TIME_MS", false, 20)
 	if err != nil {
 		zap.S().Error(err)
 	}
 
-	subTwentyMs, _ = env.GetAsBool("SUB_TWENTY_MS", false, false)
+	subTwentyMs, err = env.GetAsBool("SUB_TWENTY_MS", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	if lowestSensorTickTime < 20 {
 		if subTwentyMs {

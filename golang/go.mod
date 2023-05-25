@@ -40,7 +40,7 @@ require (
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.7.5
-	github.com/united-manufacturing-hub/umh-utils v0.2.0
+	github.com/united-manufacturing-hub/umh-utils v0.2.1
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.9.0
@@ -110,5 +110,6 @@ require (
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
+	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
