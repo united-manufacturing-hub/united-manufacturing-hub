@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BRANCH
-
-FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 as builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 AS source
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
@@ -36,13 +34,17 @@ ADD ./golang/pkg /build/pkg
 RUN go mod tidy
 RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect
 
-FROM builder AS branch
+FROM source AS build
 WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
-FROM builder AS branch-race
+FROM source AS build-race
 WORKDIR /build
 RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/sensorconnect
+# Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
+RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM branch${BRANCH} AS final
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
@@ -51,10 +53,20 @@ RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % 
 FROM alpine:latest as certs
 RUN apk --update add ca-certificates
 
-FROM scratch
+FROM scratch AS runner-race
+
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=final /build/mainFile /app/mainFile
-COPY --from=final /build/deps /lib
+COPY --from=build-race /build/mainFile /app/mainFile
+COPY --from=build-race /build/deps /lib
+
+WORKDIR /app
+CMD ["./mainFile"]
+
+FROM scratch AS runner
+
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /build/mainFile /app/mainFile
+COPY --from=build /build/deps /lib
 
 WORKDIR /app
 CMD ["./mainFile"]
