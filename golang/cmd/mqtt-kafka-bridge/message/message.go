@@ -22,11 +22,24 @@ func Init() {
 	if arcRaw != nil {
 		return
 	}
-	arcSizeRaw, _ := env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
-	arcSizeNonRaw, _ := env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
+	var err error
+	arcSizeRaw, err = env.GetAsInt("RAW_MESSSAGE_LRU_SIZE", false, 1_000_000)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	arcSizeNonRaw, err = env.GetAsInt("MESSAGE_LRU_SIZE", false, 1_000_000)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
-	arcRaw, _ = lru.NewARC(arcSizeRaw)
-	arcNonRaw, _ = lru.NewARC(arcSizeNonRaw)
+	arcRaw, err = lru.NewARC(arcSizeRaw)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	arcNonRaw, err = lru.NewARC(arcSizeNonRaw)
+	if err != nil {
+		zap.S().Error(err)
+	}
 }
 
 func GetCacheSize() (int, int, int, int) {
@@ -78,8 +91,8 @@ func isValid(topic string, payload []byte) bool {
 	if isRaw {
 		// Check if message is known
 		hasher := xxh3.New()
-		_, _ = hasher.Write([]byte(topic))
-		_, _ = hasher.Write(payload)
+		_, _ = hasher.Write([]byte(topic)) //nolint:errcheck
+		_, _ = hasher.Write(payload)       //nolint:errcheck
 		hash := hasher.Sum64()
 
 		// Uses Get to re-validate the entry

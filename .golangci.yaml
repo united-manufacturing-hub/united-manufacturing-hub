@@ -38,6 +38,7 @@ linters-settings:
     packages:
       - archive/zip
       - bytes
+      - bufio
       - context
       - crypto/tls
       - crypto/x509
@@ -80,7 +81,7 @@ linters-settings:
       - io/ioutil
       - k8s.io/apimachinery/pkg/api/resource
       - math
-      - math/rand
+      - crypto/rand
       - net
       - net/http
       - net/url
@@ -98,6 +99,7 @@ linters-settings:
       - testing
       - time
       - unicode
+      - unsafe
       - github.com/gin-contrib/gzip
       - text/template
       - github.com/felixge/fgtrace

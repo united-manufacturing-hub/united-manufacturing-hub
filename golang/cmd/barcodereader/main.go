@@ -46,7 +46,7 @@ var keycodeToCharShift = map[uint16]rune{
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -111,7 +111,7 @@ func initKafka() {
 	kafkaSendTopic = fmt.Sprintf("ia.%s.%s.%s.barcode", customerID, location, assetID)
 	zap.S().Infof("Sending to Kafka topic %s", kafkaSendTopic)
 
-	client, err = kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err = kafka.NewKafkaClient(&kafka.NewClientOptions{
 		ListenTopicRegex:  nil,
 		ConsumerName:      "barcodereader",
 		Brokers:           []string{KafkaBoostrapServer},

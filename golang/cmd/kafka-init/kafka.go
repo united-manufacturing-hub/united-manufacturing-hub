@@ -30,10 +30,13 @@ func Init(kafkaBroker string) {
 
 	topicList := strings.Split(kafkaTopics, ";")
 
-	useSsl, _ := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	useSsl, err := env.GetAsBool("KAFKA_USE_SSL", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
 
 	zap.S().Debug("Creating kafka client")
-	client, err := kafka.NewKafkaClient(kafka.NewClientOptions{
+	client, err := kafka.NewKafkaClient(&kafka.NewClientOptions{
 		Brokers:           []string{kafkaBroker},
 		ConsumerName:      "kafka-init",
 		Partitions:        6,
@@ -47,7 +50,7 @@ func Init(kafkaBroker string) {
 	}
 	defer func(client *kafka.Client) {
 		zap.S().Debug("Closing kafka client")
-		err := client.Close()
+		err = client.Close()
 		if err != nil {
 			zap.S().Fatalf("Error closing kafka client: %v", err)
 		}

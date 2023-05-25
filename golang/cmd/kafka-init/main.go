@@ -24,10 +24,10 @@ import (
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(log *zap.SugaredLogger) {
-		_ = log.Sync()
+		_ = log.Sync() //nolint:errcheck
 	}(log)
 
 	internal.Initfgtrace()

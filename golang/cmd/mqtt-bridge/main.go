@@ -37,7 +37,7 @@ var remoteMQTTClient MQTT.Client
 
 func main() {
 	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
 	log := logger.New(logLevel)
 	defer func(logger *zap.SugaredLogger) {
 		err := logger.Sync()
@@ -98,6 +98,9 @@ func main() {
 		zap.S().Fatal(err)
 	}
 	localMQTTBrokerSSLEnabled, err := env.GetAsBool("LOCAL_BROKER_SSL_ENABLED", true, true)
+	if err != nil {
+		zap.S().Fatal(err)
+	}
 
 	BridgeOneWay, err := env.GetAsBool("BRIDGE_ONE_WAY", true, true)
 	if err != nil {
