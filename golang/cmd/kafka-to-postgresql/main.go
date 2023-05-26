@@ -161,6 +161,7 @@ func main() {
 			StartOffset:             sarama.OffsetOldest,
 			AutoCommit:              false,
 			ProducerReturnSuccesses: true,
+			TransactionalID:         "hikafka",
 		})
 
 	// HT uses enable.auto.commit=true for increased performance.
@@ -175,6 +176,7 @@ func main() {
 			EnableTLS:         useSsl,
 			StartOffset:       sarama.OffsetOldest,
 			AutoCommit:        true,
+			TransactionalID:   "htkafka",
 		})
 
 	// KafkaTopicProbeConsumer receives a message when a new topic is created
@@ -189,6 +191,7 @@ func main() {
 			EnableTLS:         useSsl,
 			StartOffset:       sarama.OffsetOldest,
 			AutoCommit:        false,
+			TransactionalID:   "probeConsumer",
 		})
 
 	allowedMemorySize, err := env.GetAsString("MEMORY_REQUEST", false, "50Mi")
