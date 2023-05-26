@@ -16,10 +16,9 @@ package main
 
 import (
 	"database/sql"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lib/pq"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"go.uber.org/zap"
 	"os"
 	"strconv"
@@ -71,7 +70,8 @@ func startProcessValueQueueAggregator() {
 							if err != nil {
 								errStr = err.Error()
 							}
-							highThroughputPutBackChannel <- internal.PutBackChanMsg{
+
+							highThroughputPutBackChannel <- PutBackChanMsg{
 								Msg:         message,
 								Reason:      reason,
 								ErrorString: &errStr,
@@ -96,7 +96,7 @@ func startProcessValueQueueAggregator() {
 						if err != nil {
 							errStr = err.Error()
 						}
-						highThroughputPutBackChannel <- internal.PutBackChanMsg{
+						highThroughputPutBackChannel <- PutBackChanMsg{
 							Msg:         message,
 							Reason:      reason,
 							ErrorString: &errStr,
@@ -110,7 +110,7 @@ func startProcessValueQueueAggregator() {
 		}
 	}
 	for _, message := range messages {
-		highThroughputPutBackChannel <- internal.PutBackChanMsg{
+		highThroughputPutBackChannel <- PutBackChanMsg{
 
 			Msg:    message,
 			Reason: "Shutting down",
@@ -163,9 +163,9 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		zap.S().Debugf("[HT][PV] 3 %d", len(messages))
 		// Copy into the temporary table
 		for _, message := range messages {
-			couldParse, parsedMessage := internal.ParseMessage(message)
+			couldParse, parsedMessage := ParseMessage(message)
 			if !couldParse {
-				zap.S().Errorf("[HT][PV] Could not parse message: %s", message.String())
+				zap.S().Errorf("[HT][PV] Could not parse message: %v", message)
 				putBackMsg = append(putBackMsg, message)
 				continue
 			}
@@ -367,8 +367,8 @@ func writeProcessValueToDatabase(messages []*kafka.Message) (
 		if len(putBackMsg) > 0 {
 			return putBackMsg, true, AssetIDnotFound, nil
 		}
-		internal.KafkaPutBacks += float64(len(putBackMsg))
-		internal.KafkaCommits += temporaryCommitCounterAsFloat64
+		KafkaPutBacks += float64(len(putBackMsg))
+		KafkaCommits += temporaryCommitCounterAsFloat64
 	}
 	return putBackMsg, false, "", nil
 }
