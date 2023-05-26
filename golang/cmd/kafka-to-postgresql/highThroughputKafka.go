@@ -15,50 +15,30 @@
 package main
 
 import (
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"go.uber.org/zap"
 )
 
 var highThroughputProcessorChannel chan *kafka.Message
-var highThroughputPutBackChannel chan internal.PutBackChanMsg
+var highThroughputPutBackChannel chan PutBackChanMsg
 
-var HTKafkaConsumer *kafka.Consumer
-var HTKafkaProducer *kafka.Producer
-var HTKafkaAdminClient *kafka.AdminClient
+var HTKafkaClient *kafka.Client
 
-func SetupHTKafka(configMap kafka.ConfigMap) {
+func SetupHTKafka(opts *kafka.NewClientOptions) {
 
 	var err error
-	HTKafkaConsumer, err = kafka.NewConsumer(&configMap)
+	HTKafkaClient, err = kafka.NewKafkaClient(opts)
 	if err != nil {
-		zap.S().Fatalf("Failed to create KafkaConsumer: %s", err)
-	}
-
-	HTKafkaProducer, err = kafka.NewProducer(&configMap)
-	if err != nil {
-		zap.S().Fatalf("Failed to create KafkaProducer: %s", err)
-	}
-
-	HTKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
-	if err != nil {
-		zap.S().Fatalf("Failed to create KafkaAdminClient: %s", err)
+		zap.S().Fatalf("Failed to create HTKafkaClient: %s", err)
 	}
 
 }
 
 func CloseHTKafka() {
 
-	zap.S().Infof("[HT]Closing Kafka Consumer")
+	zap.S().Infof("[HT]Closing Kafka Client")
 
-	if err := HTKafkaConsumer.Close(); err != nil {
-		zap.S().Fatalf("Failed to close KafkaConsumer: %s", err)
+	if err := HTKafkaClient.Close(); err != nil {
+		zap.S().Fatalf("Failed to close HTKafkaClient: %s", err)
 	}
-
-	zap.S().Infof("[HT]Closing Kafka Producer")
-	HTKafkaProducer.Flush(100)
-	HTKafkaProducer.Close()
-
-	zap.S().Infof("[HT]Closing Kafka Admin Client")
-	HTKafkaAdminClient.Close()
 }
