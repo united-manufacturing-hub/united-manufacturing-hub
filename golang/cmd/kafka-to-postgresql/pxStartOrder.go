@@ -34,7 +34,7 @@ type startOrder struct {
 }
 
 // ProcessMessages processes a StartOrder kafka message, by creating an database connection, decoding the json payload, retrieving the required additional database id's (like AssetTableID or ProductTableID) and then inserting it into the database and committing
-func (c StartOrder) ProcessMessages(msg ParsedMessage) (putback bool, err error, forcePbTopic bool) {
+func (c StartOrder) ProcessMessages(msg internal.ParsedMessage) (putback bool, err error, forcePbTopic bool) {
 
 	txnCtx, txnCtxCl := context.WithDeadline(context.Background(), time.Now().Add(internal.FiveSeconds))
 	// txnCtxCl is the cancel function of the context, used in the transaction creation.
