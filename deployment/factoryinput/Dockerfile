@@ -17,8 +17,8 @@ ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
 # Add nonroot user
-RUN addgroup -S nonroot \
-    && adduser -S nonroot -G nonroot
+RUN addgroup -S nonroot -g 1000 \
+    && adduser -S -D nonroot -G nonroot -u 1000
 
 RUN mkdir /build
 # Add build requirements for librdkafka
