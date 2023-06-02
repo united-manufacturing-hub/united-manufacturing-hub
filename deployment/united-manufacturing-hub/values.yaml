@@ -723,7 +723,7 @@ kafkatopostgresql:
   enabled: false
   image:
     repository: ghcr.io/united-manufacturing-hub/kafka-to-postgresql
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
     # tag: latest
   initContainer:
     repository: ghcr.io/united-manufacturing-hub/kafka-init
