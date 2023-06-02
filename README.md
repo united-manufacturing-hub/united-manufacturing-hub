@@ -45,11 +45,18 @@ You can run `make help` to get a list of all available make targets.
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) version v1.26.1+
 - [K3d](https://k3d.io/) version v5.4.6+
 - GNU Make
+- GNU awk
 - Python (to run some make targets)
+
+You can download and install all the go dependencies by running:
+
+```bash
+make go-deps
+```
 
 ### Build
 
-To build the project, run:
+To build and push all docker images, run:
 
 ```bash
 make docker
@@ -60,25 +67,35 @@ make docker
 To run the project on a local k3d cluster, run:
 
 ```bash
-make install-latest        # Install the latest release
-make install-current       # Install the local version
+make cluster-install
 ```
 
 ### Test
 
-To run unit tests, run:
+To run go unit tests, run:
 
 ```bash
-make test-go-unit
+make go-test-unit
 ```
 
 To run upgrade tests, run:
 
 ```bash
-make data-flow-test                 # Run the data flow test Job in the current context
-make test-helm-upgrade              # Spin up a new cluster, install the latest release and upgrade to the local version
-make test-helm-upgrade-with-data    # Spin up a new cluster, install the latest release and upgrade to the local version, then run the data flow test
+make kube-test-data-flow-job        # Run the data flow test Job in the current context
+make helm-test-upgrade              # Spin up a new cluster, install the latest release and upgrade to the local version
+make helm-test-upgrade-with-data    # Spin up a new cluster, install the latest release and upgrade to the local version, then run the data flow test
 ```
+
+### Utilities
+
+To display the help menu, run:
+
+```bash
+make help                     # Print the generic help menu
+make <target> PRINT_HELP=y    # Print the help menu for a specific target
+```
+
+
 
 <!-- CONTACT -->
 ## Contact
