@@ -15,24 +15,41 @@
 package main
 
 import (
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
 
 var highIntegrityProcessorChannel chan *kafka.Message
 var highIntegrityCommitChannel chan *kafka.Message
-var highIntegrityPutBackChannel chan PutBackChanMsg
+var highIntegrityPutBackChannel chan internal.PutBackChanMsg
 
-// HIKafkaClient is a high Integrity Kafka client
-var HIKafkaClient *kafka.Client
+// HIKafkaConsumer is a high Integrity Kafka consumer
+var HIKafkaConsumer *kafka.Consumer
+
+// HIKafkaProducer is a high Integrity Kafka producer
+var HIKafkaProducer *kafka.Producer
+
+// HIKafkaAdminClient is a high Integrity Kafka admin
+var HIKafkaAdminClient *kafka.AdminClient
 
 // SetupHIKafka sets up the HI Kafka consumer, producer and admin
-func SetupHIKafka(opts *kafka.NewClientOptions) {
+func SetupHIKafka(configMap kafka.ConfigMap) {
 
 	var err error
-	HIKafkaClient, err = kafka.NewKafkaClient(opts)
+	HIKafkaConsumer, err = kafka.NewConsumer(&configMap)
 	if err != nil {
-		zap.S().Fatalf("Failed to create KafkaClient: %s", err)
+		zap.S().Fatalf("Failed to create KafkaConsumer: %s", err)
+	}
+
+	HIKafkaProducer, err = kafka.NewProducer(&configMap)
+	if err != nil {
+		zap.S().Fatalf("Failed to create KafkaProducer: %s", err)
+	}
+
+	HIKafkaAdminClient, err = kafka.NewAdminClient(&configMap)
+	if err != nil {
+		zap.S().Fatalf("Failed to create KafkaAdminClient: %s", err)
 	}
 
 }
@@ -40,9 +57,16 @@ func SetupHIKafka(opts *kafka.NewClientOptions) {
 // CloseHIKafka closes the HI Kafka consumer, producer and admin
 func CloseHIKafka() {
 
-	zap.S().Infof("[HI]Closing Kafka Client")
+	zap.S().Infof("[HI]Closing Kafka Consumer")
 
-	if err := HIKafkaClient.Close(); err != nil {
-		zap.S().Fatalf("Failed to close HIKafkaClient: %s", err)
+	if err := HIKafkaConsumer.Close(); err != nil {
+		zap.S().Fatalf("Failed to close KafkaConsumer: %s", err)
 	}
+
+	zap.S().Infof("[HI]Closing Kafka Producer")
+	HIKafkaProducer.Flush(100)
+	HIKafkaProducer.Close()
+
+	zap.S().Infof("[HI]Closing Kafka Admin Client")
+	HIKafkaAdminClient.Close()
 }

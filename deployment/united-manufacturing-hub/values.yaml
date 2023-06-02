@@ -45,12 +45,12 @@ _000_commonConfig:
     # iotsensorsmqtt simulates IoT sensor data as over OPC UA.
     # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsOPCUA
     opcuasimulator:
-       enabled: false
+       enabled: true
 
     # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
     # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
     packmlmqttsimulator:
-      enabled: false
+      enabled: true
 
   # dataprocessing involves microservices, whose main purpose is to process the data
   dataprocessing:
@@ -714,16 +714,16 @@ grafanaproxy:
     name: http
   resources:
     limits:
-      cpu: 1000m
+      cpu: 300m
     requests:
-      cpu: 200m
+      cpu: 100m
 
 ### kafka-to-postgresql ###
 kafkatopostgresql:
   enabled: false
   image:
     repository: ghcr.io/united-manufacturing-hub/kafka-to-postgresql
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
     # tag: latest
   initContainer:
     repository: ghcr.io/united-manufacturing-hub/kafka-init
@@ -738,10 +738,10 @@ kafkatopostgresql:
   resources:
     limits:
       cpu: 200m
-      memory: 200Mi
+      memory: 300Mi
     requests:
       cpu: 50m
-      memory: 50Mi
+      memory: 150Mi
 
 ### timescaleDB ###
 timescaledb-single:
@@ -1035,11 +1035,11 @@ redpanda:
       port: 9092
   resources:
     cpu:
-      cores: 2
+      cores: 1
     memory:
       enable_memory_locking: true
       container:
-        max: 5Gi
+        max: 2Gi
   config:
     cluster:
       auto_create_topics_enabled: true

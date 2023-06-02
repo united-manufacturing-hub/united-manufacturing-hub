@@ -58,6 +58,16 @@ spec:
                   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
               topologyKey: "kubernetes.io/hostname"
       terminationGracePeriodSeconds: 70
+      initContainers:
+        - name: set-ownership
+          image: alpine:3
+          command:
+            - sh
+            - -c
+            - "chown -R 1000:1000 /data && ls -la /data"
+          volumeMounts:
+            - mountPath: /data
+              name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-data
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
           {{if .Values.factoryinput.image.tag}}
