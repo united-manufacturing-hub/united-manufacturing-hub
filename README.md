@@ -13,10 +13,10 @@ The United Manufacturing Hub is an Open-Source [Helm chart for Kubernetes](https
 
 ## What can you do with it?
 
-1. **Extract data from the shopfloor** via [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red), [sensorconnect](https://learn.umh.app/docs/core/sensorconnect/) and [barcodereader](https://learn.umh.app/docs/core/barcodereader/)
-2. **Contextualize and standardize data** using [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red) and our [pre-defined datamodel](https://learn.umh.app/docs/datamodel/) (which is compliant with multiple standards)
+1. **Extract data from the shopfloor** via [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red), [sensorconnect](https://umh.docs.umh.app/docs/architecture/microservices/core/sensorconnect/) and [barcodereader](https://https://umh.docs.umh.app/docs/architecture/microservices/community/barcodereader/.umh.app/docs/core/barcodereader/)
+2. **Contextualize and standardize data** using [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red) and our [pre-defined datamodel](https://umh.docs.umh.app/docs/architecture/microservices/community/barcodereader/) (which is compliant with multiple standards)
 3. **Exchange and store data** using [MQTT](https://learn.umh.app/know/industrial-internet-of-things/techniques/mqtt/), [Kafka](https://learn.umh.app/know/industrial-internet-of-things/techniques/kafka/) and  TimescaleDB / PostgreSQL,
-4. **Visualize data** using [Grafana](https://learn.umh.app/know/industrial-internet-of-things/tools/#grafana) and [factoryinsight](https://learn.umh.app/docs/core/factoryinsight/)
+4. **Visualize data** using [Grafana](https://learn.umh.app/know/industrial-internet-of-things/tools/#grafana) and [factoryinsight](https://umh.docs.umh.app/docs/architecture/microservices/core/factoryinsight/)
 
 ## Get started
 
