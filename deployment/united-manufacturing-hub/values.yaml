@@ -714,9 +714,9 @@ grafanaproxy:
     name: http
   resources:
     limits:
-      cpu: 1000m
+      cpu: 300m
     requests:
-      cpu: 200m
+      cpu: 100m
 
 ### kafka-to-postgresql ###
 kafkatopostgresql:
