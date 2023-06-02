@@ -43,12 +43,5 @@ factoryinsight:
   replicas: 1
 
 redpanda:
-  resources:
-    cpu:
-      cores: 1
-    memory:
-      enable_memory_locking: true
-      container:
-        max: 3Gi
   console:
     enabled: false
