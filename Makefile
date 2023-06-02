@@ -34,7 +34,7 @@ CTR_TAG=latest
 ## Container image
 CTR_IMG=barcodereader factoryinput factoryinsight grafana-proxy grafana-umh hivemq-init kafka-bridge kafka-debug kafka-init kafka-state-detector kafka-to-postgresql metrics mqtt-bridge mqtt-kafka-bridge sensorconnect
 ## Space-separated list of workloads. Each workload is a string in the form <type>:<name>
-WORKLOADS=sts:kafka svc:kafka
+WORKLOADS=sts:kafka svc:kafka deploy:factoryinsight-deployment deploy:opcuasimulator-deployment deploy:iotsensorsmqtt sts:hivemqce sts:nodered deploy:grafanaproxy sts:mqttbridge sts:sensorconnect
 ## Space-separated list of flags to pass to go test
 TEST_FLAGS=
 ## Space-separated list of directories
