@@ -302,8 +302,8 @@ github.com/ugorji/go v1.2.7/go.mod h1:nF9osbDWLy6bDVv/Rtoh6QgnvNDpmCalQV5urGCCS6
 github.com/ugorji/go/codec v1.2.7/go.mod h1:WGN1fab3R1fzQlVQTkfxVtIBhWDRqOviHU95kRgeqEY=
 github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4dU=
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
-github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.7.10 h1:mJQPwL7OTFpxEUJaf6h/uV9MV3ikSwMy8bgHn8ICldQ=
-github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.7.10/go.mod h1:EMCsFMH/WeEzMkJV1HcripovLXsmvsKlXoqrI9mpdnw=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.9.0 h1:PLSIj1BKvSVnJag+aB1ftu9j+IOlASixdLHXXZOOBoo=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.9.0/go.mod h1:EMCsFMH/WeEzMkJV1HcripovLXsmvsKlXoqrI9mpdnw=
 github.com/united-manufacturing-hub/umh-utils v0.2.1 h1:51xZNYbQ3ksRMmGPr1v3BKrTU1zA7L9WSVOfSmubgwg=
 github.com/united-manufacturing-hub/umh-utils v0.2.1/go.mod h1:kCSz6dcJFPWmKIsRNJ/yjLTE4BCaVz5M6X3xaUJcsvw=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
