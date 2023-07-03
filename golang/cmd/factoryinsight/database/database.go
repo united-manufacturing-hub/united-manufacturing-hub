@@ -15,23 +15,25 @@
 package database
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"github.com/EagleChen/mapmutex"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/omeid/pgerror"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var (
-	Db                      *sql.DB
+	DBConnPool              *pgxpool.Pool
 	Mutex                   *mapmutex.Mutex
 	GracefulShutdownChannel = make(chan os.Signal, 1)
 )
 
-// Connect setups the Db and stores the handler in a global variable in database.go
+// Connect setups the DBConnPool and stores the handler in a global variable in database.go
 func Connect(
 	PQUser string,
 	PQPassword string,
@@ -50,7 +52,15 @@ func Connect(
 		PQPassword,
 		PWDBName)
 	var err error
-	Db, err = sql.Open("postgres", psqlInfo)
+	connCtx, conncnc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer conncnc()
+
+	parseConfig, err := pgxpool.ParseConfig(psqlInfo)
+	if err != nil {
+		zap.S().Fatalf("Failed to parse config: %s", err)
+	}
+
+	DBConnPool, err = pgxpool.NewWithConfig(connCtx, parseConfig)
 	if err != nil {
 		zap.S().Fatalf("Failed to open database: %s", err)
 	}
@@ -65,9 +75,7 @@ func Connect(
 
 // Shutdown closes all database connections
 func Shutdown() {
-	if err := Db.Close(); err != nil {
-		zap.S().Fatalf("Failed to close database: %s", err)
-	}
+	DBConnPool.Close()
 }
 
 // ErrorHandling logs and handles postgresql errors

@@ -580,7 +580,7 @@ func getUniqueProducts(workCellId uint32, from, to time.Time) (data datamodel.Da
 	ORDER BY begin_timestamp_ms ASC;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
+	rows, err = database.DBConnPool.Query(sqlStatement, workCellId, from, to)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -695,7 +695,7 @@ ORDER BY begin_timestamp ASC
 `
 
 	// Get order outside observation window
-	row := database.Db.QueryRow(sqlStatementGetOutsider, workCellId, from)
+	row := database.DBConnPool.QueryRow(sqlStatementGetOutsider, workCellId, from)
 	err = row.Err()
 	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Debugf("No outsider rows")
@@ -750,11 +750,11 @@ ORDER BY begin_timestamp ASC
 	if foundOutsider {
 		// Get insiders without the outsider order
 		zap.S().Debugf("Query with outsider: ", OuterOrder)
-		insideOrderRows, err = database.Db.Query(sqlStatementGetInsiders, workCellId, from, to, OuterOrder.OID)
+		insideOrderRows, err = database.DBConnPool.Query(sqlStatementGetInsiders, workCellId, from, to, OuterOrder.OID)
 	} else {
 		// Get insiders
 		zap.S().Debugf("Query without outsider: ", OuterOrder)
-		insideOrderRows, err = database.Db.Query(sqlStatementGetInsidersNoOutsider, workCellId, from, to)
+		insideOrderRows, err = database.DBConnPool.Query(sqlStatementGetInsidersNoOutsider, workCellId, from, to)
 	}
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -876,7 +876,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	var countRows *sql.Rows
-	countRows, err = database.Db.Query(
+	countRows, err = database.DBConnPool.Query(
 		sqlStatementGetCounts,
 		workCellId,
 		float64(countQueryBegin)/1000,
@@ -926,7 +926,7 @@ ORDER BY begin_timestamp ASC
 	}
 
 	var orderRows *sql.Rows
-	orderRows, err = database.Db.Query(
+	orderRows, err = database.DBConnPool.Query(
 		sqlGetRunningOrders,
 		workCellId,
 		float64(orderQueryEnd)/1000,
@@ -971,7 +971,7 @@ ORDER BY begin_timestamp ASC
 	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
 
 	var productRows *sql.Rows
-	productRows, err = database.Db.Query(sqlGetProductsPerSec, workCellId)
+	productRows, err = database.DBConnPool.Query(sqlGetProductsPerSec, workCellId)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		database.ErrorHandling(sqlGetProductsPerSec, err, false)

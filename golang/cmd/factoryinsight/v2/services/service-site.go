@@ -28,7 +28,7 @@ func GetSites(enterpriseName string) (sites []string, err error) {
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, enterpriseName)
+	rows, err = database.DBConnPool.Query(sqlStatement, enterpriseName)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")

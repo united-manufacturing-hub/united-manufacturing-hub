@@ -157,7 +157,7 @@ func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 
 	sqlStatement := `SELECT DISTINCT customer FROM assetTable;`
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement)
+	rows, err = database.DBConnPool.Query(sqlStatement)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")

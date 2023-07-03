@@ -52,7 +52,7 @@ func GetApproximateHyperRows(tableName string) (approximateRows int64) {
 				-- noinspection SqlResolve
 	SELECT approximate_row_count FROM approximate_row_count($1);`
 
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -77,7 +77,7 @@ func GetApproximateNormalRows(tableName string) (approximateRows int64) {
 	FROM   pg_catalog.pg_class c
 	WHERE  c.oid = $1::regclass;      -- schema-qualified table here
 		`
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -102,7 +102,7 @@ func GetNormalTableStatistics(tableName string) datamodel.DatabaseNormalTableSta
 	`
 
 	var dbNormalTableStats datamodel.DatabaseNormalTableStatistics
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&dbNormalTableStats.PgTableSize, &dbNormalTableStats.PgTotalRelationSize, &dbNormalTableStats.PgIndexesSize, &dbNormalTableStats.PgRelationSizeMain, &dbNormalTableStats.PgRelationSizeFsm, &dbNormalTableStats.PgRelationSizeVm, &dbNormalTableStats.PgRelationSizeInit)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&dbNormalTableStats.PgTableSize, &dbNormalTableStats.PgTotalRelationSize, &dbNormalTableStats.PgIndexesSize, &dbNormalTableStats.PgRelationSizeMain, &dbNormalTableStats.PgRelationSizeFsm, &dbNormalTableStats.PgRelationSizeVm, &dbNormalTableStats.PgRelationSizeInit)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -123,7 +123,7 @@ func IsTableHyperTable(tableName string) (isHyerTable bool) {
 		`
 
 	var count int
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&count)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&count)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -141,7 +141,7 @@ func GetHypertableStats(tableName string) (hypertableStats []datamodel.DatabaseH
 	
 			 SELECT * FROM hypertable_detailed_size($1);
 		`
-	rows, err := database.Db.Query(sqlStatement, tableName)
+	rows, err := database.DBConnPool.Query(sqlStatement, tableName)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -171,7 +171,7 @@ func GetHyperRetentionSettings(tableName string) (retentionSettings datamodel.Da
 	WHERE hypertable_name = $1
 	AND timescaledb_information.jobs.proc_name = 'policy_retention';
 	`
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -190,7 +190,7 @@ func GetHyperCompressionSettings(tableName string) (retentionSettings datamodel.
 	WHERE hypertable_name = $1
 	AND timescaledb_information.jobs.proc_name = 'policy_compression';
 	`
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -209,7 +209,7 @@ func GetAllTableNamesInPublic() (tableNames []string) {
 
 			SELECT table_name FROM information_schema.tables WHERE table_schema='public';
 		`
-	rows, err := database.Db.Query(sqlStatement)
+	rows, err := database.DBConnPool.Query(sqlStatement)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -236,7 +236,7 @@ func GetDatabaseSizeInBytes() (size int64) {
 	sqlStatement := `
 	SELECT pg_database_size('factoryinsight');`
 
-	err := database.Db.QueryRow(sqlStatement).Scan(&size)
+	err := database.DBConnPool.QueryRow(sqlStatement).Scan(&size)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
@@ -255,7 +255,7 @@ func GetVacuumAndAnalyzeStats(tableName string) (lastAutoanalyze, lastAnalyze, l
 		SELECT schemaname, relname, last_autoanalyze, last_analyze, last_vacuum, last_autovacuum FROM pg_stat_all_tables WHERE relname = $1;`
 
 	var schemaName, relName string
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&schemaName, &relName, &lastAutoanalyze, &lastAnalyze, &lastVacuum, &lastAutovacuum)
+	err := database.DBConnPool.QueryRow(sqlStatement, tableName).Scan(&schemaName, &relName, &lastAutoanalyze, &lastAnalyze, &lastVacuum, &lastAutovacuum)
 	if errors.Is(err, sql.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")

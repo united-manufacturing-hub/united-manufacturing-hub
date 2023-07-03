@@ -38,7 +38,7 @@ func GetWorkCells(
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, entrerpriseName, siteName)
+	rows, err = database.DBConnPool.Query(sqlStatement, entrerpriseName, siteName)
 	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Warnf(
 			"[GetWorkCells] No work cells found for enterprise %s, site %s, area %s and production line %s",
@@ -77,7 +77,7 @@ func GetAllWorkCellIds() (workCellIds []uint32, err error) {
 	sqlStatement := `SELECT id FROM assetTable;`
 
 	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement)
+	rows, err = database.DBConnPool.Query(sqlStatement)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		zap.S().Warnf("[GetAllWorkCellIds] No work cells found")
