@@ -126,8 +126,8 @@ func CheckIfUserIsAllowed(c *gin.Context, customer string) error {
 
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
-		c.AbortWithStatus(http.StatusUnauthorized)
 		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return fmt.Errorf("user %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil

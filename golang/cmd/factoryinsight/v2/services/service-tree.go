@@ -17,7 +17,7 @@ package services
 import (
 	"errors"
 	"github.com/jackc/pgx/v5"
-	"github.com/patrickmn/go-cache"
+	"github.com/united-manufacturing-hub/expiremap/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"go.uber.org/zap"
@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var treeCache = cache.New(1*time.Minute, 10*time.Minute)
+var treeCache = expiremap.NewEx[string, interface{}](time.Second, time.Second*30)
 
 const (
 	cacheKeyFormatTree = "format-tree"
@@ -47,7 +47,7 @@ func GetFormatTreeStructureFromCache() (tree interface{}, err error) {
 	if err != nil {
 		return
 	}
-	treeCache.Set(cacheKeyFormatTree, tree, cache.DefaultExpiration)
+	treeCache.Set(cacheKeyFormatTree, tree)
 
 	return tree, nil
 }
@@ -65,7 +65,7 @@ func GetValueTreeStructureFromCache(request models.GetTagGroupsRequest) (tree in
 	if err != nil {
 		return
 	}
-	treeCache.Set(cacheKeyValueTree, tree, cache.DefaultExpiration)
+	treeCache.Set(cacheKeyValueTree, tree)
 
 	return tree, nil
 }
@@ -84,7 +84,7 @@ func refreshFormatTreeCache() {
 		refreshRunningFT.Unlock()
 		return
 	}
-	treeCache.Set(cacheKeyFormatTree, structure, cache.DefaultExpiration)
+	treeCache.Set(cacheKeyFormatTree, structure)
 	refreshRunningFT.Unlock()
 }
 
@@ -102,7 +102,7 @@ func refreshValueTreeCache(request models.GetTagGroupsRequest) {
 		refreshRunningVT.Unlock()
 		return
 	}
-	treeCache.Set(cacheKeyValueTree, structure, cache.DefaultExpiration)
+	treeCache.Set(cacheKeyValueTree, structure)
 	refreshRunningVT.Unlock()
 }
 

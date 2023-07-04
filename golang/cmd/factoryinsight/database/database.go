@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -52,7 +53,12 @@ func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 		zap.S().Fatalf("Failed to parse config: %s", err)
 	}
 
-	parseConfig.MinConns = 2 // Let's start with 2 connections, reducing the initial load
+	parseConfig.MinConns = int32(runtime.NumCPU())
+	if parseConfig.MinConns < 4 {
+		parseConfig.MinConns = 4
+	}
+	parseConfig.MaxConnIdleTime = 5 * time.Minute
+	parseConfig.MaxConnLifetime = 10 * time.Minute
 
 	parseConfig.BeforeConnect = func(ctx context.Context, conn *pgx.ConnConfig) error {
 		zap.S().Debugf("BeforeConnect: ctx: %s, conn: %s", ctx, conn)
@@ -69,6 +75,7 @@ func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 	if err != nil {
 		zap.S().Fatalf("Failed to open database: %s", err)
 	}
+	go pingDB()
 
 	Mutex = mapmutex.NewCustomizedMapMutex(
 		800,
@@ -76,6 +83,16 @@ func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, P
 		10,
 		1.1,
 		0.2) // default configs: maxDelay:  100000000, // 0.1 second baseDelay: 10,        // 10 nanosecond
+}
+
+func pingDB() {
+	for {
+		err := DBConnPool.Ping(context.Background())
+		if err != nil {
+			zap.S().Errorf("Failed to ping database: %s", err)
+		}
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // Shutdown closes all database connections
@@ -86,18 +103,23 @@ func Shutdown() {
 // ErrorHandling logs and handles postgresql errors
 func ErrorHandling(sqlStatement string, err error, isCritical bool) {
 	zap.S().Debugf("ErrorHandling: sqlStatement: %s, err: %s, isCritical: %t", sqlStatement, err, isCritical)
+	stackTrace := make([]byte, 1024*8)
+	written := runtime.Stack(stackTrace, true)
 	if e := pgerror.ConnectionException(err); e != nil {
 		zap.S().Errorw(
 			"PostgreSQL failed: ConnectionException",
 			"error", err,
 			"sqlStatement", sqlStatement,
+			"stackTrace", string(stackTrace[:written]),
 		)
+
 		isCritical = true
 	} else {
 		zap.S().Errorw(
-			"PostgreSQL failed. ",
+			"PostgreSQL failed.",
 			"error", err,
 			"sqlStatement", sqlStatement,
+			"stackTrace", string(stackTrace[:written]),
 		)
 	}
 
@@ -107,8 +129,25 @@ func ErrorHandling(sqlStatement string, err error, isCritical bool) {
 }
 
 func Query(sql string, args ...any) (pgx.Rows, error) {
-	return DBConnPool.Query(context.Background(), sql, args...)
+	return queryRepeatable(sql, 0, args...)
 }
 func QueryRow(sql string, args ...any) pgx.Row {
 	return DBConnPool.QueryRow(context.Background(), sql, args...)
+}
+
+func queryRepeatable(sql string, count uint, args ...any) (pgx.Rows, error) {
+	rows, err := DBConnPool.Query(context.Background(), sql, args...)
+	if err != nil {
+		if count > 10 {
+			return nil, err
+		}
+		// Check if err is a connection error
+		if pgerror.ConnectionException(err) != nil {
+			zap.S().Debugf("Failed to connect to database: %s [retrying]", err)
+			time.Sleep(time.Duration(count) * time.Millisecond * 100)
+			return queryRepeatable(sql, count+1, args...)
+		}
+		return nil, err
+	}
+	return rows, nil
 }
