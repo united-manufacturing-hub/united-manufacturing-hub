@@ -23,7 +23,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -75,7 +75,7 @@ func (c Recommendation) ProcessMessages(msg internal.ParsedMessage) (putback boo
 
 	// sC is the payload, parsed as recommendation
 	var sC recommendation
-	err = jsoniter.Unmarshal(msg.Payload, &sC)
+	err = json.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err, true

@@ -17,7 +17,7 @@ package user
 import (
 	"context"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
@@ -25,14 +25,12 @@ import (
 
 func UnmarshalUser(data []byte) (User, error) {
 	var r User
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *User) Marshal() ([]byte, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	return json.Marshal(r)
 }

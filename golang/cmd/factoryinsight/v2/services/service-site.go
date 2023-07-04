@@ -15,8 +15,8 @@
 package services
 
 import (
-	"database/sql"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"go.uber.org/zap"
 )
@@ -27,9 +27,9 @@ func GetSites(enterpriseName string) (sites []string, err error) {
 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, enterpriseName)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, enterpriseName)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return

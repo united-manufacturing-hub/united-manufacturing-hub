@@ -15,10 +15,10 @@
 package helpers
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
@@ -36,7 +36,7 @@ func HandleInternalServerError(c *gin.Context, err error) {
 		err = errors.New("unknown error")
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		var data datamodel.DataResponseAny
 		data.ColumnNames = []string{
 			"error",

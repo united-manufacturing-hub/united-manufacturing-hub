@@ -17,7 +17,7 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
@@ -98,7 +98,7 @@ func startActivityProcessor() {
 		}
 
 		var activityMessage datamodel.Activity
-		err := jsoniter.Unmarshal(parsedMessage.Payload, &activityMessage)
+		err := json.Unmarshal(parsedMessage.Payload, &activityMessage)
 		if err != nil {
 			zap.S().Errorf("[AC] Failed to parse activity message: %s", err)
 			continue
@@ -119,7 +119,7 @@ func startActivityProcessor() {
 			lastStateChangeTs = activityMessage.TimestampMs
 		}
 
-		jsonStateMessage, err := jsoniter.Marshal(stateMessage)
+		jsonStateMessage, err := json.Marshal(stateMessage)
 		if err != nil {
 			continue
 		}

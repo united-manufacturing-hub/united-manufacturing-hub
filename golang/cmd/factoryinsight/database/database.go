@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/EagleChen/mapmutex"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/omeid/pgerror"
 	"go.uber.org/zap"
@@ -34,14 +35,7 @@ var (
 )
 
 // Connect setups the DBConnPool and stores the handler in a global variable in database.go
-func Connect(
-	PQUser string,
-	PQPassword string,
-	PWDBName string,
-	PQHost string,
-	PQPort int,
-	gracefulShutdownChannel chan os.Signal) {
-
+func Connect(PQUser string, PQPassword string, PWDBName string, PQHost string, PQPort int, gracefulShutdownChannel chan os.Signal) {
 	GracefulShutdownChannel = gracefulShutdownChannel
 
 	psqlInfo := fmt.Sprintf(
@@ -52,14 +46,25 @@ func Connect(
 		PQPassword,
 		PWDBName)
 	var err error
-	connCtx, conncnc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer conncnc()
 
 	parseConfig, err := pgxpool.ParseConfig(psqlInfo)
 	if err != nil {
 		zap.S().Fatalf("Failed to parse config: %s", err)
 	}
 
+	parseConfig.MinConns = 2 // Let's start with 2 connections, reducing the initial load
+
+	parseConfig.BeforeConnect = func(ctx context.Context, conn *pgx.ConnConfig) error {
+		zap.S().Debugf("BeforeConnect: ctx: %s, conn: %s", ctx, conn)
+		return nil
+	}
+
+	parseConfig.BeforeClose = func(conn *pgx.Conn) {
+		zap.S().Debugf("BeforeClose: conn: %v", conn)
+	}
+
+	connCtx, conncnc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer conncnc()
 	DBConnPool, err = pgxpool.NewWithConfig(connCtx, parseConfig)
 	if err != nil {
 		zap.S().Fatalf("Failed to open database: %s", err)
@@ -99,4 +104,11 @@ func ErrorHandling(sqlStatement string, err error, isCritical bool) {
 	if isCritical {
 		signal.Notify(GracefulShutdownChannel, syscall.SIGTERM)
 	}
+}
+
+func Query(sql string, args ...any) (pgx.Rows, error) {
+	return DBConnPool.Query(context.Background(), sql, args...)
+}
+func QueryRow(sql string, args ...any) pgx.Row {
+	return DBConnPool.QueryRow(context.Background(), sql, args...)
 }

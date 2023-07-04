@@ -15,8 +15,8 @@
 package services
 
 import (
-	"database/sql"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/patrickmn/go-cache"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
@@ -156,9 +156,9 @@ func GetFormatTreeStructure() (tree interface{}, err error) {
 func GetEnterpriseTreeStructure() (te []interface{}, err error) {
 
 	sqlStatement := `SELECT DISTINCT customer FROM assetTable;`
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return

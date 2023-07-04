@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"strconv"
 	"time"
 
@@ -34,9 +35,9 @@ func GetLocations(customerID string) (locations []string, err error) {
 
 	sqlStatement := `SELECT distinct(location) FROM assetTable WHERE customer=$1;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, customerID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, customerID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -74,9 +75,9 @@ func GetAssets(customerID string, location string) (assets []string, err error) 
 
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, customerID, location)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, customerID, location)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -111,9 +112,9 @@ func GetComponents(assetID uint32) (components []string, err error) {
 
 	sqlStatement := `SELECT distinct(componentname) FROM componentTable WHERE asset_id=$1;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -186,8 +187,8 @@ func GetStatesRaw(
 
 		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
 
-		err = database.DBConnPool.QueryRow(sqlStatement, assetID, from).Scan(&timestamp, &dataPoint)
-		if errors.Is(err, sql.ErrNoRows) {
+		err = database.QueryRow(sqlStatement, assetID, from).Scan(&timestamp, &dataPoint)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
@@ -208,9 +209,9 @@ func GetStatesRaw(
 
 		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 
-		var rows *sql.Rows
-		rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to)
-		if errors.Is(err, sql.ErrNoRows) {
+		var rows pgx.Rows
+		rows, err = database.Query(sqlStatement, assetID, from, to)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 			return
@@ -307,8 +308,8 @@ func GetShiftsRaw(
 		ORDER BY begin_timestamp ASC LIMIT 1;
 		`
 
-		err = database.DBConnPool.QueryRow(sqlStatement, assetID, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
-		if errors.Is(err, sql.ErrNoRows) {
+		err = database.QueryRow(sqlStatement, assetID, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 
@@ -348,9 +349,9 @@ func GetShiftsRaw(
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
-		var rows *sql.Rows
-		rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to) // OFFSET to prevent entering first result twice
-		if errors.Is(err, sql.ErrNoRows) {
+		var rows pgx.Rows
+		rows, err = database.Query(sqlStatement, assetID, from, to) // OFFSET to prevent entering first result twice
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 			return
@@ -481,9 +482,9 @@ func GetProcessValue(
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	sqlStatement := `SELECT timestamp, value FROM processValueTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to, valueName)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID, from, to, valueName)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -548,9 +549,9 @@ func GetProcessValueString(
 	data.ColumnNames = []string{"timestamp", JSONColumnName}
 
 	sqlStatement := `SELECT timestamp, value FROM ProcessValueStringTable WHERE asset_id=$1 AND (timestamp BETWEEN $2 AND $3) AND valueName=$4 ORDER BY timestamp ASC;`
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to, valueName)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID, from, to, valueName)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -629,8 +630,8 @@ func GetCurrentState(
 	var dataPoint int
 
 	sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 ORDER BY timestamp DESC LIMIT 1;`
-	err = database.DBConnPool.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
-	if errors.Is(err, sql.ErrNoRows) {
+	err = database.QueryRow(sqlStatement, assetID).Scan(&timestamp, &dataPoint)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -683,8 +684,8 @@ func GetDataTimeRangeForAsset(customerID string, location string, asset string) 
 	// last timestamp
 	sqlStatement := `SELECT MAX(timestamp),MIN(timestamp) FROM stateTable WHERE asset_id=$1;`
 
-	err = database.DBConnPool.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
-	if errors.Is(err, sql.ErrNoRows) {
+	err = database.QueryRow(sqlStatement, assetID).Scan(&lastTimestampPq, &firstTimestampPq)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -745,9 +746,9 @@ func GetCountsRaw(
 
 		// no data in cache
 		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
-		var rows *sql.Rows
-		rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to)
-		if errors.Is(err, sql.ErrNoRows) {
+		var rows pgx.Rows
+		rows, err = database.Query(sqlStatement, assetID, from, to)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 			return
@@ -926,10 +927,10 @@ func GetProductionSpeed(
 	GROUP BY speedPerIntervall 
 	ORDER BY speedPerIntervall ASC;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1046,10 +1047,10 @@ func GetQualityRate(
 	GROUP BY ratePerIntervall 
 	ORDER BY ratePerIntervall ASC;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, aggregatedIntervalString, assetID, from, to)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1143,7 +1144,7 @@ func GetCustomerConfiguration(customerID string) (configuration datamodel.Custom
 		WHERE 
 			customer=$1;
 	`
-	err = database.DBConnPool.QueryRow(sqlStatement, customerID).Scan(
+	err = database.QueryRow(sqlStatement, customerID).Scan(
 		&configuration.MicrostopDurationInSeconds,
 		&configuration.IgnoreMicrostopUnderThisDurationInSeconds,
 		&configuration.MinimumRunningTimeInSeconds,
@@ -1155,7 +1156,7 @@ func GetCustomerConfiguration(customerID string) (configuration datamodel.Custom
 		&tempPerformanceLossStates,
 	)
 
-	if errors.Is(err, sql.ErrNoRows) { // default values if no configuration is stored yet
+	if errors.Is(err, pgx.ErrNoRows) { // default values if no configuration is stored yet
 		configuration.MicrostopDurationInSeconds = 60 * 2
 		configuration.IgnoreMicrostopUnderThisDurationInSeconds = -1 // do not apply
 		configuration.MinimumRunningTimeInSeconds = 0
@@ -1227,9 +1228,9 @@ func GetRecommendations(customerID string, location string, asset string) (
 		AND (timestamp = (SELECT MAX(timestamp) FROM recommendationTable WHERE enabled=True AND uid LIKE $1)) 
 	ORDER BY timestamp DESC;`
 	// AND (timestamp=) used to only get the recommendations from the latest calculation batch (avoid showing old ones)
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, likeString)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, likeString)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1309,9 +1310,9 @@ func GetMaintenanceActivities(customerID string, location string, asset string) 
 		(maintenanceActivities.component_id = componentTable.id) 
 	WHERE component_id IN (SELECT component_id FROM componentTable WHERE asset_id = $1);`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1382,9 +1383,9 @@ func GetUniqueProducts(
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY begin_timestamp_ms ASC;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1487,9 +1488,9 @@ func GetUpcomingTimeBasedMaintenanceActivities(
 	WHERE timebasedmaintenance.component_id IN (SELECT timebasedmaintenance.component_id FROM componentTable WHERE asset_id = $1);
 	`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1568,9 +1569,9 @@ func GetOrdersRaw(
 		ORDER BY begin_timestamp ASC;
 	`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1634,9 +1635,9 @@ func GetUnstartedOrdersRaw(customerID string, location string, asset string) (
 			AND end_timestamp IS NULL 
 			AND orderTable.asset_id = $1;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1685,9 +1686,9 @@ func GetDistinctProcessValues(customerID string, location string, asset string) 
 	}
 
 	sqlStatement := `SELECT distinct valueName FROM processValueTable WHERE asset_id=$1;`
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1737,9 +1738,9 @@ func GetDistinctProcessValuesString(customerID string, location string, asset st
 	}
 
 	sqlStatement := `SELECT distinct valueName FROM processvaluestringtable WHERE asset_id=$1;`
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, assetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, assetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -1787,8 +1788,8 @@ func GetAssetID(customerID string, location string, assetID string) (DBassetID u
 	}
 
 	sqlStatement := "SELECT id FROM assetTable WHERE assetid=$1 AND location=$2 AND customer=$3;"
-	err = database.DBConnPool.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
-	if errors.Is(err, sql.ErrNoRows) {
+	err = database.QueryRow(sqlStatement, assetID, location, customerID).Scan(&DBassetID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf(
 			"[GetAssetID] No asset found for customerID: %v, location: %v, assetID: %v",
@@ -1864,9 +1865,9 @@ func GetUniqueProductsWithTags(
 		OR (unProdTab.begin_timestamp_ms < $2 AND unProdTab.end_timestamp_ms > $3) 
 	ORDER BY unProdTab.uniqueProductID ASC;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatementData, assetID, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatementData, assetID, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatementData, err, false)
 		return
 	} else if err != nil {
@@ -1877,9 +1878,9 @@ func GetUniqueProductsWithTags(
 
 	defer rows.Close()
 
-	var rowsStrings *sql.Rows
-	rowsStrings, err = database.DBConnPool.Query(sqlStatementDataStrings, assetID, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rowsStrings pgx.Rows
+	rowsStrings, err = database.Query(sqlStatementDataStrings, assetID, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatementDataStrings, err, false)
 		return
 	} else if err != nil {
@@ -1890,9 +1891,9 @@ func GetUniqueProductsWithTags(
 
 	defer rowsStrings.Close()
 
-	var rowsInheritance *sql.Rows
-	rowsInheritance, err = database.DBConnPool.Query(sqlStatementDataInheritance, assetID, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rowsInheritance pgx.Rows
+	rowsInheritance, err = database.Query(sqlStatementDataInheritance, assetID, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatementDataInheritance, err, false)
 		return
 	} else if err != nil {
@@ -2153,16 +2154,7 @@ ORDER BY begin_timestamp ASC
 `
 
 	// Get order outside observation window
-	row := database.DBConnPool.QueryRow(sqlStatementGetOutsider, assetID, from)
-	err = row.Err()
-	if errors.Is(err, sql.ErrNoRows) {
-		zap.S().Debugf("No outsider rows")
-		// We don't care if there is no outside order, in this case we will just select all insider orders
-	} else if err != nil {
-		database.ErrorHandling(sqlStatementGetOutsider, err, false)
-
-		return
-	}
+	row := database.QueryRow(sqlStatementGetOutsider, assetID, from)
 
 	// Holds an order, retrieved from our DB
 	type Order struct {
@@ -2196,7 +2188,7 @@ ORDER BY begin_timestamp ASC
 		AID:            AidOuter,
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		foundOutsider = false
 	} else if err != nil {
 		database.ErrorHandling(sqlStatementGetOutsider, err, false)
@@ -2204,18 +2196,18 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
-	var insideOrderRows *sql.Rows
+	var insideOrderRows pgx.Rows
 	if foundOutsider {
 		// Get insiders without the outsider order
 		zap.S().Debugf("Query with outsider: ", OuterOrder)
-		insideOrderRows, err = database.DBConnPool.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
+		insideOrderRows, err = database.Query(sqlStatementGetInsiders, assetID, from, to, OuterOrder.OID)
 	} else {
 		// Get insiders
 		zap.S().Debugf("Query without outsider: ", OuterOrder)
-		insideOrderRows, err = database.DBConnPool.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
+		insideOrderRows, err = database.Query(sqlStatementGetInsidersNoOutsider, assetID, from, to)
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// It is valid to have no internal rows !
 		zap.S().Debugf("No internal rows")
 	} else if err != nil {
@@ -2333,14 +2325,14 @@ ORDER BY begin_timestamp ASC
 		countQueryEnd = observationEnd.UnixMilli()
 	}
 
-	var countRows *sql.Rows
-	countRows, err = database.DBConnPool.Query(
+	var countRows pgx.Rows
+	countRows, err = database.Query(
 		sqlStatementGetCounts,
 		assetID,
 		float64(countQueryBegin)/1000,
 		float64(countQueryEnd)/1000)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatementGetCounts, err, false)
 		return
 	} else if err != nil {
@@ -2383,14 +2375,14 @@ ORDER BY begin_timestamp ASC
 		orderQueryEnd = observationEnd.UnixMilli()
 	}
 
-	var orderRows *sql.Rows
-	orderRows, err = database.DBConnPool.Query(
+	var orderRows pgx.Rows
+	orderRows, err = database.Query(
 		sqlGetRunningOrders,
 		assetID,
 		float64(orderQueryEnd)/1000,
 		float64(orderQueryBegin)/1000)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
@@ -2428,10 +2420,10 @@ ORDER BY begin_timestamp ASC
 
 	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
 
-	var productRows *sql.Rows
-	productRows, err = database.DBConnPool.Query(sqlGetProductsPerSec, assetID)
+	var productRows pgx.Rows
+	productRows, err = database.Query(sqlGetProductsPerSec, assetID)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlGetProductsPerSec, err, false)
 		return
 	} else if err != nil {

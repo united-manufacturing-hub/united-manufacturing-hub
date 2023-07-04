@@ -17,7 +17,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io"
 	"net/http"
@@ -103,9 +103,8 @@ func checkIfUserIsAllowed(c *gin.Context, customer string) error {
 }
 
 func IsJSON(str string) bool {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	var js jsoniter.RawMessage
+	var js json.RawMessage
 	return json.Unmarshal([]byte(str), &js) == nil
 }
 

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -44,7 +45,7 @@ func GetStateExists(workCellId uint32) (bool, error) {
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM stateTable WHERE asset_id = $1)`
 
 	var stateExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
+	err := database.QueryRow(sqlStatement, workCellId).Scan(&stateExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -63,7 +64,7 @@ func GetCustomTagsExists(workCellId uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM processvaluetable WHERE asset_id = $1)`
 	var customExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId).Scan(&customExists)
+	err := database.QueryRow(sqlStatement, workCellId).Scan(&customExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -81,7 +82,7 @@ func GetCustomTagsStringExists(workCellId uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM processvaluestringtable WHERE asset_id = $1)`
 	var customExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId).Scan(&customExists)
+	err := database.QueryRow(sqlStatement, workCellId).Scan(&customExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -99,7 +100,7 @@ func GetJobsExists(workCellid uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM ordertable WHERE asset_id = $1)`
 	var jobsExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellid).Scan(&jobsExists)
+	err := database.QueryRow(sqlStatement, workCellid).Scan(&jobsExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -117,7 +118,7 @@ func GetOutputExists(workCellid uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM counttable WHERE asset_id = $1)`
 	var outputExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellid).Scan(&outputExists)
+	err := database.QueryRow(sqlStatement, workCellid).Scan(&outputExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -134,7 +135,7 @@ func GetShiftExists(workCellid uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM shiftTable WHERE asset_id = $1)`
 	var shiftExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellid).Scan(&shiftExists)
+	err := database.QueryRow(sqlStatement, workCellid).Scan(&shiftExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -152,7 +153,7 @@ func GetUniqueProductsExists(workCellId uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM uniqueProductTable WHERE asset_id = $1)`
 	var uniqueExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId).Scan(&uniqueExists)
+	err := database.QueryRow(sqlStatement, workCellId).Scan(&uniqueExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -170,7 +171,7 @@ func GetProductExists(workCellId uint32) (bool, error) {
 	}
 	sqlStatement := `SELECT EXISTS(SELECT 1 FROM productTable WHERE asset_id = $1)`
 	var productExists bool
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId).Scan(&productExists)
+	err := database.QueryRow(sqlStatement, workCellId).Scan(&productExists)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return false, err
@@ -204,8 +205,8 @@ func GetWorkCellId(enterpriseName string, siteName string, workCellName string) 
 	}
 
 	sqlStatement := "SELECT id FROM assetTable WHERE assetID=$1 AND location=$2 AND customer=$3;"
-	err = database.DBConnPool.QueryRow(sqlStatement, workCellName, siteName, enterpriseName).Scan(&workCellId)
-	if errors.Is(err, sql.ErrNoRows) {
+	err = database.QueryRow(sqlStatement, workCellName, siteName, enterpriseName).Scan(&workCellId)
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf(
 			"[GetWorkCellId] No asset found for enterpriseName: %v, siteName: %v, workCellName: %v",
@@ -256,7 +257,7 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 		WHERE 
 			customer=$1;
 	`
-	err = database.DBConnPool.QueryRow(sqlStatement, enterpriseName).Scan(
+	err = database.QueryRow(sqlStatement, enterpriseName).Scan(
 		&configuration.MicrostopDurationInSeconds,
 		&configuration.IgnoreMicrostopUnderThisDurationInSeconds,
 		&configuration.MinimumRunningTimeInSeconds,
@@ -268,7 +269,7 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 		&tempPerformanceLossStates,
 	)
 
-	if errors.Is(err, sql.ErrNoRows) { // default values if no configuration is stored yet
+	if errors.Is(err, pgx.ErrNoRows) { // default values if no configuration is stored yet
 		configuration.MicrostopDurationInSeconds = 60 * 2
 		configuration.IgnoreMicrostopUnderThisDurationInSeconds = -1 // do not apply
 		configuration.MinimumRunningTimeInSeconds = 0
@@ -350,8 +351,8 @@ func GetStatesRaw(
 
 		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
 
-		err = database.DBConnPool.QueryRow(sqlStatement, workCellId, from).Scan(&timestamp, &dataPoint)
-		if errors.Is(err, sql.ErrNoRows) {
+		err = database.QueryRow(sqlStatement, workCellId, from).Scan(&timestamp, &dataPoint)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
@@ -372,9 +373,9 @@ func GetStatesRaw(
 
 		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp;`
 
-		var rows *sql.Rows
-		rows, err = database.DBConnPool.Query(sqlStatement, workCellId, from, to)
-		if errors.Is(err, sql.ErrNoRows) {
+		var rows pgx.Rows
+		rows, err = database.Query(sqlStatement, workCellId, from, to)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 			return
@@ -383,9 +384,7 @@ func GetStatesRaw(
 			return
 		}
 
-		defer func(rows *sql.Rows) {
-			_ = rows.Close()
-		}(rows)
+		defer rows.Close()
 
 		for rows.Next() {
 			var timestamp time.Time
@@ -463,8 +462,8 @@ func GetShiftsRaw(
 				ORDER BY begin_timestamp LIMIT 1;
 				`
 
-		err = database.DBConnPool.QueryRow(sqlStatement, workCellId, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
-		if errors.Is(err, sql.ErrNoRows) {
+		err = database.QueryRow(sqlStatement, workCellId, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 
@@ -504,13 +503,13 @@ func GetShiftsRaw(
 					OR (begin_timestamp < $2 AND end_timestamp > $3))
 				ORDER BY begin_timestamp OFFSET 1;`
 
-		var rows *sql.Rows
-		rows, err = database.DBConnPool.Query(
+		var rows pgx.Rows
+		rows, err = database.Query(
 			sqlStatement,
 			workCellId,
 			from,
 			to) // OFFSET to prevent entering first result twice
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -518,9 +517,7 @@ func GetShiftsRaw(
 			return
 		}
 
-		defer func(rows *sql.Rows) {
-			_ = rows.Close()
-		}(rows)
+		defer rows.Close()
 
 		for rows.Next() {
 
@@ -624,9 +621,9 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 		// no data in cache
 		// TODO: update query and implementation, no "scrap" field in new datamodel
 		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE asset_id=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp;`
-		var rows *sql.Rows
-		rows, err = database.DBConnPool.Query(sqlStatement, workCellId, from, to)
-		if errors.Is(err, sql.ErrNoRows) {
+		var rows pgx.Rows
+		rows, err = database.Query(sqlStatement, workCellId, from, to)
+		if errors.Is(err, pgx.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -635,9 +632,7 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 			return
 		}
 
-		defer func(rows *sql.Rows) {
-			_ = rows.Close()
-		}(rows)
+		defer rows.Close()
 
 		for rows.Next() {
 			var timestamp time.Time
@@ -728,9 +723,9 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 			ORDER BY begin_timestamp;
 		`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, workCellId, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, workCellId, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -740,8 +735,8 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 		return
 	}
 
-	defer func(rows *sql.Rows) {
-		_ = rows.Close()
+	defer func(rows pgx.Rows) {
+		rows.Close()
 	}(rows)
 
 	for rows.Next() {
@@ -830,10 +825,10 @@ func GetProductionSpeed(
 		GROUP BY speedPerInterval 
 		ORDER BY speedPerInterval;`
 
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, workCellId, from, to)
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, workCellId, from, to)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
@@ -843,8 +838,8 @@ func GetProductionSpeed(
 		return
 	}
 
-	defer func(rows *sql.Rows) {
-		_ = rows.Close()
+	defer func(rows pgx.Rows) {
+		rows.Close()
 	}(rows)
 
 	// for custom gap-filling

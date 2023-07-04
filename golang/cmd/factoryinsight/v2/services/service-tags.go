@@ -16,10 +16,10 @@ package services
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/repository"
@@ -726,8 +726,8 @@ ORDER BY bucket;
 	zap.S().Debugf("tagName: %s", tagName)
 	zap.S().Debugf("from: %s", from)
 	zap.S().Debugf("to: %s", to)
-	var rows *sql.Rows
-	rows, err = database.DBConnPool.Query(sqlStatement, workCellId, tagName, from, to)
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, workCellId, tagName, from, to)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return
@@ -735,10 +735,10 @@ ORDER BY bucket;
 
 	defer rows.Close()
 
-	cols, err := rows.Columns()
-	if err != nil {
-		database.ErrorHandling(sqlStatement, err, false)
-		return
+	fieldDescriptions := rows.FieldDescriptions()
+	var cols = make([]string, len(fieldDescriptions))
+	for i, fieldDescription := range fieldDescriptions {
+		cols[i] = string(fieldDescription.Name)
 	}
 
 	for rows.Next() {
@@ -859,8 +859,8 @@ ORDER BY
 LIMIT 1
 `
 	var timestamp time.Time
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId, tagName, from).Scan(&timestamp)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, workCellId, tagName, from).Scan(&timestamp)
+	if errors.Is(err, pgx.ErrNoRows) {
 		timestamp = from
 		return timestamp, nil
 	}
@@ -880,8 +880,8 @@ SELECT
                     LIMIT 1
 `
 	var timestamp time.Time
-	err := database.DBConnPool.QueryRow(sqlStatement, workCellId, tagName, to).Scan(&timestamp)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, workCellId, tagName, to).Scan(&timestamp)
+	if errors.Is(err, pgx.ErrNoRows) {
 		timestamp = to
 		return timestamp, nil
 	}
@@ -1046,7 +1046,7 @@ func getCustomTags(workCellId uint32, isPVS bool) (tags []string, err error) {
 	} else {
 		sqlStatement = `SELECT DISTINCT valueName FROM processValueTable WHERE asset_id = $1`
 	}
-	rows, err := database.DBConnPool.Query(sqlStatement, workCellId)
+	rows, err := database.Query(sqlStatement, workCellId)
 	if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
 		return

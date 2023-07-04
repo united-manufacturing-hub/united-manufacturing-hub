@@ -1,7 +1,7 @@
 package internal
 
 import (
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"time"
 )
@@ -59,7 +59,7 @@ func GetSXTrace(msg *kafka.Message) (bool, TraceValue) {
 	if !ok {
 		return false, traceValue
 	} else {
-		err := jsoniter.Unmarshal([]byte(traceS), traceValue)
+		err := json.Unmarshal([]byte(traceS), traceValue)
 		if err != nil {
 			return false, traceValue
 		}
@@ -80,7 +80,7 @@ func AddSXTrace(msg *kafka.Message) error {
 	t := time.Now().UnixNano()
 	trace.Traces[t] = identifier
 
-	j, err := jsoniter.Marshal(trace)
+	j, err := json.Marshal(trace)
 	if err != nil {
 		return err
 	}
