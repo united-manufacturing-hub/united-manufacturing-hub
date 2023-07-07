@@ -24,7 +24,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -70,7 +70,7 @@ func (c AddMaintenanceActivity) ProcessMessages(msg internal.ParsedMessage) (
 
 	// sC is the payload, parsed as addMaintenanceActivity
 	var sC addMaintenanceActivity
-	err = jsoniter.Unmarshal(msg.Payload, &sC)
+	err = json.Unmarshal(msg.Payload, &sC)
 	if err != nil {
 		zap.S().Warnf("Failed to unmarshal message: %s", err.Error())
 		return false, err, true

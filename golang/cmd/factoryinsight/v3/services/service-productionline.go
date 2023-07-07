@@ -41,9 +41,9 @@ func GetProductionLines(
 
 	sqlStatement := `SELECT id, name FROM productionLineTable WHERE enterpriseName = $1 AND siteName = $2 AND areaName = $3`
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	rows, err = db.Query(sqlStatement, enterpriseName, siteName, areaName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		zap.S().Warnf(
 			"[GetProductionLines] No production lines found for enterprise %s, site %s and area %s",
 			enterpriseName,

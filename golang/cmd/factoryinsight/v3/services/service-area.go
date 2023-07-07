@@ -37,9 +37,9 @@ func GetAreas(enterpriseName string, siteName string) (areas models.GetAreasResp
 
 	sqlStatement := `SELECT id, name FROM areaTable WHERE enterpriseName = $1 AND siteName = $2`
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	rows, err = db.Query(sqlStatement, enterpriseName, siteName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		zap.S().Warnf("[GetAreas] No areas found for enterprise %s and site %s", enterpriseName, siteName)
 		return
 	} else if err != nil {

@@ -19,7 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"io"
 	"net"
@@ -83,7 +83,6 @@ func GetDiscoveredDeviceInformation(wg *sync.WaitGroup, i uint32) {
 	unmarshaledAnswer := DiscoverResponseFromDevice{}
 
 	// Unmarshal file with Unmarshal
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err = json.Unmarshal(body, &unmarshaledAnswer)
 	if err != nil {

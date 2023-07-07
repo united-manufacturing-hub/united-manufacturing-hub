@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
@@ -579,15 +580,14 @@ func getUniqueProducts(workCellId uint32, from, to time.Time) (data datamodel.Da
 		OR (begin_timestamp_ms < $2 AND end_timestamp_ms > $3) 
 	ORDER BY begin_timestamp_ms ASC;`
 
-	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, workCellId, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, workCellId, from, to)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return
 	} else if err != nil {
 		database.ErrorHandling(sqlStatement, err, false)
-
 		return
 	}
 
@@ -695,16 +695,7 @@ ORDER BY begin_timestamp ASC
 `
 
 	// Get order outside observation window
-	row := database.Db.QueryRow(sqlStatementGetOutsider, workCellId, from)
-	err = row.Err()
-	if errors.Is(err, sql.ErrNoRows) {
-		zap.S().Debugf("No outsider rows")
-		// We don't care if there is no outside order, in this case we will just select all insider orders
-	} else if err != nil {
-		database.ErrorHandling(sqlStatementGetOutsider, err, false)
-
-		return
-	}
+	row := database.QueryRow(sqlStatementGetOutsider, workCellId, from)
 
 	// Holds an order, retrieved from our DB
 	type Order struct {
@@ -738,7 +729,7 @@ ORDER BY begin_timestamp ASC
 		AID:            AidOuter,
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		foundOutsider = false
 	} else if err != nil {
 		database.ErrorHandling(sqlStatementGetOutsider, err, false)
@@ -746,18 +737,18 @@ ORDER BY begin_timestamp ASC
 		return
 	}
 
-	var insideOrderRows *sql.Rows
+	var insideOrderRows pgx.Rows
 	if foundOutsider {
 		// Get insiders without the outsider order
 		zap.S().Debugf("Query with outsider: ", OuterOrder)
-		insideOrderRows, err = database.Db.Query(sqlStatementGetInsiders, workCellId, from, to, OuterOrder.OID)
+		insideOrderRows, err = database.Query(sqlStatementGetInsiders, workCellId, from, to, OuterOrder.OID)
 	} else {
 		// Get insiders
 		zap.S().Debugf("Query without outsider: ", OuterOrder)
-		insideOrderRows, err = database.Db.Query(sqlStatementGetInsidersNoOutsider, workCellId, from, to)
+		insideOrderRows, err = database.Query(sqlStatementGetInsidersNoOutsider, workCellId, from, to)
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// It is valid to have no internal rows !
 		zap.S().Debugf("No internal rows")
 	} else if err != nil {
@@ -875,14 +866,14 @@ ORDER BY begin_timestamp ASC
 		countQueryEnd = observationEnd.UnixMilli()
 	}
 
-	var countRows *sql.Rows
-	countRows, err = database.Db.Query(
+	var countRows pgx.Rows
+	countRows, err = database.Query(
 		sqlStatementGetCounts,
 		workCellId,
 		float64(countQueryBegin)/1000,
 		float64(countQueryEnd)/1000)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatementGetCounts, err, false)
 		return
 	} else if err != nil {
@@ -925,14 +916,14 @@ ORDER BY begin_timestamp ASC
 		orderQueryEnd = observationEnd.UnixMilli()
 	}
 
-	var orderRows *sql.Rows
-	orderRows, err = database.Db.Query(
+	var orderRows pgx.Rows
+	orderRows, err = database.Query(
 		sqlGetRunningOrders,
 		workCellId,
 		float64(orderQueryEnd)/1000,
 		float64(orderQueryBegin)/1000)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlGetRunningOrders, err, false)
 		return
 	} else if err != nil {
@@ -970,10 +961,10 @@ ORDER BY begin_timestamp ASC
 
 	sqlGetProductsPerSec := `SELECT product_id, time_per_unit_in_seconds FROM producttable WHERE asset_id = $1`
 
-	var productRows *sql.Rows
-	productRows, err = database.Db.Query(sqlGetProductsPerSec, workCellId)
+	var productRows pgx.Rows
+	productRows, err = database.Query(sqlGetProductsPerSec, workCellId)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlGetProductsPerSec, err, false)
 		return
 	} else if err != nil {

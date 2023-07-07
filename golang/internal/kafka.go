@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"go.uber.org/zap"
 	"strings"
 	"time"
@@ -177,7 +177,7 @@ func CreateTopicIfNotExists(kafkaTopicName string) (err error) {
 	// to trigger the subscriptions of the other consumers to the newly created topic
 	payload := make(map[string]string)
 	payload["topic"] = kafkaTopicName
-	jsonString, err := jsoniter.Marshal(payload)
+	jsonString, err := json.Marshal(payload)
 	if err != nil {
 		zap.S().Errorf("Failed to marshal payload: %s", err)
 		return

@@ -19,7 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io"
@@ -69,7 +69,6 @@ func GetUsedPortsAndModeCached(currentDeviceInformation DiscoveredDeviceInformat
 // unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
 func _(dataRaw []byte) (map[int]int, error) {
 	dataUnmarshaled := ModeInformation{}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
 		return nil, err
@@ -97,14 +96,12 @@ func _(dataRaw []byte) (map[int]int, error) {
 
 func UnmarshalUsedPortsAndMode(data []byte) (RawUsedPortsAndMode, error) {
 	var r RawUsedPortsAndMode
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *RawUsedPortsAndMode) Marshal() ([]byte, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	return json.Marshal(r)
 }

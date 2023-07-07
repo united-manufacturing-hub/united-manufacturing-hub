@@ -16,7 +16,7 @@ package internal
 
 import (
 	"bytes"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"io"
 	"os"
 	"reflect"
@@ -34,7 +34,6 @@ var lock2 sync.Mutex
 // io.Reader.
 // By default, it uses the JSON marshaller.
 var Marshal = func(v interface{}) (io.Reader, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	b, err := json.MarshalIndent(v, "", "\t")
 	if err != nil {
@@ -64,7 +63,6 @@ func Save(path string, v interface{}) error {
 // reader into the specified value.
 // By default, it uses the JSON unmarshaller.
 var Unmarshal = func(r io.Reader, v interface{}) error {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	return json.NewDecoder(r).Decode(v)
 }

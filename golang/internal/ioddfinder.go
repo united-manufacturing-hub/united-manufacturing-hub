@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"io"
 	"net/http"
 	"os"
@@ -132,7 +132,7 @@ func getTestIoddFileContext(fileName string) (Content, error) {
 		zap.S().Errorf("Unable to read test iodd file context: %v", err)
 		return content, err
 	}
-	err = jsoniter.Unmarshal(dat, &content)
+	err = json.Unmarshal(dat, &content)
 	if err != nil {
 		zap.S().Errorf("Unable to unmarshal test iodd file context: %v", err)
 		return content, err
@@ -279,14 +279,12 @@ func getUrl(url string) (body []byte, err error, status int) {
 
 func UnmarshalIoddfinder(data []byte) (Ioddfinder, error) {
 	var r Ioddfinder
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *Ioddfinder) Marshal() ([]byte, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	return json.Marshal(r)
 }
