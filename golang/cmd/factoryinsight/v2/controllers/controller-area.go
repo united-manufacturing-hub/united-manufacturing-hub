@@ -15,9 +15,9 @@
 package controllers
 
 import (
-	"database/sql"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/v2/services"
@@ -42,7 +42,7 @@ func GetAreasHandler(c *gin.Context) {
 
 	// Fetch data from database
 	areas, err = services.GetAreas(request.EnterpriseName, request.SiteName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No areas found"})
 	} else if err != nil {
 		helpers.HandleInternalServerError(c, err)

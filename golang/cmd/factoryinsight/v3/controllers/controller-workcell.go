@@ -49,7 +49,7 @@ func GetWorkCellsHandler(c *gin.Context) {
 		request.SiteName,
 		request.AreaName,
 		request.ProductionLineName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No work cells found"})
 	} else if err != nil {
 		helpers.HandleInternalServerError(c, err)

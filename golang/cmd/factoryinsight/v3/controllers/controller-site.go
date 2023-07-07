@@ -46,7 +46,7 @@ func GetSitesHandler(c *gin.Context) {
 
 	// Fetch data from database
 	sites, err = services.GetSites(request.EnterpriseName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No sites found"})
 	} else if err != nil {
 		helpers.HandleInternalServerError(c, err)

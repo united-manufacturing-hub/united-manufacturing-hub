@@ -18,7 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"go.uber.org/zap"
 	"runtime"
 	"runtime/debug"
@@ -255,7 +255,7 @@ func StartPutbackProcessor(
 				},
 			}
 		} else {
-			err := jsoniter.Unmarshal(rawKafkaKey, &kafkaKey)
+			err := json.Unmarshal(rawKafkaKey, &kafkaKey)
 			if err != nil {
 				kafkaKey = KafkaKey{
 					&Putback{
@@ -285,7 +285,7 @@ func StartPutbackProcessor(
 
 		var err error
 		var header []byte
-		header, err = jsoniter.Marshal(kafkaKey)
+		header, err = json.Marshal(kafkaKey)
 		if err != nil {
 			zap.S().Errorf("%s Failed to marshal key: %v (%s)", identifier, kafkaKey, err)
 		}

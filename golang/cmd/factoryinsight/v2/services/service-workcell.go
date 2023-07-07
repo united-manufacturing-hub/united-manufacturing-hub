@@ -15,8 +15,8 @@
 package services
 
 import (
-	"database/sql"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"go.uber.org/zap"
 )
@@ -37,9 +37,9 @@ func GetWorkCells(
 
 	sqlStatement := `SELECT distinct(assetID) FROM assetTable WHERE customer=$1 AND location=$2;`
 
-	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement, entrerpriseName, siteName)
-	if errors.Is(err, sql.ErrNoRows) {
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement, entrerpriseName, siteName)
+	if errors.Is(err, pgx.ErrNoRows) {
 		zap.S().Warnf(
 			"[GetWorkCells] No work cells found for enterprise %s, site %s, area %s and production line %s",
 			entrerpriseName,
@@ -76,10 +76,10 @@ func GetAllWorkCellIds() (workCellIds []uint32, err error) {
 
 	sqlStatement := `SELECT id FROM assetTable;`
 
-	var rows *sql.Rows
-	rows, err = database.Db.Query(sqlStatement)
+	var rows pgx.Rows
+	rows, err = database.Query(sqlStatement)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		zap.S().Warnf("[GetAllWorkCellIds] No work cells found")
 		return
 	} else if err != nil {

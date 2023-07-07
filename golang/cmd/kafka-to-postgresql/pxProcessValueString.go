@@ -17,7 +17,7 @@ package main
 import (
 	"database/sql"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -184,7 +184,7 @@ func writeProcessValueStringToDatabase(messages []*kafka.Message) (
 
 			// sC is the payload, parsed as processValueString
 			var sC processValueString
-			err = jsoniter.Unmarshal(parsedMessage.Payload, &sC)
+			err = json.Unmarshal(parsedMessage.Payload, &sC)
 			if err != nil {
 				zap.S().Errorf("[HT][PVS] Could not unmarshal message: %s", err.Error())
 				putBackMsg = append(putBackMsg, message)

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/coocood/freecache"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/zeebo/xxh3"
@@ -239,14 +239,12 @@ type Bridges []string
 
 func UnmarshalBridges(data []byte) (Bridges, error) {
 	var r Bridges
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	err := json.Unmarshal(data, &r)
 	return r, err
 }
 
 func (r *Bridges) Marshal() ([]byte, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	return json.Marshal(r)
 }
