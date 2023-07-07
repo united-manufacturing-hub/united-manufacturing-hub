@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/patrickmn/go-cache"
 	_ "github.com/patrickmn/go-cache"
 	"github.com/rung/go-safecast"
@@ -65,8 +65,6 @@ func InitCacheWithoutRedis() {
 
 // https://github.com/united-manufacturing-hub/structHashCmp
 
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
-
 // AsHash returns a hash for a given interface
 // Note: this is not a cryptographic hash, but a hash for comparison purposes
 // Also note: do not use this with structs that contain channels or functions, it will panic
@@ -104,7 +102,6 @@ func GetProcessStatesFromCache(key string) (processedStateArray []datamodel.Stat
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &processedStateArray)
 		if err != nil {
@@ -129,7 +126,6 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&processedStateArray)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -138,7 +134,7 @@ func StoreProcessStatesToCache(key string, processedStateArray []datamodel.State
 
 	err = RedisSafeSet(ctx, key, b, redisDataExpiration)
 	if err != nil {
-		zap.S().Errorf("redis failed: %#v", err)
+		zap.S().Errorf("redis failed: %#v [%s] -> len[%d]", err, key, len(b))
 		return
 	}
 }
@@ -167,7 +163,6 @@ func GetCalculatateLowSpeedStatesFromCache(
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &processedStateArray)
 		if err != nil {
@@ -199,7 +194,6 @@ func StoreCalculatateLowSpeedStatesToCache(
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&processedStateArray)
 	if err != nil {
 		zap.S().Errorf("json marshall: %+v", err)
@@ -238,7 +232,6 @@ func GetStatesRawFromCache(
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -271,7 +264,6 @@ func StoreRawStatesToCache(
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -311,7 +303,6 @@ func GetRawShiftsFromCache(
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -344,7 +335,6 @@ func StoreRawShiftsToCache(
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -378,7 +368,6 @@ func GetRawCountsFromCache(assetID uint32, from time.Time, to time.Time) (data [
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -406,7 +395,6 @@ func StoreRawCountsToCache(assetID uint32, from time.Time, to time.Time, data []
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -439,7 +427,6 @@ func GetAverageStateTimeFromCache(key string) (data []interface{}, cacheHit bool
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -466,7 +453,6 @@ func StoreAverageStateTimeToCache(key string, data []interface{}) {
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -503,7 +489,6 @@ func GetDistinctProcessValuesFromCache(customerID string, location string, asset
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -540,7 +525,6 @@ func GetDistinctProcessValuesStringFromCache(customerID string, location string,
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -569,7 +553,6 @@ func StoreDistinctProcessValuesStringToCache(customerID string, location string,
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -592,7 +575,6 @@ func StoreCustomerConfigurationToCache(customerID string, data datamodel.Custome
 
 	key := fmt.Sprintf("GetCustomerConfigurationFromCache-%s", customerID)
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -621,7 +603,6 @@ func StoreDistinctProcessValuesToCache(customerID string, location string, asset
 		return
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -656,7 +637,6 @@ func GetCustomerConfigurationFromCache(customerID string) (data datamodel.Custom
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -1200,7 +1180,6 @@ func StoreEnterpriseConfigurationToCache(enterpriseName string, data datamodel.E
 
 	key := fmt.Sprintf("GetEnterpriseConfigurationFromCache-%s", enterpriseName)
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := json.Marshal(&data)
 	if err != nil {
 		zap.S().Errorf("json marshall")
@@ -1236,7 +1215,6 @@ func GetEnterpriseConfigurationFromCache(enterpriseName string) (data datamodel.
 	} else {
 		// https://itnext.io/storing-go-structs-in-redis-using-rejson-dab7f8fc0053
 		b := []byte(value)
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		err = json.Unmarshal(b, &data)
 		if err != nil {

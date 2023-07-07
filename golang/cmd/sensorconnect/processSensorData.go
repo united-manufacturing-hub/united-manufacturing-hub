@@ -15,7 +15,7 @@
 package main
 
 import (
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 
 	// "github.com/cristalhq/base64"
@@ -66,7 +66,7 @@ func processSensorData(
 			// Payload to send
 			payload := make(map[string]interface{})
 			createDigitalInputPayload(timestampMs, dataPin2In, &payload)
-			jsonString, err = jsoniter.Marshal(payload)
+			jsonString, err = json.Marshal(payload)
 
 			if err != nil {
 				zap.S().Errorf("Error converting payload to json: %s", err.Error())
@@ -170,8 +170,6 @@ func processSensorData(
 				payload["RawSensorOutput"] = string(rawSensorOutput)
 				zap.S().Errorf("Processing Sensordata failed: %v", err)
 			}
-
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 			jsonString, err := json.Marshal(payload)
 			if err != nil {

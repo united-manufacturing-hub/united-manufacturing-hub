@@ -17,7 +17,7 @@ package internal
 import (
 	"errors"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"time"
@@ -83,7 +83,7 @@ func addHeaderTrace(message *kafka.Message, key, value string) error {
 		if header.Key == key {
 			// Json decode
 			var traceValue TraceValue
-			err := jsoniter.Unmarshal(header.Value, traceValue)
+			err := json.Unmarshal(header.Value, traceValue)
 			if err != nil {
 				return err
 			}
@@ -96,13 +96,13 @@ func addHeaderTrace(message *kafka.Message, key, value string) error {
 			// Add new trace
 			traceValue.Traces[t] = value
 			// Json encode
-			var json []byte
-			json, err = jsoniter.Marshal(traceValue)
+			var j []byte
+			j, err = json.Marshal(traceValue)
 			if err != nil {
 				return err
 			}
 			// Update header
-			header.Value = json
+			header.Value = j
 			message.Headers[i] = header
 			return nil
 		}
@@ -113,8 +113,7 @@ func addHeaderTrace(message *kafka.Message, key, value string) error {
 	traceValue.Traces = make(map[int64]string)
 	traceValue.Traces[time.Now().UnixNano()] = value
 	// Json encode
-	var json []byte
-	json, err := jsoniter.Marshal(traceValue)
+	j, err := json.Marshal(traceValue)
 	if err != nil {
 		return err
 	}
@@ -122,7 +121,7 @@ func addHeaderTrace(message *kafka.Message, key, value string) error {
 	// Add new header
 	message.Headers = append(message.Headers, kafka.Header{
 		Key:   key,
-		Value: json,
+		Value: j,
 	})
 	return nil
 }
@@ -137,7 +136,7 @@ func GetTrace(message *kafka.Message, key string) *TraceValue {
 		if header.Key == key {
 			// Json decode
 			var traceValue TraceValue
-			err := jsoniter.Unmarshal(header.Value, &traceValue)
+			err := json.Unmarshal(header.Value, &traceValue)
 			if err != nil {
 				zap.S().Errorf("Failed to unmarshal trace header: %s (%s)", err, key)
 				return nil

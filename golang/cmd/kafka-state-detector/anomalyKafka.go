@@ -17,7 +17,7 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
@@ -100,7 +100,7 @@ func startAnomalyActivityProcessor() {
 			{
 
 				var activityMessage datamodel.Activity
-				err := jsoniter.Unmarshal(parsedMessage.Payload, &activityMessage)
+				err := json.Unmarshal(parsedMessage.Payload, &activityMessage)
 				if err != nil {
 					zap.S().Errorf("[AN] Failed to parse activity message: %s", err)
 					continue
@@ -116,7 +116,7 @@ func startAnomalyActivityProcessor() {
 					continue
 				}
 				var detectedAnomalyMessage datamodel.DetectedAnomaly
-				err := jsoniter.Unmarshal(parsedMessage.Payload, &detectedAnomalyMessage)
+				err := json.Unmarshal(parsedMessage.Payload, &detectedAnomalyMessage)
 				if err != nil {
 					zap.S().Errorf("[AN] Failed to parse activity message: %s", err)
 					continue
@@ -132,7 +132,7 @@ func startAnomalyActivityProcessor() {
 
 				var stateMessage datamodel.State
 				stateMessage.State = stateNumber
-				jsonStateMessage, err := jsoniter.Marshal(stateMessage)
+				jsonStateMessage, err := json.Marshal(stateMessage)
 				if err != nil {
 					continue
 				}

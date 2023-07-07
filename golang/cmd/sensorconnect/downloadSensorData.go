@@ -19,7 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"io"
@@ -78,7 +78,6 @@ func GetSensorDataMap(currentDeviceInformation DiscoveredDeviceInformation) (map
 // unmarshalModeInformation receives the response of the IO-Link-Master regarding its port modes. The function now processes the response and returns a port, portmode map.
 func unmarshalSensorData(dataRaw []byte) (map[string]interface{}, error) {
 	dataUnmarshaled := SensorDataInformation{}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if err := json.Unmarshal(dataRaw, &dataUnmarshaled); err != nil {
 		return nil, err

@@ -41,9 +41,9 @@ func GetWorkCells(
 
 	sqlStatement := `SELECT id, name FROM workCellTable WHERE enterpriseName = $1 AND siteName = $2 AND areaName = $3 AND productionLineName = $4`
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	rows, err = db.Query(sqlStatement, entrerpriseName, siteName, areaName, productionLineName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		zap.S().Warnf(
 			"[GetWorkCells] No work cells found for enterprise %s, site %s, area %s and production line %s",
 			entrerpriseName,
