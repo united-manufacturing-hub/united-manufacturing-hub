@@ -1,8 +1,8 @@
 package message
 
 import (
+	"github.com/goccy/go-json"
 	lru "github.com/hashicorp/golang-lru"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -82,7 +82,7 @@ func isValid(topic string, payload []byte) bool {
 
 	if !isRaw {
 		// Check if payload is a valid json
-		if !jsoniter.Valid(payload) {
+		if !json.Valid(payload) {
 			zap.S().Warnf("Not a valid json: %s: %s", topic, string(payload))
 			return false
 		}

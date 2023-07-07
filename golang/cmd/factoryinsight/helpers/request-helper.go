@@ -15,10 +15,10 @@
 package helpers
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
@@ -36,7 +36,7 @@ func HandleInternalServerError(c *gin.Context, err error) {
 		err = errors.New("unknown error")
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		var data datamodel.DataResponseAny
 		data.ColumnNames = []string{
 			"error",
@@ -126,8 +126,8 @@ func CheckIfUserIsAllowed(c *gin.Context, customer string) error {
 
 	user := c.MustGet(gin.AuthUserKey)
 	if user != customer {
-		c.AbortWithStatus(http.StatusUnauthorized)
 		zap.S().Infof("User %s unauthorized to access %s", user, internal.SanitizeString(customer))
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return fmt.Errorf("user %s unauthorized to access %s", user, internal.SanitizeString(customer))
 	}
 	return nil

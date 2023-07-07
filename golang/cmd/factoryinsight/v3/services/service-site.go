@@ -37,9 +37,9 @@ func GetSites(enterpriseName string) (sites models.GetSitesResponse, err error) 
 
 	sqlStatement := `SELECT id, name FROM siteTable WHERE enterpriseName = $1`
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	rows, err = db.Query(sqlStatement, enterpriseName)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		zap.S().Warnf("[GetSites] No sites found for enterprise %s", enterpriseName)
 		return
 	} else if err != nil {

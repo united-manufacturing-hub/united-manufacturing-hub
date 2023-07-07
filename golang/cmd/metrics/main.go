@@ -17,7 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	// JSON serialization
-	jsonMetrics, err := jsoniter.Marshal(s)
+	jsonMetrics, err := json.Marshal(s)
 	if err != nil {
 		zap.S().Errorf("error: %s", err)
 		return

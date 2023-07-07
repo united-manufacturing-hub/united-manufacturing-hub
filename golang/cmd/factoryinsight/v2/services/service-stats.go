@@ -17,6 +17,7 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/factoryinsight/database"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/pkg/datamodel"
 	"go.uber.org/zap"
@@ -52,8 +53,8 @@ func GetApproximateHyperRows(tableName string) (approximateRows int64) {
 				-- noinspection SqlResolve
 	SELECT approximate_row_count FROM approximate_row_count($1);`
 
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return approximateRows
@@ -77,8 +78,8 @@ func GetApproximateNormalRows(tableName string) (approximateRows int64) {
 	FROM   pg_catalog.pg_class c
 	WHERE  c.oid = $1::regclass;      -- schema-qualified table here
 		`
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&approximateRows)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return approximateRows
@@ -102,8 +103,8 @@ func GetNormalTableStatistics(tableName string) datamodel.DatabaseNormalTableSta
 	`
 
 	var dbNormalTableStats datamodel.DatabaseNormalTableStatistics
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&dbNormalTableStats.PgTableSize, &dbNormalTableStats.PgTotalRelationSize, &dbNormalTableStats.PgIndexesSize, &dbNormalTableStats.PgRelationSizeMain, &dbNormalTableStats.PgRelationSizeFsm, &dbNormalTableStats.PgRelationSizeVm, &dbNormalTableStats.PgRelationSizeInit)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&dbNormalTableStats.PgTableSize, &dbNormalTableStats.PgTotalRelationSize, &dbNormalTableStats.PgIndexesSize, &dbNormalTableStats.PgRelationSizeMain, &dbNormalTableStats.PgRelationSizeFsm, &dbNormalTableStats.PgRelationSizeVm, &dbNormalTableStats.PgRelationSizeInit)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return dbNormalTableStats
@@ -123,8 +124,8 @@ func IsTableHyperTable(tableName string) (isHyerTable bool) {
 		`
 
 	var count int
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&count)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&count)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return false
@@ -141,8 +142,8 @@ func GetHypertableStats(tableName string) (hypertableStats []datamodel.DatabaseH
 	
 			 SELECT * FROM hypertable_detailed_size($1);
 		`
-	rows, err := database.Db.Query(sqlStatement, tableName)
-	if errors.Is(err, sql.ErrNoRows) {
+	rows, err := database.Query(sqlStatement, tableName)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return hypertableStats
@@ -171,8 +172,8 @@ func GetHyperRetentionSettings(tableName string) (retentionSettings datamodel.Da
 	WHERE hypertable_name = $1
 	AND timescaledb_information.jobs.proc_name = 'policy_retention';
 	`
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return retentionSettings
@@ -190,8 +191,8 @@ func GetHyperCompressionSettings(tableName string) (retentionSettings datamodel.
 	WHERE hypertable_name = $1
 	AND timescaledb_information.jobs.proc_name = 'policy_compression';
 	`
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&retentionSettings.ScheduleInterval, &retentionSettings.Config)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return retentionSettings
@@ -209,8 +210,8 @@ func GetAllTableNamesInPublic() (tableNames []string) {
 
 			SELECT table_name FROM information_schema.tables WHERE table_schema='public';
 		`
-	rows, err := database.Db.Query(sqlStatement)
-	if errors.Is(err, sql.ErrNoRows) {
+	rows, err := database.Query(sqlStatement)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return tableNames
@@ -236,8 +237,8 @@ func GetDatabaseSizeInBytes() (size int64) {
 	sqlStatement := `
 	SELECT pg_database_size('factoryinsight');`
 
-	err := database.Db.QueryRow(sqlStatement).Scan(&size)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement).Scan(&size)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return 0
@@ -255,8 +256,8 @@ func GetVacuumAndAnalyzeStats(tableName string) (lastAutoanalyze, lastAnalyze, l
 		SELECT schemaname, relname, last_autoanalyze, last_analyze, last_vacuum, last_autovacuum FROM pg_stat_all_tables WHERE relname = $1;`
 
 	var schemaName, relName string
-	err := database.Db.QueryRow(sqlStatement, tableName).Scan(&schemaName, &relName, &lastAutoanalyze, &lastAnalyze, &lastVacuum, &lastAutovacuum)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.QueryRow(sqlStatement, tableName).Scan(&schemaName, &relName, &lastAutoanalyze, &lastAnalyze, &lastVacuum, &lastAutovacuum)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// it can happen, no need to escalate error
 		zap.S().Debugf("No Results Found")
 		return lastAutoanalyze, lastAnalyze, lastVacuum, lastAutovacuum

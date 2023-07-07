@@ -51,7 +51,7 @@ func GetEnterpriseId(enterpriseName string) (enterpriseId uint32, err error) {
 	sqlStatement := `SELECT id FROM enterpriseTable WHERE name = $1`
 
 	err = db.QueryRow(sqlStatement, enterpriseName).Scan(&enterpriseId)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf("[GetEnterpriseID] enterprise not found: %v", enterpriseName)
 		err = errors.New("enterprise not found")
@@ -79,7 +79,7 @@ func GetSiteId(enterpriseId uint32, siteName string) (siteId uint32, err error) 
 	sqlStatement := `SELECT id FROM siteTable WHERE enterpriseId = $1 AND name = $2`
 
 	err = db.QueryRow(sqlStatement, enterpriseId, siteName).Scan(&siteId)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf("[GetSiteID] site not found: %v", siteName)
 		err = errors.New("site not found")
@@ -107,7 +107,7 @@ func GetAreaId(siteId uint32, areaName string) (areaId uint32, err error) {
 	sqlStatement := `SELECT id FROM areaTable WHERE siteId = $1 AND name = $2`
 
 	err = db.QueryRow(sqlStatement, siteId, areaName).Scan(&areaId)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf("[GetAreaID] area not found: %v", areaName)
 		err = errors.New("area not found")
@@ -135,7 +135,7 @@ func GetProductionLineId(areaId uint32, productionLineName string) (productionLi
 	sqlStatement := `SELECT id FROM productionLineTable WHERE areaId = $1 AND name = $2`
 
 	err = db.QueryRow(sqlStatement, areaId, productionLineName).Scan(&productionLineId)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf("[GetProductionLineID] production line not found: %v", productionLineName)
 		err = errors.New("production line not found")
@@ -163,7 +163,7 @@ func GetWorkCellId(productionLineId uint32, workCellName string) (workCellId uin
 	sqlStatement := `SELECT id FROM workCellTable WHERE productionLineId = $1 AND name = $2`
 
 	err = db.QueryRow(sqlStatement, productionLineId, workCellName).Scan(&workCellId)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		database.ErrorHandling(sqlStatement, err, false)
 		zap.S().Warnf("[GetWorkCellID] work cell not found: %v", workCellName)
 		err = errors.New("work cell not found")
@@ -220,7 +220,7 @@ func GetEnterpriseConfiguration(enterpriseName string) (configuration datamodel.
 		&tempPerformanceLossStates,
 	)
 
-	if errors.Is(err, sql.ErrNoRows) { // default values if no configuration is stored yet
+	if errors.Is(err, pgx.ErrNoRows) { // default values if no configuration is stored yet
 		configuration.MicrostopDurationInSeconds = 60 * 2
 		configuration.IgnoreMicrostopUnderThisDurationInSeconds = -1 // do not apply
 		configuration.MinimumRunningTimeInSeconds = 0
@@ -303,7 +303,7 @@ func GetStatesRaw(
 		sqlStatement := `SELECT timestamp, state FROM stateTable WHERE workCellId=$1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1;`
 
 		err = db.QueryRow(sqlStatement, workCellId, from).Scan(&timestamp, &dataPoint)
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 		} else if err != nil {
@@ -324,9 +324,9 @@ func GetStatesRaw(
 
 		sqlStatement = `SELECT timestamp, state FROM stateTable WHERE workCellId=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
 
-		var rows *sql.Rows
+		var rows pgx.Rows
 		rows, err = db.Query(sqlStatement, workCellId, from, to)
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -414,7 +414,7 @@ func GetShiftsRaw(
 		`
 
 		err = db.QueryRow(sqlStatement, workCellId, from, to).Scan(&timestampStart, &timestampEnd, &shiftType)
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 
@@ -454,9 +454,9 @@ func GetShiftsRaw(
 			OR (begin_timestamp < $2 AND end_timestamp > $3))
 		ORDER BY begin_timestamp ASC OFFSET 1;`
 
-		var rows *sql.Rows
+		var rows pgx.Rows
 		rows, err = db.Query(sqlStatement, workCellId, from, to) // OFFSET to prevent entering first result twice
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -568,9 +568,9 @@ func GetCountsRaw(workCellId uint32, from, to time.Time) (data []datamodel.Count
 		// no data in cache
 		// TODO: update query and implementation, no "scrap" field in new datamodel
 		sqlStatement := `SELECT timestamp, count, scrap FROM countTable WHERE workCellId=$1 AND timestamp BETWEEN $2 AND $3 ORDER BY timestamp ASC;`
-		var rows *sql.Rows
+		var rows pgx.Rows
 		rows, err = db.Query(sqlStatement, workCellId, from, to)
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			database.ErrorHandling(sqlStatement, err, false)
 			return
 		} else if err != nil {
@@ -668,9 +668,9 @@ func GetOrdersRaw(workCellId uint32, from, to time.Time) (data []datamodel.Order
 		ORDER BY begin_timestamp ASC;
 	`
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 			return
@@ -767,10 +767,10 @@ func GetProductionSpeed(workCellId uint32, from, to time.Time, aggregatedInterva
 		GROUP BY speedPerIntervall
 		ORDER BY speedPerIntervall ASC;`
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	rows, err = db.Query(sqlStatement, workCellId, from, to)
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 			// it can happen, no need to escalate error
 			zap.S().Debugf("No Results Found")
 			return
