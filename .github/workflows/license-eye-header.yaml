@@ -22,5 +22,5 @@ jobs:
     name: License Eye Header
     runs-on: ubuntu-20.04
     steps:
-      - uses: apache/skywalking-eyes@v0.4.0
+      - uses: apache/skywalking-eyes@v0.5.0
         name: License Eye Header
