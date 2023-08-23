@@ -36,6 +36,7 @@ var FactoryInputAPIKey string
 var FactoryInputUser string
 var FactoryInputBaseURL string
 var FactoryInsightBaseUrl string
+var NodeRedBaseUrl = "http://united-manufacturing-hub-nodered-service:1880/"
 
 func SetupRestAPI(factoryInputApiKey, factoryInputUser, factoryInputBaseURL, facoryInsightBaseUrl string) {
 	gin.SetMode(gin.ReleaseMode)
@@ -68,6 +69,9 @@ func SetupRestAPI(factoryInputApiKey, factoryInputUser, factoryInputBaseURL, fac
 	{
 		v1.GET(serviceRoute, getProxyHandler)
 		v1.POST(serviceRoute, postProxyHandler)
+		v1.PUT(serviceRoute, putProxyHandler)
+		v1.DELETE(serviceRoute, deleteProxyHandler)
+		v1.PATCH(serviceRoute, patchProxyHandler)
 		v1.OPTIONS(serviceRoute, optionsCORSHAndler)
 	}
 
@@ -141,6 +145,8 @@ func handleProxyRequest(c *gin.Context, method string) {
 		HandleFactoryInput(c, gPPR, method, bodyBytes)
 	case "factoryinsight":
 		HandleFactoryInsight(c, gPPR, method, bodyBytes)
+	case "nodered":
+		HandleNodeRed(c, gPPR, method, bodyBytes)
 	default:
 		{
 			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(gPPR.Service))
@@ -179,12 +185,33 @@ func getProxyHandler(c *gin.Context) {
 	handleProxyRequest(c, "GET")
 }
 
+func putProxyHandler(c *gin.Context) {
+
+	// Add cors headers for reply to original requester
+	AddCorsHeaders(c)
+	handleProxyRequest(c, "PUT")
+}
+
+func deleteProxyHandler(c *gin.Context) {
+
+	// Add cors headers for reply to original requester
+	AddCorsHeaders(c)
+	handleProxyRequest(c, "DELETE")
+}
+
+func patchProxyHandler(c *gin.Context) {
+
+	// Add cors headers for reply to original requester
+	AddCorsHeaders(c)
+	handleProxyRequest(c, "PATCH")
+}
+
 func IsBase64(s string) bool {
 	_, err := base64.StdEncoding.DecodeString(s)
 	return err == nil
 }
 
-func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string, bytes []byte) {
+func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
 
 	zap.S().Debugf("HandleFactoryInsight")
 
@@ -230,7 +257,9 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 		return
 	}
 
-	DoProxiedRequest(c, u, "", authHeader, method, bytes)
+	headers := make(map[string]string)
+	headers["Authorization"] = authHeader
+	DoProxiedRequest(c, u, "", headers, method, bodyBytes)
 }
 
 // HandleFactoryInput handles proxy requests to factoryinput
@@ -266,7 +295,6 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
 	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
-	zap.S().Warnf("Proxified URL: %s", internal.SanitizeString(u.String()))
 	if err != nil {
 		zap.S().Warnf(
 			"url.Parse failed: %s",
@@ -274,6 +302,7 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		handleInvalidInputError(c, err)
 		return
 	}
+	zap.S().Warnf("Proxified URL: %s", internal.SanitizeString(u.String()))
 
 	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
@@ -318,14 +347,46 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 		"Basic %s",
 		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
 
-	DoProxiedRequest(c, u, sessionCookie, ak, method, bodyBytes)
+	headers := make(map[string]string)
+	headers["Authorization"] = ak
+	DoProxiedRequest(c, u, "", headers, method, bodyBytes)
+}
+
+func HandleNodeRed(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
+	zap.S().Debugf("HandleNodeRed")
+	// Get all headers from request into map
+	headers := make(map[string]string)
+	for k, v := range c.Request.Header {
+		headers[k] = v[0]
+	}
+
+	proxyUrl := strings.TrimPrefix(request.OriginalURI, "/")
+
+	var path = "?"
+	for k, v := range c.Request.URL.Query() {
+		path += fmt.Sprintf("%s=%s&", k, v[0])
+	}
+
+	if len(path) == 1 {
+		path = ""
+	}
+
+	// Validate proxy url
+	u, err := url.Parse(fmt.Sprintf("%s%s%s", NodeRedBaseUrl, proxyUrl, path))
+
+	if err != nil {
+		handleInvalidInputError(c, err)
+		return
+	}
+	zap.S().Debugf("NodeRed URL: %s", internal.SanitizeString(u.String()))
+	DoProxiedRequest(c, u, "", headers, method, bodyBytes)
 }
 
 func DoProxiedRequest(
 	c *gin.Context,
 	u *url.URL,
 	sessionCookie string,
-	authorizationKey string,
+	headers map[string]string,
 	method string,
 	bodyBytes []byte) {
 
@@ -361,11 +422,13 @@ func DoProxiedRequest(
 			zap.S().Warnf("Request error: %s", err)
 			return
 		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
 		// Add headers for backend
 		if len(sessionCookie) > 0 {
 			req.Header.Set("Cookie", fmt.Sprintf("grafana_session=%s", internal.SanitizeString(sessionCookie)))
 		}
-		req.Header.Set("Authorization", authorizationKey)
 
 		var resp *http.Response
 		resp, err = client.Do(req)
@@ -390,14 +453,18 @@ func DoProxiedRequest(
 			return
 		}
 
-		zap.S().Debugf("Backend answer:")
-		zap.S().Debugf(string(bodyBytesRet))
+		zap.S().Debugf("Backend answer: %s", bodyBytesRet)
+		zap.S().Debugf("Backend answer status: %d", resp.StatusCode)
+		zap.S().Debugf("Backend answer headers: %s", resp.Header)
 
 		c.Status(resp.StatusCode)
 
 		for a, b := range resp.Header {
 			c.Header(a, b[0])
 		}
+		// Overwrite Access-Control-Allow-Origin with Origin
+		c.Header("Access-Control-Allow-Origin", c.Request.Header.Get("Origin"))
+
 		_, err = c.Writer.Write(bodyBytesRet)
 		if err != nil {
 			errx := c.AbortWithError(http.StatusInternalServerError, err)
