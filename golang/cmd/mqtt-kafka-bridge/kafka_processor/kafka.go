@@ -40,7 +40,7 @@ func Init(kafkaToMqttChan chan kafka.Message, sChan chan bool) {
 		Brokers: []string{
 			KafkaBootstrapServer,
 		},
-		ConsumerName:      "mqtt-kafka-bridge",
+		ConsumerGroupId:   "mqtt-kafka-bridge",
 		ListenTopicRegex:  compile,
 		Partitions:        6,
 		ReplicationFactor: 1,

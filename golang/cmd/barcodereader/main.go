@@ -113,7 +113,7 @@ func initKafka() {
 
 	client, err = kafka.NewKafkaClient(&kafka.NewClientOptions{
 		ListenTopicRegex:  nil,
-		ConsumerName:      "barcodereader",
+		ConsumerGroupId:   "barcodereader",
 		Brokers:           []string{KafkaBoostrapServer},
 		StartOffset:       0,
 		Partitions:        6,
