@@ -18,34 +18,26 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/cristalhq/base64"
-	ginzap "github.com/gin-contrib/zap"
-	"github.com/gin-gonic/gin"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/cristalhq/base64"
+	ginzap "github.com/gin-contrib/zap"
+	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 )
 
-var FactoryInputAPIKey string
-var FactoryInputUser string
-var FactoryInputBaseURL string
-var FactoryInsightBaseUrl string
-var NodeRedBaseUrl = "http://united-manufacturing-hub-nodered-service:1880/"
+const NodeRedBaseUrl = "http://united-manufacturing-hub-nodered-service:1880/"
 
-func SetupRestAPI(factoryInputApiKey, factoryInputUser, factoryInputBaseURL, facoryInsightBaseUrl string) {
+func (f *Factory) setupRestAPI() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-
-	FactoryInputAPIKey = factoryInputApiKey
-	FactoryInputUser = factoryInputUser
-	FactoryInputBaseURL = factoryInputBaseURL
-	FactoryInsightBaseUrl = facoryInsightBaseUrl
 
 	// Add a ginzap middleware, which:
 	//   - Logs all requests, like a combined access and error log.
@@ -67,25 +59,17 @@ func SetupRestAPI(factoryInputApiKey, factoryInputUser, factoryInputBaseURL, fac
 	// Version of the API
 	v1 := router.Group("/api/v1")
 	{
-		v1.GET(serviceRoute, getProxyHandler)
-		v1.POST(serviceRoute, postProxyHandler)
-		v1.PUT(serviceRoute, putProxyHandler)
-		v1.DELETE(serviceRoute, deleteProxyHandler)
-		v1.PATCH(serviceRoute, patchProxyHandler)
-		v1.OPTIONS(serviceRoute, optionsCORSHAndler)
+		v1.Use(AddCorsHeaders())
+		// Ignore HEAD, CONNECT and TRACE requests
+		for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} {
+			v1.Handle(method, serviceRoute, f.handleProxyRequest)
+		}
 	}
 
 	err := router.Run(":80")
 	if err != nil {
 		zap.S().Fatalf("Failed to start rest api: %s", err)
 	}
-}
-
-func optionsCORSHAndler(c *gin.Context) {
-
-	zap.S().Debugf("optionsCORSHAndler")
-	AddCorsHeaders(c)
-	c.Status(http.StatusOK)
 }
 
 func handleInvalidInputError(c *gin.Context, err error) {
@@ -103,7 +87,7 @@ type getProxyRequestPath struct {
 	OriginalURI string `uri:"data" binding:"required"`
 }
 
-func handleProxyRequest(c *gin.Context, method string) {
+func (f *Factory) handleProxyRequest(c *gin.Context) {
 
 	zap.S().Debugf("getProxyHandler")
 
@@ -142,11 +126,11 @@ func handleProxyRequest(c *gin.Context, method string) {
 	// Switch to handle our services
 	switch gPPR.Service {
 	case "factoryinput":
-		HandleFactoryInput(c, gPPR, method, bodyBytes)
+		f.handleFactoryInput(c, gPPR, bodyBytes)
 	case "factoryinsight":
-		HandleFactoryInsight(c, gPPR, method, bodyBytes)
+		f.handleFactoryInsight(c, gPPR, bodyBytes)
 	case "nodered":
-		HandleNodeRed(c, gPPR, method, bodyBytes)
+		handleNodeRed(c, gPPR, bodyBytes)
 	default:
 		{
 			zap.S().Warnf("getProxyRequestPath.Service: %s", internal.SanitizeString(gPPR.Service))
@@ -155,64 +139,12 @@ func handleProxyRequest(c *gin.Context, method string) {
 	}
 }
 
-func AddCorsHeaders(c *gin.Context) {
-
-	origin := c.GetHeader("Origin")
-	zap.S().Debugf("Requesting origin: %s", internal.SanitizeString(origin))
-	if len(origin) == 0 {
-		zap.S().Debugf("Add cors wildcard")
-		origin = "*"
-	} else {
-		zap.S().Debugf("Set cors origin to: %s", internal.SanitizeString(origin))
-	}
-	c.Header("Access-Control-Allow-Headers", "content-type, Authorization")
-	c.Header("Access-Control-Allow-Credentials", "true")
-	c.Header("Access-Control-Allow-Origin", internal.SanitizeString(origin))
-	c.Header("Access-Control-Allow-Methods", "*")
-}
-
-func postProxyHandler(c *gin.Context) {
-
-	// Add cors headers for reply to original requester
-	AddCorsHeaders(c)
-	handleProxyRequest(c, "POST")
-}
-
-func getProxyHandler(c *gin.Context) {
-
-	// Add cors headers for reply to original requester
-	AddCorsHeaders(c)
-	handleProxyRequest(c, "GET")
-}
-
-func putProxyHandler(c *gin.Context) {
-
-	// Add cors headers for reply to original requester
-	AddCorsHeaders(c)
-	handleProxyRequest(c, "PUT")
-}
-
-func deleteProxyHandler(c *gin.Context) {
-
-	// Add cors headers for reply to original requester
-	AddCorsHeaders(c)
-	handleProxyRequest(c, "DELETE")
-}
-
-func patchProxyHandler(c *gin.Context) {
-
-	// Add cors headers for reply to original requester
-	AddCorsHeaders(c)
-	handleProxyRequest(c, "PATCH")
-}
-
 func IsBase64(s string) bool {
 	_, err := base64.StdEncoding.DecodeString(s)
 	return err == nil
 }
 
-func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
-
+func (f *Factory) handleFactoryInsight(c *gin.Context, request getProxyRequestPath, bodyBytes []byte) {
 	zap.S().Debugf("HandleFactoryInsight")
 
 	authHeader := c.GetHeader("authorization")
@@ -245,12 +177,12 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 		path = ""
 	}
 
-	zap.S().Debugf("FactoryInsightBaseUrl: ", FactoryInsightBaseUrl)
+	zap.S().Debugf("FactoryInsightBaseUrl: ", f.InsightBaseURL)
 	zap.S().Debugf("proxyUrl: ", internal.SanitizeString(proxyUrl))
 	zap.S().Debugf("path: ", internal.SanitizeString(path))
 
 	// Validate proxy url
-	u, err := url.Parse(fmt.Sprintf("%s%s%s", FactoryInsightBaseUrl, proxyUrl, path))
+	u, err := url.Parse(fmt.Sprintf("%s%s%s", f.InsightBaseURL, proxyUrl, path))
 
 	if err != nil {
 		handleInvalidInputError(c, err)
@@ -259,11 +191,11 @@ func HandleFactoryInsight(c *gin.Context, request getProxyRequestPath, method st
 
 	headers := make(map[string]string)
 	headers["Authorization"] = authHeader
-	DoProxiedRequest(c, u, "", headers, method, bodyBytes)
+	doProxiedRequest(c, u, "", headers, bodyBytes)
 }
 
 // HandleFactoryInput handles proxy requests to factoryinput
-func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
+func (f *Factory) handleFactoryInput(c *gin.Context, request getProxyRequestPath, bodyBytes []byte) {
 
 	zap.S().Warnf("HandleFactoryInput")
 
@@ -294,11 +226,11 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 
 	zap.S().Warnf("ValidateProxyUrl")
 	// Validate proxy url
-	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl))
+	u, err := url.Parse(fmt.Sprintf("%sapi/v1/%s", f.BaseURL, proxyUrl))
 	if err != nil {
 		zap.S().Warnf(
 			"url.Parse failed: %s",
-			internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", FactoryInputBaseURL, proxyUrl)))
+			internal.SanitizeString(fmt.Sprintf("%sapi/v1/%s", f.BaseURL, proxyUrl)))
 		handleInvalidInputError(c, err)
 		return
 	}
@@ -345,14 +277,14 @@ func HandleFactoryInput(c *gin.Context, request getProxyRequestPath, method stri
 	}
 	ak := fmt.Sprintf(
 		"Basic %s",
-		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", FactoryInputUser, FactoryInputAPIKey))))
+		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", f.User, f.APIKey))))
 
 	headers := make(map[string]string)
 	headers["Authorization"] = ak
-	DoProxiedRequest(c, u, "", headers, method, bodyBytes)
+	doProxiedRequest(c, u, "", headers, bodyBytes)
 }
 
-func HandleNodeRed(c *gin.Context, request getProxyRequestPath, method string, bodyBytes []byte) {
+func handleNodeRed(c *gin.Context, request getProxyRequestPath, bodyBytes []byte) {
 	zap.S().Debugf("HandleNodeRed")
 	// Get all headers from request into map
 	headers := make(map[string]string)
@@ -379,15 +311,14 @@ func HandleNodeRed(c *gin.Context, request getProxyRequestPath, method string, b
 		return
 	}
 	zap.S().Debugf("NodeRed URL: %s", internal.SanitizeString(u.String()))
-	DoProxiedRequest(c, u, "", headers, method, bodyBytes)
+	doProxiedRequest(c, u, "", headers, bodyBytes)
 }
 
-func DoProxiedRequest(
+func doProxiedRequest(
 	c *gin.Context,
 	u *url.URL,
 	sessionCookie string,
 	headers map[string]string,
-	method string,
 	bodyBytes []byte) {
 
 	// Proxy request to backend
@@ -412,11 +343,10 @@ func DoProxiedRequest(
 		// no nil check required, len(nil slice) is 0
 		if len(bodyBytes) > 0 {
 			zap.S().Warnf("Request with body bytes: %s", internal.SanitizeByteArray(bodyBytes))
-			req, err = http.NewRequestWithContext(context.Background(), method, u.String(), bytes.NewBuffer(bodyBytes))
+			req, err = http.NewRequestWithContext(context.Background(), c.Request.Method, u.String(), bytes.NewBuffer(bodyBytes))
 		} else {
 			zap.S().Warnf("Request without body bytes")
-			req, err = http.NewRequestWithContext(context.Background(), method, u.String(), http.NoBody)
-
+			req, err = http.NewRequestWithContext(context.Background(), c.Request.Method, u.String(), http.NoBody)
 		}
 		if err != nil {
 			zap.S().Warnf("Request error: %s", err)

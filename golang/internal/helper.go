@@ -16,14 +16,17 @@ package internal
 
 import (
 	"bytes"
-	"github.com/goccy/go-json"
 	"io"
 	"os"
+	"os/signal"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"go.uber.org/zap"
 )
@@ -177,4 +180,47 @@ func IndexOf(slice []string, value string) int {
 		}
 	}
 	return -1
+}
+
+// Helper to set up graceful shutdown handling.
+//
+// Takes a function that runs after a SIGTERM signal is received (if not nil).
+// Returns two functions:
+//   - shuttingDown: to quickly check if a shutdown is in progress.
+//   - shutdown: to trigger a graceful shutdown programmatically.
+func SetupGracefulShutdown(shutdownFunc func() error) (shuttingDown func() bool, shutdown func()) {
+	sigs := make(chan os.Signal, 1)
+
+	go func(sigs chan os.Signal) {
+		signal.Notify(sigs, syscall.SIGTERM)
+		// before you trapped SIGTERM your process would
+		// have exited, so we are now on borrowed time.
+		//
+		// Kubernetes sends SIGTERM 30 seconds before
+		// shutting down the pod.
+		sig := <-sigs
+		zap.S().Infof("Received SIGTERM (%s), shutting down", sig)
+		if shutdownFunc != nil {
+			err := shutdownFunc()
+			if err != nil {
+				zap.S().Fatalf("Error during shutdown: %s", err)
+				return
+			}
+		}
+		zap.S().Info("Successful shutdown. Exiting.")
+		os.Exit(0)
+	}(sigs)
+
+	shuttingDown = func() bool {
+		select {
+		case <-sigs:
+			return true
+		default:
+			return false
+		}
+	}
+	shutdown = func() {
+		sigs <- syscall.SIGTERM
+	}
+	return
 }
