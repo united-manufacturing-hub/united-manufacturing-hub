@@ -77,12 +77,12 @@ func main() {
 	}(log)
 
 	internal.Initfgtrace()
-	shuttingDown, _ := internal.SetupGracefulShutdown(nil)
+	gracefulShutdown := internal.NewGracefulShutdown(nil)
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	health.AddReadinessCheck("shutdownEnabled", func() error {
-		if shuttingDown() {
+		if gracefulShutdown.ShuttingDown() {
 			return fmt.Errorf("shutdown")
 		}
 		return nil
