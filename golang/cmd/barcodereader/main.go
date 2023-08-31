@@ -3,18 +3,19 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/heptiolabs/healthcheck"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
-	"github.com/united-manufacturing-hub/umh-utils/env"
-	"github.com/united-manufacturing-hub/umh-utils/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/heptiolabs/healthcheck"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
+	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
+	"go.uber.org/zap"
 )
 
 const (
@@ -113,7 +114,7 @@ func initKafka() {
 
 	client, err = kafka.NewKafkaClient(&kafka.NewClientOptions{
 		ListenTopicRegex:  nil,
-		ConsumerName:      "barcodereader",
+		ConsumerGroupId:   "barcodereader",
 		Brokers:           []string{KafkaBoostrapServer},
 		StartOffset:       0,
 		Partitions:        6,

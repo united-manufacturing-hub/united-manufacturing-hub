@@ -14,11 +14,12 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/Shopify/sarama"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
-	"strings"
 )
 
 func Init(kafkaBroker string) {
@@ -38,7 +39,7 @@ func Init(kafkaBroker string) {
 	zap.S().Debug("Creating kafka client")
 	client, err := kafka.NewKafkaClient(&kafka.NewClientOptions{
 		Brokers:           []string{kafkaBroker},
-		ConsumerName:      "kafka-init",
+		ConsumerGroupId:   "kafka-init",
 		Partitions:        6,
 		ReplicationFactor: 1,
 		EnableTLS:         useSsl,
