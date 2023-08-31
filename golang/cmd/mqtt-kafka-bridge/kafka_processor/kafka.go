@@ -1,15 +1,16 @@
 package kafka_processor
 
 import (
+	"regexp"
+	"strings"
+	"time"
+
 	"github.com/Shopify/sarama"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/mqtt-kafka-bridge/message"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
-	"regexp"
-	"strings"
-	"time"
 )
 
 var client *kafka.Client
