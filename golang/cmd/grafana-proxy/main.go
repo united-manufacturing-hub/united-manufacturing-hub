@@ -29,16 +29,23 @@ import (
 var factoryEnvVars = []string{"FACTORYINPUT_KEY", "FACTORYINPUT_USER", "FACTORYINPUT_BASE_URL", "FACTORYINSIGHT_BASE_URL"}
 
 type Factory struct {
-	APIKey         string
-	User           string
-	BaseURL        string
-	InsightBaseURL string
+	APIKey         string // FACTORYINPUT_KEY
+	User           string // FACTORYINPUT_USER
+	BaseURL        string // FACTORYINPUT_BASE_URL
+	InsightBaseURL string // FACTORYINSIGHT_BASE_URL
 }
 
 // Initialize the factory struct by reading the required environment variables set in factoryEnvVars.
 // Returns an error if any of the environment variables are missing.
 func initFactory() (Factory, error) {
 	var f Factory
+	formatUrl := func(url string) string {
+		if !strings.HasSuffix(url, "/") {
+			url = fmt.Sprintf("%s/", url)
+		}
+		return url
+	}
+
 	for _, envVar := range factoryEnvVars {
 		val, err := env.GetAsString(envVar, true, "")
 		if err != nil {
@@ -51,15 +58,9 @@ func initFactory() (Factory, error) {
 		case "FACTORYINPUT_USER":
 			f.User = val
 		case "FACTORYINPUT_BASE_URL":
-			if !strings.HasSuffix(val, "/") {
-				val = fmt.Sprintf("%s/", val)
-			}
-			f.BaseURL = val
+			f.BaseURL = formatUrl(val)
 		case "FACTORYINSIGHT_BASE_URL":
-			if !strings.HasSuffix(val, "/") {
-				val = fmt.Sprintf("%s/", val)
-			}
-			f.InsightBaseURL = val
+			f.InsightBaseURL = formatUrl(val)
 		}
 	}
 	return f, nil
@@ -77,12 +78,14 @@ func main() {
 	}(log)
 
 	internal.Initfgtrace()
-	gracefulShutdown := internal.NewGracefulShutdown(nil)
+
+	gs := internal.NewGracefulShutdown(nil)
+	defer gs.Wait()
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 	health.AddReadinessCheck("shutdownEnabled", func() error {
-		if gracefulShutdown.ShuttingDown() {
+		if gs.ShuttingDown() {
 			return fmt.Errorf("shutdown")
 		}
 		return nil
@@ -103,6 +106,4 @@ func main() {
 
 	f.setupRestAPI()
 	zap.S().Infof("Ready to proxy connections")
-
-	select {} // block forever
 }

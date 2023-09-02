@@ -3,56 +3,76 @@ package internal
 import (
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"go.uber.org/zap"
 )
 
 type GracefulShutdownHandler interface {
-	Shutdown()          // Trigger a graceful shutdown programmatically.
-	ShuttingDown() bool // Quickly check if a shutdown is in progress.
+	Shutdown()          // Triggers a graceful shutdown programmatically.
+	ShuttingDown() bool // Quickly checks if a shutdown is in progress.
+	Wait()              // Blocks until shutdown tasks are complete.
 }
 
-// A channel that waits/reads for a SIGTERM signal.
-type sigChan chan os.Signal
+type gracefulShutdown struct {
+	quit         chan os.Signal // Blocks until a SIGTERM/SIGINT signal is received.
+	shuttingDown chan bool      // Indicates if a shutdown is happening.
+	wg           sync.WaitGroup // Waits until all shutdown tasks are complete.
+}
 
 // Initialize a graceful shutdown handler.
-// Takes a function that runs after a SIGTERM signal is received (if not nil).
+// Takes a function that runs after a SIGTERM/SIGINT signal is received (if not nil).
 func NewGracefulShutdown(onShutdown func() error) GracefulShutdownHandler {
-	sigs := make(sigChan, 1)
+	gs := &gracefulShutdown{
+		quit:         make(chan os.Signal, 1),
+		shuttingDown: make(chan bool, 1),
+		wg:           sync.WaitGroup{},
+	}
+	gs.wg.Add(1)
 
-	go func(sigs chan os.Signal) {
-		signal.Notify(sigs, syscall.SIGTERM)
+	go func(gs *gracefulShutdown, onShutdown func() error) {
+		defer gs.wg.Done()
+		signal.Notify(gs.quit, syscall.SIGINT, syscall.SIGTERM)
 		// before you trapped SIGTERM your process would
 		// have exited, so we are now on borrowed time.
 		//
 		// Kubernetes sends SIGTERM 30 seconds before
 		// shutting down the pod.
-		sig := <-sigs
-		zap.S().Infof("Received SIGTERM (%s), shutting down", sig)
+		sig := <-gs.quit
+		gs.shuttingDown <- true
+		zap.S().Infow("Received signal, shutting down", "signal", sig.String())
 		if onShutdown != nil {
 			err := onShutdown()
 			if err != nil {
-				zap.S().Fatalf("Error during shutdown: %s", err)
+				zap.S().Errorw("Error during shutdown", "error", err)
 				return
 			}
 		}
-		zap.S().Info("Successful shutdown. Exiting.")
-		os.Exit(0)
-	}(sigs)
+		zap.S().Info("Shutdown tasks completed. Ready to exit.")
+	}(gs, onShutdown)
 
-	return sigs
+	return gs
 }
 
-func (s sigChan) ShuttingDown() bool {
+func (gs *gracefulShutdown) ShuttingDown() bool {
 	select {
-	case <-s:
+	case <-gs.shuttingDown:
+		// Put the value back, in case it's checked again later during shutdown.
+		gs.shuttingDown <- true
 		return true
 	default:
 		return false
 	}
 }
 
-func (s sigChan) Shutdown() {
-	s <- syscall.SIGTERM
+func (gs *gracefulShutdown) Shutdown() {
+	// Only send a SIGTERM signal if we are not already shutting down.
+	if !gs.ShuttingDown() {
+		gs.quit <- syscall.SIGTERM
+	}
+}
+
+func (gs *gracefulShutdown) Wait() {
+	gs.wg.Wait()
 }
