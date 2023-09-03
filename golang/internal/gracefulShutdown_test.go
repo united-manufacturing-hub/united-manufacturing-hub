@@ -1,15 +1,14 @@
 package internal
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
-	"time"
 )
 
-func basicTestHttpServer(gs GracefulShutdownHandler) *http.Server {
+func httptestBasicServer(gs GracefulShutdownHandler) *httptest.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -20,48 +19,48 @@ func basicTestHttpServer(gs GracefulShutdownHandler) *http.Server {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
+		// Triggers the execution of the onShutdown passed to NewGracefulShutdown.
 		gs.Shutdown()
 		w.WriteHeader(http.StatusOK)
 	})
 
-	return &http.Server{Addr: ":8080", Handler: mux}
+	return httptest.NewServer(mux)
 }
 
 func Test_NewGracefulShutdown(t *testing.T) {
-	var gs GracefulShutdownHandler
-	var srv *http.Server
+	var reqWg sync.WaitGroup // To wait for all requests to complete before closing the server.
+	var testSrv *httptest.Server
 
-	// The passed function only runs after a SIGTERM/SIGINT signal is received.
-	gs = NewGracefulShutdown(func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		err := srv.Shutdown(ctx)
-		return err
+	// Only close the httptest server after a /shutdown request is made,
+	// which initiates the graceful shutdown.
+	gs := NewGracefulShutdown(func() error {
+		reqWg.Wait()
+		testSrv.Close()
+		return nil
 	})
 	defer gs.Wait() // Wait for shutdown tasks to complete before exiting.
 
-	// Create a basic http server and start listening for requests.
-	srv = basicTestHttpServer(gs)
-	go func() {
-		err := srv.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			t.Errorf("Error starting server: %s", err)
-		}
-	}()
+	// Create a basic httptest server and start listening for requests.
+	testSrv = httptestBasicServer(gs)
+	healthRoute := fmt.Sprintf("%s/health", testSrv.URL)
+	shutdownRoute := fmt.Sprintf("%s/shutdown", testSrv.URL)
 
 	// Order of requests is important.
 	tcs := []struct {
 		url                string
 		expectedStatusCode int
 	}{
-		{"http://localhost:8080/health", http.StatusOK},                 // Server is up during initial request.
-		{"http://localhost:8080/shutdown", http.StatusOK},               // Request to /shutdown calls gs.Shutdown()
-		{"http://localhost:8080/health", http.StatusServiceUnavailable}, // After shutdown request, a 503 is expected.
+		{healthRoute, http.StatusOK},                 // Server is up during initial request.
+		{shutdownRoute, http.StatusOK},               // Request to /shutdown calls gs.Shutdown()
+		{healthRoute, http.StatusServiceUnavailable}, // After shutdown request, a 503 is expected.
 	}
 
+	reqWg.Add(len(tcs))
 	for _, tc := range tcs {
 		name := fmt.Sprintf("test request %s", tc.url)
 		t.Run(name, func(t *testing.T) {
+			defer reqWg.Done()
+
 			res, err := http.Get(tc.url)
 			if err != nil {
 				t.Errorf("Error sending GET request to %s: %s", tc.url, err)

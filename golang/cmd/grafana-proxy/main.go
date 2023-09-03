@@ -15,18 +15,94 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 )
 
-var factoryEnvVars = []string{"FACTORYINPUT_KEY", "FACTORYINPUT_USER", "FACTORYINPUT_BASE_URL", "FACTORYINSIGHT_BASE_URL"}
+func main() {
+	// Initialize zap logging
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
+	log := logger.New(logLevel)
+	defer func(log *zap.SugaredLogger) {
+		err := logger.Sync(log)
+		if err != nil {
+			panic(err)
+		}
+	}(log)
+
+	internal.Initfgtrace()
+
+	rs := &restServers{}
+	gs := internal.NewGracefulShutdown(rs.onShutdown)
+	defer gs.Wait()
+
+	f, err := initFactory()
+	if err != nil {
+		zap.S().Fatalf("Failed to initialize factory: %s", err)
+	}
+
+	rs.factorySrv = f.factoryRestServer()
+	rs.healthSrv = healthcheckRestServer(gs)
+	rs.run()
+	zap.S().Infof("ready to proxy connections")
+}
+
+type restServers struct {
+	factorySrv *http.Server // Main REST API server
+	healthSrv  *http.Server // Healthcheck server
+}
+
+// Start the factory and healthcheck servers in their own goroutines.
+func (rs *restServers) run() {
+	go func() {
+		/* #nosec G114 */
+		err := rs.healthSrv.ListenAndServe()
+		if !errors.Is(err, http.ErrServerClosed) {
+			zap.S().Fatalf("failed to start healthcheck server: %s", err)
+		}
+	}()
+	go func() {
+		err := rs.factorySrv.ListenAndServe()
+		if !errors.Is(err, http.ErrServerClosed) {
+			zap.S().Fatalf("failed to start factory server: %s", err)
+		}
+	}()
+}
+
+// Shutdown the factory and healthcheck servers within a 30 second timeout.
+func (rs *restServers) onShutdown() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var err error
+	// Servers shouldn't be nil, but better safe than sorry.
+	if rs.factorySrv != nil {
+		fErr := rs.factorySrv.Shutdown(ctx)
+		if fErr != nil {
+			err = fmt.Errorf("failed to shutdown factory server: %w", fErr)
+		} else {
+			zap.S().Info("factory http server successfully shut down")
+		}
+	}
+	if rs.healthSrv != nil {
+		hErr := rs.healthSrv.Shutdown(ctx)
+		if hErr != nil {
+			// Append to existing error if there is one.
+			errors.Join(err, fmt.Errorf("failed to shutdown healthcheck server: %w", hErr))
+		} else {
+			zap.S().Info("healthcheck http server successfully shut down")
+		}
+	}
+	return err
+}
 
 type Factory struct {
 	APIKey         string // FACTORYINPUT_KEY
@@ -46,6 +122,7 @@ func initFactory() (Factory, error) {
 		return url
 	}
 
+	factoryEnvVars := []string{"FACTORYINPUT_KEY", "FACTORYINPUT_USER", "FACTORYINPUT_BASE_URL", "FACTORYINSIGHT_BASE_URL"}
 	for _, envVar := range factoryEnvVars {
 		val, err := env.GetAsString(envVar, true, "")
 		if err != nil {
@@ -64,46 +141,4 @@ func initFactory() (Factory, error) {
 		}
 	}
 	return f, nil
-}
-
-func main() {
-	// Initialize zap logging
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
-	log := logger.New(logLevel)
-	defer func(logger *zap.SugaredLogger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(log)
-
-	internal.Initfgtrace()
-
-	gs := internal.NewGracefulShutdown(nil)
-	defer gs.Wait()
-
-	health := healthcheck.NewHandler()
-	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
-	health.AddReadinessCheck("shutdownEnabled", func() error {
-		if gs.ShuttingDown() {
-			return fmt.Errorf("shutdown")
-		}
-		return nil
-	})
-
-	go func() {
-		/* #nosec G114 */
-		err := http.ListenAndServe("0.0.0.0:8086", health)
-		if err != nil {
-			zap.S().Fatalf("Failed to start healthcheck: %s", err)
-		}
-	}()
-
-	f, err := initFactory()
-	if err != nil {
-		zap.S().Fatalf("Failed to initialize factory: %s", err)
-	}
-
-	f.setupRestAPI()
-	zap.S().Infof("Ready to proxy connections")
 }

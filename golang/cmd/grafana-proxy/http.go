@@ -28,6 +28,7 @@ import (
 	"github.com/cristalhq/base64"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/grafana-proxy/grafana/api/user"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
@@ -35,7 +36,7 @@ import (
 
 const NodeRedBaseUrl = "http://united-manufacturing-hub-nodered-service:1880/"
 
-func (f *Factory) setupRestAPI() {
+func (f *Factory) factoryRestServer() *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -66,10 +67,7 @@ func (f *Factory) setupRestAPI() {
 		}
 	}
 
-	err := router.Run(":80")
-	if err != nil {
-		zap.S().Fatalf("Failed to start rest api: %s", err)
-	}
+	return &http.Server{Addr: ":80", Handler: router}
 }
 
 func handleInvalidInputError(c *gin.Context, err error) {
@@ -403,4 +401,16 @@ func doProxiedRequest(
 			}
 		}
 	}
+}
+
+func healthcheckRestServer(gs internal.GracefulShutdownHandler) *http.Server {
+	health := healthcheck.NewHandler()
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
+	health.AddReadinessCheck("shutdownEnabled", func() error {
+		if gs.ShuttingDown() {
+			return fmt.Errorf("shutdown")
+		}
+		return nil
+	})
+	return &http.Server{Addr: ":8086", Handler: health}
 }
