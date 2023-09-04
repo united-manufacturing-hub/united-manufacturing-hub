@@ -106,6 +106,8 @@ linters-settings:
       - github.com/gvalkov/golang-evdev
       - github.com/shirou/gopsutil/*
       - github.com/Shopify/sarama
+      - github.com/jackc/pgx/v5
+      - github.com/goccy/go-json
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
