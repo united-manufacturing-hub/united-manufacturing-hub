@@ -32,7 +32,7 @@ ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 
 RUN go mod tidy
-RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect
+RUN CGO_ENABLED=1 GOOS=linux go test -tags musl,kafka --mod=readonly -buildvcs=false -trimpath ./cmd/sensorconnect -timeout 0 -failfast
 
 FROM source AS build
 WORKDIR /build

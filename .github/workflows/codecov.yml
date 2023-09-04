@@ -29,7 +29,7 @@ jobs:
         with:
           go-version: '1.21'
       - name: Run coverage
-        run: go test ./... -tags kafka -race -coverprofile coverage.out -covermode=atomic
+        run: go test ./... -tags kafka -race -coverprofile coverage.out -covermode=atomic -timeout 0 -failfast
         working-directory: ./golang
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
