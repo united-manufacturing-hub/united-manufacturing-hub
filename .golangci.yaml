@@ -105,7 +105,7 @@ linters-settings:
       - github.com/felixge/fgtrace
       - github.com/gvalkov/golang-evdev
       - github.com/shirou/gopsutil/*
-      - github.com/Shopify/sarama
+      - github.com/IBM/sarama
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
