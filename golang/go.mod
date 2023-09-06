@@ -42,7 +42,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.10.2
 	github.com/united-manufacturing-hub/expiremap v1.1.1
-	github.com/united-manufacturing-hub/umh-utils v0.2.1
+	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.25.0
 	golang.org/x/crypto v0.13.0
