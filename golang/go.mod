@@ -52,6 +52,7 @@ require (
 
 require (
 	github.com/DataDog/gostackparse v0.7.0 // indirect
+	github.com/IBM/sarama v1.41.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.10.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
