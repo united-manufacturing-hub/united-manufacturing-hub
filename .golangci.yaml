@@ -23,91 +23,81 @@ linters-settings:
     enable-all: true
 
   depguard:
-    # Kind of list is passed in.
-    # Allowed values: allowlist|denylist
-    # Default: denylist
-    list-type: allowlist
-
-    # Check the list against standard lib.
-    # Default: false
-    include-go-root: true
-
-    # A list of packages for the list type specified.
-    # Can accept both string prefixes and string glob patterns.
-    # Default: []
-    packages:
-      - archive/zip
-      - bytes
-      - bufio
-      - context
-      - crypto/tls
-      - crypto/x509
-      - database/sql
-      - encoding/binary
-      - encoding/gob
-      - encoding/xml
-      - errors
-      - fmt
-      - github.com/EagleChen/mapmutex
-      - github.com/beeker1121/goque
-      - github.com/confluentinc/confluent-kafka-go/kafka
-      - github.com/coocood/freecache
-      - github.com/cristalhq/base64
-      - github.com/eclipse/paho.mqtt.golang
-      - github.com/gin-contrib/zap
-      - github.com/go-playground/assert/v2
-      - github.com/gin-gonic/gin
-      - github.com/go-redis/redis/v8
-      - github.com/hashicorp/golang-lru
-      - github.com/heptiolabs/healthcheck
-      - github.com/json-iterator/go
-      - github.com/lib/pq
-      - github.com/minio/minio-go/v7
-      - github.com/minio/minio-go/v7/pkg/credentials
-      - github.com/omeid/pgerror
-      - github.com/patrickmn/go-cache
-      - github.com/prometheus/client_golang/prometheus
-      - github.com/prometheus/client_golang/prometheus/promauto
-      - github.com/prometheus/client_golang/prometheus/promhttp
-      - github.com/rung/go-safecast
-      - github.com/united-manufacturing-hub/**/*
-      - github.com/zeebo/xxh3
-      - go.uber.org/zap
-      - golang.org/**/*
-      - gonum.org/v1/gonum/stat
-      - gorm.io/gorm
-      - hash/crc32
-      - io
-      - io/ioutil
-      - k8s.io/apimachinery/pkg/api/resource
-      - math
-      - crypto/rand
-      - net
-      - net/http
-      - net/url
-      - os
-      - path/filepath
-      - reflect
-      - regexp
-      - runtime
-      - runtime/debug
-      - sort
-      - strconv
-      - strings
-      - sync
-      - syscall
-      - testing
-      - time
-      - unicode
-      - unsafe
-      - github.com/gin-contrib/gzip
-      - text/template
-      - github.com/felixge/fgtrace
-      - github.com/gvalkov/golang-evdev
-      - github.com/shirou/gopsutil/*
-      - github.com/Shopify/sarama
-      - github.com/jackc/pgx/v5
-      - github.com/goccy/go-json
+    rules:
+      main:
+        allow:
+        - archive/zip
+        - bytes
+        - bufio
+        - context
+        - crypto/tls
+        - crypto/x509
+        - database/sql
+        - encoding/binary
+        - encoding/gob
+        - encoding/xml
+        - errors
+        - fmt
+        - github.com/EagleChen/mapmutex
+        - github.com/beeker1121/goque
+        - github.com/confluentinc/confluent-kafka-go/kafka
+        - github.com/coocood/freecache
+        - github.com/cristalhq/base64
+        - github.com/eclipse/paho.mqtt.golang
+        - github.com/gin-contrib/zap
+        - github.com/go-playground/assert/v2
+        - github.com/gin-gonic/gin
+        - github.com/go-redis/redis/v8
+        - github.com/hashicorp/golang-lru
+        - github.com/heptiolabs/healthcheck
+        - github.com/json-iterator/go
+        - github.com/lib/pq
+        - github.com/minio/minio-go/v7
+        - github.com/minio/minio-go/v7/pkg/credentials
+        - github.com/omeid/pgerror
+        - github.com/patrickmn/go-cache
+        - github.com/prometheus/client_golang/prometheus
+        - github.com/prometheus/client_golang/prometheus/promauto
+        - github.com/prometheus/client_golang/prometheus/promhttp
+        - github.com/rung/go-safecast
+        - github.com/united-manufacturing-hub/**/*
+        - github.com/zeebo/xxh3
+        - go.uber.org/zap
+        - golang.org/**/*
+        - gonum.org/v1/gonum/stat
+        - gorm.io/gorm
+        - hash/crc32
+        - io
+        - io/ioutil
+        - k8s.io/apimachinery/pkg/api/resource
+        - math
+        - crypto/rand
+        - net
+        - net/http
+        - net/url
+        - os
+        - path/filepath
+        - reflect
+        - regexp
+        - runtime
+        - runtime/debug
+        - sort
+        - strconv
+        - strings
+        - sync
+        - syscall
+        - testing
+        - time
+        - unicode
+        - unsafe
+        - github.com/gin-contrib/gzip
+        - text/template
+        - github.com/felixge/fgtrace
+        - github.com/gvalkov/golang-evdev
+        - github.com/shirou/gopsutil/*
+        - github.com/Shopify/sarama
+        - github.com/jackc/pgx/v5
+        - github.com/goccy/go-json
 
   errcheck:
     # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
