@@ -16,7 +16,6 @@ package internal
 
 import (
 	"bytes"
-	"github.com/goccy/go-json"
 	"io"
 	"os"
 	"reflect"
@@ -24,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"go.uber.org/zap"
 )
