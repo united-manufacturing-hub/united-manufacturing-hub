@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM docker.io/golang:1.20-alpine3.16 AS source
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.21-alpine3.18 AS source
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
