@@ -1043,6 +1043,8 @@ redpanda:
   config:
     cluster:
       auto_create_topics_enabled: true
+    tunable:
+      default_topic_partitions: 6
   tls:
     enabled: false
   console:
