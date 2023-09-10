@@ -34,7 +34,6 @@ func TestInsert101(t *testing.T) {
 		}
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(initialMessages), func(i, j int) { initialMessages[i], initialMessages[j] = initialMessages[j], initialMessages[i] })
 
 	kmsq := NewKafkaMessageStreamQueue(initialMessages)

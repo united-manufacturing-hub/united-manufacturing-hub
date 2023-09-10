@@ -14,7 +14,7 @@
 
 module github.com/united-manufacturing-hub/united-manufacturing-hub
 
-go 1.19
+go 1.21
 
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
@@ -40,7 +40,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.10.3
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.10.5
 	github.com/united-manufacturing-hub/expiremap v1.1.1
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/zeebo/xxh3 v1.0.2
