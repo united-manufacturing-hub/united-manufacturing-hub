@@ -349,8 +349,8 @@ endif
 ## Download and install the dependencies
 go-deps:
 	@cd golang
-	go get -t -d -v ./...
-	go install ./...
+	go get -u ./...
+	go mod tidy
 
 define GO_T_HELP
 # Run the unit tests.
