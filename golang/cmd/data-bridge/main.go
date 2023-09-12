@@ -31,10 +31,6 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	microserviceName, err := env.GetAsString("MICROSERVICE_NAME", true, "")
-	if err != nil {
-		zap.S().Fatal(err)
-	}
 
 	mode, err := env.GetAsInt("MODE", true, -1)
 	if err != nil {
@@ -102,11 +98,11 @@ func main() {
 	switch mode {
 	case 0: // kafka to kafka
 		zap.S().Infof("Starting kafka to kafka bridge")
-		clientA, err = newKafkaClient(brokerA, topic, partitons, replicationFactor)
+		clientA, err = newKafkaClient(brokerA, topic, serialNumber, partitons, replicationFactor)
 		if err != nil {
 			zap.S().Errorf("failed to create kafka client: %s", err)
 		}
-		clientB, err = newKafkaClient(brokerB, topic, partitons, replicationFactor)
+		clientB, err = newKafkaClient(brokerB, topic, serialNumber, partitons, replicationFactor)
 		if err != nil {
 			zap.S().Errorf("failed to create kafka client: %s", err)
 		}
@@ -125,12 +121,12 @@ func main() {
 			if err != nil {
 				zap.S().Errorf("failed to create mqtt client: %s", err)
 			}
-			clientB, err = newKafkaClient(brokerB, topic, partitons, replicationFactor)
+			clientB, err = newKafkaClient(brokerB, topic, serialNumber, partitons, replicationFactor)
 			if err != nil {
 				zap.S().Errorf("failed to create kafka client: %s", err)
 			}
 		} else {
-			clientA, err = newKafkaClient(brokerA, topic, partitons, replicationFactor)
+			clientA, err = newKafkaClient(brokerA, topic, serialNumber, partitons, replicationFactor)
 			if err != nil {
 				zap.S().Errorf("failed to create kafka client: %s", err)
 			}
