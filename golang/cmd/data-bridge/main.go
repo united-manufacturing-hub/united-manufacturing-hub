@@ -101,6 +101,7 @@ func main() {
 	var clientA, clientB client
 	switch mode {
 	case 0: // kafka to kafka
+		zap.S().Infof("Starting kafka to kafka bridge")
 		clientA, err = newKafkaClient(brokerA, topic, partitons, replicationFactor)
 		if err != nil {
 			zap.S().Errorf("failed to create kafka client: %s", err)
@@ -110,6 +111,7 @@ func main() {
 			zap.S().Errorf("failed to create kafka client: %s", err)
 		}
 	case 1: // kafka to mqtt
+		zap.S().Infof("Starting kafka to mqtt bridge")
 		mqttUseTls, err := env.GetAsBool("MQTT_ENABLE_TLS", false, false)
 		if err != nil {
 			zap.S().Error(err)
@@ -138,6 +140,7 @@ func main() {
 			}
 		}
 	case 2: // mqtt to mqtt
+		zap.S().Infof("Starting mqtt to mqtt bridge")
 		clientA, err = newMqttClient(brokerA, topic, false, "")
 		if err != nil {
 			zap.S().Errorf("failed to create mqtt client: %s", err)
@@ -170,6 +173,7 @@ func main() {
 
 }
 
+// reportStats logs the number of messages sent and received every 10 seconds. It also shuts down the application if no messages are sent or received for 3 minutes.
 func reportStats(msgChan chan kafka.Message, consumerClient, producerClient client, gs internal.GracefulShutdownHandler) {
 	var sent, recv uint64
 	sent = producerClient.getProducerStats()
