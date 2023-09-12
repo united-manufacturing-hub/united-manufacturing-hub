@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	if mode != 0 && mode != 1 {
+	if mode < 0 || mode > 2 {
 		zap.S().Fatal("invalid MODE")
 	}
 	bridgeMode, err := env.GetAsInt("BRIDGE_MODE", true, -1)
@@ -99,8 +99,8 @@ func main() {
 	}()
 
 	var clientA, clientB client
-	if mode == 0 {
-		// kafka to kafka
+	switch mode {
+	case 0: // kafka to kafka
 		clientA, err = newKafkaClient(brokerA, topic, partitons, replicationFactor)
 		if err != nil {
 			zap.S().Errorf("failed to create kafka client: %s", err)
@@ -109,8 +109,7 @@ func main() {
 		if err != nil {
 			zap.S().Errorf("failed to create kafka client: %s", err)
 		}
-	} else {
-		// mqtt to kafka
+	case 1: // kafka to mqtt
 		mqttUseTls, err := env.GetAsBool("MQTT_ENABLE_TLS", false, false)
 		if err != nil {
 			zap.S().Error(err)
@@ -137,6 +136,15 @@ func main() {
 			if err != nil {
 				zap.S().Errorf("failed to create mqtt client: %s", err)
 			}
+		}
+	case 2: // mqtt to mqtt
+		clientA, err = newMqttClient(brokerA, topic, false, "")
+		if err != nil {
+			zap.S().Errorf("failed to create mqtt client: %s", err)
+		}
+		clientB, err = newMqttClient(brokerB, topic, false, "")
+		if err != nil {
+			zap.S().Errorf("failed to create mqtt client: %s", err)
 		}
 	}
 
