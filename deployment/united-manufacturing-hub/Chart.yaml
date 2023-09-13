@@ -62,5 +62,5 @@ dependencies:
 
   - name: redpanda
     repository: https://charts.redpanda.com/
-    version: 3.0.9
+    version: 5.3.4
     condition: _000_commonConfig.infrastructure.kafka.enabled
