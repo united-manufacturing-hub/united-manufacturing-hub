@@ -39,13 +39,6 @@ func main() {
 	if mode < 0 || mode > 2 {
 		zap.S().Fatal("invalid MODE")
 	}
-	bridgeMode, err := env.GetAsInt("BRIDGE_MODE", true, -1)
-	if err != nil {
-		zap.S().Fatal(err)
-	}
-	if bridgeMode != 0 && bridgeMode != 1 {
-		zap.S().Fatal("invalid BRIDGE_MODE")
-	}
 
 	brokerA, err := env.GetAsString("BROKER_A", true, "")
 	if err != nil {
@@ -155,18 +148,9 @@ func main() {
 
 	var msgChan = make(chan kafka.Message, 100)
 
-	if bridgeMode == 0 {
-		// a to b
-		clientA.startConsuming(msgChan)
-		clientB.startProducing(msgChan, split)
-		go reportStats(msgChan, clientA, clientB, gs)
-	} else {
-		// b to a
-		clientA.startProducing(msgChan, split)
-		clientB.startConsuming(msgChan)
-		go reportStats(msgChan, clientB, clientA, gs)
-	}
-
+	clientA.startConsuming(msgChan)
+	clientB.startProducing(msgChan, split)
+	reportStats(msgChan, clientA, clientB, gs)
 }
 
 // reportStats logs the number of messages sent and received every 10 seconds. It also shuts down the application if no messages are sent or received for 3 minutes.
