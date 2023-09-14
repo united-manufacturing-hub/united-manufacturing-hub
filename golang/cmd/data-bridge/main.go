@@ -117,7 +117,7 @@ func main() {
 			zap.S().Error(err)
 		}
 		if strings.HasSuffix(brokerA, "1883") || strings.HasSuffix(brokerA, "8883") {
-			clientA, err = newMqttClient(brokerA, topic, mqttUseTls, mqttPsw)
+			clientA, err = newMqttClient(brokerA, topic, mqttPsw, serialNumber, mqttUseTls)
 			if err != nil {
 				zap.S().Errorf("failed to create mqtt client: %s", err)
 			}
@@ -130,18 +130,26 @@ func main() {
 			if err != nil {
 				zap.S().Errorf("failed to create kafka client: %s", err)
 			}
-			clientB, err = newMqttClient(brokerB, topic, mqttUseTls, mqttPsw)
+			clientB, err = newMqttClient(brokerB, topic, mqttPsw, serialNumber, mqttUseTls)
 			if err != nil {
 				zap.S().Errorf("failed to create mqtt client: %s", err)
 			}
 		}
 	case 2: // mqtt to mqtt
 		zap.S().Infof("Starting mqtt to mqtt bridge")
-		clientA, err = newMqttClient(brokerA, topic, false, "")
+		mqttUseTls, err := env.GetAsBool("MQTT_ENABLE_TLS", false, false)
+		if err != nil {
+			zap.S().Error(err)
+		}
+		mqttPsw, err := env.GetAsString("MQTT_PASSWORD", false, "")
+		if err != nil {
+			zap.S().Error(err)
+		}
+		clientA, err = newMqttClient(brokerA, topic, mqttPsw, serialNumber, mqttUseTls)
 		if err != nil {
 			zap.S().Errorf("failed to create mqtt client: %s", err)
 		}
-		clientB, err = newMqttClient(brokerB, topic, false, "")
+		clientB, err = newMqttClient(brokerB, topic, mqttPsw, serialNumber, mqttUseTls)
 		if err != nil {
 			zap.S().Errorf("failed to create mqtt client: %s", err)
 		}
