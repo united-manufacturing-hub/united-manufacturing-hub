@@ -181,7 +181,7 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 			sentPerSecond := (newSent - sent) / 10
 			recvPerSecond := (newRecv - recv) / 10
 
-			zap.S().Infof("Recieved: %d (%d/) | Sent: %d (%d/s) | Lag: %d", newSent, sentPerSecond, newRecv, recvPerSecond, len(msgChan))
+			zap.S().Infof("Recieved: %d (%d/s) | Sent: %d (%d/s) | Lag: %d", newSent, sentPerSecond, newRecv, recvPerSecond, len(msgChan))
 
 			if newSent != sent && newRecv != recv {
 				shutdownTimer.Reset(3 * time.Minute)
