@@ -185,6 +185,7 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 
 			if newSent != sent && newRecv != recv {
 				shutdownTimer.Reset(3 * time.Minute)
+				sent, recv = newSent, newRecv
 				continue
 			}
 
