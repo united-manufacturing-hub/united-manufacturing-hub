@@ -23,7 +23,6 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coocood/freecache v1.2.3
 	github.com/cristalhq/base64 v0.1.2
-	github.com/eclipse/paho.golang v0.11.0
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/felixge/fgtrace v0.2.0
 	github.com/gin-contrib/gzip v0.0.6
