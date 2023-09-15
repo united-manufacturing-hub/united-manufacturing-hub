@@ -29,6 +29,7 @@ type mqttClient struct {
 var arc *lru.ARCCache
 
 func newMqttClient(broker, topic, psw, serialNumber string, enableSsl bool) (mc *mqttClient, err error) {
+	mc = &mqttClient{}
 	podName, err := env.GetAsString("POD_NAME", true, "")
 	if err != nil {
 		return nil, err
@@ -58,11 +59,11 @@ func newMqttClient(broker, topic, psw, serialNumber string, enableSsl bool) (mc 
 	opts.SetOrderMatters(false)
 
 	opts.SetOnConnectHandler(func(client MQTT.Client) {
-		zap.S().Infof("Connected to MQTT broker %s", broker)
+		zap.S().Infof("connected to MQTT broker %s", broker)
 	})
 	opts.SetConnectionLostHandler(func(client MQTT.Client, err error) {
 		// sending os.Exit here will trigger the graceful shutdown
-		zap.S().Fatalf("Connection lost to MQTT broker %s: %v", broker, err)
+		zap.S().Fatalf("connection lost to MQTT broker %s: %v", broker, err)
 	})
 
 	mc.client = MQTT.NewClient(opts)
@@ -120,13 +121,13 @@ func (m *mqttClient) startConsuming(messageChan chan kafka.Message) {
 			}
 			m.recv.Add(1)
 		}); token.Wait() && token.Error() != nil {
-			zap.S().Fatalf("Failed to subscribe: %s", token.Error())
+			zap.S().Fatalf("failed to subscribe: %s", token.Error())
 		}
 	}()
 }
 
 func (m *mqttClient) shutdown() error {
-	zap.S().Infof("Disconnecting from MQTT broker")
+	zap.S().Infof("disconnecting from MQTT broker")
 	m.client.Disconnect(250)
 	return nil
 }
@@ -137,7 +138,7 @@ func isValidMqttMessage(msg kafka.Message) bool {
 	}
 
 	if !json.Valid(msg.Value) {
-		zap.S().Warnf("Not a valid json in message: %s", msg.Topic, string(msg.Value))
+		zap.S().Warnf("not a valid json in message: %s", msg.Topic, string(msg.Value))
 		return false
 	}
 
@@ -159,11 +160,7 @@ func isValidMqttMessage(msg kafka.Message) bool {
 }
 
 func isValidMqttTopic(topic string) bool {
-	if !regexp.MustCompile(`^\w[\w/#+]+\w$`).MatchString(topic) {
-		zap.S().Errorf("Invalid MQTT topic: %s", topic)
-		return false
-	}
-	return true
+	return regexp.MustCompile(`^\w[\w/#+]+[\w#]$`).MatchString(topic)
 }
 
 func newTLSConfig() *tls.Config {
@@ -176,10 +173,10 @@ func newTLSConfig() *tls.Config {
 	if err == nil {
 		ok := certpool.AppendCertsFromPEM(pemCerts)
 		if !ok {
-			zap.S().Errorf("Failed to parse root certificate")
+			zap.S().Errorf("failed to parse root certificate")
 		}
 	} else {
-		zap.S().Errorf("Error reading CA certificate: %s", err)
+		zap.S().Errorf("error reading CA certificate: %s", err)
 	}
 
 	zap.S().Debugf("CA cert: %s", pemCerts)
@@ -191,17 +188,17 @@ func newTLSConfig() *tls.Config {
 		var file []byte
 		file, err = os.ReadFile("/SSL_certs/mqtt/tls.crt")
 		if err != nil {
-			zap.S().Errorf("Error reading client certificate: %s", err)
+			zap.S().Errorf("error reading client certificate: %s", err)
 		}
-		zap.S().Fatalf("Error reading client certificate: %s (File: %s)", err, file)
+		zap.S().Fatalf("error reading client certificate: %s (File: %s)", err, file)
 	}
 
-	zap.S().Debugf("Client cert: %v", cert)
+	zap.S().Debugf("client cert: %v", cert)
 
 	// Just to print out the client certificate..
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		zap.S().Fatalf("Error parsing client certificate: %s", err)
+		zap.S().Fatalf("error parsing client certificate: %s", err)
 	}
 
 	skipVerify, err := env.GetAsBool("INSECURE_SKIP_VERIFY", false, true)

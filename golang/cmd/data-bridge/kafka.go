@@ -19,9 +19,10 @@ type kafkaClient struct {
 }
 
 func newKafkaClient(broker, topic, serialNumber string, partitions, replicationFactor int) (kc *kafkaClient, err error) {
+	kc = &kafkaClient{}
 	topicsRegex, err := regexp.Compile(topic)
 	if err != nil {
-		zap.S().Fatalf("Error compiling regex: %v", err)
+		zap.S().Fatalf("error compiling regex: %v", err)
 	}
 
 	hasher := sha3.New256()
@@ -75,7 +76,7 @@ func (k *kafkaClient) startProducing(msgChan chan kafka.Message, split int) {
 			var err error
 			err = internal.AddSXTrace(&msg)
 			if err != nil {
-				zap.S().Fatalf("Failed to marshal trace")
+				zap.S().Fatalf("failed to marshal trace")
 				continue
 			}
 
@@ -104,7 +105,7 @@ func (k *kafkaClient) startConsuming(msgChan chan kafka.Message) {
 }
 
 func (k *kafkaClient) shutdown() error {
-	zap.S().Info("Shutting down kafka client")
+	zap.S().Info("shutting down kafka client")
 	return k.client.Close()
 }
 
@@ -134,27 +135,27 @@ func splitMessage(msg kafka.Message, split int) (splittedMsg kafka.Message) {
 
 func isValidKafkaMessage(message kafka.Message) bool {
 	if strings.HasPrefix(message.Topic, ".") {
-		zap.S().Warnf("Topic starts with a dot: %s", message.Topic)
+		zap.S().Warnf("topic starts with a dot: %s", message.Topic)
 		return false
 	}
 
 	if strings.HasSuffix(message.Topic, ".") {
-		zap.S().Warnf("Topic ends with a dot: %s", message.Topic)
+		zap.S().Warnf("topic ends with a dot: %s", message.Topic)
 		return false
 	}
 
 	if !json.Valid(message.Value) {
-		zap.S().Warnf("Not a valid json in message: %s", message.Topic, string(message.Value))
+		zap.S().Warnf("not a valid json in message: %s", message.Topic, string(message.Value))
 		return false
 	}
 
 	if internal.IsSameOrigin(&message) {
-		zap.S().Warnf("Message from same origin: %s", message.Topic)
+		zap.S().Warnf("message from same origin: %s", message.Topic)
 		return false
 	}
 
 	if internal.IsInTrace(&message) {
-		zap.S().Warnf("Message in trace: %s", message.Topic)
+		zap.S().Warnf("message in trace: %s", message.Topic)
 		return false
 	}
 
