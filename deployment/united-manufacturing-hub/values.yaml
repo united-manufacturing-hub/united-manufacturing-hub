@@ -1094,11 +1094,11 @@ redis:
     existingSecretPasswordKey: redispassword
 
 ##### CONFIG FOR HIVEMQ CE
-##### you can set a tag if you want a version other than 2022.1
+##### you can set a tag if you want a version other than 2023.7
 mqtt_broker:
   image:
     repository: hivemq/hivemq-ce
-    tag: 2022.1
+    tag: 2023.7
     pullPolicy: IfNotPresent
   rbacEnabled: false
   initContainer:
