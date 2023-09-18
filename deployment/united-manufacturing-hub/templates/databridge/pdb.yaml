@@ -1,0 +1,15 @@
+---
+{{if or .Values.databridge.enabled .Values._000_commonConfig.datamodel_v2.enabled}}
+{{if .Values.databridge.pdb.enabled }}
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-databridge-pdb
+spec:
+    minAvailable: {{ .Values.databridge.pdb.minAvailable }}
+    selector:
+      matchLabels:
+        app: {{include "united-manufacturing-hub.fullname" .}}-databridge
+{{end}}
+{{end}}
