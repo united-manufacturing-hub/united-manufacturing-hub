@@ -31,14 +31,6 @@ func main() {
 		zap.S().Fatal(err)
 	}
 
-	mode, err := env.GetAsInt("MODE", true, -1)
-	if err != nil {
-		zap.S().Fatal(err)
-	}
-	if mode < 0 || mode > 2 {
-		zap.S().Fatal("invalid MODE")
-	}
-
 	brokerA, err := env.GetAsString("BROKER_A", true, "")
 	if err != nil {
 		zap.S().Fatal(err)
@@ -60,21 +52,6 @@ func main() {
 		zap.S().Fatalf("SPLIT must be at least 3. got: %d", split)
 	}
 
-	partitons, err := env.GetAsInt("PARTITIONS", false, 6)
-	if err != nil {
-		zap.S().Error(err)
-	}
-	if partitons < 1 {
-		zap.S().Fatalf("PARTITIONS must be at least 1. got: %d", partitons)
-	}
-	replicationFactor, err := env.GetAsInt("REPLICATION_FACTOR", false, 1)
-	if err != nil {
-		zap.S().Error(err)
-	}
-	if replicationFactor%2 == 0 {
-		zap.S().Fatalf("REPLICATION_FACTOR must be odd. got: %d", replicationFactor)
-	}
-
 	zap.S().Debug("Starting healthcheck")
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
@@ -87,65 +64,13 @@ func main() {
 	}()
 
 	var clientA, clientB client
-	switch mode {
-	case 0: // kafka to kafka
-		zap.S().Infof("starting kafka-kafka bridge")
-		clientA, err = newKafkaClient(brokerA, topic, serialNumber, partitons, replicationFactor)
-		if err != nil {
-			zap.S().Errorf("failed to create kafka client: %s", err)
-		}
-		clientB, err = newKafkaClient(brokerB, topic, serialNumber, partitons, replicationFactor)
-		if err != nil {
-			zap.S().Errorf("failed to create kafka client: %s", err)
-		}
-	case 1: // kafka to mqtt
-		zap.S().Infof("starting kafka-mqtt bridge")
-		mqttUseTls, err := env.GetAsBool("MQTT_ENABLE_TLS", false, false)
-		if err != nil {
-			zap.S().Error(err)
-		}
-		mqttPsw, err := env.GetAsString("MQTT_PASSWORD", false, "")
-		if err != nil {
-			zap.S().Error(err)
-		}
-		if strings.HasSuffix(brokerA, "1883") || strings.HasSuffix(brokerA, "8883") {
-			clientA, err = newMqttClient(brokerA, topic, mqttPsw, serialNumber, mqttUseTls)
-			if err != nil {
-				zap.S().Errorf("failed to create mqtt client: %s", err)
-			}
-			clientB, err = newKafkaClient(brokerB, topic, serialNumber, partitons, replicationFactor)
-			if err != nil {
-				zap.S().Errorf("failed to create kafka client: %s", err)
-			}
-		} else {
-			clientA, err = newKafkaClient(brokerA, topic, serialNumber, partitons, replicationFactor)
-			if err != nil {
-				zap.S().Errorf("failed to create kafka client: %s", err)
-			}
-			clientB, err = newMqttClient(brokerB, topic, mqttPsw, serialNumber, mqttUseTls)
-			if err != nil {
-				zap.S().Errorf("failed to create mqtt client: %s", err)
-			}
-		}
-	case 2: // mqtt to mqtt
-		zap.S().Infof("starting mqtt-mqtt bridge")
-		mqttUseTls, err := env.GetAsBool("MQTT_ENABLE_TLS", false, false)
-		if err != nil {
-			zap.S().Error(err)
-		}
-		mqttPsw, err := env.GetAsString("MQTT_PASSWORD", false, "")
-		if err != nil {
-			zap.S().Error(err)
-		}
-		zap.S().Infof("starting mqtt to mqtt bridge")
-		clientA, err = newMqttClient(brokerA, topic, mqttPsw, serialNumber, mqttUseTls)
-		if err != nil {
-			zap.S().Errorf("failed to create mqtt client: %s", err)
-		}
-		clientB, err = newMqttClient(brokerB, topic, mqttPsw, serialNumber, mqttUseTls)
-		if err != nil {
-			zap.S().Errorf("failed to create mqtt client: %s", err)
-		}
+	clientA, err = newClient(brokerA, topic, serialNumber)
+	if err != nil {
+		zap.S().Fatalf("failed to create client: %s", err)
+	}
+	clientB, err = newClient(brokerB, topic, serialNumber)
+	if err != nil {
+		zap.S().Fatalf("failed to create client: %s", err)
 	}
 
 	gs := internal.NewGracefulShutdown(func() error {
@@ -205,4 +130,11 @@ type client interface {
 	startProducing(messageChan chan kafka.Message, split int)
 	startConsuming(messageChan chan kafka.Message)
 	shutdown() error
+}
+
+func newClient(broker, topic, serialNumber string) (client, error) {
+	if strings.HasSuffix(broker, "1883") || strings.HasSuffix(broker, "8883") {
+		return newMqttClient(broker, topic, serialNumber)
+	}
+	return newKafkaClient(broker, topic, serialNumber)
 }

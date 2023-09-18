@@ -10,6 +10,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
@@ -19,8 +20,24 @@ type kafkaClient struct {
 	client *kafka.Client
 }
 
-func newKafkaClient(broker, topic, serialNumber string, partitions, replicationFactor int) (kc *kafkaClient, err error) {
+func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err error) {
 	kc = &kafkaClient{}
+
+	partitions, err := env.GetAsInt("PARTITIONS", false, 6)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	if partitions < 1 {
+		zap.S().Fatalf("PARTITIONS must be at least 1. got: %d", partitions)
+	}
+	replicationFactor, err := env.GetAsInt("REPLICATION_FACTOR", false, 1)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	if replicationFactor%2 == 0 {
+		zap.S().Fatalf("REPLICATION_FACTOR must be odd. got: %d", replicationFactor)
+	}
+
 	topic, err = toKafkaTopic(topic)
 	if err != nil {
 		return nil, err

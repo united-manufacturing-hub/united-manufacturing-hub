@@ -28,8 +28,17 @@ type mqttClient struct {
 
 var arc *lru.ARCCache
 
-func newMqttClient(broker, topic, psw, serialNumber string, enableSsl bool) (mc *mqttClient, err error) {
+func newMqttClient(broker, topic, serialNumber string) (mc *mqttClient, err error) {
 	mc = &mqttClient{}
+
+	enableSsl, err := env.GetAsBool("MQTT_ENABLE_TLS", false, false)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	psw, err := env.GetAsString("MQTT_PASSWORD", false, "")
+	if err != nil {
+		zap.S().Error(err)
+	}
 	podName, err := env.GetAsString("POD_NAME", true, "")
 	if err != nil {
 		return nil, err
