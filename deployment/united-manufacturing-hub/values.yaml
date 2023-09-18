@@ -24,7 +24,7 @@ _000_commonConfig:
       - mode: mqtt-kafka
         brokerA: united-manufacturing-hub-mqtt:1883
         brokerB: united-manufacturing-hub-kafka:9092
-        topic: umh/v1/#
+        topic: umh.v1..*              # accept mqtt or kafka topic format. after the topic seprator, you can use # for mqtt wildcard, or .* for kafka wildcard
         topicMergePoint: 5
         partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
         replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
