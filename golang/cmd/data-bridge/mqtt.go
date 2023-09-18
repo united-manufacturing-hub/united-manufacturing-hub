@@ -42,8 +42,9 @@ func newMqttClient(broker, topic, psw, serialNumber string, enableSsl bool) (mc 
 		opts.SetPassword(psw)
 	}
 
-	if !isValidMqttTopic(topic) {
-		return nil, fmt.Errorf("invalid MQTT topic: %s", topic)
+	topic, err = toMqttTopic(topic)
+	if err != nil {
+		return nil, err
 	}
 	hasher := sha3.New256()
 	hasher.Write([]byte(serialNumber))
@@ -97,12 +98,15 @@ func (m *mqttClient) startProducing(messageChan chan kafka.Message, split int) {
 		for {
 			msg := <-messageChan
 
-			if strings.HasPrefix(msg.Topic, "$share") {
-				msg.Topic = string(regexp.MustCompile(`\$share\/DATA_BRIDGE_(.*?)\/`).ReplaceAll([]byte(msg.Topic), []byte("")))
+			var err error
+			msg.Topic, err = toMqttTopic(msg.Topic)
+			if err != nil {
+				zap.S().Warnf("skipping message: %s", err)
+				continue
 			}
 
-			msg.Topic = strings.ReplaceAll(msg.Topic, ".", "/")
 			if !isValidMqttMessage(msg) {
+				zap.S().Warnf("skipping message: %s", msg.Topic)
 				continue
 			}
 
@@ -133,10 +137,6 @@ func (m *mqttClient) shutdown() error {
 }
 
 func isValidMqttMessage(msg kafka.Message) bool {
-	if !isValidMqttTopic(msg.Topic) {
-		return false
-	}
-
 	if !json.Valid(msg.Value) {
 		zap.S().Warnf("not a valid json in message: %s", msg.Topic, string(msg.Value))
 		return false
@@ -152,6 +152,7 @@ func isValidMqttMessage(msg kafka.Message) bool {
 
 	// Uses Get to re-validate the entry
 	if _, ok := arc.Get(hashStr); ok {
+		zap.S().Warnf("message already processed: %s", msg.Topic)
 		return false
 	}
 	arc.Add(hashStr, true)
@@ -161,6 +162,21 @@ func isValidMqttMessage(msg kafka.Message) bool {
 
 func isValidMqttTopic(topic string) bool {
 	return regexp.MustCompile(`^\w[\w/#+]+[\w#]$`).MatchString(topic)
+}
+
+func toMqttTopic(topic string) (string, error) {
+	if strings.HasPrefix(topic, "$share") {
+		topic = string(regexp.MustCompile(`\$share\/DATA_BRIDGE_(.*?)\/`).ReplaceAll([]byte(topic), []byte("")))
+	}
+	if isValidKafkaTopic(topic) {
+		topic = strings.ReplaceAll(topic, ".*", "#")
+		topic = strings.ReplaceAll(topic, ".", "/")
+		return topic, nil
+	} else if isValidMqttTopic(topic) {
+		return topic, nil
+	}
+
+	return "", fmt.Errorf("invalid topic: %s", topic)
 }
 
 func newTLSConfig() *tls.Config {

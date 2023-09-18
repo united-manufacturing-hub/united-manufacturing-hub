@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -20,6 +21,10 @@ type kafkaClient struct {
 
 func newKafkaClient(broker, topic, serialNumber string, partitions, replicationFactor int) (kc *kafkaClient, err error) {
 	kc = &kafkaClient{}
+	topic, err = toKafkaTopic(topic)
+	if err != nil {
+		return nil, err
+	}
 	topicsRegex, err := regexp.Compile(topic)
 	if err != nil {
 		zap.S().Fatalf("error compiling regex: %v", err)
@@ -61,19 +66,21 @@ func (k *kafkaClient) startProducing(msgChan chan kafka.Message, split int) {
 		for {
 			msg := <-msgChan
 
-			if strings.HasPrefix(msg.Topic, "$share") {
-				msg.Topic = string(regexp.MustCompile(`\$share\/data-bridge-(.*?)\/`).ReplaceAll([]byte(msg.Topic), []byte("")))
+			var err error
+			msg.Topic, err = toKafkaTopic(msg.Topic)
+			if err != nil {
+				zap.S().Warnf("skipping message: %s", err)
+				continue
 			}
 
-			msg.Topic = strings.ReplaceAll(msg.Topic, "/", ".")
 			if !isValidKafkaMessage(msg) {
+				zap.S().Warnf("skipping message: %s", msg.Topic)
 				continue
 			}
 
 			msg = splitMessage(msg, split)
 
 			internal.AddSXOrigin(&msg)
-			var err error
 			err = internal.AddSXTrace(&msg)
 			if err != nil {
 				zap.S().Fatalf("failed to marshal trace")
@@ -134,18 +141,8 @@ func splitMessage(msg kafka.Message, split int) (splittedMsg kafka.Message) {
 }
 
 func isValidKafkaMessage(message kafka.Message) bool {
-	if strings.HasPrefix(message.Topic, ".") {
-		zap.S().Warnf("topic starts with a dot: %s", message.Topic)
-		return false
-	}
-
-	if strings.HasSuffix(message.Topic, ".") {
-		zap.S().Warnf("topic ends with a dot: %s", message.Topic)
-		return false
-	}
-
 	if !json.Valid(message.Value) {
-		zap.S().Warnf("not a valid json in message: %s", message.Topic, string(message.Value))
+		zap.S().Warnf("not a valid json in message: %s", message.Topic)
 		return false
 	}
 
@@ -160,4 +157,23 @@ func isValidKafkaMessage(message kafka.Message) bool {
 	}
 
 	return true
+}
+
+func isValidKafkaTopic(topic string) bool {
+	return regexp.MustCompile(`^[a-zA-Z0-9\._-]+(\.\*)?$`).MatchString(topic)
+}
+
+func toKafkaTopic(topic string) (string, error) {
+	if strings.HasPrefix(topic, "$share") {
+		topic = string(regexp.MustCompile(`\$share\/DATA_BRIDGE_(.*?)\/`).ReplaceAll([]byte(topic), []byte("")))
+	}
+	if isValidMqttTopic(topic) {
+		topic = strings.ReplaceAll(topic, "/", ".")
+		topic = strings.ReplaceAll(topic, "#", ".*")
+		return topic, nil
+	} else if isValidKafkaTopic(topic) {
+		return topic, nil
+	}
+
+	return "", fmt.Errorf("invalid topic: %s", topic)
 }
