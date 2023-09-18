@@ -17,6 +17,18 @@
 # _000_commonConfig contains the most common configuration options. To go into the details you can look into the configurations option after _000_commonConfig
 _000_commonConfig:
   serialNumber: "default"  # usually the hostname
+
+  datamodel_v2:
+    enabled: true
+    bridges:
+      - mode: mqtt-kafka
+        brokerA: united-manufacturing-hub-mqtt:1883
+        brokerB: united-manufacturing-hub-kafka:9092
+        topic: umh/v1/#
+        topicMergePoint: 5
+        partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
+        replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
+
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
 
@@ -164,17 +176,6 @@ _000_commonConfig:
 #        name: HighThroughput
 #        send_direction: to_remote
 #        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$
-
-  datamodel_v2:
-    enabled: true
-    bridges:
-      - mode: mqtt-kafka
-        brokerA: united-manufacturing-hub-mqtt:1883
-        brokerB: united-manufacturing-hub-kafka:9092
-        topic: umh/v1/#
-        topicMergePoint: 5
-        partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
-        replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
 
   kafkaStateDetector:
     enabled: false
