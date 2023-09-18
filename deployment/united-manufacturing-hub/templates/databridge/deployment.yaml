@@ -1,0 +1,135 @@
+{{if or .Values._000_commonConfig.datamodel_v2.enabled .Values.databridge.enabled}}
+
+{{- range $index, $bridge := .Values._000_commonConfig.datamodel_v2.bridges }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
+  labels:
+    {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 4 }}
+spec:
+  replicas: {{ $.Values.databridge.replicas }}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
+        {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 8 }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" $}}-databridge
+          {{- if $.Values.databridge.image.tag}}
+          image: {{$.Values.databridge.image.repository}}:{{$.Values.databridge.image.tag}}{{- if $.Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{- else}}
+          image: {{$.Values.databridge.image.repository}}:{{$.Chart.AppVersion}}{{- if $.Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{- end}}
+          imagePullPolicy: {{$.Values.databridge.image.pullPolicy}}
+          {{- if $.Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{- end}}
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 10
+            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
+          env:
+            - name: SERIAL_NUMBER
+              value: {{ $.Values._000_commonConfig.serialNumber | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app.kubernetes.io/name']
+            - name: MODE
+              value: "{{ if eq $bridge.mode "kafka-kafka" }}0{{ else if eq $bridge.mode "mqtt-kafka" }}1{{ else if eq $bridge.mode "mtt-mqtt" }}2{{ else }}3{{ end }}"
+            - name: BROKER_A
+              value: {{ $bridge.brokerA | quote }}
+            - name: BROKER_B
+              value: {{ $bridge.brokerB | quote }}
+            - name: TOPIC
+              value: {{ $bridge.topic | quote }}
+            - name: SPLIT
+              value: {{ $bridge.topicMergePoint | quote }}
+            {{- if ne $bridge.mode "mqtt-mqtt" }}
+            {{- if $bridge.partitions}}
+            - name: PARTITIONS
+              value: {{ $bridge.partitions | quote }}
+            {{- end}}
+            {{- if $bridge.replicationFactor}}
+            - name: REPLICATION_FACTOR
+              value: {{ $bridge.replicationFactor | quote }}
+            {{- end}}
+            {{- end}}
+            {{- if ne $bridge.mode "kafka-kafka" }}
+            {{- if $bridge.mqttEnableTLS}}
+            - name: MQTT_ENABLE_TLS
+              value: {{ $bridge.mqttEnableTLS | quote }}
+            {{- end}}
+            {{- if $bridge.mqttPassword}}
+            - name: MQTT_PASSWORD
+              value: {{ $bridge.mqttPassword | quote }}
+            {{- end}}
+            {{- if $bridge.messageLRUSize}}
+            - name: MESSAGE_LRU_SIZE
+              value: {{ $bridge.messageLRUSize | quote }}
+            {{- end}}
+            {{- end}}
+            {{- if  $.Values.databridge.loggingLevel }}
+            - name: LOGGING_LEVEL
+              value: {{ $.Values.databridge.loggingLevel | quote }}
+            {{- end}}
+          resources:
+            limits:
+              cpu: {{$.Values.databridge.resources.limits.cpu}}
+              memory: {{$.Values.databridge.resources.limits.memory}}
+            requests:
+              cpu: {{$.Values.databridge.resources.requests.cpu}}
+              memory: {{$.Values.databridge.resources.requests.memory}}
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /certs/kubernetes-ca.pem
+              subPath: ca.crt
+            {{- if and $bridge.mqttEnableTLS (ne $bridge.mode "kafka-kafka")}}
+            - name: {{include "united-manufacturing-hub.fullname" $}}-databridge-mqtt-certificates
+              mountPath: /SSL_certs/mqtt
+            {{- end}}
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt
+        {{- if and $bridge.mqttEnableTLS (ne $bridge.mode "kafka-kafka")}}
+        - name: {{include "united-manufacturing-hub.fullname" $}}-databridge-mqtt-certificates
+          secret:
+            secretName: {{include "united-manufacturing-hub.fullname" $}}-databridge-mqtt-certificates
+        {{- end}}
+      serviceAccountName: ""
+      restartPolicy: Always
+---
+        {{- end}}
+{{- end}}
