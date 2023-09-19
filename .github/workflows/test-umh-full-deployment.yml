@@ -88,11 +88,12 @@ jobs:
             --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
             --set "metrics.image.tag=${{ env.TAG }}" \
+            --set "databridge.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --create-namespace \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
-          kubectl apply -f ./test/generic-data-flow-test-script.yaml -n ${{ env.UMH }}
+          kubectl apply -f ./test/data-flow-test/data-flow-test-scripts.yaml -n ${{ env.UMH }}
           kubectl apply -f ./test/sensorconnect-mock/sensorconnect-mock.yaml -n ${{ env.UMH }}
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Install UMH failure
@@ -100,18 +101,22 @@ jobs:
         if: ${{ failure() && steps.install-umh.outcome == 'failure' }}
         run: |
           ./tools/save_logs.sh install-umh-step
-      - name: Run Data Flow Test Job
-        id: run-data-flow-test
+      - name: Run Data Flow Test Jobs
+        id: run-data-flow-tests
         run: |
           kubectl apply -f ./test/data-flow-test/data-flow-test-job.yaml -n ${{ env.UMH }}
           kubectl wait --for=condition=complete job/data-flow-test -n ${{ env.UMH }} --timeout=2m
           echo "Data Flow Test Job succeeded"
           kubectl logs job/data-flow-test -n ${{ env.UMH }} || true
+          kubectl apply -f ./test/data-flow-test/datamodel-v2-data-flow-test-job.yaml -n ${{ env.UMH }}
+          kubectl wait --for=condition=complete job/datamodel-v2-data-flow-test -n ${{ env.UMH }} --timeout=2m
+          echo "Datamodel v2 Data Flow Test Job succeeded"
+          kubectl logs job/datamodel-v2-data-flow-test -n ${{ env.UMH }} || true
       - name: Debug Data Flow failure
         id: debug-data-flow-failure
-        if: ${{ failure() && steps.run-data-flow-test.outcome == 'failure'  }}
+        if: ${{ failure() && steps.run-data-flow-tests.outcome == 'failure'  }}
         run: |
-          ./tools/save_logs.sh run-data-flow-test-step
+          ./tools/save_logs.sh run-data-flow-tests-step
       - name: Run Sensorconnect test
         id: run-sensorconnect-test
         run: |
