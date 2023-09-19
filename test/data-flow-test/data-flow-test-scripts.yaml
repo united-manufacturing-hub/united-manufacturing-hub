@@ -51,7 +51,7 @@ data:
     unzip rpk-linux-amd64.zip -d ~/.local/bin/
 
     ## Start consuming from the topic
-    rpk topic consume umh.v1.umh.cologne.ehrenfeld.devoffice.benchdesk -n 25 -f '%t.%k\n' -X brokers=united-manufacturing-hub-kafka:9092 > /tmp/messages.json
+    rpk topic consume umh.v1.umh.cologne.ehrenfeld.devoffice.benchdesk -n 5 -f '%t.%k\n' -X brokers=united-manufacturing-hub-kafka:9092 > /tmp/messages.json
 
     ## Check if the output contains the expected messages
     if ! grep -E -q "umh\.v1\.umh\.cologne\.ehrenfeld\.devoffice\.benchdesk\.(Humidity|Pressure|Temperature)" /tmp/messages.json; then
