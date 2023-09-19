@@ -37,7 +37,7 @@ spec:
         - name: datamodel-v2-test-script
           configMap:
             name: data-flow-test-scripts
-            defaultMode: 0777
+            defaultMode: 511
             items:
               - key: datamodel-v2-test-script
                 path: datamodel-v2-test-script
