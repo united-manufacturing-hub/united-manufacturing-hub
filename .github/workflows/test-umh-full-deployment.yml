@@ -222,6 +222,7 @@ jobs:
             --set "mqttkafkabridge.image.tag=${{ env.TAG }}" \
             --set "mqttkafkabridge.initContainer.tag=${{ env.TAG }}" \
             --set "metrics.image.tag=${{ env.TAG }}" \
+            --set "databridge.image.tag=${{ env.TAG }}" \
             --namespace ${{ env.UMH }} \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
