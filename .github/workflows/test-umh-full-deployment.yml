@@ -137,7 +137,7 @@ jobs:
           name: data-flow-test-logs
           path: |
             ./install-umh-step
-            ./run-data-flow-test-step
+            ./run-data-flow-tests-step
             ./run-sensorconnect-test-step
           if-no-files-found: ignore
           retention-days: 5
