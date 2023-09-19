@@ -226,7 +226,7 @@ jobs:
             --namespace ${{ env.UMH }} \
             --wait --timeout ${{ env.HELM_TIMEOUT }} \
             --debug
-          kubectl apply -f ./test/generic-data-flow-test-script.yaml -n ${{ env.UMH }}
+          kubectl apply -f ./test/data-flow-test/data-flow-test-scripts.yaml -n ${{ env.UMH }}
           kubectl apply -f ./test/sensorconnect-mock/sensorconnect-mock.yaml -n ${{ env.UMH }}
           kubectl get po,svc -n ${{ env.UMH }}
       - name: Debug Upgrade UMH failure
