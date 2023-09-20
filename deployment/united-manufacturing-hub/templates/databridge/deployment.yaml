@@ -80,8 +80,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['app.kubernetes.io/name']
-            - name: MODE
-              value: "{{ if eq $bridge.mode "kafka-kafka" }}0{{ else if eq $bridge.mode "mqtt-kafka" }}1{{ else if eq $bridge.mode "mtt-mqtt" }}2{{ else }}3{{ end }}"
             - name: BROKER_A
               value: {{ $bridge.brokerA | quote }}
             - name: BROKER_B
