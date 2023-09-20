@@ -116,10 +116,10 @@ func (m *mqttClient) getConsumerStats() (messages uint64) {
 	return m.recv.Load()
 }
 
-func (m *mqttClient) startProducing(messageChan chan kafka.Message, split int) {
+func (m *mqttClient) startProducing(msgChan chan kafka.Message, commitChan chan *kafka.Message, split int) {
 	go func() {
 		for {
-			msg := <-messageChan
+			msg := <-msgChan
 
 			var err error
 			msg.Topic, err = toMqttTopic(msg.Topic)
@@ -135,11 +135,12 @@ func (m *mqttClient) startProducing(messageChan chan kafka.Message, split int) {
 
 			m.client.Publish(msg.Topic, 1, false, msg.Value)
 			m.sent.Add(1)
+			commitChan <- &msg
 		}
 	}()
 }
 
-func (m *mqttClient) startConsuming(messageChan chan kafka.Message) {
+func (m *mqttClient) startConsuming(messageChan chan kafka.Message, _ chan *kafka.Message) {
 	go func() {
 		if token := m.client.Subscribe(m.topic, 1, func(client MQTT.Client, msg MQTT.Message) {
 			messageChan <- kafka.Message{

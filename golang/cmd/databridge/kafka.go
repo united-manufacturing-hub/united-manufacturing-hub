@@ -74,6 +74,7 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 		Partitions:        int32(partitions),
 		ReplicationFactor: int16(replicationFactor),
 		StartOffset:       sarama.OffsetOldest,
+		AutoMark:          false,
 	}
 
 	kc.client, err = kafka.NewKafkaClient(options)
@@ -92,7 +93,7 @@ func (k *kafkaClient) getConsumerStats() (received uint64) {
 
 // startProducing starts to read incoming messages from msgChan, transforms them
 // into valid kafka messagges, does the splitting and sends them to kafka
-func (k *kafkaClient) startProducing(msgChan chan kafka.Message, split int) {
+func (k *kafkaClient) startProducing(msgChan chan kafka.Message, commitChan chan *kafka.Message, split int) {
 	go func() {
 		for {
 			msg := <-msgChan
@@ -123,21 +124,22 @@ func (k *kafkaClient) startProducing(msgChan chan kafka.Message, split int) {
 				time.Sleep(10 * time.Millisecond)
 				err = k.client.EnqueueMessage(msg)
 			}
+
+			commitChan <- &msg
 		}
 	}()
 }
 
 // startConsuming starts to read incoming messages from kafka and sends them to the msgChan
-func (k *kafkaClient) startConsuming(msgChan chan kafka.Message) {
+func (k *kafkaClient) startConsuming(msgChan chan kafka.Message, commitChan chan *kafka.Message) {
 	go func() {
-		for {
-			msg := <-k.client.GetMessages()
-			msgChan <- kafka.Message{
-				Topic:  msg.Topic,
-				Value:  msg.Value,
-				Header: msg.Header,
-				Key:    msg.Key,
-			}
+		for msg := range k.client.GetMessages() {
+			msgChan <- msg
+		}
+	}()
+	go func() {
+		for msg := range commitChan {
+			k.client.MarkMessage(msg)
 		}
 	}()
 }

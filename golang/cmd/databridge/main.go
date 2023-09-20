@@ -102,10 +102,11 @@ func main() {
 	})
 
 	var msgChan = make(chan kafka.Message, 100)
+	var commitChan = make(chan *kafka.Message, 100)
 
 	zap.S().Info("starting clients")
-	clientA.startConsuming(msgChan)
-	clientB.startProducing(msgChan, split)
+	clientA.startConsuming(msgChan, commitChan)
+	clientB.startProducing(msgChan, commitChan, split)
 	reportStats(msgChan, clientA, clientB, gs)
 }
 
@@ -148,8 +149,8 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 type client interface {
 	getProducerStats() (messages uint64)
 	getConsumerStats() (messages uint64)
-	startProducing(messageChan chan kafka.Message, split int)
-	startConsuming(messageChan chan kafka.Message)
+	startProducing(messageChan chan kafka.Message, commitChan chan *kafka.Message, split int)
+	startConsuming(messageChan chan kafka.Message, commitChan chan *kafka.Message)
 	shutdown() error
 }
 
