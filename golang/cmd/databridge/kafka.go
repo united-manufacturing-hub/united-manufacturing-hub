@@ -65,6 +65,11 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 	hasher.Write([]byte(serialNumber))
 	consumerGroupId := "databridge-" + hex.EncodeToString(hasher.Sum(nil))
 
+	podName, err := env.GetAsString("POD_NAME", true, "")
+	if err != nil {
+		zap.S().Fatalf("error getting pod name: %v", err)
+	}
+
 	options := &kafka.NewClientOptions{
 		Brokers: []string{
 			broker,
@@ -75,6 +80,7 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 		ReplicationFactor: int16(replicationFactor),
 		StartOffset:       sarama.OffsetOldest,
 		AutoMark:          false,
+		ClientID:          podName,
 	}
 
 	kc.client, err = kafka.NewKafkaClient(options)

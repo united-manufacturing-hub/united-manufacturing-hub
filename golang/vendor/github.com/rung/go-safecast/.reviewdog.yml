@@ -1,0 +1,10 @@
+runner:
+  gosec:
+    cmd: gosec -quiet -fmt=golint ./...
+    format: golint
+  golangci:
+    cmd: golangci-lint run --enable=golint --out-format=line-number ./...
+    errorformat:
+      - '%E%f:%l:%c: %m'
+      - '%E%f:%l: %m'
+      - '%C%.%#'
