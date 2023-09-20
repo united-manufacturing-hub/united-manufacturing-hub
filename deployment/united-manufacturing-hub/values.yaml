@@ -1186,7 +1186,7 @@ metrics:
 databridge:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/data-bridge
+    repository: ghcr.io/united-manufacturing-hub/databridge
     pullPolicy: IfNotPresent
   pdb:
     enabled: true

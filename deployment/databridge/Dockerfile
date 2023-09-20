@@ -31,7 +31,7 @@ ADD ./golang/go.sum /build/go.sum
 RUN go mod download
 
 # Only copy relevant packages to docker container
-ADD ./golang/cmd/data-bridge /build/cmd/data-bridge
+ADD ./golang/cmd/databridge /build/cmd/databridge
 ADD ./golang/internal /build/internal
 ADD ./golang/pkg /build/pkg
 
@@ -40,13 +40,13 @@ RUN go mod tidy
 
 FROM source AS build
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/data-bridge
+RUN CGO_ENABLED=1 GOOS=linux go build -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/databridge
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 
 FROM source AS build-race
 WORKDIR /build
-RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/data-bridge
+RUN CGO_ENABLED=1 GOOS=linux go build -race -tags musl,kafka --mod=readonly -buildvcs=false -trimpath -o mainFile ./cmd/databridge
 # Create a list of shared libraries required by the mainFile binary and copy them to the deps directory
 RUN mkdir -p /build/deps && ldd mainFile | awk '/=>/ { print $3 }' | xargs -I % sh -c 'echo "Copying: %"; cp % /build/deps/'
 

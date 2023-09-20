@@ -63,7 +63,7 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 
 	hasher := sha3.New256()
 	hasher.Write([]byte(serialNumber))
-	consumerGroupId := "data-bridge-" + hex.EncodeToString(hasher.Sum(nil))
+	consumerGroupId := "databridge-" + hex.EncodeToString(hasher.Sum(nil))
 
 	options := &kafka.NewClientOptions{
 		Brokers: []string{

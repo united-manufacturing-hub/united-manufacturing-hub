@@ -684,8 +684,8 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/data-bridge
-            ghcr.io/united-manufacturing-hub/data-bridge
+            unitedmanufacturinghub/databridge
+            ghcr.io/united-manufacturing-hub/databridge
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
@@ -707,7 +707,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./deployment/data-bridge/Dockerfile
+          file: ./deployment/databridge/Dockerfile
           push: true
           target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
