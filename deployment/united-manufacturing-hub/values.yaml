@@ -1122,7 +1122,7 @@ mqtt_broker:
     hivemqextensioninit:
       image:
         repository: ghcr.io/united-manufacturing-hub/hivemq-init
-        tag: 2.0.0
+        tag: 3.0.0
         pullPolicy: IfNotPresent
   resources:
     limits:
@@ -1192,7 +1192,7 @@ databridge:
     enabled: true
     minAvailable: 1
   replicas: 1
-  resources: 
+  resources:
     requests:
       cpu: "400m"
       memory: "300Mi"
