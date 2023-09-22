@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -31,7 +32,10 @@ import (
 )
 
 type kafkaClient struct {
-	client *kafka.Client
+	client             *kafka.Client
+	lossInvalidTopic   atomic.Uint64
+	lossInvalidMessage atomic.Uint64
+	skipped            atomic.Uint64
 }
 
 func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err error) {
@@ -87,14 +91,14 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 	return
 }
 
-func (k *kafkaClient) getProducerStats() (sent uint64) {
+func (k *kafkaClient) getProducerStats() (sent uint64, load uint64, u uint64, u2 uint64) {
 	sent, _, _, _ = kafka.GetKafkaStats()
-	return
+	return sent, k.lossInvalidTopic.Load(), k.lossInvalidMessage.Load(), k.skipped.Load()
 }
 
-func (k *kafkaClient) getConsumerStats() (received uint64) {
+func (k *kafkaClient) getConsumerStats() (received uint64, load uint64, u uint64, u2 uint64) {
 	_, received, _, _ = kafka.GetKafkaStats()
-	return
+	return received, k.lossInvalidTopic.Load(), k.lossInvalidMessage.Load(), k.skipped.Load()
 }
 
 // startProducing starts to read incoming messages from msgChan, transforms them
@@ -107,12 +111,18 @@ func (k *kafkaClient) startProducing(msgChan chan kafka.Message, commitChan chan
 			var err error
 			msg.Topic, err = toKafkaTopic(msg.Topic)
 			if err != nil {
-				zap.S().Warnf("skipping message: %s", err)
+				k.lossInvalidTopic.Add(1)
+				zap.S().Warnf("skipping message (invalid topic): %s", err)
 				continue
 			}
 
-			if !isValidKafkaMessage(msg) {
-				zap.S().Warnf("skipping message: %s", msg.Topic)
+			valid, jsonFailed := isValidKafkaMessage(msg)
+			if !valid {
+				if jsonFailed {
+					k.lossInvalidMessage.Add(1)
+				} else {
+					k.skipped.Add(1)
+				}
 				continue
 			}
 
@@ -179,23 +189,23 @@ func splitMessage(msg kafka.Message, split int) (splittedMsg kafka.Message) {
 	return splittedMsg
 }
 
-func isValidKafkaMessage(message kafka.Message) bool {
+func isValidKafkaMessage(message kafka.Message) (valid bool, jsonFailed bool) {
 	if !json.Valid(message.Value) {
 		zap.S().Warnf("not a valid json in message: %s", message.Topic)
-		return false
+		return false, true
 	}
 
 	if internal.IsSameOrigin(&message) {
 		zap.S().Warnf("message from same origin: %s", message.Topic)
-		return false
+		return false, false
 	}
 
 	if internal.IsInTrace(&message) {
 		zap.S().Warnf("message in trace: %s", message.Topic)
-		return false
+		return false, false
 	}
 
-	return true
+	return true, false
 }
 
 func isValidKafkaTopic(topic string) bool {

@@ -101,8 +101,12 @@ func main() {
 		return nil
 	})
 
-	var msgChan = make(chan kafka.Message, 100)
-	var commitChan = make(chan *kafka.Message, 100)
+	msgChanLen, err := env.GetAsInt("MSG_CHANNEL_LENGTH", false, 100)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	var msgChan = make(chan kafka.Message, msgChanLen)
+	var commitChan = make(chan *kafka.Message, msgChanLen)
 
 	zap.S().Info("starting clients")
 	clientA.startConsuming(msgChan, commitChan)
@@ -112,9 +116,8 @@ func main() {
 
 // reportStats logs the number of messages sent and received every 10 seconds. It also shuts down the application if no messages are sent or received for 3 minutes.
 func reportStats(msgChan chan kafka.Message, consumerClient, producerClient client, gs internal.GracefulShutdownHandler) {
-	var sent, recv uint64
-	sent = producerClient.getProducerStats()
-	recv = consumerClient.getConsumerStats()
+	sent, _, _, _ := producerClient.getProducerStats()
+	recv, _, _, _ := consumerClient.getConsumerStats()
 
 	ticker := time.NewTicker(10 * time.Second)
 	shutdownTimer := time.NewTimer(3 * time.Minute)
@@ -122,13 +125,18 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 		select {
 		case <-ticker.C:
 			var newSent, newRecv uint64
-			newSent = producerClient.getProducerStats()
-			newRecv = consumerClient.getConsumerStats()
+			newSent, newSentInvalidTopic, newSentInvalidMessage, newSentSkipped := producerClient.getProducerStats()
+			newRecv, newRecvInvalidTopic, newRecvInvalidMessage, newRecvSkipped := consumerClient.getConsumerStats()
 
 			sentPerSecond := (newSent - sent) / 10
 			recvPerSecond := (newRecv - recv) / 10
 
-			zap.S().Infof("Received: %d (%d/s) | Sent: %d (%d/s) | Lag: %d", newSent, sentPerSecond, newRecv, recvPerSecond, len(msgChan))
+			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Lag: %d",
+				newRecv, recvPerSecond,
+				newRecvInvalidTopic, newRecvInvalidMessage, newRecvSkipped,
+				newSent, sentPerSecond,
+				newSentInvalidTopic, newSentInvalidMessage, newSentSkipped,
+				len(msgChan))
 
 			if newSent != sent && newRecv != recv {
 				shutdownTimer.Reset(3 * time.Minute)
@@ -147,8 +155,8 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 }
 
 type client interface {
-	getProducerStats() (messages uint64)
-	getConsumerStats() (messages uint64)
+	getProducerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
+	getConsumerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
 	startProducing(messageChan chan kafka.Message, commitChan chan *kafka.Message, split int)
 	startConsuming(messageChan chan kafka.Message, commitChan chan *kafka.Message)
 	shutdown() error

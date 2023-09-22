@@ -34,10 +34,13 @@ import (
 )
 
 type mqttClient struct {
-	client MQTT.Client
-	topic  string
-	sent   atomic.Uint64
-	recv   atomic.Uint64
+	client             MQTT.Client
+	topic              string
+	sent               atomic.Uint64
+	recv               atomic.Uint64
+	lossInvalidTopic   atomic.Uint64
+	lossInvalidMessage atomic.Uint64
+	skipped            atomic.Uint64
 }
 
 var arc *lru.ARCCache
@@ -108,12 +111,12 @@ func newMqttClient(broker, topic, serialNumber string) (mc *mqttClient, err erro
 	return
 }
 
-func (m *mqttClient) getProducerStats() (messages uint64) {
-	return m.sent.Load()
+func (m *mqttClient) getProducerStats() (messages uint64, load uint64, u uint64, u2 uint64) {
+	return m.sent.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
-func (m *mqttClient) getConsumerStats() (messages uint64) {
-	return m.recv.Load()
+func (m *mqttClient) getConsumerStats() (messages uint64, load uint64, u uint64, u2 uint64) {
+	return m.recv.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
 func (m *mqttClient) startProducing(msgChan chan kafka.Message, commitChan chan *kafka.Message, split int) {
@@ -122,14 +125,23 @@ func (m *mqttClient) startProducing(msgChan chan kafka.Message, commitChan chan 
 			msg := <-msgChan
 
 			var err error
+			if len(msg.Key) > 0 {
+				msg.Topic = msg.Topic + "." + string(msg.Key)
+			}
 			msg.Topic, err = toMqttTopic(msg.Topic)
 			if err != nil {
-				zap.S().Warnf("skipping message: %s", err)
+				zap.S().Warnf("skipping message (invalid topic): %s", err)
+				m.lossInvalidTopic.Add(1)
 				continue
 			}
 
-			if !isValidMqttMessage(msg) {
-				zap.S().Warnf("skipping message: %s", msg.Topic)
+			valid, jsonFailed := isValidMqttMessage(msg)
+			if !valid {
+				if jsonFailed {
+					m.lossInvalidMessage.Add(1)
+				} else {
+					m.skipped.Add(1)
+				}
 				continue
 			}
 
@@ -160,10 +172,10 @@ func (m *mqttClient) shutdown() error {
 	return nil
 }
 
-func isValidMqttMessage(msg kafka.Message) bool {
+func isValidMqttMessage(msg kafka.Message) (valid bool, jsonFailed bool) {
 	if !json.Valid(msg.Value) {
 		zap.S().Warnf("not a valid json in message: %s", msg.Topic, string(msg.Value))
-		return false
+		return false, true
 	}
 
 	// Check if message is known
@@ -176,12 +188,12 @@ func isValidMqttMessage(msg kafka.Message) bool {
 
 	// Uses Get to re-validate the entry
 	if _, ok := arc.Get(hashStr); ok {
-		zap.S().Warnf("message already processed: %s", msg.Topic)
-		return false
+		zap.S().Debugf("message already processed: %s", msg.Topic)
+		return false, false
 	}
 	arc.Add(hashStr, true)
 
-	return true
+	return true, false
 }
 
 func isValidMqttTopic(topic string) bool {

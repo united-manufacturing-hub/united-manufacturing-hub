@@ -116,6 +116,10 @@ spec:
             - name: LOGGING_LEVEL
               value: {{ $.Values.databridge.loggingLevel | quote }}
             {{- end}}
+            {{- if  $.Values.databridge.msgChanLen }}
+            - name: MSG_CHANNEL_LENGTH
+              value: {{ $.Values.databridge.msgChanLen | quote }}
+            {{- end}}
           resources:
             limits:
               cpu: {{$.Values.databridge.resources.limits.cpu}}
