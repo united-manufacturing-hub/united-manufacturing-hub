@@ -21,7 +21,7 @@ require (
 	github.com/IBM/sarama v1.41.2
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.9.2
-	github.com/coocood/freecache v1.2.3
+	github.com/coocood/freecache v1.2.4
 	github.com/cristalhq/base64 v0.1.2
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/felixge/fgtrace v0.2.0
