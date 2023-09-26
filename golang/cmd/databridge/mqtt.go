@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"os"
 	"regexp"
 	"strings"
@@ -27,7 +28,6 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/goccy/go-json"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
@@ -119,7 +119,7 @@ func (m *mqttClient) getConsumerStats() (messages uint64, load uint64, u uint64,
 	return m.recv.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
-func (m *mqttClient) startProducing(msgChan chan kafka.Message, commitChan chan *kafka.Message, split int) {
+func (m *mqttClient) startProducing(msgChan chan shared.KafkaMessage, commitChan chan *shared.KafkaMessage, split int) {
 	go func() {
 		for {
 			msg := <-msgChan
@@ -135,7 +135,7 @@ func (m *mqttClient) startProducing(msgChan chan kafka.Message, commitChan chan 
 				continue
 			}
 
-			valid, jsonFailed := isValidMqttMessage(msg)
+			valid, jsonFailed := isValidMqttMessage(&msg)
 			if !valid {
 				if jsonFailed {
 					m.lossInvalidMessage.Add(1)
@@ -152,10 +152,10 @@ func (m *mqttClient) startProducing(msgChan chan kafka.Message, commitChan chan 
 	}()
 }
 
-func (m *mqttClient) startConsuming(messageChan chan kafka.Message, _ chan *kafka.Message) {
+func (m *mqttClient) startConsuming(messageChan chan *shared.KafkaMessage, _ chan *shared.KafkaMessage) {
 	go func() {
 		if token := m.client.Subscribe(m.topic, 1, func(client MQTT.Client, msg MQTT.Message) {
-			messageChan <- kafka.Message{
+			messageChan <- &shared.KafkaMessage{
 				Topic: msg.Topic(),
 				Value: msg.Payload(),
 			}
@@ -172,7 +172,7 @@ func (m *mqttClient) shutdown() error {
 	return nil
 }
 
-func isValidMqttMessage(msg kafka.Message) (valid bool, jsonFailed bool) {
+func isValidMqttMessage(msg *shared.KafkaMessage) (valid bool, jsonFailed bool) {
 	if !json.Valid(msg.Value) {
 		zap.S().Warnf("not a valid json in message: %s", msg.Topic, string(msg.Value))
 		return false, true

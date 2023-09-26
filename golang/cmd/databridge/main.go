@@ -15,6 +15,7 @@
 package main
 
 import (
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"net/http"
 	"strings"
 	"time"
@@ -157,8 +158,8 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 type client interface {
 	getProducerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
 	getConsumerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
-	startProducing(messageChan chan kafka.Message, commitChan chan *kafka.Message, split int)
-	startConsuming(messageChan chan kafka.Message, commitChan chan *kafka.Message)
+	startProducing(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage, split int)
+	startConsuming(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)
 	shutdown() error
 }
 
