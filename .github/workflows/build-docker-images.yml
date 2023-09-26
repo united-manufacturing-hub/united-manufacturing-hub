@@ -17,10 +17,10 @@ name: Build Docker Images
 on:
   push:
     paths:
-      - 'deployment/**'
-      - '!deployment/helm-repo/**'
-      - '!deployment/united-manufacturing-hub/**'
-      - 'golang/**'
+      - 'deployment/*'
+      - '!deployment/helm-repo/*'
+      - '!deployment/united-manufacturing-hub/*'
+      - 'golang/*'
       - '.github/workflows/build-docker-images.yml'
 
 jobs:

@@ -17,8 +17,8 @@ name: Helm Checks
 on:
   push:
     paths:
-      - 'deployment/**'
-      - 'test/**'
+      - 'deployment/*'
+      - 'test/*'
       - '.github/workflows/helm-checks.yaml'
 
 env:

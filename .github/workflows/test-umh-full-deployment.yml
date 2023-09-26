@@ -17,9 +17,9 @@ name: Test UMH Full Deployment
 on:
   pull_request:
     paths:
-      - 'deployment/**'
-      - 'golang/**'
-      - 'test/**'
+      - 'deployment/*'
+      - 'golang/*'
+      - 'test/*'
       - '!test/test-values-tiny.yaml'
       - '.github/workflows/test-umh-full-deployment.yml'
 
