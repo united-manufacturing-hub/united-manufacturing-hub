@@ -16,26 +16,26 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/goccy/go-json"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	"github.com/united-manufacturing-hub/umh-utils/env"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/sha3"
 	"regexp"
 	"strings"
 	"sync/atomic"
-	"time"
-
-	"github.com/IBM/sarama"
-	"github.com/goccy/go-json"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
-	"github.com/united-manufacturing-hub/umh-utils/env"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
-	"go.uber.org/zap"
-	"golang.org/x/crypto/sha3"
 )
 
 type kafkaClient struct {
-	client             *kafka.Client
 	lossInvalidTopic   atomic.Uint64
 	lossInvalidMessage atomic.Uint64
 	skipped            atomic.Uint64
+	consumer           *consumer.Consumer
+	producer           *producer.Producer
 }
 
 func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err error) {
@@ -60,53 +60,35 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 	if err != nil {
 		return nil, err
 	}
-	topicsRegex, err := regexp.Compile(topic)
-	if err != nil {
-		zap.S().Fatalf("error compiling regex: %v", err)
-	}
 
 	hasher := sha3.New256()
 	hasher.Write([]byte(serialNumber))
 	consumerGroupId := "databridge-" + hex.EncodeToString(hasher.Sum(nil))
 
-	podName, err := env.GetAsString("POD_NAME", true, "")
-	if err != nil {
-		zap.S().Fatalf("error getting pod name: %v", err)
-	}
+	// split brokers by comma
+	brokers := strings.Split(broker, ",")
 
-	options := &kafka.NewClientOptions{
-		Brokers: []string{
-			broker,
-		},
-		ConsumerGroupId:   consumerGroupId,
-		ListenTopicRegex:  topicsRegex,
-		Partitions:        int32(partitions),
-		ReplicationFactor: int16(replicationFactor),
-		StartOffset:       sarama.OffsetOldest,
-		AutoMark:          false,
-		ClientID:          podName,
-	}
+	kc.consumer, err = consumer.NewConsumer(brokers, topic, consumerGroupId)
 
-	kc.client, err = kafka.NewKafkaClient(options)
 	return
 }
 
-func (k *kafkaClient) getProducerStats() (sent uint64, load uint64, u uint64, u2 uint64) {
-	sent, _, _, _ = kafka.GetKafkaStats()
-	return sent, k.lossInvalidTopic.Load(), k.lossInvalidMessage.Load(), k.skipped.Load()
+func (k *kafkaClient) getProducerStats() (sent uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
+	produced, productionErrors := k.producer.GetProducedMessages()
+	return produced, 0, productionErrors, 0
 }
 
-func (k *kafkaClient) getConsumerStats() (received uint64, load uint64, u uint64, u2 uint64) {
-	_, received, _, _ = kafka.GetKafkaStats()
-	return received, k.lossInvalidTopic.Load(), k.lossInvalidMessage.Load(), k.skipped.Load()
+func (k *kafkaClient) getConsumerStats() (received uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
+	_, consumed := k.consumer.GetStats()
+	return consumed, 0, 0, 0
 }
 
 // startProducing starts to read incoming messages from msgChan, transforms them
-// into valid kafka messagges, does the splitting and sends them to kafka
-func (k *kafkaClient) startProducing(msgChan chan kafka.Message, commitChan chan *kafka.Message, split int) {
+// into valid kafka messages, does the splitting and sends them to kafka
+func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage, split int) {
 	go func() {
 		for {
-			msg := <-msgChan
+			msg := <-toProduceMessageChannel
 
 			var err error
 			msg.Topic, err = toKafkaTopic(msg.Topic)
@@ -128,41 +110,32 @@ func (k *kafkaClient) startProducing(msgChan chan kafka.Message, commitChan chan
 
 			msg = splitMessage(msg, split)
 
-			internal.AddSXOrigin(&msg)
-			err = internal.AddSXTrace(&msg)
-			if err != nil {
-				zap.S().Fatalf("failed to marshal trace")
-				continue
-			}
+			k.producer.SendMessage(msg)
 
-			err = k.client.EnqueueMessage(msg)
-			for err != nil {
-				time.Sleep(10 * time.Millisecond)
-				err = k.client.EnqueueMessage(msg)
-			}
-
-			commitChan <- &msg
+			bridgedMessagesToCommitChannel <- msg
 		}
 	}()
 }
 
 // startConsuming starts to read incoming messages from kafka and sends them to the msgChan
-func (k *kafkaClient) startConsuming(msgChan chan kafka.Message, commitChan chan *kafka.Message) {
+func (k *kafkaClient) startConsuming(receivedMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
-		for msg := range k.client.GetMessages() {
-			msgChan <- msg
+		for msg := range k.consumer.GetMessages() {
+			receivedMessageChannel <- msg
 		}
 	}()
 	go func() {
-		for msg := range commitChan {
-			k.client.MarkMessage(msg)
+		for msg := range bridgedMessagesToCommitChannel {
+			k.consumer.MarkMessage(msg)
 		}
 	}()
 }
 
 func (k *kafkaClient) shutdown() error {
-	zap.S().Info("shutting down kafka client")
-	return k.client.Close()
+	zap.S().Info("shutting down kafka clients")
+	errProducer := k.producer.Close()
+	errConsumer := k.consumer.Close()
+	return errors.Join(errProducer, errConsumer)
 }
 
 // splitMessage splits the topic of msg into two parts, the first part will be
@@ -171,8 +144,9 @@ func (k *kafkaClient) shutdown() error {
 // If the topic of msg has less than split parts, splittedMsg will have the same
 // topic and key as msg.
 // The key of msg will always be appended to the end of the key of splittedMsg.
-func splitMessage(msg kafka.Message, split int) (splittedMsg kafka.Message) {
+func splitMessage(msg *shared.KafkaMessage, split int) (splittedMsg *shared.KafkaMessage) {
 	parts := strings.Split(msg.Topic, ".")
+	splittedMsg = &shared.KafkaMessage{}
 
 	if len(parts) < split {
 		splittedMsg.Topic = msg.Topic
@@ -184,23 +158,23 @@ func splitMessage(msg kafka.Message, split int) (splittedMsg kafka.Message) {
 		splittedMsg.Key = append([]byte(strings.Join(parts[split:], ".")), msg.Key...)
 	}
 	splittedMsg.Value = msg.Value
-	splittedMsg.Header = msg.Header
+	splittedMsg.Headers = msg.Headers
 
 	return splittedMsg
 }
 
-func isValidKafkaMessage(message kafka.Message) (valid bool, jsonFailed bool) {
+func isValidKafkaMessage(message *shared.KafkaMessage) (valid bool, jsonFailed bool) {
 	if !json.Valid(message.Value) {
 		zap.S().Warnf("not a valid json in message: %s", message.Topic)
 		return false, true
 	}
 
-	if internal.IsSameOrigin(&message) {
+	if shared.IsSameOrigin(message) {
 		zap.S().Warnf("message from same origin: %s", message.Topic)
 		return false, false
 	}
 
-	if internal.IsInTrace(&message) {
+	if shared.IsInTrace(message) {
 		zap.S().Warnf("message in trace: %s", message.Topic)
 		return false, false
 	}

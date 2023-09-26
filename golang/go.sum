@@ -43,8 +43,8 @@ github.com/cncf/xds/go v0.0.0-20211001041855-01bcc9b48dfe/go.mod h1:eXthEFrGJvWH
 github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/confluentinc/confluent-kafka-go v1.9.2 h1:gV/GxhMBUb03tFWkN+7kdhg+zf+QUM+wVkI9zwh770Q=
 github.com/confluentinc/confluent-kafka-go v1.9.2/go.mod h1:ptXNqsuDfYbAE/LBW6pnwWZElUoWxHoV8E43DCrliyo=
-github.com/coocood/freecache v1.2.3 h1:lcBwpZrwBZRZyLk/8EMyQVXRiFl663cCuMOrjCALeto=
-github.com/coocood/freecache v1.2.3/go.mod h1:RBUWa/Cy+OHdfTGFEhEuE1pMCMX51Ncizj7rthiQ3vk=
+github.com/coocood/freecache v1.2.4 h1:UdR6Yz/X1HW4fZOuH0Z94KwG851GWOSknua5VUbb/5M=
+github.com/coocood/freecache v1.2.4/go.mod h1:RBUWa/Cy+OHdfTGFEhEuE1pMCMX51Ncizj7rthiQ3vk=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cristalhq/base64 v0.1.2 h1:edsefYyYDiac7Ytdh2xdaiiSSJzcI2f0yIkdGEf1qY0=
 github.com/cristalhq/base64 v0.1.2/go.mod h1:sy4+2Hale2KbtSqkzpdMeYTP/IrB+HCvxVHWsh2VSYk=
@@ -278,8 +278,8 @@ github.com/rogpeppe/clock v0.0.0-20190514195947-2896927a307a/go.mod h1:4r5QyqhjI
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.6.1/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTEfhy4qGm1nDQc=
 github.com/rogpeppe/go-internal v1.8.0/go.mod h1:WmiCO8CzOY8rg0OYDC4/i/2WRWAB6poM+XZ2dLUbcbE=
-github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
-github.com/rogpeppe/go-internal v1.10.0/go.mod h1:UQnix2H7Ngw/k4C5ijL5+65zddjncjaFoBhdsK/akog=
+github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=
+github.com/rogpeppe/go-internal v1.11.0/go.mod h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA=
 github.com/rung/go-safecast v1.0.1 h1:7rkt2qO4JGdOkWKdPEBFLaEwQy20y0IhhWJNFxmH0p0=
 github.com/rung/go-safecast v1.0.1/go.mod h1:dzUcUS2UMtbfVc7w6mx/Ur3UYcpXEZC+WilISksJ4P8=
 github.com/santhosh-tekuri/jsonschema/v5 v5.0.0/go.mod h1:FKdcjfQW6rpZSnxxUvEA5H/cDPdvJ/SZJQLWWXWGrZ0=
@@ -314,6 +314,10 @@ github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4d
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1 h1:pCex5miYLZ37kVdIEd/UJ/Ix7fzSoTRcIVJv7+/spx8=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1/go.mod h1:b1vxJUohwTE7syNQoTCxdATvxDUTyC6EWFiYjHkkuEs=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v0.0.3 h1:7MTS42Dd4I3KpKvr9UC5Kqh85F9jSwBHPdJbA/OeKcQ=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v0.0.3/go.mod h1:tYlh+7sbh1s79IgVMTWm541WRxYLx40uweWGQI2OtzU=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v0.0.4 h1:ar/SRWxatzISJ3VMUAFY42T0bCG5nFBljwxyXC/A634=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v0.0.4/go.mod h1:tYlh+7sbh1s79IgVMTWm541WRxYLx40uweWGQI2OtzU=
 github.com/united-manufacturing-hub/expiremap v1.1.1 h1:v9e94HwZ+AwlRRCExErZ/Yn8hOvMa6rQjNQKUcUwo1E=
 github.com/united-manufacturing-hub/expiremap v1.1.1/go.mod h1:2WoxiolkyNqalce90Yd101zwNsH21V1Mo40/JaJivYI=
 github.com/united-manufacturing-hub/umh-utils v0.2.2 h1:3Op9Cx+fwqxL1Qtu7AytZ19LU8vOBmJSF0dsXs0Oxw4=

@@ -50,7 +50,7 @@ github.com/chenzhuoyu/iasm/x86_64
 ## explicit; go 1.13
 github.com/confluentinc/confluent-kafka-go/kafka
 github.com/confluentinc/confluent-kafka-go/kafka/librdkafka_vendor
-# github.com/coocood/freecache v1.2.3
+# github.com/coocood/freecache v1.2.4
 ## explicit; go 1.13
 github.com/coocood/freecache
 # github.com/cristalhq/base64 v0.1.2
@@ -374,6 +374,11 @@ github.com/ugorji/go/codec
 # github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1
 ## explicit; go 1.20
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka
+# github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v0.0.4
+## explicit; go 1.21
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared
 # github.com/united-manufacturing-hub/expiremap v1.1.1
 ## explicit; go 1.20
 github.com/united-manufacturing-hub/expiremap/pkg/expiremap

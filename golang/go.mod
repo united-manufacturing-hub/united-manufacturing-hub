@@ -21,7 +21,7 @@ require (
 	github.com/IBM/sarama v1.41.2
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.9.2
-	github.com/coocood/freecache v1.2.3
+	github.com/coocood/freecache v1.2.4
 	github.com/cristalhq/base64 v0.1.2
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/felixge/fgtrace v0.2.0
@@ -41,6 +41,7 @@ require (
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v0.0.4
 	github.com/united-manufacturing-hub/expiremap v1.1.1
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/zeebo/xxh3 v1.0.2
