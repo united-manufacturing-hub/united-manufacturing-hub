@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/heptiolabs/healthcheck"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
@@ -106,8 +105,8 @@ func main() {
 	if err != nil {
 		zap.S().Error(err)
 	}
-	var msgChan = make(chan kafka.Message, msgChanLen)
-	var commitChan = make(chan *kafka.Message, msgChanLen)
+	var msgChan = make(chan *shared.KafkaMessage, msgChanLen)
+	var commitChan = make(chan *shared.KafkaMessage, msgChanLen)
 
 	zap.S().Info("starting clients")
 	clientA.startConsuming(msgChan, commitChan)
@@ -116,7 +115,7 @@ func main() {
 }
 
 // reportStats logs the number of messages sent and received every 10 seconds. It also shuts down the application if no messages are sent or received for 3 minutes.
-func reportStats(msgChan chan kafka.Message, consumerClient, producerClient client, gs internal.GracefulShutdownHandler) {
+func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClient client, gs internal.GracefulShutdownHandler) {
 	sent, _, _, _ := producerClient.getProducerStats()
 	recv, _, _, _ := consumerClient.getConsumerStats()
 
@@ -131,13 +130,15 @@ func reportStats(msgChan chan kafka.Message, consumerClient, producerClient clie
 
 			sentPerSecond := (newSent - sent) / 10
 			recvPerSecond := (newRecv - recv) / 10
+			lruHits, lruMisses, lruSize := GetLRUStats()
 
-			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Lag: %d",
+			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Lag: %d | LRU: Hits: %d Misses: %d Size: %d",
 				newRecv, recvPerSecond,
 				newRecvInvalidTopic, newRecvInvalidMessage, newRecvSkipped,
 				newSent, sentPerSecond,
 				newSentInvalidTopic, newSentInvalidMessage, newSentSkipped,
-				len(msgChan))
+				len(msgChan),
+				lruHits, lruMisses, lruSize)
 
 			if newSent != sent && newRecv != recv {
 				shutdownTimer.Reset(3 * time.Minute)

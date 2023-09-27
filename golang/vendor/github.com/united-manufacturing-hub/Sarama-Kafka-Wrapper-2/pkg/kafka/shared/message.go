@@ -2,6 +2,7 @@ package shared
 
 import (
 	"github.com/IBM/sarama"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -66,6 +67,16 @@ func ToProducerMessage(message *KafkaMessage) *sarama.ProducerMessage {
 	if message == nil {
 		return nil
 	}
+	if v, _ := GetSXOrigin(message); !v {
+		AddSXOrigin(message)
+	}
+	if v, _ := GetSXTrace(message); !v {
+		err := AddSXTrace(message)
+		if err != nil {
+			zap.S().Errorf("failed to add trace header: %s", err)
+			return nil
+		}
+	}
 	m := &sarama.ProducerMessage{
 		Topic: message.Topic,
 		Key:   sarama.ByteEncoder(message.Key),
@@ -77,12 +88,6 @@ func ToProducerMessage(message *KafkaMessage) *sarama.ProducerMessage {
 			Key:   []byte(k),
 			Value: []byte(v),
 		})
-	}
-	if err := addXOriginIfMissing(&m.Headers); err != nil {
-		return nil
-	}
-	if err := addXTrace(&m.Headers); err != nil {
-		return nil
 	}
 	return m
 }

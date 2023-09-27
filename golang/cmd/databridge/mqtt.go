@@ -43,8 +43,6 @@ type mqttClient struct {
 	skipped            atomic.Uint64
 }
 
-var arc *lru.ARCCache
-
 func newMqttClient(broker, topic, serialNumber string) (mc *mqttClient, err error) {
 	mc = &mqttClient{}
 
@@ -119,10 +117,10 @@ func (m *mqttClient) getConsumerStats() (messages uint64, load uint64, u uint64,
 	return m.recv.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
-func (m *mqttClient) startProducing(msgChan chan shared.KafkaMessage, commitChan chan *shared.KafkaMessage, split int) {
+func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage, split int) {
 	go func() {
 		for {
-			msg := <-msgChan
+			msg := <-toProduceMessageChannel
 
 			var err error
 			if len(msg.Key) > 0 {
@@ -135,7 +133,7 @@ func (m *mqttClient) startProducing(msgChan chan shared.KafkaMessage, commitChan
 				continue
 			}
 
-			valid, jsonFailed := isValidMqttMessage(&msg)
+			valid, jsonFailed := isValidMqttMessage(msg)
 			if !valid {
 				if jsonFailed {
 					m.lossInvalidMessage.Add(1)
@@ -147,21 +145,39 @@ func (m *mqttClient) startProducing(msgChan chan shared.KafkaMessage, commitChan
 
 			m.client.Publish(msg.Topic, 1, false, msg.Value)
 			m.sent.Add(1)
-			commitChan <- &msg
+			bridgedMessagesToCommitChannel <- msg
 		}
 	}()
 }
 
-func (m *mqttClient) startConsuming(messageChan chan *shared.KafkaMessage, _ chan *shared.KafkaMessage) {
+func (m *mqttClient) startConsuming(receivedMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
 		if token := m.client.Subscribe(m.topic, 1, func(client MQTT.Client, msg MQTT.Message) {
-			messageChan <- &shared.KafkaMessage{
+			// Check if message is known
+			known := QueryOrInsert(&shared.KafkaMessage{
+				Topic: msg.Topic(),
+				Value: msg.Payload(),
+			})
+			if known {
+				m.skipped.Add(1)
+				return
+			}
+
+			receivedMessageChannel <- &shared.KafkaMessage{
 				Topic: msg.Topic(),
 				Value: msg.Payload(),
 			}
 			m.recv.Add(1)
 		}); token.Wait() && token.Error() != nil {
 			zap.S().Fatalf("failed to subscribe: %s", token.Error())
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-bridgedMessagesToCommitChannel:
+				// This needs to be empty to prevent blocking
+			}
 		}
 	}()
 }
@@ -179,19 +195,12 @@ func isValidMqttMessage(msg *shared.KafkaMessage) (valid bool, jsonFailed bool) 
 	}
 
 	// Check if message is known
-	hasher := sha3.New512()
-	_, _ = hasher.Write([]byte(msg.Topic))
-	_, _ = hasher.Write(msg.Value)
-	hash := hasher.Sum(nil)
-	// hash to string
-	hashStr := string(hash)
-
 	// Uses Get to re-validate the entry
-	if _, ok := arc.Get(hashStr); ok {
-		zap.S().Debugf("message already processed: %s", msg.Topic)
+	known := QueryOrInsert(msg)
+	if known {
+		zap.S().Debugf("message is known: %s", msg.Topic)
 		return false, false
 	}
-	arc.Add(hashStr, true)
 
 	return true, false
 }

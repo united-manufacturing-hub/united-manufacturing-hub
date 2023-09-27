@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
-	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 	"regexp"
@@ -32,6 +32,7 @@ import (
 
 type kafkaClient struct {
 	lossInvalidTopic   atomic.Uint64
+	marked             atomic.Uint64
 	lossInvalidMessage atomic.Uint64
 	skipped            atomic.Uint64
 	consumer           *consumer.Consumer
@@ -40,21 +41,6 @@ type kafkaClient struct {
 
 func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err error) {
 	kc = &kafkaClient{}
-
-	partitions, err := env.GetAsInt("PARTITIONS", false, 6)
-	if err != nil {
-		zap.S().Error(err)
-	}
-	if partitions < 1 {
-		zap.S().Fatalf("PARTITIONS must be at least 1. got: %d", partitions)
-	}
-	replicationFactor, err := env.GetAsInt("REPLICATION_FACTOR", false, 1)
-	if err != nil {
-		zap.S().Error(err)
-	}
-	if replicationFactor%2 == 0 {
-		zap.S().Fatalf("REPLICATION_FACTOR must be odd. got: %d", replicationFactor)
-	}
 
 	topic, err = toKafkaTopic(topic)
 	if err != nil {
@@ -68,19 +54,32 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 	// split brokers by comma
 	brokers := strings.Split(broker, ",")
 
-	kc.consumer, err = consumer.NewConsumer(brokers, topic, consumerGroupId)
+	brokers = resolver(brokers)
 
+	zap.S().Infof("connecting to kafka brokers: %s (topic: %s, consumer group: %s)", broker, topic, consumerGroupId)
+	kc.consumer, err = consumer.NewConsumer(brokers, []string{topic}, consumerGroupId)
+	if err != nil {
+		return nil, err
+	}
+	err = kc.consumer.Start(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	kc.producer, err = producer.NewProducer(brokers)
+	if err != nil {
+		return nil, err
+	}
 	return
 }
 
 func (k *kafkaClient) getProducerStats() (sent uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
-	produced, productionErrors := k.producer.GetProducedMessages()
-	return produced, 0, productionErrors, 0
+	_, productionErrors := k.producer.GetProducedMessages()
+	return k.marked.Load(), k.lossInvalidTopic.Load(), productionErrors + k.lossInvalidMessage.Load(), k.skipped.Load()
 }
 
 func (k *kafkaClient) getConsumerStats() (received uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
 	_, consumed := k.consumer.GetStats()
-	return consumed, 0, 0, 0
+	return consumed, k.lossInvalidTopic.Load(), k.lossInvalidMessage.Load(), k.skipped.Load()
 }
 
 // startProducing starts to read incoming messages from msgChan, transforms them
@@ -120,13 +119,20 @@ func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaM
 // startConsuming starts to read incoming messages from kafka and sends them to the msgChan
 func (k *kafkaClient) startConsuming(receivedMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
-		for msg := range k.consumer.GetMessages() {
-			receivedMessageChannel <- msg
+		for {
+			select {
+			case msg := <-k.consumer.GetMessages():
+				receivedMessageChannel <- msg
+			}
 		}
 	}()
 	go func() {
-		for msg := range bridgedMessagesToCommitChannel {
-			k.consumer.MarkMessage(msg)
+		for {
+			select {
+			case msg := <-bridgedMessagesToCommitChannel:
+				k.consumer.MarkMessage(msg)
+				k.marked.Add(1)
+			}
 		}
 	}()
 }
