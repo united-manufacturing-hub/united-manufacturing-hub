@@ -429,7 +429,7 @@ github.com/ugorji/go/codec
 # github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1
 ## explicit; go 1.20
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka
-# github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.0.1
+# github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.0.6
 ## explicit; go 1.21
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer

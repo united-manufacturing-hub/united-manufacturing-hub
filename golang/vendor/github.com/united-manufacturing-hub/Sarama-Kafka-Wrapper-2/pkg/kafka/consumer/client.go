@@ -27,9 +27,12 @@ type Consumer struct {
 }
 
 // NewConsumer initializes a Consumer.
-func NewConsumer(brokers, topic []string, groupName string) (*Consumer, error) {
+func NewConsumer(brokers, topic []string, groupName string, instanceId string) (*Consumer, error) {
+	zap.S().Infof("connecting to brokers: %v", brokers)
 	config := sarama.NewConfig()
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	config.Consumer.Group.InstanceId = instanceId
+	config.Version = sarama.V2_3_0_0
 
 	c, err := sarama.NewClient(brokers, config)
 	if err != nil {

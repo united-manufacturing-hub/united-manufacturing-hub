@@ -65,6 +65,11 @@ func main() {
 	if split != -1 && split < 3 {
 		zap.S().Fatalf("SPLIT must be at least 3. got: %d", split)
 	}
+	lruSize, err := env.GetAsInt("LRU_SIZE", false, 10_000)
+	if err != nil {
+		zap.S().Error(err)
+	}
+	InitARC(lruSize)
 
 	zap.S().Debug("Starting healthcheck")
 	health := healthcheck.NewHandler()
@@ -78,11 +83,11 @@ func main() {
 	}()
 
 	var clientA, clientB client
-	clientA, err = newClient(brokerA, topic, serialNumber)
+	clientA, err = newClient(brokerA, topic, serialNumber, split)
 	if err != nil {
 		zap.S().Fatalf("failed to create client: %s", err)
 	}
-	clientB, err = newClient(brokerB, topic, serialNumber)
+	clientB, err = newClient(brokerB, topic, serialNumber, split)
 	if err != nil {
 		zap.S().Fatalf("failed to create client: %s", err)
 	}
@@ -110,7 +115,7 @@ func main() {
 
 	zap.S().Info("starting clients")
 	clientA.startConsuming(msgChan, commitChan)
-	clientB.startProducing(msgChan, commitChan, split)
+	clientB.startProducing(msgChan, commitChan)
 	reportStats(msgChan, clientA, clientB, gs)
 }
 
@@ -159,14 +164,14 @@ func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClie
 type client interface {
 	getProducerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
 	getConsumerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
-	startProducing(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage, split int)
+	startProducing(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)
 	startConsuming(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)
 	shutdown() error
 }
 
-func newClient(broker, topic, serialNumber string) (client, error) {
+func newClient(broker, topic, serialNumber string, split int) (client, error) {
 	if strings.HasSuffix(broker, "1883") || strings.HasSuffix(broker, "8883") {
 		return newMqttClient(broker, topic, serialNumber)
 	}
-	return newKafkaClient(broker, topic, serialNumber)
+	return newKafkaClient(broker, topic, serialNumber, split)
 }

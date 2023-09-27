@@ -120,6 +120,10 @@ spec:
             - name: MSG_CHANNEL_LENGTH
               value: {{ $.Values.databridge.msgChanLen | quote }}
             {{- end}}
+            {{- if  $.Values.databridge.lruSize }}
+            - name: LRU_SIZE
+              value: {{ $.Values.databridge.lruSize | quote }}
+            {{- end}}
           resources:
             limits:
               cpu: {{$.Values.databridge.resources.limits.cpu}}

@@ -75,9 +75,11 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 			if markedMessages.Load()%10000 == 0 || time.Since(lastCommit) > 10*time.Second {
 				lastCommit = time.Now()
 				for k, v := range offsets {
+					zap.S().Debugf("Marking offset %d for %s:%d", v, k.Topic, k.Partition)
 					(*session).MarkOffset(k.Topic, k.Partition, v, "")
 				}
 				(*session).Commit()
+				zap.S().Debugf("Committing messages")
 			}
 		case <-time.After(shared.CycleTime):
 			continue
@@ -90,6 +92,7 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 	}
 
 	(*session).Commit()
+	zap.S().Debugf("Commited messages")
 }
 
 func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, running *atomic.Bool, consumedMessages *atomic.Uint64) {

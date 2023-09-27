@@ -117,7 +117,7 @@ func (m *mqttClient) getConsumerStats() (messages uint64, load uint64, u uint64,
 	return m.recv.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
-func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage, split int) {
+func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
 		for {
 			msg := <-toProduceMessageChannel

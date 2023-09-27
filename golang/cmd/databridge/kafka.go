@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 	"regexp"
@@ -37,10 +38,18 @@ type kafkaClient struct {
 	skipped            atomic.Uint64
 	consumer           *consumer.Consumer
 	producer           *producer.Producer
+	split              int
 }
 
-func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err error) {
-	kc = &kafkaClient{}
+func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaClient, err error) {
+	kc = &kafkaClient{
+		split: split,
+	}
+
+	podName, err := env.GetAsString("POD_NAME", true, "")
+	if err != nil {
+		return nil, err
+	}
 
 	topic, err = toKafkaTopic(topic)
 	if err != nil {
@@ -57,7 +66,7 @@ func newKafkaClient(broker, topic, serialNumber string) (kc *kafkaClient, err er
 	brokers = resolver(brokers)
 
 	zap.S().Infof("connecting to kafka brokers: %s (topic: %s, consumer group: %s)", broker, topic, consumerGroupId)
-	kc.consumer, err = consumer.NewConsumer(brokers, []string{topic}, consumerGroupId)
+	kc.consumer, err = consumer.NewConsumer(brokers, []string{topic}, consumerGroupId, podName)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +93,7 @@ func (k *kafkaClient) getConsumerStats() (received uint64, invalidTopic uint64, 
 
 // startProducing starts to read incoming messages from msgChan, transforms them
 // into valid kafka messages, does the splitting and sends them to kafka
-func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage, split int) {
+func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
 		for {
 			msg := <-toProduceMessageChannel
@@ -107,7 +116,7 @@ func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaM
 				continue
 			}
 
-			msg = splitMessage(msg, split)
+			msg = splitMessage(msg, k.split)
 
 			k.producer.SendMessage(msg)
 
@@ -130,6 +139,8 @@ func (k *kafkaClient) startConsuming(receivedMessageChannel chan *shared.KafkaMe
 		for {
 			select {
 			case msg := <-bridgedMessagesToCommitChannel:
+				msg.Topic = strings.ReplaceAll(msg.Topic, "/", ".")
+				msg = splitMessage(msg, k.split)
 				k.consumer.MarkMessage(msg)
 				k.marked.Add(1)
 			}
@@ -152,7 +163,10 @@ func (k *kafkaClient) shutdown() error {
 // The key of msg will always be appended to the end of the key of splittedMsg.
 func splitMessage(msg *shared.KafkaMessage, split int) (splittedMsg *shared.KafkaMessage) {
 	parts := strings.Split(msg.Topic, ".")
-	splittedMsg = &shared.KafkaMessage{}
+	splittedMsg = &shared.KafkaMessage{
+		Offset:    msg.Offset,
+		Partition: msg.Partition,
+	}
 
 	if len(parts) < split {
 		splittedMsg.Topic = msg.Topic
