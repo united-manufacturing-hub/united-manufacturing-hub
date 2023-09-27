@@ -17,13 +17,16 @@ type GroupHandler struct {
 }
 
 func (c *GroupHandler) Setup(_ sarama.ConsumerGroupSession) error {
+	zap.S().Debugf("Hello from setup")
 	return nil
 }
 
 func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 	session.Commit()
+	c.running.Store(false)
 	// Wait for one cycle to finish
 	time.Sleep(shared.CycleTime)
+	zap.S().Debugf("Goodbye from cleanup")
 	return nil
 }
 
@@ -36,6 +39,7 @@ func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 	for c.running.Load() {
 		time.Sleep(shared.CycleTime * 10)
 	}
+	zap.S().Debugf("Goodbye from consume claim")
 	return err
 }
 
@@ -47,7 +51,6 @@ type TopicPartition struct {
 func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, running *atomic.Bool, markedMessages *atomic.Uint64) {
 	lastCommit := time.Now()
 	offsets := make(map[TopicPartition]int64)
-
 	for running.Load() {
 		select {
 		case message := <-messagesToMark:
@@ -75,7 +78,6 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 			if markedMessages.Load()%10000 == 0 || time.Since(lastCommit) > 10*time.Second {
 				lastCommit = time.Now()
 				for k, v := range offsets {
-					zap.S().Debugf("Marking offset %d for %s:%d", v, k.Topic, k.Partition)
 					(*session).MarkOffset(k.Topic, k.Partition, v, "")
 				}
 				(*session).Commit()
@@ -92,11 +94,12 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 	}
 
 	(*session).Commit()
-	zap.S().Debugf("Commited messages")
+	zap.S().Debugf("Goodbye from marker")
 }
 
 func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, running *atomic.Bool, consumedMessages *atomic.Uint64) {
 	timer := time.NewTimer(shared.CycleTime)
+	timerTenSeconds := time.NewTimer(10 * time.Second)
 	messagesHandledCurrTenSeconds := 0.0
 	for running.Load() {
 		select {
@@ -115,6 +118,10 @@ func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupC
 		case <-timer.C:
 			timer.Reset(shared.CycleTime)
 			continue
+		case <-timerTenSeconds.C:
+			zap.S().Debugf("Consumer for session %s:%d is running", (*session).MemberID(), (*session).GenerationID())
+			continue
 		}
 	}
+	zap.S().Debugf("Goodbye from consumer")
 }

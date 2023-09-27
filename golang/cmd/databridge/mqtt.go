@@ -182,6 +182,10 @@ func (m *mqttClient) startConsuming(receivedMessageChannel chan *shared.KafkaMes
 	}()
 }
 
+func (m *mqttClient) getState() State {
+	return StateRunning
+}
+
 func (m *mqttClient) shutdown() error {
 	zap.S().Infof("disconnecting from MQTT broker")
 	m.client.Disconnect(250)

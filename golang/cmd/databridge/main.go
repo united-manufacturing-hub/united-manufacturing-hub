@@ -136,16 +136,17 @@ func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClie
 			sentPerSecond := (newSent - sent) / 10
 			recvPerSecond := (newRecv - recv) / 10
 			lruHits, lruMisses, lruSize := GetLRUStats()
+			consumerState := consumerClient.getState()
 
-			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Lag: %d | LRU: Hits: %d Misses: %d Size: %d",
+			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | MsgChanLen: %d | LRU: Hits: %d Misses: %d Size: %d | ConsumerState: %s",
 				newRecv, recvPerSecond,
 				newRecvInvalidTopic, newRecvInvalidMessage, newRecvSkipped,
 				newSent, sentPerSecond,
 				newSentInvalidTopic, newSentInvalidMessage, newSentSkipped,
 				len(msgChan),
-				lruHits, lruMisses, lruSize)
+				lruHits, lruMisses, lruSize, consumerState)
 
-			if newSent != sent && newRecv != recv {
+			if (newSent != sent && newRecv != recv) || consumerState == StatePreparing {
 				shutdownTimer.Reset(3 * time.Minute)
 				sent, recv = newSent, newRecv
 				continue
@@ -167,6 +168,7 @@ type client interface {
 	startProducing(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)
 	startConsuming(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)
 	shutdown() error
+	getState() State
 }
 
 func newClient(broker, topic, serialNumber string, split int) (client, error) {
@@ -175,3 +177,11 @@ func newClient(broker, topic, serialNumber string, split int) (client, error) {
 	}
 	return newKafkaClient(broker, topic, serialNumber, split)
 }
+
+type State string
+
+const (
+	StateRunning   State = "running"
+	StatePreparing State = "preparing"
+	StateDead      State = "dead"
+)

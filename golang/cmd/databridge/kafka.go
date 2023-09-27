@@ -81,6 +81,27 @@ func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaCli
 	return
 }
 
+func (k *kafkaClient) getState() State {
+	state := k.consumer.GetState()
+	switch state {
+	case consumer.ConsumerStateUnknown:
+		return StateDead
+	case consumer.ConsumerStateEmpty:
+		return StatePreparing
+	case consumer.ConsumerStateStable:
+		return StateRunning
+	case consumer.ConsumerStatePreparingRebalance:
+		return StatePreparing
+	case consumer.ConsumerStateCompletingRebalance:
+		return StatePreparing
+	case consumer.ConsumerStateDead:
+		return StateDead
+	default:
+		zap.S().Errorf("unknown state: %d", state)
+		return StateDead
+	}
+}
+
 func (k *kafkaClient) getProducerStats() (sent uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
 	_, productionErrors := k.producer.GetProducedMessages()
 	return k.marked.Load(), k.lossInvalidTopic.Load(), productionErrors + k.lossInvalidMessage.Load(), k.skipped.Load()
