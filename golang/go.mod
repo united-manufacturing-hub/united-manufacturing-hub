@@ -18,7 +18,7 @@ go 1.21
 
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
-	github.com/IBM/sarama v1.41.2
+	github.com/IBM/sarama v1.41.3
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coocood/freecache v1.2.3
@@ -45,7 +45,7 @@ require (
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.26.0
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gonum.org/v1/gonum v0.14.0
 )
@@ -107,9 +107,9 @@ require (
 	go.elastic.co/ecszap v1.0.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.5.0 // indirect
-	golang.org/x/net v0.15.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/sync v0.4.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
