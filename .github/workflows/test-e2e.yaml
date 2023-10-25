@@ -2,10 +2,10 @@ name: UMH E2E test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - staging
+#  push:
+#    branches:
+#      - main
+#      - staging
 
 concurrency:
   group: e2e-tests-umh
@@ -56,12 +56,15 @@ jobs:
       - name: Execute install script
         run: ssh testserver 'sudo bash /tmp/install.sh'
 
-      - name: Upload benthos configs
-        run:
-          scp .github/workflows/e2e-scripts/benthos-config.yaml testserver:/tmp/benthos-config.yaml
-          scp .github/workflows/e2e-scripts/benthos-deployment.yaml testserver:/tmp/benthos-deployment.yaml
+      - name: Upload benthos config
+        run: scp .github/workflows/e2e-scripts/benthos-config.yaml testserver:/tmp/benthos-config.yaml
 
-      - name: Deploy benthos
-        run:
-          ssh testserver 'kubectl apply -f /tmp/benthos-config.yaml'
-          ssh testserver 'kubectl apply -f /tmp/benthos-deployment.yaml'
+      - name: Upload benthos config
+        run: scp .github/workflows/e2e-scripts/benthos-deployment.yaml testserver:/tmp/benthos-deployment.yaml
+
+      - name: Deploy benthos config
+        run: ssh testserver 'kubectl apply -f /tmp/benthos-config.yaml'
+
+      - name: Deploy benthos deployment
+        run: ssh testserver 'kubectl apply -f /tmp/benthos-deployment.yaml'
+
