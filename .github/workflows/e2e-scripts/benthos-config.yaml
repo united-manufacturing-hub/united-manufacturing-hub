@@ -17,5 +17,5 @@ data:
               "timestamp_unix": timestamp_unix()
             }
     output:
-      umh_output: 
-        topic: 'ia.raw.${! meta("opcua_path") }'
+      umh_output:
+        topic: 'umh.v1.umh._raw.${! meta("opcua_path") }'

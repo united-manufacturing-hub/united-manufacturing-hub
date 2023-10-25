@@ -18,7 +18,7 @@ spec:
       containers:
         - name: benthos-1
           image: "ghcr.io/united-manufacturing-hub/benthos-umh:latest"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 4195

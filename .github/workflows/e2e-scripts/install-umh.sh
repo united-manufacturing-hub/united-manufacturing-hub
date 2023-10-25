@@ -61,9 +61,7 @@ success=false
 echo "[Step 8] Await UMH"
 
 while (( timeout > 0 )); do
-  kubectl get pods --all-namespaces -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' --no-headers | awk '$3!="Running" && $3!="Succeeded" {exit 1}'
-
-  if [[ $? -eq 0 ]]; then
+  if kubectl get pods --all-namespaces -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' --no-headers | awk '$3!="Running" && $3!="Succeeded" {exit 1}'; then
     printf "\tPods have started\n"
     success=true
     break
