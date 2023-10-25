@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benthos-1-deployment
+  namespace: united-manufacturing-hub
+  labels:
+    app: benthos-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benthos-1
+  template:
+    metadata:
+      labels:
+        app: benthos-1
+    spec:
+      containers:
+        - name: benthos-1
+          image: "ghcr.io/united-manufacturing-hub/benthos-umh:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4195
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          volumeMounts:
+            - name: config
+              mountPath: "/benthos.yaml"
+              subPath: "benthos.yaml"
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: benthos-1-config

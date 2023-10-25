@@ -55,3 +55,13 @@ jobs:
 
       - name: Execute install script
         run: ssh testserver 'sudo bash /tmp/install.sh'
+
+      - name: Upload benthos configs
+        run:
+          scp .github/workflows/e2e-scripts/benthos-config.yaml testserver:/tmp/benthos-config.yaml
+          scp .github/workflows/e2e-scripts/benthos-deployment.yaml testserver:/tmp/benthos-deployment.yaml
+
+      - name: Deploy benthos
+        run:
+          ssh testserver 'kubectl apply -f /tmp/benthos-config.yaml'
+          ssh testserver 'kubectl apply -f /tmp/benthos-deployment.yaml'

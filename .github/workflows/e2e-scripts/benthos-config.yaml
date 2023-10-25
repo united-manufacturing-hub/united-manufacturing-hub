@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benthos-1-config
+  namespace: united-manufacturing-hub
+  labels:
+    app: benthos-1
+data:
+  benthos.yaml: |-
+    input:
+      umh_input_opcuasimulator: {}
+    pipeline:
+      processors:
+        - bloblang: |
+            root = {
+              meta("opcua_path"): this,
+              "timestamp_unix": timestamp_unix()
+            }
+    output:
+      umh_output: 
+        topic: 'ia.raw.${! meta("opcua_path") }'
