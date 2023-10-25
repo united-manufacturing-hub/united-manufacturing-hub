@@ -10,3 +10,14 @@ tasks:
       git config push.autoSetupRemote true
       git config pull.rebase true
 
+
+jetbrains:
+  plugins:
+    - lermitage.intellij.extratci # Extra colorfull icons
+    - some.awesome # Nyan Cat
+    - com.nasller.CodeGlancePro # Code Glance Pro
+    - izhangzhihao.rainbow.brackets # Rainbow Brackets
+    - zielu.gittoolbox # Git ToolBox
+    - com.intellij.grazie.pro # Grazie Pro
+    - com.ypwang.plugin.go-linter # Go Linter
+    - com.intellij.kubernetes # Kubernetes
