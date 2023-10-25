@@ -85,5 +85,8 @@ jobs:
         if: always()
         run: ssh testserver 'kubectl logs -n united-manufacturing-hub $(kubectl get pods -n united-manufacturing-hub -l app=benthos-1 -o name)'
 
+      - name: Sleep :)
+        run: sleep 10
+
       - name: Check kafka
-        run: ssh testserver 'kubectl exec -n united-manufacturing-hub united-manufacturing-hub-kafka-0 -- rpk topic list | grep -E '^umh\.v1\._raw\..+$' && exit 0 || exit 1'
+        run: ssh testserver 'kubectl exec -n united-manufacturing-hub united-manufacturing-hub-kafka-0 -- rpk topic list | grep -E 'umh.v1.umh._raw.ns_2_s_ConcentrationH2'' && exit 0 || exit 1'
