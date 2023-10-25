@@ -1,0 +1,57 @@
+name: UMH E2E test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - staging
+
+concurrency:
+  group: e2e-tests-umh
+  cancel-in-progress: false
+
+jobs:
+  full-e2e-run:
+    name: SSH runner
+    runs-on: ubuntu-latest
+      #group: large-runners
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key and Config
+        run: |
+          echo "$SSH_KEY" | base64 -d > /tmp/ssh_key
+          awk '{ sub("\r$", ""); print }' /tmp/ssh_key > /tmp/ssh_key_unix 
+          mv /tmp/ssh_key_unix /tmp/ssh_key
+          chmod 600 /tmp/ssh_key
+          echo "Host *" > ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+          echo "Host testserver" >> ~/.ssh/config
+          echo "  HostName ${{ secrets.AWS_UMH_TESTING_IP }}" >> ~/.ssh/config
+          echo "  User ec2-user" >> ~/.ssh/config
+          echo "  IdentityFile /tmp/ssh_key" >> ~/.ssh/config
+          cat ~/.ssh/config
+          sha512sum /tmp/ssh_key
+        env:
+          SSH_KEY: ${{ secrets.AWS_UMH_TESTING_KEY_B64 }}
+
+      - name: Test SSH
+        run: ssh -vvv testserver 'exit 0'
+
+      - name: Check registration
+        run: ssh testserver 'sudo subscription-manager status'
+
+      - name: Upload reset script
+        run: scp .github/workflows/e2e-scripts/e2e-reset.sh testserver:/tmp/reset.sh
+
+      - name: Execute reset script
+        run: ssh testserver 'sudo bash /tmp/reset.sh'
+
+      - name: Upload install script
+        run: scp .github/workflows/e2e-scripts/install-umh.sh testserver:/tmp/install.sh
+
+      - name: Execute install script
+        run: ssh testserver 'sudo bash /tmp/install.sh'
