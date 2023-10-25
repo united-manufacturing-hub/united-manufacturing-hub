@@ -22,6 +22,7 @@ jobs:
 
       - name: Setup SSH Key and Config
         run: |
+          mkdir -p .ssh
           echo "$SSH_KEY" | base64 -d > /tmp/ssh_key
           awk '{ sub("\r$", ""); print }' /tmp/ssh_key > /tmp/ssh_key_unix 
           mv /tmp/ssh_key_unix /tmp/ssh_key
