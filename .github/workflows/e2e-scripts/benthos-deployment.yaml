@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: benthos-1
-          image: "ghcr.io/united-manufacturing-hub/benthos-umh:latest"
+          image: "ghcr.io/united-manufacturing-hub/benthos-umh@sha256:a664d29c7ecfec0fb92a322cf81c723339f8c21c109d1ac1759a3ed0c80719dd"
           imagePullPolicy: Always
           ports:
             - name: http

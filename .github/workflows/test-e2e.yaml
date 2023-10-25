@@ -68,3 +68,21 @@ jobs:
       - name: Deploy benthos deployment
         run: ssh testserver 'kubectl apply -f /tmp/benthos-deployment.yaml'
 
+      - name: Wait for benthos
+        run: |
+          for i in {1..10}; do
+            POD_STATUS=$(ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no testserver "kubectl get pods -n united-manufacturing-hub -l app=benthos-1 -o jsonpath='{.items[0].status.phase}'")
+            if [[ "$POD_STATUS" == "Running" ]]; then
+              echo "Benthos pod is Running"
+              break
+            fi
+            echo "Waiting for benthos pod to be Running..."
+            sleep 1
+          done
+
+      - name: Get benthos logs
+        if: always()
+        run: ssh testserver 'kubectl logs -n united-manufacturing-hub $(kubectl get pods -n united-manufacturing-hub -l app=benthos-1 -o name)'
+
+      - name: Check kafka
+        run: ssh testserver 'kubectl exec -n united-manufacturing-hub united-manufacturing-hub-kafka-0 -- rpk topic list | grep -E '^umh\.v1\._raw\..+$' && exit 0 || exit 1'
