@@ -54,7 +54,7 @@ kubectl version
 
 kubectl get nodes
 
-timeout=60  # 1 minute
+timeout=120  # 2 minutes
 interval=5  # Check every 5 seconds
 success=false
 
@@ -66,6 +66,9 @@ while (( timeout > 0 )); do
     success=true
     break
   fi
+  failedCount=$(kubectl get pods --all-namespaces -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' --no-headers | awk '$3!="Running" && $3!="Succeeded"' | wc -l)
+  totalCount=$(kubectl get pods --all-namespaces -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' --no-headers | wc -l)
+  printf "\f%s/%s failed pods, retrying\n" "$failedCount" "$totalCount"
 
   sleep $interval
   timeout=$((timeout - interval))
