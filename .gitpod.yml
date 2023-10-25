@@ -5,7 +5,8 @@
 # Learn more from ready-to-use templates: https://www.gitpod.io/docs/introduction/getting-started/quickstart
 
 tasks:
-  - init:
-      echo "Hello World"
-
+  - name: Setup git
+    init:
+      git config push.autoSetupRemote true
+      git config pull.rebase true
 
