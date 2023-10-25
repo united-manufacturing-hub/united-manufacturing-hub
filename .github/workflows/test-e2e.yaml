@@ -2,10 +2,10 @@ name: UMH E2E test
 
 on:
   workflow_dispatch:
-#  push:
-#    branches:
-#      - main
-#      - staging
+  push:
+    branches:
+      - main
+      - staging
 
 concurrency:
   group: e2e-tests-umh
