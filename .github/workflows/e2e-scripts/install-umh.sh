@@ -29,17 +29,56 @@ sudo update-crypto-policies --set DEFAULT
 echo "[Step 2] Installing helm"
 curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
 chmod +x /tmp/get_helm.sh
+# Add /usr/local/bin to path
+export PATH=$PATH:/usr/local/bin/
 /tmp/get_helm.sh
 
 echo "[Step 3] Allow access to k3s.yaml"
 sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 
 echo "[Step 4] Add UMH repo"
-/usr/local/bin/helm repo add united-manufacturing-hub https://repo.umh.app/
+helm repo add united-manufacturing-hub https://repo.umh.app/
 
 echo "[Step 5] Add UMH namespace"
 kubectl create namespace united-manufacturing-hub --kubeconfig /etc/rancher/k3s/k3s.yaml
 
 echo "[Step 6] Install UMH"
-/usr/local/bin/helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub
+helm install united-manufacturing-hub united-manufacturing-hub/united-manufacturing-hub --set serialNumber=$(hostname) --kubeconfig /etc/rancher/k3s/k3s.yaml -n united-manufacturing-hub
 
+
+echo "[Step 7] Install kubectl"
+curl -LO "https://dl.k8s.io/release/$INSTALL_KUBECTL_VERSION/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl
+sudo chmod +x kubectl
+
+kubectl version
+
+kubectl get nodes
+
+timeout=60  # 1 minute
+interval=5  # Check every 5 seconds
+success=false
+
+echo "[Step 8] Await UMH"
+
+while (( timeout > 0 )); do
+  kubectl get pods --all-namespaces -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' --no-headers | awk '$3!="Running" && $3!="Succeeded" {exit 1}'
+
+  if [[ $? -eq 0 ]]; then
+    printf "\tPods have started\n"
+    success=true
+    break
+  fi
+
+  sleep $interval
+  timeout=$((timeout - interval))
+done
+
+if [ "$success" = true ]; then
+  printf "\tAll pods are Running or Succeeded.\n"
+  # Continue with the rest of the script
+else
+  printf "\tPods failed to startup in time"
+  # Print pod list and exit with code 1
+  kubectl get pods --all-namespaces
+  exit 1
+fi
