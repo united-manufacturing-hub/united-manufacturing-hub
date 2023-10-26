@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -43,6 +44,17 @@ func NewGracefulShutdown(onShutdown func() error) GracefulShutdownHandler {
 		gs.shuttingDown <- true
 		zap.S().Infow("Received signal, shutting down", "signal", sig.String())
 		if onShutdown != nil {
+			timeout := 30 * time.Second
+			zap.S().Infow("Waiting for shutdown tasks to complete", "timeout", timeout)
+			go func(t time.Duration) {
+				select {
+				case <-time.After(t):
+					zap.S().Errorw("Shutdown tasks did not complete in time", "timeout", t)
+					// Flush buffer
+					_ = zap.S().Sync()
+					os.Exit(1)
+				}
+			}(timeout)
 			err := onShutdown()
 			if err != nil {
 				zap.S().Errorw("Error during shutdown", "error", err)
@@ -50,6 +62,7 @@ func NewGracefulShutdown(onShutdown func() error) GracefulShutdownHandler {
 			}
 		}
 		zap.S().Info("Shutdown tasks completed. Ready to exit.")
+		os.Exit(0)
 	}(gs, onShutdown)
 
 	return gs
