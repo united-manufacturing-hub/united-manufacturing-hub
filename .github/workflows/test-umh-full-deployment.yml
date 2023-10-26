@@ -16,12 +16,9 @@ name: Test UMH Full Deployment
 
 on:
   pull_request:
-    paths:
-      - 'deployment/**'
-      - 'golang/**'
-      - 'test/**'
-      - '!test/test-values-tiny.yaml'
-      - '.github/workflows/test-umh-full-deployment.yml'
+    branches:
+      - main
+      - staging
 
 env:
   CHART_DIR: ./deployment/united-manufacturing-hub
@@ -35,7 +32,8 @@ env:
 jobs:
   data-flow-test:
     name: Data Flow Test
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -139,7 +137,8 @@ jobs:
 
   upgrade-test:
     name: Upgrade Test
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - name: Checkout
         uses: actions/checkout@v3

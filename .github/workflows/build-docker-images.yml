@@ -15,13 +15,10 @@
 name: Build Docker Images
 
 on:
-  push:
-    paths:
-      - 'deployment/**'
-      - '!deployment/helm-repo/**'
-      - '!deployment/united-manufacturing-hub/**'
-      - 'golang/**'
-      - '.github/workflows/build-docker-images.yml'
+  pull_request:
+    branches:
+      - main
+      - staging
 
 jobs:
   barcodereader:
@@ -32,7 +29,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -69,7 +67,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -106,7 +105,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -143,7 +143,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -173,7 +174,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-umh:
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -202,7 +204,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   hivemq-init:
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -238,7 +241,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -275,7 +279,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -312,7 +317,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -349,7 +355,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -386,7 +393,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -423,7 +431,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -460,7 +469,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -497,7 +507,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta
@@ -534,7 +545,8 @@ jobs:
             suffix: ""
           - target: runner-race
             suffix: -race
-    runs-on: ubuntu-latest
+    runs-on: 
+      group: large-runners
     steps:
       - uses: actions/checkout@v3
       - name: Docker Meta

@@ -23,7 +23,8 @@ on:
 jobs:
   autoupdate:
     name: autoupdate
-    runs-on: ubuntu-20.04
+    runs-on: 
+      group: large-runners
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         env:
