@@ -20,7 +20,7 @@ The United Manufacturing Hub is an Open-Source [Helm chart for Kubernetes](https
 ## Get started
 
 - [Get started by installing the United Manufacturing Hub](https://learn.umh.app/getstarted/)
-- [Visit our learning platform](https://www.umh.app) learn all about common IT, OT and IIoT concepts such as the [**Unified Namespace**](https://learn.umh.app/know/industrial-internet-of-things/techniques/unified-namespace/) and associated common open source tools such as Node-RED, Grafana and the United Manufacturing Hub.
+- [Visit our learning platform](https://www.umh.app) learn all about common IT, OT and IIoT concepts such as the [*Unified Namespace*](https://learn.umh.app/know/industrial-internet-of-things/techniques/unified-namespace/) and associated common open source tools such as Node-RED, Grafana and the United Manufacturing Hub.
 
 <!-- LICENSE -->
 ## License
