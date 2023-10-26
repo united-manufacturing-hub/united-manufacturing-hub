@@ -34,68 +34,6 @@ Our current release, has been deployed and tested at a number of industrial site
 
 To get started with development, please refer to our [development guide](https://umh.docs.umh.app/docs/development/contribute/getting-started/).
 
-You can run `make help` to get a list of all available make targets.
-
-### Dependencies
-
-- [Go](https://golang.org/) version v1.19+.
-- [Docker](https://www.docker.com/) version v20.10.11+
-- [Helm](https://helm.sh/) version v3.11.2+
-- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) version v1.26.1+
-- [K3d](https://k3d.io/) version v5.4.6+
-- GNU Make
-- GNU awk
-- Python (to run some make targets)
-
-You can download and install all the go dependencies by running:
-
-```bash
-make go-deps
-```
-
-### Build
-
-To build and push all docker images, run:
-
-```bash
-make docker
-```
-
-### Run
-
-To run the project on a local k3d cluster, run:
-
-```bash
-make cluster-install
-```
-
-### Test
-
-To run go unit tests, run:
-
-```bash
-make go-test-unit
-```
-
-To run upgrade tests, run:
-
-```bash
-make kube-test-data-flow-job        # Run the data flow test Job in the current context
-make helm-test-upgrade              # Spin up a new cluster, install the latest release and upgrade to the local version
-make helm-test-upgrade-with-data    # Spin up a new cluster, install the latest release and upgrade to the local version, then run the data flow test
-```
-
-### Utilities
-
-To display the help menu, run:
-
-```bash
-make help                     # Print the generic help menu
-make <target> PRINT_HELP=y    # Print the help menu for a specific target
-```
-
-
-
 <!-- CONTACT -->
 ## Contact
 
