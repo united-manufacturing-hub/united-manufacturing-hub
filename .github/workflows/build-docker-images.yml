@@ -40,19 +40,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/barcodereader
             ghcr.io/united-manufacturing-hub/barcodereader
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -84,19 +77,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/factoryinput
             ghcr.io/united-manufacturing-hub/factoryinput
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -128,19 +114,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/factoryinsight
             ghcr.io/united-manufacturing-hub/factoryinsight
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -172,19 +151,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/grafana-proxy
             ghcr.io/united-manufacturing-hub/grafana-proxy
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -209,19 +181,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/grafana-umh
             ghcr.io/united-manufacturing-hub/grafana-umh
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -245,19 +210,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/hivemq-init
             ghcr.io/united-manufacturing-hub/hivemq-init
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -288,19 +246,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/kafka-bridge
             ghcr.io/united-manufacturing-hub/kafka-bridge
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -332,19 +283,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/kafka-debug
             ghcr.io/united-manufacturing-hub/kafka-debug
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -376,19 +320,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/kafka-init
             ghcr.io/united-manufacturing-hub/kafka-init
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -420,19 +357,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/kafka-state-detector
             ghcr.io/united-manufacturing-hub/kafka-state-detector
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -464,19 +394,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/kafka-to-postgresql
             ghcr.io/united-manufacturing-hub/kafka-to-postgresql
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -508,19 +431,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/metrics
             ghcr.io/united-manufacturing-hub/metrics
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -552,19 +468,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/mqtt-bridge
             ghcr.io/united-manufacturing-hub/mqtt-bridge
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -596,19 +505,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/mqtt-kafka-bridge
             ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -640,19 +542,12 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            unitedmanufacturinghub/sensorconnect
             ghcr.io/united-manufacturing-hub/sensorconnect
           tags: |
             type=ref,event=branch,suffix=${{ matrix.suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
