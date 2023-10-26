@@ -1,9 +1,8 @@
 <!-- PROJECT LOGO -->
 # United Manufacturing Hub
 
-[![License: AGPL v3](https://img.shields.io/badge/License-Apache2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Go Report Card](https://goreportcard.com/badge/github.com/united-manufacturing-hub/united-manufacturing-hub)](https://goreportcard.com/report/github.com/united-manufacturing-hub/united-manufacturing-hub)
-![Docker Pulls](https://img.shields.io/docker/pulls/unitedmanufacturinghub/factoryinsight)
 ![Website](https://img.shields.io/website?up_message=online&url=https%3A%2F%2Fwww.united-manufacturing-hub.com)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub?ref=badge_shield)
 
@@ -34,68 +33,6 @@ Our current release, has been deployed and tested at a number of industrial site
 ## Development
 
 To get started with development, please refer to our [development guide](https://umh.docs.umh.app/docs/development/contribute/getting-started/).
-
-You can run `make help` to get a list of all available make targets.
-
-### Dependencies
-
-- [Go](https://golang.org/) version v1.19+.
-- [Docker](https://www.docker.com/) version v20.10.11+
-- [Helm](https://helm.sh/) version v3.11.2+
-- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) version v1.26.1+
-- [K3d](https://k3d.io/) version v5.4.6+
-- GNU Make
-- GNU awk
-- Python (to run some make targets)
-
-You can download and install all the go dependencies by running:
-
-```bash
-make go-deps
-```
-
-### Build
-
-To build and push all docker images, run:
-
-```bash
-make docker
-```
-
-### Run
-
-To run the project on a local k3d cluster, run:
-
-```bash
-make cluster-install
-```
-
-### Test
-
-To run go unit tests, run:
-
-```bash
-make go-test-unit
-```
-
-To run upgrade tests, run:
-
-```bash
-make kube-test-data-flow-job        # Run the data flow test Job in the current context
-make helm-test-upgrade              # Spin up a new cluster, install the latest release and upgrade to the local version
-make helm-test-upgrade-with-data    # Spin up a new cluster, install the latest release and upgrade to the local version, then run the data flow test
-```
-
-### Utilities
-
-To display the help menu, run:
-
-```bash
-make help                     # Print the generic help menu
-make <target> PRINT_HELP=y    # Print the help menu for a specific target
-```
-
-
 
 <!-- CONTACT -->
 ## Contact

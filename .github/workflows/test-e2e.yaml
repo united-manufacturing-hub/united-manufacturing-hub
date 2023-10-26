@@ -14,8 +14,8 @@ concurrency:
 jobs:
   full-e2e-run:
     name: SSH runner
-    runs-on: ubuntu-latest
-      #group: large-runners
+    runs-on: 
+      group: large-runners
     steps:
       - name: Checkout
         uses: actions/checkout@v4
