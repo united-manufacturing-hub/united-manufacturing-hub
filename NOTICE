@@ -2173,7 +2173,7 @@ modification, are permitted provided that the following conditions
 are met:
 
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer. 
+   notice, this list of conditions and the following disclaimer.
 
 2. Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in
@@ -2256,7 +2256,7 @@ are met:
     Eric Young (eay@cryptsoft.com)"
    The word 'cryptographic' can be left out if the rouines from the library
    being used are not cryptographic related :-).
-4. If you include any Windows specific code (or a derivative thereof) from 
+4. If you include any Windows specific code (or a derivative thereof) from
    the apps directory (application code) you must include an acknowledgement:
    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
 
@@ -5071,7 +5071,7 @@ MIT
 
 The MIT License (MIT)
 
-Copyright (c) 2016 Conner Hewitt 
+Copyright (c) 2016 Conner Hewitt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -7366,9 +7366,9 @@ and the Eclipse Distribution License is available at
 For an explanation of what dual-licensing means to you, see:
 https://www.eclipse.org/legal/eplfaq.php#DUALLIC
 
-****
+**
 The epl-2.0 is copied below in order to pass the pkg.go.dev license check (https://pkg.go.dev/license-policy).
-****
+**
 Eclipse Public License - v 2.0
 
     THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE
