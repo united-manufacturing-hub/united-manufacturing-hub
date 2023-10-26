@@ -28,7 +28,7 @@
 .env
 .dccache
 
-/**/persistentData/*
+/*/persistentData/*
 
 # ignore certificates
 golang/test/mqtt-to-postgresql/config/certificates/*
@@ -57,8 +57,8 @@ cameraconnect/assets/producer_files/*
 /docs/static/openapi/output/rust/
 /docs/static/openapi/output/python/
 
-**/.idea
-**/node_modules
+*/.idea
+*/node_modules
 #openapi generated files (docs are left in repo)
 /docs/static/openapi/output/factory_input/python/
 /docs/static/openapi/output/factory_input/rust/
@@ -76,7 +76,7 @@ docs/static/openapi/output/factory_insight/markdown/.openapi-generator/
 docs/static/openapi/output/factory_input/markdown/.openapi-generator/
 
 sensorconnect/IoddFiles
-**/__pycache__
+*/__pycache__
 
 deployment/kafka-to-postgresql/postgres_data
 
