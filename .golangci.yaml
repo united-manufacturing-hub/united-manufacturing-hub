@@ -60,10 +60,10 @@ linters-settings:
         - github.com/prometheus/client_golang/prometheus/promauto
         - github.com/prometheus/client_golang/prometheus/promhttp
         - github.com/rung/go-safecast
-        - github.com/united-manufacturing-hub/**/*
+        - github.com/united-manufacturing-hub/*/*
         - github.com/zeebo/xxh3
         - go.uber.org/zap
-        - golang.org/**/*
+        - golang.org/*/*
         - gonum.org/v1/gonum/stat
         - gorm.io/gorm
         - hash/crc32
