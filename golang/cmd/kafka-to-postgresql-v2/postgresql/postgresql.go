@@ -108,7 +108,7 @@ func (c *Connection) IsAvailable() bool {
 	defer cncl()
 	err := c.db.PingContext(ctx)
 	if err != nil {
-		zap.S().Debug("Failed to ping database: %s", err)
+		zap.S().Debugf("Failed to ping database: %s", err)
 		return false
 	}
 	return true

@@ -7593,7 +7593,7 @@ data:
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
-      asset SERIAL REFERENCES assets(id) NOT NULL
+      asset SERIAL REFERENCES assets(id) NOT NULL,
       value REAL
     );
 
@@ -7601,7 +7601,7 @@ data:
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
-      asset SERIAL REFERENCES assets(id) NOT NULL
+      asset SERIAL REFERENCES assets(id) NOT NULL,
       value TEXT
     );
 

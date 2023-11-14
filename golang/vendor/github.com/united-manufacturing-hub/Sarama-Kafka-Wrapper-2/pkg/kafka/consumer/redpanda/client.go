@@ -94,6 +94,9 @@ func (c *Consumer) Start() error {
 func (c *Consumer) generateTopics() {
 	zap.S().Debugf("Started topic generator")
 
+	var httpClient http.Client
+	httpClient.Timeout = 5 * time.Second
+
 	for c.running.Load() {
 
 		clients := c.httpClients
@@ -101,7 +104,7 @@ func (c *Consumer) generateTopics() {
 		for _, client := range clients {
 			url := fmt.Sprintf("http://%s/topics", client)
 			zap.S().Infof("fetching topics from %s", url)
-			response, err := http.Get(url)
+			response, err := httpClient.Get(url)
 			if err != nil {
 				zap.S().Errorf("failed to fetch topics from %s: %v", url, err)
 				continue
@@ -124,6 +127,7 @@ func (c *Consumer) generateTopics() {
 			for _, topic := range topicsX {
 				topics[topic] = true
 			}
+			zap.S().Debugf("Fetched %d topics from remote", len(topics))
 		}
 
 		// Filter topics by regex
@@ -136,6 +140,7 @@ func (c *Consumer) generateTopics() {
 				}
 			}
 		}
+		zap.S().Debugf("After regex check we have %d topics", len(actualTopics))
 
 		// Check if topics changed
 		c.actualTopicsLock.RLock()
@@ -171,8 +176,11 @@ func (c *Consumer) generateTopics() {
 			c.shallConsumerRun.Store(false)
 			zap.S().Debugf("cancled context")
 			c.cgContext, c.cgCncl = context.WithCancel(context.Background())
+		} else {
+			zap.S().Debugf("topics unchanged")
 		}
 
+		zap.S().Debugf("Finished topic generator")
 		time.Sleep(5 * time.Second)
 	}
 	zap.S().Debugf("Goodbye topic generator")
@@ -181,6 +189,7 @@ func (c *Consumer) generateTopics() {
 func (c *Consumer) consumer() {
 	zap.S().Debugf("Started consumer")
 	for c.running.Load() {
+		zap.S().Debugf("Create handler")
 		handler := &GroupHandler{
 			incomingMessages: c.incomingMessages,
 			messagesToMark:   c.messagesToMark,
@@ -188,6 +197,7 @@ func (c *Consumer) consumer() {
 			consumedMessages: &c.consumedMessages,
 			running:          &c.shallConsumerRun,
 		}
+		zap.S().Debugf("Create consumer group")
 		err := c.createConsumerGroup()
 		if err != nil {
 			zap.S().Warnf("Failed to recreate consumer group: %s", err)
@@ -217,8 +227,8 @@ func (c *Consumer) consumer() {
 			}
 		}
 		zap.S().Debugf("End consume loop")
-		time.Sleep(shared.CycleTime * 100)
-
+		time.Sleep(shared.CycleTime)
+		zap.S().Debugf("End sleep")
 	}
 	zap.S().Debugf("Goodbye consumer")
 }
@@ -279,12 +289,15 @@ func (c *Consumer) MarkMessages(msgs []*shared.KafkaMessage) {
 
 func (c *Consumer) createConsumerGroup() error {
 	if c.consumerGroup != nil {
+		zap.S().Debugf("Consumer group already exists")
 		return nil
 	}
+	zap.S().Debugf("Creating consumer group")
 	cg, err := sarama.NewConsumerGroupFromClient(c.groupName, c.rawClient)
 	if err != nil {
 		return err
 	}
+	zap.S().Debugf("Created consumer group")
 	c.consumerGroup = &cg
 	return nil
 }
