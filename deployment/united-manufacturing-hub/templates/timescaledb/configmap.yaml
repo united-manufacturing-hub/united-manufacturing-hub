@@ -7577,5 +7577,42 @@ data:
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:05+00',1,40000);
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
 
-    __SQL__
+    -------------------- DATAMODEL V2 --------------------
+    CREATE TABLE assets (
+      id SERIAL PRIMARY KEY,
+      enterprise TEXT NOT NULL,
+      site TEXT,
+      area TEXT,
+      line TEXT,
+      workcell TEXT,
+      origin_id TEXT,
+      UNIQUE (enterprise, site, area, line, workcell, origin_id)
+    );
+
+    CREATE TABLE tag (
+      timestamp TIMESTAMPTZ NOT NULL,
+      name TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      asset SERIAL REFERENCES assets(id) NOT NULL
+      value REAL
+    );
+
+    CREATE TABLE tag_string (
+      timestamp TIMESTAMPTZ NOT NULL,
+      name TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      asset SERIAL REFERENCES assets(id) NOT NULL
+      value TEXT
+    );
+
+    SELECT create_hypertable('tag', 'timestamp');
+    SELECT create_hypertable('tag_string', 'timestamp');
+    CREATE INDEX ON tag (asset, timestamp DESC);
+    CREATE INDEX ON tag_string (asset, timestamp DESC);
+    CREATE INDEX ON tag (name);
+    CREATE INDEX ON tag_string (name);
+    ALTER TABLE tag ADD UNIQUE (name, asset, timestamp);
+    ALTER TABLE tag_string ADD UNIQUE (name, asset, timestamp);
+
+  __SQL__
 {{end}}

@@ -15,13 +15,68 @@ jobs:
       - name: Create Docker Network
         run: docker network create my_network
 
-      - name: Start PostgreSQL
+      - name: Start TimescaleDB
         run: |
-          docker run -d --name=postgres --network=my_network \
-          -e POSTGRES_USER=youruser \
+          docker run -d --name timescaledb-1 \
           -e POSTGRES_PASSWORD=yourpassword \
-          -e POSTGRES_DB=yourdb \
-          postgres:latest
+          -p 5432:5432 \
+          timescale/timescaledb:latest-pg15
+
+      - name: Initialize Database
+        run: |
+          # Wait for TimescaleDB to be ready
+          echo "Waiting for TimescaleDB to start..."
+          until docker exec timescaledb-1 pg_isready -U postgres; do
+            sleep 1
+          done
+          
+          sleep 1
+
+          # Create the database
+          echo "Creating database..."
+          docker exec -u postgres timescaledb-1 createdb yourdb
+          echo "Created database"
+          
+          # Execute SQL commands
+          echo "Setting up database schema..."
+          docker exec -i timescaledb-1 psql -U postgres -d yourdb <<-EOSQL
+            CREATE TABLE assets (
+              id SERIAL PRIMARY KEY,
+              enterprise TEXT NOT NULL,
+              site TEXT,
+              area TEXT,
+              line TEXT,
+              workcell TEXT,
+              origin_id TEXT,
+              UNIQUE (enterprise, site, area, line, workcell, origin_id)
+            );
+          
+            CREATE TABLE tag (
+              timestamp TIMESTAMPTZ NOT NULL,
+              name TEXT NOT NULL,
+              origin TEXT NOT NULL,
+              asset SERIAL REFERENCES assets(id) NOT NULL
+              value REAL
+            );
+
+            CREATE TABLE tag_string (
+              timestamp TIMESTAMPTZ NOT NULL,
+              name TEXT NOT NULL,
+              origin TEXT NOT NULL,
+              asset SERIAL REFERENCES assets(id) NOT NULL
+              value TEXT
+            );
+
+            SELECT create_hypertable('tag', 'timestamp');
+            SELECT create_hypertable('tag_string', 'timestamp');
+            CREATE INDEX ON tag (asset, timestamp DESC);
+            CREATE INDEX ON tag_string (asset, timestamp DESC);
+            CREATE INDEX ON tag (name);
+            CREATE INDEX ON tag_string (name);
+            ALTER TABLE tag ADD UNIQUE (name, asset, timestamp);
+            ALTER TABLE tag_string ADD UNIQUE (name, asset, timestamp);
+          EOSQL
+      
 
       - name: Start Redpanda
         run: |
@@ -51,9 +106,9 @@ jobs:
       - name: Run Docker Image
         run: |
           docker run -d --name=kafka-to-postgresql-v2-1 --network=my_network \
-          -e POSTGRES_HOST=postgres \
+          -e POSTGRES_HOST=timescaledb-1 \
           -e POSTGRES_PORT=5432 \
-          -e POSTGRES_USER=youruser \
+          -e POSTGRES_USER=postgres \
           -e POSTGRES_PASSWORD=yourpassword \
           -e POSTGRES_DATABASE=yourdb \
           -e POSTGRES_SSL_MODE=disable \
@@ -93,9 +148,9 @@ jobs:
         env:
           PGPASSWORD: yourpassword
         run: |
-          docker exec postgres psql -U youruser -d yourdb -c "SELECT * FROM tag;"
-          docker exec postgres psql -U youruser -d yourdb -c "SELECT * FROM tag_string;"
-          docker exec postgres psql -U youruser -d yourdb -c "SELECT * FROM asset;"
+          docker exec timescaledb-1 psql -U youruser -d yourdb -c "SELECT * FROM tag;"
+          docker exec timescaledb-1 psql -U youruser -d yourdb -c "SELECT * FROM tag_string;"
+          docker exec timescaledb-1 psql -U youruser -d yourdb -c "SELECT * FROM asset;"
 
       # Teardown, allowing for repeated local testing
       - name: Teardown
@@ -103,16 +158,16 @@ jobs:
         run: |
           echo "Logging and stopping redpanda"
           #docker logs redpanda-1
-          docker stop redpanda-1
+          docker stop redpanda-1 || true
                     
           echo "Logging and stopping postgres"          
-          #docker logs $(docker ps -q --filter ancestor=postgres:latest)
-          docker stop $(docker ps -q --filter ancestor=postgres:latest)
+          #docker logs timescaledb-1
+          docker stop timescaledb-1 || true
           
           echo "Logging and stopping kafka-to-postgresql-v2"
           #docker logs kafka-to-postgresql-v2-1
-          docker stop kafka-to-postgresql-v2-1
+          docker stop kafka-to-postgresql-v2-1 || true
           
-          docker container prune -f
-          docker volume prune -f
-          docker system prune -f
+          docker container prune -f || true
+          docker volume prune -f || true
+          docker system prune -f || true
