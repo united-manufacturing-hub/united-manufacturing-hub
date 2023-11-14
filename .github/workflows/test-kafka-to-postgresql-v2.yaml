@@ -167,11 +167,31 @@ jobs:
           docker run --network=my_network --mount type=bind,source=/tmp/message.json,target=/message.json edenhill/kcat:1.7.1 -P -b redpanda-1:9092 -t umh.v1.test._historian /message.json
           
 
-      # Wait for 20 seconds
-      - name: Wait for 20 seconds
-        run: sleep 20
+      # Wait for topics endpoint to respond with more than 10 characters
+      - name: Wait for Topics Endpoint
+        run: |
+          success=false
+          for i in {1..60}; do
+              echo "Attempt $i to check topics endpoint..."
+              response=$(curl -s http://${{ env.REDPANDA_IP }}:8082/topics)
+              if [ ${#response} -gt 10 ]; then
+                  echo "Response is longer than 10 characters. Proceeding..."
+                  echo $response
+                  success=true
+                  break
+              else
+                  echo "Response is not long enough, retrying in 1 second..."
+                  sleep 1
+              fi
+          done
+          if [ "$success" = false ]; then
+              echo "Failed to get a valid response after 60 attempts."
+              exit 1
+          fi
+        
+          sleep 10
 
-      # Check for entries in the tag table
+        # Check for entries in the tag table
       - name: Check Database
         env:
           PGPASSWORD: yourpassword
@@ -184,7 +204,6 @@ jobs:
       - name: Log
         if: always()
         run: |
-          docker logs redpanda-1 || true
+          #docker logs redpanda-1 || true
           #docker logs timescaledb-1 || true      
           docker logs kafka-to-postgresql-v2-1 || true
-          curl -vvv http://${{ env.REDPANDA_IP }}:8082/topics
