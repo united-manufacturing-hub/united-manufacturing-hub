@@ -213,8 +213,9 @@ func (c *Connection) InsertHistorianStringValue(value string, timestampMs int64,
 	return nil
 }
 
-func (c *Connection) NumericalWorker() {
-	// The context is only used for preperation, not execution !
+func (c *Connection) numericalWorker() {
+	zap.S().Debugf("Starting numericalWorker")
+	// The context is only used for preperation, not execution!
 	preparationCtx, preparationCancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer preparationCancel()
 	var err error
@@ -343,6 +344,156 @@ CREATE TEMP TABLE tmp_tag
 
 		if err != nil {
 			zap.S().Warnf("Failed to close stmtCopyToTag")
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Failed to rollback transaction: %s", err)
+			}
+			retries++
+			continue
+		}
+
+		err = txn.Commit()
+
+		if err != nil {
+			zap.S().Errorf("Failed to rollback transaction: %s", err)
+			retries++
+			continue
+		}
+		retries = 0
+	}
+}
+
+func (c *Connection) stringWorker() {
+	zap.S().Debugf("Starting stringWorker")
+	// The context is only used for preperation, not execution!
+	preparationCtx, preparationCancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer preparationCancel()
+	var err error
+
+	var statementCreateTmpTagString *sql.Stmt
+	statementCreateTmpTagString, err = c.db.PrepareContext(preparationCtx, `
+CREATE TEMP TABLE tmp_tag_string
+       ( LIKE tag_string INCLUDING DEFAULTS )
+       ON COMMIT DROP;
+`)
+	if err != nil {
+		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTagString")
+	}
+
+	var statementCopyTable *sql.Stmt
+	statementCopyTable, err = c.db.PrepareContext(preparationCtx, pq.CopyIn("tmp_tag_string", "timestamp", "name", "origin", "asset", "value"))
+
+	if err != nil {
+		zap.S().Fatalf("Failed to prepare statement for statementCopyTable")
+	}
+
+	var statementInsertSelect *sql.Stmt
+	statementInsertSelect, err = c.db.PrepareContext(preparationCtx, `
+	INSERT INTO tag_string (SELECT * FROM tmp_tag_string) ON CONFLICT DO NOTHING;
+`)
+
+	if err != nil {
+		zap.S().Fatalf("Failed to prepare statement for statementCopyTable")
+	}
+
+	retries := int64(0)
+	tickerEvery30Seconds := time.NewTicker(30 * time.Second)
+	for {
+		internal.SleepBackedOff(retries, time.Millisecond, time.Minute)
+		// Create transaction
+		txn, err := c.db.Begin()
+		if err != nil {
+			zap.S().Errorf("Failed to create transaction: %s", err)
+			retries++
+			continue
+		}
+		// Create the temp table for COPY
+		stmt := txn.Stmt(statementCreateTmpTagString)
+		_, err = stmt.Exec()
+		if err != nil {
+			zap.S().Errorf("Failed to execute statementCreateTmpTagString: %s", err)
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Failed to rollback transaction: %s", err)
+			}
+			retries++
+			continue
+		}
+
+		// Create COPY
+		stmtCopy := txn.Stmt(statementCopyTable)
+
+		// Copy in data, until:
+		// 30-second Ticker
+		// 10000 entries
+		// then commit
+
+		inserted := 0
+		shouldInsert := true
+		for shouldInsert {
+			select {
+			case <-tickerEvery30Seconds.C:
+				if inserted == 0 {
+					// Nothing to do, let's just wait longer
+					continue
+				}
+				shouldInsert = false
+			case msg := <-c.numericalValuesChannel:
+				_, err := stmtCopy.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.Value)
+				if err != nil {
+					zap.S().Errorf("Failed to copy into tmp_tag_string: %s", err)
+					shouldInsert = false
+					continue
+				}
+				inserted++
+				if inserted > 10000 {
+					shouldInsert = false
+				}
+			}
+		}
+
+		// Cleanup the statement, dropping allocated memory
+		err = stmtCopy.Close()
+		if err != nil {
+			zap.S().Warnf("Failed to close stmtCopy")
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Failed to rollback transaction: %s", err)
+			}
+			retries++
+			continue
+		}
+
+		// Do insert via statementInsertSelect
+		var stmtCopyToTagString *sql.Stmt
+		stmtCopyToTagString = txn.Stmt(statementInsertSelect)
+
+		if err != nil {
+			zap.S().Warnf("Failed to prepare stmtCopyToTagString")
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Failed to rollback transaction: %s", err)
+			}
+			retries++
+			continue
+		}
+
+		_, err = stmtCopyToTagString.Exec()
+
+		if err != nil {
+			zap.S().Warnf("Failed to execute stmtCopyToTagString")
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Failed to rollback transaction: %s", err)
+			}
+			retries++
+			continue
+		}
+
+		err = stmtCopyToTagString.Close()
+
+		if err != nil {
+			zap.S().Warnf("Failed to close stmtCopyToTagString")
 			err = txn.Rollback()
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s", err)
