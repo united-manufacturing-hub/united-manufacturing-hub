@@ -37,7 +37,7 @@ func Init() *Connection {
 		httpBrokers := strings.Split(KafkaHTTPBrokers, ",")
 		instanceID := rand.Int63()
 
-		consumer, err := redpanda.NewConsumer(brokers, httpBrokers, []string{"^umh\\.v1\\..*\\._analytics.*$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10), false)
+		consumer, err := redpanda.NewConsumer(brokers, httpBrokers, []string{"^umh\\.v1\\..*\\._((historian)|(analytics)).*$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10), false)
 		if err != nil {
 			zap.S().Fatalf("Failed to create kafka client: %s", err)
 		}

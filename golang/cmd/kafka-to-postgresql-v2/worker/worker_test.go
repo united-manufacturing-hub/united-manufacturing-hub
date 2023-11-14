@@ -3,6 +3,8 @@ package worker
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -49,7 +51,7 @@ func TestRecreateTopic(t *testing.T) {
 	for _, validTopic := range valid {
 		msg := shared.KafkaMessage{
 			Headers:   nil,
-			Topic:     "",
+			Topic:     validTopic,
 			Key:       nil,
 			Value:     nil,
 			Offset:    0,
@@ -62,7 +64,7 @@ func TestRecreateTopic(t *testing.T) {
 	for _, invalidTopic := range invalid {
 		msg := shared.KafkaMessage{
 			Headers:   nil,
-			Topic:     "",
+			Topic:     invalidTopic,
 			Key:       nil,
 			Value:     nil,
 			Offset:    0,
@@ -70,5 +72,29 @@ func TestRecreateTopic(t *testing.T) {
 		}
 		_, err := recreateTopic(&msg)
 		assert.Errorf(t, err, "topic %s failed to parse", invalidTopic)
+	}
+
+	// Test with splits
+	for _, validTopic := range valid {
+		// Split the topic into parts
+		parts := strings.Split(validTopic, ".")
+
+		// Choose a random split point, ensuring it's not the first or the last part
+		splitIndex := rand.Intn(len(parts)-1) + 1
+
+		// Create a modified topic and key
+		modifiedTopic := strings.Join(parts[:splitIndex], ".")
+		key := "." + strings.Join(parts[splitIndex:], ".")
+
+		msg := shared.KafkaMessage{
+			Headers:   nil,
+			Topic:     modifiedTopic,
+			Key:       []byte(key),
+			Value:     nil,
+			Offset:    0,
+			Partition: 0,
+		}
+		_, err := recreateTopic(&msg)
+		assert.NoError(t, err, "modified topic %s with key %s failed to parse", modifiedTopic, key)
 	}
 }
