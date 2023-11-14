@@ -93,6 +93,8 @@ func Init() *Connection {
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
 		}
+		go conn.numericalWorker()
+		go conn.stringWorker()
 
 	})
 	return conn
@@ -247,7 +249,7 @@ CREATE TEMP TABLE tmp_tag
 	}
 
 	retries := int64(0)
-	tickerEvery30Seconds := time.NewTicker(30 * time.Second)
+	tickerEvery30Seconds := time.NewTicker(5 * time.Second)
 	for {
 		internal.SleepBackedOff(retries, time.Millisecond, time.Minute)
 		// Create transaction
@@ -359,6 +361,7 @@ CREATE TEMP TABLE tmp_tag
 			retries++
 			continue
 		}
+		zap.S().Infof("Inserted %d values inside the tag table", inserted)
 		retries = 0
 	}
 }
@@ -509,6 +512,7 @@ CREATE TEMP TABLE tmp_tag_string
 			retries++
 			continue
 		}
+		zap.S().Infof("Inserted %d values inside the tag_string table", inserted)
 		retries = 0
 	}
 }
