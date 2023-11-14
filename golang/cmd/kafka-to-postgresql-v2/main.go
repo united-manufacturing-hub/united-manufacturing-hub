@@ -5,7 +5,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/worker"
 	"go.uber.org/zap"
 	"net/http"
 )
@@ -13,11 +15,10 @@ import (
 func main() {
 	InitLogging()
 	InitPrometheus()
+	_ = kafka.Init()
+	_ = postgresql.Init()
 	InitHealthCheck()
-	err := postgresql.Init()
-	if err !=nil{
-		zap.S().Fatalf("Failed to setup postgresql: %v"
-	}
+	_ = worker.Init()
 
 }
 
@@ -48,6 +49,11 @@ func InitHealthCheck() {
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
+
+	health.AddReadinessCheck("database", postgresql.GetHealthCheck())
+	health.AddLivenessCheck("database", postgresql.GetHealthCheck())
+	health.AddReadinessCheck("kafka", kafka.GetReadinessCheck())
+	health.AddLivenessCheck("kafka", kafka.GetLivenessCheck())
 	go func() {
 		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
