@@ -15,22 +15,33 @@ jobs:
       # Teardown, allowing for repeated local testing
       - name: Teardown old tests
         run: |
-          docker stop redpanda-1 || true
-          docker stop timescaledb-1 || true
           docker stop kafka-to-postgresql-v2-1 || true          
+          docker stop timescaledb-1 || true          
           docker container prune -f || true
           docker volume prune -f || true
           docker system prune -f || true
 
-      - name: Create Docker Network
-        run: docker network create my_network
 
       - name: Start TimescaleDB
         run: |
-          docker run -d --name timescaledb-1 --network=my_network \
+          docker run -d --name timescaledb-1 --network=host \
           -e POSTGRES_PASSWORD=yourpassword \
           -p 5432:5432 \
           timescale/timescaledb:latest-pg15
+
+      - name: Start Redpanda
+        run: |
+          curl -LO https://github.com/redpanda-data/redpanda/releases/latest/download/rpk-linux-amd64.zip
+          unzip rpk-linux-amd64.zip -d /usr/bin/ || true
+          rpk container purge || true
+          
+          output=$(rpk container start -n 1 | tee /dev/tty)
+          kafka_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $3}')
+          proxy_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $5}')
+          echo "Kafka address: $kafka_address"
+          echo "Proxy address: $proxy_address"
+          echo "REDPANDA_IP=$kafka_address" >> $GITHUB_ENV
+          echo "REDPANDA_PROXY_IP=$proxy_address" >> $GITHUB_ENV
 
       - name: Initialize Database
         run: |
@@ -88,31 +99,13 @@ jobs:
           EOSQL
       
 
-      - name: Start Redpanda
-        run: |
-          docker run -d --name=redpanda-1 --network=my_network --rm \
-          -p 8081:8081 \
-          -p 8082:8082 \
-          -p 9092:9092 \
-          -p 9644:9644 \
-          docker.redpanda.com/redpandadata/redpanda:latest \
-          redpanda start \
-          --overprovisioned \
-          --smp 1  \
-          --memory 1G \
-          --reserve-memory 0M \
-          --node-id 0 \
-          --check=false \
-          --kafka-addr=0.0.0.0:9092 \
-          --advertise-kafka-addr=redpanda-1:9092
-
       # Validate redpanda is reachable
       - name: Check Redpanda REST Interface
         run: |
           success=false
           for i in {1..5}; do
               echo "Attempt $i to check Redpanda REST interface..."
-              if curl -f http://localhost:8082/topics; then
+              if curl -f http://${{ env.REDPANDA_PROXY_IP }}/topics; then
                   echo "Successfully connected to Redpanda REST interface!"
                   success=true
                   break
@@ -128,28 +121,23 @@ jobs:
 
       # Build the Docker image
       - name: Build Docker Image
-        run: docker build -t kafka-to-postgresql-v2:latest -f ./deployment/kafka-to-postgresql-v2/Dockerfile .
+        run: |
+          docker build -t kafka-to-postgresql-v2:latest -f ./deployment/kafka-to-postgresql-v2/Dockerfile .
 
       # Run the Docker image
       - name: Run Docker Image
         run: |
-          docker run -d --name=kafka-to-postgresql-v2-1 --network=my_network \
-          -e POSTGRES_HOST=timescaledb-1 \
+          docker run -d --name=kafka-to-postgresql-v2-1 --network=host \
+          -e POSTGRES_HOST=localhost \
           -e POSTGRES_PORT=5432 \
           -e POSTGRES_USER=postgres \
           -e POSTGRES_PASSWORD=yourpassword \
           -e POSTGRES_DATABASE=yourdb \
           -e POSTGRES_SSL_MODE=disable \
-          -e KAFKA_BROKERS=redpanda-1:9092 \
-          -e KAFKA_HTTP_BROKERS=redpanda-1:8082 \
+          -e KAFKA_BROKERS=${{ env.REDPANDA_IP }} \
+          -e KAFKA_HTTP_BROKERS=${{ env.REDPANDA_PROXY_IP }} \
           -e LOGGING_LEVEL=DEVELOPMENT \
           kafka-to-postgresql-v2:latest
-
-      - name: Get Redpanda IP Address
-        id: redpanda_ip
-        run: |
-          IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' redpanda-1)
-          echo "REDPANDA_IP=$IP" >> $GITHUB_ENV
 
       - name: Install kafkacat
         run: |
@@ -166,17 +154,22 @@ jobs:
           docker run --rm \
           --volume kafka-message-volume:/tmp \
           alpine /bin/sh -c "echo '{\"timestamp_ms\": 1, \"hello\":\"world\"}' > /tmp/message.json"
+          
+          docker run --rm \
+          --volume kafka-message-volume:/tmp \
+          alpine /bin/sh -c "echo '{\"timestamp_ms\": 1, \"a\":3}' > /tmp/message2.json"
 
       # Send message to Kafka
       - name: Use Redpanda IP with rpk
-        run: |
-          docker exec redpanda-1 rpk topic create umh.v1.test._historian --brokers localhost:9092
+        run: |          
+          docker run --network=host edenhill/kcat:1.7.1 -b ${{ env.REDPANDA_IP }} -L
+          docker run --network=host edenhill/kcat:1.7.1 -b ${{ env.REDPANDA_IP }} -P -v -t umh.v1.test._historian
           
-          docker run --network=my_network edenhill/kcat:1.7.1 -b redpanda-1 -L
-          docker run --network=my_network edenhill/kcat:1.7.1 -b redpanda-1 -P -v -t umh.v1.test._historian
+          docker run --network=host --volume kafka-message-volume:/tmp \
+          edenhill/kcat:1.7.1 -P -b ${{ env.REDPANDA_IP }} -t umh.v1.test._historian /tmp/message.json
           
-          docker run --network=my_network --volume kafka-message-volume:/tmp \
-          edenhill/kcat:1.7.1 -P -b redpanda-1:9092 -t umh.v1.test._historian /tmp/message.json
+          docker run --network=host --volume kafka-message-volume:/tmp \
+          edenhill/kcat:1.7.1 -P -b ${{ env.REDPANDA_IP }} -t umh.v1.test._historian /tmp/message2.json
       
 
         # Wait for topics endpoint to respond with more than 10 characters
@@ -185,7 +178,7 @@ jobs:
           success=false
           for i in {1..60}; do
               echo "Attempt $i to check topics endpoint..."
-              response=$(curl -s http://${{ env.REDPANDA_IP }}:8082/topics)
+              response=$(curl -s http://${{ env.REDPANDA_PROXY_IP }}/topics)
               if [ ${#response} -gt 10 ]; then
                   echo "Response is longer than 10 characters. Proceeding..."
                   echo $response
@@ -201,7 +194,7 @@ jobs:
               exit 1
           fi
         
-          sleep 20
+          sleep 5
 
         # Check for entries in the tag table
       - name: Check Database
@@ -216,6 +209,4 @@ jobs:
       - name: Log
         if: always()
         run: |
-          #docker logs redpanda-1 || true
-          #docker logs timescaledb-1 || true      
           docker logs kafka-to-postgresql-v2-1 || true

@@ -44,7 +44,7 @@ func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 
 	c.running.Store(false)
 	// Wait for one cycle to finish
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(shared.CycleTime)
 	zap.S().Debugf("Goodbye from cleanup")
 	return nil
 }
@@ -56,7 +56,7 @@ func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 	// Wait for c.running to be false
 	var err error
 	for c.running.Load() {
-		time.Sleep(100 * time.Millisecond * 10)
+		time.Sleep(shared.CycleTime * 10)
 	}
 	zap.S().Debugf("Goodbye from consume claim (%d-%s)", session.GenerationID(), session.MemberID())
 	return err
@@ -101,7 +101,7 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 				}
 				commit(*session)
 			}
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(shared.CycleTime):
 			continue
 		}
 	}
@@ -115,7 +115,7 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 }
 
 func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, running *atomic.Bool, consumedMessages *atomic.Uint64) {
-	timer := time.NewTimer(100 * time.Millisecond)
+	timer := time.NewTimer(shared.CycleTime)
 	timerTenSeconds := time.NewTimer(10 * time.Second)
 	messagesHandledCurrTenSeconds := 0.0
 	for running.Load() {
@@ -125,7 +125,7 @@ func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupC
 				running.Store(false)
 			}
 			if message == nil {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(shared.CycleTime)
 				continue
 			}
 			// Add to incoming message channel, else block
@@ -133,7 +133,7 @@ func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupC
 			consumedMessages.Add(1)
 			messagesHandledCurrTenSeconds++
 		case <-timer.C:
-			timer.Reset(100 * time.Millisecond)
+			timer.Reset(shared.CycleTime)
 			continue
 		case <-timerTenSeconds.C:
 			zap.S().Debugf("Consumer for session %s:%d is running", (*session).MemberID(), (*session).GenerationID())

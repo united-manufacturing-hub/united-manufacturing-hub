@@ -97,13 +97,10 @@ func (c *Consumer) generateTopics() {
 	var httpClient http.Client
 	httpClient.Timeout = 5 * time.Second
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 
-	zap.S().Debugf("IsRunning: %v", c.running.Load())
 	for c.running.Load() {
-		zap.S().Debugf("Pre tick")
 		<-ticker.C
-		zap.S().Debugf("Started topic generator loop")
 
 		clients := c.httpClients
 		topics := make(map[string]bool)
@@ -181,7 +178,6 @@ func (c *Consumer) generateTopics() {
 			zap.S().Debugf("updated actual topics")
 			c.cgCncl()
 			c.shallConsumerRun.Store(false)
-			zap.S().Debugf("cancled context")
 			c.cgContext, c.cgCncl = context.WithCancel(context.Background())
 		} else {
 			zap.S().Debugf("topics unchanged")
@@ -193,7 +189,7 @@ func (c *Consumer) generateTopics() {
 
 func (c *Consumer) consumer() {
 	zap.S().Debugf("Started consumer")
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(shared.CycleTime)
 	for c.running.Load() {
 		<-ticker.C
 		zap.S().Debugf("Getting topics")
@@ -204,6 +200,7 @@ func (c *Consumer) consumer() {
 
 		if len(topicClone) == 0 {
 			zap.S().Debugf("No topics for consume, trying later")
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
@@ -216,12 +213,7 @@ func (c *Consumer) consumer() {
 			running:          &c.shallConsumerRun,
 		}
 		zap.S().Debugf("Create consumer group")
-		err := c.createConsumerGroup()
-		if err != nil {
-			zap.S().Warnf("Failed to recreate consumer group: %s", err)
-			time.Sleep(100 * time.Millisecond * 100)
-			continue
-		}
+		c.createConsumerGroup()
 
 		zap.S().Debugf("Beginning consume loop")
 		c.shallConsumerRun.Store(true)
@@ -236,7 +228,7 @@ func (c *Consumer) consumer() {
 			} else if strings.Contains(err.Error(), "EOF") {
 				zap.S().Info("EOF, trying later")
 			} else {
-				zap.S().Fatalf("failed to consume: %v", err)
+				zap.S().Errorf("failed to consume: %v", err)
 			}
 		}
 		zap.S().Debugf("End consume loop")
@@ -300,17 +292,27 @@ func (c *Consumer) MarkMessages(msgs []*shared.KafkaMessage) {
 	}
 }
 
-func (c *Consumer) createConsumerGroup() error {
+func (c *Consumer) createConsumerGroup() {
+	var err error
 	if c.consumerGroup != nil {
-		zap.S().Debugf("Consumer group already exists")
-		return nil
+		zap.S().Debugf("Closing existing consumer group")
+		err = (*c.consumerGroup).Close()
+		if err != nil {
+			zap.S().Errorf("Failed to close existing consumer group: %s", err)
+		}
 	}
-	zap.S().Debugf("Creating consumer group")
-	cg, err := sarama.NewConsumerGroupFromClient(c.groupName, c.rawClient)
+	zap.S().Debugf("Refreshing metadata")
+	err = c.rawClient.RefreshMetadata()
 	if err != nil {
-		return err
+		zap.S().Errorf("Failed to refresh metadata: %s", err)
+	}
+	zap.S().Debugf("Creating consumer group: %v", c.groupName)
+	var cg sarama.ConsumerGroup
+	cg, err = sarama.NewConsumerGroupFromClient(c.groupName, c.rawClient)
+	if err != nil {
+		zap.S().Fatalf("Failed to create consumer group: %v", err)
 	}
 	zap.S().Debugf("Created consumer group")
 	c.consumerGroup = &cg
-	return nil
+
 }

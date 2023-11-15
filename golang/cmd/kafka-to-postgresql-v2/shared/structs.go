@@ -10,3 +10,10 @@ type TopicDetails struct {
 	Usecase        string
 	Tag            *string
 }
+
+type Value struct {
+	NumericValue *float64
+	StringValue  *string
+	IsNumeric    bool
+	Name         string
+}

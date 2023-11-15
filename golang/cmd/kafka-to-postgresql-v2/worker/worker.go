@@ -6,6 +6,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
+	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
 	"strconv"
 	"sync"
@@ -31,56 +32,49 @@ func Init() *Worker {
 }
 
 func (w *Worker) startWorkLoop() {
+	zap.S().Debugf("Started work loop")
 	messageChannel := w.kafka.GetMessages()
 	for {
-		select {
-		case msg := <-messageChannel:
-			topic, err := recreateTopic(msg)
+		msg := <-messageChannel
+		zap.S().Debugf("Got message: %+v", msg)
+		topic, err := recreateTopic(msg)
+		if err != nil {
+			zap.S().Warnf("Failed to parse message %+v into topic: %s", msg, err)
+			w.kafka.MarkMessage(msg)
+			continue
+		}
+		if topic == nil {
+			zap.S().Fatalf("topic is null, after successful parsing, this should never happen !: %+v", msg)
+		}
+
+		origin, hasOrigin := msg.Headers["x-origin"]
+		if !hasOrigin {
+			origin = "unknown"
+		}
+
+		switch topic.Usecase {
+		case "historian":
+			payload, timestampMs, err := parseHistorianPayload(msg.Value)
 			if err != nil {
-				zap.S().Warnf("Failed to parse message %+v into topic: %s", msg, err)
-				w.kafka.MarkMessage(msg)
+				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
 				continue
 			}
-			if topic == nil {
-				zap.S().Fatalf("topic is null, after successfull parsing, this should never happen !: %+v", msg)
+			zap.S().Debug("payload:%s", payload)
+			err = w.postgres.InsertHistorianValue(payload, timestampMs, origin, topic, payload.Name)
+			if err != nil {
+				zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
+				continue
 			}
 
-			origin, hasOrigin := msg.Headers["x-origin"]
-			if !hasOrigin {
-				origin = "unknown"
-			}
-
-			switch topic.Usecase {
-			case "historian":
-				payload, timestampMs, err := parseHistorianPayload(msg.Value)
-				if err != nil {
-					zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
-					continue
-				}
-				zap.S().Debug("payload:%s", payload)
-				if payload.IsNumeric {
-					err := w.postgres.InsertHistorianNumericValue(payload.NumericValue, timestampMs, origin, topic, payload.Name)
-					if err != nil {
-						zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
-						continue
-					}
-				}
-			case "analytics":
-				zap.S().Warnf("Analytics not yet supported, ignoring")
-			}
-			w.kafka.MarkMessage(msg)
+		case "analytics":
+			zap.S().Warnf("Analytics not yet supported, ignoring")
 		}
+		w.kafka.MarkMessage(msg)
+
 	}
 }
 
-type Value struct {
-	NumericValue int64
-	StringValue  string
-	IsNumeric    bool
-	Name         string
-}
-
-func parseHistorianPayload(value []byte) (*Value, int64, error) {
+func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 	// Attempt to JSON decode the message
 	var message map[string]interface{}
 	err := json.Unmarshal(value, &message)
@@ -93,35 +87,24 @@ func parseHistorianPayload(value []byte) (*Value, int64, error) {
 	}
 	var timestampMs int64
 	var timestampFound bool
-	var v Value
+	var v *sharedStructs.Value
 	var vFound bool
 
 	for key, value := range message {
+		var parsed *sharedStructs.Value
+		parsed, err = parseValue(value)
+		if err != nil {
+			return nil, 0, err
+		}
 		if key == "timestamp_ms" {
-			timestampMs, err = interfaceToInt(value)
-			if err != nil {
-				return nil, 0, err
+			if !parsed.IsNumeric {
+				return nil, 0, fmt.Errorf("expected timestamp_ms to be numeric, got: %+v", parsed)
 			}
+			timestampMs = int64(*parsed.NumericValue)
 			timestampFound = true
-			if timestampMs < 0 {
-				zap.S().Warnf("message contains negative timestamp, this can be dangerous: %+v", message)
-			}
 		} else {
-			v.Name = key
-			var vX int64
-			vX, err = interfaceToInt(value)
-			if err != nil {
-				var ok bool
-				v.StringValue, ok = value.(string)
-				if !ok {
-					return nil, 0, fmt.Errorf("message value is not parseable as either int or string: %+v", message)
-				}
-				vFound = true
-			} else {
-				v.NumericValue = vX
-				v.IsNumeric = true
-				vFound = true
-			}
+			v = parsed
+			vFound = true
 		}
 	}
 
@@ -132,22 +115,31 @@ func parseHistorianPayload(value []byte) (*Value, int64, error) {
 		return nil, 0, fmt.Errorf("message does not contain any value: %+v", message)
 	}
 
-	return &v, timestampMs, nil
+	return v, timestampMs, nil
 }
 
-func interfaceToInt(value interface{}) (int64, error) {
-	// Attempt to directly cast to int
-	var err error
-	numericValue, ok := value.(int64)
-	if !ok {
-		timestampMsString, ok := value.(string)
-		if !ok {
-			return 0, fmt.Errorf("message value for timestamp_ms is neither string nor integer, but: %+v", value)
+func parseValue(v interface{}) (*sharedStructs.Value, error) {
+	var val sharedStructs.Value
+
+	switch t := v.(type) {
+	case float64:
+		val.NumericValue = &t
+		val.IsNumeric = true
+	case int:
+		f := float64(t)
+		val.NumericValue = &f
+		val.IsNumeric = true
+	case string:
+		if num, err := strconv.ParseFloat(t, 64); err == nil {
+			n := num
+			val.NumericValue = &n
+			val.IsNumeric = true
+		} else {
+			val.StringValue = &t
 		}
-		numericValue, err = strconv.ParseInt(timestampMsString, 10, 64)
-		if err != nil {
-			return 0, err
-		}
+	default:
+		return nil, fmt.Errorf("Unsupported type: %T (%v)", t, v)
 	}
-	return numericValue, err
+
+	return &val, nil
 }

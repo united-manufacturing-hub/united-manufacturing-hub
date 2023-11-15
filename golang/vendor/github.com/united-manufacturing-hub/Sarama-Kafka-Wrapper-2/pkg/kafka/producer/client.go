@@ -40,13 +40,13 @@ func NewProducer(brokers []string) (*Producer, error) {
 
 // handleErrors handles errors from the producer in a goroutine.
 func (p *Producer) handleErrors() {
-	timeout := time.NewTimer(100 * time.Millisecond)
+	timeout := time.NewTimer(shared.CycleTime)
 	defer timeout.Stop()
 
 	for p.running.Load() {
 		select {
 		case <-timeout.C:
-			timeout.Reset(100 * time.Millisecond)
+			timeout.Reset(shared.CycleTime)
 		case err := <-(*p.producer).Errors():
 			if err != nil {
 				p.erroredMessages.Add(1)

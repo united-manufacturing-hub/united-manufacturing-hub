@@ -5,6 +5,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const CycleTime = 100
+
 // KafkaMessage represents a message in the Kafka queue.
 type KafkaMessage struct {
 	Headers   map[string]string `json:"headers"`

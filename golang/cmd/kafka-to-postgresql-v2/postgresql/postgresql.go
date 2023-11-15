@@ -17,26 +17,27 @@ import (
 	"time"
 )
 
-type DBValueNumeric struct {
+type DBValue struct {
 	Timestamp int64
 	Name      string
 	Origin    string
 	AssetId   int
-	Value     int64
+	Value     *sharedStructs.Value
 }
-type DBValueString struct {
-	Timestamp int64
-	Name      string
-	Origin    string
-	AssetId   int
-	Value     string
+
+func (r *DBValue) GetValue() interface{} {
+	if r.Value.IsNumeric {
+		return *r.Value.NumericValue
+	} else {
+		return *r.Value.StringValue
+	}
 }
 
 type Connection struct {
 	db                     *sql.DB
 	cache                  *lru.ARCCache
-	numericalValuesChannel chan DBValueNumeric
-	stringValuesChannel    chan DBValueString
+	numericalValuesChannel chan DBValue
+	stringValuesChannel    chan DBValue
 }
 
 var conn *Connection
@@ -87,14 +88,14 @@ func Init() *Connection {
 		conn = &Connection{
 			db:                     db,
 			cache:                  cache,
-			numericalValuesChannel: make(chan DBValueNumeric, 500_000),
-			stringValuesChannel:    make(chan DBValueString, 500_000),
+			numericalValuesChannel: make(chan DBValue, 500_000),
+			stringValuesChannel:    make(chan DBValue, 500_000),
 		}
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
 		}
-		go conn.numericalWorker()
-		go conn.stringWorker()
+		go conn.tagWorker("tag", conn.numericalValuesChannel)
+		go conn.tagWorker("tag_string", conn.stringValuesChannel)
 
 	})
 	return conn
@@ -122,27 +123,27 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	var cacheKey strings.Builder
 	cacheKey.WriteString(topic.Enterprise)
 	if topic.Site != nil {
-		cacheKey.WriteRune('*') // This char cannot occure in the topic, and therefore can be safely used as seperator
+		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
 		cacheKey.WriteRune('s')
 		cacheKey.WriteString(*topic.Site)
 	}
 	if topic.Area != nil {
-		cacheKey.WriteRune('*') // This char cannot occure in the topic, and therefore can be safely used as seperator
+		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
 		cacheKey.WriteRune('a')
 		cacheKey.WriteString(*topic.Area)
 	}
 	if topic.ProductionLine != nil {
-		cacheKey.WriteRune('*') // This char cannot occure in the topic, and therefore can be safely used as seperator
+		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
 		cacheKey.WriteRune('p')
 		cacheKey.WriteString(*topic.ProductionLine)
 	}
 	if topic.WorkCell != nil {
-		cacheKey.WriteRune('*') // This char cannot occure in the topic, and therefore can be safely used as seperator
+		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
 		cacheKey.WriteRune('w')
 		cacheKey.WriteString(*topic.WorkCell)
 	}
 	if topic.OriginId != nil {
-		cacheKey.WriteRune('*') // This char cannot occure in the topic, and therefore can be safely used as seperator
+		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
 		cacheKey.WriteRune('o')
 		cacheKey.WriteString(*topic.OriginId)
 	}
@@ -185,12 +186,12 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	return id, nil
 }
 
-func (c *Connection) InsertHistorianNumericValue(value int64, timestampMs int64, origin string, topic *sharedStructs.TopicDetails, name string) error {
+func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails, name string) error {
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
 	}
-	c.numericalValuesChannel <- DBValueNumeric{
+	c.numericalValuesChannel <- DBValue{
 		Timestamp: timestampMs,
 		Name:      name,
 		Origin:    origin,
@@ -200,52 +201,21 @@ func (c *Connection) InsertHistorianNumericValue(value int64, timestampMs int64,
 	return nil
 }
 
-func (c *Connection) InsertHistorianStringValue(value string, timestampMs int64, origin string, topic *sharedStructs.TopicDetails, name string) error {
-	assetId, err := c.GetOrInsertAsset(topic)
-	if err != nil {
-		return err
-	}
-	c.stringValuesChannel <- DBValueString{
-		Timestamp: timestampMs,
-		Name:      name,
-		Origin:    origin,
-		AssetId:   assetId,
-		Value:     value,
-	}
-	return nil
-}
-
-func (c *Connection) numericalWorker() {
-	zap.S().Debugf("Starting numericalWorker")
-	// The context is only used for preperation, not execution!
+func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
+	zap.S().Debugf("Starting tagWorker for %s", tableName)
+	// The context is only used for preparation, not execution!
 	preparationCtx, preparationCancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer preparationCancel()
 	var err error
 
 	var statementCreateTmpTag *sql.Stmt
-	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, `
-CREATE TEMP TABLE tmp_tag
+	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, fmt.Sprintf(`
+CREATE TEMP TABLE tmp_%s
        ( LIKE tag INCLUDING DEFAULTS )
        ON COMMIT DROP;
-`)
+`, tableName))
 	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTag")
-	}
-
-	var statementCopyTable *sql.Stmt
-	statementCopyTable, err = c.db.PrepareContext(preparationCtx, pq.CopyIn("tmp_tag", "timestamp", "name", "origin", "asset", "value"))
-
-	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCopyTable")
-	}
-
-	var statementInsertSelect *sql.Stmt
-	statementInsertSelect, err = c.db.PrepareContext(preparationCtx, `
-	INSERT INTO tag (SELECT * FROM tmp_tag) ON CONFLICT DO NOTHING;
-`)
-
-	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCopyTable")
+		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTag: %v (%s)", err, tableName)
 	}
 
 	retries := int64(0)
@@ -253,9 +223,10 @@ CREATE TEMP TABLE tmp_tag
 	for {
 		internal.SleepBackedOff(retries, time.Millisecond, time.Minute)
 		// Create transaction
-		txn, err := c.db.Begin()
+		var txn *sql.Tx
+		txn, err = c.db.Begin()
 		if err != nil {
-			zap.S().Errorf("Failed to create transaction: %s", err)
+			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
 			retries++
 			continue
 		}
@@ -263,17 +234,27 @@ CREATE TEMP TABLE tmp_tag
 		stmt := txn.Stmt(statementCreateTmpTag)
 		_, err = stmt.Exec()
 		if err != nil {
-			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s", err)
+			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
 			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 			retries++
 			continue
 		}
 
-		// Create COPY
-		stmtCopy := txn.Stmt(statementCopyTable)
+		var statementCopyTable *sql.Stmt
+		statementCopyTable, err = txn.Prepare(pq.CopyIn(fmt.Sprintf("tmp_%s", tableName), "timestamp", "name", "origin", "asset", "value"))
+
+		if err != nil {
+			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
+			err = txn.Rollback()
+			if err != nil {
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+			}
+			retries++
+			continue
+		}
 
 		// Copy in data, until:
 		// 30-second Ticker
@@ -287,13 +268,14 @@ CREATE TEMP TABLE tmp_tag
 			case <-tickerEvery30Seconds.C:
 				if inserted == 0 {
 					// Nothing to do, let's just wait longer
+					zap.S().Debugf("Nothing to insert")
 					continue
 				}
 				shouldInsert = false
-			case msg := <-c.numericalValuesChannel:
-				_, err := stmtCopy.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.Value)
+			case msg := <-channel:
+				_, err = statementCopyTable.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
 				if err != nil {
-					zap.S().Errorf("Failed to copy into tmp_tag: %s", err)
+					zap.S().Errorf("Failed to copy into tmp_tag: %s (%s)", err, tableName)
 					shouldInsert = false
 					continue
 				}
@@ -304,39 +286,30 @@ CREATE TEMP TABLE tmp_tag
 			}
 		}
 
-		// Cleanup the statement, dropping allocated memory
-		err = stmtCopy.Close()
+		var statementInsertSelect *sql.Stmt
+		statementInsertSelect, err = c.db.Prepare(fmt.Sprintf(`
+	INSERT INTO %s (SELECT * FROM tmp_%s) ON CONFLICT DO NOTHING;
+`, tableName, tableName))
+
 		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopy")
+			zap.S().Warnf("Failed to prepare statementInsertSelect: %s (%s)", err, tableName)
 			err = txn.Rollback()
 			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 			retries++
 			continue
 		}
 
 		// Do insert via statementInsertSelect
-		var stmtCopyToTag *sql.Stmt
-		stmtCopyToTag = txn.Stmt(statementInsertSelect)
-
-		if err != nil {
-			zap.S().Warnf("Failed to prepare stmtCopyToTag")
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
-			}
-			retries++
-			continue
-		}
-
+		stmtCopyToTag := txn.Stmt(statementInsertSelect)
 		_, err = stmtCopyToTag.Exec()
 
 		if err != nil {
-			zap.S().Warnf("Failed to execute stmtCopyToTag")
+			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
 			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 			retries++
 			continue
@@ -345,161 +318,22 @@ CREATE TEMP TABLE tmp_tag
 		err = stmtCopyToTag.Close()
 
 		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopyToTag")
+			zap.S().Warnf("Failed to close stmtCopyToTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
 			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 			retries++
 			continue
-		}
-
-		err = txn.Commit()
-
-		if err != nil {
-			zap.S().Errorf("Failed to rollback transaction: %s", err)
-			retries++
-			continue
-		}
-		zap.S().Infof("Inserted %d values inside the tag table", inserted)
-		retries = 0
-	}
-}
-
-func (c *Connection) stringWorker() {
-	zap.S().Debugf("Starting stringWorker")
-	// The context is only used for preperation, not execution!
-	preparationCtx, preparationCancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer preparationCancel()
-	var err error
-
-	var statementCreateTmpTagString *sql.Stmt
-	statementCreateTmpTagString, err = c.db.PrepareContext(preparationCtx, `
-CREATE TEMP TABLE tmp_tag_string
-       ( LIKE tag_string INCLUDING DEFAULTS )
-       ON COMMIT DROP;
-`)
-	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTagString")
-	}
-
-	var statementCopyTable *sql.Stmt
-	statementCopyTable, err = c.db.PrepareContext(preparationCtx, pq.CopyIn("tmp_tag_string", "timestamp", "name", "origin", "asset", "value"))
-
-	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCopyTable")
-	}
-
-	var statementInsertSelect *sql.Stmt
-	statementInsertSelect, err = c.db.PrepareContext(preparationCtx, `
-	INSERT INTO tag_string (SELECT * FROM tmp_tag_string) ON CONFLICT DO NOTHING;
-`)
-
-	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCopyTable")
-	}
-
-	retries := int64(0)
-	tickerEvery30Seconds := time.NewTicker(30 * time.Second)
-	for {
-		internal.SleepBackedOff(retries, time.Millisecond, time.Minute)
-		// Create transaction
-		txn, err := c.db.Begin()
-		if err != nil {
-			zap.S().Errorf("Failed to create transaction: %s", err)
-			retries++
-			continue
-		}
-		// Create the temp table for COPY
-		stmt := txn.Stmt(statementCreateTmpTagString)
-		_, err = stmt.Exec()
-		if err != nil {
-			zap.S().Errorf("Failed to execute statementCreateTmpTagString: %s", err)
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
-			}
-			retries++
-			continue
-		}
-
-		// Create COPY
-		stmtCopy := txn.Stmt(statementCopyTable)
-
-		// Copy in data, until:
-		// 30-second Ticker
-		// 10000 entries
-		// then commit
-
-		inserted := 0
-		shouldInsert := true
-		for shouldInsert {
-			select {
-			case <-tickerEvery30Seconds.C:
-				if inserted == 0 {
-					// Nothing to do, let's just wait longer
-					continue
-				}
-				shouldInsert = false
-			case msg := <-c.numericalValuesChannel:
-				_, err := stmtCopy.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.Value)
-				if err != nil {
-					zap.S().Errorf("Failed to copy into tmp_tag_string: %s", err)
-					shouldInsert = false
-					continue
-				}
-				inserted++
-				if inserted > 10000 {
-					shouldInsert = false
-				}
-			}
 		}
 
 		// Cleanup the statement, dropping allocated memory
-		err = stmtCopy.Close()
+		err = statementCopyTable.Close()
 		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopy")
+			zap.S().Warnf("Failed to close stmtCopy: %s (%s)", err, tableName)
 			err = txn.Rollback()
 			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
-			}
-			retries++
-			continue
-		}
-
-		// Do insert via statementInsertSelect
-		var stmtCopyToTagString *sql.Stmt
-		stmtCopyToTagString = txn.Stmt(statementInsertSelect)
-
-		if err != nil {
-			zap.S().Warnf("Failed to prepare stmtCopyToTagString")
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
-			}
-			retries++
-			continue
-		}
-
-		_, err = stmtCopyToTagString.Exec()
-
-		if err != nil {
-			zap.S().Warnf("Failed to execute stmtCopyToTagString")
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
-			}
-			retries++
-			continue
-		}
-
-		err = stmtCopyToTagString.Close()
-
-		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopyToTagString")
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s", err)
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 			retries++
 			continue
@@ -508,11 +342,11 @@ CREATE TEMP TABLE tmp_tag_string
 		err = txn.Commit()
 
 		if err != nil {
-			zap.S().Errorf("Failed to rollback transaction: %s", err)
+			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			retries++
 			continue
 		}
-		zap.S().Infof("Inserted %d values inside the tag_string table", inserted)
+		zap.S().Infof("Inserted %d values inside the %s table", inserted, tableName)
 		retries = 0
 	}
 }
