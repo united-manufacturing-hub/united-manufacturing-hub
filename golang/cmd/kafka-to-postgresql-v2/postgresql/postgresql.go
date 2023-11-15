@@ -320,7 +320,7 @@ CREATE TEMP TABLE %s
 		}
 
 		var statementInsertSelect *sql.Stmt
-		statementInsertSelect, err = c.db.Prepare(fmt.Sprintf(`
+		statementInsertSelect, err = txn.Prepare(fmt.Sprintf(`
 	INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
 `, tableName, tableNameTemp)) // This is safe, as tableName is not user provided
 
