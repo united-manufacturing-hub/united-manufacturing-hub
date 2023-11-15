@@ -35,7 +35,7 @@ jobs:
           unzip rpk-linux-amd64.zip -d /usr/bin/ || true
           rpk container purge || true
           
-          output=$(rpk container start -n 1 | tee /dev/tty)
+          output=$(rpk container -v start | tee /dev/tty)
           kafka_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $3}')
           proxy_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $5}')
           echo "Kafka address: $kafka_address"
@@ -137,6 +137,7 @@ jobs:
           -e KAFKA_BROKERS=${{ env.REDPANDA_IP }} \
           -e KAFKA_HTTP_BROKERS=${{ env.REDPANDA_PROXY_IP }} \
           -e LOGGING_LEVEL=DEVELOPMENT \
+          -e NO_GROUP=true
           kafka-to-postgresql-v2:latest
 
       - name: Install kafkacat
