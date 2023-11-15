@@ -10,7 +10,6 @@ import (
 	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"strings"
 	"sync"
@@ -250,7 +249,7 @@ CREATE TEMP TABLE %s
 	retries := int64(0)
 	tickerEvery30Seconds := time.NewTicker(5 * time.Second)
 	for {
-		internal.SleepBackedOff(retries, time.Millisecond, time.Minute)
+		time.Sleep(1 * time.Second)
 		// Create transaction
 		var txn *sql.Tx
 		txn, err = c.db.Begin()
