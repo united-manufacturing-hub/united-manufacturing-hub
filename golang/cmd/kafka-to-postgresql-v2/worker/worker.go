@@ -36,7 +36,6 @@ func (w *Worker) startWorkLoop() {
 	messageChannel := w.kafka.GetMessages()
 	for {
 		msg := <-messageChannel
-		zap.S().Debugf("Got message: %+v", msg)
 		topic, err := recreateTopic(msg)
 		if err != nil {
 			zap.S().Warnf("Failed to parse message %+v into topic: %s", msg, err)
@@ -59,15 +58,15 @@ func (w *Worker) startWorkLoop() {
 				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
 				continue
 			}
-			zap.S().Debug("payload:%s", payload)
 			err = w.postgres.InsertHistorianValue(payload, timestampMs, origin, topic, payload.Name)
 			if err != nil {
 				zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
 				continue
 			}
-
 		case "analytics":
 			zap.S().Warnf("Analytics not yet supported, ignoring")
+		default:
+			zap.S().Errorf("Unknown usecase %s", topic.Usecase)
 		}
 		w.kafka.MarkMessage(msg)
 
