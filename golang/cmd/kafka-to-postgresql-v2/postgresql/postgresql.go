@@ -224,6 +224,7 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 			Value:     value,
 		}
 	}
+	zap.S().Debugf("Inserted value. NumericChannelLenght: %d/%d, StringChannelLenght: %d/%d", len(c.numericalValuesChannel), cap(c.numericalValuesChannel), len(c.stringValuesChannel), cap(c.stringValuesChannel))
 	return nil
 }
 
