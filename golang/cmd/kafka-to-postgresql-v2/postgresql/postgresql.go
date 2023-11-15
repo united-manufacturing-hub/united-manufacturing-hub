@@ -270,7 +270,7 @@ CREATE TEMP TABLE %s
 		zap.S().Debugf("R: %v", r)
 
 		var statementCopyTable *sql.Stmt
-		statementCopyTable, err = txn.Prepare(pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset", "value"))
+		statementCopyTable, err = txn.Prepare(pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
 
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
