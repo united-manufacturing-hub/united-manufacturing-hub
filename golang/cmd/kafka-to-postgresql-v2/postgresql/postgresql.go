@@ -300,6 +300,9 @@ CREATE TEMP TABLE %s
 			select {
 			case <-tickerEvery30Seconds.C:
 				zap.S().Debugf("Got tick, manually committing")
+				if inserted == 0 {
+					zap.S().Debugf("Skipping")
+				}
 				shouldInsert = false
 			case msg := <-channel:
 				zap.S().Debugf("Got a message to insert")
