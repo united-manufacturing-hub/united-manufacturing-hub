@@ -207,12 +207,22 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	if err != nil {
 		return err
 	}
-	c.numericalValuesChannel <- DBValue{
-		Timestamp: timestampMs,
-		Name:      name,
-		Origin:    origin,
-		AssetId:   assetId,
-		Value:     value,
+	if value.IsNumeric {
+		c.numericalValuesChannel <- DBValue{
+			Timestamp: timestampMs,
+			Name:      name,
+			Origin:    origin,
+			AssetId:   assetId,
+			Value:     value,
+		}
+	} else {
+		c.stringValuesChannel <- DBValue{
+			Timestamp: timestampMs,
+			Name:      name,
+			Origin:    origin,
+			AssetId:   assetId,
+			Value:     value,
+		}
 	}
 	return nil
 }
