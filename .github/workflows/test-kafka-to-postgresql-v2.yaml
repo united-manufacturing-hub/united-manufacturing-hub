@@ -41,7 +41,8 @@ jobs:
           sudo chmod +x /usr/bin/rpk
           rpk container purge || true
           
-          output=$(rpk container -v start | tee /dev/tty)
+          output=$(rpk container -v start)
+          echo $output
           kafka_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $3}')
           proxy_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $5}')
           echo "Kafka address: $kafka_address"
