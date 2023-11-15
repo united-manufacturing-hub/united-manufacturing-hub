@@ -208,7 +208,6 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 		return err
 	}
 	if value.IsNumeric {
-		zap.S().Debugf("Inserting numerical value")
 		c.numericalValuesChannel <- DBValue{
 			Timestamp: timestampMs,
 			Name:      name,
@@ -216,9 +215,7 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 			AssetId:   assetId,
 			Value:     value,
 		}
-		zap.S().Debugf("Inserted numerical value")
 	} else {
-		zap.S().Debugf("Inserting string value")
 		c.stringValuesChannel <- DBValue{
 			Timestamp: timestampMs,
 			Name:      name,
@@ -226,7 +223,6 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 			AssetId:   assetId,
 			Value:     value,
 		}
-		zap.S().Debugf("Inserted string value")
 	}
 	return nil
 }
@@ -314,6 +310,7 @@ CREATE TEMP TABLE %s
 				}
 				inserted++
 				if inserted > 10000 {
+					zap.S().Debugf("Got 10k, manually commiting")
 					shouldInsert = false
 				}
 			}
