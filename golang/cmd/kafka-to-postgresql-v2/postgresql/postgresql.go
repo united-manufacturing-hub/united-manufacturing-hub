@@ -246,7 +246,6 @@ CREATE TEMP TABLE %s
 		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTag: %v (%s)", err, tableName)
 	}
 
-	retries := int64(0)
 	tickerEvery30Seconds := time.NewTicker(5 * time.Second)
 	for {
 		time.Sleep(1 * time.Second)
@@ -255,7 +254,7 @@ CREATE TEMP TABLE %s
 		txn, err = c.db.Begin()
 		if err != nil {
 			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
-			retries++
+
 			continue
 		}
 		// Create the temp table for COPY
@@ -267,7 +266,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			retries++
+
 			continue
 		}
 
@@ -280,7 +279,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			retries++
+
 			continue
 		}
 
@@ -322,7 +321,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			retries++
+
 			continue
 		}
 
@@ -336,7 +335,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			retries++
+
 			continue
 		}
 
@@ -348,7 +347,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			retries++
+
 			continue
 		}
 
@@ -360,7 +359,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			retries++
+
 			continue
 		}
 
@@ -368,11 +367,11 @@ CREATE TEMP TABLE %s
 
 		if err != nil {
 			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			retries++
+
 			continue
 		}
 		zap.S().Infof("Inserted %d values inside the %s table", inserted, tableName)
-		retries = 0
+
 	}
 }
 
