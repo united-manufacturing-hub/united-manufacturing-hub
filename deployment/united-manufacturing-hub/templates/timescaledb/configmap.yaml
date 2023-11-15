@@ -7586,7 +7586,13 @@ data:
       line TEXT,
       workcell TEXT,
       origin_id TEXT,
-      UNIQUE (enterprise, site, area, line, workcell, origin_id)
+      -- Non null is considered distinct, so this mess has to be done :(
+      UNIQUE (enterprise),
+      UNIQUE (enterprise, COALESCE(site, '')),
+      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, '')),
+      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, '')),
+      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, '')),
+      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''), COALESCE(origin_id, ''))
     );
 
     CREATE TABLE tag (
