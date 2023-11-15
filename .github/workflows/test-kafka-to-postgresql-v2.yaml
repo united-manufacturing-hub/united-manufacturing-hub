@@ -1,10 +1,10 @@
 name: Run and Test kafka-to-postgresql-v2
 
 on:
-  #push:
-  #  branches:
-   #   - main
-    # This is on hold, until i (Ferdinand) can figure out how to use consumer groups inside a redpanda docker
+  push:
+    branches:
+      - main
+      - feat/987/new_kafka_to_postgresql
 
 jobs:
   build-and-test:
