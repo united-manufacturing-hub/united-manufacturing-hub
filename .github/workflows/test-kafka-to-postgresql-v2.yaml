@@ -38,7 +38,7 @@ jobs:
         run: |
           curl -LO https://github.com/redpanda-data/redpanda/releases/latest/download/rpk-linux-amd64.zip
           sudo unzip rpk-linux-amd64.zip -d /usr/bin/ || true
-          sudo chmod x /usr/bin/rpk
+          sudo chmod +x /usr/bin/rpk
           rpk container purge || true
           
           output=$(rpk container -v start | tee /dev/tty)
