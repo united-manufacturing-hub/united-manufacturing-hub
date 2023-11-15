@@ -231,11 +231,11 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 	var err error
 
 	var statementCreateTmpTag *sql.Stmt
-	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, fmt.Sprintf(`
-CREATE TEMP TABLE tmp_%s
-       ( LIKE tag INCLUDING DEFAULTS )
+	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, `
+CREATE TEMP TABLE $1
+       ( LIKE $2 INCLUDING DEFAULTS )
        ON COMMIT DROP;
-`, tableName))
+`)
 	if err != nil {
 		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTag: %v (%s)", err, tableName)
 	}
@@ -254,7 +254,7 @@ CREATE TEMP TABLE tmp_%s
 		}
 		// Create the temp table for COPY
 		stmt := txn.Stmt(statementCreateTmpTag)
-		_, err = stmt.Exec()
+		_, err = stmt.Exec(fmt.Sprintf("tmp_%s", tableName), tableName)
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
@@ -309,9 +309,9 @@ CREATE TEMP TABLE tmp_%s
 		}
 
 		var statementInsertSelect *sql.Stmt
-		statementInsertSelect, err = c.db.Prepare(fmt.Sprintf(`
-	INSERT INTO %s (SELECT * FROM tmp_%s) ON CONFLICT DO NOTHING;
-`, tableName, tableName))
+		statementInsertSelect, err = c.db.Prepare(`
+	INSERT INTO $1 (SELECT * FROM $2) ON CONFLICT DO NOTHING;
+`)
 
 		if err != nil {
 			zap.S().Warnf("Failed to prepare statementInsertSelect: %s (%s)", err, tableName)
@@ -325,7 +325,7 @@ CREATE TEMP TABLE tmp_%s
 
 		// Do insert via statementInsertSelect
 		stmtCopyToTag := txn.Stmt(statementInsertSelect)
-		_, err = stmtCopyToTag.Exec()
+		_, err = stmtCopyToTag.Exec(tableName, fmt.Sprintf("tmp_%s", tableName))
 
 		if err != nil {
 			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
