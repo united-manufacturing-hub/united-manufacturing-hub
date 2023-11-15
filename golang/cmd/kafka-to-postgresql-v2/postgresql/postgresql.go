@@ -144,31 +144,25 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	// Attempt cache lookup
 	var cacheKey strings.Builder
 	cacheKey.WriteString(topic.Enterprise)
-	if topic.Site != nil {
-		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-		cacheKey.WriteRune('s')
-		cacheKey.WriteString(*topic.Site)
-	}
-	if topic.Area != nil {
-		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-		cacheKey.WriteRune('a')
-		cacheKey.WriteString(*topic.Area)
-	}
-	if topic.ProductionLine != nil {
-		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-		cacheKey.WriteRune('p')
-		cacheKey.WriteString(*topic.ProductionLine)
-	}
-	if topic.WorkCell != nil {
-		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-		cacheKey.WriteRune('w')
-		cacheKey.WriteString(*topic.WorkCell)
-	}
-	if topic.OriginId != nil {
-		cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-		cacheKey.WriteRune('o')
-		cacheKey.WriteString(*topic.OriginId)
-	}
+	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
+	cacheKey.WriteRune('s')
+	cacheKey.WriteString(topic.Site)
+
+	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
+	cacheKey.WriteRune('a')
+	cacheKey.WriteString(topic.Area)
+
+	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
+	cacheKey.WriteRune('p')
+	cacheKey.WriteString(topic.ProductionLine)
+
+	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
+	cacheKey.WriteRune('w')
+	cacheKey.WriteString(topic.WorkCell)
+
+	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
+	cacheKey.WriteRune('o')
+	cacheKey.WriteString(topic.OriginId)
 
 	value, ok := c.cache.Get(cacheKey.String())
 	if ok {

@@ -7585,7 +7585,7 @@ data:
       area TEXT,
       line TEXT,
       workcell TEXT,
-      origin_id TEXT,
+      origin_id TEXT
     );
 
     -- Non null is considered distinct, so this mess has to be done :(

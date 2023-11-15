@@ -71,25 +71,19 @@ jobs:
             CREATE TABLE asset (
               id SERIAL PRIMARY KEY,
               enterprise TEXT NOT NULL,
-              site TEXT,
-              area TEXT,
-              line TEXT,
-              workcell TEXT,
-              origin_id TEXT,
+              site TEXT DEFAULT '' NOT NULL,
+              area TEXT DEFAULT '' NOT NULL,
+              line TEXT DEFAULT '' NOT NULL,
+              workcell TEXT DEFAULT '' NOT NULL,
+              origin_id TEXT DEFAULT '' NOT NULL,
+              UNIQUE (enterprise),
+              UNIQUE (enterprise, site),
+              UNIQUE (enterprise, site, area),
+              UNIQUE (enterprise, site, area, line),
+              UNIQUE (enterprise, site, area, line, workcell),
+              UNIQUE (enterprise, site, area, line, workcell, origin_id)
             );
-          
-            -- Non null is considered distinct, so this mess has to be done :(
-            CREATE UNIQUE INDEX idx_unique_enterprise ON asset (enterprise);
-            
-            CREATE UNIQUE INDEX idx_unique_enterprise_site ON asset (enterprise, COALESCE(site, ''));
-            
-            CREATE UNIQUE INDEX idx_unique_enterprise_site_area ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''));
-            
-            CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''));
-            
-            CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line_workcell ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''));
-            
-            CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line_workcell_origin_id ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''), COALESCE(origin_id, ''));
+            -- Defaults to '', so we can have ON CONFLICT queries
 
           
             CREATE TABLE tag (

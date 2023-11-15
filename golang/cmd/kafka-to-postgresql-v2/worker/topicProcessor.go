@@ -35,25 +35,25 @@ func recreateTopic(msg *shared.KafkaMessage) (*sharedStructs.TopicDetails, error
 		return nil, errors.New("invalid topic format")
 	}
 
-	result := make(map[string]*string)
+	result := make(map[string]string)
 	for i, name := range topicRegex.SubexpNames() {
 		if i != 0 && name != "" {
 			if matches[i] != "" {
-				result[name] = &matches[i]
+				result[name] = matches[i]
 			} else {
-				result[name] = nil
+				result[name] = ""
 			}
 		}
 	}
 
 	return &sharedStructs.TopicDetails{
-		Enterprise:     *result["enterprise"],
+		Enterprise:     result["enterprise"],
 		Site:           result["site"],
 		Area:           result["area"],
 		ProductionLine: result["productionLine"],
 		WorkCell:       result["workCell"],
 		OriginId:       result["originId"],
-		Usecase:        *result["usecase"],
+		Usecase:        result["usecase"],
 		Tag:            result["tag"],
 	}, nil
 }
