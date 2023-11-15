@@ -177,7 +177,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 
 	// Prepare an upsert query with RETURNING clause
 	// This is atomic
-	upsertQuery := `INSERT INTO assets (enterprise, site, area, line, workcell, origin_id) 
+	upsertQuery := `INSERT INTO asset (enterprise, site, area, line, workcell, origin_id) 
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (enterprise, site, area, line, workcell, origin_id) 
 		DO UPDATE SET enterprise = EXCLUDED.enterprise
@@ -191,7 +191,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	}
 
 	// If the upsert didn't return an id, retrieve it with a select query
-	selectQuery := `SELECT id FROM assets WHERE enterprise = $1 AND 
+	selectQuery := `SELECT id FROM asset WHERE enterprise = $1 AND 
 		(site IS NULL OR site = $2) AND 
 		(area IS NULL OR area = $3) AND 
 		(line IS NULL OR line = $4) AND 
