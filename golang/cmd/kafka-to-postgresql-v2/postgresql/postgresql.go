@@ -304,12 +304,13 @@ CREATE TEMP TABLE %s
 				}
 				inserted++
 				if inserted > 10000 {
-					zap.S().Debugf("Got 10k, manually commiting")
+					zap.S().Debugf("Got 10k, manually committing")
 					shouldInsert = false
 				}
 			}
 		}
 
+		zap.S().Debugf("INSERT SELECT")
 		var statementInsertSelect *sql.Stmt
 		statementInsertSelect, err = txn.Prepare(fmt.Sprintf(`
 	INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
@@ -340,7 +341,6 @@ CREATE TEMP TABLE %s
 		}
 
 		err = stmtCopyToTag.Close()
-
 		if err != nil {
 			zap.S().Warnf("Failed to close stmtCopyToTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
@@ -363,7 +363,9 @@ CREATE TEMP TABLE %s
 			continue
 		}
 
+		now := time.Now()
 		err = txn.Commit()
+		zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
 
 		if err != nil {
 			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
