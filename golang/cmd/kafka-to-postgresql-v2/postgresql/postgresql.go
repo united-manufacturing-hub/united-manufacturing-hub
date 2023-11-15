@@ -301,6 +301,7 @@ CREATE TEMP TABLE %s
 				}
 				shouldInsert = false
 			case msg := <-channel:
+				zap.S().Debugf("Got a message to insert")
 				_, err = statementCopyTable.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
 				if err != nil {
 					zap.S().Errorf("Failed to copy into %s: %s (%s)", tableNameTemp, err, tableName)
