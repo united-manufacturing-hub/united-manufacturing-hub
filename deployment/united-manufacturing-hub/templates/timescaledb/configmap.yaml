@@ -7586,14 +7586,20 @@ data:
       line TEXT,
       workcell TEXT,
       origin_id TEXT,
-      -- Non null is considered distinct, so this mess has to be done :(
-      UNIQUE (enterprise),
-      UNIQUE (enterprise, COALESCE(site, '')),
-      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, '')),
-      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, '')),
-      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, '')),
-      UNIQUE (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''), COALESCE(origin_id, ''))
     );
+
+    -- Non null is considered distinct, so this mess has to be done :(
+    CREATE UNIQUE INDEX idx_unique_enterprise ON asset (enterprise);
+
+    CREATE UNIQUE INDEX idx_unique_enterprise_site ON asset (enterprise, COALESCE(site, ''));
+
+    CREATE UNIQUE INDEX idx_unique_enterprise_site_area ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''));
+
+    CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''));
+
+    CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line_workcell ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''));
+
+    CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line_workcell_origin_id ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''), COALESCE(origin_id, ''));
 
     CREATE TABLE tag (
       timestamp TIMESTAMPTZ NOT NULL,
