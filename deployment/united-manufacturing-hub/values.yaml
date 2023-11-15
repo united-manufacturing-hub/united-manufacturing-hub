@@ -944,19 +944,19 @@ grafana:
           editable: false
         - name: Postgres
           type: postgres
-          url: localhost:5432
+          url: united-manufacturing-hub:5432
           user: $GRAFANAREADER_USER
           secureJsonData:
             password: $GRAFANAREADER_PASSWORD
           jsonData:
-            database: grafana
+            database: factoryinsight
             sslmode: 'disable' # disable/require/verify-ca/verify-full
             maxOpenConns: 100 # Grafana v5.4+
             maxIdleConns: 100 # Grafana v5.4+
             maxIdleConnsAuto: true # Grafana v9.5.1+
             connMaxLifetime: 14400 # Grafana v5.4+
             postgresVersion: 903 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
-            timescaledb: false
+            timescaledb: true
 
   ## Grafana's primary configuration
   ## NOTE: values in map will be converted to ini format
