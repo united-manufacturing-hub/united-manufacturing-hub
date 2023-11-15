@@ -15,8 +15,8 @@ import (
 func main() {
 	InitLogging()
 	InitPrometheus()
-	_ = kafka.Init()
 	_ = postgresql.Init()
+	_ = kafka.Init()
 	InitHealthCheck()
 	_ = worker.Init()
 
