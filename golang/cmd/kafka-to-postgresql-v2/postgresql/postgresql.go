@@ -249,19 +249,19 @@ CREATE TEMP TABLE %s
 	tickerEvery30Seconds := time.NewTicker(5 * time.Second)
 	for {
 		time.Sleep(1 * time.Second)
-		txCtl, txCncl := context.WithTimeout(context.Background(), time.Minute)
+		txnExecutionCtx, txnExecutionCancel := context.WithTimeout(context.Background(), time.Minute)
 		// Create transaction
 		var txn *sql.Tx
-		txn, err = c.db.BeginTx(txCtl, nil)
+		txn, err = c.db.BeginTx(txnExecutionCtx, nil)
 		if err != nil {
 			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
 
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 		// Create the temp table for COPY
 		stmt := txn.Stmt(statementCreateTmpTag)
-		_, err = stmt.ExecContext(txCtl)
+		_, err = stmt.ExecContext(txnExecutionCtx)
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
@@ -269,12 +269,14 @@ CREATE TEMP TABLE %s
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 
+		txnPrepareContextCtx, txnPrepareContextCancel := context.WithTimeout(context.Background(), time.Second*5)
 		var statementCopyTable *sql.Stmt
-		statementCopyTable, err = txn.PrepareContext(txCtl, pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
+		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
+		txnPrepareContextCancel()
 
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
@@ -283,7 +285,7 @@ CREATE TEMP TABLE %s
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
 
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 
@@ -301,7 +303,7 @@ CREATE TEMP TABLE %s
 				shouldInsert = false
 			case msg := <-channel:
 				zap.S().Debugf("Got a message to insert")
-				_, err = statementCopyTable.ExecContext(txCtl, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
+				_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
 				if err != nil {
 					zap.S().Errorf("Failed to copy into %s: %s (%s)", tableNameTemp, err, tableName)
 					shouldInsert = false
@@ -316,10 +318,12 @@ CREATE TEMP TABLE %s
 		}
 
 		zap.S().Debugf("PREP INSERT SELECT")
+		txnPrepareContextCtx, txnPrepareContextCancel = context.WithTimeout(context.Background(), time.Second*5)
 		var statementInsertSelect *sql.Stmt
-		statementInsertSelect, err = txn.PrepareContext(txCtl, fmt.Sprintf(`
+		statementInsertSelect, err = txn.PrepareContext(txnPrepareContextCtx, fmt.Sprintf(`
 	INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
 `, tableName, tableNameTemp)) // This is safe, as tableName is not user provided
+		txnPrepareContextCancel()
 
 		if err != nil {
 			zap.S().Warnf("Failed to prepare statementInsertSelect: %s (%s)", err, tableName)
@@ -327,14 +331,14 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 
 		zap.S().Debugf("EXEC INSERT SELECT")
 		// Do insert via statementInsertSelect
 		stmtCopyToTag := txn.Stmt(statementInsertSelect)
-		_, err = stmtCopyToTag.ExecContext(txCtl)
+		_, err = stmtCopyToTag.ExecContext(txnExecutionCtx)
 
 		if err != nil {
 			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
@@ -342,7 +346,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 
@@ -354,7 +358,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 
@@ -367,7 +371,7 @@ CREATE TEMP TABLE %s
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 
@@ -378,11 +382,11 @@ CREATE TEMP TABLE %s
 
 		if err != nil {
 			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			txCncl()
+			txnExecutionCancel()
 			continue
 		}
 		zap.S().Infof("Inserted %d values inside the %s table", inserted, tableName)
-		txCncl()
+		txnExecutionCancel()
 	}
 }
 
