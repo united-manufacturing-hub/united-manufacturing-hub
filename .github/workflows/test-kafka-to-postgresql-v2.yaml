@@ -208,10 +208,10 @@ jobs:
         env:
           PGPASSWORD: yourpassword
         run: |
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT 1 FROM tag LIMIT 1;" || exit 1
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT 1 FROM tag_string LIMIT 1;" || exit 1
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT 1 FROM asset LIMIT 1;" || exit 1
-
+          docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM tag;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM tag_string;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM asset;" | grep -q -v '^0$' || exit 1
+      
       # Log
       - name: Log
         if: always()
