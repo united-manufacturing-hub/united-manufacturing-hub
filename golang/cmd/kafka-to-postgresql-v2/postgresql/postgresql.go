@@ -94,6 +94,23 @@ func Init() *Connection {
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
 		}
+
+		// Validate that tables exist
+		tablesToCheck := []string{"asset", "tag", "tag_string"}
+		for _, table := range tablesToCheck {
+			var tableName string
+			query := `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`
+			row := db.QueryRow(query, table)
+			err := row.Scan(&tableName)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					zap.S().Fatalf("Table %s does not exist in the database", table)
+				} else {
+					zap.S().Fatalf("Failed to check for table %s: %s", table, err)
+				}
+			}
+		}
+
 		go conn.tagWorker("tag", conn.numericalValuesChannel)
 		go conn.tagWorker("tag_string", conn.stringValuesChannel)
 

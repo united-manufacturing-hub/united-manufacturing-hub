@@ -1,9 +1,10 @@
 name: Run and Test kafka-to-postgresql-v2
 
 on:
-  push:
-    branches:
-      - main
+  #push:
+  #  branches:
+   #   - main
+    # This is on hold, until i (Ferdinand) can figure out how to use consumer groups inside a redpanda docker
 
 jobs:
   build-and-test:
