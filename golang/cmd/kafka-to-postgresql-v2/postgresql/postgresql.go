@@ -230,12 +230,14 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 	defer preparationCancel()
 	var err error
 
+	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
+
 	var statementCreateTmpTag *sql.Stmt
-	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, `
-CREATE TEMP TABLE $1
-       ( LIKE $2 INCLUDING DEFAULTS )
+	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, fmt.Sprintf(`
+CREATE TEMP TABLE %s
+       ( LIKE %s INCLUDING DEFAULTS )
        ON COMMIT DROP;
-`)
+`, tableNameTemp, tableName)) // This is safe, as tableName is not user provided
 	if err != nil {
 		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTag: %v (%s)", err, tableName)
 	}
@@ -254,7 +256,7 @@ CREATE TEMP TABLE $1
 		}
 		// Create the temp table for COPY
 		stmt := txn.Stmt(statementCreateTmpTag)
-		_, err = stmt.Exec(fmt.Sprintf("tmp_%s", tableName), tableName)
+		_, err = stmt.Exec()
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
@@ -266,7 +268,7 @@ CREATE TEMP TABLE $1
 		}
 
 		var statementCopyTable *sql.Stmt
-		statementCopyTable, err = txn.Prepare(pq.CopyIn(fmt.Sprintf("tmp_%s", tableName), "timestamp", "name", "origin", "asset", "value"))
+		statementCopyTable, err = txn.Prepare(pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset", "value"))
 
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
@@ -297,7 +299,7 @@ CREATE TEMP TABLE $1
 			case msg := <-channel:
 				_, err = statementCopyTable.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
 				if err != nil {
-					zap.S().Errorf("Failed to copy into tmp_tag: %s (%s)", err, tableName)
+					zap.S().Errorf("Failed to copy into %s: %s (%s)",tableNameTemp err, tableName)
 					shouldInsert = false
 					continue
 				}
@@ -309,9 +311,9 @@ CREATE TEMP TABLE $1
 		}
 
 		var statementInsertSelect *sql.Stmt
-		statementInsertSelect, err = c.db.Prepare(`
-	INSERT INTO $1 (SELECT * FROM $2) ON CONFLICT DO NOTHING;
-`)
+		statementInsertSelect, err = c.db.Prepare(fmt.Sprintf(`
+	INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
+`, tableName, tableNameTemp))// This is safe, as tableName is not user provided
 
 		if err != nil {
 			zap.S().Warnf("Failed to prepare statementInsertSelect: %s (%s)", err, tableName)
@@ -325,7 +327,7 @@ CREATE TEMP TABLE $1
 
 		// Do insert via statementInsertSelect
 		stmtCopyToTag := txn.Stmt(statementInsertSelect)
-		_, err = stmtCopyToTag.Exec(tableName, fmt.Sprintf("tmp_%s", tableName))
+		_, err = stmtCopyToTag.Exec()
 
 		if err != nil {
 			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
