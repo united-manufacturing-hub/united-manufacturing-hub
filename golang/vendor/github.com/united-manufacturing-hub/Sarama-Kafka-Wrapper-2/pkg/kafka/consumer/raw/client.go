@@ -132,19 +132,19 @@ func (c *Consumer) consume() {
 			// Check if the error is "no topics provided"
 			if err.Error() == "no topics provided" {
 				zap.S().Info("no topics provided")
-				time.Sleep(shared.CycleTime * 10)
+				time.Sleep(100 * time.Millisecond * 10)
 				continue
 			} else if strings.Contains(err.Error(), "i/o timeout") {
 				zap.S().Info("i/o timeout, trying later")
-				time.Sleep(shared.CycleTime * 10)
+				time.Sleep(100 * time.Millisecond * 10)
 				continue
 			} else if strings.Contains(err.Error(), "context canceled") {
 				zap.S().Info("context canceled, trying later")
-				time.Sleep(shared.CycleTime * 10)
+				time.Sleep(100 * time.Millisecond * 10)
 				continue
 			} else if strings.Contains(err.Error(), "EOF") {
 				zap.S().Info("EOF, trying later")
-				time.Sleep(shared.CycleTime * 10)
+				time.Sleep(100 * time.Millisecond * 10)
 				continue
 			}
 			c.running.Store(false)
@@ -222,11 +222,11 @@ func (c *Consumer) recheck() {
 				zap.S().Fatal(err)
 			}
 			for c.consuming.Load() {
-				time.Sleep(shared.CycleTime * 10)
+				time.Sleep(100 * time.Millisecond * 10)
 				zap.S().Debugf("waiting for consumer to stop")
 			}
 			// Wait for the consumer to stop
-			time.Sleep(shared.CycleTime * 10)
+			time.Sleep(100 * time.Millisecond * 10)
 			c.running.Store(true)
 			c.actualTopics = newTopics
 			c.internalCtx, c.consumerContextCancel = context.WithCancel(c.externalCtx)
@@ -234,7 +234,7 @@ func (c *Consumer) recheck() {
 			zap.S().Infof("restarted consumer with topics %v", c.actualTopics)
 		}
 		_ = c.rawClient.RefreshMetadata()
-		time.Sleep(shared.CycleTime * 50)
+		time.Sleep(100 * time.Millisecond * 50)
 	}
 	zap.S().Infof("stopped recheck")
 }
@@ -297,13 +297,13 @@ func (c *Consumer) updateState() {
 		groups, err = adminClient.DescribeConsumerGroups([]string{c.groupName})
 		if err != nil {
 			zap.S().Warnf("failed to describe consumer groups: %s", err)
-			time.Sleep(shared.CycleTime * 10)
+			time.Sleep(100 * time.Millisecond * 10)
 			continue
 		}
 
 		if len(groups) != 1 {
 			zap.S().Warnf("expected 1 consumer group, got %d", len(groups))
-			time.Sleep(shared.CycleTime * 10)
+			time.Sleep(100 * time.Millisecond * 10)
 			continue
 		}
 		currentGroup := groups[0]
@@ -329,7 +329,7 @@ func (c *Consumer) updateState() {
 			zap.S().Warnf("unknown consumer group state: %s", currentGroup.State)
 		}
 
-		time.Sleep(shared.CycleTime * 10)
+		time.Sleep(100 * time.Millisecond * 10)
 	}
 }
 

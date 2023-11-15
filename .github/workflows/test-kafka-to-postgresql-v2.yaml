@@ -40,7 +40,7 @@ jobs:
             sleep 1
           done
           
-          sleep 1
+          sleep 3
 
           # Create the database
           echo "Creating database..."
@@ -155,6 +155,18 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y kafkacat
+
+      # Create a Docker volume
+      - name: Create Docker Volume
+        run: docker volume create kafka-message-volume
+
+      # Write message to the volume
+      - name: Prepare Kafka Message
+        run: |
+          docker run --rm \
+          --volume kafka-message-volume:/tmp \
+          alpine /bin/sh -c "echo '{\"timestamp_ms\": 1, \"hello\":\"world\"}' > /tmp/message.json"
+
       # Send message to Kafka
       - name: Use Redpanda IP with rpk
         run: |
@@ -163,11 +175,11 @@ jobs:
           docker run --network=my_network edenhill/kcat:1.7.1 -b redpanda-1 -L
           docker run --network=my_network edenhill/kcat:1.7.1 -b redpanda-1 -P -v -t umh.v1.test._historian
           
-          echo '{"timestamp_ms": 1, "hello":"world"}' > /tmp/message.json
-          docker run --network=my_network --mount type=bind,source=/tmp/message.json,target=/message.json edenhill/kcat:1.7.1 -P -b redpanda-1:9092 -t umh.v1.test._historian /message.json
-          
+          docker run --network=my_network --volume kafka-message-volume:/tmp \
+          edenhill/kcat:1.7.1 -P -b redpanda-1:9092 -t umh.v1.test._historian /tmp/message.json
+      
 
-      # Wait for topics endpoint to respond with more than 10 characters
+        # Wait for topics endpoint to respond with more than 10 characters
       - name: Wait for Topics Endpoint
         run: |
           success=false
@@ -189,7 +201,7 @@ jobs:
               exit 1
           fi
         
-          sleep 10
+          sleep 20
 
         # Check for entries in the tag table
       - name: Check Database

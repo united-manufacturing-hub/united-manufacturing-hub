@@ -23,7 +23,9 @@ var conn *Connection
 var once sync.Once
 
 func Init() *Connection {
+	zap.S().Debugf("kafka.Init()")
 	once.Do(func() {
+		zap.S().Debugf("kafka.Init().once")
 		KafkaBrokers, err := env.GetAsString("KAFKA_BROKERS", true, "http://united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092")
 		if err != nil {
 			zap.S().Fatalf("Failed to get KAFKA_BROKERS from env")
@@ -35,13 +37,15 @@ func Init() *Connection {
 
 		brokers := strings.Split(KafkaBrokers, ",")
 		httpBrokers := strings.Split(KafkaHTTPBrokers, ",")
-		instanceID := rand.Int63()
+		instanceID := rand.Int63() //nolint:gosec
 
 		consumer, err := redpanda.NewConsumer(brokers, httpBrokers, []string{"^umh\\.v1.+$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10), false)
 		if err != nil {
 			zap.S().Fatalf("Failed to create kafka client: %s", err)
 		}
+		zap.S().Debugf("kafka.Init().once.consumer.Start()")
 		err = consumer.Start()
+		zap.S().Debugf("post kafka.Init().once.consumer.Start()")
 		if err != nil {
 			zap.S().Fatalf("Failed to start consumer: %s", err)
 		}

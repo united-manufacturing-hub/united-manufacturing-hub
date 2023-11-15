@@ -20,6 +20,7 @@ func main() {
 	InitHealthCheck()
 	_ = worker.Init()
 
+	select {}
 }
 
 func InitLogging() {

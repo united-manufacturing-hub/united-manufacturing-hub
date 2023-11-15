@@ -97,7 +97,13 @@ func (c *Consumer) generateTopics() {
 	var httpClient http.Client
 	httpClient.Timeout = 5 * time.Second
 
+	ticker := time.NewTicker(1 * time.Second)
+
+	zap.S().Debugf("IsRunning: %v", c.running.Load())
 	for c.running.Load() {
+		zap.S().Debugf("Pre tick")
+		<-ticker.C
+		zap.S().Debugf("Started topic generator loop")
 
 		clients := c.httpClients
 		topics := make(map[string]bool)
@@ -109,6 +115,7 @@ func (c *Consumer) generateTopics() {
 				zap.S().Errorf("failed to fetch topics from %s: %v", url, err)
 				continue
 			}
+			zap.S().Debugf("Finished http request")
 
 			// Parse as []string from JSON
 			var topicsX []string
@@ -179,16 +186,27 @@ func (c *Consumer) generateTopics() {
 		} else {
 			zap.S().Debugf("topics unchanged")
 		}
-
 		zap.S().Debugf("Finished topic generator")
-		time.Sleep(5 * time.Second)
 	}
 	zap.S().Debugf("Goodbye topic generator")
 }
 
 func (c *Consumer) consumer() {
 	zap.S().Debugf("Started consumer")
+	ticker := time.NewTicker(100 * time.Millisecond)
 	for c.running.Load() {
+		<-ticker.C
+		zap.S().Debugf("Getting topics")
+		c.actualTopicsLock.RLock()
+		topicClone := make([]string, len(c.actualTopics))
+		copy(topicClone, c.actualTopics)
+		c.actualTopicsLock.RUnlock()
+
+		if len(topicClone) == 0 {
+			zap.S().Debugf("No topics for consume, trying later")
+			continue
+		}
+
 		zap.S().Debugf("Create handler")
 		handler := &GroupHandler{
 			incomingMessages: c.incomingMessages,
@@ -201,15 +219,10 @@ func (c *Consumer) consumer() {
 		err := c.createConsumerGroup()
 		if err != nil {
 			zap.S().Warnf("Failed to recreate consumer group: %s", err)
-			time.Sleep(shared.CycleTime * 100)
+			time.Sleep(100 * time.Millisecond * 100)
 			continue
 		}
 
-		zap.S().Debugf("Getting topics")
-		c.actualTopicsLock.RLock()
-		topicClone := make([]string, len(c.actualTopics))
-		copy(topicClone, c.actualTopics)
-		c.actualTopicsLock.RUnlock()
 		zap.S().Debugf("Beginning consume loop")
 		c.shallConsumerRun.Store(true)
 		if err := (*c.consumerGroup).Consume(c.cgContext, topicClone, handler); err != nil {
@@ -227,15 +240,15 @@ func (c *Consumer) consumer() {
 			}
 		}
 		zap.S().Debugf("End consume loop")
-		time.Sleep(shared.CycleTime)
-		zap.S().Debugf("End sleep")
 	}
 	zap.S().Debugf("Goodbye consumer")
 }
 
 // Close terminates the Consumer.
 func (c *Consumer) Close() error {
+	zap.S().Info("closing consumer")
 	if !c.running.Swap(false) {
+		zap.S().Info("consumer already closed")
 		return nil
 	}
 	closeTimeout := 5 * time.Second

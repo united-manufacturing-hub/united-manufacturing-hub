@@ -3,12 +3,7 @@ package shared
 import (
 	"github.com/IBM/sarama"
 	"go.uber.org/zap"
-	"time"
 )
-
-// CycleTime is the default cycle time for loops.
-// It is used in the consumer and producer.
-const CycleTime = 100 * time.Millisecond
 
 // KafkaMessage represents a message in the Kafka queue.
 type KafkaMessage struct {
