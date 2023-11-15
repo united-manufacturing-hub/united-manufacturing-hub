@@ -208,9 +208,9 @@ jobs:
         env:
           PGPASSWORD: yourpassword
         run: |
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM tag;"
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM tag_string;"
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM asset;"
+          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT 1 FROM tag LIMIT 1;" || exit 1
+          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT 1 FROM tag_string LIMIT 1;" || exit 1
+          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT 1 FROM asset LIMIT 1;" || exit 1
 
       # Log
       - name: Log

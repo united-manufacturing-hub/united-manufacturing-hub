@@ -256,7 +256,8 @@ CREATE TEMP TABLE %s
 		}
 		// Create the temp table for COPY
 		stmt := txn.Stmt(statementCreateTmpTag)
-		_, err = stmt.Exec()
+		var r sql.Result
+		r, err = stmt.Exec()
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
 			err = txn.Rollback()
@@ -266,6 +267,7 @@ CREATE TEMP TABLE %s
 			retries++
 			continue
 		}
+		zap.S().Debugf("R: %v", r)
 
 		var statementCopyTable *sql.Stmt
 		statementCopyTable, err = txn.Prepare(pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset", "value"))
