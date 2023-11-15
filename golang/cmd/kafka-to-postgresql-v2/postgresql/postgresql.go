@@ -299,7 +299,7 @@ CREATE TEMP TABLE %s
 			case msg := <-channel:
 				_, err = statementCopyTable.Exec(msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
 				if err != nil {
-					zap.S().Errorf("Failed to copy into %s: %s (%s)",tableNameTemp err, tableName)
+					zap.S().Errorf("Failed to copy into %s: %s (%s)", tableNameTemp, err, tableName)
 					shouldInsert = false
 					continue
 				}
@@ -313,7 +313,7 @@ CREATE TEMP TABLE %s
 		var statementInsertSelect *sql.Stmt
 		statementInsertSelect, err = c.db.Prepare(fmt.Sprintf(`
 	INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
-`, tableName, tableNameTemp))// This is safe, as tableName is not user provided
+`, tableName, tableNameTemp)) // This is safe, as tableName is not user provided
 
 		if err != nil {
 			zap.S().Warnf("Failed to prepare statementInsertSelect: %s (%s)", err, tableName)
