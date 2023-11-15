@@ -297,7 +297,7 @@ CREATE TEMP TABLE %s
 		for shouldInsert {
 			select {
 			case <-tickerEvery30Seconds.C:
-				zap.S().Debugf("Got tick, manually comitting")
+				zap.S().Debugf("Got tick, manually committing")
 				shouldInsert = false
 			case msg := <-channel:
 				zap.S().Debugf("Got a message to insert")
@@ -315,7 +315,7 @@ CREATE TEMP TABLE %s
 			}
 		}
 
-		zap.S().Debugf("INSERT SELECT")
+		zap.S().Debugf("PREP INSERT SELECT")
 		var statementInsertSelect *sql.Stmt
 		statementInsertSelect, err = txn.PrepareContext(txCtl, fmt.Sprintf(`
 	INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
@@ -331,6 +331,7 @@ CREATE TEMP TABLE %s
 			continue
 		}
 
+		zap.S().Debugf("EXEC INSERT SELECT")
 		// Do insert via statementInsertSelect
 		stmtCopyToTag := txn.Stmt(statementInsertSelect)
 		_, err = stmtCopyToTag.ExecContext(txCtl)
@@ -345,6 +346,7 @@ CREATE TEMP TABLE %s
 			continue
 		}
 
+		zap.S().Debugf("CLOSE COPY TO TMP")
 		err = stmtCopyToTag.Close()
 		if err != nil {
 			zap.S().Warnf("Failed to close stmtCopyToTag: %s (%s)", err, tableName)
@@ -356,6 +358,7 @@ CREATE TEMP TABLE %s
 			continue
 		}
 
+		zap.S().Debugf("CLOSE COPY TABLE")
 		// Cleanup the statement, dropping allocated memory
 		err = statementCopyTable.Close()
 		if err != nil {
@@ -368,6 +371,7 @@ CREATE TEMP TABLE %s
 			continue
 		}
 
+		zap.S().Debugf("Pre-commit")
 		now := time.Now()
 		err = txn.Commit()
 		zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
