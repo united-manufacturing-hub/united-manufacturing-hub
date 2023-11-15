@@ -170,7 +170,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 		cacheKey.WriteString(*topic.OriginId)
 	}
 
-	value, ok := c.cache.Get(cacheKey)
+	value, ok := c.cache.Get(cacheKey.String())
 	if ok {
 		return value.(int), nil
 	}
@@ -203,7 +203,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 		return 0, err
 	}
 
-	c.cache.Add(cacheKey, id)
+	c.cache.Add(cacheKey.String(), id)
 
 	return id, nil
 }

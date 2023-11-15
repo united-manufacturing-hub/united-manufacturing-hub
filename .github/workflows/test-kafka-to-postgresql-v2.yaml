@@ -211,7 +211,7 @@ jobs:
           docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM tag;" | grep -q -v '^0$' || exit 1
           docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM tag_string;" | grep -q -v '^0$' || exit 1
           docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM asset;" | grep -q -v '^0$' || exit 1
-      
+
       # Log
       - name: Log
         if: always()
