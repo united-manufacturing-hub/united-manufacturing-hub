@@ -72,6 +72,8 @@ func Init() *Connection {
 			zap.S().Fatalf("Failed to get POSTGRES_SSL_MODE from env: %s", err)
 		}
 
+		zap.S().Infof("Connecting to %s@%s:%d/%s [%s]", PQUser, PQHost, PQPort, PQDBName, PQSSLMode)
+
 		conString := fmt.Sprintf("host=%s port=%d user =%s password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PQDBName, PQSSLMode)
 
 		var db *sql.DB
@@ -85,6 +87,9 @@ func Init() *Connection {
 			zap.S().Fatalf("Failed to get POSTGRES_LRU_CACHE_SIZE from env: %s", err)
 		}
 		cache, err := lru.NewARC(PQLRUSize)
+		if err != nil {
+			zap.S().Fatalf("Failed to create ARC: %s", err)
+		}
 		conn = &Connection{
 			db:                     db,
 			cache:                  cache,
