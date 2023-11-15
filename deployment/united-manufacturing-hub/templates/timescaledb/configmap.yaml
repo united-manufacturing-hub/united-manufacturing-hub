@@ -7578,7 +7578,7 @@ data:
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
 
     -------------------- DATAMODEL V2 --------------------
-    CREATE TABLE assets (
+    CREATE TABLE asset (
       id SERIAL PRIMARY KEY,
       enterprise TEXT NOT NULL,
       site TEXT,
@@ -7593,7 +7593,7 @@ data:
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
-      asset SERIAL REFERENCES assets(id) NOT NULL,
+      asset_id INT REFERENCES asset(id) NOT NULL,
       value REAL
     );
 
@@ -7601,7 +7601,7 @@ data:
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
-      asset SERIAL REFERENCES assets(id) NOT NULL,
+      asset_id INT REFERENCES asset(id) NOT NULL,
       value TEXT
     );
 

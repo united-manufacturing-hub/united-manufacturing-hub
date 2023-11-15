@@ -62,7 +62,7 @@ jobs:
           # Execute SQL commands
           echo "Setting up database schema..."
           docker exec -i timescaledb-1 psql -U postgres -d yourdb <<-EOSQL
-            CREATE TABLE assets (
+            CREATE TABLE asset (
               id SERIAL PRIMARY KEY,
               enterprise TEXT NOT NULL,
               site TEXT,
@@ -77,7 +77,7 @@ jobs:
               timestamp TIMESTAMPTZ NOT NULL,
               name TEXT NOT NULL,
               origin TEXT NOT NULL,
-              asset SERIAL REFERENCES assets(id) NOT NULL,
+              asset_id INT REFERENCES asset(id) NOT NULL,
               value REAL
             );
 
@@ -85,7 +85,7 @@ jobs:
               timestamp TIMESTAMPTZ NOT NULL,
               name TEXT NOT NULL,
               origin TEXT NOT NULL,
-              asset SERIAL REFERENCES assets(id) NOT NULL,
+              asset_id INT REFERENCES asset(id) NOT NULL,
               value TEXT
             );
 
@@ -95,8 +95,8 @@ jobs:
             CREATE INDEX ON tag_string (asset, timestamp DESC);
             CREATE INDEX ON tag (name);
             CREATE INDEX ON tag_string (name);
-            ALTER TABLE tag ADD UNIQUE (name, asset, timestamp);
-            ALTER TABLE tag_string ADD UNIQUE (name, asset, timestamp);
+            ALTER TABLE tag ADD UNIQUE (name, asset_id, timestamp);
+            ALTER TABLE tag_string ADD UNIQUE (name, asset_id, timestamp);
           EOSQL
       
 
@@ -204,7 +204,7 @@ jobs:
         run: |
           docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM tag;"
           docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM tag_string;"
-          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM assets;"
+          docker exec timescaledb-1 psql -U postgres -d yourdb -c "SELECT * FROM asset;"
 
       # Log
       - name: Log

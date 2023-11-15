@@ -103,7 +103,7 @@ func Init() *Connection {
 			row := db.QueryRow(query, table)
 			err := row.Scan(&tableName)
 			if err != nil {
-				if err == sql.ErrNoRows {
+				if errors.Is(err, sql.ErrNoRows) {
 					zap.S().Fatalf("Table %s does not exist in the database", table)
 				} else {
 					zap.S().Fatalf("Failed to check for table %s: %s", table, err)
