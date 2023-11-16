@@ -85,7 +85,7 @@ func handleParsing(msgChan chan *shared.KafkaMessage) {
 		messagesHandled++
 		elapsed := time.Since(now)
 		if int(elapsed.Seconds())%10 == 0 {
-			zap.S().Debugf("handleParsing handled %d messages in %d (%f msg/s)", messagesHandled, elapsed, float64(messagesHandled)/elapsed.Seconds())
+			zap.S().Debugf("handleParsing handled %d messages in %d (%f msg/s) [%d/%d]", messagesHandled, elapsed, float64(messagesHandled)/elapsed.Seconds(), len(msgChan), cap(msgChan))
 		}
 	}
 }
