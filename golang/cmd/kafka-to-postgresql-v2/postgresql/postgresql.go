@@ -276,7 +276,7 @@ CREATE TEMP TABLE %s
 		txnPrepareContextCtx, txnPrepareContextCancel := context.WithTimeout(context.Background(), time.Second*5)
 
 		var statementCopyTable *sql.Stmt
-		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyInSchema("pg_temp", tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
+		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
 		txnPrepareContextCancel()
 
 		if err != nil {
@@ -307,7 +307,12 @@ CREATE TEMP TABLE %s
 				shouldInsert = false
 			case msg := <-channel:
 				zap.S().Debugf("Got a message to insert")
-				_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
+
+				if tableName == "tag" {
+					_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
+				} else {
+					_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
+				}
 				if err != nil {
 					zap.S().Errorf("Failed to copy into %s: %s (%s)", tableNameTemp, err, tableName)
 					shouldInsert = false
