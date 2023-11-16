@@ -120,19 +120,19 @@ func parseValue(v interface{}) (*sharedStructs.Value, error) {
 	var val sharedStructs.Value
 
 	switch t := v.(type) {
-	case float32:
-		val.NumericValue = &t
-		val.IsNumeric = true
 	case float64:
-		f := float32(t)
-		val.NumericValue = &f
-		val.IsNumeric = true
-	case int:
 		f := float32(t)
 		val.NumericValue = &f
 		val.IsNumeric = true
 	case string:
 		val.StringValue = &t
+	case float32:
+		val.NumericValue = &t
+		val.IsNumeric = true
+	case int:
+		f := float32(t)
+		val.NumericValue = &f
+		val.IsNumeric = true
 	case bool:
 		f := float32(0.0)
 		if t {
