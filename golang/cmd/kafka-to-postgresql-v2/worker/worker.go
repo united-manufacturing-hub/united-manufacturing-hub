@@ -74,7 +74,7 @@ func handleParsing(msgChan chan *shared.KafkaMessage, i int) {
 			}
 			err = p.InsertHistorianValue(payload, timestampMs, origin, topic)
 			if err != nil {
-				zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
+				zap.S().Warnf("Failed to insert historian numerical value %+v: %s [%+v]", msg, err, payload)
 				k.MarkMessage(msg)
 				continue
 			}
