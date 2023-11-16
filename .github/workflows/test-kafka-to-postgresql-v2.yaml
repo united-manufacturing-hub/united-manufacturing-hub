@@ -62,12 +62,12 @@ jobs:
 
           # Create the database
           echo "Creating database..."
-          docker exec -u postgres timescaledb-1 createdb yourdb
+          docker exec -u postgres timescaledb-1 createdb factoryinsight
           echo "Created database"
           
           # Execute SQL commands
           echo "Setting up database schema..."
-          docker exec -i timescaledb-1 psql -U postgres -d yourdb <<-EOSQL
+          docker exec -i timescaledb-1 psql -U postgres -d factoryinsight <<-EOSQL
             CREATE TABLE asset (
               id SERIAL PRIMARY KEY,
               enterprise TEXT NOT NULL,
@@ -146,7 +146,7 @@ jobs:
           -e POSTGRES_PORT=5432 \
           -e POSTGRES_USER=postgres \
           -e POSTGRES_PASSWORD=yourpassword \
-          -e POSTGRES_DATABASE=yourdb \
+          -e POSTGRES_DATABASE=factoryinsight \
           -e POSTGRES_SSL_MODE=disable \
           -e KAFKA_BROKERS=${{ env.REDPANDA_IP }} \
           -e KAFKA_HTTP_BROKERS=${{ env.REDPANDA_PROXY_IP }} \
@@ -215,9 +215,9 @@ jobs:
         env:
           PGPASSWORD: yourpassword
         run: |
-          docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM tag;" | grep -q -v '^0$' || exit 1
-          docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM tag_string;" | grep -q -v '^0$' || exit 1
-          docker exec timescaledb-1 psql -U postgres -d yourdb -t -c "SELECT COUNT(*) FROM asset;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d factoryinsight -t -c "SELECT COUNT(*) FROM tag;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d factoryinsight -t -c "SELECT COUNT(*) FROM tag_string;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d factoryinsight -t -c "SELECT COUNT(*) FROM asset;" | grep -q -v '^0$' || exit 1
 
       # Log
       - name: Log

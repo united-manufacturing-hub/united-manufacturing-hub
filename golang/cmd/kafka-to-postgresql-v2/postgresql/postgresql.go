@@ -276,7 +276,7 @@ CREATE TEMP TABLE %s
 		txnPrepareContextCtx, txnPrepareContextCancel := context.WithTimeout(context.Background(), time.Second*5)
 
 		var statementCopyTable *sql.Stmt
-		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyInSchema("factoryinsight", tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
+		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyInSchema("pg_temp", tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
 		txnPrepareContextCancel()
 
 		if err != nil {
