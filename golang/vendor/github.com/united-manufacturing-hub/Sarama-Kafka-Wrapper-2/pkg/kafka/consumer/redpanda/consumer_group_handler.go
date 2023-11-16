@@ -94,11 +94,12 @@ outer:
 			}
 			markedMessages.Add(1)
 
-			if markedMessages.Load()%10000 == 0 || time.Since(lastCommit) > 10*time.Second {
+			if markedMessages.Load()%1000 == 0 || time.Since(lastCommit) > 10*time.Second {
 				lastCommit = time.Now()
 				for k, v := range offsets {
 					(*session).MarkOffset(k.Topic, k.Partition, v, "")
 				}
+				zap.S().Debugf("Reached %d marked messages, committing", markedMessages.Load())
 				commitWithTimeout(*session, shutdownchan)
 			}
 		case <-time.After(shared.CycleTime):

@@ -42,7 +42,7 @@ func (c *Consumer) GetStats() (uint64, uint64) {
 func NewConsumer(kafkaBrokers, httpBrokers, subscribeRegexes []string, groupName, instanceId string, greeter bool) (*Consumer, error) {
 	zap.S().Infof("connecting to brokers: %v", kafkaBrokers)
 	config := sarama.NewConfig()
-	config.Consumer.Offsets.Initial = sarama.OffsetNewest
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	config.Consumer.Group.InstanceId = instanceId
 	config.Version = sarama.V2_3_0_0
 
