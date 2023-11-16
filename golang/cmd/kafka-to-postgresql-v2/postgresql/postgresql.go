@@ -117,7 +117,7 @@ func Init() *Connection {
 		}
 
 		go conn.tagWorker("tag", conn.numericalValuesChannel)
-		go conn.tagWorker("tag_string", conn.stringValuesChannel)
+		//go conn.tagWorker("tag_string", conn.stringValuesChannel)
 
 	})
 	return conn
@@ -283,7 +283,9 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 		txnPrepareContextCtx, txnPrepareContextCancel := context.WithTimeout(context.Background(), time.Second*5)
 
 		var statementCopyTable *sql.Stmt
-		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
+		stmtCpy := pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value")
+		zap.S().Debugf("stmtCopy: %s", stmtCpy)
+		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, stmtCpy)
 		txnPrepareContextCancel()
 
 		if err != nil {
@@ -316,7 +318,6 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 				zap.S().Debugf("Got a message to insert")
 
 				var res sql.Result
-
 				if tableName == "tag" {
 					res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float32))
 					//res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float32))
