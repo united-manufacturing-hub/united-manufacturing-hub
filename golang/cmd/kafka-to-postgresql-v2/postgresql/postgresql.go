@@ -315,8 +315,8 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 			txnExecutionCancel()
 			continue
 		}
-
-		_, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
+		var copiedIn int64
+		copiedIn, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
 			"timestamp", "name", "origin", "asset_id", "value",
 		}, source)
 
@@ -359,7 +359,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 			txnExecutionCancel()
 			continue
 		}
-		zap.S().Infof("Inserted %d values inside the %s table", inserted, tableName)
+		zap.S().Infof("Inserted %d values inside the %s table", copiedIn, tableName)
 		txnExecutionCancel()
 	}
 }
