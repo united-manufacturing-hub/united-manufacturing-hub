@@ -18,7 +18,7 @@ import (
 )
 
 type DBValue struct {
-	Timestamp string //RFC3339 formatted
+	Timestamp time.Time
 	Name      string
 	Origin    string
 	AssetId   int
@@ -210,10 +210,9 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	seconds := timestampMs / 1000
 	nanoseconds := (timestampMs % 1000) * 1000000
 	timestamp := time.Unix(seconds, nanoseconds)
-	formattedTimestamp := timestamp.Format(time.RFC3339)
 	if value.IsNumeric {
 		c.numericalValuesChannel <- DBValue{
-			Timestamp: formattedTimestamp,
+			Timestamp: timestamp,
 			Name:      name,
 			Origin:    origin,
 			AssetId:   assetId,
@@ -221,7 +220,7 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 		}
 	} else {
 		c.stringValuesChannel <- DBValue{
-			Timestamp: formattedTimestamp,
+			Timestamp: timestamp,
 			Name:      name,
 			Origin:    origin,
 			AssetId:   assetId,
