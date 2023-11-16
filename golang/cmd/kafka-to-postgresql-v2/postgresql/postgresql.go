@@ -364,20 +364,20 @@ CREATE TEMP TABLE %s
 			txnExecutionCancel()
 			continue
 		}
-
-		zap.S().Debugf("CLOSE COPY TABLE")
-		// Cleanup the statement, dropping allocated memory
-		err = statementCopyTable.Close()
-		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopy: %s (%s)", err, tableName)
-			err = txn.Rollback()
+		/*
+			zap.S().Debugf("CLOSE COPY TABLE")
+			// Cleanup the statement, dropping allocated memory
+			err = statementCopyTable.Close()
 			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+				zap.S().Warnf("Failed to close stmtCopy: %s (%s)", err, tableName)
+				err = txn.Rollback()
+				if err != nil {
+					zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+				}
+				txnExecutionCancel()
+				continue
 			}
-			txnExecutionCancel()
-			continue
-		}
-
+		*/
 		zap.S().Debugf("Pre-commit")
 		now := time.Now()
 		err = txn.Commit()
