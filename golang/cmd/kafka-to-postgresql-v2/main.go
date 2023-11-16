@@ -24,6 +24,7 @@ func main() {
 	_ = worker.GetOrInit()
 
 	awaitShutdown()
+	// We should never get to this await, but better to have it then to always close the program
 	select {}
 }
 
