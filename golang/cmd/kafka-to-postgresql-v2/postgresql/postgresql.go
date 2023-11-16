@@ -17,7 +17,7 @@ import (
 )
 
 type DBValue struct {
-	Timestamp time.Time
+	Timestamp string //RFC3339 formatted
 	Name      string
 	Origin    string
 	AssetId   int
@@ -209,9 +209,10 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	seconds := timestampMs / 1000
 	nanoseconds := (timestampMs % 1000) * 1000000
 	timestamp := time.Unix(seconds, nanoseconds)
+	formattedTimestamp := timestamp.Format(time.RFC3339)
 	if value.IsNumeric {
 		c.numericalValuesChannel <- DBValue{
-			Timestamp: timestamp,
+			Timestamp: formattedTimestamp,
 			Name:      name,
 			Origin:    origin,
 			AssetId:   assetId,
@@ -219,7 +220,7 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 		}
 	} else {
 		c.stringValuesChannel <- DBValue{
-			Timestamp: timestamp,
+			Timestamp: formattedTimestamp,
 			Name:      name,
 			Origin:    origin,
 			AssetId:   assetId,
@@ -317,13 +318,12 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 
 				var res sql.Result
 
-				formattedTimestamp := msg.Timestamp.Format(time.RFC3339)
 				if tableName == "tag" {
 					//res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
-					res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), formattedTimestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
+					res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
 				} else {
 					//res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
-					res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), formattedTimestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
+					res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
 				}
 
 				if err != nil {
