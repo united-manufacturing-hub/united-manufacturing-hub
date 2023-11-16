@@ -36,13 +36,13 @@ func GetOrInit() *Worker {
 func (w *Worker) startWorkLoop() {
 	zap.S().Debugf("Started work loop")
 	messageChannel := w.kafka.GetMessages()
-	for i := 0; i < runtime.NumCPU(); i++ {
-		go handleParsing(messageChannel)
+	for i := 0; i < runtime.NumCPU()*512; i++ {
+		go handleParsing(messageChannel, i)
 	}
 	zap.S().Debugf("Started all workers")
 }
 
-func handleParsing(msgChan chan *shared.KafkaMessage) {
+func handleParsing(msgChan chan *shared.KafkaMessage, i int) {
 	k := kafka.GetOrInit()
 	p := postgresql.GetOrInit()
 	messagesHandled := 0
@@ -85,7 +85,7 @@ func handleParsing(msgChan chan *shared.KafkaMessage) {
 		messagesHandled++
 		elapsed := time.Since(now)
 		if int(elapsed.Seconds())%10 == 0 {
-			zap.S().Debugf("handleParsing handled %d messages in %d (%f msg/s) [%d/%d]", messagesHandled, elapsed, float64(messagesHandled)/elapsed.Seconds(), len(msgChan), cap(msgChan))
+			zap.S().Debugf("handleParsing [%d] handled %d messages in %s (%f msg/s) [%d/%d]", i, messagesHandled, elapsed, float64(messagesHandled)/elapsed.Seconds(), len(msgChan), cap(msgChan))
 		}
 	}
 }
