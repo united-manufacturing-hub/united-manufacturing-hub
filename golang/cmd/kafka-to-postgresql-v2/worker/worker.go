@@ -57,7 +57,7 @@ func (w *Worker) startWorkLoop() {
 				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
 				continue
 			}
-			err = w.postgres.InsertHistorianValue(payload, timestampMs, origin, topic, payload.Name)
+			err = w.postgres.InsertHistorianValue(payload, timestampMs, origin, topic)
 			if err != nil {
 				zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
 				continue

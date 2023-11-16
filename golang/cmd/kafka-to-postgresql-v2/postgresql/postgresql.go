@@ -19,7 +19,6 @@ import (
 
 type DBValue struct {
 	Timestamp time.Time
-	Name      string
 	Origin    string
 	AssetId   int
 	Value     *sharedStructs.Value
@@ -216,7 +215,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	return id, nil
 }
 
-func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails, name string) error {
+func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
@@ -227,7 +226,6 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	if value.IsNumeric {
 		c.numericalValuesChannel <- DBValue{
 			Timestamp: timestamp,
-			Name:      name,
 			Origin:    origin,
 			AssetId:   assetId,
 			Value:     value,
@@ -235,7 +233,6 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	} else {
 		c.stringValuesChannel <- DBValue{
 			Timestamp: timestamp,
-			Name:      name,
 			Origin:    origin,
 			AssetId:   assetId,
 			Value:     value,
@@ -260,7 +257,7 @@ func (s *Source) Values() ([]any, error) {
 	case msg := <-s.datachan:
 		values := make([]any, 5)
 		values[0] = msg.Timestamp
-		values[1] = msg.Name
+		values[1] = msg.Value.Name
 		values[2] = msg.Origin
 		values[3] = msg.AssetId
 		if s.isNumeric {
