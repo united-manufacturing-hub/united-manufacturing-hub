@@ -21,27 +21,8 @@ func (c *GroupHandler) Setup(_ sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-func commit(session sarama.ConsumerGroupSession) chan bool {
-	now := time.Now()
-	zap.S().Debugf("Committing messages")
-	session.Commit()
-	zap.S().Debugf("Commit took %s", time.Since(now))
-	return nil
-}
-
-func commitWithTimeout(session sarama.ConsumerGroupSession, shutdownchannel chan bool) {
-	timeout := time.NewTimer(30 * time.Second)
-	select {
-	case <-timeout.C:
-		zap.S().Debugf("Timeout reached, closing consumer")
-		shutdown(shutdownchannel)
-	case <-commit(session):
-		zap.S().Debugf("Cleanup commit finished")
-	}
-}
-
 func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
-	commitWithTimeout(session, c.shutdownChannel)
+	zap.S().Debugf("Begin cleanup")
 	shutdown(c.shutdownChannel)
 	// Wait for one cycle to finish
 	time.Sleep(shared.CycleTime)
@@ -50,6 +31,7 @@ func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 }
 
 func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	zap.S().Debugf("Begin ConsumeClaim")
 	// This must be smaller then Config.Consumer.Group.Rebalance.Timeout (default 60s)
 	go consumer(&session, &claim, c.incomingMessages, c.shutdownChannel, c.consumedMessages)
 	go marker(&session, c.messagesToMark, c.shutdownChannel, c.markedMessages)
@@ -65,6 +47,7 @@ type TopicPartition struct {
 }
 
 func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, shutdownchan chan bool, markedMessages *atomic.Uint64) {
+	zap.S().Debugf("begin marker")
 	lastCommit := time.Now()
 	offsets := make(map[TopicPartition]int64)
 	lastLoopCommited := false
@@ -103,7 +86,6 @@ outer:
 				}
 				clear(offsets)
 				zap.S().Debugf("Marked offsets")
-				commitWithTimeout(*session, shutdownchan)
 				lastLoopCommited = true
 			}
 		case <-time.After(shared.CycleTime):
@@ -115,13 +97,13 @@ outer:
 	for k, v := range offsets {
 		(*session).MarkOffset(k.Topic, k.Partition, v, "")
 	}
-	commitWithTimeout(*session, shutdownchan)
 	zap.S().Debugf("Goodbye from marker (%d-%s)", (*session).GenerationID(), (*session).MemberID())
 }
 
 func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, shutdownchan chan bool, consumedMessages *atomic.Uint64) {
-	timer := time.NewTimer(shared.CycleTime)
-	timerTenSeconds := time.NewTimer(10 * time.Second)
+	zap.S().Debugf("begin consumer")
+	ticker := time.NewTicker(shared.CycleTime)
+	ticker10Seconds := time.NewTicker(10 * time.Second)
 	messagesHandledCurrTenSeconds := 0.0
 outer:
 	for {
@@ -141,9 +123,9 @@ outer:
 			incomingMessages <- shared.FromConsumerMessage(message)
 			consumedMessages.Add(1)
 			messagesHandledCurrTenSeconds++
-		case <-timer.C:
+		case <-ticker.C:
 			continue
-		case <-timerTenSeconds.C:
+		case <-ticker10Seconds.C:
 			msgPerSecond := messagesHandledCurrTenSeconds / 10
 			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s)", (*session).MemberID(), (*session).GenerationID(), msgPerSecond)
 			messagesHandledCurrTenSeconds = 0
