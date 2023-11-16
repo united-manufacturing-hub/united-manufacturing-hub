@@ -15,8 +15,8 @@ import (
 func main() {
 	InitLogging()
 	InitPrometheus()
-	_ = postgresql.Init()
-	_ = kafka.Init()
+	_ = postgresql.GetOrInit()
+	_ = kafka.GetOrInit()
 	InitHealthCheck()
 	_ = worker.Init()
 
@@ -45,7 +45,6 @@ func InitPrometheus() {
 }
 
 func InitHealthCheck() {
-
 	zap.S().Debugf("Setting up healthcheck")
 
 	health := healthcheck.NewHandler()

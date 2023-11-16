@@ -42,7 +42,7 @@ type Connection struct {
 var conn *Connection
 var once sync.Once
 
-func Init() *Connection {
+func GetOrInit() *Connection {
 	once.Do(func() {
 		zap.S().Debugf("Setting up postgresql")
 		// Postgres
@@ -368,7 +368,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 
 func GetHealthCheck() healthcheck.Check {
 	return func() error {
-		if Init().IsAvailable() {
+		if GetOrInit().IsAvailable() {
 			return nil
 		} else {
 			return errors.New("healthcheck failed to reach database")

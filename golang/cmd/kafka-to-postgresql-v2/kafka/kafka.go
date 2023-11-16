@@ -22,10 +22,10 @@ type Connection struct {
 var conn *Connection
 var once sync.Once
 
-func Init() *Connection {
-	zap.S().Debugf("kafka.Init()")
+func GetOrInit() *Connection {
+	zap.S().Debugf("kafka.GetOrInit()")
 	once.Do(func() {
-		zap.S().Debugf("kafka.Init().once")
+		zap.S().Debugf("kafka.GetOrInit().once")
 		KafkaBrokers, err := env.GetAsString("KAFKA_BROKERS", true, "http://united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092")
 		if err != nil {
 			zap.S().Fatalf("Failed to get KAFKA_BROKERS from env")
@@ -43,9 +43,9 @@ func Init() *Connection {
 		if err != nil {
 			zap.S().Fatalf("Failed to create kafka client: %s", err)
 		}
-		zap.S().Debugf("kafka.Init().once.consumer.Start()")
+		zap.S().Debugf("kafka.GetOrInit().once.consumer.Start()")
 		err = consumer.Start()
-		zap.S().Debugf("post kafka.Init().once.consumer.Start()")
+		zap.S().Debugf("post kafka.GetOrInit().once.consumer.Start()")
 		if err != nil {
 			zap.S().Fatalf("Failed to start consumer: %s", err)
 		}
@@ -69,7 +69,7 @@ var lastChangeUTCSeconds atomic.Int64
 
 func GetLivenessCheck() healthcheck.Check {
 	return func() error {
-		marked, _ := Init().consumer.GetStats()
+		marked, _ := GetOrInit().consumer.GetStats()
 		oldValue := lastMarked.Swap(marked)
 		nowUTCSeconds := time.Now().UTC().Unix()
 		if oldValue < marked {
@@ -92,7 +92,7 @@ func GetLivenessCheck() healthcheck.Check {
 
 func GetReadinessCheck() healthcheck.Check {
 	return func() error {
-		if Init().consumer.IsRunning() {
+		if GetOrInit().consumer.IsRunning() {
 			return nil
 		} else {
 			return errors.New("kafka consumer is not running")

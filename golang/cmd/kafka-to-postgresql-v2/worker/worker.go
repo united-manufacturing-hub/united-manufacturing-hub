@@ -3,11 +3,14 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"github.com/Jeffail/tunny"
 	"github.com/goccy/go-json"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
+	"runtime"
 	"sync"
 )
 
@@ -22,8 +25,8 @@ var once sync.Once
 func Init() *Worker {
 	once.Do(func() {
 		worker = &Worker{
-			kafka:    kafka.Init(),
-			postgres: postgresql.Init(),
+			kafka:    kafka.GetOrInit(),
+			postgres: postgresql.GetOrInit(),
 		}
 		go worker.startWorkLoop()
 	})
@@ -33,43 +36,51 @@ func Init() *Worker {
 func (w *Worker) startWorkLoop() {
 	zap.S().Debugf("Started work loop")
 	messageChannel := w.kafka.GetMessages()
+	numCPUs := runtime.NumCPU()
+	pool := tunny.NewFunc(numCPUs, handleParsing)
+	defer pool.Close()
 	for {
 		msg := <-messageChannel
-		topic, err := recreateTopic(msg)
-		if err != nil {
-			zap.S().Warnf("Failed to parse message %+v into topic: %s", msg, err)
-			w.kafka.MarkMessage(msg)
-			continue
-		}
-		if topic == nil {
-			zap.S().Fatalf("topic is null, after successful parsing, this should never happen !: %+v", msg)
-		}
-
-		origin, hasOrigin := msg.Headers["x-origin"]
-		if !hasOrigin {
-			origin = "unknown"
-		}
-
-		switch topic.Usecase {
-		case "historian":
-			payload, timestampMs, err := parseHistorianPayload(msg.Value)
-			if err != nil {
-				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
-				continue
-			}
-			err = w.postgres.InsertHistorianValue(payload, timestampMs, origin, topic)
-			if err != nil {
-				zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
-				continue
-			}
-		case "analytics":
-			zap.S().Warnf("Analytics not yet supported, ignoring")
-		default:
-			zap.S().Errorf("Unknown usecase %s", topic.Usecase)
-		}
-		w.kafka.MarkMessage(msg)
-
+		pool.Process(msg)
 	}
+}
+
+func handleParsing(msgX interface{}) interface{} {
+	msg := msgX.(*shared.KafkaMessage)
+	topic, err := recreateTopic(msg)
+	if err != nil {
+		zap.S().Warnf("Failed to parse message %+v into topic: %s", msg, err)
+		kafka.GetOrInit().MarkMessage(msg)
+		return nil
+	}
+	if topic == nil {
+		zap.S().Fatalf("topic is null, after successful parsing, this should never happen !: %+v", msg)
+	}
+
+	origin, hasOrigin := msg.Headers["x-origin"]
+	if !hasOrigin {
+		origin = "unknown"
+	}
+
+	switch topic.Usecase {
+	case "historian":
+		payload, timestampMs, err := parseHistorianPayload(msg.Value)
+		if err != nil {
+			zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
+			return nil
+		}
+		err = postgresql.GetOrInit().InsertHistorianValue(payload, timestampMs, origin, topic)
+		if err != nil {
+			zap.S().Warnf("Failed to insert historian numerical value %+v: %s", msg, err)
+			return nil
+		}
+	case "analytics":
+		zap.S().Warnf("Analytics not yet supported, ignoring")
+	default:
+		zap.S().Errorf("Unknown usecase %s", topic.Usecase)
+	}
+	kafka.GetOrInit().MarkMessage(msg)
+	return nil
 }
 
 func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
