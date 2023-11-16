@@ -23,7 +23,6 @@ var conn *Connection
 var once sync.Once
 
 func GetOrInit() *Connection {
-	zap.S().Debugf("kafka.GetOrInit()")
 	once.Do(func() {
 		zap.S().Debugf("kafka.GetOrInit().once")
 		KafkaBrokers, err := env.GetAsString("KAFKA_BROKERS", true, "http://united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092")

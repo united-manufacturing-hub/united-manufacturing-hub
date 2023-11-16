@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,6 +38,11 @@ type Connection struct {
 	cache                  *lru.ARCCache
 	numericalValuesChannel chan DBValue
 	stringValuesChannel    chan DBValue
+	numericalReceived      atomic.Uint64
+	stringsReceived        atomic.Uint64
+	databaseInserted       atomic.Uint64
+	lruHits                atomic.Uint64
+	lruMisses              atomic.Uint64
 }
 
 var conn *Connection
@@ -128,6 +134,7 @@ func GetOrInit() *Connection {
 			isNumeric: false,
 		})
 
+		go conn.postStats()
 	})
 	return conn
 }
@@ -144,6 +151,48 @@ func (c *Connection) IsAvailable() bool {
 		return false
 	}
 	return true
+}
+
+func (c *Connection) postStats() {
+	lastNumericalReceived := uint64(0)
+	lastStringsReceived := uint64(0)
+	lastDatabaseInserted := uint64(0)
+
+	tenSecondTicker := time.NewTicker(10 * time.Second)
+	for {
+		<-tenSecondTicker.C
+		currentNumericalReceived := c.numericalReceived.Load()
+		currentStringsReceived := c.stringsReceived.Load()
+		currentDatabaseInserted := c.databaseInserted.Load()
+
+		// Calculating LRU hit percentage
+		lruHits := c.lruHits.Load()
+		lruMisses := c.lruMisses.Load()
+		totalLRUAccesses := lruHits + lruMisses
+		lruHitPercentage := 0.0
+		if totalLRUAccesses > 0 {
+			lruHitPercentage = float64(lruHits) / float64(totalLRUAccesses) * 100
+		}
+
+		// Calculating rates per second for the past 10 seconds
+		numericalRate := float64(currentNumericalReceived-lastNumericalReceived) / 10.0
+		stringRate := float64(currentStringsReceived-lastStringsReceived) / 10.0
+		databaseInsertionRate := float64(currentDatabaseInserted-lastDatabaseInserted) / 10.0
+
+		// Logging the stats
+		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions/s: %.2f",
+			lruHitPercentage, numericalRate, stringRate, databaseInsertionRate)
+
+		// Update the last values for the next tick
+		lastNumericalReceived = currentNumericalReceived
+		lastStringsReceived = currentStringsReceived
+		lastDatabaseInserted = currentDatabaseInserted
+
+		// Check if there were no database insertions
+		if currentDatabaseInserted == 0 {
+			zap.S().Info("No database insertions so far")
+		}
+	}
 }
 
 func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, error) {
@@ -175,8 +224,10 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 
 	value, ok := c.cache.Get(cacheKey.String())
 	if ok {
+		c.lruHits.Add(1)
 		return value.(int), nil
 	}
+	c.lruMisses.Add(1)
 
 	// Prepare an upsert query with RETURNING clause
 	// This is atomic
@@ -230,6 +281,7 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 			AssetId:   assetId,
 			Value:     value,
 		}
+		c.numericalReceived.Add(1)
 	} else {
 		c.stringValuesChannel <- DBValue{
 			Timestamp: timestamp,
@@ -237,8 +289,8 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 			AssetId:   assetId,
 			Value:     value,
 		}
+		c.stringsReceived.Add(1)
 	}
-	zap.S().Debugf("Inserted value. NumericChannelLenght: %d/%d, StringChannelLenght: %d/%d", len(c.numericalValuesChannel), cap(c.numericalValuesChannel), len(c.stringValuesChannel), cap(c.stringValuesChannel))
 	return nil
 }
 
@@ -362,6 +414,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 			continue
 		}
 		zap.S().Infof("Inserted %d values inside the %s table", copiedIn, tableName)
+		c.databaseInserted.Add(1)
 		txnExecutionCancel()
 	}
 }
