@@ -22,21 +22,17 @@ func (c *GroupHandler) Setup(session sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+func (c *GroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 	zap.S().Debugf("Begin cleanup")
 	shutdown(c.shutdownChannel)
 	// Wait for one cycle to finish
-	time.Sleep(shared.CycleTime)
 	zap.S().Debugf("Goodbye from cleanup")
 	return nil
 }
 
 func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	zap.S().Debugf("Begin ConsumeClaim")
-	// This must be smaller then Config.Consumer.Group.Rebalance.Timeout (default 60s)
 	consumer(&session, &claim, c.incomingMessages, c.shutdownChannel, c.consumedMessages)
-	// Wait for c.shutdownChannel to have a value
-	//<-c.shutdownChannel
 	zap.S().Debugf("Goodbye from consume claim (%d-%s)", session.GenerationID(), session.MemberID())
 	return nil
 }
@@ -88,8 +84,6 @@ outer:
 				zap.S().Debugf("Marked offsets")
 				lastLoopCommited = true
 			}
-		case <-time.After(shared.CycleTime):
-			continue
 		case <-(*session).Context().Done():
 			zap.S().Debugf("Marker for session %s:%d is done", (*session).MemberID(), (*session).GenerationID())
 			break outer
@@ -104,8 +98,7 @@ outer:
 }
 
 func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, shutdownchan chan bool, consumedMessages *atomic.Uint64) {
-	zap.S().Debugf("begin consumer")
-	ticker := time.NewTicker(shared.CycleTime)
+	zap.S().Debugf("begin consumer %d:%s Messages: %d/%d", (*session).GenerationID(), (*session).MemberID(), len((*claim).Messages()), cap((*claim).Messages()))
 	ticker10Seconds := time.NewTicker(10 * time.Second)
 	messagesHandledCurrTenSeconds := 0.0
 outer:
@@ -126,8 +119,6 @@ outer:
 			incomingMessages <- shared.FromConsumerMessage(message)
 			consumedMessages.Add(1)
 			messagesHandledCurrTenSeconds++
-		case <-ticker.C:
-			continue
 		case <-ticker10Seconds.C:
 			msgPerSecond := messagesHandledCurrTenSeconds / 10
 			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s) [Claims: %+v] [InitialOffset: %d], [HighWaterMarkOffset: %d]", (*session).MemberID(), (*session).GenerationID(), msgPerSecond, (*session).Claims(), (*claim).InitialOffset(), (*claim).HighWaterMarkOffset())
