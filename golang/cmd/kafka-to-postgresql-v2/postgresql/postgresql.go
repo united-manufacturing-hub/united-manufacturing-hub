@@ -43,6 +43,8 @@ type Connection struct {
 	databaseInserted       atomic.Uint64
 	lruHits                atomic.Uint64
 	lruMisses              atomic.Uint64
+	commits                atomic.Uint64
+	commitTime             atomic.Uint64
 }
 
 var conn *Connection
@@ -190,9 +192,17 @@ func (c *Connection) postStats() {
 			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(cap(c.stringValuesChannel)) * 100
 		}
 
+		totalCommits := c.commits.Load()
+		totalCommitTime := c.commitTime.Load() // Assuming this is in milliseconds
+
+		averageCommitDuration := float64(0)
+		if totalCommits > 0 {
+			averageCommitDuration = float64(totalCommitTime) / float64(totalCommits)
+		}
+
 		// Logging the stats
-		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions/s: %.2f, Numerical Channel fill: %f, Strings Channel fill: %f",
-			lruHitPercentage, numericalRate, stringRate, databaseInsertionRate, numericalChannelFillPercentage, stringsChannelFillPercentage)
+		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions/s: %.2f, Avg Commit Duration (ms): %.2f, Numerical Channel fill: %f, Strings Channel fill: %f",
+			lruHitPercentage, numericalRate, stringRate, databaseInsertionRate, averageCommitDuration, numericalChannelFillPercentage, stringsChannelFillPercentage)
 
 		// Check if there were no database insertions
 		if currentDatabaseInserted == 0 {
@@ -412,6 +422,8 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 		zap.S().Debugf("Pre-commit")
 		now := time.Now()
 		err = txn.Commit(txnExecutionCtx)
+		c.commits.Add(1)
+		c.commitTime.Add(uint64(time.Since(now).Milliseconds()))
 		zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
 
 		if err != nil {
