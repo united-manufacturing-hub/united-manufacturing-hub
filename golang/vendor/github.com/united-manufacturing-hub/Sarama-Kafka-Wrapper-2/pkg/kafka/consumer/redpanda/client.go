@@ -205,6 +205,7 @@ func (c *Consumer) consumer() {
 		}
 
 		zap.S().Debugf("Create handler")
+		c.consumerShutdownChannel = make(chan bool, 512) // This is oversized, but it's better to be safe than sorry
 		handler := &GroupHandler{
 			incomingMessages: c.incomingMessages,
 			messagesToMark:   c.messagesToMark,
@@ -216,7 +217,6 @@ func (c *Consumer) consumer() {
 		c.createConsumerGroup()
 
 		zap.S().Debugf("Beginning consume loop")
-		drainChannel(c.consumerShutdownChannel)
 		if err := (*c.consumerGroup).Consume(c.cgContext, topicClone, handler); err != nil {
 			// Check if the error is "no topics provided"
 			if err.Error() == "no topics provided" {
@@ -320,17 +320,5 @@ func (c *Consumer) createConsumerGroup() {
 func shutdown(c chan bool) {
 	for i := 0; i < cap(c)-1; i++ {
 		c <- true
-	}
-}
-
-func drainChannel(c chan bool) {
-outer:
-	for {
-		select {
-		case <-c:
-			continue
-		default:
-			break outer
-		}
 	}
 }
