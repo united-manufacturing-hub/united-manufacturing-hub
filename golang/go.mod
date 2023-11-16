@@ -19,7 +19,6 @@ go 1.21
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 	github.com/IBM/sarama v1.42.1
-	github.com/Jeffail/tunny v0.1.4
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coocood/freecache v1.2.4
