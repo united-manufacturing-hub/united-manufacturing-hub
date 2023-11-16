@@ -7,8 +7,8 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq"
-	_ "github.com/lib/pq"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
@@ -34,7 +34,7 @@ func (r *DBValue) GetValue() interface{} {
 }
 
 type Connection struct {
-	db                     *sql.DB
+	db                     *pgxpool.Pool
 	cache                  *lru.ARCCache
 	numericalValuesChannel chan DBValue
 	stringValuesChannel    chan DBValue
@@ -76,8 +76,8 @@ func Init() *Connection {
 
 		conString := fmt.Sprintf("host=%s port=%d user =%s password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PQDBName, PQSSLMode)
 
-		var db *sql.DB
-		db, err = sql.Open("postgres", conString)
+		var db *pgxpool.Pool
+		db, err = pgxpool.New(context.Background(), conString)
 		if err != nil {
 			zap.S().Fatalf("Failed to open connection to postgres database: %s", err)
 		}
