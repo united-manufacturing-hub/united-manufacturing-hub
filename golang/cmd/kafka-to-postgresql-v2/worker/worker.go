@@ -8,7 +8,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
-	"strconv"
 	"sync"
 )
 
@@ -129,15 +128,15 @@ func parseValue(v interface{}) (*sharedStructs.Value, error) {
 		val.NumericValue = &f
 		val.IsNumeric = true
 	case string:
-		if num, err := strconv.ParseFloat(t, 64); err == nil {
-			n := num
-			val.NumericValue = &n
-			val.IsNumeric = true
-		} else {
-			val.StringValue = &t
+		val.StringValue = &t
+	case bool:
+		f := 0.0
+		if t {
+			f = 1.0
 		}
+		val.NumericValue = &f
 	default:
-		return nil, fmt.Errorf("Unsupported type: %T (%v)", t, v)
+		return nil, fmt.Errorf("unsupported type: %T (%v)", t, v)
 	}
 
 	return &val, nil
