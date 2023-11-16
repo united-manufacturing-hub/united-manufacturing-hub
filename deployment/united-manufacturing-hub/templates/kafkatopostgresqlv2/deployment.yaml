@@ -76,10 +76,10 @@ spec:
             - name: LOGGING_LEVEL
               value: PRODUCTION
 
-            - name: KAFKA_BOOTSTRAP_SERVER
+            - name: KAFKA_BROKERS
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
-            - name: MEMORY_REQUEST
-              value: {{.Values.kafkatopostgresqlv2.resources.requests.memory}}
+            - name: KAFKA_HTTP_BROKERS
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:8082
 
             - name: MY_POD_NAME
               valueFrom:
@@ -90,36 +90,22 @@ spec:
                 fieldRef:
                     fieldPath: metadata.labels['app.kubernetes.io/name']
 
-            - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
-            - name: KAFKA_SSL_KEY_PASSWORD
-              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresqlv2.sslKeyPassword | quote}}
-              {{- else}}
-              value: ""
-              {{- end}}
-
             - name: SERIAL_NUMBER
               value: {{.Values._000_commonConfig.serialNumber | quote}}
 
-            {{if .Values._000_commonConfig.debug.enableFGTrace}}
-            - name: DEBUG_ENABLE_FGTRACE
-              value: "true"
-            {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:
               path: /live
               port: 8086
             periodSeconds: 5
-          startupProbe:
+            initialDelaySeconds: 60
+          readinessProbe:
             httpGet:
-              path: /live
+              path: /ready
               port: 8086
-            periodSeconds: 10
-            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
-
-
+            periodSeconds: 5
+            initialDelaySeconds: 5
           resources:
             limits:
               cpu: {{.Values.kafkatopostgresqlv2.resources.limits.cpu}}
@@ -127,13 +113,6 @@ spec:
             requests:
               cpu: {{.Values.kafkatopostgresqlv2.resources.requests.cpu}}
               memory: {{.Values.kafkatopostgresqlv2.resources.requests.memory}}
-      {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-      volumes:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-certificates
-          secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-secrets
-      {{end}}
-
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}

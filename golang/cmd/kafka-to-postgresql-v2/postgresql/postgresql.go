@@ -414,7 +414,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 			continue
 		}
 		zap.S().Infof("Inserted %d values inside the %s table", copiedIn, tableName)
-		c.databaseInserted.Add(copiedIn)
+		c.databaseInserted.Add(uint64(copiedIn))
 		txnExecutionCancel()
 	}
 }
