@@ -103,6 +103,7 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 		} else {
 			v = parsed
 			vFound = true
+			v.Name = key
 		}
 	}
 
