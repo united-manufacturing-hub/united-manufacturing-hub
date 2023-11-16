@@ -154,9 +154,7 @@ func (c *Connection) IsAvailable() bool {
 }
 
 func (c *Connection) postStats() {
-	lastNumericalReceived := uint64(0)
-	lastStringsReceived := uint64(0)
-	lastDatabaseInserted := uint64(0)
+	startTime := time.Now()
 
 	tenSecondTicker := time.NewTicker(10 * time.Second)
 	for {
@@ -175,9 +173,10 @@ func (c *Connection) postStats() {
 		}
 
 		// Calculating rates per second for the past 10 seconds
-		numericalRate := float64(currentNumericalReceived-lastNumericalReceived) / 10.0
-		stringRate := float64(currentStringsReceived-lastStringsReceived) / 10.0
-		databaseInsertionRate := float64(currentDatabaseInserted-lastDatabaseInserted) / 10.0
+		elapsedTime := time.Since(startTime).Seconds()
+		numericalRate := float64(currentNumericalReceived) / elapsedTime
+		stringRate := float64(currentStringsReceived) / elapsedTime
+		databaseInsertionRate := float64(currentDatabaseInserted) / elapsedTime
 
 		numericalChannelFill := len(c.numericalValuesChannel)
 		numericalChannelFillPercentage := float64(0)
@@ -194,11 +193,6 @@ func (c *Connection) postStats() {
 		// Logging the stats
 		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions/s: %.2f, Numerical Channel fill: %f, Strings Channel fill: %f",
 			lruHitPercentage, numericalRate, stringRate, databaseInsertionRate, numericalChannelFillPercentage, stringsChannelFillPercentage)
-
-		// Update the last values for the next tick
-		lastNumericalReceived = currentNumericalReceived
-		lastStringsReceived = currentStringsReceived
-		lastDatabaseInserted = currentDatabaseInserted
 
 		// Check if there were no database insertions
 		if currentDatabaseInserted == 0 {
