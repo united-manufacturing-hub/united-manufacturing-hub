@@ -1199,3 +1199,20 @@ databridge:
     limits:
       cpu: "500m"
       memory: "450Mi"
+
+
+### kafka-to-postgresql ###
+kafkatopostgresqlv2:
+  enabled: false
+  image:
+    repository: ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2
+    pullPolicy: IfNotPresent
+    # tag: latest
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 300Mi
+    requests:
+      cpu: 100m
+      memory: 150Mi
