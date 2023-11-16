@@ -7,6 +7,7 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
@@ -273,22 +274,22 @@ CREATE TEMP TABLE %s
 			continue
 		}
 		txnPrepareContextCtx, txnPrepareContextCancel := context.WithTimeout(context.Background(), time.Second*5)
-		/*
-			var statementCopyTable *sql.Stmt
-			statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
-			txnPrepareContextCancel()
 
+		var statementCopyTable *sql.Stmt
+		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, pq.CopyInSchema("factoryinsight", tableNameTemp, "timestamp", "name", "origin", "asset_id", "value"))
+		txnPrepareContextCancel()
+
+		if err != nil {
+			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
+			err = txn.Rollback()
 			if err != nil {
-				zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
-				err = txn.Rollback()
-				if err != nil {
-					zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-				}
-
-				txnExecutionCancel()
-				continue
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-		*/
+
+			txnExecutionCancel()
+			continue
+		}
+
 		// Copy in data, until:
 		// 30-second Ticker
 		// 10000 entries
@@ -306,8 +307,7 @@ CREATE TEMP TABLE %s
 				shouldInsert = false
 			case msg := <-channel:
 				zap.S().Debugf("Got a message to insert")
-				//_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
-				_, err = txn.Exec(`COPY "tmp_tag_string" ("timestamp", "name", "origin", "asset_id", "value") FROM STDIN`, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
+				_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue())
 				if err != nil {
 					zap.S().Errorf("Failed to copy into %s: %s (%s)", tableNameTemp, err, tableName)
 					shouldInsert = false
@@ -365,20 +365,20 @@ CREATE TEMP TABLE %s
 			txnExecutionCancel()
 			continue
 		}
-		/*
-			zap.S().Debugf("CLOSE COPY TABLE")
-			// Cleanup the statement, dropping allocated memory
-			err = statementCopyTable.Close()
+
+		zap.S().Debugf("CLOSE COPY TABLE")
+		// Cleanup the statement, dropping allocated memory
+		err = statementCopyTable.Close()
+		if err != nil {
+			zap.S().Warnf("Failed to close stmtCopy: %s (%s)", err, tableName)
+			err = txn.Rollback()
 			if err != nil {
-				zap.S().Warnf("Failed to close stmtCopy: %s (%s)", err, tableName)
-				err = txn.Rollback()
-				if err != nil {
-					zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-				}
-				txnExecutionCancel()
-				continue
+				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
-		*/
+			txnExecutionCancel()
+			continue
+		}
+
 		zap.S().Debugf("Pre-commit")
 		now := time.Now()
 		err = txn.Commit()
