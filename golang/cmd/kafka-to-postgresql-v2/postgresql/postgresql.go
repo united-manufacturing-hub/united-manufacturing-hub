@@ -308,13 +308,18 @@ CREATE TEMP TABLE %s
 			case msg := <-channel:
 				zap.S().Debugf("Got a message to insert")
 
+				var res sql.Result
+
 				if tableName == "tag" {
-					_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
+					//res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
+					res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
 				} else {
-					_, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
+					//res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
+					res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
 				}
+
 				if err != nil {
-					zap.S().Errorf("Failed to copy into %s: %s (%s)", tableNameTemp, err, tableName)
+					zap.S().Errorf("Failed to copy into %s: %s (%s) [%+v]", tableNameTemp, err, tableName, res)
 					shouldInsert = false
 					continue
 				}
