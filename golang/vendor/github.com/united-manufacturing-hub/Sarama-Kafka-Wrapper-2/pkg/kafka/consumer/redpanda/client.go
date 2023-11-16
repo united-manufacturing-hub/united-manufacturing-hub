@@ -16,22 +16,22 @@ import (
 )
 
 type Consumer struct {
-	rawClient        sarama.Client
-	httpClients      []string
-	consumerGroup    *sarama.ConsumerGroup
-	regexTopics      []regexp.Regexp
-	actualTopics     []string
-	actualTopicsLock sync.RWMutex
-	running          atomic.Bool
-	cgContext        context.Context
-	cgCncl           context.CancelFunc
-	incomingMessages chan *shared.KafkaMessage
-	messagesToMark   chan *shared.KafkaMessage
-	markedMessages   atomic.Uint64
-	consumedMessages atomic.Uint64
-	shallConsumerRun atomic.Bool
-	groupName        string
-	greeter          bool
+	rawClient               sarama.Client
+	httpClients             []string
+	consumerGroup           *sarama.ConsumerGroup
+	regexTopics             []regexp.Regexp
+	actualTopics            []string
+	actualTopicsLock        sync.RWMutex
+	running                 atomic.Bool
+	cgContext               context.Context
+	cgCncl                  context.CancelFunc
+	incomingMessages        chan *shared.KafkaMessage
+	messagesToMark          chan *shared.KafkaMessage
+	markedMessages          atomic.Uint64
+	consumedMessages        atomic.Uint64
+	consumerShutdownChannel chan bool
+	groupName               string
+	greeter                 bool
 }
 
 // GetStats returns marked and consumed message counts.
@@ -62,17 +62,17 @@ func NewConsumer(kafkaBrokers, httpBrokers, subscribeRegexes []string, groupName
 	}
 
 	return &Consumer{
-		rawClient:        c,
-		httpClients:      httpBrokers,
-		regexTopics:      rgxTopics,
-		actualTopics:     []string{},
-		running:          atomic.Bool{},
-		groupName:        groupName,
-		markedMessages:   atomic.Uint64{},
-		shallConsumerRun: atomic.Bool{},
-		incomingMessages: make(chan *shared.KafkaMessage, 100_000),
-		messagesToMark:   make(chan *shared.KafkaMessage, 100_000),
-		greeter:          greeter,
+		rawClient:               c,
+		httpClients:             httpBrokers,
+		regexTopics:             rgxTopics,
+		actualTopics:            []string{},
+		running:                 atomic.Bool{},
+		groupName:               groupName,
+		markedMessages:          atomic.Uint64{},
+		consumerShutdownChannel: make(chan bool, 512), // This is oversized, but it's better to be safe than sorry
+		incomingMessages:        make(chan *shared.KafkaMessage, 100_000),
+		messagesToMark:          make(chan *shared.KafkaMessage, 100_000),
+		greeter:                 greeter,
 	}, nil
 }
 
@@ -177,7 +177,7 @@ func (c *Consumer) generateTopics() {
 			c.actualTopicsLock.Unlock()
 			zap.S().Debugf("updated actual topics")
 			c.cgCncl()
-			c.shallConsumerRun.Store(false)
+			shutdown(c.consumerShutdownChannel)
 			c.cgContext, c.cgCncl = context.WithCancel(context.Background())
 		} else {
 			zap.S().Debugf("topics unchanged")
@@ -210,13 +210,13 @@ func (c *Consumer) consumer() {
 			messagesToMark:   c.messagesToMark,
 			markedMessages:   &c.markedMessages,
 			consumedMessages: &c.consumedMessages,
-			running:          &c.shallConsumerRun,
+			shutdownChannel:  c.consumerShutdownChannel,
 		}
 		zap.S().Debugf("Create consumer group")
 		c.createConsumerGroup()
 
 		zap.S().Debugf("Beginning consume loop")
-		c.shallConsumerRun.Store(true)
+		drainChannel(c.consumerShutdownChannel)
 		if err := (*c.consumerGroup).Consume(c.cgContext, topicClone, handler); err != nil {
 			// Check if the error is "no topics provided"
 			if err.Error() == "no topics provided" {
@@ -315,4 +315,22 @@ func (c *Consumer) createConsumerGroup() {
 	zap.S().Debugf("Created consumer group")
 	c.consumerGroup = &cg
 
+}
+
+func shutdown(c chan bool) {
+	for i := 0; i < cap(c)-1; i++ {
+		c <- true
+	}
+}
+
+func drainChannel(c chan bool) {
+outer:
+	for {
+		select {
+		case <-c:
+			continue
+		default:
+			break outer
+		}
+	}
 }

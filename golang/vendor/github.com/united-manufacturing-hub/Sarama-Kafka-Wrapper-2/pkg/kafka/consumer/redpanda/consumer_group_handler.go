@@ -9,7 +9,7 @@ import (
 )
 
 type GroupHandler struct {
-	running          *atomic.Bool
+	shutdownChannel  chan bool
 	markedMessages   *atomic.Uint64
 	consumedMessages *atomic.Uint64
 	incomingMessages chan *shared.KafkaMessage
@@ -18,7 +18,6 @@ type GroupHandler struct {
 
 func (c *GroupHandler) Setup(_ sarama.ConsumerGroupSession) error {
 	zap.S().Debugf("Hello from setup")
-	c.running.Store(true)
 	return nil
 }
 
@@ -30,19 +29,20 @@ func commit(session sarama.ConsumerGroupSession) chan bool {
 	return nil
 }
 
-func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+func commitWithTimeout(session sarama.ConsumerGroupSession, shutdownchannel chan bool) {
 	timeout := time.NewTimer(30 * time.Second)
-
 	select {
 	case <-timeout.C:
 		zap.S().Debugf("Timeout reached, closing consumer")
-		c.running.Store(false)
-		return nil
+		shutdown(shutdownchannel)
 	case <-commit(session):
 		zap.S().Debugf("Cleanup commit finished")
 	}
+}
 
-	c.running.Store(false)
+func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+	commitWithTimeout(session, c.shutdownChannel)
+	shutdown(c.shutdownChannel)
 	// Wait for one cycle to finish
 	time.Sleep(shared.CycleTime)
 	zap.S().Debugf("Goodbye from cleanup")
@@ -51,15 +51,12 @@ func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 
 func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	// This must be smaller then Config.Consumer.Group.Rebalance.Timeout (default 60s)
-	go consumer(&session, &claim, c.incomingMessages, c.running, c.consumedMessages)
-	go marker(&session, c.messagesToMark, c.running, c.markedMessages)
-	// Wait for c.running to be false
-	var err error
-	for c.running.Load() {
-		time.Sleep(shared.CycleTime * 10)
-	}
+	go consumer(&session, &claim, c.incomingMessages, c.shutdownChannel, c.consumedMessages)
+	go marker(&session, c.messagesToMark, c.shutdownChannel, c.markedMessages)
+	// Wait for c.shutdownChannel to have a value
+	<-c.shutdownChannel
 	zap.S().Debugf("Goodbye from consume claim (%d-%s)", session.GenerationID(), session.MemberID())
-	return err
+	return nil
 }
 
 type TopicPartition struct {
@@ -67,15 +64,18 @@ type TopicPartition struct {
 	Partition int32
 }
 
-func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, running *atomic.Bool, markedMessages *atomic.Uint64) {
+func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, shutdownchan chan bool, markedMessages *atomic.Uint64) {
 	lastCommit := time.Now()
 	offsets := make(map[TopicPartition]int64)
-	for running.Load() {
+outer:
+	for {
 		select {
+		case <-shutdownchan:
+			break outer
 		case message := <-messagesToMark:
 			if session == nil || (*session) == nil {
-				running.Store(false)
-				continue
+				shutdown(shutdownchan)
+				break
 			}
 			if message == nil {
 				continue
@@ -99,7 +99,7 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 				for k, v := range offsets {
 					(*session).MarkOffset(k.Topic, k.Partition, v, "")
 				}
-				commit(*session)
+				commitWithTimeout(*session, shutdownchan)
 			}
 		case <-time.After(shared.CycleTime):
 			continue
@@ -110,19 +110,23 @@ func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.Ka
 	for k, v := range offsets {
 		(*session).MarkOffset(k.Topic, k.Partition, v, "")
 	}
-	commit(*session)
+	commitWithTimeout(*session, shutdownchan)
 	zap.S().Debugf("Goodbye from marker (%d-%s)", (*session).GenerationID(), (*session).MemberID())
 }
 
-func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, running *atomic.Bool, consumedMessages *atomic.Uint64) {
+func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, shutdownchan chan bool, consumedMessages *atomic.Uint64) {
 	timer := time.NewTimer(shared.CycleTime)
 	timerTenSeconds := time.NewTimer(10 * time.Second)
 	messagesHandledCurrTenSeconds := 0.0
-	for running.Load() {
+outer:
+	for {
 		select {
+		case <-shutdownchan:
+			break outer
 		case message := <-(*claim).Messages():
 			if session == nil {
-				running.Store(false)
+				shutdown(shutdownchan)
+				continue
 			}
 			if message == nil {
 				time.Sleep(shared.CycleTime)
@@ -136,7 +140,7 @@ func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupC
 			timer.Reset(shared.CycleTime)
 			continue
 		case <-timerTenSeconds.C:
-			zap.S().Debugf("Consumer for session %s:%d is running", (*session).MemberID(), (*session).GenerationID())
+			zap.S().Debugf("Consumer for session %s:%d is shutdownChannel", (*session).MemberID(), (*session).GenerationID())
 			continue
 		}
 	}
