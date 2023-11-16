@@ -18,25 +18,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
   labels:
-    {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 4}}
-  {{if .Values.kafkatopostgresql.annotations}}
+    {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 4}}
+  {{if .Values.kafkatopostgresqlv2.annotations}}
   annotations:
-    {{- toYaml .Values.kafkatopostgresql.annotations | nindent 4}}
+    {{- toYaml .Values.kafkatopostgresqlv2.annotations | nindent 4}}
   {{end}}
 spec:
-  replicas: {{.Values.kafkatopostgresql.replicas}}
+  replicas: {{.Values.kafkatopostgresqlv2.replicas}}
   selector:
     matchLabels:
-      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
-        {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 8}}
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+        {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 8}}
     spec:
       affinity:
         podAntiAffinity:
@@ -45,24 +45,24 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
                 topologyKey: "kubernetes.io/hostname"
       # Be nice to kafka & the db
       terminationGracePeriodSeconds: 180
       initContainers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
-          {{if .Values.kafkatopostgresql.image.tag}}
-          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Values.kafkatopostgresql.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{if .Values.kafkatopostgresqlv2.image.tag}}
+          image: {{.Values.kafkatopostgresqlv2.initContainer.repository}}:{{.Values.kafkatopostgresqlv2.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          image: {{.Values.kafkatopostgresqlv2.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
           {{end}}
           {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresql.initContainer.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkatopostgresqlv2.initContainer.pullPolicy}}
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
@@ -73,21 +73,21 @@ spec:
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresql.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresqlv2.sslKeyPassword | quote}}
               {{- else}}
               value: ""
               {{- end}}
       containers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
-          {{if .Values.kafkatopostgresql.image.tag}}
-          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Values.kafkatopostgresql.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+          {{if .Values.kafkatopostgresqlv2.image.tag}}
+          image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Values.kafkatopostgresqlv2.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{- else}}
-          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
+          imagePullPolicy: {{.Values.kafkatopostgresqlv2.image.pullPolicy}}
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
+            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-certificates
               mountPath: /SSL_certs/kafka
               readOnly: true
           {{end}}
@@ -119,7 +119,7 @@ spec:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: MEMORY_REQUEST
-              value: {{.Values.kafkatopostgresql.resources.requests.memory}}
+              value: {{.Values.kafkatopostgresqlv2.resources.requests.memory}}
 
             - name: MY_POD_NAME
               valueFrom:
@@ -134,7 +134,7 @@ spec:
               value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
             - name: KAFKA_SSL_KEY_PASSWORD
               {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresql.sslKeyPassword | quote}}
+              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresqlv2.sslKeyPassword | quote}}
               {{- else}}
               value: ""
               {{- end}}
@@ -162,16 +162,16 @@ spec:
 
           resources:
             limits:
-              cpu: {{.Values.kafkatopostgresql.resources.limits.cpu}}
-              memory: {{.Values.kafkatopostgresql.resources.limits.memory}}
+              cpu: {{.Values.kafkatopostgresqlv2.resources.limits.cpu}}
+              memory: {{.Values.kafkatopostgresqlv2.resources.limits.memory}}
             requests:
-              cpu: {{.Values.kafkatopostgresql.resources.requests.cpu}}
-              memory: {{.Values.kafkatopostgresql.resources.requests.memory}}
+              cpu: {{.Values.kafkatopostgresqlv2.resources.requests.cpu}}
+              memory: {{.Values.kafkatopostgresqlv2.resources.requests.memory}}
       {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
       volumes:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-certificates
           secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-secrets
+            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-secrets
       {{end}}
 
       serviceAccountName: ""

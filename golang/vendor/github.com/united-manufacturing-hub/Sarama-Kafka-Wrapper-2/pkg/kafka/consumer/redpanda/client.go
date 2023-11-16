@@ -329,8 +329,10 @@ func (c *Consumer) reporter() {
 			len(c.incomingMessages), cap(c.incomingMessages),
 			len(c.messagesToMark), cap(c.messagesToMark))
 
-		for err := range (*c.consumerGroup).Errors() {
-			zap.S().Debugf("Consumer group error: %v", err)
+		if c.consumerGroup != nil {
+			for err := range (*c.consumerGroup).Errors() {
+				zap.S().Debugf("Consumer group error: %v", err)
+			}
 		}
 	}
 }
