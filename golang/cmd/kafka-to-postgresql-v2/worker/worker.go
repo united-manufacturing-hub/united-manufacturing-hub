@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"runtime"
 	"sync"
+	"time"
 )
 
 type Worker struct {
@@ -22,7 +23,7 @@ type Worker struct {
 var worker *Worker
 var once sync.Once
 
-func Init() *Worker {
+func GetOrInit() *Worker {
 	once.Do(func() {
 		worker = &Worker{
 			kafka:    kafka.GetOrInit(),
@@ -37,10 +38,19 @@ func (w *Worker) startWorkLoop() {
 	zap.S().Debugf("Started work loop")
 	messageChannel := w.kafka.GetMessages()
 	numCPUs := runtime.NumCPU()
+	zap.S().Debugf("Starting workloop kafka pre-processor with %d goroutines", numCPUs)
 	pool := tunny.NewFunc(numCPUs, handleParsing)
 	defer pool.Close()
+	messages := float64(0)
+	now := time.Now()
 	for {
 		msg := <-messageChannel
+		messages++
+		if messages/10 == 0 {
+			elapsed := time.Since(now)
+			perSecond := messages / elapsed.Seconds()
+			zap.S().Debugf("received messages per second: %f", perSecond)
+		}
 		pool.Process(msg)
 	}
 }

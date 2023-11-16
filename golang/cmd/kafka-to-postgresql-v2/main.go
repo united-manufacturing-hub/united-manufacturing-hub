@@ -18,7 +18,7 @@ func main() {
 	_ = postgresql.GetOrInit()
 	_ = kafka.GetOrInit()
 	InitHealthCheck()
-	_ = worker.Init()
+	_ = worker.GetOrInit()
 
 	select {}
 }
