@@ -12,7 +12,7 @@ type TopicDetails struct {
 }
 
 type Value struct {
-	NumericValue *float64
+	NumericValue *float32
 	StringValue  *string
 	IsNumeric    bool
 	Name         string

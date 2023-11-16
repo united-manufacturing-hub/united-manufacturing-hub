@@ -318,8 +318,8 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 				var res sql.Result
 
 				if tableName == "tag" {
-					res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
-					//res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float64))
+					res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float32))
+					//res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float32))
 				} else {
 					res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
 					//res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
