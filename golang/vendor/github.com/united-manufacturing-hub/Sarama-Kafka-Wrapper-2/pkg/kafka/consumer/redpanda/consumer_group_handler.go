@@ -67,6 +67,7 @@ type TopicPartition struct {
 func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, shutdownchan chan bool, markedMessages *atomic.Uint64) {
 	lastCommit := time.Now()
 	offsets := make(map[TopicPartition]int64)
+	lastLoopCommited := false
 outer:
 	for {
 		select {
@@ -94,13 +95,16 @@ outer:
 			}
 			markedMessages.Add(1)
 
-			if markedMessages.Load()%1000 == 0 || time.Since(lastCommit) > 10*time.Second {
+			if !lastLoopCommited && (markedMessages.Load()%1000 == 0 || time.Since(lastCommit) > 10*time.Second) {
+				zap.S().Debugf("Reached %d marked messages, committing", markedMessages.Load())
 				lastCommit = time.Now()
 				for k, v := range offsets {
 					(*session).MarkOffset(k.Topic, k.Partition, v, "")
 				}
-				zap.S().Debugf("Reached %d marked messages, committing", markedMessages.Load())
+				clear(offsets)
+				zap.S().Debugf("Marked offsets")
 				commitWithTimeout(*session, shutdownchan)
+				lastLoopCommited = true
 			}
 		case <-time.After(shared.CycleTime):
 			continue
@@ -138,10 +142,11 @@ outer:
 			consumedMessages.Add(1)
 			messagesHandledCurrTenSeconds++
 		case <-timer.C:
-			timer.Reset(shared.CycleTime)
 			continue
 		case <-timerTenSeconds.C:
-			zap.S().Debugf("Consumer for session %s:%d is shutdownChannel", (*session).MemberID(), (*session).GenerationID())
+			msgPerSecond := messagesHandledCurrTenSeconds / 10
+			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s)", (*session).MemberID(), (*session).GenerationID(), msgPerSecond)
+			messagesHandledCurrTenSeconds = 0
 			continue
 		}
 	}
