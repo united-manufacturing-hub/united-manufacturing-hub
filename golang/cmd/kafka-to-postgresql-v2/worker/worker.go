@@ -137,27 +137,29 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 
 func parseValue(v interface{}) (*sharedStructs.Value, error) {
 	var val sharedStructs.Value
+	var numericVal float32
 
 	switch t := v.(type) {
 	case float64:
-		f := float32(t)
-		val.NumericValue = &f
+		numericVal = float32(t)
+		val.NumericValue = &numericVal
 		val.IsNumeric = true
 	case string:
 		val.StringValue = &t
 	case float32:
-		val.NumericValue = &t
+		numericVal = t
+		val.NumericValue = &numericVal
 		val.IsNumeric = true
 	case int:
-		f := float32(t)
-		val.NumericValue = &f
+		numericVal = float32(t)
+		val.NumericValue = &numericVal
 		val.IsNumeric = true
 	case bool:
-		f := float32(0.0)
+		numericVal = 0.0
 		if t {
-			f = 1.0
+			numericVal = 1.0
 		}
-		val.NumericValue = &f
+		val.NumericValue = &numericVal
 	default:
 		return nil, fmt.Errorf("unsupported type: %T (%v)", t, v)
 	}

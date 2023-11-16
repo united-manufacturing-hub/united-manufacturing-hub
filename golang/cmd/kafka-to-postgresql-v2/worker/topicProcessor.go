@@ -35,25 +35,25 @@ func recreateTopic(msg *shared.KafkaMessage) (*sharedStructs.TopicDetails, error
 		return nil, errors.New("invalid topic format")
 	}
 
-	result := make(map[string]string)
-	for i, name := range topicRegex.SubexpNames() {
-		if i != 0 && name != "" {
-			if matches[i] != "" {
-				result[name] = matches[i]
-			} else {
-				result[name] = ""
-			}
+	// Directly creating and filling the TopicDetails struct
+	return &sharedStructs.TopicDetails{
+		Enterprise:     getMatch(matches, "enterprise"),
+		Site:           getMatch(matches, "site"),
+		Area:           getMatch(matches, "area"),
+		ProductionLine: getMatch(matches, "productionLine"),
+		WorkCell:       getMatch(matches, "workCell"),
+		OriginId:       getMatch(matches, "originId"),
+		Usecase:        getMatch(matches, "usecase"),
+		Tag:            getMatch(matches, "tag"),
+	}, nil
+}
+
+// getMatch safely retrieves the match from the regular expression results
+func getMatch(matches []string, name string) string {
+	for i, n := range topicRegex.SubexpNames() {
+		if n == name {
+			return matches[i]
 		}
 	}
-
-	return &sharedStructs.TopicDetails{
-		Enterprise:     result["enterprise"],
-		Site:           result["site"],
-		Area:           result["area"],
-		ProductionLine: result["productionLine"],
-		WorkCell:       result["workCell"],
-		OriginId:       result["originId"],
-		Usecase:        result["usecase"],
-		Tag:            result["tag"],
-	}, nil
+	return ""
 }

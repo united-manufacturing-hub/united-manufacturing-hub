@@ -179,9 +179,21 @@ func (c *Connection) postStats() {
 		stringRate := float64(currentStringsReceived-lastStringsReceived) / 10.0
 		databaseInsertionRate := float64(currentDatabaseInserted-lastDatabaseInserted) / 10.0
 
+		numericalChannelFill := len(c.numericalValuesChannel)
+		numericalChannelFillPercentage := float64(0)
+		if numericalChannelFill > 0 {
+			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(cap(c.numericalValuesChannel)) * 100
+		}
+
+		stringsChannelFill := len(c.stringValuesChannel)
+		stringsChannelFillPercentage := float64(0)
+		if stringsChannelFill > 0 {
+			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(cap(c.stringValuesChannel)) * 100
+		}
+
 		// Logging the stats
-		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions/s: %.2f",
-			lruHitPercentage, numericalRate, stringRate, databaseInsertionRate)
+		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions/s: %.2f, Numerical Channel fill: %f, Strings Channel fill: %f",
+			lruHitPercentage, numericalRate, stringRate, databaseInsertionRate, numericalChannelFillPercentage, stringsChannelFillPercentage)
 
 		// Update the last values for the next tick
 		lastNumericalReceived = currentNumericalReceived
