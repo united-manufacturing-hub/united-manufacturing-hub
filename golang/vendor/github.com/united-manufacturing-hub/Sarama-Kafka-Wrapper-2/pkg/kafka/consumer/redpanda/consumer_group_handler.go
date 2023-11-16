@@ -16,8 +16,9 @@ type GroupHandler struct {
 	messagesToMark   chan *shared.KafkaMessage
 }
 
-func (c *GroupHandler) Setup(_ sarama.ConsumerGroupSession) error {
+func (c *GroupHandler) Setup(session sarama.ConsumerGroupSession) error {
 	zap.S().Debugf("Hello from setup")
+	go marker(&session, c.messagesToMark, c.shutdownChannel, c.markedMessages)
 	return nil
 }
 
@@ -33,10 +34,9 @@ func (c *GroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
 func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	zap.S().Debugf("Begin ConsumeClaim")
 	// This must be smaller then Config.Consumer.Group.Rebalance.Timeout (default 60s)
-	go consumer(&session, &claim, c.incomingMessages, c.shutdownChannel, c.consumedMessages)
-	go marker(&session, c.messagesToMark, c.shutdownChannel, c.markedMessages)
+	consumer(&session, &claim, c.incomingMessages, c.shutdownChannel, c.consumedMessages)
 	// Wait for c.shutdownChannel to have a value
-	<-c.shutdownChannel
+	//<-c.shutdownChannel
 	zap.S().Debugf("Goodbye from consume claim (%d-%s)", session.GenerationID(), session.MemberID())
 	return nil
 }

@@ -55,6 +55,13 @@ func GetOrInit() *Connection {
 	return conn
 }
 
+func (c *Connection) Close() {
+	err := c.consumer.Close()
+	if err != nil {
+		zap.S().Errorf("Failed to close kafka: %s", err)
+	}
+}
+
 func (c *Connection) GetMessages() chan *shared.KafkaMessage {
 	return c.consumer.GetMessages()
 }

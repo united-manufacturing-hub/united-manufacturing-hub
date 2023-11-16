@@ -10,6 +10,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/worker"
 	"go.uber.org/zap"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -20,7 +23,24 @@ func main() {
 	InitHealthCheck()
 	_ = worker.GetOrInit()
 
+	awaitShutdown()
 	select {}
+}
+
+func awaitShutdown() {
+	// Allow graceful shutdown
+	sigs := make(chan os.Signal, 1)
+	// It's important to handle both signals, allowing Kafka to shut down gracefully !
+	// If this is not possible, it will attempt to rebalance itself, which will increase startup time
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	sig := <-sigs
+	// Log the received signal
+	zap.S().Infof("Received SIG %v", sig)
+
+	zap.S().Debugf("Shutting down kafka")
+	kafka.GetOrInit().Close()
+	os.Exit(0)
 }
 
 func InitLogging() {
