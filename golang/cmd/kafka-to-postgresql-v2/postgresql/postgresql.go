@@ -7,8 +7,8 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/lib/pq"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
@@ -76,8 +76,10 @@ func Init() *Connection {
 
 		conString := fmt.Sprintf("host=%s port=%d user =%s password=%s dbname=%s sslmode=%s", PQHost, PQPort, PQUser, PQPassword, PQDBName, PQSSLMode)
 
+		extablishContext, extablishContextCncl := get5SecondContext()
+		defer extablishContextCncl()
 		var db *pgxpool.Pool
-		db, err = pgxpool.New(context.Background(), conString)
+		db, err = pgxpool.New(extablishContext, conString)
 		if err != nil {
 			zap.S().Fatalf("Failed to open connection to postgres database: %s", err)
 		}
@@ -101,11 +103,13 @@ func Init() *Connection {
 		}
 
 		// Validate that tables exist
+		contextCheckTables, contextCheckTablesCncl := get5SecondContext()
+		defer contextCheckTablesCncl()
 		tablesToCheck := []string{"asset", "tag", "tag_string"}
 		for _, table := range tablesToCheck {
 			var tableName string
 			query := `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`
-			row := db.QueryRow(query, table)
+			row := db.QueryRow(contextCheckTables, query, table)
 			err := row.Scan(&tableName)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
@@ -116,8 +120,14 @@ func Init() *Connection {
 			}
 		}
 
-		go conn.tagWorker("tag", conn.numericalValuesChannel)
-		//go conn.tagWorker("tag_string", conn.stringValuesChannel)
+		go conn.tagWorker("tag", &Source{
+			datachan:  conn.numericalValuesChannel,
+			isNumeric: true,
+		})
+		go conn.tagWorker("tag_string", &Source{
+			datachan:  conn.stringValuesChannel,
+			isNumeric: false,
+		})
 
 	})
 	return conn
@@ -127,9 +137,9 @@ func (c *Connection) IsAvailable() bool {
 	if c.db == nil {
 		return false
 	}
-	ctx, cncl := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cncl := get5SecondContext()
 	defer cncl()
-	err := c.db.PingContext(ctx)
+	err := c.db.Ping(ctx)
 	if err != nil {
 		zap.S().Debugf("Failed to ping database: %s", err)
 		return false
@@ -177,8 +187,10 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 		DO UPDATE SET enterprise = EXCLUDED.enterprise
 		RETURNING id`
 
+	queryRowContext, queryRowContextCncl := get5SecondContext()
+	defer queryRowContextCncl()
 	var id int
-	err := c.db.QueryRow(upsertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
+	err := c.db.QueryRow(queryRowContext, upsertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
 	if err == nil {
 		// Asset was inserted or updated and id was retrieved
 		return id, nil
@@ -192,7 +204,9 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 		(workcell IS NULL OR workcell = $5) AND 
 		(origin_id IS NULL OR origin_id = $6)`
 
-	err = c.db.QueryRow(selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
+	selectRowContext, selectRowContextCncl := get5SecondContext()
+	defer selectRowContextCncl()
+	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
@@ -231,34 +245,51 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	return nil
 }
 
-func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
+// Source This implementation is not thread-safe !
+type Source struct {
+	datachan  chan DBValue
+	isNumeric bool
+}
+
+func (s *Source) Next() bool {
+	return len(s.datachan) != 0
+}
+
+func (s *Source) Values() ([]any, error) {
+	select {
+	case msg := <-s.datachan:
+		values := make([]any, 5)
+		values[0] = msg.Timestamp
+		values[1] = msg.Name
+		values[2] = msg.Origin
+		values[3] = msg.AssetId
+		if s.isNumeric {
+			values[4] = msg.GetValue().(float32)
+		} else {
+			values[4] = msg.GetValue().(string)
+		}
+		return values, nil
+	default:
+		return nil, errors.New("no more rows available")
+	}
+}
+
+func (s *Source) Err() error {
+	return nil
+}
+
+func (c *Connection) tagWorker(tableName string, source *Source) {
 	zap.S().Debugf("Starting tagWorker for %s", tableName)
 	// The context is only used for preparation, not execution!
 
-	preparationCtx, preparationCancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer preparationCancel()
-
 	var err error
-
 	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
-
-	var statementCreateTmpTag *sql.Stmt
-	statementCreateTmpTag, err = c.db.PrepareContext(preparationCtx, fmt.Sprintf(`
-	   CREATE TEMP TABLE %s
-	          ( LIKE %s INCLUDING DEFAULTS )
-	          ON COMMIT DROP;
-	   `, tableNameTemp, tableName)) // This is safe, as tableName is not user provided
-	if err != nil {
-		zap.S().Fatalf("Failed to prepare statement for statementCreateTmpTag: %v (%s)", err, tableName)
-	}
-
-	tickerEvery30Seconds := time.NewTicker(5 * time.Second)
 	for {
 		time.Sleep(1 * time.Second)
-		txnExecutionCtx, txnExecutionCancel := context.WithTimeout(context.Background(), time.Minute)
+		txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
 		// Create transaction
-		var txn *sql.Tx
-		txn, err = c.db.BeginTx(txnExecutionCtx, nil)
+		var txn pgx.Tx
+		txn, err = c.db.BeginTx(txnExecutionCtx, pgx.TxOptions{})
 		if err != nil {
 			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
 
@@ -267,11 +298,16 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 		}
 
 		// Create the temp table for COPY
-		stmt := txn.Stmt(statementCreateTmpTag)
-		_, err = stmt.ExecContext(txnExecutionCtx)
+		_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
+	   CREATE TEMP TABLE %s
+	          ( LIKE %s INCLUDING DEFAULTS )
+	          ON COMMIT DROP;
+	   `, tableNameTemp, tableName))
 		if err != nil {
 			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
-			err = txn.Rollback()
+			rollbackCtx, rollbackCtxCncl := get5SecondContext()
+			err = txn.Rollback(rollbackCtx)
+			rollbackCtxCncl()
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
@@ -280,93 +316,15 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 			continue
 		}
 
-		txnPrepareContextCtx, txnPrepareContextCancel := context.WithTimeout(context.Background(), time.Second*5)
-
-		var statementCopyTable *sql.Stmt
-		stmtCpy := pq.CopyIn(tableNameTemp, "timestamp", "name", "origin", "asset_id", "value")
-		zap.S().Debugf("stmtCopy: %s", stmtCpy)
-		statementCopyTable, err = txn.PrepareContext(txnPrepareContextCtx, stmtCpy)
-		txnPrepareContextCancel()
-
-		if err != nil {
-			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-
-			txnExecutionCancel()
-			continue
-		}
-
-		// Copy in data, until:
-		// 30-second Ticker
-		// 10000 entries
-		// then commit
-
-		inserted := 0
-		shouldInsert := true
-		for shouldInsert {
-			select {
-			case <-tickerEvery30Seconds.C:
-				zap.S().Debugf("Got tick, manually committing")
-				if inserted == 0 {
-					zap.S().Debugf("Skipping")
-				}
-				shouldInsert = false
-			case msg := <-channel:
-				zap.S().Debugf("Got a message to insert")
-
-				var res sql.Result
-				if tableName == "tag" {
-					res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float32))
-					//res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(float32))
-				} else {
-					res, err = statementCopyTable.ExecContext(txnExecutionCtx, msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
-					//res, err = txn.ExecContext(txnExecutionCtx, fmt.Sprintf(`INSERT INTO %s (timestamp, name, origin, asset_id, value) VALUES ($1, $2, $3, $4, $5);`, tableName), msg.Timestamp, msg.Name, msg.Origin, msg.AssetId, msg.GetValue().(string))
-				}
-
-				if err != nil {
-					zap.S().Errorf("Failed to copy into %s: %s (%s) [%+v]", tableNameTemp, err, tableName, res)
-					shouldInsert = false
-					continue
-				}
-				inserted++
-				if inserted > 10000 {
-					zap.S().Debugf("Got 10k, manually committing")
-					shouldInsert = false
-				}
-			}
-		}
-
-		zap.S().Debugf("PREP INSERT SELECT")
-
-		txnPrepareContextCtx, txnPrepareContextCancel = context.WithTimeout(context.Background(), time.Second*5)
-		var statementInsertSelect *sql.Stmt
-		statementInsertSelect, err = txn.PrepareContext(txnPrepareContextCtx, fmt.Sprintf(`
-				INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
-			`, tableName, tableNameTemp)) // This is safe, as tableName is not user provided
-		txnPrepareContextCancel()
-
-		if err != nil {
-			zap.S().Warnf("Failed to prepare statementInsertSelect: %s (%s)", err, tableName)
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-			txnExecutionCancel()
-			continue
-		}
-
-		zap.S().Debugf("EXEC INSERT SELECT")
-
-		// Do insert via statementInsertSelect
-		stmtCopyToTag := txn.Stmt(statementInsertSelect)
-		_, err = stmtCopyToTag.ExecContext(txnExecutionCtx)
+		_, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
+			"timestamp", "name", "origin", "asset_id", "value",
+		}, source)
 
 		if err != nil {
 			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
-			err = txn.Rollback()
+			rollbackCtx, rollbackCtxCncl := get5SecondContext()
+			err = txn.Rollback(rollbackCtx)
+			rollbackCtxCncl()
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
@@ -374,25 +332,16 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 			continue
 		}
 
-		zap.S().Debugf("CLOSE COPY TO TMP")
-		err = stmtCopyToTag.Close()
-		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopyToTag: %s (%s)", err, tableName)
-			err = txn.Rollback()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-			txnExecutionCancel()
-			continue
-		}
+		// Do insert via statementInsertSelect
+		_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
+				INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
+			`, tableName, tableNameTemp))
 
-		zap.S().Debugf("CLOSE COPY TABLE")
-
-		// Cleanup the statement, dropping allocated memory
-		err = statementCopyTable.Close()
 		if err != nil {
-			zap.S().Warnf("Failed to close stmtCopy: %s (%s)", err, tableName)
-			err = txn.Rollback()
+			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
+			rollbackCtx, rollbackCtxCncl := get5SecondContext()
+			err = txn.Rollback(rollbackCtx)
+			rollbackCtxCncl()
 			if err != nil {
 				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
 			}
@@ -402,7 +351,7 @@ func (c *Connection) tagWorker(tableName string, channel chan DBValue) {
 
 		zap.S().Debugf("Pre-commit")
 		now := time.Now()
-		err = txn.Commit()
+		err = txn.Commit(txnExecutionCtx)
 		zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
 
 		if err != nil {
@@ -423,4 +372,12 @@ func GetHealthCheck() healthcheck.Check {
 			return errors.New("healthcheck failed to reach database")
 		}
 	}
+}
+
+func get5SecondContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Second)
+}
+
+func get1MinuteContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 1*time.Minute)
 }
