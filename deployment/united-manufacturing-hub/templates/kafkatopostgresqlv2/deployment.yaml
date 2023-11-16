@@ -49,34 +49,6 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       # Be nice to kafka & the db
       terminationGracePeriodSeconds: 180
-      initContainers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
-          {{if .Values.kafkatopostgresqlv2.image.tag}}
-          image: {{.Values.kafkatopostgresqlv2.initContainer.repository}}:{{.Values.kafkatopostgresqlv2.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- else}}
-          image: {{.Values.kafkatopostgresqlv2.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-certificates
-              mountPath: /SSL_certs/kafka
-              readOnly: true
-          {{end}}
-          {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresqlv2.initContainer.pullPolicy}}
-          env:
-            - name: KAFKA_BOOTSTRAP_SERVER
-              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
-            - name: KAFKA_TOPICS
-              value: {{.Values._000_commonConfig.infrastructure.kafka.defaultTopics}}
-
-            - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
-            - name: KAFKA_SSL_KEY_PASSWORD
-              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresqlv2.sslKeyPassword | quote}}
-              {{- else}}
-              value: ""
-              {{- end}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
           {{if .Values.kafkatopostgresqlv2.image.tag}}
@@ -85,23 +57,11 @@ spec:
           image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
           imagePullPolicy: {{.Values.kafkatopostgresqlv2.image.pullPolicy}}
-          {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2-certificates
-              mountPath: /SSL_certs/kafka
-              readOnly: true
-          {{end}}
           ports:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          {{if .Values._000_commonConfig.debug.enableFGTrace}}
-            - containerPort: 1337
-              name: fgtrace
-              protocol: TCP
-          {{end}}
           env:
-
             - name: POSTGRES_HOST
               value: {{.Values.factoryinsight.db_host}}
             - name: POSTGRES_DATABASE

@@ -90,6 +90,9 @@ outer:
 			}
 		case <-time.After(shared.CycleTime):
 			continue
+		case <-(*session).Context().Done():
+			zap.S().Debugf("Marker for session %s:%d is done", (*session).MemberID(), (*session).GenerationID())
+			break outer
 		}
 	}
 
@@ -127,9 +130,12 @@ outer:
 			continue
 		case <-ticker10Seconds.C:
 			msgPerSecond := messagesHandledCurrTenSeconds / 10
-			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s)", (*session).MemberID(), (*session).GenerationID(), msgPerSecond)
+			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s) [Claims: %+v] [InitialOffset: %d], [HighWaterMarkOffset: %d]", (*session).MemberID(), (*session).GenerationID(), msgPerSecond, (*session).Claims(), (*claim).InitialOffset(), (*claim).HighWaterMarkOffset())
 			messagesHandledCurrTenSeconds = 0
 			continue
+		case <-(*session).Context().Done():
+			zap.S().Debugf("Consumer for session %s:%d is done", (*session).MemberID(), (*session).GenerationID())
+			break outer
 		}
 	}
 	zap.S().Debugf("Goodbye from consumer (%d-%s)", (*session).GenerationID(), (*session).MemberID())

@@ -325,7 +325,7 @@ func (c *Consumer) reporter() {
 		<-ticker10Seconds.C
 		marked, consumed := c.GetStats()
 		zap.S().Infof("marked: %d, consumed: %d", marked, consumed)
-		zap.S().Info("Incoming messages channel (%d/%d), Marked messages channel (%d/%d)",
+		zap.S().Infof("Incoming messages channel (%d/%d), Marked messages channel (%d/%d)",
 			len(c.incomingMessages), cap(c.incomingMessages),
 			len(c.messagesToMark), cap(c.messagesToMark))
 
