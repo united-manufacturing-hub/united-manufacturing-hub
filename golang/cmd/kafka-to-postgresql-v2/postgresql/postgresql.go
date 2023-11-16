@@ -286,6 +286,11 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
 	for {
 		time.Sleep(1 * time.Second)
+		if !source.Next() {
+			zap.S().Debugf("No data available for %s", tableName)
+			continue
+		}
+
 		txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
 		// Create transaction
 		var txn pgx.Tx
