@@ -201,7 +201,7 @@ func (c *Connection) postStats() {
 
 		// Logging the stats
 		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration (ms): %.2f, Numerical Channel fill: %f, Strings Channel fill: %f",
-			lruHitPercentage, numericalRate, stringRate, c.databaseInserted.Load(), currentDatabaseInserted, averageCommitDuration, numericalChannelFillPercentage, stringsChannelFillPercentage)
+			lruHitPercentage, numericalRate, stringRate, c.databaseInserted.Load(), databaseInsertionRate, averageCommitDuration, numericalChannelFillPercentage, stringsChannelFillPercentage)
 
 		// Check if there were no database insertions
 		if currentDatabaseInserted == 0 {
