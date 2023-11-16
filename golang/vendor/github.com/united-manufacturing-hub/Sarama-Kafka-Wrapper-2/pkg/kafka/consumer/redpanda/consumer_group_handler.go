@@ -134,7 +134,8 @@ outer:
 			messagesHandledCurrTenSeconds = 0
 			continue
 		case <-(*session).Context().Done():
-			zap.S().Debugf("Consumer for session %s:%d is done", (*session).MemberID(), (*session).GenerationID())
+			msgPerSecond := messagesHandledCurrTenSeconds / 10
+			zap.S().Debugf("Consumer for session %s:%d is done (%f msg/s) [Claims: %+v] [InitialOffset: %d], [HighWaterMarkOffset: %d]", (*session).MemberID(), (*session).GenerationID(), msgPerSecond, (*session).Claims(), (*claim).InitialOffset(), (*claim).HighWaterMarkOffset())
 			break outer
 		}
 	}
