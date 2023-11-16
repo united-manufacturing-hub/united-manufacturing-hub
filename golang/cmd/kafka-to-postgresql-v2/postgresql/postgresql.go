@@ -7,6 +7,7 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/heptiolabs/healthcheck"
+	_ "github.com/lib/pq"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
