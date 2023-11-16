@@ -122,6 +122,10 @@ outer:
 		case <-ticker10Seconds.C:
 			msgPerSecond := messagesHandledCurrTenSeconds / 10
 			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s) [Claims: %+v] [InitialOffset: %d], [HighWaterMarkOffset: %d]", (*session).MemberID(), (*session).GenerationID(), msgPerSecond, (*session).Claims(), (*claim).InitialOffset(), (*claim).HighWaterMarkOffset())
+			if messagesHandledCurrTenSeconds == 0 {
+				zap.S().Debugf("Handler got no messages, exiting")
+				break outer
+			}
 			messagesHandledCurrTenSeconds = 0
 			continue
 		case <-(*session).Context().Done():
