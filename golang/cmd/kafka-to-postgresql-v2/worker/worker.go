@@ -130,7 +130,7 @@ func parseValue(v interface{}) (*sharedStructs.Value, error) {
 	case string:
 		val.StringValue = &t
 	case bool:
-		f := 0.0
+		f := float32(0.0)
 		if t {
 			f = 1.0
 		}
