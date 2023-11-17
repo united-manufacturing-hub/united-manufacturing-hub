@@ -83,33 +83,30 @@ jobs:
               UNIQUE (enterprise, site, area, line, workcell),
               UNIQUE (enterprise, site, area, line, workcell, origin_id)
             );
-            -- Defaults to '', so we can have ON CONFLICT queries
-
-          
+        
             CREATE TABLE tag (
               timestamp TIMESTAMPTZ NOT NULL,
               name TEXT NOT NULL,
               origin TEXT NOT NULL,
               asset_id INT REFERENCES asset(id) NOT NULL,
-              value REAL
+              value REAL,
+              UNIQUE (name, asset_id, timestamp)
             );
-
+            SELECT create_hypertable('tag', 'timestamp');
+            CREATE INDEX ON tag (asset_id, timestamp DESC);
+            CREATE INDEX ON tag (name);
+        
             CREATE TABLE tag_string (
               timestamp TIMESTAMPTZ NOT NULL,
               name TEXT NOT NULL,
               origin TEXT NOT NULL,
               asset_id INT REFERENCES asset(id) NOT NULL,
-              value TEXT
+              value TEXT,
+              UNIQUE (name, asset_id, timestamp)
             );
-
-            SELECT create_hypertable('tag', 'timestamp');
             SELECT create_hypertable('tag_string', 'timestamp');
-            CREATE INDEX ON tag (asset, timestamp DESC);
-            CREATE INDEX ON tag_string (asset, timestamp DESC);
-            CREATE INDEX ON tag (name);
+            CREATE INDEX ON tag_string (asset_id, timestamp DESC);
             CREATE INDEX ON tag_string (name);
-            ALTER TABLE tag ADD UNIQUE (name, asset_id, timestamp);
-            ALTER TABLE tag_string ADD UNIQUE (name, asset_id, timestamp);
           EOSQL
       
 

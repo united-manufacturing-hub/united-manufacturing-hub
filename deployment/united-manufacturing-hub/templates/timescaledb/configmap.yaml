@@ -7581,50 +7581,41 @@ data:
     CREATE TABLE asset (
       id SERIAL PRIMARY KEY,
       enterprise TEXT NOT NULL,
-      site TEXT,
-      area TEXT,
-      line TEXT,
-      workcell TEXT,
-      origin_id TEXT
+      site TEXT DEFAULT '' NOT NULL,
+      area TEXT DEFAULT '' NOT NULL,
+      line TEXT DEFAULT '' NOT NULL,
+      workcell TEXT DEFAULT '' NOT NULL,
+      origin_id TEXT DEFAULT '' NOT NULL,
+      UNIQUE (enterprise),
+      UNIQUE (enterprise, site),
+      UNIQUE (enterprise, site, area),
+      UNIQUE (enterprise, site, area, line),
+      UNIQUE (enterprise, site, area, line, workcell),
+      UNIQUE (enterprise, site, area, line, workcell, origin_id)
     );
-
-    -- Non null is considered distinct, so this mess has to be done :(
-    CREATE UNIQUE INDEX idx_unique_enterprise ON asset (enterprise);
-
-    CREATE UNIQUE INDEX idx_unique_enterprise_site ON asset (enterprise, COALESCE(site, ''));
-
-    CREATE UNIQUE INDEX idx_unique_enterprise_site_area ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''));
-
-    CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''));
-
-    CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line_workcell ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''));
-
-    CREATE UNIQUE INDEX idx_unique_enterprise_site_area_line_workcell_origin_id ON asset (enterprise, COALESCE(site, ''), COALESCE(area, ''), COALESCE(line, ''), COALESCE(workcell, ''), COALESCE(origin_id, ''));
 
     CREATE TABLE tag (
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
       asset_id INT REFERENCES asset(id) NOT NULL,
-      value REAL
+      value REAL,
+      UNIQUE (name, asset_id, timestamp)
     );
+    SELECT create_hypertable('tag', 'timestamp');
+    CREATE INDEX ON tag (asset_id, timestamp DESC);
+    CREATE INDEX ON tag (name);
 
     CREATE TABLE tag_string (
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
       asset_id INT REFERENCES asset(id) NOT NULL,
-      value TEXT
+      value TEXT,
+      UNIQUE (name, asset_id, timestamp)
     );
-
-    SELECT create_hypertable('tag', 'timestamp');
     SELECT create_hypertable('tag_string', 'timestamp');
-    CREATE INDEX ON tag (asset, timestamp DESC);
-    CREATE INDEX ON tag_string (asset, timestamp DESC);
-    CREATE INDEX ON tag (name);
+    CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
-    ALTER TABLE tag ADD UNIQUE (name, asset, timestamp);
-    ALTER TABLE tag_string ADD UNIQUE (name, asset, timestamp);
-
   __SQL__
 {{end}}
