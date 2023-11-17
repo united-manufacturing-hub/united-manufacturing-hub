@@ -348,8 +348,8 @@ github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4d
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1 h1:pCex5miYLZ37kVdIEd/UJ/Ix7fzSoTRcIVJv7+/spx8=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1/go.mod h1:b1vxJUohwTE7syNQoTCxdATvxDUTyC6EWFiYjHkkuEs=
-github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.20 h1:Y86kdy2Rss5xeSbe68M4RM4BrfFqaA+dC75JXwlzjj0=
-github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.20/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.21 h1:12g4ZYvp2QkiQq7sIU1L4DKusHJcLA/7gP0mlsyj2gY=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.21/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
 github.com/united-manufacturing-hub/expiremap v1.1.1 h1:v9e94HwZ+AwlRRCExErZ/Yn8hOvMa6rQjNQKUcUwo1E=
 github.com/united-manufacturing-hub/expiremap v1.1.1/go.mod h1:2WoxiolkyNqalce90Yd101zwNsH21V1Mo40/JaJivYI=
 github.com/united-manufacturing-hub/umh-utils v0.2.2 h1:3Op9Cx+fwqxL1Qtu7AytZ19LU8vOBmJSF0dsXs0Oxw4=
