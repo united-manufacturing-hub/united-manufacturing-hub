@@ -7633,14 +7633,14 @@ data:
     CREATE INDEX ON tag_string (name);
 
     CREATE OR REPLACE FUNCTION get_asset_id(
-    _enterprise text,
-    _site text DEFAULT NULL,
-    _area text DEFAULT NULL,
-    _line text DEFAULT NULL,
-    _workcell text DEFAULT NULL,
-    _origin_id text DEFAULT NULL
+        _enterprise text,
+        _site text DEFAULT NULL,
+        _area text DEFAULT NULL,
+        _line text DEFAULT NULL,
+        _workcell text DEFAULT NULL,
+        _origin_id text DEFAULT NULL
     )
-    RETURNS integer AS $$
+    RETURNS integer AS '
     DECLARE
         result_id integer;
     BEGIN
@@ -7655,9 +7655,11 @@ data:
 
         RETURN result_id;
     END;
-    $$ LANGUAGE plpgsql;
+    ' LANGUAGE plpgsql;
 
     GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+    -- $$
 
     CREATE OR REPLACE FUNCTION get_asset_ids(
     _enterprise text,
@@ -7667,7 +7669,7 @@ data:
     _workcell text DEFAULT NULL,
     _origin_id text DEFAULT NULL
     )
-    RETURNS SETOF integer AS $$
+    RETURNS SETOF integer AS '
     BEGIN
         RETURN QUERY
         SELECT id FROM asset
@@ -7678,7 +7680,7 @@ data:
         AND (workcell = _workcell OR _workcell IS NULL)
         AND (origin_id = _origin_id OR _origin_id IS NULL);
     END;
-    $$ LANGUAGE plpgsql;
+    ' LANGUAGE plpgsql;
 
     GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
