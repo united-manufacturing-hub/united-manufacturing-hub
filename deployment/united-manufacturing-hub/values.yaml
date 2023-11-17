@@ -30,7 +30,7 @@ _000_commonConfig:
         replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
     database:
       name: "umh_v2"
-      db_host: "united-manufacturing-hub"
+      host: "united-manufacturing-hub"
 
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
