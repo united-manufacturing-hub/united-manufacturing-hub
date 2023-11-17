@@ -406,7 +406,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 	var copiedIn int64
 
 	for {
-		sleepTime := calculateSleepTime(copiedIn)
+		sleepTime := c.calculateSleepTime(copiedIn)
 		time.Sleep(sleepTime)
 
 		if !source.Next() {
