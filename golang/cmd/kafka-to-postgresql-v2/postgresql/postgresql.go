@@ -230,11 +230,11 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	}
 
 	selectQuery := `SELECT id FROM asset WHERE enterprise = $1 AND 
-		(site IS NULL OR site = $2) AND 
-		(area IS NULL OR area = $3) AND 
-		(line IS NULL OR line = $4) AND 
-		(workcell IS NULL OR workcell = $5) AND 
-		(origin_id IS NULL OR origin_id = $6)`
+    site = $2 AND 
+    area = $3 AND 
+    line = $4 AND 
+    workcell = $5 AND 
+    origin_id = $6`
 	selectRowContext, selectRowContextCncl := get1MinuteContext()
 	defer selectRowContextCncl()
 
@@ -249,7 +249,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 
 			err = c.db.QueryRow(insertRowContext, insertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
 			if err != nil {
-				return 0, err // Handle insertion error
+				return 0, err
 			}
 
 			// Add to LRU cache
@@ -257,7 +257,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 
 			return id, nil
 		} else {
-			return 0, err // Handle other errors
+			return 0, err
 		}
 	}
 
