@@ -33,11 +33,6 @@ data:
     CREATE DATABASE {{.Values.factoryinsight.db_database}} OWNER {{.Values.factoryinsight.db_user}};
     GRANT ALL PRIVILEGES ON DATABASE {{.Values.factoryinsight.db_database}} TO {{.Values.factoryinsight.db_user}};
 
-    CREATE USER {{include "grafanareader.user" .}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{include "grafanareader.user" .}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{include "grafanareader.user" .}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{include "grafanareader.user" .}};
-
     \c {{.Values.factoryinsight.db_database}}
 
     -- Extend the database with TimescaleDB
@@ -7585,6 +7580,11 @@ data:
     CREATE USER {{.Values.kafkatopostgresqlv2.database.user}};
     CREATE DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} OWNER {{.Values.kafkatopostgresqlv2.database.user}};
     GRANT ALL PRIVILEGES ON DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} TO {{.Values.kafkatopostgresqlv2.database.user}};
+
+    CREATE USER {{include "grafanareader.user" .}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{include "grafanareader.user" .}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{include "grafanareader.user" .}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{include "grafanareader.user" .}};
 
     \c {{.Values._000_commonConfig.datamodel_v2.database.name}}
 
