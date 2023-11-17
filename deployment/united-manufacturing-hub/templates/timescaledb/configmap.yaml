@@ -29,13 +29,14 @@ data:
     \c {{index .Values "grafana" "grafana.ini" "database" "name"}}
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{index .Values "grafana" "grafana.ini" "database" "user"}};
     
-    CREATE USER {{include "grafanareader.user" .}};
-    GRANT USAGE ON SCHEMA public TO {{include "grafanareader.user" .}};
-    GRANT SELECT ON public.asset, public.tag, public.tag_string TO {{include "grafanareader.user" .}};
-
     CREATE USER {{.Values.factoryinsight.db_user}};
     CREATE DATABASE {{.Values.factoryinsight.db_database}} OWNER {{.Values.factoryinsight.db_user}};
     GRANT ALL PRIVILEGES ON DATABASE {{.Values.factoryinsight.db_database}} TO {{.Values.factoryinsight.db_user}};
+
+    CREATE USER {{include "grafanareader.user" .}};
+    GRANT SELECT ON {{.Values.factoryinsight.db_database}}.public.asset TO {{include "grafanareader.user" .}};
+    GRANT SELECT ON {{.Values.factoryinsight.db_database}}.public.tag TO {{include "grafanareader.user" .}};
+    GRANT SELECT ON {{.Values.factoryinsight.db_database}}.public.tag_string TO {{include "grafanareader.user" .}};
 
     \c {{.Values.factoryinsight.db_database}}
 
