@@ -3,9 +3,10 @@ package shared
 import (
 	"github.com/IBM/sarama"
 	"go.uber.org/zap"
+	"time"
 )
 
-const CycleTime = 100
+const CycleTime = 100 * time.Millisecond
 
 // KafkaMessage represents a message in the Kafka queue.
 type KafkaMessage struct {

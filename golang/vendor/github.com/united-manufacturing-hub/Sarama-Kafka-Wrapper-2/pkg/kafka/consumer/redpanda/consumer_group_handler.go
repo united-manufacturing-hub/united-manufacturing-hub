@@ -45,9 +45,9 @@ type TopicPartition struct {
 // marker marks messages coming in from messagesToMark to be ready for commit
 func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, shutdownchan chan bool, markedMessages *atomic.Uint64) {
 	zap.S().Debugf("begin marker")
-	lastMark := time.Now()
-	offsets := make(map[TopicPartition]int64)
-	lastLoopMarked := false
+	//lastMark := time.Now()
+	//offsets := make(map[TopicPartition]int64)
+	//lastLoopMarked := false
 outer:
 	for {
 		select {
@@ -98,9 +98,10 @@ outer:
 	}
 
 	zap.S().Debugf("Marker committing messages")
-	for k, v := range offsets {
-		(*session).MarkOffset(k.Topic, k.Partition, v, "")
-	}
+	/*
+		for k, v := range offsets {
+			(*session).MarkOffset(k.Topic, k.Partition, v, "")
+		}*/
 	zap.S().Debugf("Goodbye from marker (%d-%s)", (*session).GenerationID(), (*session).MemberID())
 }
 
@@ -119,6 +120,7 @@ outer:
 				continue
 			}
 			if message == nil {
+				zap.S().Debugf("Message is nil for %s:%d", (*session).MemberID(), (*session).GenerationID())
 				time.Sleep(shared.CycleTime)
 				continue
 			}
