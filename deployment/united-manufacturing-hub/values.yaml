@@ -963,7 +963,7 @@ grafana:
             maxIdleConns: 100 # Grafana v5.4+
             maxIdleConnsAuto: true # Grafana v9.5.1+
             connMaxLifetime: 14400 # Grafana v5.4+
-            postgresVersion: 13 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+            postgresVersion: 1300 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
             timescaledb: true
 
   ## Grafana's primary configuration
