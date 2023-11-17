@@ -18,7 +18,7 @@ go 1.21
 
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
-	github.com/IBM/sarama v1.41.2
+	github.com/IBM/sarama v1.42.1
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coocood/freecache v1.2.4
@@ -40,13 +40,14 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/stretchr/testify v1.8.4
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.0.16
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.23
 	github.com/united-manufacturing-hub/expiremap v1.1.1
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.26.0
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.15.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gonum.org/v1/gonum v0.14.0
 	k8s.io/apimachinery v0.28.2
@@ -97,7 +98,7 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.0 // indirect
+	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -109,6 +110,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
@@ -122,12 +124,12 @@ require (
 	go.elastic.co/ecszap v1.0.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.5.0 // indirect
-	golang.org/x/net v0.15.0 // indirect
+	golang.org/x/net v0.18.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
-	golang.org/x/term v0.12.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/sync v0.4.0 // indirect
+	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/term v0.14.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect

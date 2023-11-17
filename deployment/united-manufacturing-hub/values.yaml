@@ -28,6 +28,12 @@ _000_commonConfig:
         topicMergePoint: 5
         partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
         replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
+    database:
+      name: "umh_v2"
+      host: "united-manufacturing-hub"
+    grafana:
+      dbreader: "grafanareader"
+      dbpassword: "changeme"
 
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
@@ -150,7 +156,7 @@ _000_commonConfig:
     enabled: true
     db_password: "changeme"
 
-# factoryinput, grafanaproxy
+  # factoryinput, grafanaproxy
   datainput:
     enabled: false
 
@@ -891,6 +897,14 @@ grafana:
       secretKeyRef:
         name: factoryinsight-secret
         key: password
+    GRAFANAREADER_USER:
+      secretKeyRef:
+        name: grafana-secret
+        key: databaseuser
+    GRAFANAREADER_PASSWORD:
+      secretKeyRef:
+        name: grafana-secret
+        key: databasepassword
 
   ## Configure grafana datasources
   ## ref: http://docs.grafana.org/administration/provisioning/#datasources
@@ -932,9 +946,25 @@ grafana:
             apiKeyConfigured: true
           version: 1
           # <bool> allow users to edit datasources from the UI.
-          isDefault: true
+          isDefault: false
           editable: false
-        # <string, required> name of the datasource. Required
+        # https://grafana.com/docs/grafana/latest/datasources/postgres/
+        - name: UMH TimescaleDB 
+          type: postgres
+          url: united-manufacturing-hub:5432
+          user: $GRAFANAREADER_USER
+          isDefault: true
+          secureJsonData:
+            password: $GRAFANAREADER_PASSWORD
+          jsonData:
+            database: umh_v2
+            sslmode: 'require' # disable/require/verify-ca/verify-full
+            maxOpenConns: 100 # Grafana v5.4+
+            maxIdleConns: 100 # Grafana v5.4+
+            maxIdleConnsAuto: true # Grafana v9.5.1+
+            connMaxLifetime: 14400 # Grafana v5.4+
+            postgresVersion: 1300 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+            timescaledb: true
 
   ## Grafana's primary configuration
   ## NOTE: values in map will be converted to ini format
@@ -1199,3 +1229,43 @@ databridge:
     limits:
       cpu: "500m"
       memory: "450Mi"
+
+
+### kafka-to-postgresql ###
+kafkatopostgresqlv2:
+  enabled: false
+  image:
+    repository: ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2
+    pullPolicy: IfNotPresent
+    # tag: latest
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 300Mi
+    requests:
+      cpu: 100m
+      memory: 150Mi
+  probes:
+    startup:
+      failureThreshold: 30
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    liveness:
+      periodSeconds: 5
+    readiness:
+      periodSeconds: 5
+  logging:
+    level: PRODUCTION
+  asset:
+    cache:
+      lru:
+        size: 1000
+  workers:
+    channel:
+      size: 10000
+    goroutines:
+      multiplier: 16 # Logical CPU's * this value
+  database:
+    user: "kafkatopostgresqlv2"
+    password: "changemetoo"
