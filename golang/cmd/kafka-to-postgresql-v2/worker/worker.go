@@ -10,7 +10,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -42,7 +41,7 @@ func (w *Worker) startWorkLoop() {
 	}
 	messageChannel := w.kafka.GetMessages()
 	zap.S().Debugf("Started using %d workers (logical cores * WORKER_MULTIPLIER)", workerMultiplier)
-	for i := 0; i < runtime.NumCPU()*workerMultiplier; i++ {
+	for i := 0; i < /*runtime.NumCPU()*workerMultiplier*/ 1; i++ {
 		go handleParsing(messageChannel, i)
 	}
 	zap.S().Debugf("Started all workers")
