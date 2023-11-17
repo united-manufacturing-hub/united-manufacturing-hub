@@ -1216,3 +1216,12 @@ kafkatopostgresqlv2:
     requests:
       cpu: 100m
       memory: 150Mi
+  probes:
+    startup:
+      failureThreshold: 30
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    liveness:
+      periodSeconds: 5
+    readiness:
+      periodSeconds: 5

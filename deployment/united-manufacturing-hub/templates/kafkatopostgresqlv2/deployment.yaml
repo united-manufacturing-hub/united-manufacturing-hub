@@ -93,19 +93,24 @@ spec:
             - name: SERIAL_NUMBER
               value: {{.Values._000_commonConfig.serialNumber | quote}}
 
-          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            failureThreshold: {{.Values.kafkatopostgresqlv2.probes.startup.failureThreshold}}
+            initialDelaySeconds: {{.Values.kafkatopostgresqlv2.probes.startup.initialDelaySeconds}}
+            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.startup.periodSecondss}}
           livenessProbe:
             httpGet:
               path: /live
               port: 8086
-            periodSeconds: 5
-            initialDelaySeconds: 60
+            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.liveness.periodSeconds}}
+          # Not really useful as we don't expose any HTTP endpoint, but good for metrics
           readinessProbe:
             httpGet:
               path: /ready
               port: 8086
-            periodSeconds: 5
-            initialDelaySeconds: 5
+            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.readiness.periodSeconds}}
           resources:
             limits:
               cpu: {{.Values.kafkatopostgresqlv2.resources.limits.cpu}}
