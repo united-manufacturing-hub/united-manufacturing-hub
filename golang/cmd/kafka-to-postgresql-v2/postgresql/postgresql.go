@@ -210,10 +210,77 @@ func (c *Connection) postStats() {
 	}
 }
 
+var goiLock = sync.Mutex{}
+
 func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, error) {
 	if c.db == nil {
 		return 0, errors.New("database is nil")
 	}
+	id, hit := c.lookupLRU(topic)
+	if hit {
+		return id, nil
+	}
+
+	goiLock.Lock()
+	defer goiLock.Unlock()
+	// It might be that another locker already added it, so we do a double check
+	id, hit = c.lookupLRU(topic)
+	if hit {
+		return id, nil
+	}
+
+	selectQuery := `SELECT id FROM asset WHERE enterprise = $1 AND 
+		(site IS NULL OR site = $2) AND 
+		(area IS NULL OR area = $3) AND 
+		(line IS NULL OR line = $4) AND 
+		(workcell IS NULL OR workcell = $5) AND 
+		(origin_id IS NULL OR origin_id = $6)`
+	selectRowContext, selectRowContextCncl := get1MinuteContext()
+	defer selectRowContextCncl()
+
+	var err error
+	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Row isn't found, need to insert
+			insertQuery := `INSERT INTO asset (enterprise, site, area, line, workcell, origin_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+			insertRowContext, insertRowContextCncl := get1MinuteContext()
+			defer insertRowContextCncl()
+
+			err = c.db.QueryRow(insertRowContext, insertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
+			if err != nil {
+				return 0, err // Handle insertion error
+			}
+
+			// Add to LRU cache
+			c.addToLRU(topic, id)
+
+			return id, nil
+		} else {
+			return 0, err // Handle other errors
+		}
+	}
+
+	// If no error and asset exists
+	c.addToLRU(topic, id)
+	return id, nil
+}
+
+func (c *Connection) addToLRU(topic *sharedStructs.TopicDetails, id int) {
+	c.cache.Add(getCacheKey(topic), id)
+}
+
+func (c *Connection) lookupLRU(topic *sharedStructs.TopicDetails) (int, bool) {
+	value, ok := c.cache.Get(getCacheKey(topic))
+	if ok {
+		c.lruHits.Add(1)
+		return value.(int), true
+	}
+	c.lruMisses.Add(1)
+	return 0, false
+}
+
+func getCacheKey(topic *sharedStructs.TopicDetails) string {
 	// Attempt cache lookup
 	var cacheKey strings.Builder
 	cacheKey.WriteString(topic.Enterprise)
@@ -236,49 +303,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
 	cacheKey.WriteRune('o')
 	cacheKey.WriteString(topic.OriginId)
-
-	value, ok := c.cache.Get(cacheKey.String())
-	if ok {
-		c.lruHits.Add(1)
-		return value.(int), nil
-	}
-	c.lruMisses.Add(1)
-
-	// Prepare an upsert query with RETURNING clause
-	// This is atomic
-	upsertQuery := `INSERT INTO asset (enterprise, site, area, line, workcell, origin_id) 
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (enterprise, site, area, line, workcell, origin_id) 
-		DO UPDATE SET enterprise = EXCLUDED.enterprise
-		RETURNING id`
-
-	queryRowContext, queryRowContextCncl := get5SecondContext()
-	defer queryRowContextCncl()
-	var id int
-	err := c.db.QueryRow(queryRowContext, upsertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
-	if err == nil {
-		// Asset was inserted or updated and id was retrieved
-		return id, nil
-	}
-
-	// If the upsert didn't return an id, retrieve it with a select query
-	selectQuery := `SELECT id FROM asset WHERE enterprise = $1 AND 
-		(site IS NULL OR site = $2) AND 
-		(area IS NULL OR area = $3) AND 
-		(line IS NULL OR line = $4) AND 
-		(workcell IS NULL OR workcell = $5) AND 
-		(origin_id IS NULL OR origin_id = $6)`
-
-	selectRowContext, selectRowContextCncl := get5SecondContext()
-	defer selectRowContextCncl()
-	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
-	if err != nil {
-		return 0, err
-	}
-
-	c.cache.Add(cacheKey.String(), id)
-
-	return id, nil
+	return cacheKey.String()
 }
 
 func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
