@@ -1,0 +1,223 @@
+name: Run and Test kafka-to-postgresql-v2
+
+on:
+  push:
+    branches:
+      - main
+      - feat/987/new_kafka_to_postgresql
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # Teardown, allowing for repeated local testing
+      - name: Teardown old tests
+        run: |
+          docker stop kafka-to-postgresql-v2-1 || true          
+          docker stop timescaledb-1 || true          
+          docker container prune -f || true
+          docker volume prune -f || true
+          docker system prune -f || true
+
+
+      - name: Start TimescaleDB
+        run: |
+          docker run -d --name timescaledb-1 --network=host \
+          -e POSTGRES_PASSWORD=yourpassword \
+          -p 5432:5432 \
+          timescale/timescaledb:latest-pg15
+
+      - name: Start Redpanda
+        run: |
+          curl -LO https://github.com/redpanda-data/redpanda/releases/latest/download/rpk-linux-amd64.zip
+          sudo unzip rpk-linux-amd64.zip -d /usr/bin/ || true
+          sudo chmod +x /usr/bin/rpk
+          rpk container purge || true
+          
+          output=$(rpk container -v start)
+          echo $output
+          kafka_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $3}')
+          proxy_address=$(echo "$output" | awk '/^[0-9]+\s+running\s+/{print $5}')
+          echo "Kafka address: $kafka_address"
+          echo "Proxy address: $proxy_address"
+          echo "REDPANDA_IP=$kafka_address" >> $GITHUB_ENV
+          echo "REDPANDA_PROXY_IP=$proxy_address" >> $GITHUB_ENV
+
+      - name: Initialize Database
+        run: |
+          # Wait for TimescaleDB to be ready
+          echo "Waiting for TimescaleDB to start..."
+          until docker exec timescaledb-1 pg_isready -U postgres; do
+            sleep 1
+          done
+          
+          sleep 3
+
+          # Create the database
+          echo "Creating database..."
+          docker exec -u postgres timescaledb-1 createdb factoryinsight
+          echo "Created database"
+          
+          # Execute SQL commands
+          echo "Setting up database schema..."
+          docker exec -i timescaledb-1 psql -U postgres -d factoryinsight <<-EOSQL
+            CREATE TABLE asset (
+              id SERIAL PRIMARY KEY,
+              enterprise TEXT NOT NULL,
+              site TEXT DEFAULT '' NOT NULL,
+              area TEXT DEFAULT '' NOT NULL,
+              line TEXT DEFAULT '' NOT NULL,
+              workcell TEXT DEFAULT '' NOT NULL,
+              origin_id TEXT DEFAULT '' NOT NULL,
+              UNIQUE (enterprise),
+              UNIQUE (enterprise, site),
+              UNIQUE (enterprise, site, area),
+              UNIQUE (enterprise, site, area, line),
+              UNIQUE (enterprise, site, area, line, workcell),
+              UNIQUE (enterprise, site, area, line, workcell, origin_id)
+            );
+        
+            CREATE TABLE tag (
+              timestamp TIMESTAMPTZ NOT NULL,
+              name TEXT NOT NULL,
+              origin TEXT NOT NULL,
+              asset_id INT REFERENCES asset(id) NOT NULL,
+              value REAL,
+              UNIQUE (name, asset_id, timestamp)
+            );
+            SELECT create_hypertable('tag', 'timestamp');
+            CREATE INDEX ON tag (asset_id, timestamp DESC);
+            CREATE INDEX ON tag (name);
+        
+            CREATE TABLE tag_string (
+              timestamp TIMESTAMPTZ NOT NULL,
+              name TEXT NOT NULL,
+              origin TEXT NOT NULL,
+              asset_id INT REFERENCES asset(id) NOT NULL,
+              value TEXT,
+              UNIQUE (name, asset_id, timestamp)
+            );
+            SELECT create_hypertable('tag_string', 'timestamp');
+            CREATE INDEX ON tag_string (asset_id, timestamp DESC);
+            CREATE INDEX ON tag_string (name);
+          EOSQL
+      
+
+      # Validate redpanda is reachable
+      - name: Check Redpanda REST Interface
+        run: |
+          success=false
+          for i in {1..5}; do
+              echo "Attempt $i to check Redpanda REST interface..."
+              if curl -f http://${{ env.REDPANDA_PROXY_IP }}/topics; then
+                  echo "Successfully connected to Redpanda REST interface!"
+                  success=true
+                  break
+              else
+                  echo "Failed to connect, retrying in 1 second..."
+                  sleep 1
+              fi
+          done
+          if [ "$success" = false ]; then
+              echo "Failed to connect to Redpanda REST interface after 5 attempts."
+              exit 1
+          fi
+
+      # Build the Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t kafka-to-postgresql-v2:latest -f ./deployment/kafka-to-postgresql-v2/Dockerfile .
+
+      # Run the Docker image
+      - name: Run Docker Image
+        run: |
+          docker run -d --name=kafka-to-postgresql-v2-1 --network=host \
+          -e POSTGRES_HOST=localhost \
+          -e POSTGRES_PORT=5432 \
+          -e POSTGRES_USER=postgres \
+          -e POSTGRES_PASSWORD=yourpassword \
+          -e POSTGRES_DATABASE=factoryinsight \
+          -e POSTGRES_SSL_MODE=disable \
+          -e KAFKA_BROKERS=${{ env.REDPANDA_IP }} \
+          -e KAFKA_HTTP_BROKERS=${{ env.REDPANDA_PROXY_IP }} \
+          -e LOGGING_LEVEL=DEVELOPMENT \
+          kafka-to-postgresql-v2:latest
+
+      - name: Install kafkacat
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y kafkacat
+
+      # Create a Docker volume
+      - name: Create Docker Volume
+        run: docker volume create kafka-message-volume
+
+      # Write message to the volume
+      - name: Prepare Kafka Message
+        run: |
+          docker run --rm \
+          --volume kafka-message-volume:/tmp \
+          alpine /bin/sh -c "echo '{\"timestamp_ms\": 1, \"hello\":\"world\"}' > /tmp/message.json"
+          
+          docker run --rm \
+          --volume kafka-message-volume:/tmp \
+          alpine /bin/sh -c "echo '{\"timestamp_ms\": 1, \"a\":3}' > /tmp/message2.json"
+
+      # Send message to Kafka
+      - name: Use Redpanda IP with rpk
+        run: |          
+          docker run --network=host edenhill/kcat:1.7.1 -b ${{ env.REDPANDA_IP }} -L
+          docker run --network=host edenhill/kcat:1.7.1 -b ${{ env.REDPANDA_IP }} -P -v -t umh.v1.test._historian
+          
+          docker run --network=host --volume kafka-message-volume:/tmp \
+          edenhill/kcat:1.7.1 -P -b ${{ env.REDPANDA_IP }} -t umh.v1.test._historian /tmp/message.json
+          
+          docker run --network=host --volume kafka-message-volume:/tmp \
+          edenhill/kcat:1.7.1 -P -b ${{ env.REDPANDA_IP }} -t umh.v1.test._historian /tmp/message2.json
+      
+
+        # Wait for topics endpoint to respond with more than 10 characters
+      - name: Wait for Topics Endpoint
+        run: |
+          success=false
+          for i in {1..60}; do
+              echo "Attempt $i to check topics endpoint..."
+              response=$(curl -s http://${{ env.REDPANDA_PROXY_IP }}/topics)
+              if [ ${#response} -gt 10 ]; then
+                  echo "Response is longer than 10 characters. Proceeding..."
+                  echo $response
+                  success=true
+                  break
+              else
+                  echo "Response is not long enough, retrying in 1 second..."
+                  sleep 1
+              fi
+          done
+          if [ "$success" = false ]; then
+              echo "Failed to get a valid response after 60 attempts."
+              exit 1
+          fi
+        
+          sleep 5
+
+        # Check for entries in the tag table
+      - name: Check Database
+        env:
+          PGPASSWORD: yourpassword
+        run: |
+          docker exec timescaledb-1 psql -U postgres -d factoryinsight -t -c "SELECT COUNT(*) FROM tag;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d factoryinsight -t -c "SELECT COUNT(*) FROM tag_string;" | grep -q -v '^0$' || exit 1
+          docker exec timescaledb-1 psql -U postgres -d factoryinsight -t -c "SELECT COUNT(*) FROM asset;" | grep -q -v '^0$' || exit 1
+
+      # Log
+      - name: Log
+        if: always()
+        run: |
+          docker logs kafka-to-postgresql-v2-1 || true

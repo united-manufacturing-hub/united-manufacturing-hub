@@ -6,18 +6,16 @@ import (
 	"time"
 )
 
-// CycleTime is the default cycle time for loops.
-// It is used in the consumer and producer.
 const CycleTime = 100 * time.Millisecond
 
 // KafkaMessage represents a message in the Kafka queue.
 type KafkaMessage struct {
-	Headers   map[string]string
-	Topic     string
-	Key       []byte
-	Value     []byte
-	Offset    int64
-	Partition int32
+	Headers   map[string]string `json:"headers"`
+	Topic     string            `json:"topic"`
+	Key       []byte            `json:"key"`
+	Value     []byte            `json:"value"`
+	Offset    int64             `json:"offset"`
+	Partition int32             `json:"partition"`
 }
 
 // FromConsumerMessage converts a sarama.ConsumerMessage to a KafkaMessage.
