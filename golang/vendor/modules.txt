@@ -4,7 +4,7 @@ github.com/DataDog/gostackparse
 # github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 ## explicit
 github.com/EagleChen/mapmutex
-# github.com/IBM/sarama v1.41.2
+# github.com/IBM/sarama v1.42.1
 ## explicit; go 1.17
 github.com/IBM/sarama
 # github.com/beeker1121/goque v2.1.0+incompatible
@@ -286,7 +286,7 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/klauspost/compress v1.17.0
+# github.com/klauspost/compress v1.17.2
 ## explicit; go 1.18
 github.com/klauspost/compress
 github.com/klauspost/compress/flate
@@ -351,6 +351,9 @@ github.com/pierrec/lz4/v4/internal/xxh32
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+## explicit
+github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/client_golang v1.16.0
 ## explicit; go 1.17
 github.com/prometheus/client_golang/prometheus
@@ -384,6 +387,9 @@ github.com/shirou/gopsutil/load
 github.com/shirou/gopsutil/mem
 github.com/shirou/gopsutil/net
 github.com/shirou/gopsutil/process
+# github.com/stretchr/testify v1.8.4
+## explicit; go 1.20
+github.com/stretchr/testify/assert
 # github.com/syndtr/goleveldb v1.0.0
 ## explicit
 github.com/syndtr/goleveldb/leveldb
@@ -429,9 +435,10 @@ github.com/ugorji/go/codec
 # github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1
 ## explicit; go 1.20
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper/pkg/kafka
-# github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.0.16
+# github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.23
 ## explicit; go 1.21
-github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/raw
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/redpanda
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared
 # github.com/united-manufacturing-hub/expiremap v1.1.1
@@ -469,8 +476,8 @@ go.uber.org/zap/zapcore
 # golang.org/x/arch v0.5.0
 ## explicit; go 1.17
 golang.org/x/arch/x86/x86asm
-# golang.org/x/crypto v0.13.0
-## explicit; go 1.17
+# golang.org/x/crypto v0.15.0
+## explicit; go 1.18
 golang.org/x/crypto/md4
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/sha3
@@ -478,8 +485,8 @@ golang.org/x/crypto/sha3
 ## explicit; go 1.20
 golang.org/x/exp/constraints
 golang.org/x/exp/slices
-# golang.org/x/net v0.15.0
-## explicit; go 1.17
+# golang.org/x/net v0.18.0
+## explicit; go 1.18
 golang.org/x/net/context
 golang.org/x/net/html
 golang.org/x/net/html/atom
@@ -494,22 +501,21 @@ golang.org/x/net/proxy
 ## explicit; go 1.17
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.3.0
+# golang.org/x/sync v0.4.0
 ## explicit; go 1.17
 golang.org/x/sync/semaphore
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.12.0
-## explicit; go 1.17
+# golang.org/x/sys v0.14.0
+## explicit; go 1.18
 golang.org/x/sys/cpu
-golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/term v0.12.0
-## explicit; go 1.17
+# golang.org/x/term v0.14.0
+## explicit; go 1.18
 golang.org/x/term
-# golang.org/x/text v0.13.0
-## explicit; go 1.17
+# golang.org/x/text v0.14.0
+## explicit; go 1.18
 golang.org/x/text/cases
 golang.org/x/text/internal
 golang.org/x/text/internal/language
