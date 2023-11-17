@@ -7629,6 +7629,10 @@ data:
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
 
+    ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+    ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+    ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
