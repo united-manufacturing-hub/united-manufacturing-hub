@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/raw"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"github.com/united-manufacturing-hub/umh-utils/env"
@@ -36,7 +36,7 @@ type kafkaClient struct {
 	marked             atomic.Uint64
 	lossInvalidMessage atomic.Uint64
 	skipped            atomic.Uint64
-	consumer           *raw.Consumer
+	consumer           *consumer.Consumer
 	producer           *producer.Producer
 	split              int
 }
@@ -66,7 +66,7 @@ func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaCli
 	brokers = resolver(brokers)
 
 	zap.S().Infof("connecting to kafka brokers: %s (topic: %s, consumer group: %s)", broker, topic, consumerGroupId)
-	kc.consumer, err = raw.NewConsumer(brokers, []string{topic}, consumerGroupId, podName)
+	kc.consumer, err = consumer.NewConsumer(brokers, []string{topic}, consumerGroupId, podName)
 	if err != nil {
 		return nil, err
 	}
@@ -84,17 +84,17 @@ func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaCli
 func (k *kafkaClient) getState() State {
 	state := k.consumer.GetState()
 	switch state {
-	case raw.ConsumerStateUnknown:
+	case consumer.ConsumerStateUnknown:
 		return StateDead
-	case raw.ConsumerStateEmpty:
+	case consumer.ConsumerStateEmpty:
 		return StatePreparing
-	case raw.ConsumerStateStable:
+	case consumer.ConsumerStateStable:
 		return StateRunning
-	case raw.ConsumerStatePreparingRebalance:
+	case consumer.ConsumerStatePreparingRebalance:
 		return StatePreparing
-	case raw.ConsumerStateCompletingRebalance:
+	case consumer.ConsumerStateCompletingRebalance:
 		return StatePreparing
-	case raw.ConsumerStateDead:
+	case consumer.ConsumerStateDead:
 		return StateDead
 	default:
 		zap.S().Errorf("unknown state: %d", state)
