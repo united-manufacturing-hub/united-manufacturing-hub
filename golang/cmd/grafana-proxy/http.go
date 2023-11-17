@@ -237,7 +237,7 @@ func (f *Factory) handleFactoryInput(c *gin.Context, request getProxyRequestPath
 	// Split proxy url into customer, location, asset, value
 	s := strings.Split(u.Path, "/")
 	if len(s) != 7 {
-		zap.S().Warnf("String split failed: %d", len(s))
+		zap.S().Warnf("StringValue split failed: %d", len(s))
 		handleInvalidInputError(c, fmt.Errorf("factoryinput url invalid: %d", len(s)))
 		return
 	}

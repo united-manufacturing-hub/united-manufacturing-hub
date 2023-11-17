@@ -313,6 +313,15 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-databrid
 {{- end }}
 
 {{/*
+Labels for kafkatopostgresqlv2
+*/}}
+{{- define "united-manufacturing-hub.labels.kafkatopostgresqlv2" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatopostgresqlv2
+{{ include "united-manufacturing-hub.labels.common" . }}
+{{- end }}
+
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
