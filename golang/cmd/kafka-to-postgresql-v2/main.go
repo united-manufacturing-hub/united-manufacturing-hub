@@ -74,20 +74,24 @@ var (
 	lruHitGauge                           = prometheus.NewGauge(prometheus.GaugeOpts{Name: "lru_hit_percentage", Help: "LRU Hit Percentage"})
 	numericalChannelFillGauge             = prometheus.NewGauge(prometheus.GaugeOpts{Name: "numerical_channel_fill_percentage", Help: "Numerical Channel Fill Percentage"})
 	stringChannelFillGauge                = prometheus.NewGauge(prometheus.GaugeOpts{Name: "string_channel_fill_percentage", Help: "String Channel Fill Percentage"})
-	databaseInsertionsCounter             = prometheus.NewGauge(prometheus.GaugeOpts{Name: "database_insertions", Help: "Total Database Insertions"})
+	databaseInsertionsGauge               = prometheus.NewGauge(prometheus.GaugeOpts{Name: "database_insertions", Help: "Total Database Insertions"})
+	databaseInsertionsRateGauge           = prometheus.NewGauge(prometheus.GaugeOpts{Name: "database_insertion_rate", Help: "Database Insertions Per Second"})
 	averageCommitDurationGauge            = prometheus.NewGauge(prometheus.GaugeOpts{Name: "average_commit_duration_milliseconds", Help: "Average Commit Duration in Milliseconds"})
 	numericalValuesReceivedPerSecondGauge = prometheus.NewGauge(prometheus.GaugeOpts{Name: "numerical_values_received_per_second", Help: "Numerical Values Received Per Second"})
 	stringValuesReceivedPerSecondGauge    = prometheus.NewGauge(prometheus.GaugeOpts{Name: "string_values_received_per_second", Help: "String Values Received Per Second"})
+	kafkaIncomingMessageChannelFillGauge  = prometheus.NewGauge(prometheus.GaugeOpts{Name: "kafka_incoming_message_channel_fill_percentage", Help: "Kafka Incoming Message Fill Percentage"})
 )
 
 func registerCustomMetrics() {
 	prometheus.MustRegister(lruHitGauge)
 	prometheus.MustRegister(numericalChannelFillGauge)
 	prometheus.MustRegister(stringChannelFillGauge)
-	prometheus.MustRegister(databaseInsertionsCounter)
+	prometheus.MustRegister(databaseInsertionsGauge)
+	prometheus.MustRegister(databaseInsertionsRateGauge)
 	prometheus.MustRegister(averageCommitDurationGauge)
 	prometheus.MustRegister(numericalValuesReceivedPerSecondGauge)
 	prometheus.MustRegister(stringValuesReceivedPerSecondGauge)
+	prometheus.MustRegister(kafkaIncomingMessageChannelFillGauge)
 
 	// Update metrics in a separate go routine
 	go func() {
@@ -97,10 +101,30 @@ func registerCustomMetrics() {
 			lruHitGauge.Set(metrics.LRUHitPercentage)
 			numericalChannelFillGauge.Set(metrics.NumericalChannelFillPercentage)
 			stringChannelFillGauge.Set(metrics.StringChannelFillPercentage)
-			databaseInsertionsCounter.Set(float64(metrics.DatabaseInsertions))
+			databaseInsertionsGauge.Set(float64(metrics.DatabaseInsertions))
+			databaseInsertionsRateGauge.Set(metrics.DatabaseInsertionRate)
 			averageCommitDurationGauge.Set(metrics.AverageCommitDurationInMilliseconds)
 			numericalValuesReceivedPerSecondGauge.Set(metrics.NumericalValuesReceivedPerSecond)
 			stringValuesReceivedPerSecondGauge.Set(metrics.StringValuesReceivedPerSecond)
+
+			kafkaChanLen := len(kafka.GetOrInit().GetMessages())
+			kafkaChanCap := cap(kafka.GetOrInit().GetMessages())
+			kafkaChanPercentage := float64(kafkaChanLen) / float64(kafkaChanCap) * 100
+			kafkaIncomingMessageChannelFillGauge.Set(kafkaChanPercentage)
+
+			// Logging the stats
+			zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration: %.2fms, Numerical Channel fill: %.2f%%, Strings Channel fill: %.2f%%, Kafka Channel fill: %.2f%%",
+				metrics.LRUHitPercentage,
+				metrics.NumericalValuesReceivedPerSecond,
+				metrics.StringValuesReceivedPerSecond,
+				metrics.DatabaseInsertions,
+				metrics.DatabaseInsertionRate,
+				metrics.AverageCommitDurationInMilliseconds,
+				metrics.NumericalChannelFillPercentage,
+				metrics.StringChannelFillPercentage,
+				kafkaChanPercentage,
+			)
+
 			<-ticker10Seconds.C
 		}
 	}()

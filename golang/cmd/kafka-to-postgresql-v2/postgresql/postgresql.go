@@ -40,6 +40,7 @@ type Metrics struct {
 	AverageCommitDurationInMilliseconds float64
 	NumericalValuesReceivedPerSecond    float64
 	StringValuesReceivedPerSecond       float64
+	DatabaseInsertionRate               float64
 }
 
 type Connection struct {
@@ -213,17 +214,13 @@ func (c *Connection) postStats() {
 		if totalCommits > 0 {
 			averageCommitDuration = float64(totalCommitTime) / float64(totalCommits)
 		}
-
-		// Logging the stats
-		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration: %.2fms, Numerical Channel fill: %f, Strings Channel fill: %f",
-			lruHitPercentage, numericalRate, stringRate, c.databaseInserted.Load(), databaseInsertionRate, averageCommitDuration, numericalChannelFillPercentage, stringsChannelFillPercentage)
-
 		c.metricsLock.Lock()
 		c.metrics = Metrics{
 			LRUHitPercentage:                    lruHitPercentage,
 			NumericalChannelFillPercentage:      numericalChannelFillPercentage,
 			StringChannelFillPercentage:         stringsChannelFillPercentage,
 			DatabaseInsertions:                  c.databaseInserted.Load(),
+			DatabaseInsertionRate:               databaseInsertionRate,
 			AverageCommitDurationInMilliseconds: averageCommitDuration,
 			NumericalValuesReceivedPerSecond:    numericalRate,
 			StringValuesReceivedPerSecond:       stringRate,
