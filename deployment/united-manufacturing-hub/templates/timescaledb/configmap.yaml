@@ -7609,12 +7609,12 @@ data:
     );
 
     CREATE TABLE tag (
-    timestamp TIMESTAMPTZ NOT NULL,
-    name TEXT NOT NULL,
-    origin TEXT NOT NULL,
-    asset_id INT REFERENCES asset(id) NOT NULL,
-    value REAL,
-    UNIQUE (name, asset_id, timestamp)
+      timestamp TIMESTAMPTZ NOT NULL,
+      name TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      asset_id INT REFERENCES asset(id) NOT NULL,
+      value REAL,
+      UNIQUE (name, asset_id, timestamp)
     );
     SELECT create_hypertable('tag', 'timestamp');
     CREATE INDEX ON tag (asset_id, timestamp DESC);

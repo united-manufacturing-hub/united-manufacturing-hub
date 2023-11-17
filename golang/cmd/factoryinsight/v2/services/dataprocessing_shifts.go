@@ -66,8 +66,8 @@ func GetOverlappingShifts(state, followingState datamodel.StateEntry, processedS
 	for _, dataPoint := range processedShifts {
 		/*
 			zap.S().Infow("for _, dataPoint := range processedShifts",
-				"dataPoint.TimestampBegin", dataPoint.TimestampBegin.String(),
-				"dataPoint.TimestampEnd", dataPoint.TimestampEnd.String(),
+				"dataPoint.TimestampBegin", dataPoint.TimestampBegin.StringValue(),
+				"dataPoint.TimestampEnd", dataPoint.TimestampEnd.StringValue(),
 				"dataPoint.ShiftType", dataPoint.ShiftType,
 			)
 		*/

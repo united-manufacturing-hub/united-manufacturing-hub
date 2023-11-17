@@ -1,4 +1,4 @@
-package consumer
+package raw
 
 import (
 	"context"
@@ -40,6 +40,7 @@ type Consumer struct {
 	groupState            ConsumerState
 	externalCtx           context.Context
 	runConsumerGroup      atomic.Bool
+	consuming             atomic.Bool
 }
 
 // NewConsumer initializes a Consumer.
@@ -90,6 +91,10 @@ func NewConsumer(brokers, topic []string, groupName string, instanceId string) (
 	}, nil
 }
 
+func (c *Consumer) GetTopics() []string {
+	return c.actualTopics
+}
+
 // Start runs the Consumer.
 func (c *Consumer) Start(ctx context.Context) error {
 	if c.running.Swap(true) {
@@ -108,6 +113,10 @@ func (c *Consumer) Start(ctx context.Context) error {
 }
 
 func (c *Consumer) consume() {
+	alreadyConsuming := c.consuming.Swap(true)
+	if alreadyConsuming {
+		zap.S().Fatalf("consume called while already consuming")
+	}
 	for c.running.Load() {
 		handler := &GroupHandler{
 			incomingMessages: c.incomingMessages,
@@ -143,6 +152,7 @@ func (c *Consumer) consume() {
 		}
 	}
 	zap.S().Infof("stopped consumer")
+	c.consuming.Store(false)
 }
 
 func (c *Consumer) check() error {
@@ -211,15 +221,17 @@ func (c *Consumer) recheck() {
 			if err != nil {
 				zap.S().Fatal(err)
 			}
+			for c.consuming.Load() {
+				time.Sleep(shared.CycleTime * 10)
+				zap.S().Debugf("waiting for consumer to stop")
+			}
 			// Wait for the consumer to stop
 			time.Sleep(shared.CycleTime * 10)
 			c.running.Store(true)
 			c.actualTopics = newTopics
 			c.internalCtx, c.consumerContextCancel = context.WithCancel(c.externalCtx)
-			c.consume()
+			go c.consume()
 			zap.S().Infof("restarted consumer with topics %v", c.actualTopics)
-		} else {
-			zap.S().Debugf("topics did not change")
 		}
 		_ = c.rawClient.RefreshMetadata()
 		time.Sleep(shared.CycleTime * 50)
