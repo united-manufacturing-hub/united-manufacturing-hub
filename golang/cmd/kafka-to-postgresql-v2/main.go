@@ -10,6 +10,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/worker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/internal"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ import (
 
 func main() {
 	InitLogging()
+	internal.Initfgtrace()
 	InitPrometheus()
 	_ = postgresql.GetOrInit()
 	_ = kafka.GetOrInit()
