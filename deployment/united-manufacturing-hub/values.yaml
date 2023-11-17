@@ -940,23 +940,24 @@ grafana:
             apiKeyConfigured: true
           version: 1
           # <bool> allow users to edit datasources from the UI.
-          isDefault: true
+          isDefault: false
           editable: false
         # https://grafana.com/docs/grafana/latest/datasources/postgres/
-        - name: Postgres 
+        - name: UMH TimescaleDB 
           type: postgres
           url: united-manufacturing-hub:5432
           user: $GRAFANAREADER_USER
+          isDefault: true
           secureJsonData:
             password: $GRAFANAREADER_PASSWORD
           jsonData:
-            database: factoryinsight
-            sslmode: 'disable' # disable/require/verify-ca/verify-full
+            database: umh_v2
+            sslmode: 'require' # disable/require/verify-ca/verify-full
             maxOpenConns: 100 # Grafana v5.4+
             maxIdleConns: 100 # Grafana v5.4+
             maxIdleConnsAuto: true # Grafana v9.5.1+
             connMaxLifetime: 14400 # Grafana v5.4+
-            postgresVersion: 1308 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+            postgresVersion: 13 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
             timescaledb: true
 
   ## Grafana's primary configuration
