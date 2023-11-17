@@ -322,14 +322,3 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
-{{/*
-Define credentials for the read-olny grafana db user
-*/}}
-{{- define "grafanareader.user" -}}
-{{- "grafanareader" }}
-{{- end -}}
-{{- define "grafanareader.password" -}}
-{{- uuidv4 -}}
-{{- end -}}
-

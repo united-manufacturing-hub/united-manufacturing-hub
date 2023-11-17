@@ -31,6 +31,9 @@ _000_commonConfig:
     database:
       name: "umh_v2"
       host: "united-manufacturing-hub"
+    grafana:
+      dbreader: "grafanareader"
+      dbpassword: "changeme"
 
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
