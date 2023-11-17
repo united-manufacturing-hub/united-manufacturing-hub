@@ -114,7 +114,7 @@ func registerCustomMetrics() {
 			kafkaIncomingMessageChannelFillGauge.Set(kafkaChanPercentage)
 
 			// Logging the stats
-			zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration: %.2fms, Numerical Channel fill: %.2f%%, Strings Channel fill: %.2f%%, Kafka Channel fill: %.2f%%",
+			zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration: %.2fms, Numerical Channel fill: %.2f%%, Strings Channel fill: %.2f%%, Kafka Channel fill: %.2f%%, PG Health: %t, Kafka ready: %t, Kafka Live: %t",
 				metrics.LRUHitPercentage,
 				metrics.NumericalValuesReceivedPerSecond,
 				metrics.StringValuesReceivedPerSecond,
@@ -124,6 +124,9 @@ func registerCustomMetrics() {
 				metrics.NumericalChannelFillPercentage,
 				metrics.StringChannelFillPercentage,
 				kafkaChanPercentage,
+				postgresql.GetHealthCheck()(),
+				kafka.GetReadinessCheck()(),
+				kafka.GetLivenessCheck()(),
 			)
 
 			<-ticker10Seconds.C
