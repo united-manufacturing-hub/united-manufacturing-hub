@@ -28,6 +28,9 @@ _000_commonConfig:
         topicMergePoint: 5
         partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
         replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
+    database:
+      name: "umh_v2"
+      db_host: "united-manufacturing-hub"
 
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
@@ -1236,3 +1239,6 @@ kafkatopostgresqlv2:
       size: 10000
     goroutines:
       multiplier: 16 # Logical CPU's * this value
+  database:
+    user: "kafkatopostgresqlv2"
+    password: "changemetoo"

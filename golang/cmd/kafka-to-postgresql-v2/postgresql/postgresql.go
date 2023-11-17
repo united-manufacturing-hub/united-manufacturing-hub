@@ -33,6 +33,16 @@ func (r *DBValue) GetValue() interface{} {
 	}
 }
 
+type Metrics struct {
+	LRUHitPercentage                    float64
+	NumericalChannelFillPercentage      float64
+	StringChannelFillPercentage         float64
+	DatabaseInsertions                  uint64
+	AverageCommitDurationInMilliseconds float64
+	NumericalValuesReceivedPerSecond    float64
+	StringValuesReceivedPerSecond       float64
+}
+
 type Connection struct {
 	db                     *pgxpool.Pool
 	cache                  *lru.ARCCache
@@ -45,6 +55,8 @@ type Connection struct {
 	lruMisses              atomic.Uint64
 	commits                atomic.Uint64
 	commitTime             atomic.Uint64
+	metrics                Metrics
+	metricsLock            sync.RWMutex
 }
 
 var conn *Connection
@@ -207,11 +219,28 @@ func (c *Connection) postStats() {
 		zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration: %.2fms, Numerical Channel fill: %f, Strings Channel fill: %f",
 			lruHitPercentage, numericalRate, stringRate, c.databaseInserted.Load(), databaseInsertionRate, averageCommitDuration, numericalChannelFillPercentage, stringsChannelFillPercentage)
 
+		c.metricsLock.Lock()
+		c.metrics = Metrics{
+			LRUHitPercentage:                    lruHitPercentage,
+			NumericalChannelFillPercentage:      numericalChannelFillPercentage,
+			StringChannelFillPercentage:         stringsChannelFillPercentage,
+			DatabaseInsertions:                  c.databaseInserted.Load(),
+			AverageCommitDurationInMilliseconds: averageCommitDuration,
+			NumericalValuesReceivedPerSecond:    numericalRate,
+			StringValuesReceivedPerSecond:       stringRate,
+		}
+
 		// Check if there were no database insertions
 		if currentDatabaseInserted == 0 {
 			zap.S().Info("No database insertions so far")
 		}
 	}
+}
+
+func (c *Connection) GetMetrics() Metrics {
+	c.metricsLock.RLock()
+	c.metricsLock.RUnlock()
+	return c.metrics
 }
 
 var goiLock = sync.Mutex{}

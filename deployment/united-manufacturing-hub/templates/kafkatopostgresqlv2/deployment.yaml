@@ -66,13 +66,13 @@ spec:
               protocol: TCP
           env:
             - name: POSTGRES_HOST
-              value: {{.Values.factoryinsight.db_host}}
+              value: {{.Values._000_commonConfig.datamodel_v2.database.db_host}}
             - name: POSTGRES_DATABASE
-              value: {{.Values.factoryinsight.db_database}}
+              value: {{.Values._000_commonConfig.datamodel_v2.database.name}}
             - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
+              value: {{.Values.kafkatopostgresqlv2.database.user}}
             - name: POSTGRES_PASSWORD
-              value: {{.Values._000_commonConfig.datastorage.db_password}}
+              value: {{.Values.kafkatopostgresqlv2.database.password}}
             - name: POSTGRES_SSLMODE
               value: "require"
             - name: POSTGRES_PORT
