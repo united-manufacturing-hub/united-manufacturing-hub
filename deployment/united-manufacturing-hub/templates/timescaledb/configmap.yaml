@@ -330,10 +330,6 @@ data:
     ON DELETE CASCADE
     );
 
-
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-
     -- TEST DATA
     -- assetTable
     INSERT INTO assetTable(assetID,location,customer) VALUES ('testMachine', 'testLocation', 'factoryinsight');
@@ -7577,5 +7573,48 @@ data:
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:05+00',1,40000);
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
 
+    -------------------- DATAMODEL V2 --------------------
+    CREATE TABLE asset (
+      id SERIAL PRIMARY KEY,
+      enterprise TEXT NOT NULL,
+      site TEXT DEFAULT '' NOT NULL,
+      area TEXT DEFAULT '' NOT NULL,
+      line TEXT DEFAULT '' NOT NULL,
+      workcell TEXT DEFAULT '' NOT NULL,
+      origin_id TEXT DEFAULT '' NOT NULL,
+      UNIQUE (enterprise),
+      UNIQUE (enterprise, site),
+      UNIQUE (enterprise, site, area),
+      UNIQUE (enterprise, site, area, line),
+      UNIQUE (enterprise, site, area, line, workcell),
+      UNIQUE (enterprise, site, area, line, workcell, origin_id)
+    );
+
+    CREATE TABLE tag (
+    timestamp TIMESTAMPTZ NOT NULL,
+    name TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    asset_id INT REFERENCES asset(id) NOT NULL,
+    value REAL,
+    UNIQUE (name, asset_id, timestamp)
+    );
+    SELECT create_hypertable('tag', 'timestamp');
+    CREATE INDEX ON tag (asset_id, timestamp DESC);
+    CREATE INDEX ON tag (name);
+
+    CREATE TABLE tag_string (
+      timestamp TIMESTAMPTZ NOT NULL,
+      name TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      asset_id INT REFERENCES asset(id) NOT NULL,
+      value TEXT,
+      UNIQUE (name, asset_id, timestamp)
+    );
+    SELECT create_hypertable('tag_string', 'timestamp');
+    CREATE INDEX ON tag_string (asset_id, timestamp DESC);
+    CREATE INDEX ON tag_string (name);
+
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
     __SQL__
 {{end}}
