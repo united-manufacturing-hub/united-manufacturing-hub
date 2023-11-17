@@ -403,8 +403,12 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 
 	var err error
 	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
+	var copiedIn int64
+
 	for {
-		time.Sleep(1 * time.Second)
+		sleepTime := calculateSleepTime(copiedIn)
+		time.Sleep(sleepTime)
+
 		if !source.Next() {
 			zap.S().Debugf("No data available for %s", tableName)
 			continue
@@ -439,7 +443,6 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 			txnExecutionCancel()
 			continue
 		}
-		var copiedIn int64
 		copiedIn, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
 			"timestamp", "name", "origin", "asset_id", "value",
 		}, source)
@@ -507,4 +510,23 @@ func get5SecondContext() (context.Context, context.CancelFunc) {
 
 func get1MinuteContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 1*time.Minute)
+}
+
+// calculateSleepTime scales the sleep time based on the number of entries
+func calculateSleepTime(copiedIn int64) time.Duration {
+	const maxSleep = 5 * time.Second
+	const minEntries = 1
+	const maxEntries = 50000
+
+	if copiedIn >= maxEntries {
+		return 0 // or a very small duration
+	}
+
+	// Linear scaling of sleep time
+	sleepScale := float64(maxSleep) * (1 - float64(copiedIn)/float64(maxEntries))
+	if sleepScale < 0 {
+		sleepScale = 0
+	}
+
+	return time.Duration(sleepScale)
 }
