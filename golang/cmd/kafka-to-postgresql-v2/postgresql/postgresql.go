@@ -516,7 +516,7 @@ func get1MinuteContext() (context.Context, context.CancelFunc) {
 func (c *Connection) calculateSleepTime(copiedIn int64) time.Duration {
 	const maxSleep = 5 * time.Second
 	const minEntries = 1
-	const maxEntries = cap(c.numericalValuesChannel)
+	maxEntries := int64(cap(c.numericalValuesChannel))
 
 	if copiedIn >= maxEntries {
 		return 0 // or a very small duration
