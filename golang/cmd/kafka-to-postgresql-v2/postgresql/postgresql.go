@@ -99,11 +99,15 @@ func GetOrInit() *Connection {
 		if err != nil {
 			zap.S().Fatalf("Failed to create ARC: %s", err)
 		}
+		ChannelSize, err := env.GetAsInt("VALUE_CHANNEL_SIZE", false, 10000)
+		if err != nil {
+			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
+		}
 		conn = &Connection{
 			db:                     db,
 			cache:                  cache,
-			numericalValuesChannel: make(chan DBValue, 500_000),
-			stringValuesChannel:    make(chan DBValue, 500_000),
+			numericalValuesChannel: make(chan DBValue, ChannelSize),
+			stringValuesChannel:    make(chan DBValue, ChannelSize),
 		}
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")

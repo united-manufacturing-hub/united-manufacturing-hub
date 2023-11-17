@@ -75,9 +75,17 @@ spec:
               value: {{.Values._000_commonConfig.datastorage.db_password}}
             - name: POSTGRES_SSLMODE
               value: "require"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_LRU_CACHE_SIZE
+              value: {{.Values.kafkatopostgresqlv2.asset.cache.lru.size}}
+            - name: VALUE_CHANNEL_SIZE
+              value: {{.Values.kafkatopostgresqlv2.workers.channel.size}}
+            - name: WORKER_MULTIPLIER
+              value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier}}
 
             - name: LOGGING_LEVEL
-              value: PRODUCTION
+              value: {{.Values.kafkatopostgresqlv2.logging.level}}
 
             - name: KAFKA_BROKERS
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
@@ -35,8 +36,13 @@ func GetOrInit() *Worker {
 
 func (w *Worker) startWorkLoop() {
 	zap.S().Debugf("Started work loop")
+	workerMultiplier, err := env.GetAsInt("WORKER_MULTIPLIER", false, 16)
+	if err != nil {
+		zap.S().Fatalf("Failed to get WORKER_MULTIPLIER from env: %s", err)
+	}
 	messageChannel := w.kafka.GetMessages()
-	for i := 0; i < runtime.NumCPU()*512; i++ {
+	zap.S().Debugf("Started using %d workers (logical cores * WORKER_MULTIPLIER)", workerMultiplier)
+	for i := 0; i < runtime.NumCPU()*workerMultiplier; i++ {
 		go handleParsing(messageChannel, i)
 	}
 	zap.S().Debugf("Started all workers")

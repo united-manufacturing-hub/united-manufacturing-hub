@@ -1225,3 +1225,14 @@ kafkatopostgresqlv2:
       periodSeconds: 5
     readiness:
       periodSeconds: 5
+  logging:
+    level: PRODUCTION
+  asset:
+    cache:
+      lru:
+        size: 1000
+  workers:
+    channel:
+      size: 10000
+    goroutines:
+      multiplier: 16 # Logical CPU's * this value
