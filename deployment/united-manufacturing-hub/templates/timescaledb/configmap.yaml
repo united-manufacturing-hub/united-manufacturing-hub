@@ -29,7 +29,7 @@ data:
     \c {{index .Values "grafana" "grafana.ini" "database" "name"}}
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{index .Values "grafana" "grafana.ini" "database" "user"}};
     
-    CREATE USER {{include "grafanareader.user" .}} WITH PASSWORD '{{include "grafanareader.password" .}}';
+    CREATE USER {{include "grafanareader.user" .}};
     GRANT USAGE ON SCHEMA public TO {{include "grafanareader.user" .}};
     GRANT SELECT ON public.asset, public.tag, public.tag_string TO {{include "grafanareader.user" .}};
 
