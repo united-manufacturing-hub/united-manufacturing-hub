@@ -61,6 +61,9 @@ spec:
             - name: metrics
               containerPort: 2112
               protocol: TCP
+            - name: healthcheck
+              containerPort: 8086
+              protocol: TCP
           env:
             - name: POSTGRES_HOST
               value: {{.Values.factoryinsight.db_host}}

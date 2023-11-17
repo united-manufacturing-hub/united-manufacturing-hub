@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/umh-utils/env"
@@ -58,7 +59,7 @@ func InitPrometheus() {
 	http.Handle(metricsPath, promhttp.Handler())
 	go func() {
 		/* #nosec G114 */
-		err := http.ListenAndServe(metricsPort, nil)
+		err := http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", metricsPort), nil)
 		if err != nil {
 			zap.S().Errorf("Error starting metrics: %s", err)
 		}
