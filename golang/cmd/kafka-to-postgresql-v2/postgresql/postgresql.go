@@ -228,6 +228,7 @@ func (c *Connection) postStats() {
 			NumericalValuesReceivedPerSecond:    numericalRate,
 			StringValuesReceivedPerSecond:       stringRate,
 		}
+		c.metricsLock.Unlock()
 
 		// Check if there were no database insertions
 		if currentDatabaseInserted == 0 {
