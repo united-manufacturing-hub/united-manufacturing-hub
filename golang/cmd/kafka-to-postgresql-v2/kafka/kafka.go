@@ -67,31 +67,22 @@ func (c *Connection) GetMessages() chan *shared.KafkaMessage {
 }
 
 func (c *Connection) MarkMessage(message *shared.KafkaMessage) {
+	lastChangeUTCSeconds.Store(time.Now().Unix())
 	c.consumer.MarkMessage(message)
 }
 
-var lastMarked atomic.Uint64
 var lastChangeUTCSeconds atomic.Int64
 
 func GetLivenessCheck() healthcheck.Check {
 	return func() error {
-		marked, _ := GetOrInit().consumer.GetStats()
-		oldValue := lastMarked.Swap(marked)
 		nowUTCSeconds := time.Now().UTC().Unix()
-		if oldValue < marked {
-			lastChangeUTCSeconds.Store(nowUTCSeconds)
-			return nil
-		} else if oldValue > marked {
-			return errors.New("amount of marked messages went down")
+		// Check if last change is more then 5 minutes ago
+		lastChange := lastChangeUTCSeconds.Load()
+		elapsedSeconds := nowUTCSeconds - lastChange
+		if elapsedSeconds > 60*5 {
+			return errors.New("no new kafka message in the last 5 minutes")
 		} else {
-			// Check if last change is more then 5 minutes ago
-			lastChange := lastChangeUTCSeconds.Load()
-			elapsedSeconds := nowUTCSeconds - lastChange
-			if elapsedSeconds > 60*5 {
-				return errors.New("no new kafka message in the last 5 minutes")
-			} else {
-				return nil
-			}
+			return nil
 		}
 	}
 }

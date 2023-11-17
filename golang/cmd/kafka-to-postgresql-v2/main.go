@@ -139,12 +139,11 @@ func InitHealthCheck() {
 
 	health := healthcheck.NewHandler()
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(1000000))
-	/*
-		health.AddReadinessCheck("database", postgresql.GetHealthCheck())
-		health.AddLivenessCheck("database", postgresql.GetHealthCheck())
-		health.AddReadinessCheck("kafka", kafka.GetReadinessCheck())
-		health.AddLivenessCheck("kafka", kafka.GetLivenessCheck())
-	*/
+	health.AddReadinessCheck("database", postgresql.GetHealthCheck())
+	health.AddLivenessCheck("database", postgresql.GetHealthCheck())
+	health.AddReadinessCheck("kafka", kafka.GetReadinessCheck())
+	health.AddLivenessCheck("kafka", kafka.GetLivenessCheck())
+
 	go func() {
 		/* #nosec G114 */
 		err := http.ListenAndServe("0.0.0.0:8086", health)
