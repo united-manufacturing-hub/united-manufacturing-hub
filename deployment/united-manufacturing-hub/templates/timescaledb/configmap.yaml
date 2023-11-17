@@ -7634,11 +7634,11 @@ data:
 
     CREATE OR REPLACE FUNCTION get_asset_id(
         _enterprise text,
-        _site text DEFAULT NULL,
-        _area text DEFAULT NULL,
-        _line text DEFAULT NULL,
-        _workcell text DEFAULT NULL,
-        _origin_id text DEFAULT NULL
+        _site text DEFAULT '',
+        _area text DEFAULT '',
+        _line text DEFAULT '',
+        _workcell text DEFAULT '',
+        _origin_id text DEFAULT ''
     )
     RETURNS integer AS '
     DECLARE
@@ -7646,11 +7646,11 @@ data:
     BEGIN
         SELECT id INTO result_id FROM asset
         WHERE enterprise = _enterprise
-        AND (site = _site OR _site IS NULL)
-        AND (area = _area OR _area IS NULL)
-        AND (line = _line OR _line IS NULL)
-        AND (workcell = _workcell OR _workcell IS NULL)
-        AND (origin_id = _origin_id OR _origin_id IS NULL)
+        AND site = _site
+        AND area = _area
+        AND line = _line
+        AND workcell = _workcell
+        AND origin_id = _origin_id
         LIMIT 1; -- Ensure only one id is returned
 
         RETURN result_id;
@@ -7663,22 +7663,22 @@ data:
 
     CREATE OR REPLACE FUNCTION get_asset_ids(
     _enterprise text,
-    _site text DEFAULT NULL,
-    _area text DEFAULT NULL,
-    _line text DEFAULT NULL,
-    _workcell text DEFAULT NULL,
-    _origin_id text DEFAULT NULL
+    _site text DEFAULT '',
+    _area text DEFAULT '',
+    _line text DEFAULT '',
+    _workcell text DEFAULT '',
+    _origin_id text DEFAULT ''
     )
     RETURNS SETOF integer AS '
     BEGIN
         RETURN QUERY
         SELECT id FROM asset
         WHERE enterprise = _enterprise
-        AND (site = _site OR _site IS NULL)
-        AND (area = _area OR _area IS NULL)
-        AND (line = _line OR _line IS NULL)
-        AND (workcell = _workcell OR _workcell IS NULL)
-        AND (origin_id = _origin_id OR _origin_id IS NULL);
+        AND site = _site
+        AND area = _area
+        AND line = _line
+        AND workcell = _workcell
+        AND origin_id = _origin_id
     END;
     ' LANGUAGE plpgsql;
 
