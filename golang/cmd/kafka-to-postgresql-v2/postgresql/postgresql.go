@@ -2,7 +2,6 @@ package postgresql
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
@@ -135,7 +134,7 @@ func GetOrInit() *Connection {
 			row := db.QueryRow(contextCheckTables, query, table)
 			err := row.Scan(&tableName)
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
+				if errors.Is(err, pgx.ErrNoRows) {
 					zap.S().Fatalf("Table %s does not exist in the database", table)
 				} else {
 					zap.S().Fatalf("Failed to check for table %s: %s", table, err)
@@ -274,7 +273,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	var err error
 	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
 			insertQuery := `INSERT INTO asset (enterprise, site, area, line, workcell, origin_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 			insertRowContext, insertRowContextCncl := get1MinuteContext()

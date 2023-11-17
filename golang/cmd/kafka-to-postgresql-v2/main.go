@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"github.com/united-manufacturing-hub/umh-utils/logger"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -62,6 +64,44 @@ func InitPrometheus() {
 		err := http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", metricsPort), nil)
 		if err != nil {
 			zap.S().Errorf("Error starting metrics: %s", err)
+		}
+	}()
+	registerCustomMetrics()
+}
+
+var (
+	// Define custom metrics as package-level variables
+	lruHitGauge                           = prometheus.NewGauge(prometheus.GaugeOpts{Name: "lru_hit_percentage", Help: "LRU Hit Percentage"})
+	numericalChannelFillGauge             = prometheus.NewGauge(prometheus.GaugeOpts{Name: "numerical_channel_fill_percentage", Help: "Numerical Channel Fill Percentage"})
+	stringChannelFillGauge                = prometheus.NewGauge(prometheus.GaugeOpts{Name: "string_channel_fill_percentage", Help: "String Channel Fill Percentage"})
+	databaseInsertionsCounter             = prometheus.NewGauge(prometheus.GaugeOpts{Name: "database_insertions", Help: "Total Database Insertions"})
+	averageCommitDurationGauge            = prometheus.NewGauge(prometheus.GaugeOpts{Name: "average_commit_duration_milliseconds", Help: "Average Commit Duration in Milliseconds"})
+	numericalValuesReceivedPerSecondGauge = prometheus.NewGauge(prometheus.GaugeOpts{Name: "numerical_values_received_per_second", Help: "Numerical Values Received Per Second"})
+	stringValuesReceivedPerSecondGauge    = prometheus.NewGauge(prometheus.GaugeOpts{Name: "string_values_received_per_second", Help: "String Values Received Per Second"})
+)
+
+func registerCustomMetrics() {
+	prometheus.MustRegister(lruHitGauge)
+	prometheus.MustRegister(numericalChannelFillGauge)
+	prometheus.MustRegister(stringChannelFillGauge)
+	prometheus.MustRegister(databaseInsertionsCounter)
+	prometheus.MustRegister(averageCommitDurationGauge)
+	prometheus.MustRegister(numericalValuesReceivedPerSecondGauge)
+	prometheus.MustRegister(stringValuesReceivedPerSecondGauge)
+
+	// Update metrics in a separate go routine
+	go func() {
+		ticker10Seconds := time.NewTicker(10 * time.Second)
+		for {
+			metrics := postgresql.GetOrInit().GetMetrics()
+			lruHitGauge.Set(metrics.LRUHitPercentage)
+			numericalChannelFillGauge.Set(metrics.NumericalChannelFillPercentage)
+			stringChannelFillGauge.Set(metrics.StringChannelFillPercentage)
+			databaseInsertionsCounter.Set(float64(metrics.DatabaseInsertions))
+			averageCommitDurationGauge.Set(metrics.AverageCommitDurationInMilliseconds)
+			numericalValuesReceivedPerSecondGauge.Set(metrics.NumericalValuesReceivedPerSecond)
+			stringValuesReceivedPerSecondGauge.Set(metrics.StringValuesReceivedPerSecond)
+			<-ticker10Seconds.C
 		}
 	}()
 }
