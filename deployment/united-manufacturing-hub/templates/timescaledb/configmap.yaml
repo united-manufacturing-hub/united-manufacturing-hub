@@ -7583,9 +7583,6 @@ data:
 
     CREATE USER {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT USAGE ON SCHEMA public TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
     \c {{.Values._000_commonConfig.datamodel_v2.database.name}}
 
@@ -7635,6 +7632,62 @@ data:
     ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
     ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
     ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    
+    CREATE OR REPLACE FUNCTION get_asset_id(
+        _enterprise text,
+        _site text DEFAULT '',
+        _area text DEFAULT '',
+        _line text DEFAULT '',
+        _workcell text DEFAULT '',
+        _origin_id text DEFAULT ''
+    )
+    RETURNS integer AS '
+    DECLARE
+        result_id integer;
+    BEGIN
+        SELECT id INTO result_id FROM asset
+        WHERE enterprise = _enterprise
+        AND site = _site
+        AND area = _area
+        AND line = _line
+        AND workcell = _workcell
+        AND origin_id = _origin_id
+        LIMIT 1; -- Ensure only one id is returned
+
+        RETURN result_id;
+    END;
+    ' LANGUAGE plpgsql;
+
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+    -- $$
+
+    CREATE OR REPLACE FUNCTION get_asset_ids(
+    _enterprise text,
+    _site text DEFAULT '',
+    _area text DEFAULT '',
+    _line text DEFAULT '',
+    _workcell text DEFAULT '',
+    _origin_id text DEFAULT ''
+    )
+    RETURNS SETOF integer AS '
+    BEGIN
+        RETURN QUERY
+        SELECT id FROM asset
+        WHERE enterprise = _enterprise
+        AND site = _site
+        AND area = _area
+        AND line = _line
+        AND workcell = _workcell
+        AND origin_id = _origin_id
+    END;
+    ' LANGUAGE plpgsql;
+
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
     __SQL__
 {{end}}
