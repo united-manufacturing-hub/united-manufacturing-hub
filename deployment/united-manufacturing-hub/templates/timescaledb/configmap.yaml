@@ -7583,9 +7583,6 @@ data:
 
     CREATE USER {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT USAGE ON SCHEMA public TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
     \c {{.Values._000_commonConfig.datamodel_v2.database.name}}
 
@@ -7632,6 +7629,10 @@ data:
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
 
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    
     CREATE OR REPLACE FUNCTION get_asset_id(
         _enterprise text,
         _site text DEFAULT '',
