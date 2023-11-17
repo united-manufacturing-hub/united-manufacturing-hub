@@ -330,10 +330,6 @@ data:
     ON DELETE CASCADE
     );
 
-
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-
     -- TEST DATA
     -- assetTable
     INSERT INTO assetTable(assetID,location,customer) VALUES ('testMachine', 'testLocation', 'factoryinsight');
@@ -7617,5 +7613,8 @@ data:
     SELECT create_hypertable('tag_string', 'timestamp');
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
+
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
     __SQL__
 {{end}}
