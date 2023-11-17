@@ -7657,6 +7657,8 @@ data:
     END;
     $$ LANGUAGE plpgsql;
 
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
     CREATE OR REPLACE FUNCTION get_asset_ids(
     _enterprise text,
     _site text DEFAULT NULL,
@@ -7677,6 +7679,8 @@ data:
         AND (origin_id = _origin_id OR _origin_id IS NULL);
     END;
     $$ LANGUAGE plpgsql;
+
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
     __SQL__
 {{end}}
