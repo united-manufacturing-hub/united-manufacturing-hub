@@ -7582,7 +7582,7 @@ data:
     GRANT ALL PRIVILEGES ON DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} TO {{.Values.kafkatopostgresqlv2.database.user}};
 
     CREATE USER {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT USAGE ON SCHEMA schema TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT USAGE ON SCHEMA public TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
