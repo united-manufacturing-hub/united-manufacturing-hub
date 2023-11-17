@@ -1,0 +1,139 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if or .Values.kafkatopostgresql.enabled (and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datastorage.enabled .Values._000_commonConfig.datamodel_v2.enabled)}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+  labels:
+    {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 4}}
+  {{if .Values.kafkatopostgresqlv2.annotations}}
+  annotations:
+    {{- toYaml .Values.kafkatopostgresqlv2.annotations | nindent 4}}
+  {{end}}
+spec:
+  replicas: {{.Values.kafkatopostgresqlv2.replicas}}
+  selector:
+    matchLabels:
+      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+        {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+                topologyKey: "kubernetes.io/hostname"
+      # Be nice to kafka & the db
+      terminationGracePeriodSeconds: 180
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+          {{if .Values.kafkatopostgresqlv2.image.tag}}
+          image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Values.kafkatopostgresqlv2.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{- else}}
+          image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{end}}
+          imagePullPolicy: {{.Values.kafkatopostgresqlv2.image.pullPolicy}}
+          ports:
+            - name: metrics
+              containerPort: 2112
+              protocol: TCP
+            - name: healthcheck
+              containerPort: 8086
+              protocol: TCP
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
+          env:
+            - name: POSTGRES_HOST
+              value: {{.Values._000_commonConfig.datamodel_v2.database.host}}
+            - name: POSTGRES_DATABASE
+              value: {{.Values._000_commonConfig.datamodel_v2.database.name}}
+            - name: POSTGRES_USER
+              value: {{.Values.kafkatopostgresqlv2.database.user}}
+            - name: POSTGRES_PASSWORD
+              value: {{.Values.kafkatopostgresqlv2.database.password}}
+            - name: POSTGRES_SSLMODE
+              value: "require"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_LRU_CACHE_SIZE
+              value: {{.Values.kafkatopostgresqlv2.asset.cache.lru.size | quote}}
+            - name: VALUE_CHANNEL_SIZE
+              value: {{.Values.kafkatopostgresqlv2.workers.channel.size | quote}}
+            - name: WORKER_MULTIPLIER
+              value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier | quote}}
+            - name: LOGGING_LEVEL
+              value: {{.Values.kafkatopostgresqlv2.logging.level | quote}}
+
+            - name: KAFKA_BROKERS
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: KAFKA_HTTP_BROKERS
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:8082
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
+
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            failureThreshold: {{.Values.kafkatopostgresqlv2.probes.startup.failureThreshold}}
+            initialDelaySeconds: {{.Values.kafkatopostgresqlv2.probes.startup.initialDelaySeconds}}
+            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.startup.periodSecondss}}
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.liveness.periodSeconds}}
+          # Not really useful as we don't expose any HTTP endpoint, but good for metrics
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8086
+            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.readiness.periodSeconds}}
+          resources:
+            limits:
+              cpu: {{.Values.kafkatopostgresqlv2.resources.limits.cpu}}
+              memory: {{.Values.kafkatopostgresqlv2.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.kafkatopostgresqlv2.resources.requests.cpu}}
+              memory: {{.Values.kafkatopostgresqlv2.resources.requests.memory}}
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+
