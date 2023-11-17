@@ -55,7 +55,7 @@ func InitLogging() {
 func InitPrometheus() {
 	// Prometheus
 	metricsPath := "/metrics"
-	metricsPort := ":2112"
+	metricsPort := "2112"
 	zap.S().Debugf("Setting up metrics %s %v", metricsPath, metricsPort)
 
 	http.Handle(metricsPath, promhttp.Handler())
