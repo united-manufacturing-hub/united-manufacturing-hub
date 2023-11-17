@@ -67,10 +67,10 @@ outer:
 			}
 			if v, ok := offsets[key]; ok {
 				if v < message.Offset {
-					offsets[key] = message.Offset
+					offsets[key] = message.Offset + 1
 				}
 			} else {
-				offsets[key] = message.Offset
+				offsets[key] = message.Offset + 1
 			}
 			markedMessages.Add(1)
 

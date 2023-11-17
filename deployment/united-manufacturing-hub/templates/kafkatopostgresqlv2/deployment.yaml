@@ -64,6 +64,11 @@ spec:
             - name: healthcheck
               containerPort: 8086
               protocol: TCP
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
           env:
             - name: POSTGRES_HOST
               value: {{.Values._000_commonConfig.datamodel_v2.database.host}}
@@ -83,7 +88,6 @@ spec:
               value: {{.Values.kafkatopostgresqlv2.workers.channel.size | quote}}
             - name: WORKER_MULTIPLIER
               value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier | quote}}
-
             - name: LOGGING_LEVEL
               value: {{.Values.kafkatopostgresqlv2.logging.level | quote}}
 

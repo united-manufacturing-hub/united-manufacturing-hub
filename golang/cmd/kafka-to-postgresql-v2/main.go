@@ -96,6 +96,7 @@ func registerCustomMetrics() {
 	// Update metrics in a separate go routine
 	go func() {
 		ticker10Seconds := time.NewTicker(10 * time.Second)
+		msgChan := kafka.GetOrInit().GetMessages()
 		for {
 			metrics := postgresql.GetOrInit().GetMetrics()
 			lruHitGauge.Set(metrics.LRUHitPercentage)
@@ -107,9 +108,7 @@ func registerCustomMetrics() {
 			numericalValuesReceivedPerSecondGauge.Set(metrics.NumericalValuesReceivedPerSecond)
 			stringValuesReceivedPerSecondGauge.Set(metrics.StringValuesReceivedPerSecond)
 
-			kafkaChanLen := len(kafka.GetOrInit().GetMessages())
-			kafkaChanCap := cap(kafka.GetOrInit().GetMessages())
-			kafkaChanPercentage := float64(kafkaChanLen) / float64(kafkaChanCap) * 100
+			kafkaChanPercentage := float64(len(msgChan)) / float64(cap(msgChan)) * 100
 			kafkaIncomingMessageChannelFillGauge.Set(kafkaChanPercentage)
 
 			// Logging the stats
