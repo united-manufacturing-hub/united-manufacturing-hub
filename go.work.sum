@@ -98,7 +98,7 @@ github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 h1:TToq11gyfNlrMFZiYujSekIsPd9Am
 github.com/stretchr/objx v0.5.0 h1:1zr/of2m5FGMsad5YfcqgdqdWrIhu+EBEJRhR1U7z/c=
 github.com/ugorji/go v1.2.7 h1:qYhyWUUd6WbiM+C6JZAUkIJt/1WrjzNHY9+KCIjVqTo=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.4.3/go.mod h1:064ly34eWMjEXbcmShQ9OtVhzC7t4A5zJce5FmNKJOU=
-github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.19/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.6.20/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
 github.com/xdg-go/pbkdf2 v1.0.0 h1:Su7DPu48wXMwC3bs7MCNG+z4FhcyEuz5dlvchbq0B0c=
 github.com/xdg-go/pbkdf2 v1.0.0/go.mod h1:jrpuAogTd400dnrH08LKmI/xc1MbPOebTwRqcT5RDeI=
 github.com/xdg-go/scram v1.1.2 h1:FHX5I5B4i4hKRVRBCFRxq1iQRej7WO3hhBuJf+UUySY=

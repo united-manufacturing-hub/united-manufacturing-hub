@@ -42,11 +42,12 @@ type TopicPartition struct {
 	Partition int32
 }
 
+// marker marks messages coming in from messagesToMark to be ready for commit
 func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, shutdownchan chan bool, markedMessages *atomic.Uint64) {
 	zap.S().Debugf("begin marker")
-	lastCommit := time.Now()
+	lastMark := time.Now()
 	offsets := make(map[TopicPartition]int64)
-	lastLoopCommited := false
+	lastLoopMarked := false
 outer:
 	for {
 		select {
@@ -60,30 +61,36 @@ outer:
 			if message == nil {
 				continue
 			}
+			(*session).MarkOffset(message.Topic, message.Partition, message.Offset+1, "")
 
-			key := TopicPartition{
-				Topic:     message.Topic,
-				Partition: message.Partition,
-			}
-			if v, ok := offsets[key]; ok {
-				if v < message.Offset {
+			// Checks if there is already an offset for the given topic and partition
+			// If the topic is new, then it can happen that there is no offset, but it should only happen once for each topic and partition and consumer group
+			/*
+				key := TopicPartition{
+					Topic:     message.Topic,
+					Partition: message.Partition,
+				}
+				if v, ok := offsets[key]; ok {
+					if v < message.Offset {
+						offsets[key] = message.Offset + 1
+					}
+				} else {
 					offsets[key] = message.Offset + 1
 				}
-			} else {
-				offsets[key] = message.Offset + 1
-			}
-			markedMessages.Add(1)
+				markedMessages.Add(1)
 
-			if !lastLoopCommited && (markedMessages.Load()%1000 == 0 || time.Since(lastCommit) > 10*time.Second) {
-				zap.S().Debugf("Reached %d marked messages, committing", markedMessages.Load())
-				lastCommit = time.Now()
-				for k, v := range offsets {
-					(*session).MarkOffset(k.Topic, k.Partition, v, "")
+				// If 10 seconds since the last comit happened or every 1000 messages, then
+				if !lastLoopMarked && (markedMessages.Load()%1000 == 0 || time.Since(lastMark) > 10*time.Second) {
+					zap.S().Debugf("Reached %d marked messages, committing", markedMessages.Load())
+					lastMark = time.Now()
+					for k, v := range offsets {
+						(*session).MarkOffset(k.Topic, k.Partition, v, "")
+					}
+					clear(offsets)
+					zap.S().Debugf("Marked offsets")
+					lastLoopMarked = true
 				}
-				clear(offsets)
-				zap.S().Debugf("Marked offsets")
-				lastLoopCommited = true
-			}
+			*/
 		case <-(*session).Context().Done():
 			zap.S().Debugf("Marker for session %s:%d is done", (*session).MemberID(), (*session).GenerationID())
 			break outer
