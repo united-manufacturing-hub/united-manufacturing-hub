@@ -124,9 +124,9 @@ func registerCustomMetrics() {
 				metrics.NumericalChannelFillPercentage,
 				metrics.StringChannelFillPercentage,
 				kafkaChanPercentage,
-				postgresql.GetHealthCheck()(),
-				kafka.GetReadinessCheck()(),
-				kafka.GetLivenessCheck()(),
+				postgresql.GetHealthCheck()() == nil,
+				kafka.GetReadinessCheck()() == nil,
+				kafka.GetLivenessCheck()() == nil,
 			)
 
 			<-ticker10Seconds.C

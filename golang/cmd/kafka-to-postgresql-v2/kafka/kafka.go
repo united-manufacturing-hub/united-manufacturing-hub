@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type Connection struct {
@@ -67,22 +65,15 @@ func (c *Connection) GetMessages() chan *shared.KafkaMessage {
 }
 
 func (c *Connection) MarkMessage(message *shared.KafkaMessage) {
-	lastChangeUTCSeconds.Store(time.Now().Unix())
 	c.consumer.MarkMessage(message)
 }
 
-var lastChangeUTCSeconds atomic.Int64
-
 func GetLivenessCheck() healthcheck.Check {
 	return func() error {
-		nowUTCSeconds := time.Now().UTC().Unix()
-		// Check if last change is more then 5 minutes ago
-		lastChange := lastChangeUTCSeconds.Load()
-		elapsedSeconds := nowUTCSeconds - lastChange
-		if elapsedSeconds > 60*5 {
-			return errors.New("no new kafka message in the last 5 minutes")
-		} else {
+		if GetOrInit().consumer.IsRunning() {
 			return nil
+		} else {
+			return errors.New("kafka consumer is not running")
 		}
 	}
 }
