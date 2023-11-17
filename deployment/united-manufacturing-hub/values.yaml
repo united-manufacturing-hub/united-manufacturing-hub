@@ -942,7 +942,8 @@ grafana:
           # <bool> allow users to edit datasources from the UI.
           isDefault: true
           editable: false
-        - name: Postgres
+        # https://grafana.com/docs/grafana/latest/datasources/postgres/
+        - name: Postgres 
           type: postgres
           url: united-manufacturing-hub:5432
           user: $GRAFANAREADER_USER
@@ -955,7 +956,7 @@ grafana:
             maxIdleConns: 100 # Grafana v5.4+
             maxIdleConnsAuto: true # Grafana v9.5.1+
             connMaxLifetime: 14400 # Grafana v5.4+
-            postgresVersion: 903 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+            postgresVersion: 1308 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
             timescaledb: true
 
   ## Grafana's primary configuration
