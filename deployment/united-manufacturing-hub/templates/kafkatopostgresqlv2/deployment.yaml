@@ -78,14 +78,14 @@ spec:
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_LRU_CACHE_SIZE
-              value: {{.Values.kafkatopostgresqlv2.asset.cache.lru.size}}
+              value: {{.Values.kafkatopostgresqlv2.asset.cache.lru.size | quote}}
             - name: VALUE_CHANNEL_SIZE
-              value: {{.Values.kafkatopostgresqlv2.workers.channel.size}}
+              value: {{.Values.kafkatopostgresqlv2.workers.channel.size | quote}}
             - name: WORKER_MULTIPLIER
-              value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier}}
+              value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier | quote}}
 
             - name: LOGGING_LEVEL
-              value: {{.Values.kafkatopostgresqlv2.logging.level}}
+              value: {{.Values.kafkatopostgresqlv2.logging.level | quote}}
 
             - name: KAFKA_BROKERS
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
