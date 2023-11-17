@@ -7579,19 +7579,19 @@ data:
 
     -------------------- DATAMODEL V2 --------------------
     CREATE TABLE asset (
-    id SERIAL PRIMARY KEY,
-    enterprise TEXT NOT NULL,
-    site TEXT DEFAULT '' NOT NULL,
-    area TEXT DEFAULT '' NOT NULL,
-    line TEXT DEFAULT '' NOT NULL,
-    workcell TEXT DEFAULT '' NOT NULL,
-    origin_id TEXT DEFAULT '' NOT NULL,
-    UNIQUE (enterprise),
-    UNIQUE (enterprise, site),
-    UNIQUE (enterprise, site, area),
-    UNIQUE (enterprise, site, area, line),
-    UNIQUE (enterprise, site, area, line, workcell),
-    UNIQUE (enterprise, site, area, line, workcell, origin_id)
+      id SERIAL PRIMARY KEY,
+      enterprise TEXT NOT NULL,
+      site TEXT DEFAULT '' NOT NULL,
+      area TEXT DEFAULT '' NOT NULL,
+      line TEXT DEFAULT '' NOT NULL,
+      workcell TEXT DEFAULT '' NOT NULL,
+      origin_id TEXT DEFAULT '' NOT NULL,
+      UNIQUE (enterprise),
+      UNIQUE (enterprise, site),
+      UNIQUE (enterprise, site, area),
+      UNIQUE (enterprise, site, area, line),
+      UNIQUE (enterprise, site, area, line, workcell),
+      UNIQUE (enterprise, site, area, line, workcell, origin_id)
     );
 
     CREATE TABLE tag (
@@ -7607,15 +7607,15 @@ data:
     CREATE INDEX ON tag (name);
 
     CREATE TABLE tag_string (
-    timestamp TIMESTAMPTZ NOT NULL,
-    name TEXT NOT NULL,
-    origin TEXT NOT NULL,
-    asset_id INT REFERENCES asset(id) NOT NULL,
-    value TEXT,
-    UNIQUE (name, asset_id, timestamp)
+      timestamp TIMESTAMPTZ NOT NULL,
+      name TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      asset_id INT REFERENCES asset(id) NOT NULL,
+      value TEXT,
+      UNIQUE (name, asset_id, timestamp)
     );
     SELECT create_hypertable('tag_string', 'timestamp');
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
-  __SQL__
+    __SQL__
 {{end}}
