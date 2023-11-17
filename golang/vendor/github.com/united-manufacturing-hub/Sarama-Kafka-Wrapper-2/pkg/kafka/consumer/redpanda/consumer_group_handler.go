@@ -114,8 +114,13 @@ outer:
 		select {
 		case <-shutdownchan:
 			break outer
-		case message := <-(*claim).Messages():
+		case message, ok := <-(*claim).Messages():
 			if session == nil {
+				shutdown(shutdownchan)
+				continue
+			}
+			if !ok {
+				zap.S().Debugf("Message channel is closed for %s:%d", (*session).MemberID(), (*session).GenerationID())
 				shutdown(shutdownchan)
 				continue
 			}
