@@ -7626,5 +7626,51 @@ data:
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
 
+    CREATE OR REPLACE FUNCTION get_asset_id(
+    _enterprise text,
+    _site text DEFAULT NULL,
+    _area text DEFAULT NULL,
+    _line text DEFAULT NULL,
+    _workcell text DEFAULT NULL,
+    _origin_id text DEFAULT NULL
+    )
+    RETURNS integer AS $$
+    DECLARE
+        result_id integer;
+    BEGIN
+        SELECT id INTO result_id FROM asset
+        WHERE enterprise = _enterprise
+        AND (site = _site OR _site IS NULL)
+        AND (area = _area OR _area IS NULL)
+        AND (line = _line OR _line IS NULL)
+        AND (workcell = _workcell OR _workcell IS NULL)
+        AND (origin_id = _origin_id OR _origin_id IS NULL)
+        LIMIT 1; -- Ensure only one id is returned
+
+        RETURN result_id;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE OR REPLACE FUNCTION get_asset_ids(
+    _enterprise text,
+    _site text DEFAULT NULL,
+    _area text DEFAULT NULL,
+    _line text DEFAULT NULL,
+    _workcell text DEFAULT NULL,
+    _origin_id text DEFAULT NULL
+    )
+    RETURNS SETOF integer AS $$
+    BEGIN
+        RETURN QUERY
+        SELECT id FROM asset
+        WHERE enterprise = _enterprise
+        AND (site = _site OR _site IS NULL)
+        AND (area = _area OR _area IS NULL)
+        AND (line = _line OR _line IS NULL)
+        AND (workcell = _workcell OR _workcell IS NULL)
+        AND (origin_id = _origin_id OR _origin_id IS NULL);
+    END;
+    $$ LANGUAGE plpgsql;
+
     __SQL__
 {{end}}
