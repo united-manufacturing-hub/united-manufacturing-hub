@@ -49,7 +49,7 @@ jobs:
           helm repo index . --url https://repo.umh.app --merge index.yaml
           git add .
           git commit -m "Release Helm chart version ${{ steps.semantic.outputs.new_release_version }}"
-          # git push
+          git push
 
       - name: Clean up
         if: steps.semantic.outputs.new_release_published == 'true'
