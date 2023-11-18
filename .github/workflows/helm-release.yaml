@@ -54,8 +54,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push barcodereader Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/barcodereader:latest ./deployment/barcodereader/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/barcodereader:latest ./deployment/barcodereader/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/barcodereader:latest
 
@@ -74,8 +73,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push factoryinput Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/factoryinput:latest ./deployment/factoryinput/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/factoryinput:latest ./deployment/factoryinput/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/factoryinput:latest
 
@@ -94,8 +92,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push factoryinsight Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/factoryinsight:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/factoryinsight:latest ./deployment/factoryinsight/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/factoryinsight:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/factoryinsight:latest ./deployment/factoryinsight/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/factoryinsight:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/factoryinsight:latest
 
@@ -114,8 +111,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push grafana-proxy Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/grafana-proxy:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/grafana-proxy:latest ./deployment/grafana-proxy/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/grafana-proxy:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/grafana-proxy:latest ./deployment/grafana-proxy/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/grafana-proxy:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/grafana-proxy:latest
 
@@ -134,8 +130,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push grafana-umh Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/grafana-umh:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/grafana-umh:latest ./deployment/grafana-umh/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/grafana-umh:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/grafana-umh:latest ./deployment/grafana-umh/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/grafana-umh:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/grafana-umh:latest
 
@@ -154,8 +149,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push hivemq-init Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/hivemq-init:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/hivemq-init:latest ./deployment/hivemq-init/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/hivemq-init:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/hivemq-init:latest ./deployment/hivemq-init/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/hivemq-init:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/hivemq-init:latest
 
@@ -174,8 +168,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push kafka-bridge Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/kafka-bridge:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/kafka-bridge:latest ./deployment/kafka-bridge/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/kafka-bridge:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/kafka-bridge:latest ./deployment/kafka-bridge/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/kafka-bridge:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/kafka-bridge:latest
 
@@ -194,8 +187,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push kafka-debug Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/kafka-debug:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/kafka-debug:latest ./deployment/kafka-debug/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/kafka-debug:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/kafka-debug:latest ./deployment/kafka-debug/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/kafka-debug:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/kafka-debug:latest
 
@@ -214,8 +206,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push kafka-init Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/kafka-init:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/kafka-init:latest ./deployment/kafka-init/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/kafka-init:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/kafka-init:latest ./deployment/kafka-init/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/kafka-init:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/kafka-init:latest
 
@@ -234,8 +225,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push kafka-state-detector Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/kafka-state-detector:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/kafka-state-detector:latest ./deployment/kafka-state-detector/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/kafka-state-detector:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/kafka-state-detector:latest ./deployment/kafka-state-detector/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/kafka-state-detector:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/kafka-state-detector:latest
 
@@ -254,8 +244,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push kafka-to-postgresql Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql:latest ./deployment/kafka-to-postgresql/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql:latest ./deployment/kafka-to-postgresql/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/kafka-to-postgresql:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/kafka-to-postgresql:latest
 
@@ -274,8 +263,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push kafka-to-postgresql-v2 Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:latest ./deployment/kafka-to-postgresql-v2/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:latest ./deployment/kafka-to-postgresql-v2/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:latest
 
@@ -294,8 +282,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push metrics Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/metrics:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/metrics:latest ./deployment/metrics/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/metrics:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/metrics:latest ./deployment/metrics/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/metrics:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/metrics:latest
 
@@ -314,8 +301,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push mqtt-bridge Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/mqtt-bridge:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/mqtt-bridge:latest ./deployment/mqtt-bridge/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/mqtt-bridge:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/mqtt-bridge:latest ./deployment/mqtt-bridge/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/mqtt-bridge:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/mqtt-bridge:latest
 
@@ -334,8 +320,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push mqtt-kafka-bridge Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:latest ./deployment/mqtt-kafka-bridge/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:latest ./deployment/mqtt-kafka-bridge/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:latest
 
@@ -354,8 +339,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push sensorconnect Docker Image
         run: |
-          docker build -t ghcr.io/united-manufacturing-hub/sensorconnect:${{ needs.release.outputs.new_release_version }}
-                     -t ghcr.io/united-manufacturing-hub/sensorconnect:latest ./deployment/sensorconnect/Dockerfile
+          docker build -t ghcr.io/united-manufacturing-hub/sensorconnect:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/sensorconnect:latest ./deployment/sensorconnect/Dockerfile
           docker push ghcr.io/united-manufacturing-hub/sensorconnect:${{ needs.release.outputs.new_release_version }}
           docker push ghcr.io/united-manufacturing-hub/sensorconnect:latest
 
