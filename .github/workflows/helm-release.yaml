@@ -1,0 +1,48 @@
+name: Release Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Bump version and tag release
+        id: bump_version
+        uses: anothrNick/github-tag-action@1.35.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: minor
+          WITH_V: "yes"
+
+      - name: Install Helm
+        run: |
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+          chmod 700 get_helm.sh
+          ./get_helm.sh
+
+      - name: Package Helm chart
+        run: |
+          helm package deployment/united-manufacturing-hub --version ${{ steps.bump_version.outputs.new_tag }}
+          mv united-manufacturing-hub-${{ steps.bump_version.outputs.new_tag }}.tgz deployment/helm-repo/
+
+      - name: Update Helm repo index
+        run: |
+          cd deployment/helm-repo
+          helm repo index . --url https://repo.umh.app --merge index.yaml
+          git add .
+          git commit -m "Release Helm chart version ${{ steps.bump_version.outputs.new_tag }}"
+          # git push
+
+      - name: Clean up
+        run: rm -f deployment/helm-repo/united-manufacturing-hub-${{ steps.bump_version.outputs.new_tag }}.tgz
