@@ -24,7 +24,7 @@ jobs:
         id: semantic
         with:
           dry_run: false
-          branch: staging
+          branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
