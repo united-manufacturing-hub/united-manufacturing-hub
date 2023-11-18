@@ -24,6 +24,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BUMP: minor
           WITH_V: "yes"
+          INITIAL_VERSION: 0.10.0
+          DRY_RUN: true
 
       - name: Install Helm
         run: |
