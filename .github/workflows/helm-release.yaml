@@ -8,16 +8,20 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
           fetch-depth: 0 # Important for semantic-release to analyze all commits
 
-      - name: Configure Git
+      - name: Install Helm
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+          chmod 700 get_helm.sh
+          ./get_helm.sh
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v4
@@ -25,32 +29,424 @@ jobs:
         with:
           dry_run: false
           branch: main
+          extra_plugins: |
+            @semantic-release/exec
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Helm
-        if: steps.semantic.outputs.new_release_published == 'true'
+      - name: Set Outputs
         run: |
-          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-          chmod 700 get_helm.sh
-          ./get_helm.sh
+          echo "::set-output name=new_release_published::${{ steps.semantic.outputs.new_release_published }}"
+          echo "::set-output name=new_release_version::${{ steps.semantic.outputs.new_release_version }}"
 
-      - name: Package Helm chart
-        if: steps.semantic.outputs.new_release_published == 'true'
-        run: |
-          echo "${{ steps.semantic.outputs.new_release_version }}"
-          helm package deployment/united-manufacturing-hub --version ${{ steps.semantic.outputs.new_release_version }}
-          mv united-manufacturing-hub-${{ steps.semantic.outputs.new_release_version }}.tgz deployment/helm-repo/
+  build-barcodereader:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/barcodereader/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/barcodereader:latest
 
-      - name: Update Helm repo index
-        if: steps.semantic.outputs.new_release_published == 'true'
-        run: |
-          cd deployment/helm-repo
-          helm repo index . --url https://repo.umh.app --merge index.yaml
-          git add .
-          git commit -m "Release Helm chart version ${{ steps.semantic.outputs.new_release_version }}"
-          # git push
+  build-factoryinput:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/factoryinput/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/factoryinput:latest
 
-      - name: Clean up
-        if: steps.semantic.outputs.new_release_published == 'true'
-        run: rm -f deployment/helm-repo/united-manufacturing-hub-${{ steps.semantic.outputs.new_release_version }}.tgz
+  build-factoryinsight:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/factoryinsight/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/factoryinsight:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/factoryinsight:latest
+
+  build-grafana-proxy:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/grafana-proxy/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/grafana-proxy:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/grafana-proxy:latest
+
+  build-grafana-umh:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/grafana-umh/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/grafana-umh:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/grafana-umh:latest
+
+  build-hivemq-init:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/hivemq-init/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/hivemq-init:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/hivemq-init:latest
+
+  build-kafka-bridge:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-bridge/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/kafka-bridge:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/kafka-bridge:latest
+
+
+  build-kafka-debug:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-debug/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/kafka-debug:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/kafka-debug:latest
+
+
+  build-kafka-init:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-init/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/kafka-init:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/kafka-init:latest
+
+
+  build-kafka-state-detector:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-state-detector/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/kafka-state-detector:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/kafka-state-detector:latest
+
+
+  build-kafka-to-postgresql:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-to-postgresql/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/kafka-to-postgresql:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/kafka-to-postgresql:latest
+
+
+  build-kafka-to-postgresql-v2:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/kafka-to-postgresql-v2/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2:latest
+
+
+  build-metrics:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/metrics/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/metrics:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/metrics:latest
+
+
+  build-mqtt-bridge:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/mqtt-bridge/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/mqtt-bridge:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/mqtt-bridge:latest
+
+
+  build-mqtt-kafka-bridge:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/mqtt-kafka-bridge/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:latest
+
+
+  build-sensorconnect:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/sensorconnect/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/sensorconnect:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/sensorconnect:latest
+
+
+  
