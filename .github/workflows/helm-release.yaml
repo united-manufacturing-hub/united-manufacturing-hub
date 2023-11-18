@@ -11,21 +11,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # Important for semantic-release to analyze all commits
 
       - name: Configure Git
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
-      - name: Bump version and tag release
-        id: bump_version
-        uses: anothrNick/github-tag-action@1.35.0
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: true # Set to false to actually release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BUMP: minor
-          WITH_V: "yes"
-          INITIAL_VERSION: 0.10.0
-          DRY_RUN: true
 
       - name: Install Helm
         run: |
