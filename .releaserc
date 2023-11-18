@@ -1,3 +1,16 @@
 {
-  "branches": ["main"]
+    "branches": ["main"],
+    "repositoryUrl": "https://github.com/united-manufacturing-hub/united-manufacturing-hub.git",
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/github",
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "sed -i 's/^version:.*/version: ${nextRelease.version}/' deployment/united-manufacturing-hub/Chart.yaml && sed -i 's/^appVersion:.*/appVersion: ${nextRelease.version}/' deployment/united-manufacturing-hub/Chart.yaml && helm package deployment/united-manufacturing-hub --version ${nextRelease.version} && mv united-manufacturing-hub-${nextRelease.version}.tgz deployment/helm-repo/",
+          "publishCmd": "cd deployment/helm-repo && helm repo index . --url https://repo.umh.app --merge index.yaml && git add . && git commit -m 'Release Helm chart version ${nextRelease.version}' && git push"
+        }
+      ]
+    ]
 }
