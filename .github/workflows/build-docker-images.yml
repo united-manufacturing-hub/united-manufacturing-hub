@@ -15,12 +15,6 @@
 name: Build Docker Images
 
 on:
-  push: 
-    branches:
-      - main
-      - staging
-    tags:
-        - '*'
   pull_request:
     branches:
       - main
