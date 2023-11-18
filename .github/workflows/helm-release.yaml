@@ -54,11 +54,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push barcodereader Docker Image
-        run: |
-          docker build -t ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/barcodereader:latest ./deployment/barcodereader/Dockerfile
-          docker push ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }}
-          docker push ghcr.io/united-manufacturing-hub/barcodereader:latest
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/barcodereader/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/barcodereader:{{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/barcodereader:latest
 
   build-factoryinput:
     needs: release
@@ -75,11 +79,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push factoryinput Docker Image
-        run: |
-          docker build -t ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }} -t ghcr.io/united-manufacturing-hub/factoryinput:latest ./deployment/factoryinput/Dockerfile
-          docker push ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }}
-          docker push ghcr.io/united-manufacturing-hub/factoryinput:latest
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/factoryinput/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/united-manufacturing-hub/factoryinput:{{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/factoryinput:latest
 
   build-factoryinsight:
     needs: release
