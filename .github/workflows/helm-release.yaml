@@ -61,7 +61,7 @@ jobs:
           file: ./deployment/barcodereader/Dockerfile
           push: true
           tags: |
-            ghcr.io/united-manufacturing-hub/barcodereader:{{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/barcodereader:latest
 
   build-factoryinput:
@@ -86,7 +86,7 @@ jobs:
           file: ./deployment/factoryinput/Dockerfile
           push: true
           tags: |
-            ghcr.io/united-manufacturing-hub/factoryinput:{{ needs.release.outputs.new_release_version }}
+            ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/factoryinput:latest
 
   build-factoryinsight:
