@@ -15,7 +15,6 @@ jobs:
           fetch-depth: 0 # Important for semantic-release to analyze all commits
 
       - name: Install Helm
-        if: steps.semantic.outputs.new_release_published == 'true'
         run: |
           curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
           chmod 700 get_helm.sh
@@ -34,7 +33,6 @@ jobs:
 
   build-barcodereader:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -54,7 +52,6 @@ jobs:
 
   build-factoryinput:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -74,7 +71,6 @@ jobs:
 
   build-factoryinsight:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -94,7 +90,6 @@ jobs:
 
   build-grafana-proxy:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -114,7 +109,6 @@ jobs:
 
   build-grafana-umh:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -134,7 +128,6 @@ jobs:
 
   build-hivemq-init:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -154,7 +147,6 @@ jobs:
 
   build-kafka-bridge:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -174,7 +166,6 @@ jobs:
 
   build-kafka-debug:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -194,7 +185,6 @@ jobs:
 
   build-kafka-init:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -214,7 +204,6 @@ jobs:
 
   build-kafka-state-detector:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -234,7 +223,6 @@ jobs:
 
   build-kafka-to-postgresql:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -254,7 +242,6 @@ jobs:
 
   build-kafka-to-postgresql-v2:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -274,7 +261,6 @@ jobs:
 
   build-metrics:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -294,7 +280,6 @@ jobs:
 
   build-mqtt-bridge:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -314,7 +299,6 @@ jobs:
 
   build-mqtt-kafka-bridge:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -334,7 +318,6 @@ jobs:
 
   build-sensorconnect:
     needs: release
-    if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
