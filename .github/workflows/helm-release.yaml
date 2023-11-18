@@ -21,29 +21,36 @@ jobs:
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v4
+        id: semantic
         with:
-          dry_run: true # Set to false to actually release
+          dry_run: false
+          branch: staging
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Helm
+        if: steps.semantic.outputs.new_release_published == 'true'
         run: |
           curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
           chmod 700 get_helm.sh
           ./get_helm.sh
 
       - name: Package Helm chart
+        if: steps.semantic.outputs.new_release_published == 'true'
         run: |
-          helm package deployment/united-manufacturing-hub --version ${{ steps.bump_version.outputs.new_tag }}
-          mv united-manufacturing-hub-${{ steps.bump_version.outputs.new_tag }}.tgz deployment/helm-repo/
+          echo "${{ steps.semantic.outputs.new_release_version }}"
+          helm package deployment/united-manufacturing-hub --version ${{ steps.semantic.outputs.new_release_version }}
+          mv united-manufacturing-hub-${{ steps.semantic.outputs.new_release_version }}.tgz deployment/helm-repo/
 
       - name: Update Helm repo index
+        if: steps.semantic.outputs.new_release_published == 'true'
         run: |
           cd deployment/helm-repo
           helm repo index . --url https://repo.umh.app --merge index.yaml
           git add .
-          git commit -m "Release Helm chart version ${{ steps.bump_version.outputs.new_tag }}"
+          git commit -m "Release Helm chart version ${{ steps.semantic.outputs.new_release_version }}"
           # git push
 
       - name: Clean up
-        run: rm -f deployment/helm-repo/united-manufacturing-hub-${{ steps.bump_version.outputs.new_tag }}.tgz
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: rm -f deployment/helm-repo/united-manufacturing-hub-${{ steps.semantic.outputs.new_release_version }}.tgz
