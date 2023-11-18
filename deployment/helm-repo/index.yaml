@@ -3,7 +3,39 @@ entries:
   united-manufacturing-hub:
   - apiVersion: v2
     appVersion: 0.9.16
-    created: "2023-11-17T19:06:22.468803429Z"
+    created: "2023-11-18T12:03:38.799339023Z"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.9.0
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.52.4
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://charts.timescale.com/
+      version: 0.26.9
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: redpanda
+      repository: https://charts.redpanda.com/
+      version: 5.3.4
+    description: Transform manufacturing with UMH Systems united-manufacturing-hub
+      Helm chart, simplifying access to powerful technology for engineers.
+    digest: 490962f469fe143ef932afc3aabad752398efe854f486461a8a3b7a22090e64f
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.18.tgz
+    version: 0.9.18
+  - apiVersion: v2
+    appVersion: 0.9.16
+    created: "2023-11-18T12:03:38.756190337Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -547,7 +579,7 @@ entries:
     version: 0.9.16-prerelease1
   - apiVersion: v2
     appVersion: 0.9.15
-    created: "2023-11-17T19:06:22.443312693Z"
+    created: "2023-11-18T12:03:38.722959039Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -579,7 +611,7 @@ entries:
     version: 0.9.15
   - apiVersion: v2
     appVersion: 0.9.15-prerelease6
-    created: "2023-11-17T16:03:25.377548933Z"
+    created: "2023-11-18T12:03:38.697030253Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -607,11 +639,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://feat-987-new-kafka-to-postgr.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.15-prerelease6.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease6.tgz
     version: 0.9.15-prerelease6
   - apiVersion: v2
     appVersion: 0.9.15-prerelease5
-    created: "2023-11-17T16:03:25.351704006Z"
+    created: "2023-11-18T12:03:38.670960051Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -639,11 +671,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://feat-987-new-kafka-to-postgr.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.15-prerelease5.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease5.tgz
     version: 0.9.15-prerelease5
   - apiVersion: v2
     appVersion: 0.9.15-prerelease4
-    created: "2023-11-17T16:03:25.32481845Z"
+    created: "2023-11-18T12:03:38.645715683Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -671,11 +703,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://feat-987-new-kafka-to-postgr.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.15-prerelease4.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease4.tgz
     version: 0.9.15-prerelease4
   - apiVersion: v2
     appVersion: 0.9.15-prerelease3
-    created: "2023-11-17T16:03:25.297234493Z"
+    created: "2023-11-18T12:03:38.619576322Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -703,11 +735,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://feat-987-new-kafka-to-postgr.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.15-prerelease3.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease3.tgz
     version: 0.9.15-prerelease3
   - apiVersion: v2
     appVersion: 0.9.15-prerelease2
-    created: "2023-11-17T16:03:25.271032357Z"
+    created: "2023-11-18T12:03:38.592155275Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -735,11 +767,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://feat-987-new-kafka-to-postgr.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.15-prerelease2.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease2.tgz
     version: 0.9.15-prerelease2
   - apiVersion: v2
     appVersion: 0.9.15-prerelease1
-    created: "2023-11-17T16:03:25.2439738Z"
+    created: "2023-11-18T12:03:38.567567708Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -767,11 +799,11 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://feat-987-new-kafka-to-postgr.united-manufacturing-hub.pages.dev/united-manufacturing-hub-0.9.15-prerelease1.tgz
+    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease1.tgz
     version: 0.9.15-prerelease1
   - apiVersion: v2
     appVersion: 0.9.14
-    created: "2023-11-17T19:06:22.416954896Z"
+    created: "2023-11-18T12:03:38.541946289Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -803,7 +835,7 @@ entries:
     version: 0.9.14
   - apiVersion: v2
     appVersion: 0.9.13
-    created: "2023-11-17T19:06:22.390842089Z"
+    created: "2023-11-18T12:03:38.518233697Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -839,7 +871,7 @@ entries:
     version: 0.9.13
   - apiVersion: v2
     appVersion: 0.9.12
-    created: "2023-11-17T19:06:22.364118352Z"
+    created: "2023-11-18T12:03:38.490072471Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -947,7 +979,7 @@ entries:
     version: 0.9.12-prerelease1
   - apiVersion: v2
     appVersion: 0.9.11
-    created: "2023-11-17T19:06:22.335916795Z"
+    created: "2023-11-18T12:03:38.461600227Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -991,7 +1023,7 @@ entries:
     version: 0.9.11
   - apiVersion: v2
     appVersion: 0.9.10
-    created: "2023-11-17T19:06:22.29908868Z"
+    created: "2023-11-18T12:03:38.423471808Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1079,7 +1111,7 @@ entries:
     version: 0.9.10-hf1
   - apiVersion: v2
     appVersion: 0.9.9
-    created: "2023-11-17T19:06:22.687887252Z"
+    created: "2023-11-18T12:03:39.02580451Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1126,7 +1158,7 @@ entries:
     version: 0.9.9
   - apiVersion: v2
     appVersion: 0.9.8
-    created: "2023-11-17T19:06:22.661490885Z"
+    created: "2023-11-18T12:03:38.998755956Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1173,7 +1205,7 @@ entries:
     version: 0.9.8
   - apiVersion: v2
     appVersion: 0.9.7
-    created: "2023-11-17T19:06:22.634379989Z"
+    created: "2023-11-18T12:03:38.97304346Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1220,7 +1252,7 @@ entries:
     version: 0.9.7
   - apiVersion: v2
     appVersion: 0.9.6
-    created: "2023-11-17T19:06:22.606501592Z"
+    created: "2023-11-18T12:03:38.944226114Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1267,7 +1299,7 @@ entries:
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.5
-    created: "2023-11-17T19:06:22.578617356Z"
+    created: "2023-11-18T12:03:38.907380218Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1314,7 +1346,7 @@ entries:
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.4
-    created: "2023-11-17T19:06:22.550418999Z"
+    created: "2023-11-18T12:03:38.88051551Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1361,7 +1393,7 @@ entries:
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.3
-    created: "2023-11-17T19:06:22.520030213Z"
+    created: "2023-11-18T12:03:38.851859303Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1404,7 +1436,7 @@ entries:
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.2
-    created: "2023-11-17T19:06:22.492514087Z"
+    created: "2023-11-18T12:03:38.825101187Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1447,7 +1479,7 @@ entries:
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
-    created: "2023-11-17T19:06:22.256249685Z"
+    created: "2023-11-18T12:03:38.387250378Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1490,7 +1522,7 @@ entries:
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
-    created: "2023-11-17T19:06:22.230929669Z"
+    created: "2023-11-18T12:03:38.362879638Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1533,7 +1565,7 @@ entries:
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2023-11-17T19:06:22.203906772Z"
+    created: "2023-11-18T12:03:38.339022025Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1576,7 +1608,7 @@ entries:
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2023-11-17T19:06:22.180894875Z"
+    created: "2023-11-18T12:03:38.310336335Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1619,7 +1651,7 @@ entries:
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2023-11-17T19:06:22.154696198Z"
+    created: "2023-11-18T12:03:38.285222161Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1662,7 +1694,7 @@ entries:
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2023-11-17T19:06:22.129232971Z"
+    created: "2023-11-18T12:03:38.259718303Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1705,7 +1737,7 @@ entries:
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2023-11-17T19:06:22.102972435Z"
+    created: "2023-11-18T12:03:38.236714279Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1748,7 +1780,7 @@ entries:
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2023-11-17T19:06:22.078673547Z"
+    created: "2023-11-18T12:03:38.212740161Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1791,7 +1823,7 @@ entries:
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2023-11-17T19:06:22.049957751Z"
+    created: "2023-11-18T12:03:38.188996034Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1834,7 +1866,7 @@ entries:
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2023-11-17T19:06:22.023312314Z"
+    created: "2023-11-18T12:03:38.165744843Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1875,4 +1907,4 @@ entries:
     urls:
     - https://repo.umh.app/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
-generated: "2023-11-17T19:06:21.995903298Z"
+generated: "2023-11-18T12:03:38.128453813Z"
