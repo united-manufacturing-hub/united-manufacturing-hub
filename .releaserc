@@ -1,3 +1,9 @@
 {
-  "branches": ["main"]
-}
+    "branches": ["main"],
+    "repositoryUrl": "https://github.com/united-manufacturing-hub/united-manufacturing-hub.git",
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/github"
+    ]
+  }
