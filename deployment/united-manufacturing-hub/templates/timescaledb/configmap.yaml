@@ -7597,13 +7597,15 @@ data:
       line TEXT DEFAULT '' NOT NULL,
       workcell TEXT DEFAULT '' NOT NULL,
       origin_id TEXT DEFAULT '' NOT NULL,
-      UNIQUE (enterprise),
-      UNIQUE (enterprise, site),
-      UNIQUE (enterprise, site, area),
-      UNIQUE (enterprise, site, area, line),
-      UNIQUE (enterprise, site, area, line, workcell),
       UNIQUE (enterprise, site, area, line, workcell, origin_id)
     );
+    -- These are just to drop for old installs.
+    ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_key;
+    ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_key;
+    ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_area_key;
+    ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_area_line_key;
+    ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_area_line_workcell_key;
+
 
     CREATE TABLE tag (
       timestamp TIMESTAMPTZ NOT NULL,
