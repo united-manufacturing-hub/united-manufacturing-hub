@@ -125,7 +125,8 @@ func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClie
 	recv, _, _, _ := consumerClient.getConsumerStats()
 
 	ticker := time.NewTicker(10 * time.Second)
-	shutdownTimer := time.NewTimer(3 * time.Minute)
+	shutdownTime := 1 * time.Hour
+	shutdownTimer := time.NewTimer(shutdownTime)
 	for {
 		select {
 		case <-ticker.C:
@@ -147,7 +148,7 @@ func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClie
 				lruHits, lruMisses, lruSize, consumerState)
 
 			if (newSent != sent && newRecv != recv) || consumerState == StatePreparing {
-				shutdownTimer.Reset(3 * time.Minute)
+				shutdownTimer.Reset(shutdownTime)
 				sent, recv = newSent, newRecv
 				continue
 			}
