@@ -210,7 +210,7 @@ func isValidMqttMessage(msg *shared.KafkaMessage) (valid bool, jsonFailed bool) 
 }
 
 func isValidMqttTopic(topic string) bool {
-	return regexp.MustCompile(`^\w[\w/#+]+[\w#]$`).MatchString(topic)
+	return regexp.MustCompile(`^umh/v1/(?:[\w_-]+/)*[\w_-]+$`).MatchString(topic)
 }
 
 func toMqttTopic(topic string) (string, error) {
