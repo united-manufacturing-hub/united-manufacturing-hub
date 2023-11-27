@@ -2,8 +2,40 @@ apiVersion: v1
 entries:
   united-manufacturing-hub:
   - apiVersion: v2
+    appVersion: 0.9.30
+    created: "2023-11-20T12:57:10.421733136Z"
+    dependencies:
+    - condition: _000_commonConfig.datastorage.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.9.0
+    - condition: _000_commonConfig.datastorage.enabled
+      name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 6.52.4
+    - condition: _000_commonConfig.datastorage.enabled
+      name: timescaledb-single
+      repository: https://charts.timescale.com/
+      version: 0.26.9
+    - condition: _000_commonConfig.infrastructure.kafka.enabled
+      name: redpanda
+      repository: https://charts.redpanda.com/
+      version: 5.3.4
+    description: Transform manufacturing with UMH Systems united-manufacturing-hub
+      Helm chart, simplifying access to powerful technology for engineers.
+    digest: b2899b129abc2b99b1355ee0e7ba923993b4d0f389d05fdb0e7f7522ace882f5
+    home: https://www.umh.app
+    icon: https://avatars.githubusercontent.com/u/77492553
+    name: united-manufacturing-hub
+    sources:
+    - https://github.com/united-manufacturing-hub/united-manufacturing-hub
+    type: application
+    urls:
+    - https://repo.umh.app/united-manufacturing-hub-0.9.30.tgz
+    version: 0.9.30
+  - apiVersion: v2
     appVersion: 0.9.29
-    created: "2023-11-18T20:36:11.727275604Z"
+    created: "2023-11-20T12:57:10.368949818Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -35,7 +67,7 @@ entries:
     version: 0.9.29
   - apiVersion: v2
     appVersion: 0.9.28
-    created: "2023-11-18T20:36:11.701446855Z"
+    created: "2023-11-20T12:57:10.344739483Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -67,7 +99,7 @@ entries:
     version: 0.9.28
   - apiVersion: v2
     appVersion: 0.9.27
-    created: "2023-11-18T20:36:11.676629558Z"
+    created: "2023-11-20T12:57:10.318892592Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -99,7 +131,7 @@ entries:
     version: 0.9.27
   - apiVersion: v2
     appVersion: 0.9.26
-    created: "2023-11-18T20:36:11.651158441Z"
+    created: "2023-11-20T12:57:10.293463764Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -131,7 +163,7 @@ entries:
     version: 0.9.26
   - apiVersion: v2
     appVersion: 0.9.25
-    created: "2023-11-18T20:36:11.62498458Z"
+    created: "2023-11-20T12:57:10.268164752Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -163,7 +195,7 @@ entries:
     version: 0.9.25
   - apiVersion: v2
     appVersion: 0.9.24
-    created: "2023-11-18T20:36:11.59856791Z"
+    created: "2023-11-20T12:57:10.242516972Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -195,7 +227,7 @@ entries:
     version: 0.9.24
   - apiVersion: v2
     appVersion: 0.9.23
-    created: "2023-11-18T20:36:11.570660481Z"
+    created: "2023-11-20T12:57:10.218625136Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -227,7 +259,7 @@ entries:
     version: 0.9.23
   - apiVersion: v2
     appVersion: 0.9.22
-    created: "2023-11-18T20:36:11.543168699Z"
+    created: "2023-11-20T12:57:10.193320905Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -259,7 +291,7 @@ entries:
     version: 0.9.22
   - apiVersion: v2
     appVersion: 0.9.21
-    created: "2023-11-18T20:36:11.516523821Z"
+    created: "2023-11-20T12:57:10.167317493Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -291,7 +323,7 @@ entries:
     version: 0.9.21
   - apiVersion: v2
     appVersion: 0.9.20
-    created: "2023-11-18T20:36:11.489927155Z"
+    created: "2023-11-20T12:57:10.140876091Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -323,7 +355,7 @@ entries:
     version: 0.9.20
   - apiVersion: v2
     appVersion: 0.9.16
-    created: "2023-11-18T20:36:11.43833119Z"
+    created: "2023-11-20T12:57:10.093913464Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -355,7 +387,7 @@ entries:
     version: 0.9.18
   - apiVersion: v2
     appVersion: 0.9.16
-    created: "2023-11-18T20:36:11.411988513Z"
+    created: "2023-11-20T12:57:10.068349916Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -899,7 +931,7 @@ entries:
     version: 0.9.16-prerelease1
   - apiVersion: v2
     appVersion: 0.9.15
-    created: "2023-11-18T20:36:11.385549073Z"
+    created: "2023-11-20T12:57:10.04397697Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -931,7 +963,7 @@ entries:
     version: 0.9.15
   - apiVersion: v2
     appVersion: 0.9.15-prerelease6
-    created: "2023-11-18T20:36:11.359777417Z"
+    created: "2023-11-20T12:57:10.018096652Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -963,7 +995,7 @@ entries:
     version: 0.9.15-prerelease6
   - apiVersion: v2
     appVersion: 0.9.15-prerelease5
-    created: "2023-11-18T20:36:11.334805186Z"
+    created: "2023-11-20T12:57:09.993028968Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -995,7 +1027,7 @@ entries:
     version: 0.9.15-prerelease5
   - apiVersion: v2
     appVersion: 0.9.15-prerelease4
-    created: "2023-11-18T20:36:11.308610765Z"
+    created: "2023-11-20T12:57:09.968067815Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1027,7 +1059,7 @@ entries:
     version: 0.9.15-prerelease4
   - apiVersion: v2
     appVersion: 0.9.15-prerelease3
-    created: "2023-11-18T20:36:11.283986084Z"
+    created: "2023-11-20T12:57:09.944064018Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1059,7 +1091,7 @@ entries:
     version: 0.9.15-prerelease3
   - apiVersion: v2
     appVersion: 0.9.15-prerelease2
-    created: "2023-11-18T20:36:11.25949887Z"
+    created: "2023-11-20T12:57:09.919371244Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1091,7 +1123,7 @@ entries:
     version: 0.9.15-prerelease2
   - apiVersion: v2
     appVersion: 0.9.15-prerelease1
-    created: "2023-11-18T20:36:11.234760048Z"
+    created: "2023-11-20T12:57:09.894421653Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1123,7 +1155,7 @@ entries:
     version: 0.9.15-prerelease1
   - apiVersion: v2
     appVersion: 0.9.14
-    created: "2023-11-18T20:36:11.2093454Z"
+    created: "2023-11-20T12:57:09.870580197Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1155,7 +1187,7 @@ entries:
     version: 0.9.14
   - apiVersion: v2
     appVersion: 0.9.13
-    created: "2023-11-18T20:36:11.185088638Z"
+    created: "2023-11-20T12:57:09.84668976Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1191,7 +1223,7 @@ entries:
     version: 0.9.13
   - apiVersion: v2
     appVersion: 0.9.12
-    created: "2023-11-18T20:36:11.156357359Z"
+    created: "2023-11-20T12:57:09.818737165Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1299,7 +1331,7 @@ entries:
     version: 0.9.12-prerelease1
   - apiVersion: v2
     appVersion: 0.9.11
-    created: "2023-11-18T20:36:11.12929601Z"
+    created: "2023-11-20T12:57:09.79239555Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1343,7 +1375,7 @@ entries:
     version: 0.9.11
   - apiVersion: v2
     appVersion: 0.9.10
-    created: "2023-11-18T20:36:11.091351089Z"
+    created: "2023-11-20T12:57:09.754475674Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1431,7 +1463,7 @@ entries:
     version: 0.9.10-hf1
   - apiVersion: v2
     appVersion: 0.9.9
-    created: "2023-11-18T20:36:11.920188117Z"
+    created: "2023-11-20T12:57:10.582710441Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1478,7 +1510,7 @@ entries:
     version: 0.9.9
   - apiVersion: v2
     appVersion: 0.9.8
-    created: "2023-11-18T20:36:11.892756359Z"
+    created: "2023-11-20T12:57:10.555328486Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1525,7 +1557,7 @@ entries:
     version: 0.9.8
   - apiVersion: v2
     appVersion: 0.9.7
-    created: "2023-11-18T20:36:11.865588787Z"
+    created: "2023-11-20T12:57:10.529898833Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1572,7 +1604,7 @@ entries:
     version: 0.9.7
   - apiVersion: v2
     appVersion: 0.9.6
-    created: "2023-11-18T20:36:11.838004494Z"
+    created: "2023-11-20T12:57:10.503606442Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1619,7 +1651,7 @@ entries:
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.5
-    created: "2023-11-18T20:36:11.810538102Z"
+    created: "2023-11-20T12:57:10.476069653Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1666,7 +1698,7 @@ entries:
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.4
-    created: "2023-11-18T20:36:11.782586821Z"
+    created: "2023-11-20T12:57:10.44929383Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1713,7 +1745,7 @@ entries:
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.3
-    created: "2023-11-18T20:36:11.755552519Z"
+    created: "2023-11-20T12:57:10.39510741Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1756,7 +1788,7 @@ entries:
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.2
-    created: "2023-11-18T20:36:11.463096448Z"
+    created: "2023-11-20T12:57:10.11651797Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1799,7 +1831,7 @@ entries:
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
-    created: "2023-11-18T20:36:11.054159607Z"
+    created: "2023-11-20T12:57:09.719307317Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1842,7 +1874,7 @@ entries:
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
-    created: "2023-11-18T20:36:11.03085829Z"
+    created: "2023-11-20T12:57:09.695115369Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1885,7 +1917,7 @@ entries:
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2023-11-18T20:36:11.005910556Z"
+    created: "2023-11-20T12:57:09.671470132Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1928,7 +1960,7 @@ entries:
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2023-11-18T20:36:10.982279627Z"
+    created: "2023-11-20T12:57:09.647151887Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -1971,7 +2003,7 @@ entries:
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2023-11-18T20:36:10.958247448Z"
+    created: "2023-11-20T12:57:09.623636798Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2014,7 +2046,7 @@ entries:
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2023-11-18T20:36:10.935062323Z"
+    created: "2023-11-20T12:57:09.595447443Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2057,7 +2089,7 @@ entries:
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2023-11-18T20:36:10.912625867Z"
+    created: "2023-11-20T12:57:09.563200638Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2100,7 +2132,7 @@ entries:
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2023-11-18T20:36:10.888572931Z"
+    created: "2023-11-20T12:57:09.53897021Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2143,7 +2175,7 @@ entries:
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2023-11-18T20:36:10.864730828Z"
+    created: "2023-11-20T12:57:09.510462574Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2186,7 +2218,7 @@ entries:
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2023-11-18T20:36:10.839451577Z"
+    created: "2023-11-20T12:57:09.483062534Z"
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
@@ -2227,4 +2259,4 @@ entries:
     urls:
     - https://repo.umh.app/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
-generated: "2023-11-18T20:36:10.815490484Z"
+generated: "2023-11-20T12:57:09.459171494Z"
