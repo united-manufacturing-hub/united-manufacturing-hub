@@ -272,7 +272,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, e
 	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			zap.S().Info("Inserting enterprise: %s, site: %s, area: %s, line: %s, workcell: %s, origin_id: %s", topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId)
+			zap.S().Infof("Inserting enterprise: %s, site: %s, area: %s, line: %s, workcell: %s, origin_id: %s", topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId)
 			// Row isn't found, need to insert
 			insertQuery := `INSERT INTO asset (enterprise, site, area, line, workcell, origin_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 			insertRowContext, insertRowContextCncl := get1MinuteContext()

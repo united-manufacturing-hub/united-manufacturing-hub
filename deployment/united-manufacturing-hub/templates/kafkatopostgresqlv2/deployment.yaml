@@ -78,7 +78,7 @@ spec:
               value: {{.Values.kafkatopostgresqlv2.database.user}}
             - name: POSTGRES_PASSWORD
               value: {{.Values.kafkatopostgresqlv2.database.password}}
-            - name: POSTGRES_SSLMODE
+            - name: POSTGRES_SSL_MODE
               value: "require"
             - name: POSTGRES_PORT
               value: "5432"
