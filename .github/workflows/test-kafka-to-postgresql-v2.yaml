@@ -1,4 +1,4 @@
-name: Run and Test kafka-to-postgresql-v2
+0name: Run and Test kafka-to-postgresql-v2
 
 on:
   push:
