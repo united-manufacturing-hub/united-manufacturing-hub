@@ -124,6 +124,7 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 				return nil, 0, fmt.Errorf("expected timestamp_ms to be numeric, got: %+v", parsed)
 			}
 			timestampMs = int64(*parsed.NumericValue)
+			zap.S().Debugf("Parsed %s:%s as timestamp_ms: %+v (%d)", key, value, parsed, timestampMs)
 			timestampFound = true
 		} else {
 			v = parsed
