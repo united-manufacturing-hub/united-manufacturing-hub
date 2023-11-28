@@ -114,19 +114,18 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 	var vFound bool
 
 	for key, value := range message {
-		var parsed *sharedStructs.Value
-		parsed, err = parseValue(value)
-		if err != nil {
-			return nil, 0, err
-		}
 		if key == "timestamp_ms" {
-			if !parsed.IsNumeric {
-				return nil, 0, fmt.Errorf("expected timestamp_ms to be numeric, got: %+v", parsed)
+			timestampMs, err = parseInt(value)
+			if err != nil {
+				return nil, 0, err
 			}
-			timestampMs = int64(*parsed.NumericValue)
+			zap.S().Debugf("Parsed %s:%s as timestamp_ms: %d", key, value, timestampMs)
 			timestampFound = true
 		} else {
-			v = parsed
+			v, err = parseValue(value)
+			if err != nil {
+				return nil, 0, err
+			}
 			vFound = true
 			v.Name = key
 		}
@@ -140,6 +139,14 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 	}
 
 	return v, timestampMs, nil
+}
+
+func parseInt(v interface{}) (int64, error) {
+	timestamp, ok := v.(float64)
+	if !ok {
+		return 0, fmt.Errorf("timestamp_ms is not an float64: %T (%v)", v, v)
+	}
+	return int64(timestamp), nil
 }
 
 func parseValue(v interface{}) (*sharedStructs.Value, error) {
