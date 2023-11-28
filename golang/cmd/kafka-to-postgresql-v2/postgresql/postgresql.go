@@ -387,6 +387,7 @@ func (s *Source) Values() ([]any, error) {
 		} else {
 			values[4] = msg.GetValue().(string)
 		}
+		zap.S().Debugf("Values: %+v", values)
 		return values, nil
 	default:
 		return nil, errors.New("no more rows available")
