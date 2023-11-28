@@ -142,11 +142,11 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 }
 
 func parseInt(v interface{}) (int64, error) {
-	timestamp, ok := v.(int64)
+	timestamp, ok := v.(float64)
 	if !ok {
-		return 0, fmt.Errorf("timestamp_ms is not an int64: %T (%v)", v, v)
+		return 0, fmt.Errorf("timestamp_ms is not an float64: %T (%v)", v, v)
 	}
-	return timestamp, nil
+	return int64(timestamp), nil
 }
 
 func parseValue(v interface{}) (*sharedStructs.Value, error) {
