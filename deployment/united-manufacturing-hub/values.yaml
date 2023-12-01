@@ -337,7 +337,7 @@ sensorconnect:
   storageRequest: 1Gi
   image: ghcr.io/united-manufacturing-hub/sensorconnect
   ioddfilepath: "/ioddfiles"
-  lowerPollingTime: 20 # Fastest time, sensors should be requested to serve data
+  lowerPollingTime: 100 # Fastest time, sensors should be requested to serve data
   upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
   pollingSpeedStepUpMs: 20 # Time to add to actual stepping in case of failure
   pollingSpeedStepDownMs: 1 # Time to add to actual stepping in case of no-failure

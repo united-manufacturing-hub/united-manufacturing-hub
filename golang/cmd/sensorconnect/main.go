@@ -149,7 +149,7 @@ func main() {
 		kafkaProducerClient, _ = setupKafka(KafkaBoostrapServer)
 	}
 
-	lowestSensorTickTime, err = env.GetAsUint64("LOWER_POLLING_TIME_MS", false, 20)
+	lowestSensorTickTime, err = env.GetAsUint64("LOWER_POLLING_TIME_MS", false, 100)
 	if err != nil {
 		zap.S().Error(err)
 	}
