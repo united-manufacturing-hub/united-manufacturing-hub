@@ -147,7 +147,9 @@ func (c *Consumer) generateTopics() {
 		zap.S().Debugf("After regex check we have %d topics", len(actualTopics))
 
 		// Check if topics changed
+		zap.S().Debugf("Aquiring read lock")
 		c.actualTopicsLock.RLock()
+		zap.S().Debugf("Acquired read lock")
 		changed := false
 		for _, topic := range actualTopics {
 			found := false
@@ -160,21 +162,31 @@ func (c *Consumer) generateTopics() {
 			if !found {
 				changed = true
 				if c.greeter {
-					c.incomingMessages <- &shared.KafkaMessage{
+					select {
+					case c.incomingMessages <- &shared.KafkaMessage{
 						Topic: topic,
 						Value: []byte(""),
+					}:
+						zap.S().Debugf("Inserted greeter message for %s", topic)
+					default:
+						zap.S().Debugf("Greeter message for %s dropped", topic)
 					}
 				}
 				break
 			}
 		}
 		c.actualTopicsLock.RUnlock()
+		zap.S().Debugf("Dropped read lock")
 
 		if changed {
 			zap.S().Infof("topics changed: %v", actualTopics)
+			zap.S().Debugf("Aquiring write lock")
 			c.actualTopicsLock.Lock()
+			zap.S().Debugf("Acquired write lock")
 			c.actualTopics = actualTopics
+			zap.S().Debugf("set actual topics")
 			c.actualTopicsLock.Unlock()
+			zap.S().Debugf("Dropped write lock")
 			zap.S().Debugf("updated actual topics")
 			c.cgCncl()
 			shutdown(c.consumerShutdownChannel)
@@ -193,11 +205,14 @@ func (c *Consumer) consumer() {
 	for c.running.Load() {
 		<-ticker.C
 		zap.S().Debugf("Getting topics")
+		zap.S().Debugf("Aquiring read lock")
 		c.actualTopicsLock.RLock()
+		zap.S().Debugf("Acquired read lock")
 		topicClone := make([]string, len(c.actualTopics))
 		copy(topicClone, c.actualTopics)
 		zap.S().Debugf("Got topics: %v from %v", topicClone, c.actualTopics)
 		c.actualTopicsLock.RUnlock()
+		zap.S().Debugf("Dropped read lock")
 
 		if len(topicClone) == 0 {
 			zap.S().Debugf("No topics for consume, trying later")
