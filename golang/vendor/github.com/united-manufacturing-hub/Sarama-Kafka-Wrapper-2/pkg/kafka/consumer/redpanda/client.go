@@ -46,6 +46,11 @@ func NewConsumer(kafkaBrokers, httpBrokers, subscribeRegexes []string, groupName
 	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
 	config.Consumer.Group.InstanceId = instanceId
 	config.Version = sarama.V2_3_0_0
+	// Default fetch is 1MB, which is too much for us
+	// Normal messages are under 1KB, so 1MB is overkill
+	config.Consumer.Fetch.Default = 1024
+	// If a message is larger than 1MB, we'll fetch it in 1MB chunks
+	config.Consumer.Fetch.Max = 1024 * 1024
 
 	c, err := sarama.NewClient(kafkaBrokers, config)
 	if err != nil {
@@ -318,6 +323,7 @@ func (c *Consumer) createConsumerGroup() {
 		if err != nil {
 			zap.S().Errorf("Failed to close existing consumer group: %s", err)
 		}
+		//*c.consumerGroup = nil
 	}
 	zap.S().Debugf("Refreshing metadata")
 	err = c.rawClient.RefreshMetadata()
@@ -332,7 +338,6 @@ func (c *Consumer) createConsumerGroup() {
 	}
 	zap.S().Debugf("Created consumer group")
 	c.consumerGroup = &cg
-
 }
 
 func (c *Consumer) reporter() {
