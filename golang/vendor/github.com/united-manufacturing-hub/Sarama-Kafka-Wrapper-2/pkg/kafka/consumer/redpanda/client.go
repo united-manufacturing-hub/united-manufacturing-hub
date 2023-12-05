@@ -27,16 +27,15 @@ type Consumer struct {
 	cgCncl                  context.CancelFunc
 	incomingMessages        chan *shared.KafkaMessage
 	messagesToMark          chan *shared.KafkaMessage
-	markedMessages          atomic.Uint64
 	consumedMessages        atomic.Uint64
 	consumerShutdownChannel chan bool
 	groupName               string
 	greeter                 bool
 }
 
-// GetStats returns marked and consumed message counts.
-func (c *Consumer) GetStats() (uint64, uint64) {
-	return c.markedMessages.Load(), c.consumedMessages.Load()
+// GetStats returns consumed message counts.
+func (c *Consumer) GetStats() uint64 {
+	return c.consumedMessages.Load()
 }
 
 func NewConsumer(kafkaBrokers, httpBrokers, subscribeRegexes []string, groupName, instanceId string, greeter bool) (*Consumer, error) {
@@ -69,7 +68,6 @@ func NewConsumer(kafkaBrokers, httpBrokers, subscribeRegexes []string, groupName
 		actualTopics:            []string{},
 		running:                 atomic.Bool{},
 		groupName:               groupName,
-		markedMessages:          atomic.Uint64{},
 		consumerShutdownChannel: make(chan bool, 512), // This is oversized, but it's better to be safe than sorry
 		incomingMessages:        make(chan *shared.KafkaMessage, 100_000),
 		messagesToMark:          make(chan *shared.KafkaMessage, 100_000),
@@ -133,7 +131,7 @@ func (c *Consumer) generateTopics() {
 			for _, topic := range topicsX {
 				topics[topic] = true
 			}
-			zap.S().Debugf("Fetched %d topics from remote", len(topics))
+			zap.S().Infof("Fetched %v topics from remote", topics)
 		}
 
 		// Filter topics by regex
@@ -198,6 +196,7 @@ func (c *Consumer) consumer() {
 		c.actualTopicsLock.RLock()
 		topicClone := make([]string, len(c.actualTopics))
 		copy(topicClone, c.actualTopics)
+		zap.S().Debugf("Got topics: %v from %v", topicClone, c.actualTopics)
 		c.actualTopicsLock.RUnlock()
 
 		if len(topicClone) == 0 {
@@ -211,14 +210,14 @@ func (c *Consumer) consumer() {
 		handler := &GroupHandler{
 			incomingMessages: c.incomingMessages,
 			messagesToMark:   c.messagesToMark,
-			markedMessages:   &c.markedMessages,
 			consumedMessages: &c.consumedMessages,
 			shutdownChannel:  c.consumerShutdownChannel,
 		}
 		zap.S().Debugf("Create consumer group")
 		c.createConsumerGroup()
 
-		zap.S().Debugf("Beginning consume loop")
+		deadline, hasDeadline := c.cgContext.Deadline()
+		zap.S().Debugf("Beginning consume loop for %v [Deadline: %v (%s)]", topicClone, hasDeadline, deadline)
 		if err := (*c.consumerGroup).Consume(c.cgContext, topicClone, handler); err != nil {
 			// Check if the error is "no topics provided"
 			if err.Error() == "no topics provided" {
@@ -232,6 +231,8 @@ func (c *Consumer) consumer() {
 			} else {
 				zap.S().Errorf("failed to consume: %v", err)
 			}
+		} else {
+			zap.S().Debugf("Finished consume loop without error")
 		}
 		zap.S().Debugf("End consume loop")
 	}
@@ -323,8 +324,8 @@ func (c *Consumer) reporter() {
 	ticker10Seconds := time.NewTicker(10 * time.Second)
 	for c.running.Load() {
 		<-ticker10Seconds.C
-		marked, consumed := c.GetStats()
-		zap.S().Infof("marked: %d, consumed: %d", marked, consumed)
+		consumed := c.GetStats()
+		zap.S().Infof("consumed: %d", consumed)
 		zap.S().Infof("Incoming messages channel (%d/%d), Marked messages channel (%d/%d)",
 			len(c.incomingMessages), cap(c.incomingMessages),
 			len(c.messagesToMark), cap(c.messagesToMark))
