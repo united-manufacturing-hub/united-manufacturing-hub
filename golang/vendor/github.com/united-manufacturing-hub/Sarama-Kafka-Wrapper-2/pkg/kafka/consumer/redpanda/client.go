@@ -88,20 +88,22 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 			zap.S().Errorf("Failed to retrieve topics: %v", err)
 			return nil, err
 		}
+		zap.S().Debugf("Filtering topics")
+		topics = filter(topics, c.subscribeRegexes)
 		if len(topics) > 0 {
+			c.topicsMutex.Lock()
+			c.topics = topics
+			c.topicsMutex.Unlock()
 			break
 		}
 		zap.S().Infof("No topics found. Waiting for 1 second")
 		time.Sleep(1 * time.Second)
 	}
 
-	zap.S().Debugf("Filtering topics")
-	c.topicsMutex.Lock()
-	c.topics = filter(topics, c.subscribeRegexes)
-	c.topicsMutex.Unlock()
-
 	readyChan := make(chan bool, 1)
-	zap.S().Debugf("Starting consumer")
+	c.topicsMutex.RLock()
+	zap.S().Debugf("Starting consumer for %v", c.topics)
+	c.topicsMutex.RUnlock()
 	go c.start(readyChan)
 	zap.S().Debugf("Waiting for consumer to start")
 	<-readyChan
