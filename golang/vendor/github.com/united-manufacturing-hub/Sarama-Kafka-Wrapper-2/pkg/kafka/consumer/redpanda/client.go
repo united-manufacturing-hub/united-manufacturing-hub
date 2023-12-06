@@ -38,7 +38,6 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
 	config.Consumer.Group.InstanceId = instanceId
 	config.Version = sarama.V2_3_0_0
-	zap.S().Debugf("Config: %+v", config)
 
 	c := Consumer{}
 	c.subscribeRegexes = make([]*regexp.Regexp, len(subscribeRegexes))
@@ -72,6 +71,12 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	c.consumerGroup = &consumerGroup
 	c.groupId = groupId
 
+	err = newClient.RefreshMetadata()
+	if err != nil {
+		zap.S().Errorf("Failed to refresh metadata: %v", err)
+		return nil, err
+	}
+
 	zap.S().Debugf("Retrieving topics")
 	topics, err := newClient.Topics()
 	if err != nil {
@@ -85,9 +90,9 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	c.topicsMutex.Unlock()
 
 	readyChan := make(chan bool, 1)
-	zap.S().Debugf("Starting consumer loop")
+	zap.S().Debugf("Starting consumer")
 	go c.start(readyChan)
-	zap.S().Debugf("Waiting for consumer loop to start")
+	zap.S().Debugf("Waiting for consumer to start")
 	<-readyChan
 	c.isReady.Store(true)
 	zap.S().Debugf("Consumer loop started")
@@ -106,6 +111,12 @@ func (c *Consumer) start(ready chan bool) {
 		c.topicsMutex.RLock()
 		copy(topics, c.topics)
 		c.topicsMutex.RUnlock()
+		if len(topics) == 0 {
+			zap.S().Infof("No topics to consume. Waiting for 1 second")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		zap.S().Debugf("Consuming topics: %v", topics)
 		consumer := ConsumerGroupHandler{
 			ready:              ready,
 			incomingMessages:   c.incomingMessages,
