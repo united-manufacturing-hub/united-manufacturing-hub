@@ -366,6 +366,8 @@ github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.13 h1:d6qEuc4dh2
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.13/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.14 h1:lgIpcyFdKYlLNgp9MJ39T6NM+PTq7+QZlxpH3XNBP7o=
 github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.14/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.15 h1:3XLvBxms4NBL/UknQDiNk2xQTY33tT1u45AWI8LVA/k=
+github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.15/go.mod h1:s4bcjx9emecX3hEWCXa3ff3KrblMVBeHOP0yX6ODi6E=
 github.com/united-manufacturing-hub/expiremap v1.1.1 h1:v9e94HwZ+AwlRRCExErZ/Yn8hOvMa6rQjNQKUcUwo1E=
 github.com/united-manufacturing-hub/expiremap v1.1.1/go.mod h1:2WoxiolkyNqalce90Yd101zwNsH21V1Mo40/JaJivYI=
 github.com/united-manufacturing-hub/umh-utils v0.2.2 h1:3Op9Cx+fwqxL1Qtu7AytZ19LU8vOBmJSF0dsXs0Oxw4=

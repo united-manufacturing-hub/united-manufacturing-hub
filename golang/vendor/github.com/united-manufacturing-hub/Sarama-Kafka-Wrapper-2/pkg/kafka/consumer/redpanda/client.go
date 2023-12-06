@@ -74,17 +74,25 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	c.consumerGroup = &consumerGroup
 	c.groupId = groupId
 
-	err = newClient.RefreshMetadata()
-	if err != nil {
-		zap.S().Errorf("Failed to refresh metadata: %v", err)
-		return nil, err
-	}
-
 	zap.S().Debugf("Retrieving topics")
-	topics, err := newClient.Topics()
-	if err != nil {
-		zap.S().Errorf("Failed to retrieve topics: %v", err)
-		return nil, err
+	var topics []string
+	for {
+		err = newClient.RefreshMetadata()
+		if err != nil {
+			zap.S().Errorf("Failed to refresh metadata: %v", err)
+			return nil, err
+		}
+
+		topics, err = newClient.Topics()
+		if err != nil {
+			zap.S().Errorf("Failed to retrieve topics: %v", err)
+			return nil, err
+		}
+		if len(topics) > 0 {
+			break
+		}
+		zap.S().Infof("No topics found. Waiting for 1 second")
+		time.Sleep(1 * time.Second)
 	}
 
 	zap.S().Debugf("Filtering topics")
