@@ -36,11 +36,13 @@ func (c *ConsumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error 
 	}
 
 	c.ready <- true
+	zap.S().Debugf("ConsumerGroupHandler set up")
 	return nil
 }
 
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
 func (c *ConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+	zap.S().Debugf("ConsumerGroupHandler cleaned up")
 	return nil
 }
 

@@ -142,7 +142,7 @@ func (c *Consumer) start(ready chan bool) {
 		if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 			zap.S().Infof("Consumer group closed")
 			return
-		} else {
+		} else if err != nil {
 			zap.S().Errorf("Error from consumer: %v", err)
 		}
 		if ctx.Err() != nil {
@@ -150,6 +150,7 @@ func (c *Consumer) start(ready chan bool) {
 			return
 		}
 		ready = make(chan bool, 1)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -201,7 +202,13 @@ func (c *Consumer) refreshTopics() {
 		c.topicsMutex.Unlock()
 		readyChan := make(chan bool, 1)
 		go c.start(readyChan)
-		<-readyChan
+		timeout := time.NewTimer(10 * time.Second)
+		select {
+		case <-timeout.C:
+			zap.S().Errorf("Timeout waiting for consumer to start")
+			continue
+		case <-readyChan:
+		}
 		c.isReady.Store(true)
 		// Reset the ticker to avoid spamming the API
 		ticker = time.NewTicker(5 * time.Second)
