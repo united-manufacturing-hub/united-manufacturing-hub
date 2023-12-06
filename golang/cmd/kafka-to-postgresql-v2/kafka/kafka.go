@@ -52,17 +52,14 @@ func (c *Connection) MarkMessage(message *shared.KafkaMessage) {
 
 func GetLivenessCheck() healthcheck.Check {
 	return func() error {
-		if GetOrInit().consumer.IsRunning() {
-			return nil
-		} else {
-			return errors.New("kafka consumer is not running")
-		}
+		// For now, the kafka client will always be alive (or it will panic [connection loss, etc.])
+		return nil
 	}
 }
 
 func GetReadinessCheck() healthcheck.Check {
 	return func() error {
-		if GetOrInit().consumer.IsRunning() {
+		if GetOrInit().consumer.IsReady() {
 			return nil
 		} else {
 			return errors.New("kafka consumer is not running")
