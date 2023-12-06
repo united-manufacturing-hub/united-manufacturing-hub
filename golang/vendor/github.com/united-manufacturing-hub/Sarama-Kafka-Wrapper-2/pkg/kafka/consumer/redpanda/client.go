@@ -191,6 +191,7 @@ func (c *Consumer) refreshTopics() {
 		}
 
 		// This is for debugging purposes only
+		zap.S().Debugf("Getting partitions for %v", topics)
 		for _, topic := range topics {
 			partitions, err := (*c.client).WritablePartitions(topic)
 			if err != nil {
