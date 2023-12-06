@@ -189,8 +189,20 @@ func (c *Consumer) refreshTopics() {
 			zap.S().Errorf("Failed to close consumer group: %v", err)
 			continue
 		}
+
+		// This is for debugging purposes only
+		for _, topic := range topics {
+			partitions, err := (*c.client).WritablePartitions(topic)
+			if err != nil {
+				zap.S().Errorf("Failed to get partitions for topic %s: %v", topic, err)
+				continue
+			}
+			zap.S().Debugf("Partitions for topic %s: %v", topic, partitions)
+		}
+
 		// Give the old goroutine a chance to exit
 		time.Sleep(1 * time.Second)
+		zap.S().Debugf("Creating new consumer group")
 		newConsumerGroup, err := sarama.NewConsumerGroupFromClient(c.groupId, *c.client)
 		if err != nil {
 			zap.S().Errorf("Error creating consumer group: %v", err)
@@ -257,7 +269,6 @@ func (c *Consumer) IsReady() bool {
 }
 
 func filter(topics []string, regexes []*regexp.Regexp) []string {
-	slices.Sort(topics)
 	filtered := make(map[string]bool)
 	for _, topic := range topics {
 		for _, re := range regexes {
@@ -272,5 +283,6 @@ func filter(topics []string, regexes []*regexp.Regexp) []string {
 		result = append(result, topic)
 	}
 	zap.S().Debugf("Filtered topics: %v to %v", topics, result)
+	slices.Sort(result)
 	return result
 }
