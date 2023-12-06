@@ -188,6 +188,8 @@ func (c *Consumer) refreshTopics() {
 			zap.S().Errorf("Failed to close consumer group: %v", err)
 			continue
 		}
+		// Give the old goroutine a chance to exit
+		time.Sleep(1 * time.Second)
 		newConsumerGroup, err := sarama.NewConsumerGroupFromClient(c.groupId, *c.client)
 		if err != nil {
 			zap.S().Errorf("Error creating consumer group: %v", err)
@@ -201,6 +203,8 @@ func (c *Consumer) refreshTopics() {
 		go c.start(readyChan)
 		<-readyChan
 		c.isReady.Store(true)
+		// Reset the ticker to avoid spamming the API
+		ticker = time.NewTicker(5 * time.Second)
 	}
 }
 
