@@ -122,6 +122,7 @@ func (c *Consumer) start(ready chan bool) {
 	for {
 		var topics []string
 		c.topicsMutex.RLock()
+		topics = make([]string, len(c.topics))
 		copy(topics, c.topics)
 		c.topicsMutex.RUnlock()
 		if len(topics) == 0 {
