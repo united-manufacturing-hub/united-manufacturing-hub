@@ -24,6 +24,7 @@ type Consumer struct {
 	messagesToMarkChan chan *shared.KafkaMessage
 	read               atomic.Uint64
 	marked             atomic.Uint64
+	isReady            atomic.Bool
 }
 
 func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId string) (*Consumer, error) {
@@ -88,6 +89,7 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	go c.start(readyChan)
 	zap.S().Debugf("Waiting for consumer loop to start")
 	<-readyChan
+	c.isReady.Store(true)
 	zap.S().Debugf("Consumer loop started")
 	go c.refreshTopics()
 
@@ -155,6 +157,7 @@ func (c *Consumer) refreshTopics() {
 		c.topicsMutex.RLock()
 		zap.S().Infof("Detected topic change. Old topics: %v, New topics: %v", c.topics, topics)
 		c.topicsMutex.RUnlock()
+		c.isReady.Store(false)
 		err = (*c.consumerGroup).Close()
 		if err != nil {
 			zap.S().Errorf("Failed to close consumer group: %v", err)
@@ -172,6 +175,7 @@ func (c *Consumer) refreshTopics() {
 		readyChan := make(chan bool, 1)
 		go c.start(readyChan)
 		<-readyChan
+		c.isReady.Store(true)
 	}
 }
 
@@ -209,6 +213,11 @@ func (c *Consumer) MarkMessages(messages []*shared.KafkaMessage) {
 	for _, message := range messages {
 		c.messagesToMarkChan <- message
 	}
+}
+
+// IsReady returns whether the consumer is ready to consume messages.
+func (c *Consumer) IsReady() bool {
+	return c.isReady.Load()
 }
 
 func filter(topics []string, regexes []*regexp.Regexp) []string {

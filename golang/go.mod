@@ -42,7 +42,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.4
 	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper v1.11.1
-	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.9
+	github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2 v1.8.10
 	github.com/united-manufacturing-hub/expiremap v1.1.1
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/zeebo/xxh3 v1.0.2
