@@ -32,12 +32,15 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	zap.S().Infof("Creating new consumer with Group ID: %s, Instance ID: %s", groupId, instanceId)
 	zap.S().Infof("Subscribing to topics: %v", subscribeRegexes)
 
+	sarama.Logger = zap.NewStdLog(zap.L())
+
 	config := sarama.NewConfig()
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	config.Consumer.Offsets.AutoCommit.Enable = true
 	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
 	config.Consumer.Group.InstanceId = instanceId
 	config.Version = sarama.V2_3_0_0
+	config.Metadata.RefreshFrequency = 1 * time.Minute
 
 	c := Consumer{}
 	c.subscribeRegexes = make([]*regexp.Regexp, len(subscribeRegexes))
