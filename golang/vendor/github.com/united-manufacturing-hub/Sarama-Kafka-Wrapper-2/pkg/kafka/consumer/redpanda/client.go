@@ -37,7 +37,7 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	config.Consumer.Offsets.AutoCommit.Enable = true
 	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
 	config.Consumer.Group.InstanceId = instanceId
-	config.Version = sarama.V3_1_0_0
+	config.Version = sarama.V2_3_0_0
 	zap.S().Debugf("Config: %+v", config)
 
 	c := Consumer{}
