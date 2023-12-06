@@ -1,114 +1,81 @@
 package redpanda
 
 import (
+	"errors"
 	"github.com/IBM/sarama"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"go.uber.org/zap"
 	"sync/atomic"
-	"time"
 )
 
-type GroupHandler struct {
-	shutdownChannel  chan bool
-	markedMessages   *atomic.Uint64
-	consumedMessages *atomic.Uint64
-	incomingMessages chan *shared.KafkaMessage
-	messagesToMark   chan *shared.KafkaMessage
+// ConsumerGroupHandler represents a Sarama consumer group consumer
+type ConsumerGroupHandler struct {
+	ready              chan bool
+	incomingMessages   chan *shared.KafkaMessage
+	messagesToMarkChan chan *shared.KafkaMessage
+	read               *atomic.Uint64
+	marked             *atomic.Uint64
 }
 
-func (c *GroupHandler) Setup(session sarama.ConsumerGroupSession) error {
-	zap.S().Debugf("Hello from setup")
-	go marker(&session, c.messagesToMark, c.shutdownChannel, c.markedMessages)
-	return nil
-}
-
-func (c *GroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
-	zap.S().Debugf("Begin cleanup")
-	shutdown(c.shutdownChannel)
-	// Wait for one cycle to finish
-	zap.S().Debugf("Goodbye from cleanup")
-	return nil
-}
-
-func (c *GroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	zap.S().Debugf("Begin ConsumeClaim")
-	consumer(&session, &claim, c.incomingMessages, c.shutdownChannel, c.consumedMessages)
-	zap.S().Debugf("Goodbye from consume claim (%d-%s)", session.GenerationID(), session.MemberID())
-	return nil
-}
-
-type TopicPartition struct {
-	Topic     string
-	Partition int32
-}
-
-// marker marks messages coming in from messagesToMark to be ready for commit
-func marker(session *sarama.ConsumerGroupSession, messagesToMark chan *shared.KafkaMessage, shutdownchan chan bool, markedMessages *atomic.Uint64) {
-	zap.S().Debugf("begin marker")
-outer:
-	for {
-		select {
-		case <-shutdownchan:
-			break outer
-		case message := <-messagesToMark:
-			if session == nil || (*session) == nil {
-				shutdown(shutdownchan)
-				break
-			}
-			if message == nil {
-				continue
-			}
-			(*session).MarkOffset(message.Topic, message.Partition, message.Offset+1, "")
-		case <-(*session).Context().Done():
-			zap.S().Debugf("Marker for session %s:%d is done", (*session).MemberID(), (*session).GenerationID())
-			break outer
-		}
+// Setup is run at the beginning of a new session, before ConsumeClaim
+func (c *ConsumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error {
+	if c.ready == nil {
+		return errors.New("ConsumerGroupHandler: ready channel is nil")
 	}
-	zap.S().Debugf("Goodbye from marker (%d-%s)", (*session).GenerationID(), (*session).MemberID())
+	if c.incomingMessages == nil {
+		return errors.New("ConsumerGroupHandler: incomingMessages channel is nil")
+	}
+	if c.messagesToMarkChan == nil {
+		return errors.New("ConsumerGroupHandler: messagesToMarkChan channel is nil")
+	}
+	if c.read == nil {
+		return errors.New("ConsumerGroupHandler: read counter is nil")
+	}
+	if c.marked == nil {
+		return errors.New("ConsumerGroupHandler: marked counter is nil")
+	}
+
+	c.ready <- true
+	return nil
 }
 
-func consumer(session *sarama.ConsumerGroupSession, claim *sarama.ConsumerGroupClaim, incomingMessages chan *shared.KafkaMessage, shutdownchan chan bool, consumedMessages *atomic.Uint64) {
-	zap.S().Debugf("begin consumer %d:%s Messages: %d/%d", (*session).GenerationID(), (*session).MemberID(), len((*claim).Messages()), cap((*claim).Messages()))
-	ticker10Seconds := time.NewTicker(10 * time.Second)
-	messagesHandledCurrTenSeconds := 0.0
-outer:
+// Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
+func (c *ConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+	return nil
+}
+
+// ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
+// Once the Messages() channel is closed, the Handler must finish its processing
+// loop and exit.
+func (c *ConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for {
 		select {
-		case <-shutdownchan:
-			break outer
-		case message, ok := <-(*claim).Messages():
-			if session == nil {
-				shutdown(shutdownchan)
-				continue
-			}
+		case message, ok := <-claim.Messages():
 			if !ok {
-				zap.S().Debugf("Message channel is closed for %s:%d", (*session).MemberID(), (*session).GenerationID())
-				shutdown(shutdownchan)
-				continue
+				zap.S().Infof("ConsumerGroupHandler: Message channel closed")
+				return nil
 			}
-			if message == nil {
-				zap.S().Debugf("Message is nil for %s:%d", (*session).MemberID(), (*session).GenerationID())
-				time.Sleep(shared.CycleTime)
-				continue
+			c.incomingMessages <- &shared.KafkaMessage{
+				Topic:     message.Topic,
+				Partition: message.Partition,
+				Offset:    message.Offset,
+				Key:       message.Key,
+				Value:     message.Value,
 			}
-			// Add to incoming message channel, else block
-			incomingMessages <- shared.FromConsumerMessage(message)
-			consumedMessages.Add(1)
-			messagesHandledCurrTenSeconds++
-		case <-ticker10Seconds.C:
-			msgPerSecond := messagesHandledCurrTenSeconds / 10
-			zap.S().Debugf("Consumer for session %s:%d is active (%f msg/s) [Claims: %+v] [InitialOffset: %d], [HighWaterMarkOffset: %d]", (*session).MemberID(), (*session).GenerationID(), msgPerSecond, (*session).Claims(), (*claim).InitialOffset(), (*claim).HighWaterMarkOffset())
-			if messagesHandledCurrTenSeconds == 0 {
-				zap.S().Debugf("Handler got no messages, exiting")
-				break outer
+			c.read.Add(1)
+		case msg := <-c.messagesToMarkChan:
+			session.MarkOffset(msg.Topic, msg.Partition, msg.Offset+1, "")
+			c.marked.Add(1)
+		// Should return when `session.Context()` is done.
+		// If not, will raise `ErrRebalanceInProgress` or `read tcp <ip>:<port>: i/o timeout` when kafka rebalances. see:
+		// https://github.com/IBM/sarama/issues/1192
+		case _, ok := <-session.Context().Done():
+			if !ok {
+				zap.S().Infof("ConsumerGroupHandler: Session context channel closed")
+				return nil
 			}
-			messagesHandledCurrTenSeconds = 0
-			continue
-		case <-(*session).Context().Done():
-			msgPerSecond := messagesHandledCurrTenSeconds / 10
-			zap.S().Debugf("Consumer for session %s:%d is done (%f msg/s) [Claims: %+v] [InitialOffset: %d], [HighWaterMarkOffset: %d]", (*session).MemberID(), (*session).GenerationID(), msgPerSecond, (*session).Claims(), (*claim).InitialOffset(), (*claim).HighWaterMarkOffset())
-			break outer
+			zap.S().Infof("ConsumerGroupHandler: Session context closed")
+			return nil
 		}
 	}
-	zap.S().Debugf("Goodbye from consumer (%d-%s)", (*session).GenerationID(), (*session).MemberID())
 }
