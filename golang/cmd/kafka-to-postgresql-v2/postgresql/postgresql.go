@@ -49,10 +49,11 @@ type Metrics struct {
 // It is not thread-safe to call Next() and Values() at the same time
 type Source struct {
 	rows      [][]any
-	available atomic.Uint64
+	available atomic.Int64
 	lock      sync.Mutex
 	isNumeric bool
-	max       uint64
+	// max must be > 0, otherwise the source will never be available
+	max int64
 }
 
 func (s *Source) Next() bool {
@@ -96,11 +97,11 @@ func (s *Source) Insert(msg DBValue) {
 }
 
 func (s *Source) Available() uint64 {
-	return s.available.Load()
+	return uint64(s.available.Load())
 }
 
 func (s *Source) Capacity() uint64 {
-	return s.max
+	return uint64(s.max)
 }
 
 type Connection struct {
