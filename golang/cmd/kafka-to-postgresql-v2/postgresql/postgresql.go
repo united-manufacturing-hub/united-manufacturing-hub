@@ -182,12 +182,12 @@ func GetOrInit() *Connection {
 			stringSource: &Source{
 				isNumeric: false,
 				rows:      make([][]any, 0, ChannelSize),
-				max:       uint64(ChannelSize),
+				max:       int64(ChannelSize),
 			},
 			numericSource: &Source{
 				isNumeric: true,
 				rows:      make([][]any, 0, ChannelSize),
-				max:       uint64(ChannelSize),
+				max:       int64(ChannelSize),
 			},
 		}
 		if !conn.IsAvailable() {
