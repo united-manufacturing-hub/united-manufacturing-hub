@@ -48,7 +48,7 @@ type Metrics struct {
 // Source is semi-thread-safe
 // It is not thread-safe to call Next() and Values() at the same time
 type Source struct {
-	rows      [][]any
+	rows      chan []any
 	available atomic.Int64
 	lock      sync.Mutex
 	isNumeric bool
@@ -56,18 +56,27 @@ type Source struct {
 	max int64
 }
 
+func NewSource(maxLenght int64, isNumeric bool) *Source {
+	s := &Source{
+		rows:      make(chan []any, maxLenght),
+		available: atomic.Int64{},
+		isNumeric: isNumeric,
+		max:       maxLenght,
+	}
+	s.available.Store(0)
+	return s
+}
+
 func (s *Source) Next() bool {
 	return s.available.Load() > 0
 }
 
 func (s *Source) Values() ([]any, error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
 	if len(s.rows) == 0 {
 		return nil, errors.New("no more rows available")
 	}
 	s.available.Add(-1)
-	return s.rows[0], nil
+	return <-s.rows, nil
 }
 
 func (s *Source) Err() error {
@@ -76,9 +85,6 @@ func (s *Source) Err() error {
 
 func (s *Source) Insert(msg DBValue) {
 	// Block if the rows are full
-	for s.available.Load() >= s.max {
-		time.Sleep(1 * time.Millisecond)
-	}
 	values := make([]any, 5)
 	values[0] = msg.Timestamp
 	values[1] = msg.Value.Name
@@ -89,11 +95,8 @@ func (s *Source) Insert(msg DBValue) {
 	} else {
 		values[4] = msg.GetValue().(string)
 	}
-
-	s.lock.Lock()
-	s.rows = append(s.rows, values)
+	s.rows <- values
 	s.available.Add(1)
-	s.lock.Unlock()
 }
 
 func (s *Source) Available() uint64 {
@@ -177,18 +180,10 @@ func GetOrInit() *Connection {
 			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
 		}
 		conn = &Connection{
-			db:    db,
-			cache: cache,
-			stringSource: &Source{
-				isNumeric: false,
-				rows:      make([][]any, 0, ChannelSize),
-				max:       int64(ChannelSize),
-			},
-			numericSource: &Source{
-				isNumeric: true,
-				rows:      make([][]any, 0, ChannelSize),
-				max:       int64(ChannelSize),
-			},
+			db:            db,
+			cache:         cache,
+			stringSource:  NewSource(int64(ChannelSize), false),
+			numericSource: NewSource(int64(ChannelSize), true),
 		}
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
