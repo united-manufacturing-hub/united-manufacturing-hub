@@ -16,24 +16,52 @@ import (
 	"time"
 )
 
+// Consumer represents a Kafka consumer.
 type Consumer struct {
-	subscribeRegexes   []*regexp.Regexp
-	topics             []string
-	topicsMutex        sync.RWMutex
-	groupId            string
-	incomingMessages   chan *shared.KafkaMessage
+	// subscribeRegexes holds compiled regular expressions to filter topics.
+	subscribeRegexes []*regexp.Regexp
+
+	// topics holds the list of Kafka topics the consumer is subscribed to.
+	topics []string
+
+	// topicsMutex provides concurrent access protection for the topics.
+	topicsMutex sync.RWMutex
+
+	// groupId represents the Kafka consumer group ID.
+	groupId string
+
+	// incomingMessages is a channel for incoming Kafka messages.
+	incomingMessages chan *shared.KafkaMessage
+
+	// messagesToMarkChan is a channel for marking messages as processed.
 	messagesToMarkChan chan *shared.KafkaMessage
-	read               atomic.Uint64
-	marked             atomic.Uint64
-	isReady            atomic.Bool
-	config             *sarama.Config
-	brokers            []string
-	client             *sarama.Client
-	consumerGroup      *sarama.ConsumerGroup
+
+	// read tracks the number of messages read.
+	read atomic.Uint64
+
+	// marked tracks the number of messages marked as processed.
+	marked atomic.Uint64
+
+	// isReady indicates if the consumer is ready to consume messages.
+	isReady atomic.Bool
+
+	// config holds the Sarama consumer configuration.
+	config *sarama.Config
+
+	// brokers lists the Kafka brokers.
+	brokers []string
+
+	// client is the Sarama client for Kafka communication.
+	client *sarama.Client
+
+	// consumerGroup is the Sarama consumer group.
+	consumerGroup *sarama.ConsumerGroup
 }
 
+// genIID generates an instance ID by appending a timestamp to the provided instanceId and hashing it.
 func genIID(instanceId string) string {
 	// Append random suffix to avoid conflicts
+	// For our purposes, unix nanoseconds is good enough
 	now := time.Now().UnixNano()
 	x := instanceId + "-" + strconv.FormatInt(now, 10)
 	// Hash the string to avoid weird characters (using SHA-256)
@@ -42,6 +70,7 @@ func genIID(instanceId string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+// NewConsumer initializes and returns a new Consumer instance.
 func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId string) (*Consumer, error) {
 	zap.S().Infof("Connecting to brokers: %v", kafkaBrokers)
 	zap.S().Infof("Creating new consumer with Group ID: %s, Instance ID: %s", groupId, instanceId)
@@ -118,6 +147,8 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	return &c, nil
 }
 
+// start begins the consumption process for Kafka messages.
+// If required it also re-initializes the consumer.
 func (c *Consumer) start() {
 	zap.S().Debugf("Starting consumer with Group ID: %s", c.groupId)
 	var err error
@@ -200,6 +231,7 @@ func (c *Consumer) start() {
 	}
 }
 
+// refreshTopics periodically updates the list of topics the consumer subscribes to.
 func (c *Consumer) refreshTopics() {
 
 	ticker := time.NewTicker(5 * time.Second)
@@ -297,6 +329,7 @@ func (c *Consumer) IsReady() bool {
 	return c.isReady.Load()
 }
 
+// filter applies regular expression filters to a list of topics and returns the filtered list.
 func filter(topics []string, regexes []*regexp.Regexp) []string {
 	filtered := make(map[string]bool)
 	for _, topic := range topics {
