@@ -368,7 +368,7 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 	zap.S().Debugf("Starting tagWorker for %s", tableName)
 	// The context is only used for preparation, not execution!
 
-	ticker1Second := time.NewTicker(1 * time.Second)
+	ticker1Second := time.NewTicker(10 * time.Second)
 	shallFlush := make(chan bool, 1)
 
 	maxBeforeFlush := 100_000
