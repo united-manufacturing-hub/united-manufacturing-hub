@@ -11,7 +11,6 @@ import (
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
 	"sync"
-	"time"
 )
 
 type Worker struct {
@@ -50,8 +49,6 @@ func (w *Worker) startWorkLoop() {
 func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 	k := kafka.GetOrInit()
 	p := postgresql.GetOrInit()
-	messagesHandled := 0
-	now := time.Now()
 	for {
 		msg := <-msgChan
 		topic, err := recreateTopic(msg)
@@ -89,11 +86,6 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 			zap.S().Errorf("Unknown usecase %s", topic.Usecase)
 		}
 		k.MarkMessage(msg)
-		messagesHandled++
-		elapsed := time.Since(now)
-		if int(elapsed.Seconds())%10 == 0 {
-			zap.S().Debugf("handleParsing [%d] handled %d messages in %s (%f msg/s) [%d/%d]", i, messagesHandled, elapsed, float64(messagesHandled)/elapsed.Seconds(), len(msgChan), cap(msgChan))
-		}
 	}
 }
 
