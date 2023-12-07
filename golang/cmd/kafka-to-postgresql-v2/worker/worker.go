@@ -71,15 +71,15 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 
 		switch topic.Usecase {
 		case "historian":
-			payload, timestampMs, err := parseHistorianPayload(msg.Value)
+			payloads, timestampMs, err := parseHistorianPayload(msg.Value)
 			if err != nil {
 				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
 				k.MarkMessage(msg)
 				continue
 			}
-			err = p.InsertHistorianValue(payload, timestampMs, origin, topic)
+			err = p.InsertHistorianValue(payloads, timestampMs, origin, topic)
 			if err != nil {
-				zap.S().Warnf("Failed to insert historian numerical value %+v: %s [%+v]", msg, err, payload)
+				zap.S().Warnf("Failed to insert historian numerical value %+v: %s [%+v]", msg, err, payloads)
 				k.MarkMessage(msg)
 				continue
 			}
@@ -97,7 +97,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 	}
 }
 
-func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
+func parseHistorianPayload(value []byte) ([]sharedStructs.Value, int64, error) {
 	// Attempt to JSON decode the message
 	var message map[string]interface{}
 	err := json.Unmarshal(value, &message)
@@ -110,7 +110,7 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 	}
 	var timestampMs int64
 	var timestampFound bool
-	var v *sharedStructs.Value
+	var values []sharedStructs.Value
 	var vFound bool
 
 	for key, value := range message {
@@ -119,15 +119,16 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 			if err != nil {
 				return nil, 0, err
 			}
-			zap.S().Debugf("Parsed %s:%s as timestamp_ms: %d", key, value, timestampMs)
 			timestampFound = true
 		} else {
+			var v sharedStructs.Value
 			v, err = parseValue(value)
 			if err != nil {
 				return nil, 0, err
 			}
 			vFound = true
 			v.Name = key
+			values = append(values, v)
 		}
 	}
 
@@ -138,7 +139,7 @@ func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
 		return nil, 0, fmt.Errorf("message does not contain any value: %+v", message)
 	}
 
-	return v, timestampMs, nil
+	return values, timestampMs, nil
 }
 
 func parseInt(v interface{}) (int64, error) {
@@ -149,7 +150,7 @@ func parseInt(v interface{}) (int64, error) {
 	return int64(timestamp), nil
 }
 
-func parseValue(v interface{}) (*sharedStructs.Value, error) {
+func parseValue(v interface{}) (sharedStructs.Value, error) {
 	var val sharedStructs.Value
 	var numericVal float32
 
@@ -175,8 +176,8 @@ func parseValue(v interface{}) (*sharedStructs.Value, error) {
 		}
 		val.NumericValue = &numericVal
 	default:
-		return nil, fmt.Errorf("unsupported type: %T (%v)", t, v)
+		return sharedStructs.Value{}, fmt.Errorf("unsupported type: %T (%v)", t, v)
 	}
 
-	return &val, nil
+	return val, nil
 }
