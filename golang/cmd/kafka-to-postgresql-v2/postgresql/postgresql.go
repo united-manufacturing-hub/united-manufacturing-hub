@@ -374,7 +374,6 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 	maxBeforeFlush := 100_000
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
 	tableSize := 0
-	lastInsertAmount := 0
 
 	for {
 		select {
