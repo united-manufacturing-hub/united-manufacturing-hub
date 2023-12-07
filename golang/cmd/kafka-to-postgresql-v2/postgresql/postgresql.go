@@ -18,19 +18,12 @@ import (
 	"time"
 )
 
-type DBValue struct {
+type DBRow struct {
 	Timestamp time.Time
+	Name      string
 	Origin    string
 	AssetId   int
-	Value     sharedStructs.Value
-}
-
-func (r *DBValue) GetValue() interface{} {
-	if r.Value.IsNumeric {
-		return r.Value.NumericValue
-	} else {
-		return r.Value.StringValue
-	}
+	Value     any
 }
 
 type Metrics struct {
@@ -45,68 +38,6 @@ type Metrics struct {
 	DatabaseInsertionRate10Seconds      float64
 }
 
-// Source is semi-thread-safe
-// It is not thread-safe to call Next() and Values() at the same time
-type Source struct {
-	rows      chan []any
-	available atomic.Int64
-	lock      sync.Mutex
-	isNumeric bool
-	// max must be > 0, otherwise the source will never be available
-	max int64
-}
-
-func NewSource(maxLenght int64, isNumeric bool) *Source {
-	s := &Source{
-		rows:      make(chan []any, maxLenght),
-		available: atomic.Int64{},
-		isNumeric: isNumeric,
-		max:       maxLenght,
-	}
-	s.available.Store(0)
-	return s
-}
-
-func (s *Source) Next() bool {
-	return s.available.Load() > 0
-}
-
-func (s *Source) Values() ([]any, error) {
-	if len(s.rows) == 0 {
-		return nil, errors.New("no more rows available")
-	}
-	s.available.Add(-1)
-	return <-s.rows, nil
-}
-
-func (s *Source) Err() error {
-	return nil
-}
-
-func (s *Source) Insert(msg DBValue) {
-	// Block if the rows are full
-	values := make([]any, 5)
-	values[0] = msg.Timestamp
-	values[1] = msg.Value.Name
-	values[2] = msg.Origin
-	values[3] = msg.AssetId
-	if s.isNumeric {
-		values[4] = msg.GetValue().(float32)
-	} else {
-		values[4] = msg.GetValue().(string)
-	}
-	s.rows <- values
-	s.available.Add(1)
-}
-
-func (s *Source) Available() uint64 {
-	return uint64(s.available.Load())
-}
-
-func (s *Source) Capacity() uint64 {
-	return uint64(s.max)
-}
-
 type Connection struct {
 	db                *pgxpool.Pool
 	cache             *lru.ARCCache
@@ -119,8 +50,8 @@ type Connection struct {
 	commitTime        atomic.Uint64
 	metrics           Metrics
 	metricsLock       sync.RWMutex
-	numericSource     *Source
-	stringSource      *Source
+	numericSource     chan DBRow
+	stringSource      chan DBRow
 }
 
 var conn *Connection
@@ -182,8 +113,8 @@ func GetOrInit() *Connection {
 		conn = &Connection{
 			db:            db,
 			cache:         cache,
-			stringSource:  NewSource(int64(ChannelSize), false),
-			numericSource: NewSource(int64(ChannelSize), true),
+			stringSource:  make(chan DBRow, ChannelSize),
+			numericSource: make(chan DBRow, ChannelSize),
 		}
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
@@ -254,18 +185,17 @@ func (c *Connection) postStats() {
 		stringRate := float64(currentStringsReceived) / elapsedTime
 		databaseInsertionRate := float64(currentDatabaseInserted) / elapsedTime
 
-		numericalChannelFill := c.numericSource.Available()
+		numericalChannelFill := len(c.numericSource)
 		numericalChannelFillPercentage := float64(0)
 		if numericalChannelFill > 0 {
-			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(c.numericSource.Capacity()) * 100
+			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(cap(c.numericSource)) * 100
 		}
 
-		stringsChannelFill := c.stringSource.Available()
+		stringsChannelFill := len(c.stringSource)
 		stringsChannelFillPercentage := float64(0)
 		if stringsChannelFill > 0 {
-			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(c.stringSource.Capacity()) * 100
+			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(cap(c.stringSource)) * 100
 		}
-
 		totalCommits := c.commits.Load()
 		totalCommitTime := c.commitTime.Load() // Assuming this is in milliseconds
 
@@ -412,20 +342,22 @@ func (c *Connection) InsertHistorianValue(values []sharedStructs.Value, timestam
 
 	for _, value := range values {
 		if value.IsNumeric {
-			c.numericSource.Insert(DBValue{
+			c.numericSource <- DBRow{
 				Timestamp: timestamp,
+				Name:      value.Name,
 				Origin:    origin,
 				AssetId:   assetId,
-				Value:     value,
-			})
+				Value:     *value.NumericValue,
+			}
 			c.numericalReceived.Add(1)
 		} else {
-			c.stringSource.Insert(DBValue{
+			c.stringSource <- DBRow{
 				Timestamp: timestamp,
+				Name:      value.Name,
 				Origin:    origin,
 				AssetId:   assetId,
-				Value:     value,
-			})
+				Value:     *value.StringValue,
+			}
 			c.stringsReceived.Add(1)
 		}
 	}
@@ -433,102 +365,133 @@ func (c *Connection) InsertHistorianValue(values []sharedStructs.Value, timestam
 	return nil
 }
 
-func (c *Connection) tagWorker(tableName string, source *Source) {
+func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 	zap.S().Debugf("Starting tagWorker for %s", tableName)
 	// The context is only used for preparation, not execution!
 
-	var err error
-	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
-	var copiedIn int64
+	ticker1Second := time.NewTicker(1 * time.Second)
+	shallFlush := make(chan bool, 1)
+
+	maxBeforeFlush := 100_000
+	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
+	tableSize := 0
 
 	for {
-		sleepTime := calculateSleepTime(copiedIn, source.Capacity())
-		zap.S().Debugf("Sleeping for %s [CopiedIn: %d]", sleepTime, copiedIn)
-		time.Sleep(sleepTime)
-
-		if !source.Next() {
-			zap.S().Debugf("No data available for %s", tableName)
-			continue
-		}
-
-		txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
-		// Create transaction
-		var txn pgx.Tx
-		txn, err = c.db.BeginTx(txnExecutionCtx, pgx.TxOptions{})
-		if err != nil {
-			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
-
-			txnExecutionCancel()
-			continue
-		}
-
-		// Create the temp table for COPY
-		_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
-	   CREATE TEMP TABLE %s
-	          ( LIKE %s INCLUDING DEFAULTS )
-	          ON COMMIT DROP;
-	   `, tableNameTemp, tableName))
-		if err != nil {
-			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
-			rollbackCtx, rollbackCtxCncl := get5SecondContext()
-			err = txn.Rollback(rollbackCtx)
-			rollbackCtxCncl()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+		select {
+		case <-ticker1Second.C:
+			c.flush(rowsToInsert[:tableSize], tableName)
+			tableSize = 0
+		case <-shallFlush:
+			c.flush(rowsToInsert[:tableSize], tableName)
+			tableSize = 0
+		default:
+			// Add to insertion table
+			if tableSize == maxBeforeFlush {
+				shallFlush <- true
 			}
-
-			txnExecutionCancel()
-			continue
-		}
-		copiedIn, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
-			"timestamp", "name", "origin", "asset_id", "value",
-		}, source)
-
-		if err != nil {
-			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
-			rollbackCtx, rollbackCtxCncl := get5SecondContext()
-			err = txn.Rollback(rollbackCtx)
-			rollbackCtxCncl()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+			// Try to get value from source
+			select {
+			case val := <-source:
+				rowsToInsert[tableSize] = val
+				tableSize++
+			default:
+				// There is nothing to do, just wait a bit
+				time.Sleep(100 * time.Millisecond)
 			}
-			txnExecutionCancel()
-			continue
 		}
+	}
+}
 
-		// Do insert via statementInsertSelect
-		_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
-				INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
-			`, tableName, tableNameTemp))
+func (c *Connection) flush(rows []DBRow, tableName string) {
+	var copiedIn int64
+	var err error
 
-		if err != nil {
-			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
-			rollbackCtx, rollbackCtxCncl := get5SecondContext()
-			err = txn.Rollback(rollbackCtx)
-			rollbackCtxCncl()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-			txnExecutionCancel()
-			continue
-		}
+	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
 
-		zap.S().Debugf("Pre-commit")
-		now := time.Now()
-		err = txn.Commit(txnExecutionCtx)
-		c.commits.Add(1)
-		c.commitTime.Add(uint64(time.Since(now).Milliseconds()))
-		zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
+	txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
+	// Create transaction
+	var txn pgx.Tx
+	txn, err = c.db.BeginTx(txnExecutionCtx, pgx.TxOptions{})
+	if err != nil {
+		zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
+		txnExecutionCancel()
+		return
+	}
 
+	// Create the temp table for COPY
+	_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
+		   CREATE TEMP TABLE %s
+		          ( LIKE %s INCLUDING DEFAULTS )
+		          ON COMMIT DROP;
+		   `, tableNameTemp, tableName))
+	if err != nil {
+		zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
+		rollbackCtx, rollbackCtxCncl := get5SecondContext()
+		err = txn.Rollback(rollbackCtx)
+		rollbackCtxCncl()
 		if err != nil {
 			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			txnExecutionCancel()
-			continue
 		}
-		zap.S().Debugf("Inserted %d values inside the %s table", copiedIn, tableName)
-		c.databaseInserted.Add(uint64(copiedIn))
+
 		txnExecutionCancel()
+		return
 	}
+	copiedIn, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
+		"timestamp", "name", "origin", "asset_id", "value",
+	}, pgx.CopyFromSlice(len(rows), func(i int) ([]any, error) {
+		return []any{
+			rows[i].Timestamp,
+			rows[i].Name,
+			rows[i].Origin,
+			rows[i].AssetId,
+			rows[i].Value,
+		}, nil
+	}))
+
+	if err != nil {
+		zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
+		rollbackCtx, rollbackCtxCncl := get5SecondContext()
+		err = txn.Rollback(rollbackCtx)
+		rollbackCtxCncl()
+		if err != nil {
+			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+		}
+		txnExecutionCancel()
+		return
+	}
+
+	// Do insert via statementInsertSelect
+	_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
+					INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
+				`, tableName, tableNameTemp))
+
+	if err != nil {
+		zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
+		rollbackCtx, rollbackCtxCncl := get5SecondContext()
+		err = txn.Rollback(rollbackCtx)
+		rollbackCtxCncl()
+		if err != nil {
+			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+		}
+		txnExecutionCancel()
+		return
+	}
+
+	zap.S().Debugf("Pre-commit")
+	now := time.Now()
+	err = txn.Commit(txnExecutionCtx)
+	c.commits.Add(1)
+	c.commitTime.Add(uint64(time.Since(now).Milliseconds()))
+	zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
+
+	if err != nil {
+		zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
+		txnExecutionCancel()
+		return
+	}
+	zap.S().Debugf("Inserted %d values inside the %s table", copiedIn, tableName)
+	c.databaseInserted.Add(uint64(copiedIn))
+	txnExecutionCancel()
 }
 
 func GetHealthCheck() healthcheck.Check {
