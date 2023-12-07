@@ -36,7 +36,7 @@ func (c *ConsumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error 
 	}
 
 	c.ready.Store(true)
-	zap.S().Debugf("ConsumerGroupHandler set up")
+	zap.S().Debugf("ConsumerGroupHandler set up for: %+v", session.Claims())
 	return nil
 }
 
@@ -50,6 +50,7 @@ func (c *ConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) erro
 // Once the Messages() channel is closed, the Handler must finish its processing
 // loop and exit.
 func (c *ConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	zap.S().Debugf("ConsumerGroupHandler: starting to consume claim: %+v", claim)
 	for {
 		select {
 		case message, ok := <-claim.Messages():

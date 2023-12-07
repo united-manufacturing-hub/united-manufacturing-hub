@@ -124,10 +124,12 @@ func (c *Consumer) start() {
 		zap.S().Debugf("Got topics: %v", topics)
 
 		if c.client != nil {
-			zap.S().Infof("Closing old client")
-			err = (*c.client).Close()
-			if err != nil {
-				zap.S().Warnf("Failed to close client: %s", err)
+			if !(*c.client).Closed() {
+				zap.S().Infof("Closing old client")
+				err = (*c.client).Close()
+				if err != nil {
+					zap.S().Warnf("Failed to close client: %s", err)
+				}
 			}
 		}
 		zap.S().Debugf("Creating new client")
@@ -159,12 +161,15 @@ func (c *Consumer) start() {
 				read:               &c.read,
 				marked:             &c.marked,
 			}
+			zap.S().Debugf("CHG topics: %v", topics)
 			err = consumer.Consume(ctx, topics, &cgh)
 			if errors.Is(err, sarama.ErrClosedClient) {
 				zap.S().Infof("Consumer closed")
+				time.Sleep(5 * time.Second)
 				break
 			} else if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 				zap.S().Infof("Consumer group closed")
+				time.Sleep(5 * time.Second)
 				break
 			} else if err != nil {
 				zap.S().Errorf("Consumer error: %v", err)
