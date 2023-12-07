@@ -101,10 +101,12 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	go c.start()
 	go c.refreshTopics()
 
+	zap.S().Debugf("Consumer initialized with Group ID: %s, Instance ID: %s, Brokers: %v", groupId, instanceId, kafkaBrokers)
 	return &c, nil
 }
 
 func (c *Consumer) start() {
+	zap.S().Debugf("Starting consumer with Group ID: %s", c.groupId)
 	var err error
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -119,6 +121,7 @@ func (c *Consumer) start() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		zap.S().Debugf("Got topics: %v", topics)
 
 		if c.client != nil {
 			zap.S().Infof("Closing old client")
@@ -173,13 +176,15 @@ func (c *Consumer) start() {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		zap.S().Debugf("Ending consume loop")
+		zap.S().Debugf("Consumer start loop ended for Group ID: %s", c.groupId)
 	}
 }
 
 func (c *Consumer) refreshTopics() {
+
 	ticker := time.NewTicker(5 * time.Second)
 	for {
+		zap.S().Debugf("Starting topic refresh for consumer with Group ID: %s", c.groupId)
 		<-ticker.C
 		if c.client == nil {
 			zap.S().Debugf("Client not ready")
@@ -227,6 +232,7 @@ func (c *Consumer) refreshTopics() {
 		zap.S().Debugf("Refresh loop ended")
 		// Reset the ticker to avoid a burst of refreshes
 		ticker.Reset(5 * time.Second)
+		zap.S().Debugf("Topic refresh loop ended for Group ID: %s", c.groupId)
 	}
 }
 
