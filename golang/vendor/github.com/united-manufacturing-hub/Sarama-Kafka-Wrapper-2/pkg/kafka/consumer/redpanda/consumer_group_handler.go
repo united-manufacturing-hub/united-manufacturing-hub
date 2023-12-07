@@ -10,7 +10,7 @@ import (
 
 // ConsumerGroupHandler represents a Sarama consumer group consumer
 type ConsumerGroupHandler struct {
-	ready              chan bool
+	ready              *atomic.Bool
 	incomingMessages   chan *shared.KafkaMessage
 	messagesToMarkChan chan *shared.KafkaMessage
 	read               *atomic.Uint64
@@ -35,7 +35,7 @@ func (c *ConsumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error 
 		return errors.New("ConsumerGroupHandler: marked counter is nil")
 	}
 
-	c.ready <- true
+	c.ready.Store(true)
 	zap.S().Debugf("ConsumerGroupHandler set up")
 	return nil
 }

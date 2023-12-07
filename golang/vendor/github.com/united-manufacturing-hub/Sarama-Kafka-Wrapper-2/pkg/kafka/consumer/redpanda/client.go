@@ -17,14 +17,16 @@ type Consumer struct {
 	subscribeRegexes   []*regexp.Regexp
 	topics             []string
 	topicsMutex        sync.RWMutex
-	consumerGroup      *sarama.ConsumerGroup
-	client             *sarama.Client
 	groupId            string
 	incomingMessages   chan *shared.KafkaMessage
 	messagesToMarkChan chan *shared.KafkaMessage
 	read               atomic.Uint64
 	marked             atomic.Uint64
 	isReady            atomic.Bool
+	config             *sarama.Config
+	brokers            []string
+	client             *sarama.Client
+	consumerGroup      *sarama.ConsumerGroup
 }
 
 func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId string) (*Consumer, error) {
@@ -57,25 +59,13 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	c.incomingMessages = make(chan *shared.KafkaMessage, 100_000)
 	c.messagesToMarkChan = make(chan *shared.KafkaMessage, 100_000)
 
-	zap.S().Debugf("Setting up client")
+	zap.S().Debugf("Setting up initial client")
 	newClient, err := sarama.NewClient(kafkaBrokers, config)
 	if err != nil {
 		zap.S().Errorf("Failed to create new client: %v", err)
 		return nil, err
 	}
-	c.client = &newClient
 
-	zap.S().Debugf("Setting up consumer group")
-	consumerGroup, err := sarama.NewConsumerGroupFromClient(groupId, newClient)
-	if err != nil {
-		zap.S().Errorf("Failed to create consumer group: %v", err)
-		return nil, err
-	}
-	c.consumerGroup = &consumerGroup
-	c.groupId = groupId
-
-	zap.S().Debugf("Retrieving topics")
-	var topics []string
 	for {
 		err = newClient.RefreshMetadata()
 		if err != nil {
@@ -83,6 +73,7 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 			return nil, err
 		}
 
+		var topics []string
 		topics, err = newClient.Topics()
 		if err != nil {
 			zap.S().Errorf("Failed to retrieve topics: %v", err)
@@ -99,24 +90,19 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 		zap.S().Infof("No topics found. Waiting for 1 second")
 		time.Sleep(1 * time.Second)
 	}
+	err = newClient.Close()
+	if err != nil {
+		zap.S().Warnf("Failed to close initial client: %s", err)
+	}
 
-	readyChan := make(chan bool, 1)
-	c.topicsMutex.RLock()
-	zap.S().Debugf("Starting consumer for %v", c.topics)
-	c.topicsMutex.RUnlock()
-	go c.start(readyChan)
-	zap.S().Debugf("Waiting for consumer to start")
-	<-readyChan
-	c.isReady.Store(true)
-	zap.S().Debugf("Consumer loop started")
+	go c.start()
 	go c.refreshTopics()
 
-	zap.S().Infof("Finished setting up consumer")
 	return &c, nil
 }
 
-func (c *Consumer) start(ready chan bool) {
-	zap.S().Infof("Starting consumer loop")
+func (c *Consumer) start() {
+	var err error
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -126,31 +112,65 @@ func (c *Consumer) start(ready chan bool) {
 		copy(topics, c.topics)
 		c.topicsMutex.RUnlock()
 		if len(topics) == 0 {
-			zap.S().Infof("No topics to consume. Waiting for 1 second")
+			zap.S().Infof("No topics found. Waiting for 1 second")
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		zap.S().Debugf("Consuming topics: %v", topics)
-		consumer := ConsumerGroupHandler{
-			ready:              ready,
-			incomingMessages:   c.incomingMessages,
-			messagesToMarkChan: c.messagesToMarkChan,
-			read:               &c.read,
-			marked:             &c.marked,
+
+		if c.client != nil {
+			zap.S().Infof("Closing old client")
+			err = (*c.client).Close()
+			if err != nil {
+				zap.S().Warnf("Failed to close client: %s", err)
+			}
 		}
-		err := (*c.consumerGroup).Consume(ctx, topics, &consumer)
-		if errors.Is(err, sarama.ErrClosedConsumerGroup) {
-			zap.S().Infof("Consumer group closed")
-			return
-		} else if err != nil {
-			zap.S().Errorf("Error from consumer: %v", err)
+		zap.S().Debugf("Creating new client")
+		var client sarama.Client
+		client, err = sarama.NewClient(c.brokers, c.config)
+		c.client = &client
+		if err != nil {
+			zap.S().Errorf("Failed to create new client: %v", err)
+			time.Sleep(1 * time.Second)
+			continue
 		}
-		if ctx.Err() != nil {
-			zap.S().Infof("Context err from consumer: %v", ctx.Err())
-			return
+
+		zap.S().Debugf("Creating new consumer")
+		consumer, err := sarama.NewConsumerGroupFromClient(c.groupId, client)
+		if err != nil {
+			zap.S().Errorf("Failed to create new consumer: %v", err)
+			time.Sleep(1 * time.Second)
+			continue
 		}
-		ready = make(chan bool, 1)
-		time.Sleep(10 * time.Millisecond)
+		c.consumerGroup = &consumer
+
+		// Consume loop
+		zap.S().Infof("Starting to consume messages")
+		for {
+			cgh := ConsumerGroupHandler{
+				incomingMessages:   c.incomingMessages,
+				messagesToMarkChan: c.messagesToMarkChan,
+				ready:              &c.isReady,
+				read:               &c.read,
+				marked:             &c.marked,
+			}
+			err = consumer.Consume(ctx, topics, &cgh)
+			if errors.Is(err, sarama.ErrClosedClient) {
+				zap.S().Infof("Consumer closed")
+				break
+			} else if errors.Is(err, sarama.ErrClosedConsumerGroup) {
+				zap.S().Infof("Consumer group closed")
+				break
+			} else if err != nil {
+				zap.S().Errorf("Consumer error: %v", err)
+				time.Sleep(1 * time.Second)
+			}
+			if ctx.Err() != nil {
+				zap.S().Infof("Context closed")
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		zap.S().Debugf("Ending consume loop")
 	}
 }
 
@@ -158,6 +178,10 @@ func (c *Consumer) refreshTopics() {
 	ticker := time.NewTicker(5 * time.Second)
 	for {
 		<-ticker.C
+		if c.client == nil {
+			zap.S().Debugf("Client not ready")
+			continue
+		}
 		zap.S().Debugf("Refreshing metadata")
 
 		err := (*c.client).RefreshMetadata()
@@ -183,48 +207,22 @@ func (c *Consumer) refreshTopics() {
 		c.topicsMutex.RLock()
 		zap.S().Infof("Detected topic change. Old topics: %v, New topics: %v", c.topics, topics)
 		c.topicsMutex.RUnlock()
-		c.isReady.Store(false)
-		err = (*c.consumerGroup).Close()
-		if err != nil {
-			zap.S().Errorf("Failed to close consumer group: %v", err)
-			continue
-		}
 
-		// This is for debugging purposes only
-		zap.S().Debugf("Getting partitions for %v", topics)
-		for _, topic := range topics {
-			partitions, err := (*c.client).WritablePartitions(topic)
+		if c.consumerGroup != nil {
+			err = (*c.consumerGroup).Close()
 			if err != nil {
-				zap.S().Errorf("Failed to get partitions for topic %s: %v", topic, err)
-				continue
+				zap.S().Warnf("Failed to close consumer group: %s", err)
 			}
-			zap.S().Debugf("Partitions for topic %s: %v", topic, partitions)
 		}
-
-		// Give the old goroutine a chance to exit
-		time.Sleep(1 * time.Second)
-		zap.S().Debugf("Creating new consumer group")
-		newConsumerGroup, err := sarama.NewConsumerGroupFromClient(c.groupId, *c.client)
-		if err != nil {
-			zap.S().Errorf("Error creating consumer group: %v", err)
-			continue
+		if c.client != nil {
+			err = (*c.client).Close()
+			if err != nil {
+				zap.S().Warnf("Failed to close client: %s", err)
+			}
 		}
-		c.consumerGroup = &newConsumerGroup
-		c.topicsMutex.Lock()
-		c.topics = topics
-		c.topicsMutex.Unlock()
-		readyChan := make(chan bool, 1)
-		go c.start(readyChan)
-		timeout := time.NewTimer(10 * time.Second)
-		select {
-		case <-timeout.C:
-			zap.S().Errorf("Timeout waiting for consumer to start")
-			continue
-		case <-readyChan:
-		}
-		c.isReady.Store(true)
-		// Reset the ticker to avoid spamming the API
-		ticker = time.NewTicker(5 * time.Second)
+		zap.S().Debugf("Refresh loop ended")
+		// Reset the ticker to avoid a burst of refreshes
+		ticker.Reset(5 * time.Second)
 	}
 }
 
