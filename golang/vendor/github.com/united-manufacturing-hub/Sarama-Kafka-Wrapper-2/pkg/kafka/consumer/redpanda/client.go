@@ -207,9 +207,10 @@ func (c *Consumer) refreshTopics() {
 			zap.S().Infof("No change in topics")
 			continue
 		}
-		c.topicsMutex.RLock()
+		c.topicsMutex.Lock()
 		zap.S().Infof("Detected topic change. Old topics: %v, New topics: %v", c.topics, topics)
-		c.topicsMutex.RUnlock()
+		c.topics = topics
+		c.topicsMutex.Unlock()
 
 		if c.consumerGroup != nil {
 			err = (*c.consumerGroup).Close()
