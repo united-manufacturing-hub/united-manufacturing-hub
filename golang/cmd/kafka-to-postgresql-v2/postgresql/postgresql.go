@@ -378,6 +378,9 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 	for {
 		select {
 		case <-ticker1Second.C:
+			if tableSize == 0 {
+				continue
+			}
 			c.flush(rowsToInsert[:tableSize], tableName)
 			clear(rowsToInsert)
 			tableSize = 0
