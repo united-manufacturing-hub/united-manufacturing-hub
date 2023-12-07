@@ -54,6 +54,9 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 		}
 		c.subscribeRegexes[i] = re
 	}
+	c.groupId = groupId
+	c.config = config
+	c.brokers = kafkaBrokers
 
 	zap.S().Debugf("Setting up channels")
 	c.incomingMessages = make(chan *shared.KafkaMessage, 100_000)
