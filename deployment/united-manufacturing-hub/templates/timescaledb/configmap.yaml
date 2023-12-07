@@ -198,7 +198,7 @@ data:
 
     -- #51 state table
     -- function called by trigger
-    CREATE FUNCTION rm_duplicate() RETURNS trigger AS \$rm_duplicate\$
+    CREATE OR REPLACE FUNCTION rm_duplicate() RETURNS trigger AS \$rm_duplicate\$
     DECLARE
     last_state int;
     next_state int;
@@ -206,7 +206,7 @@ data:
     SELECT last(state, timestamp) INTO last_state FROM statetable WHERE asset_id = NEW.asset_id AND timestamp < NEW.timestamp;
     SELECT first(state, timestamp) INTO next_state FROM statetable WHERE asset_id = NEW.asset_id AND timestamp > NEW.timestamp;
     if last_state = NEW.state OR next_state = NEW.state THEN
-    RAISE EXCEPTION 'INSERT VALUE --> % % %', NEW.timestamp, NEW.asset_id, NEW.state;
+    RAISE unique_violation USING MESSAGE = 'Duplicate state detected for asset_id ' || NEW.asset_id;
     END if;
     RETURN NEW;
     END;
