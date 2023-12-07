@@ -11,7 +11,6 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
-	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -375,19 +374,23 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 	maxBeforeFlush := 100_000
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
 	tableSize := 0
+	lastInsertAmount := 0
 
 	for {
 		select {
 		case <-ticker1Second.C:
 			c.flush(rowsToInsert[:tableSize], tableName)
+			clear(rowsToInsert)
 			tableSize = 0
 		case <-shallFlush:
 			c.flush(rowsToInsert[:tableSize], tableName)
+			clear(rowsToInsert)
 			tableSize = 0
 		default:
 			// Add to insertion table
 			if tableSize == maxBeforeFlush {
 				shallFlush <- true
+				continue
 			}
 			// Try to get value from source
 			select {
@@ -510,36 +513,4 @@ func get5SecondContext() (context.Context, context.CancelFunc) {
 
 func get1MinuteContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 1*time.Minute)
-}
-
-// calculateSleepTime calculates the sleep time based on the number of rows inserted (exponential backoff)
-// The minimum sleep time is 0 milliseconds, and the maximum sleep time is 5 second
-func calculateSleepTime(rowsInserted int64, capacity uint64) time.Duration {
-	// Constants: max and min sleep times
-	const maxSleepTime = 5 * time.Second
-	const minSleepTime = 0 * time.Millisecond
-
-	if rowsInserted <= 0 {
-		return maxSleepTime
-	}
-	// Shortcut if rowsInserted is >= 50% of the capacity, since math.Log is expensive
-	if float64(rowsInserted) >= float64(capacity)*0.5 {
-		return minSleepTime
-	}
-
-	// Calculate a reduction factor based on the number of rows inserted
-	// This factor is inversely proportional to rowsInserted
-	factor := math.Log(float64(rowsInserted))
-
-	// Calculate sleep time based on the factor
-	sleepTime := time.Duration(float64(maxSleepTime) / factor)
-
-	// Ensure sleep time is within bounds
-	if sleepTime < minSleepTime {
-		sleepTime = minSleepTime
-	} else if sleepTime > maxSleepTime {
-		sleepTime = maxSleepTime
-	}
-
-	return sleepTime
 }
