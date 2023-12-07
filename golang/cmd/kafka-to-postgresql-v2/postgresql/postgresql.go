@@ -397,7 +397,7 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 			// Try to get value from source
 			select {
 			case val := <-source:
-				rowsToInsert[tableSize] = val
+				rowsToInsert = append(rowsToInsert, val)
 				tableSize++
 			default:
 				// There is nothing to do, just wait a bit
