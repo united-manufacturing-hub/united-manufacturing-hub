@@ -11,6 +11,7 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -41,22 +42,81 @@ type Metrics struct {
 	NumericalValuesReceivedPerSecond    float64
 	StringValuesReceivedPerSecond       float64
 	DatabaseInsertionRate               float64
+	DatabaseInsertionRate10Seconds      float64
+}
+
+// Source is semi-thread-safe
+// It is not thread-safe to call Next() and Values() at the same time
+type Source struct {
+	rows      [][]any
+	available atomic.Uint64
+	lock      sync.Mutex
+	isNumeric bool
+	max       uint64
+}
+
+func (s *Source) Next() bool {
+	return s.available.Load() > 0
+}
+
+func (s *Source) Values() ([]any, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if len(s.rows) == 0 {
+		return nil, errors.New("no more rows available")
+	}
+	s.available.Add(-1)
+	return s.rows[0], nil
+}
+
+func (s *Source) Err() error {
+	return nil
+}
+
+func (s *Source) Insert(msg DBValue) {
+	// Block if the rows are full
+	for s.available.Load() >= s.max {
+		time.Sleep(1 * time.Millisecond)
+	}
+	values := make([]any, 5)
+	values[0] = msg.Timestamp
+	values[1] = msg.Value.Name
+	values[2] = msg.Origin
+	values[3] = msg.AssetId
+	if s.isNumeric {
+		values[4] = msg.GetValue().(float32)
+	} else {
+		values[4] = msg.GetValue().(string)
+	}
+
+	s.lock.Lock()
+	s.rows = append(s.rows, values)
+	s.available.Add(1)
+	s.lock.Unlock()
+}
+
+func (s *Source) Available() uint64 {
+	return s.available.Load()
+}
+
+func (s *Source) Capacity() uint64 {
+	return s.max
 }
 
 type Connection struct {
-	db                     *pgxpool.Pool
-	cache                  *lru.ARCCache
-	numericalValuesChannel chan DBValue
-	stringValuesChannel    chan DBValue
-	numericalReceived      atomic.Uint64
-	stringsReceived        atomic.Uint64
-	databaseInserted       atomic.Uint64
-	lruHits                atomic.Uint64
-	lruMisses              atomic.Uint64
-	commits                atomic.Uint64
-	commitTime             atomic.Uint64
-	metrics                Metrics
-	metricsLock            sync.RWMutex
+	db                *pgxpool.Pool
+	cache             *lru.ARCCache
+	numericalReceived atomic.Uint64
+	stringsReceived   atomic.Uint64
+	databaseInserted  atomic.Uint64
+	lruHits           atomic.Uint64
+	lruMisses         atomic.Uint64
+	commits           atomic.Uint64
+	commitTime        atomic.Uint64
+	metrics           Metrics
+	metricsLock       sync.RWMutex
+	numericSource     *Source
+	stringSource      *Source
 }
 
 var conn *Connection
@@ -116,10 +176,18 @@ func GetOrInit() *Connection {
 			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
 		}
 		conn = &Connection{
-			db:                     db,
-			cache:                  cache,
-			numericalValuesChannel: make(chan DBValue, ChannelSize),
-			stringValuesChannel:    make(chan DBValue, ChannelSize),
+			db:    db,
+			cache: cache,
+			stringSource: &Source{
+				isNumeric: false,
+				rows:      make([][]any, 0, ChannelSize),
+				max:       uint64(ChannelSize),
+			},
+			numericSource: &Source{
+				isNumeric: true,
+				rows:      make([][]any, 0, ChannelSize),
+				max:       uint64(ChannelSize),
+			},
 		}
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
@@ -143,14 +211,8 @@ func GetOrInit() *Connection {
 			}
 		}
 
-		go conn.tagWorker("tag", &Source{
-			datachan:  conn.numericalValuesChannel,
-			isNumeric: true,
-		})
-		go conn.tagWorker("tag_string", &Source{
-			datachan:  conn.stringValuesChannel,
-			isNumeric: false,
-		})
+		go conn.tagWorker("tag", conn.numericSource)
+		go conn.tagWorker("tag_string", conn.stringSource)
 
 		go conn.postStats()
 	})
@@ -175,6 +237,7 @@ func (c *Connection) postStats() {
 	startTime := time.Now()
 
 	tenSecondTicker := time.NewTicker(10 * time.Second)
+	lastInserted := uint64(0)
 	for {
 		<-tenSecondTicker.C
 		currentNumericalReceived := c.numericalReceived.Load()
@@ -195,16 +258,16 @@ func (c *Connection) postStats() {
 		stringRate := float64(currentStringsReceived) / elapsedTime
 		databaseInsertionRate := float64(currentDatabaseInserted) / elapsedTime
 
-		numericalChannelFill := len(c.numericalValuesChannel)
+		numericalChannelFill := c.numericSource.Available()
 		numericalChannelFillPercentage := float64(0)
 		if numericalChannelFill > 0 {
-			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(cap(c.numericalValuesChannel)) * 100
+			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(c.numericSource.Capacity()) * 100
 		}
 
-		stringsChannelFill := len(c.stringValuesChannel)
+		stringsChannelFill := c.stringSource.Available()
 		stringsChannelFillPercentage := float64(0)
 		if stringsChannelFill > 0 {
-			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(cap(c.stringValuesChannel)) * 100
+			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(c.stringSource.Capacity()) * 100
 		}
 
 		totalCommits := c.commits.Load()
@@ -214,6 +277,11 @@ func (c *Connection) postStats() {
 		if totalCommits > 0 {
 			averageCommitDuration = float64(totalCommitTime) / float64(totalCommits)
 		}
+		// Inserted per second (avg 10 seconds)
+		inserted := currentDatabaseInserted - lastInserted
+		lastInserted = currentDatabaseInserted
+		databaseInsertionRate10Sec := float64(inserted) / 10
+
 		c.metricsLock.Lock()
 		c.metrics = Metrics{
 			LRUHitPercentage:                    lruHitPercentage,
@@ -221,6 +289,7 @@ func (c *Connection) postStats() {
 			StringChannelFillPercentage:         stringsChannelFillPercentage,
 			DatabaseInsertions:                  c.databaseInserted.Load(),
 			DatabaseInsertionRate:               databaseInsertionRate,
+			DatabaseInsertionRate10Seconds:      databaseInsertionRate10Sec,
 			AverageCommitDurationInMilliseconds: averageCommitDuration,
 			NumericalValuesReceivedPerSecond:    numericalRate,
 			StringValuesReceivedPerSecond:       stringRate,
@@ -345,56 +414,22 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	nanoseconds := (timestampMs % 1000) * 1000000
 	timestamp := time.Unix(seconds, nanoseconds)
 	if value.IsNumeric {
-		c.numericalValuesChannel <- DBValue{
+		c.numericSource.Insert(DBValue{
 			Timestamp: timestamp,
 			Origin:    origin,
 			AssetId:   assetId,
 			Value:     value,
-		}
+		})
 		c.numericalReceived.Add(1)
 	} else {
-		c.stringValuesChannel <- DBValue{
+		c.stringSource.Insert(DBValue{
 			Timestamp: timestamp,
 			Origin:    origin,
 			AssetId:   assetId,
 			Value:     value,
-		}
+		})
 		c.stringsReceived.Add(1)
 	}
-	return nil
-}
-
-// Source This implementation is not thread-safe !
-type Source struct {
-	datachan  chan DBValue
-	isNumeric bool
-}
-
-func (s *Source) Next() bool {
-	return len(s.datachan) != 0
-}
-
-func (s *Source) Values() ([]any, error) {
-	select {
-	case msg := <-s.datachan:
-		values := make([]any, 5)
-		values[0] = msg.Timestamp
-		values[1] = msg.Value.Name
-		values[2] = msg.Origin
-		values[3] = msg.AssetId
-		if s.isNumeric {
-			values[4] = msg.GetValue().(float32)
-		} else {
-			values[4] = msg.GetValue().(string)
-		}
-		zap.S().Debugf("Values: %+v", values)
-		return values, nil
-	default:
-		return nil, errors.New("no more rows available")
-	}
-}
-
-func (s *Source) Err() error {
 	return nil
 }
 
@@ -407,7 +442,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 	var copiedIn int64
 
 	for {
-		sleepTime := c.calculateSleepTime(copiedIn)
+		sleepTime := calculateSleepTime(copiedIn, source.Capacity())
 		time.Sleep(sleepTime)
 
 		if !source.Next() {
@@ -513,21 +548,34 @@ func get1MinuteContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 1*time.Minute)
 }
 
-// calculateSleepTime scales the sleep time based on the number of entries
-func (c *Connection) calculateSleepTime(copiedIn int64) time.Duration {
-	const maxSleep = 5 * time.Second
-	const minEntries = 1
-	maxEntries := int64(cap(c.numericalValuesChannel))
+// calculateSleepTime calculates the sleep time based on the number of rows inserted (exponential backoff)
+// The minimum sleep time is 0 milliseconds, and the maximum sleep time is 5 second
+func calculateSleepTime(rowsInserted int64, capacity uint64) time.Duration {
+	// Constants: max and min sleep times
+	const maxSleepTime = 5 * time.Second
+	const minSleepTime = 0 * time.Millisecond
 
-	if copiedIn >= maxEntries {
-		return 0 // or a very small duration
+	if rowsInserted <= 0 {
+		return maxSleepTime
+	}
+	// Shortcut if rowsInserted is >= 50% of the capacity, since math.Log is expensive
+	if float64(rowsInserted) >= float64(capacity)*0.5 {
+		return minSleepTime
 	}
 
-	// Linear scaling of sleep time
-	sleepScale := float64(maxSleep) * (1 - float64(copiedIn)/float64(maxEntries))
-	if sleepScale < 0 {
-		sleepScale = 0
+	// Calculate a reduction factor based on the number of rows inserted
+	// This factor is inversely proportional to rowsInserted
+	factor := math.Log(float64(rowsInserted))
+
+	// Calculate sleep time based on the factor
+	sleepTime := time.Duration(float64(maxSleepTime) / factor)
+
+	// Ensure sleep time is within bounds
+	if sleepTime < minSleepTime {
+		sleepTime = minSleepTime
+	} else if sleepTime > maxSleepTime {
+		sleepTime = maxSleepTime
 	}
 
-	return time.Duration(sleepScale)
+	return sleepTime
 }

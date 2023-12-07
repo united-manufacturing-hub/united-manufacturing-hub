@@ -25,6 +25,11 @@ tasks:
       ./get_helm.sh
       exit 0
 
+  - name: GHCR login
+    init: |
+      echo $GHCR_PAT | docker login ghcr.io -u $GHCR_USERNAME --password-stdin
+      exit 0
+
 jetbrains:
   plugins:
     - lermitage.intellij.extratci # Extra colorfull icons

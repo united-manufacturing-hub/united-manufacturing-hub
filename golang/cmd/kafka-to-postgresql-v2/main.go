@@ -80,6 +80,7 @@ var (
 	numericalValuesReceivedPerSecondGauge = prometheus.NewGauge(prometheus.GaugeOpts{Name: "numerical_values_received_per_second", Help: "Numerical Values Received Per Second"})
 	stringValuesReceivedPerSecondGauge    = prometheus.NewGauge(prometheus.GaugeOpts{Name: "string_values_received_per_second", Help: "String Values Received Per Second"})
 	kafkaIncomingMessageChannelFillGauge  = prometheus.NewGauge(prometheus.GaugeOpts{Name: "kafka_incoming_message_channel_fill_percentage", Help: "Kafka Incoming Message Fill Percentage"})
+	databaseInsertionRate10SecondsGauge   = prometheus.NewGauge(prometheus.GaugeOpts{Name: "database_insertion_rate_10_seconds", Help: "Database Insertion Rate 10 Seconds"})
 )
 
 func registerCustomMetrics() {
@@ -92,6 +93,7 @@ func registerCustomMetrics() {
 	prometheus.MustRegister(numericalValuesReceivedPerSecondGauge)
 	prometheus.MustRegister(stringValuesReceivedPerSecondGauge)
 	prometheus.MustRegister(kafkaIncomingMessageChannelFillGauge)
+	prometheus.MustRegister(databaseInsertionRate10SecondsGauge)
 
 	// Update metrics in a separate go routine
 	go func() {
@@ -107,17 +109,19 @@ func registerCustomMetrics() {
 			averageCommitDurationGauge.Set(metrics.AverageCommitDurationInMilliseconds)
 			numericalValuesReceivedPerSecondGauge.Set(metrics.NumericalValuesReceivedPerSecond)
 			stringValuesReceivedPerSecondGauge.Set(metrics.StringValuesReceivedPerSecond)
+			databaseInsertionRate10SecondsGauge.Set(metrics.DatabaseInsertionRate10Seconds)
 
 			kafkaChanPercentage := float64(len(msgChan)) / float64(cap(msgChan)) * 100
 			kafkaIncomingMessageChannelFillGauge.Set(kafkaChanPercentage)
 
 			// Logging the stats
-			zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s), Avg Commit Duration: %.2fms, Numerical Channel fill: %.2f%%, Strings Channel fill: %.2f%%, Kafka Channel fill: %.2f%%, PG Health: %t, Kafka ready: %t, Kafka Live: %t",
+			zap.S().Infof("LRU Hit Percentage: %.2f%%, Numerical Entries/s: %.2f, String Entries/s: %.2f, DB Insertions: %d (%.2f/s) [%.2f/s 10sec avg], Avg Commit Duration: %.2fms, Numerical Channel fill: %.2f%%, Strings Channel fill: %.2f%%, Kafka Channel fill: %.2f%%, PG Health: %t, Kafka ready: %t, Kafka Live: %t",
 				metrics.LRUHitPercentage,
 				metrics.NumericalValuesReceivedPerSecond,
 				metrics.StringValuesReceivedPerSecond,
 				metrics.DatabaseInsertions,
 				metrics.DatabaseInsertionRate,
+				metrics.DatabaseInsertionRate10Seconds,
 				metrics.AverageCommitDurationInMilliseconds,
 				metrics.NumericalChannelFillPercentage,
 				metrics.StringChannelFillPercentage,
