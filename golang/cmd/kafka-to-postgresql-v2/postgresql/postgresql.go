@@ -378,10 +378,10 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 		select {
 		case <-ticker1Second.C:
 			c.flush(rowsToInsert, tableName)
-			clear(rowsToInsert)
+			rowsToInsert = make([]DBRow, 0, maxBeforeFlush)
 		case <-shallFlush:
 			c.flush(rowsToInsert, tableName)
-			clear(rowsToInsert)
+			rowsToInsert = make([]DBRow, 0, maxBeforeFlush)
 		default:
 			// Add to insertion table
 			if len(rowsToInsert) == maxBeforeFlush {
