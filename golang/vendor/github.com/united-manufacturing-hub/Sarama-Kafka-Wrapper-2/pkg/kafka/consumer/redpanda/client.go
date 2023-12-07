@@ -2,12 +2,15 @@ package redpanda
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"github.com/IBM/sarama"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"go.uber.org/zap"
 	"regexp"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +32,16 @@ type Consumer struct {
 	consumerGroup      *sarama.ConsumerGroup
 }
 
+func genIID(instanceId string) string {
+	// Append random suffix to avoid conflicts
+	now := time.Now().UnixNano()
+	x := instanceId + "-" + strconv.FormatInt(now, 10)
+	// Hash the string to avoid weird characters (using SHA-256)
+	hasher := sha256.New()
+	hasher.Write([]byte(x))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId string) (*Consumer, error) {
 	zap.S().Infof("Connecting to brokers: %v", kafkaBrokers)
 	zap.S().Infof("Creating new consumer with Group ID: %s, Instance ID: %s", groupId, instanceId)
@@ -40,7 +53,7 @@ func NewConsumer(kafkaBrokers, subscribeRegexes []string, groupId, instanceId st
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	config.Consumer.Offsets.AutoCommit.Enable = true
 	config.Consumer.Offsets.AutoCommit.Interval = 1 * time.Second
-	config.Consumer.Group.InstanceId = instanceId
+	config.Consumer.Group.InstanceId = genIID(instanceId)
 	config.Version = sarama.V2_3_0_0
 	config.Metadata.RefreshFrequency = 1 * time.Minute
 
@@ -134,6 +147,8 @@ func (c *Consumer) start() {
 		}
 		zap.S().Debugf("Creating new client")
 		var client sarama.Client
+		c.config.Consumer.Group.InstanceId = genIID(c.config.Consumer.Group.InstanceId)
+		zap.S().Debugf("Using instanceId %s", c.config.Consumer.Group.InstanceId)
 		client, err = sarama.NewClient(c.brokers, c.config)
 		c.client = &client
 		if err != nil {
