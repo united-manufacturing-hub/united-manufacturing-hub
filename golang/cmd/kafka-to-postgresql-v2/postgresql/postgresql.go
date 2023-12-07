@@ -373,24 +373,18 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 
 	maxBeforeFlush := 100_000
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
-	tableSize := 0
 
 	for {
 		select {
 		case <-ticker1Second.C:
-			if tableSize == 0 {
-				continue
-			}
-			c.flush(rowsToInsert[:tableSize], tableName)
+			c.flush(rowsToInsert, tableName)
 			clear(rowsToInsert)
-			tableSize = 0
 		case <-shallFlush:
-			c.flush(rowsToInsert[:tableSize], tableName)
+			c.flush(rowsToInsert, tableName)
 			clear(rowsToInsert)
-			tableSize = 0
 		default:
 			// Add to insertion table
-			if tableSize == maxBeforeFlush {
+			if len(rowsToInsert) == maxBeforeFlush {
 				shallFlush <- true
 				continue
 			}
@@ -398,7 +392,6 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 			select {
 			case val := <-source:
 				rowsToInsert = append(rowsToInsert, val)
-				tableSize++
 			default:
 				// There is nothing to do, just wait a bit
 				time.Sleep(100 * time.Millisecond)
