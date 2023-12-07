@@ -444,6 +444,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 
 	for {
 		sleepTime := calculateSleepTime(copiedIn, source.Capacity())
+		zap.S().Debugf("Sleeping for %s [CopiedIn: %d]", sleepTime, copiedIn)
 		time.Sleep(sleepTime)
 
 		if !source.Next() {
