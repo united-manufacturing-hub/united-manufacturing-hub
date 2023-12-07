@@ -401,6 +401,9 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 }
 
 func (c *Connection) flush(rows []DBRow, tableName string) {
+	if len(rows) == 0 {
+		return
+	}
 	var copiedIn int64
 	var err error
 
