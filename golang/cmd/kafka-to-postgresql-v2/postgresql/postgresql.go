@@ -376,7 +376,6 @@ func (c *Connection) InsertHistorianValue(values []sharedStructs.Value, timestam
 
 func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeFlush int, flushInterval int) {
 	zap.S().Debugf("Starting tagWorker for %s", tableName)
-	// The context is only used for preparation, not execution!
 
 	ticker1Second := time.NewTicker(time.Duration(flushInterval) * time.Second)
 	shallFlush := make(chan bool, 1)
@@ -392,19 +391,23 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		default:
-			// Add to insertion table
-			if len(rowsToInsert) == maxBeforeFlush {
-				zap.S().Debugf("Reached capacity, flushing")
-				shallFlush <- true
-				continue
+			// Drain the channel completely
+			draining := true
+			for draining {
+				select {
+				case val := <-source:
+					rowsToInsert = append(rowsToInsert, val)
+					if len(rowsToInsert) >= maxBeforeFlush {
+						zap.S().Debugf("Reached capacity, flushing")
+						shallFlush <- true
+						draining = false
+					}
+				default:
+					draining = false
+				}
 			}
-			// Try to get value from source
-			select {
-			case val := <-source:
-				rowsToInsert = append(rowsToInsert, val)
-			default:
-				zap.S().Debugf("Nothing to do, waiting")
-				// There is nothing to do, just wait a bit
+			if len(rowsToInsert) == 0 {
+				zap.S().Debugf("No values to insert, sleeping")
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
