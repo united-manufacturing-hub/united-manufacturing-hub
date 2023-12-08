@@ -14,6 +14,6 @@ type TopicDetails struct {
 type Value struct {
 	NumericValue *float32
 	StringValue  *string
-	IsNumeric    bool
 	Name         string
+	IsNumeric    bool
 }

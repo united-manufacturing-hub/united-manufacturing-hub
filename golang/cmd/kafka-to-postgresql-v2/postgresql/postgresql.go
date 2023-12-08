@@ -19,10 +19,10 @@ import (
 
 type DBRow struct {
 	Timestamp time.Time
+	Value     any
 	Name      string
 	Origin    string
 	AssetId   int
-	Value     any
 }
 
 type Metrics struct {
@@ -38,19 +38,19 @@ type Metrics struct {
 }
 
 type Connection struct {
-	db                *pgxpool.Pool
 	cache             *lru.ARCCache
-	numericalReceived atomic.Uint64
+	stringSource      chan DBRow
+	db                *pgxpool.Pool
+	numericSource     chan DBRow
+	metrics           Metrics
 	stringsReceived   atomic.Uint64
-	databaseInserted  atomic.Uint64
-	lruHits           atomic.Uint64
 	lruMisses         atomic.Uint64
 	commits           atomic.Uint64
 	commitTime        atomic.Uint64
-	metrics           Metrics
+	lruHits           atomic.Uint64
+	databaseInserted  atomic.Uint64
+	numericalReceived atomic.Uint64
 	metricsLock       sync.RWMutex
-	numericSource     chan DBRow
-	stringSource      chan DBRow
 }
 
 var conn *Connection
