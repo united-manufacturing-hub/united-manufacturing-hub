@@ -404,13 +404,13 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 						draining = false
 					}
 				default:
-					zap.S().Debugf("Drained channel")
+					zap.S().Debugf("Drained channel for %s", tableName)
 					draining = false
 				}
 			}
 			if len(rowsToInsert) == 0 {
-				zap.S().Debugf("No values to insert, sleeping")
-				time.Sleep(100 * time.Millisecond)
+				zap.S().Debugf("No values to insert for %s, sleeping", tableName)
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
