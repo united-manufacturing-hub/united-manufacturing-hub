@@ -377,14 +377,14 @@ func (c *Connection) InsertHistorianValue(values []sharedStructs.Value, timestam
 func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeFlush int, flushInterval int) {
 	zap.S().Debugf("Starting tagWorker for %s", tableName)
 
-	ticker1Second := time.NewTicker(time.Duration(flushInterval) * time.Second)
+	tickerXSeconds := time.NewTicker(time.Duration(flushInterval) * time.Second)
 	shallFlush := make(chan bool, 1)
 
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
 
 	for {
 		select {
-		case <-ticker1Second.C:
+		case <-tickerXSeconds.C:
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		case <-shallFlush:
@@ -393,6 +393,7 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 		default:
 			// Drain the channel completely
 			draining := true
+			zap.S().Debugf("Draining channel for %s with %d values", tableName, len(source))
 			for draining {
 				select {
 				case val := <-source:
@@ -403,6 +404,7 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 						draining = false
 					}
 				default:
+					zap.S().Debugf("Drained channel")
 					draining = false
 				}
 			}
