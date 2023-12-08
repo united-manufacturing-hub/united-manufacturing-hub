@@ -382,6 +382,8 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
 
+	tickerDrain := time.NewTicker(1 * time.Second)
+
 	for {
 		select {
 		case <-tickerXSeconds.C:
@@ -390,7 +392,7 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 		case <-shallFlush:
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
-		default:
+		case <-tickerDrain.C:
 			// Drain the channel completely
 			draining := true
 			zap.S().Debugf("Draining channel for %s with %d values", tableName, len(source))
@@ -407,10 +409,6 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 					zap.S().Debugf("Drained channel for %s", tableName)
 					draining = false
 				}
-			}
-			if len(rowsToInsert) == 0 {
-				zap.S().Debugf("No values to insert for %s, sleeping", tableName)
-				time.Sleep(1 * time.Second)
 			}
 		}
 	}
