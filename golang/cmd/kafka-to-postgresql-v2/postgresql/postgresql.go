@@ -238,8 +238,7 @@ func (c *Connection) postStats() {
 
 func (c *Connection) GetMetrics() Metrics {
 	c.metricsLock.RLock()
-	var metricsClone Metrics
-	metricsClone = c.metrics
+	metricsClone := c.metrics
 	c.metricsLock.RUnlock()
 	return metricsClone
 }
@@ -395,7 +394,12 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		case <-tickerDrain.C:
-			if len(source) == 0 || len(rowsToInsert) >= maxBeforeFlush {
+			if len(source) == 0 {
+				zap.S().Debugf("Skipping drain for %s (empty)", tableName)
+				continue
+			}
+			if len(rowsToInsert) >= maxBeforeFlush {
+				zap.S().Debugf("Skipping drain for %s (full)", tableName)
 				continue
 			}
 			// Drain the channel completely
