@@ -86,6 +86,10 @@ spec:
               value: {{.Values.kafkatopostgresqlv2.asset.cache.lru.size | quote}}
             - name: VALUE_CHANNEL_SIZE
               value: {{.Values.kafkatopostgresqlv2.workers.channel.size | quote}}
+            - name: VALUE_TABLE_SIZE
+              value: {{.Values.kafkatopostgresqlv2.postgresql.table.size | quote}}
+            - name: FLUSH_INTERVAL_SECONDS
+              value: {{.Values.kafkatopostgresqlv2.postgresql.flush.interval | quote}}
             - name: WORKER_MULTIPLIER
               value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier | quote}}
             - name: LOGGING_LEVEL

@@ -1266,6 +1266,11 @@ kafkatopostgresqlv2:
       size: 10000
     goroutines:
       multiplier: 16 # Logical CPU's * this value
+  postgresql:
+    table:
+      size: 100000
+    flush:
+      interval: 10 # Seconds
   database:
     user: "kafkatopostgresqlv2"
     password: "changemetoo"

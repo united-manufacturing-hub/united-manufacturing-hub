@@ -393,6 +393,9 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		case <-tickerDrain.C:
+			if len(source) == 0 {
+				continue
+			}
 			// Drain the channel completely
 			draining := true
 			zap.S().Debugf("Draining channel for %s with %d values", tableName, len(source))
@@ -406,7 +409,6 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 						draining = false
 					}
 				default:
-					zap.S().Debugf("Drained channel for %s", tableName)
 					draining = false
 				}
 			}
