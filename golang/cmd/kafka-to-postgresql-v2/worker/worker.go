@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
@@ -95,10 +94,6 @@ func parseHistorianPayload(value []byte) ([]sharedStructs.Value, int64, error) {
 	err := json.Unmarshal(value, &message)
 	if err != nil {
 		return nil, 0, err
-	}
-	// There should only be two fields and one of them is "timestamp_ms"
-	if len(message) != 2 {
-		return nil, 0, errors.New("message contains does not have exactly 2 fields")
 	}
 	var timestampMs int64
 	var timestampFound bool
