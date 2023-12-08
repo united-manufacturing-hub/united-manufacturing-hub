@@ -382,8 +382,6 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
 
-	tickerDrain := time.NewTicker(1 * time.Second)
-
 	for {
 		select {
 		case <-tickerXSeconds.C:
@@ -394,25 +392,11 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 			zap.S().Debugf("Flushing %d values [full]", len(rowsToInsert))
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
-		case <-tickerDrain.C:
-			if len(source) == 0 || len(rowsToInsert) >= maxBeforeFlush {
-				continue
-			}
-			// Drain the channel completely
-			draining := true
-			zap.S().Debugf("Draining channel for %s with %d values", tableName, len(source))
-			for draining {
-				select {
-				case val := <-source:
-					rowsToInsert = append(rowsToInsert, val)
-					if len(rowsToInsert) >= maxBeforeFlush {
-						zap.S().Debugf("Reached capacity, flushing")
-						shallFlush <- true
-						draining = false
-					}
-				default:
-					draining = false
-				}
+		case val := <-source:
+			rowsToInsert = append(rowsToInsert, val)
+			if len(rowsToInsert) >= maxBeforeFlush {
+				zap.S().Debugf("Reached capacity, flushing")
+				shallFlush <- true
 			}
 		}
 	}
