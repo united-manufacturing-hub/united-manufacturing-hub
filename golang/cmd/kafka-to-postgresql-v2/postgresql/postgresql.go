@@ -386,11 +386,15 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 	for {
 		select {
 		case <-tickerXSeconds.C:
-			zap.S().Debugf("Flushing %d values", len(rowsToInsert))
+			if len(rowsToInsert) == 0 {
+				zap.S().Debugf("Skipping flush for %s (empty)", tableName)
+				continue
+			}
+			zap.S().Debugf("Flushing %d values for %s [time]", len(rowsToInsert), tableName)
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		case <-shallFlush:
-			zap.S().Debugf("Flushing %d values [full]", len(rowsToInsert))
+			zap.S().Debugf("Flushing %d values for %s [full]", len(rowsToInsert), tableName)
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		case <-tickerDrain.C:
