@@ -393,7 +393,7 @@ func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeF
 			c.flush(rowsToInsert, tableName)
 			rowsToInsert = rowsToInsert[:0]
 		case <-tickerDrain.C:
-			if len(source) == 0 {
+			if len(source) == 0 || len(rowsToInsert) >= maxBeforeFlush {
 				continue
 			}
 			// Drain the channel completely
