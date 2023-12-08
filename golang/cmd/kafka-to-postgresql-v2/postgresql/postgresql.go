@@ -109,6 +109,14 @@ func GetOrInit() *Connection {
 		if err != nil {
 			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
 		}
+		TableSize, err := env.GetAsInt("VALUE_TABLE_SIZE", false, 100000)
+		if err != nil {
+			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
+		}
+		FlushInterval, err := env.GetAsInt("FLUSH_INTERVAL_SECONDS", false, 10)
+		if err != nil {
+			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
+		}
 		conn = &Connection{
 			db:            db,
 			cache:         cache,
@@ -137,8 +145,8 @@ func GetOrInit() *Connection {
 			}
 		}
 
-		go conn.tagWorker("tag", conn.numericSource)
-		go conn.tagWorker("tag_string", conn.stringSource)
+		go conn.tagWorker("tag", conn.numericSource, TableSize, FlushInterval)
+		go conn.tagWorker("tag_string", conn.stringSource, TableSize, FlushInterval)
 
 		go conn.postStats()
 	})
@@ -230,8 +238,10 @@ func (c *Connection) postStats() {
 
 func (c *Connection) GetMetrics() Metrics {
 	c.metricsLock.RLock()
+	var metricsClone Metrics
+	metricsClone = c.metrics
 	c.metricsLock.RUnlock()
-	return c.metrics
+	return metricsClone
 }
 
 var goiLock = sync.Mutex{}
@@ -364,14 +374,13 @@ func (c *Connection) InsertHistorianValue(values []sharedStructs.Value, timestam
 	return nil
 }
 
-func (c *Connection) tagWorker(tableName string, source chan DBRow) {
+func (c *Connection) tagWorker(tableName string, source <-chan DBRow, maxBeforeFlush int, flushInterval int) {
 	zap.S().Debugf("Starting tagWorker for %s", tableName)
 	// The context is only used for preparation, not execution!
 
-	ticker1Second := time.NewTicker(10 * time.Second)
+	ticker1Second := time.NewTicker(time.Duration(flushInterval) * time.Second)
 	shallFlush := make(chan bool, 1)
 
-	maxBeforeFlush := 100_000
 	rowsToInsert := make([]DBRow, 0, maxBeforeFlush)
 
 	for {
@@ -385,6 +394,7 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 		default:
 			// Add to insertion table
 			if len(rowsToInsert) == maxBeforeFlush {
+				zap.S().Debugf("Reached capacity, flushing")
 				shallFlush <- true
 				continue
 			}
@@ -393,6 +403,7 @@ func (c *Connection) tagWorker(tableName string, source chan DBRow) {
 			case val := <-source:
 				rowsToInsert = append(rowsToInsert, val)
 			default:
+				zap.S().Debugf("Nothing to do, waiting")
 				// There is nothing to do, just wait a bit
 				time.Sleep(100 * time.Millisecond)
 			}
