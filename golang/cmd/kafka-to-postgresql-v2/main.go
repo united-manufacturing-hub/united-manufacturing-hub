@@ -44,8 +44,6 @@ func awaitShutdown() {
 	// Log the received signal
 	zap.S().Infof("Received SIG %v", sig)
 
-	zap.S().Debugf("Shutting down kafka")
-	kafka.GetOrInit().Close()
 	os.Exit(0)
 }
 
