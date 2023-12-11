@@ -87,7 +87,7 @@ spec:
             - name: VALUE_CHANNEL_SIZE
               value: {{.Values.kafkatopostgresqlv2.workers.channel.size | quote}}
             - name: VALUE_TABLE_SIZE
-              value: {{.Values.kafkatopostgresqlv2.postgresql.table.size | quote}}
+              value: {{.Values.kafkatopostgresqlv2.postgresql.table.size | default "10000" | quote}}
             - name: FLUSH_INTERVAL_SECONDS
               value: {{.Values.kafkatopostgresqlv2.postgresql.flush.interval | quote}}
             - name: WORKER_MULTIPLIER
