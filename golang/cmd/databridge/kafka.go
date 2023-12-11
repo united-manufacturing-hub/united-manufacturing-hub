@@ -15,12 +15,10 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/raw"
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/redpanda"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"github.com/united-manufacturing-hub/umh-utils/env"
@@ -36,7 +34,7 @@ type kafkaClient struct {
 	marked             atomic.Uint64
 	lossInvalidMessage atomic.Uint64
 	skipped            atomic.Uint64
-	consumer           *raw.Consumer
+	consumer           *redpanda.Consumer
 	producer           *producer.Producer
 	split              int
 }
@@ -66,11 +64,7 @@ func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaCli
 	brokers = resolver(brokers)
 
 	zap.S().Infof("connecting to kafka brokers: %s (topic: %s, consumer group: %s)", broker, topic, consumerGroupId)
-	kc.consumer, err = raw.NewConsumer(brokers, []string{topic}, consumerGroupId, podName)
-	if err != nil {
-		return nil, err
-	}
-	err = kc.consumer.Start(context.Background())
+	kc.consumer, err = redpanda.NewConsumer(brokers, []string{topic}, consumerGroupId, podName)
 	if err != nil {
 		return nil, err
 	}
@@ -82,24 +76,10 @@ func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaCli
 }
 
 func (k *kafkaClient) getState() State {
-	state := k.consumer.GetState()
-	switch state {
-	case raw.ConsumerStateUnknown:
-		return StateDead
-	case raw.ConsumerStateEmpty:
-		return StatePreparing
-	case raw.ConsumerStateStable:
+	if k.consumer.IsReady() {
 		return StateRunning
-	case raw.ConsumerStatePreparingRebalance:
-		return StatePreparing
-	case raw.ConsumerStateCompletingRebalance:
-		return StatePreparing
-	case raw.ConsumerStateDead:
-		return StateDead
-	default:
-		zap.S().Errorf("unknown state: %d", state)
-		return StateDead
 	}
+	return StatePreparing
 }
 
 func (k *kafkaClient) getProducerStats() (sent uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
@@ -171,9 +151,7 @@ func (k *kafkaClient) startConsuming(receivedMessageChannel chan *shared.KafkaMe
 
 func (k *kafkaClient) shutdown() error {
 	zap.S().Info("shutting down kafka clients")
-	errProducer := k.producer.Close()
-	errConsumer := k.consumer.Close()
-	return errors.Join(errProducer, errConsumer)
+	return k.producer.Close()
 }
 
 // splitMessage splits the topic of msg into two parts, the first part will be
