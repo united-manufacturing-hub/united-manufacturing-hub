@@ -403,7 +403,7 @@ jobs:
           context: .
           file: ./deployment/kafka-to-postgresql-v2/Dockerfile
           push: true
-          target: runner-race # TODO: change to runner
+          target: runner
           tags: ${{ steps.meta.outputs.tags }}
           
   metrics:
