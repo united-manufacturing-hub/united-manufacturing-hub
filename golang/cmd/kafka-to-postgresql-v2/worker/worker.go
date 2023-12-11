@@ -47,7 +47,7 @@ func (w *Worker) startWorkLoop() {
 	zap.S().Debugf("Started all workers")
 }
 
-func handleParsing(msgChan chan *shared.KafkaMessage, i int) {
+func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 	k := kafka.GetOrInit()
 	p := postgresql.GetOrInit()
 	messagesHandled := 0
