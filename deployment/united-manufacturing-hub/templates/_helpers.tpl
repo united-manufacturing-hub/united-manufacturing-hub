@@ -48,7 +48,6 @@ DO NOT USE FOR SELECTOR LABELS.
 */}}
 {{- define "united-manufacturing-hub.labels.common" -}}
 {{ include "united-manufacturing-hub.matchLabels" . }}
-{{- end }}
 helm.sh/chart: {{ include "united-manufacturing-hub.chart" . }}
 {{- end }}
 
