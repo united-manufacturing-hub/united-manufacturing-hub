@@ -20,6 +20,7 @@ kind: Ingress
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-ingress
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
 spec:
   rules:
