@@ -20,11 +20,13 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-pdb
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 2}}
 spec:
   minAvailable: {{.Values.factoryinput.pdb.minAvailable}}
   selector:
     matchLabels:
-      name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 6}}
 
 {{end}}
 {{end}}
