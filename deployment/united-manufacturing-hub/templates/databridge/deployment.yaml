@@ -20,14 +20,14 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
   labels:
-    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.common" $ | nindent 4}}
     {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 4 }}
 spec:
   replicas: {{ $.Values.databridge.replicas }}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
-      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.matchLabels" $ | nindent 6}}
       {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 6 }}
   strategy:
     type: RollingUpdate
@@ -35,7 +35,7 @@ spec:
     metadata:
       labels:
         name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
-        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.common" $ | nindent 8}}
         {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 8 }}
     spec:
       affinity:
