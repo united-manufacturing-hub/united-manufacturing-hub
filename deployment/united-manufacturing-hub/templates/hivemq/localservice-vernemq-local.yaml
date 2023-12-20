@@ -20,10 +20,8 @@ kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-vernemq-local-service
   labels:
-    app.kubernetes.io/name: hivemqce
-    app.kubernetes.io/instance: {{include "united-manufacturing-hub.fullname" .}}
-    app.kubernetes.io/managed-by: helm
-    app.kubernetes.io/component: "hivemqce"
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 spec:
   type: ClusterIP
   ports:
