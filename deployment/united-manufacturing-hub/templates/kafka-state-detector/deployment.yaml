@@ -19,6 +19,7 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 4}}
   {{if .Values.kafkastatedetector.annotations}}
   annotations:
@@ -27,13 +28,13 @@ metadata:
 spec:
   selector:
     matchLabels:
-      name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{include "united-manufacturing-hub.fullname" .}}-kafkastatedetector
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.kafkastatedetector" . | nindent 8}}
     spec:
       affinity:
