@@ -21,6 +21,7 @@ kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-nodered-service
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
 spec:
   type: {{.Values.nodered.serviceType}}
