@@ -20,6 +20,7 @@ kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinput-service
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinput" . | nindent 4}}
   {{if .Values.factoryinput.service.annotations}}
   annotations:

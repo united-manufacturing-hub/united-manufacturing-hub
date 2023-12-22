@@ -20,16 +20,19 @@ kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-nodered
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
 spec:
   serviceName: {{include "united-manufacturing-hub.fullname" .}}-nodered
   replicas: 1
   selector:
     matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
       {{- include "united-manufacturing-hub.labels.nodered" . | nindent 6}}
   template:
     metadata:
       labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.nodered" . | nindent 8}}
     spec:
       securityContext:

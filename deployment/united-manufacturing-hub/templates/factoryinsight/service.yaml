@@ -19,6 +19,7 @@ kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-service
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
   {{if .Values.factoryinsight.service.annotations}}
   annotations:
