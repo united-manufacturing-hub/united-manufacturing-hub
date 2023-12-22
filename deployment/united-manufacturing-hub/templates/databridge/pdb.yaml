@@ -20,10 +20,14 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-databridge-pdb
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.databridge" . | nindent 4}}
 spec:
-    minAvailable: {{ .Values.databridge.pdb.minAvailable }}
-    selector:
-      matchLabels:
-        app: {{include "united-manufacturing-hub.fullname" .}}-databridge
+  minAvailable: {{ .Values.databridge.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.databridge" . | nindent 6}}
 {{end}}
 {{end}}

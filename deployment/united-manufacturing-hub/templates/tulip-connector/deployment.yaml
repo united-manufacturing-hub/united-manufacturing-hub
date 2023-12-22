@@ -20,18 +20,20 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 4 }}
 spec:
   replicas: {{ .Values.tulipconnector.replicas }}
   selector:
     matchLabels:
-      name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{include "united-manufacturing-hub.fullname" .}}-tulip-connector-deployment
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.tulip-connector" . | nindent 8 }}
     spec:
       restartPolicy: Always

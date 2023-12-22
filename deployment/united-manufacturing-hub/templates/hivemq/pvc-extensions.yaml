@@ -23,6 +23,7 @@ metadata:
   annotations:
     "helm.sh/resource-policy": keep
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
     volume.alpha.kubernetes.io/storage-class: default
 spec:

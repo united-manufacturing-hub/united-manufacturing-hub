@@ -19,6 +19,7 @@ kind: Service
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-grafanaproxy-service
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.grafanaproxy" . | nindent 4}}
   {{if .Values.grafanaproxy.service.annotations}}
   annotations:

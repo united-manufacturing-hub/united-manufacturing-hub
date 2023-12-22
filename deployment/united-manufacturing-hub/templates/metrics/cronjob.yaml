@@ -19,6 +19,7 @@ kind: CronJob
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-metrics-cron
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.metrics-cron" . | nindent 4}}
   {{if .Values.metrics.annotations}}
   annotations:
