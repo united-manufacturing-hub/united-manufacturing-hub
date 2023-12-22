@@ -21,6 +21,7 @@ kind: Job
 metadata:
   name: {{include "united-manufacturing-hub.fullname" $}}-metrics-{{ $reason | lower }}
   labels:
+    {{- include "united-manufacturing-hub.labels.common" $ | nindent 4}}
     {{- include (printf "united-manufacturing-hub.labels.metrics-%s" ($reason | lower)) $ | nindent 4 }}
   annotations:
     helm.sh/hook: {{ $hook }}
