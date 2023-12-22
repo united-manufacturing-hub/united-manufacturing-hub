@@ -20,6 +20,9 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-mqttkafkabridge-pdb
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.mqttkafkabridge" . | nindent 4}}
 spec:
   minAvailable: {{.Values.mqttkafkabridge.pdb.minAvailable}}
   selector:
