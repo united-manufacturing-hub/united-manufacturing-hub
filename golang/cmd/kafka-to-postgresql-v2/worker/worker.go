@@ -3,6 +3,7 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -143,7 +144,11 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) {
 		for k, v := range val {
 			fullKey := k
 			if prefix != "" {
-				fullKey = prefix + "." + k
+				if strings.HasSuffix(prefix, k) {
+					fullKey = prefix
+				} else {
+					fullKey = prefix + "." + k
+				}
 			}
 			parseValue(fullKey, v, values)
 		}
