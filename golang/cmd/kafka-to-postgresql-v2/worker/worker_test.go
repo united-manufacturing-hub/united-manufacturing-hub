@@ -240,6 +240,22 @@ func TestParseHistorianPayload(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "Multiple tag groups from topic",
+			input: []byte(`{
+				"timestamp_ms": 12345,
+				"multipleTagGroups": "this is a string"
+			}`),
+			tag: "multipleTagGroups$tag1$tag2$tag3",
+			expected: []sharedStructs.Value{
+				{
+					Name:        "multipleTagGroups$tag1$tag2$tag3$multipleTagGroups",
+					StringValue: &sV,
+					IsNumeric:   false,
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
