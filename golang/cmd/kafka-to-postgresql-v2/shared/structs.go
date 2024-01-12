@@ -1,5 +1,8 @@
 package shared
 
+const (
+	DbTagSeparator = "$"
+)
 type TopicDetails struct {
 	Enterprise     string
 	Site           string
@@ -7,7 +10,7 @@ type TopicDetails struct {
 	ProductionLine string
 	WorkCell       string
 	OriginId       string
-	Usecase        string
+	Schema         string
 	Tag            string
 }
 
