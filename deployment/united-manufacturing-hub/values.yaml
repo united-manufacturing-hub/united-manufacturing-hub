@@ -261,7 +261,7 @@ _001_customMicroservices:
       statefulEnabled: false
   -
     name: cmtester
-    image: ghcr.io/united-manufacturing-hub/custom-microservice-tester:latest
+    image: management.umh.app/oci/united-manufacturing-hub/custom-microservice-tester:latest
     enabled: false
 
     # imagePullPolicy: Always is recommended when using latest tags. Otherwise, please use IfNotPresent
@@ -296,7 +296,7 @@ serviceAccount:
 kafkastatedetector:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/kafkastatedetector
+    repository: management.umh.app/oci/united-manufacturing-hub/kafkastatedetector
     pullPolicy: IfNotPresent
   activityEnabled: true
   anomalyEnabled: true
@@ -304,7 +304,7 @@ kafkastatedetector:
 ### mqttbridge ###
 mqttbridge:
   enabled: false
-  image: ghcr.io/united-manufacturing-hub/mqtt-bridge
+  image: management.umh.app/oci/united-manufacturing-hub/mqtt-bridge
   storageRequest: 1Gi
   resources:
     requests:
@@ -321,7 +321,7 @@ mqttbridge:
 barcodereader:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/barcodereader
+    repository: management.umh.app/oci/united-manufacturing-hub/barcodereader
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -335,7 +335,7 @@ barcodereader:
 ### sensorconnect ###
 sensorconnect:
   storageRequest: 1Gi
-  image: ghcr.io/united-manufacturing-hub/sensorconnect
+  image: management.umh.app/oci/united-manufacturing-hub/sensorconnect
   ioddfilepath: "/ioddfiles"
   lowerPollingTime: 100 # Fastest time, sensors should be requested to serve data
   upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
@@ -363,7 +363,7 @@ sensorconnect:
 
 ### iotsensorsmqtt ###
 iotsensorsmqtt:
-  image: amineamaach/sensors-mqtt
+  image: management.umh.app/oci/amineamaach/sensors-mqtt
   tag: v1.0.0
   resources:
     requests:
@@ -378,7 +378,7 @@ iotsensorsmqtt:
 
 ### opcuasimulator ###
 opcuasimulator:
-  image: ghcr.io/united-manufacturing-hub/opcuasimulator
+  image: management.umh.app/oci/united-manufacturing-hub/opcuasimulator
   tag: 0.1.0
   resources:
     requests:
@@ -397,11 +397,11 @@ opcuasimulator:
 ### kafkabridge ###
 kafkabridge:
   image:
-    repository: ghcr.io/united-manufacturing-hub/kafka-bridge
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-bridge
     pullPolicy: IfNotPresent
   # tag: development
   initContainer:
-    repository: ghcr.io/united-manufacturing-hub/kafka-init
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-init
     pullPolicy: IfNotPresent
 
 ### nodered ###
@@ -665,7 +665,7 @@ nodered:
 factoryinsight:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/factoryinsight
+    repository: management.umh.app/oci/united-manufacturing-hub/factoryinsight
     pullPolicy: IfNotPresent
   # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
   # tag: 0.3.2
@@ -704,7 +704,7 @@ factoryinput:
   service:
     annotations: {}
   image:
-    repository: ghcr.io/united-manufacturing-hub/factoryinput
+    repository: management.umh.app/oci/united-manufacturing-hub/factoryinput
     pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
@@ -723,7 +723,7 @@ factoryinput:
 grafanaproxy:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/grafana-proxy
+    repository: management.umh.app/oci/united-manufacturing-hub/grafana-proxy
     pullPolicy: IfNotPresent
   replicas: 1
   service:
@@ -745,11 +745,11 @@ grafanaproxy:
 kafkatopostgresql:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/kafka-to-postgresql
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-to-postgresql
     pullPolicy: IfNotPresent
     # tag: latest
   initContainer:
-    repository: ghcr.io/united-manufacturing-hub/kafka-init
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-init
     pullPolicy: IfNotPresent
   replicas: 1
   storageRequest: 1Gi
@@ -772,8 +772,12 @@ timescaledb-single:
   image:
     # Image was built from
     # https://github.com/timescale/timescaledb-docker-ha
+    repository: management.umh.app/oci/timescale/timescaledb-ha
     tag: pg13.8-ts2.8.0-p1
     pullPolicy: IfNotPresent
+  prometheus:
+    image:
+    repository: management.umh.app/oci/prometheuscommunity/postgres-exporter
 
   # This configuration will be passed on to Patroni directly, there are a few things that are
   # injected/changed, these are:
@@ -800,6 +804,8 @@ timescaledb-single:
 
 ### grafana ###
 grafana:
+  image:
+    repository: management.umh.app/oci/grafana/grafana
   serviceAccount:
     create: false
 
@@ -811,6 +817,7 @@ grafana:
 
   testFramework:
     enabled: false
+    image: management.umh.app/oci/bats/bats
 
   ## Expose the grafana service to be accessed from outside the cluster (LoadBalancer service).
   ## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
@@ -821,7 +828,7 @@ grafana:
     port: 8080
 
   extraInitContainers:
-    - image: ghcr.io/united-manufacturing-hub/grafana-umh:1.2.1
+    - image: management.umh.app/oci/united-manufacturing-hub/grafana-umh:1.2.1
       name: init-plugins
       imagePullPolicy: IfNotPresent
       command: ['sh', '-c', 'cp -r /plugins /var/lib/grafana/']
@@ -840,7 +847,15 @@ grafana:
     ## If false, data ownership will not be reset at startup
     ## This allows the prometheus-server to be run with an arbitrary user
     enabled: true
+    image:
+      repository: management.umh.app/oci/library/busybox
 
+  sidecar:
+    image:
+      repository: management.umh.app/oci/kiwigrid/k8s-sidecar
+  imageRenderer:
+    image:
+      repository: management.umh.app/oci/grafana/grafana-image-renderer
   # Use an existing secret for the admin user.
   admin:
     existingSecret: "grafana-secret"
@@ -989,7 +1004,7 @@ grafana:
 ### packmlmqttsimulator ###
 packmlmqttsimulator:
   image:
-    repository: spruiktec/packml-simulator
+    repository: management.umh.app/oci/spruiktec/packml-simulator
     pullPolicy: IfNotPresent
     hash: 01e2f0da3542f1b4e0de830a8d24135de03fd9174dce184ed329bed3ee688e19
   env:
@@ -1011,7 +1026,7 @@ packmlmqttsimulator:
 ### tulip-connector ###
 tulipconnector:
   image:
-    repository: ghcr.io/united-manufacturing-hub/tulip-connector
+    repository: management.umh.app/oci/united-manufacturing-hub/tulip-connector
     pullPolicy: IfNotPresent
     # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
     tag: 0.1.0
@@ -1030,13 +1045,13 @@ tulipconnector:
 mqttkafkabridge:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge
+    repository: management.umh.app/oci/united-manufacturing-hub/mqtt-kafka-bridge
     pullPolicy: IfNotPresent
   pdb:
     enabled: true
     minAvailable: 1
   initContainer:
-    repository: ghcr.io/united-manufacturing-hub/kafka-init
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-init
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -1058,7 +1073,7 @@ mqttkafkabridge:
 kafkatoblob:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/kafka-to-blob
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-to-blob
     pullPolicy: IfNotPresent
   replicas: 1
   pdb:
@@ -1067,6 +1082,8 @@ kafkatoblob:
 
 ##### CONFIG FOR APACHE KAFKA #####
 redpanda:
+  image:
+    repository: management.umh.app/oci/redpandadata/redpanda
   serviceAccount:
     create: false
   fullnameOverride: united-manufacturing-hub-kafka
@@ -1109,6 +1126,8 @@ redpanda:
 
 ##### CONFIG FOR REDIS #####
 redis:
+  image:
+    registry: management.umh.app/oci
   architecture: standalone
   commonConfiguration: |-
     maxmemory-policy allkeys-lru
@@ -1131,6 +1150,8 @@ redis:
         memory: 50Mi
   metrics:
     enabled: true
+    image:
+      registry: management.umh.app/oci/
   pdb:
     create: true
     minAvailable: 2
@@ -1139,19 +1160,28 @@ redis:
   auth:
     existingSecret: redis-secret
     existingSecretPasswordKey: redispassword
+  sentinel:
+    image:
+      registry: management.umh.app/oci/
+  volumePermissions:
+    image:
+      registry: management.umh.app/oci/
+  sysctl:
+    image:
+      registry: management.umh.app/oci/
 
 ##### CONFIG FOR HIVEMQ CE
 ##### you can set a tag if you want a version other than 2023.7
 mqtt_broker:
   image:
-    repository: hivemq/hivemq-ce
+    repository: management.umh.app/oci/hivemq/hivemq-ce
     tag: 2023.7
     pullPolicy: IfNotPresent
   rbacEnabled: false
   initContainer:
     hivemqextensioninit:
       image:
-        repository: ghcr.io/united-manufacturing-hub/hivemq-init
+        repository: management.umh.app/oci/united-manufacturing-hub/hivemq-init
         tag: 3.0.0
         pullPolicy: IfNotPresent
   resources:
@@ -1207,7 +1237,7 @@ mqtt_broker:
 
 metrics:
   image:
-    repository: ghcr.io/united-manufacturing-hub/metrics
+    repository: management.umh.app/oci/united-manufacturing-hub/metrics
     pullPolicy: IfNotPresent
     #tag: latest
   cronJob:
@@ -1216,7 +1246,7 @@ metrics:
 databridge:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/databridge
+    repository: management.umh.app/oci/united-manufacturing-hub/databridge
     pullPolicy: IfNotPresent
   pdb:
     enabled: true
@@ -1235,7 +1265,7 @@ databridge:
 kafkatopostgresqlv2:
   enabled: false
   image:
-    repository: ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2
+    repository: management.umh.app/oci/united-manufacturing-hub/kafka-to-postgresql-v2
     pullPolicy: IfNotPresent
     # tag: latest
   replicas: 1
