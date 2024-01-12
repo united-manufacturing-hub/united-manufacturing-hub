@@ -147,6 +147,7 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (er
 		for k, v := range val {
 			fullKey := k
 			if prefix != "" {
+				// Handle duplicate tag groups
 				if strings.HasSuffix(prefix, k) {
 					fullKey = prefix
 				} else {
