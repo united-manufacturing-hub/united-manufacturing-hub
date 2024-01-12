@@ -7,7 +7,7 @@ type TopicDetails struct {
 	ProductionLine string
 	WorkCell       string
 	OriginId       string
-	Usecase        string
+	Schema         string
 	Tag            string
 }
 
