@@ -1607,7 +1607,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
@@ -1623,7 +1623,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 05a59f3890862fd716254efd50d6f52fe594fc772bc4acb1a994676de3457406
@@ -1654,7 +1654,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
@@ -1670,7 +1670,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 28d372ebe1a6937a33769bd66feab3b3769bc07fdb91c304523fa5a54552f349
@@ -1701,7 +1701,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
@@ -1717,7 +1717,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: ab808a918b02348e18553ec034fc0ba8fe888edf109c3b68ce3240e9855b026a
@@ -1748,7 +1748,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
@@ -1764,7 +1764,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 8c77fa2eb038d7efdeba73682eefee94d193b8976e0710a8bdf222bc2d2b91a6
@@ -1795,7 +1795,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
@@ -1811,7 +1811,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 043e070f02d07b180671cdae40bebb6843c577ab59fe0915f96f8ea0c8d98bc0
@@ -1842,7 +1842,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
@@ -1858,7 +1858,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 3a70fdcd0367169637e3c68bfbbf92a75bfcfca1c5f4a16545057c089882dcbb
@@ -1889,7 +1889,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -1901,7 +1901,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: c8f1a76b221014fd2961a5e40afb33996b4d913acdf9c85d4a6aaf7a56809fe1
@@ -1932,7 +1932,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -1944,7 +1944,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 7ffaf386e245a6b9443b6a720cbb738c2c592d5f283333f00b51cc9cb9a61657
@@ -1975,7 +1975,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -1987,7 +1987,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 9e1b17a156038fc85ceec838b3bc833d856da0ecc861d5811a21c70834cbc51a
@@ -2018,7 +2018,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2030,7 +2030,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: e84a3bbb89b529edc05ce7b1f5064cc26c9d3c74a27c88822381611a03421f3b
@@ -2061,7 +2061,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2073,7 +2073,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 2ba5b310d68d72ed8772bdc55402c1eec4ef9df43bcc288b9c4e4511bff9d61e
@@ -2104,7 +2104,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2116,7 +2116,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 3f1f2194317f73e2f5218774864d8ab12da12484e0cabc2b86182e9b944af614
@@ -2147,7 +2147,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2159,7 +2159,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 0304fb8577e2cd09e25911ba4439b5ef827e771d4b76eac476a7a94cea8e5659
@@ -2190,7 +2190,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2202,7 +2202,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: a04b90ffd33e8e030e1f9ecad41d6b22433310755ee409ba204bc4ac45b46ad9
@@ -2233,7 +2233,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2245,7 +2245,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 6ab964318d8d715922f94250045ec39c8af371a086f6853c5ac78cbd5453324f
@@ -2276,7 +2276,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2288,7 +2288,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: bba01d566e9b8315ca9054726fef3cbc89e4e013dd962c3117570218b633a27d
@@ -2319,7 +2319,7 @@ entries:
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2331,7 +2331,7 @@ entries:
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: 234a90b89aabc0e552aeb8b31011b2fec2b43796b5cffb89757c87554f8f6815
@@ -2362,7 +2362,7 @@ entries:
       version: 6.13.5
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://raw.githubusercontent.com/timescale/timescaledb-kubernetes/master/charts/repo/
+      repository: https://management.umh.app/helm/timescale
       version: 0.9.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
@@ -2374,7 +2374,7 @@ entries:
       version: 14.4.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
-      repository: https://raw.githubusercontent.com/cloudhut/charts/master/archives
+      repository: https://management.umh.app/helm/cloudhut
       version: 2.3.0
     description: A Helm chart for Kubernetes
     digest: a143dab63f8f31875766437d9b1f1ab461e1babac067386497a5b945ab17ade9

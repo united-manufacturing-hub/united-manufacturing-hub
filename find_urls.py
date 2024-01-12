@@ -15,7 +15,8 @@ def go_through_files_and_folders(start_path):
                 "find_urls.py",
                 "LICENSE",
                 "NOTICE",
-                "CODEOWNERS"
+                "CODEOWNERS",
+                "Dockerfile"
             ] and not file.endswith(".go") and not file.endswith(".md"):
                 f.append(os.path.join(root, file))
     return f
@@ -26,7 +27,13 @@ allowed_urls = [
     "https://www.umh.app",
     "http://www.apache.org/licenses/",
     "http://www.openssl.org",
-    "https://github.com/united-manufacturing-hub/united-manufacturing-hub"
+    "https://github.com/united-manufacturing-hub/united-manufacturing-hub",
+    "https://semver.org",
+    "http://example.net/pki/my_ca.crl",
+    "https://github.com/hivemq/hivemq-file-rbac-extension",
+    "http://www.w3.org/2001/XMLSchema-instance",
+    "https://wanderingdeveloper.medium.com/reusing-auto-generated-helm-secrets-a7426403d4bb",
+    "https://gist.github.com/fphilipe/0a2a3d50a9f3834683bf",
 ]
 
 def finder(file):
