@@ -107,7 +107,9 @@ func TestParseHistorianPayload(t *testing.T) {
 	var bV float32 = 1.0
 	testCases := []struct {
 		name     string
+		// input is the JSON payload to parse
 		input    []byte
+		// tag is the tag parsed from the topic, including eventual tag groups
 		tag      string
 		expected []sharedStructs.Value
 		wantErr  bool
@@ -218,9 +220,25 @@ func TestParseHistorianPayload(t *testing.T) {
 				"timestamp_ms": 12345,
 				"unsupportedValue": ["this", "is", "an", "array"]
 			}`),
-			tag: "tag6",
+			tag:      "tag6",
 			expected: []sharedStructs.Value{},
 			wantErr:  true,
+		},
+		{
+			name: "Duplicate tag group",
+			input: []byte(`{
+				"timestamp_ms": 12345,
+				"duplicateTag": "this is a string"
+			}`),
+			tag: "duplicateTag",
+			expected: []sharedStructs.Value{
+				{
+					Name:        "duplicateTag",
+					StringValue: &sV,
+					IsNumeric:   false,
+				},
+			},
+			wantErr: false,
 		},
 	}
 
