@@ -123,7 +123,7 @@ func TestParseHistorianPayload(t *testing.T) {
 			tag: "tag1",
 			expected: []sharedStructs.Value{
 				{
-					Name:        "tag1.stringValue",
+					Name:        "tag1$stringValue",
 					StringValue: &sV,
 					IsNumeric:   false,
 				},
@@ -139,7 +139,7 @@ func TestParseHistorianPayload(t *testing.T) {
 			tag: "tag2",
 			expected: []sharedStructs.Value{
 				{
-					Name:         "tag2.intValue",
+					Name:         "tag2$intValue",
 					NumericValue: &iV,
 					IsNumeric:    true,
 				},
@@ -155,7 +155,7 @@ func TestParseHistorianPayload(t *testing.T) {
 			tag: "tag3",
 			expected: []sharedStructs.Value{
 				{
-					Name:         "tag3.floatValue",
+					Name:         "tag3$floatValue",
 					NumericValue: &fV,
 					IsNumeric:    true,
 				},
@@ -171,7 +171,7 @@ func TestParseHistorianPayload(t *testing.T) {
 			tag: "tag4",
 			expected: []sharedStructs.Value{
 				{
-					Name:         "tag4.boolValue",
+					Name:         "tag4$boolValue",
 					NumericValue: &bV,
 					IsNumeric:    true,
 				},
@@ -192,22 +192,22 @@ func TestParseHistorianPayload(t *testing.T) {
 			tag: "tag5",
 			expected: []sharedStructs.Value{
 				{
-					Name:        "tag5.structValue.stringValue",
+					Name:        "tag5$structValue$stringValue",
 					StringValue: &sV,
 					IsNumeric:   false,
 				},
 				{
-					Name:         "tag5.structValue.intValue",
+					Name:         "tag5$structValue$intValue",
 					NumericValue: &iV,
 					IsNumeric:    true,
 				},
 				{
-					Name:         "tag5.structValue.floatValue",
+					Name:         "tag5$structValue$floatValue",
 					NumericValue: &fV,
 					IsNumeric:    true,
 				},
 				{
-					Name:         "tag5.structValue.boolValue",
+					Name:         "tag5$structValue$boolValue",
 					NumericValue: &bV,
 					IsNumeric:    true,
 				},

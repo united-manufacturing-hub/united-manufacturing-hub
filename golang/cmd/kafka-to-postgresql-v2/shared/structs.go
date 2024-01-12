@@ -1,5 +1,8 @@
 package shared
 
+const (
+	DbTagSeparator = "$"
+)
 type TopicDetails struct {
 	Enterprise     string
 	Site           string

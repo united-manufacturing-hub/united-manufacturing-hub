@@ -124,6 +124,9 @@ func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.Value, int
 		delete(message, "timestamp_ms")
 	}
 
+	// Replace separators in the tag with $
+	tag = strings.ReplaceAll(tag, ".", sharedStructs.DbTagSeparator)
+
 	// Recursively parse the remaining fields
 	err = parseValue(tag, message, &values)
 
@@ -147,7 +150,7 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (er
 				if strings.HasSuffix(prefix, k) {
 					fullKey = prefix
 				} else {
-					fullKey = prefix + "." + k
+					fullKey = prefix + sharedStructs.DbTagSeparator + k
 				}
 			}
 			err = parseValue(fullKey, v, values)
