@@ -72,7 +72,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 
 		switch topic.Schema {
 		case "historian":
-			payload, timestampMs, err := parseHistorianPayload(msg.Value)
+			payload, timestampMs, err := parseHistorianPayload(msg.Value, topic.Tag)
 			if err != nil {
 				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
 				k.MarkMessage(msg)
@@ -98,7 +98,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 	}
 }
 
-func parseHistorianPayload(value []byte) ([]sharedStructs.Value, int64, error) {
+func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.Value, int64, error) {
 	// Attempt to JSON decode the message
 	var message map[string]interface{}
 	err := json.Unmarshal(value, &message)
@@ -111,7 +111,6 @@ func parseHistorianPayload(value []byte) ([]sharedStructs.Value, int64, error) {
 	}
 	var timestampMs int64
 	var values = make([]sharedStructs.Value, 0)
-	var vFound bool
 
 	// Extract and remove the timestamp_ms field
 	if ts, ok := message["timestamp_ms"]; !ok {
@@ -125,11 +124,7 @@ func parseHistorianPayload(value []byte) ([]sharedStructs.Value, int64, error) {
 	}
 
 	// Recursively parse the remaining fields
-	parseValue("", message, &values)
-
-	if !vFound {
-		return nil, 0, fmt.Errorf("message does not contain any value: %+v", message)
-	}
+	parseValue(tag, message, &values)
 
 	return values, timestampMs, nil
 }
