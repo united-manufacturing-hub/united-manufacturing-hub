@@ -110,6 +110,7 @@ func TestParseHistorianPayload(t *testing.T) {
 		input    []byte
 		tag      string
 		expected []sharedStructs.Value
+		wantErr  bool
 	}{
 		{
 			name: "String value",
@@ -125,6 +126,7 @@ func TestParseHistorianPayload(t *testing.T) {
 					IsNumeric:   false,
 				},
 			},
+			wantErr: false,
 		},
 		{
 			name: "Int value",
@@ -140,6 +142,7 @@ func TestParseHistorianPayload(t *testing.T) {
 					IsNumeric:    true,
 				},
 			},
+			wantErr: false,
 		},
 		{
 			name: "Float value",
@@ -155,6 +158,7 @@ func TestParseHistorianPayload(t *testing.T) {
 					IsNumeric:    true,
 				},
 			},
+			wantErr: false,
 		},
 		{
 			name: "Bool value",
@@ -170,6 +174,7 @@ func TestParseHistorianPayload(t *testing.T) {
 					IsNumeric:    true,
 				},
 			},
+			wantErr: false,
 		},
 		{
 			name: "Nested struct value",
@@ -205,14 +210,25 @@ func TestParseHistorianPayload(t *testing.T) {
 					IsNumeric:    true,
 				},
 			},
+			wantErr: false,
+		},
+		{
+			name: "Unsupported type",
+			input: []byte(`{
+				"timestamp_ms": 12345,
+				"unsupportedValue": ["this", "is", "an", "array"]
+			}`),
+			tag: "tag6",
+			expected: []sharedStructs.Value{},
+			wantErr:  true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			values, timestampMs, err := parseHistorianPayload(tc.input, tc.tag)
-			assert.NoError(t, err, "unexpected error")
-			assert.Equal(t, tc.expected, values, "unexpected values. want %+v, got %+v", tc.expected, values)
+			assert.Equal(t, tc.wantErr, err != nil, "unexpected error. want %v, got %v", tc.wantErr, err)
+			assert.ElementsMatch(t, tc.expected, values, "unexpected values. want %+v, got %+v", tc.expected, values)
 			assert.Equal(t, int64(12345), timestampMs, "unexpected timestamp. want %d, got %d", 12345, timestampMs)
 		})
 	}

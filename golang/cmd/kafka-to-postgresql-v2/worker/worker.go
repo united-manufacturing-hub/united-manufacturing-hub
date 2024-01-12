@@ -125,9 +125,9 @@ func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.Value, int
 	}
 
 	// Recursively parse the remaining fields
-	parseValue(tag, message, &values)
+	err = parseValue(tag, message, &values)
 
-	return values, timestampMs, nil
+	return values, timestampMs, err
 }
 
 func parseInt(v interface{}) (int64, error) {
@@ -138,7 +138,7 @@ func parseInt(v interface{}) (int64, error) {
 	return int64(timestamp), nil
 }
 
-func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) {
+func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (err error) {
 	switch val := v.(type) {
 	case map[string]interface{}:
 		for k, v := range val {
@@ -150,7 +150,7 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) {
 					fullKey = prefix + "." + k
 				}
 			}
-			parseValue(fullKey, v, values)
+			err = parseValue(fullKey, v, values)
 		}
 	case float64:
 		f := float32(val)
@@ -188,6 +188,7 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) {
 			IsNumeric:    true,
 		})
 	default:
-		zap.S().Warnf("Unsupported type %T (%v) for tag %s", val, val, prefix)
+		return fmt.Errorf("unsupported type %T (%v) for tag %s", val, val, prefix)
 	}
+	return err
 }
