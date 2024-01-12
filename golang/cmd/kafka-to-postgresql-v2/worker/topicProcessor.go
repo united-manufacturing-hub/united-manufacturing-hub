@@ -2,32 +2,24 @@ package worker
 
 import (
 	"errors"
-	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
-	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"regexp"
 	"strings"
+
+	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 )
 
-// Test this regex at https://regex101.com/r/VQAUvY/1
-var topicRegex = regexp.MustCompile(`^umh\.v1\.(?P<enterprise>[\w-_]+)\.((?P<site>[\w-_]+)\.)?((?P<area>[\w-_]+)\.)?((?P<productionLine>[\w-_]+)\.)?((?P<workCell>[\w-_]+)\.)?((?P<originId>[\w-_]+)\.)?_(?P<usecase>(historian)|(analytics))(\.(?P<tag>[\w-_]+))?$`)
+// Test this regex at https://regex101.com/r/VQAUvY/4
+var topicRegex = regexp.MustCompile(`^umh\.v1\.(?P<enterprise>[\w-_]+)\.((?P<site>[\w-_]+)\.)?((?P<area>[\w-_]+)\.)?((?P<productionLine>[\w-_]+)\.)?((?P<workCell>[\w-_]+)\.)?((?P<originId>[\w-_]+)\.)?_(?P<usecase>(historian)|(analytics))\.(?P<tag>(?:[\w-_.]+\w)+)$`)
 
 func recreateTopic(msg *shared.KafkaMessage) (*sharedStructs.TopicDetails, error) {
 	topic := strings.Builder{}
-	topic.WriteString(msg.Topic)
+	// Trim leading and trailing dots from the topic
+	topic.WriteString(strings.Trim(msg.Topic, "."))
 	if len(msg.Key) > 0 {
-		key := string(msg.Key)
-		topicHasDot := strings.HasSuffix(msg.Topic, ".")
-		keyHasDot := strings.HasPrefix(key, ".")
-		if topicHasDot && keyHasDot {
-			// Topic ends with dot and string has dot prefix
-			topic.WriteString(key[1:])
-		} else if (topicHasDot && !keyHasDot) || (!topicHasDot && keyHasDot) {
-			// Topic ends with dot and string has no dot
-			topic.WriteString(key)
-		} else if !topicHasDot && !keyHasDot {
-			topic.WriteRune('.')
-			topic.WriteString(key)
-		}
+		topic.WriteRune('.')
+		// Trim leading and trailing dots from the key
+		topic.WriteString(strings.Trim(string(msg.Key), "."))
 	}
 
 	matches := topicRegex.FindStringSubmatch(topic.String())
@@ -43,7 +35,7 @@ func recreateTopic(msg *shared.KafkaMessage) (*sharedStructs.TopicDetails, error
 		ProductionLine: getMatch(matches, "productionLine"),
 		WorkCell:       getMatch(matches, "workCell"),
 		OriginId:       getMatch(matches, "originId"),
-		Usecase:        getMatch(matches, "usecase"),
+		Schema:         getMatch(matches, "usecase"),
 		Tag:            getMatch(matches, "tag"),
 	}, nil
 }
