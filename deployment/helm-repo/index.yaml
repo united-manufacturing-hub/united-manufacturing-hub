@@ -7,31 +7,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: b8f63ad411cf385208b14b748c850498e0a2e930eadec7e680fb197ee8a909f0
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.34.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.34.tgz
     version: 0.9.34
   - apiVersion: v2
     appVersion: 0.9.33
@@ -39,31 +39,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: e5f01bb478f8241fd1d72bf1545a3d542012348f0af2b6f4822f769de7f726a9
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.33.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.33.tgz
     version: 0.9.33
   - apiVersion: v2
     appVersion: 0.9.32
@@ -71,31 +71,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 20f84f0b53f94c13fa0176df14203407236dc865eb9d9b90b06e1109c6408e01
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.32.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.32.tgz
     version: 0.9.32
   - apiVersion: v2
     appVersion: 0.9.31
@@ -103,31 +103,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 578df30ea004ad0d7292a36b005da294f407f7a4c99e5d8d7056b39dfe01a409
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.31.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.31.tgz
     version: 0.9.31
   - apiVersion: v2
     appVersion: 0.9.30
@@ -135,31 +135,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: b2899b129abc2b99b1355ee0e7ba923993b4d0f389d05fdb0e7f7522ace882f5
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.30.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.30.tgz
     version: 0.9.30
   - apiVersion: v2
     appVersion: 0.9.29
@@ -167,31 +167,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: e563e7cc12052c173515e94cd65d3ec8b95a14084fa97f69287e6c0fceeb70cf
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.29.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.29.tgz
     version: 0.9.29
   - apiVersion: v2
     appVersion: 0.9.28
@@ -199,31 +199,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 3fa725caeb47f2f9fe585dd00907d3fdf363bef801ae5c6b7843b8f900e34c4b
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.28.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.28.tgz
     version: 0.9.28
   - apiVersion: v2
     appVersion: 0.9.27
@@ -231,31 +231,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 5291481310a91a2e0e372c4daa49efb09e6254dd6100516d51c8dc353eca8129
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.27.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.27.tgz
     version: 0.9.27
   - apiVersion: v2
     appVersion: 0.9.26
@@ -263,31 +263,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 0cc1c09afc3dfe39a3e9d97fd2e188a5e764160be85f38a83605de9f15834694
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.26.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.26.tgz
     version: 0.9.26
   - apiVersion: v2
     appVersion: 0.9.25
@@ -295,31 +295,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 0f3b68ed69128c6bff0fc08add50d606bc9bfebb9b8595db1b58938d21578785
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.25.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.25.tgz
     version: 0.9.25
   - apiVersion: v2
     appVersion: 0.9.24
@@ -327,31 +327,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 9f47dca4317c94d9dcb80d788b32964e2cae00779813a822dd527bb358e8a301
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.24.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.24.tgz
     version: 0.9.24
   - apiVersion: v2
     appVersion: 0.9.23
@@ -359,31 +359,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: d953ac5e5b2134039085fba47825b3006bbf9a72172934cba00d5783e4dae70d
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.23.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.23.tgz
     version: 0.9.23
   - apiVersion: v2
     appVersion: 0.9.22
@@ -391,31 +391,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: c679492fe1bedb80d19fafc7dfbfb4add117f5d0e3eff2f1596a5e281ae788f2
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.22.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.22.tgz
     version: 0.9.22
   - apiVersion: v2
     appVersion: 0.9.21
@@ -423,31 +423,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 579235505e96b7a8b157a8c9dd1310971a0ab8b811504768d4685f12efb64bea
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.21.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.21.tgz
     version: 0.9.21
   - apiVersion: v2
     appVersion: 0.9.20
@@ -455,31 +455,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 6980722da0b7507e520d6e4f53b9bfb14994fc4812e9ec97d740db4870063b09
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.20.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.20.tgz
     version: 0.9.20
   - apiVersion: v2
     appVersion: 0.9.16
@@ -487,31 +487,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 490962f469fe143ef932afc3aabad752398efe854f486461a8a3b7a22090e64f
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.18.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.18.tgz
     version: 0.9.18
   - apiVersion: v2
     appVersion: 0.9.16
@@ -519,31 +519,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: ae9a4f21841e02d76973d170081ab4547cee29cb5db996f2c2aeae825ac7069c
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.16.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.16.tgz
     version: 0.9.16
   - apiVersion: v2
     appVersion: 0.9.16-prerelease91
@@ -551,25 +551,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 5ef4a0dbee1f7fba34420f9d4767fa6c70612b34be0cdfb0510249fe342f7e30
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -583,25 +583,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 315a8aa49df97bad201f69d5e75c114362f162400f00723732a188ada39b0799
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -615,25 +615,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: a83b6946759dc41117cbd5f9a8ffc6b13d9fa40daa38c35485baa8dfe34bcc1a
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -647,25 +647,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 46d37dfa2fd011d98b4777f7a8dbf32a374cd9ddb96f6ab21a47ae1bb6075799
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -679,25 +679,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 4ca45205de10d851cee0d10222b5b765a6a9c9066ed9e8b076a2674e59609b34
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -711,25 +711,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: c48dfb2b7d2f4fe3aef9ccbcd8b1d9a041186a17e0256ae2979e2665443828aa
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -743,25 +743,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 644ef3c959fd97c8cceda5797e602120dc31d569a5238549c2eb2143382a46ff
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -775,25 +775,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 9f949fa1f36c58043c9901824aebbff0867ad9d92b08418e69906fddd8a5e042
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -807,25 +807,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 0ceb3d1faaf896b4826a8f40f7c75831f2100a2298bb202424fbde977487f08f
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -839,25 +839,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 6be7d42bb2b09b0fafcd57abd6f0d38c337fecd60a2ee3afbb3e30a71f2bd7f8
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -871,25 +871,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 86cde741a26237946bc4d30d63a3364b9a6aa9dd5de05463d02c0bb887420e39
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -903,25 +903,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 38cb64a9999a0c97e147796c4dd0facfb48cf2d601645d208b523a6ee7f612ba
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -935,25 +935,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 36452e9149d8059ecdd559151fe8e542f2308ddc28570a133fd4151044e6766f
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -967,25 +967,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: fc6b66d61187283e90a28727a75f353a2fd6e51c535538bda9e51edac7c57831
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -999,25 +999,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 82c37ed14e45e3d286dfe4de52f5a1097fbc702bf12c027c953e1f3fade39dd9
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -1031,25 +1031,25 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: a47a95e3f800bc435f9e82c83c354680df1a00ee4ce08485fd76c454c25bd8ea
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -1063,31 +1063,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 2462a4a924c954da32bd8d09690cd1dcae7911f2a1d63f97a623d7610de17c0f
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15.tgz
     version: 0.9.15
   - apiVersion: v2
     appVersion: 0.9.15-prerelease6
@@ -1095,31 +1095,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 5453a1e5cafe3d6e073f99bc3067b484d507aac9c31b982a0289b9fdc0e07fa4
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease6.tgz
     version: 0.9.15-prerelease6
   - apiVersion: v2
     appVersion: 0.9.15-prerelease5
@@ -1127,31 +1127,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: e90e616dcefdf20289c0861bd39dd401183f342387c07f6449e47f23e3d83dbe
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease5.tgz
     version: 0.9.15-prerelease5
   - apiVersion: v2
     appVersion: 0.9.15-prerelease4
@@ -1159,31 +1159,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 67d651d2db03f6e273559db0d0733c0cdc8a93e981d985cc473f97373a4a217f
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease4.tgz
     version: 0.9.15-prerelease4
   - apiVersion: v2
     appVersion: 0.9.15-prerelease3
@@ -1191,31 +1191,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 6cc7ca407a44f2799af2e83706671c4b6ab5628a2b782b2644bb50254c3157ee
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease3.tgz
     version: 0.9.15-prerelease3
   - apiVersion: v2
     appVersion: 0.9.15-prerelease2
@@ -1223,31 +1223,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 55b4dca9b1ed5847dc252d494b0ea8b6b4e2d8fe9e50ce54600d0996cc182d3b
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease2.tgz
     version: 0.9.15-prerelease2
   - apiVersion: v2
     appVersion: 0.9.15-prerelease1
@@ -1255,31 +1255,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 5.3.4
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: eb0af47d1936ee6481c7205fb5ec946d0560916088a70c3c3b2d4fe2f6dba964
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease1.tgz
     version: 0.9.15-prerelease1
   - apiVersion: v2
     appVersion: 0.9.14
@@ -1287,31 +1287,31 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: redpanda
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 3.0.9
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 2702f7dbb487fbb7346b4c156a936a69db12f6d12691bf1f23cdfb9b8cfbeb7a
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.14.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.14.tgz
     version: 0.9.14
   - apiVersion: v2
     appVersion: 0.9.13
@@ -1319,35 +1319,35 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.5.6
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 6a020b6ec4a8715f3c24d071be166166ebf29c613cd477b62c6918e4d1401677
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.13.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.13.tgz
     version: 0.9.13
   - apiVersion: v2
     appVersion: 0.9.12
@@ -1355,35 +1355,35 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.5.6
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: a31ff5536ca136536d23d2c22c2a6e44bb13f397e11f8451122063992c5a9342
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.12.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.12.tgz
     version: 0.9.12
   - apiVersion: v2
     appVersion: 0.9.12-prerelease2
@@ -1391,35 +1391,35 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.5.6
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: c61947c5149b3cb04bf6696c0ceb06602d99f41f87e72530f1c5573b161535ba
     home: https://0-9-12-prerelease2.united-manufacturing-hub.pages.dev
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.12-prerelease2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.12-prerelease2.tgz
     version: 0.9.12-prerelease2
   - apiVersion: v2
     appVersion: 0.9.12-prerelease1
@@ -1427,29 +1427,29 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.9.0
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.52.4
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.26.9
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://charts.redpanda.com/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.5.6
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 5158756dfd0fa1fa548d88a053b991cecb86fd47e07adab06fbb5cfa6ca6cd84
     home: https://v0-9-12-prerelease1.united-manufacturing-hub.pages.dev
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -1463,43 +1463,43 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.3.17
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.49.0
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.5.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.5.0
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://dl.redpanda.com/public/console/helm/charts/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.3.1
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 9164c269a717e39bf4155e3d524e4a9e148fc4f66fe132025ddcaa30db0637aa
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.11.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.11.tgz
     version: 0.9.11
   - apiVersion: v2
     appVersion: 0.9.10
@@ -1507,43 +1507,43 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.3.17
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.49.0
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.5.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.5.0
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://dl.redpanda.com/public/console/helm/charts/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.3.1
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: 5e9d30967535a81cf51b9a3a0263bf8c9b3dd880d1c7e31f00c8dbbe0c7b0f51
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.10.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.10.tgz
     version: 0.9.10
   - apiVersion: v2
     appVersion: 0.9.10-hf1
@@ -1551,43 +1551,43 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.3.17
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.49.0
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
-      repository: https://charts.timescale.com/
+      repository: https://management.umh.app/helm/timescale
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.5.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.5.0
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 20.0.2
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: console
-      repository: https://dl.redpanda.com/public/console/helm/charts/
+      repository: https://management.umh.app/helm/redpanda
       version: 0.3.1
     description: Transform manufacturing with UMH Systems united-manufacturing-hub
       Helm chart, simplifying access to powerful technology for engineers.
     digest: c3947170a8b69099b9eb45ae573a2b4dee9ccf4b3f046b9f4e455b327f783f37
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.10-hf1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.10-hf1.tgz
     version: 0.9.10-hf1
   - apiVersion: v2
     appVersion: 0.9.9
@@ -1595,15 +1595,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.1.7
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1611,15 +1611,15 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1628,13 +1628,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 05a59f3890862fd716254efd50d6f52fe594fc772bc4acb1a994676de3457406
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.9.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.9.tgz
     version: 0.9.9
   - apiVersion: v2
     appVersion: 0.9.8
@@ -1642,15 +1642,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.1.7
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1658,15 +1658,15 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1675,13 +1675,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 28d372ebe1a6937a33769bd66feab3b3769bc07fdb91c304523fa5a54552f349
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.8.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.8.tgz
     version: 0.9.8
   - apiVersion: v2
     appVersion: 0.9.7
@@ -1689,15 +1689,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.1.7
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1705,15 +1705,15 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1722,13 +1722,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: ab808a918b02348e18553ec034fc0ba8fe888edf109c3b68ce3240e9855b026a
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.7.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.7.tgz
     version: 0.9.7
   - apiVersion: v2
     appVersion: 0.9.6
@@ -1736,15 +1736,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 17.1.7
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1752,15 +1752,15 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1769,13 +1769,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 8c77fa2eb038d7efdeba73682eefee94d193b8976e0710a8bdf222bc2d2b91a6
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.6.tgz
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.5
@@ -1783,15 +1783,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1799,15 +1799,15 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1816,13 +1816,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 043e070f02d07b180671cdae40bebb6843c577ab59fe0915f96f8ea0c8d98bc0
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.5.tgz
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.4
@@ -1830,15 +1830,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1846,15 +1846,15 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.blobstorage.enabled
       name: tenant
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.4.17
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1863,13 +1863,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 3a70fdcd0367169637e3c68bfbbf92a75bfcfca1c5f4a16545057c089882dcbb
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.4.tgz
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.3
@@ -1877,15 +1877,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1893,11 +1893,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1906,13 +1906,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: c8f1a76b221014fd2961a5e40afb33996b4d913acdf9c85d4a6aaf7a56809fe1
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.3.tgz
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.2
@@ -1920,15 +1920,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1936,11 +1936,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1949,13 +1949,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 7ffaf386e245a6b9443b6a720cbb738c2c592d5f283333f00b51cc9cb9a61657
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.2.tgz
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
@@ -1963,15 +1963,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -1979,11 +1979,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -1992,13 +1992,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 9e1b17a156038fc85ceec838b3bc833d856da0ecc861d5811a21c70834cbc51a
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.1.tgz
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
@@ -2006,15 +2006,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2022,11 +2022,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2035,13 +2035,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: e84a3bbb89b529edc05ce7b1f5064cc26c9d3c74a27c88822381611a03421f3b
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.0.tgz
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.7
@@ -2049,15 +2049,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2065,11 +2065,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2078,13 +2078,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 2ba5b310d68d72ed8772bdc55402c1eec4ef9df43bcc288b9c4e4511bff9d61e
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.7.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.7.tgz
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
@@ -2092,15 +2092,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2108,11 +2108,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2121,13 +2121,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 3f1f2194317f73e2f5218774864d8ab12da12484e0cabc2b86182e9b944af614
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.6.tgz
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
@@ -2135,15 +2135,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2151,11 +2151,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2164,13 +2164,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 0304fb8577e2cd09e25911ba4439b5ef827e771d4b76eac476a7a94cea8e5659
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.5.tgz
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
@@ -2178,15 +2178,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2194,11 +2194,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2207,13 +2207,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: a04b90ffd33e8e030e1f9ecad41d6b22433310755ee409ba204bc4ac45b46ad9
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.4.tgz
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
@@ -2221,15 +2221,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2237,11 +2237,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2250,13 +2250,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 6ab964318d8d715922f94250045ec39c8af371a086f6853c5ac78cbd5453324f
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.3.tgz
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
@@ -2264,15 +2264,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2280,11 +2280,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2293,13 +2293,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: bba01d566e9b8315ca9054726fef3cbc89e4e013dd962c3117570218b633a27d
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.2.tgz
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
@@ -2307,15 +2307,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 16.2.0
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.12-1
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.21.1
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2323,11 +2323,11 @@ entries:
       version: 0.10.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.3.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 15.0.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2336,13 +2336,13 @@ entries:
     description: A Helm chart for Kubernetes
     digest: 234a90b89aabc0e552aeb8b31011b2fec2b43796b5cffb89757c87554f8f6815
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.1.tgz
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
@@ -2350,15 +2350,15 @@ entries:
     dependencies:
     - condition: _000_commonConfig.datastorage.enabled
       name: redis
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 12.7.3
     - condition: _000_commonConfig.infrastructure.mqtt.enabled
       name: vernemq
-      repository: https://vernemq.github.io/docker-vernemq
+      repository: https://management.umh.app/helm/vernemq
       version: 1.6.7
     - condition: _000_commonConfig.datastorage.enabled
       name: grafana
-      repository: https://grafana.github.io/helm-charts
+      repository: https://management.umh.app/helm/grafana
       version: 6.13.5
     - condition: _000_commonConfig.datastorage.enabled
       name: timescaledb-single
@@ -2366,11 +2366,11 @@ entries:
       version: 0.9.0
     - condition: _000_commonConfig.blobstorage.enabled
       name: minio-operator
-      repository: https://operator.min.io/
+      repository: https://management.umh.app/helm/minio
       version: 4.1.7
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kafka
-      repository: https://charts.bitnami.com/bitnami
+      repository: https://management.umh.app/helm/bitnami
       version: 14.4.1
     - condition: _000_commonConfig.infrastructure.kafka.enabled
       name: kowl
@@ -2379,12 +2379,12 @@ entries:
     description: A Helm chart for Kubernetes
     digest: a143dab63f8f31875766437d9b1f1ab461e1babac067386497a5b945ab17ade9
     home: https://www.umh.app
-    icon: https://avatars.githubusercontent.com/u/77492553
+    icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
     name: united-manufacturing-hub
     sources:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
 generated: "2023-11-29T15:25:07.099695778Z"
