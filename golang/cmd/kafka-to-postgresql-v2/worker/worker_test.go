@@ -106,9 +106,9 @@ func TestParseHistorianPayload(t *testing.T) {
 	var fV float32 = 1.5
 	var bV float32 = 1.0
 	testCases := []struct {
-		name     string
+		name string
 		// input is the JSON payload to parse
-		input    []byte
+		input []byte
 		// tag is the tag parsed from the topic, including eventual tag groups
 		tag      string
 		expected []sharedStructs.Value
@@ -256,6 +256,15 @@ func TestParseHistorianPayload(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "Invalid JSON",
+			input: []byte(`{
+				"timestamp_ms": 12345,
+			}`),
+			tag:      "tag7",
+			expected: []sharedStructs.Value{},
+			wantErr:  true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -263,7 +272,9 @@ func TestParseHistorianPayload(t *testing.T) {
 			values, timestampMs, err := parseHistorianPayload(tc.input, tc.tag)
 			assert.Equal(t, tc.wantErr, err != nil, "unexpected error. want %v, got %v", tc.wantErr, err)
 			assert.ElementsMatch(t, tc.expected, values, "unexpected values. want %+v, got %+v", tc.expected, values)
-			assert.Equal(t, int64(12345), timestampMs, "unexpected timestamp. want %d, got %d", 12345, timestampMs)
+			if !tc.wantErr {
+				assert.Equal(t, int64(12345), timestampMs, "unexpected timestamp. want %d, got %d", 12345, timestampMs)
+			}
 		})
 	}
 }
