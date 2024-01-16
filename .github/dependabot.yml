@@ -43,13 +43,6 @@ updates:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/factoryinput
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
 
   - directory: /deployment/factoryinsight
     labels:
