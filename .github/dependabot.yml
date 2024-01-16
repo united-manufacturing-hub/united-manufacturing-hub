@@ -52,13 +52,6 @@ updates:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/grafana-proxy
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
 
   - directory: /deployment/kafka-debug
     labels:

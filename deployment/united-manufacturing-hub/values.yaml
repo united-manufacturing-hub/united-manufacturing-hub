@@ -151,9 +151,6 @@ _000_commonConfig:
     enabled: true
     db_password: "changeme"
 
-  # factoryinput, grafanaproxy
-  datainput:
-    enabled: false
 
   # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
   mqttBridge:
@@ -666,27 +663,6 @@ factoryinsight:
   insecure_no_auth: false # DO NOT ENABLE IN PRODUCTION. This will disable authentication and authorization
 
 
-### grafanaproxy ###
-grafanaproxy:
-  enabled: false
-  image:
-    repository: ghcr.io/united-manufacturing-hub/grafana-proxy
-    pullPolicy: IfNotPresent
-  replicas: 1
-  service:
-    annotations: {}
-    type: LoadBalancer
-    port: 2096
-    targetPort: 80
-    protocol: TCP
-    labels: {}
-    portName: service
-    name: http
-  resources:
-    limits:
-      cpu: 300m
-    requests:
-      cpu: 100m
 
 ### kafka-to-postgresql ###
 kafkatopostgresql:
