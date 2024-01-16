@@ -152,16 +152,6 @@ _000_commonConfig:
     db_password: "changeme"
 
 
-  # mqttBridge allows connecting multiple United Manufacturing Hub clusters, e.g., the installations on the edge with the central cloud
-  mqttBridge:
-    enabled: false
-    localSubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
-    oneWay: true
-    localPubTopic: "ia"
-    remoteBrokerURL: "ssl://united-manufacturing-hub-hivemq-ce-local-service.united-manufacturing-hub:8883"
-    remoteBrokerSSLEnabled: true
-    remoteSubTopic: "ia"
-    remotePubTopic: "ia/factoryinsight"  # /# will be automatically appended to the string specified here.
 
 
   kafkaBridge:
@@ -266,21 +256,6 @@ kafkastatedetector:
   activityEnabled: true
   anomalyEnabled: true
 
-### mqttbridge ###
-mqttbridge:
-  enabled: false
-  image: ghcr.io/united-manufacturing-hub/mqtt-bridge
-  storageRequest: 1Gi
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "20Mi"
-    limits:
-      cpu: "200m"
-      memory: "100Mi"
-  mqtt:
-    password: INSECURE_INSECURE_INSECURE
-    encryptedPassword: M21tR09vUkI3NTBSUlJWOHdRQUV2R3VCbUJEeGw3WDY=:100:GguBx5OY0JHD0IQhCoVgzf0/cx2dPDbHcC4NXu2fEnu0Oz2Ii2afammPZBd0y0M0Q46Gyf/z/c4lKd5qQ8Oo3Q==
 
 ### barcodereader ###
 barcodereader:
