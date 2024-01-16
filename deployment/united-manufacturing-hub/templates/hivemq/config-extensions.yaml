@@ -36,13 +36,6 @@ data:
                 </roles>
             </user>
             <user>
-                <name>MQTT_BRIDGE</name>
-                <password>{{.Values.mqttbridge.mqtt.encryptedPassword}}</password>
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
                 <name>SENSORCONNECT</name>
                 <password>{{.Values.sensorconnect.mqtt.encryptedPassword}}</password>
                 <roles>
