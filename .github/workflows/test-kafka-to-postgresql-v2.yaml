@@ -4,7 +4,12 @@ on:
   push:
     branches:
       - main
-      - feat/987/new_kafka_to_postgresql
+      - staging
+  pull_request:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
