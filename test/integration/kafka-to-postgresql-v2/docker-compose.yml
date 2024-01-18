@@ -69,10 +69,12 @@ services:
       - redpanda
     networks:
       - k2pv2_network
+    restart: unless-stopped
 
 volumes:
   redpanda: null
 
 networks:
   k2pv2_network:
+    name: k2pv2_network
     driver: bridge
