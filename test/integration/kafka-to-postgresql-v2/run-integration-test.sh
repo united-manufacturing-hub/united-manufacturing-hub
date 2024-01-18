@@ -21,11 +21,11 @@ echo "Querying the database..."
 
 ## Check if the number of assets is correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM asset;" |
-    grep -q -E "^\s*1$" || exit 1
+    grep -q -E "^\s*1$" || echo "Number of assets is incorrect" && exit 1
 
 ## Check if the number of tags is correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag;" |
-    grep -q -E "^\s*4$" || exit 1
+    grep -q -E "^\s*4$" || echo "Number of tags is incorrect" && exit 1
 
 ## Check if the tag names and their values are correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag ORDER BY name;" >/tmp/tag_values.txt
@@ -37,7 +37,7 @@ grep -Fxq " pos\$x |     1 " /tmp/tag_values.txt &&
 
 ## Check if the number of tag_string is correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag_string;" |
-    grep -q -E "^\s*1$" || exit 1
+    grep -q -E "^\s*1$" || echo "Number of tag_string is incorrect" && exit 1
 
 ## Check if the tag_string names and their values are correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag_string;" >/tmp/tag_string_values.txt
