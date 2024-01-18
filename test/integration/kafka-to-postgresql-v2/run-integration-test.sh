@@ -53,13 +53,13 @@ check_count "asset" 1
 check_count "tag" 4
 
 # Check if the tag names and their values are correct
-check_values "tag" "pos\$x, 1
-pos\$y, 2
-pos\$z, 3
-value, 1"
+check_values "tag" "head\$pos\$x, 1
+head\$pos\$y, 2
+head\$pos\$z, 3
+head\$value, 1"
 
 # Check if the number of tag_string is correct
 check_count "tag_string" 1
 
 # Check if the tag_string names and their values are correct
-check_values "tag_string" "stringValue, hello"
+check_values "tag_string" "head\$stringValue, hello"
