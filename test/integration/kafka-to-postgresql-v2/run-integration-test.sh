@@ -6,6 +6,7 @@ echo '{"timestamp_ms": 845980440000, "value": 1}
 {"timestamp_ms": 845980440000, "pos": {"x": 1, "y": 2, "z": 3}}
 {"timestamp_ms": 845980440000, "stringValue": "hello"}
 ' >/tmp/messages.txt
+cat /tmp/messages.txt
 docker run -t --rm --network=k2pv2_network \
     --mount type=bind,source=/tmp/messages.txt,target=/messages.txt,readonly \
     confluentinc/cp-kafkacat:7.0.13 \
@@ -22,6 +23,7 @@ echo "Querying the database..."
 if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM asset;" |
     grep -q -E "^\s*1$"; then
     echo "Number of assets is incorrect"
+    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM asset;"
     exit 1
 fi
 
@@ -29,6 +31,7 @@ fi
 if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag;" |
     grep -q -E "^\s*4$"; then
     echo "Number of tags is incorrect"
+    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag;"
     exit 1
 fi
 
@@ -39,6 +42,7 @@ if ! grep -Fxq " pos\$x |     1 " /tmp/tag_values.txt &&
     grep -Fxq " pos\$z |     3 " /tmp/tag_values.txt &&
     grep -Fxq " value |     1" /tmp/tag_values.txt; then
     echo "One or more lines are missing"
+    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag;"
     exit 1
 fi
 
@@ -46,6 +50,7 @@ fi
 if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag_string;" |
     grep -q -E "^\s*1$"; then
     echo "Number of tag_string is incorrect"
+    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag_string;"
     exit 1
 fi
 
@@ -53,5 +58,6 @@ fi
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag_string;" >/tmp/tag_string_values.txt
 if ! grep -Fxq " stringValue | hello " /tmp/tag_string_values.txt; then
     echo "One or more lines are missing"
+    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag_string;"
     exit 1
 fi
