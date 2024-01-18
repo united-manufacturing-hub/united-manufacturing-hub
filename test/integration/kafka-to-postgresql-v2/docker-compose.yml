@@ -2,6 +2,7 @@ version: "3.8"
 services:
   timescaledb:
     image: timescale/timescaledb:2.8.1-pg14
+    container_name: timescaledb
     environment:
       POSTGRES_PASSWORD: yourpassword
     ports:
@@ -11,6 +12,7 @@ services:
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.8
+    container_name: redpanda
     command:
       - redpanda start
       - --smp 1
