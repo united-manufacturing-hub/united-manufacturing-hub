@@ -14,10 +14,12 @@ check_count() {
 }
 
 # Function to check if the values are correct
+# $1 - table name
+# $2 - expected values in CSV format, one per line
 check_values() {
     table_name=$1
     expected_values=$2
-    query="SELECT $expected_values FROM $table_name;"
+    query="COPY (SELECT name, value FROM $table_name) TO STDOUT WITH CSV;"
     docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "$query" >/tmp/"$table_name".txt
     while IFS= read -r line; do
         if ! grep -Fxq "$line" /tmp/"$table_name".txt; then
@@ -53,13 +55,13 @@ check_count "asset" 1
 check_count "tag" 4
 
 # Check if the tag names and their values are correct
-check_values "tag" "head\$pos\$x, 1
-head\$pos\$y, 2
-head\$pos\$z, 3
-head\$value, 1"
+check_values "tag" "head\$pos\$x,1
+head\$pos\$y,2
+head\$pos\$z,3
+head\$value,1"
 
 # Check if the number of tag_string is correct
 check_count "tag_string" 1
 
 # Check if the tag_string names and their values are correct
-check_values "tag_string" "head\$stringValue, hello"
+check_values "tag_string" "head\$stringValue,hello"
