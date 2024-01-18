@@ -29,15 +29,15 @@ jobs:
       
       - name: Wait for Services
         working-directory: ./test/integration/kafka-to-postgresql-v2
-        run: wait-for-services.sh
+        run: ./wait-for-services.sh
 
       - name: Initialize Database
         working-directory: ./test/integration/kafka-to-postgresql-v2
-        run: initialize-database.sh
+        run: ./initialize-database.sh
 
       - name: Run Tests
         working-directory: ./test/integration/kafka-to-postgresql-v2
-        run: run-integration-test.sh
+        run: ./run-integration-test.sh
 
       - name: Cleanup
         if: always()
