@@ -2,16 +2,15 @@
 
 # Send messages to RedPanda
 echo "Sending messages to RedPanda..."
-docker run -it --rm --network=k2pv2_network \
-    edenhill/kcat \
-    -b redpanda:9092 \
-    -t umh.v1.enterprise.site.area.line.workcell._historian.head \
-    -K: \
-    -P <<EOF
-1:{"timestamp_ms": 845980440000, "value": 1}
-2:{"timestamp_ms": 845980440000, "pos": {"x": 1, "y": 2, "z": 3}}
-3:{"timestamp_ms": 845980440000, "stringValue": "hello"}
-EOF
+echo '{"timestamp_ms": 845980440000, "value": 1}
+{"timestamp_ms": 845980440000, "pos": {"x": 1, "y": 2, "z": 3}}
+{"timestamp_ms": 845980440000, "stringValue": "hello"}
+' >/tmp/messages.txt
+docker run -t --rm --network=k2pv2_network \
+    --mount type=bind,source=/tmp/messages.txt,target=/messages.txt,readonly \
+    confluentinc/cp-kafkacat:7.0.13 \
+    bash -c \
+    'kafkacat -b redpanda:9092 -t umh.v1.enterprise.site.area.line.workcell._historian.head -P -l /messages.txt'
 
 echo "Waiting for messages to be processed..."
 sleep 5
