@@ -50,7 +50,7 @@ services:
   kafka-to-postgresql-v2:
     build:
       context: .
-      dockerfile: ./deployment/kafka-to-postgresql-v2/Dockerfile
+      dockerfile: ../../../deployment/kafka-to-postgresql-v2/Dockerfile
     container_name: kafka-to-postgresql-v2
     environment:
       POSTGRES_HOST: timescaledb
