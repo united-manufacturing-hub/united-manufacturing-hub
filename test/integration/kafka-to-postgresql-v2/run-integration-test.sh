@@ -46,7 +46,7 @@ docker run -t --rm --network=k2pv2_network \
     'kafkacat -b redpanda:9092 -t umh.v1.enterprise.site.area.line.workcell._historian.head -P -l /messages.txt'
 
 echo "Waiting for messages to be processed..."
-sleep 5
+sleep 10
 
 # Check if the number of assets is correct
 check_count "asset" 1
