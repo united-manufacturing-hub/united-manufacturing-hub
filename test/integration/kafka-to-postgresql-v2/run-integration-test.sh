@@ -1,12 +1,42 @@
 #!/bin/bash
 
+# Function to check if the count is correct
+check_count() {
+    table_name=$1
+    expected_count=$2
+    query="SELECT COUNT(*) FROM $table_name;"
+    if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "$query" |
+        grep -q -E "^\s*$expected_count$"; then
+        echo "Number of $table_name is incorrect"
+        docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM $table_name;"
+        exit 1
+    fi
+}
+
+# Function to check if the values are correct
+check_values() {
+    table_name=$1
+    expected_values=$2
+    query="SELECT $expected_values FROM $table_name;"
+    docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "$query" >/tmp/"$table_name".txt
+    while IFS= read -r line; do
+        if ! grep -Fxq "$line" /tmp/"$table_name".txt; then
+            echo "One or more lines are missing"
+            docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM $table_name;"
+            exit 1
+        fi
+    done <<<"$expected_values"
+}
+
 # Send messages to RedPanda
 echo "Sending messages to RedPanda..."
+
 echo '{"timestamp_ms": 845980440000, "value": 1}
 {"timestamp_ms": 845980440000, "pos": {"x": 1, "y": 2, "z": 3}}
 {"timestamp_ms": 845980440000, "stringValue": "hello"}
 ' >/tmp/messages.txt
 cat /tmp/messages.txt
+
 docker run -t --rm --network=k2pv2_network \
     --mount type=bind,source=/tmp/messages.txt,target=/messages.txt,readonly \
     confluentinc/cp-kafkacat:7.0.13 \
@@ -16,48 +46,20 @@ docker run -t --rm --network=k2pv2_network \
 echo "Waiting for messages to be processed..."
 sleep 5
 
-# Query the database and check results
-echo "Querying the database..."
+# Check if the number of assets is correct
+check_count "asset" 1
 
-## Check if the number of assets is correct
-if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM asset;" |
-    grep -q -E "^\s*1$"; then
-    echo "Number of assets is incorrect"
-    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM asset;"
-    exit 1
-fi
+# Check if the number of tags is correct
+check_count "tag" 4
 
-## Check if the number of tags is correct
-if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag;" |
-    grep -q -E "^\s*4$"; then
-    echo "Number of tags is incorrect"
-    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag;"
-    exit 1
-fi
+# Check if the tag names and their values are correct
+check_values "tag" "pos\$x, 1
+pos\$y, 2
+pos\$z, 3
+value, 1"
 
-## Check if the tag names and their values are correct
-docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag ORDER BY name;" >/tmp/tag_values.txt
-if ! grep -Fxq " pos\$x |     1 " /tmp/tag_values.txt &&
-    grep -Fxq " pos\$y |     2 " /tmp/tag_values.txt &&
-    grep -Fxq " pos\$z |     3 " /tmp/tag_values.txt &&
-    grep -Fxq " value |     1" /tmp/tag_values.txt; then
-    echo "One or more lines are missing"
-    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag;"
-    exit 1
-fi
+# Check if the number of tag_string is correct
+check_count "tag_string" 1
 
-## Check if the number of tag_string is correct
-if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag_string;" |
-    grep -q -E "^\s*1$"; then
-    echo "Number of tag_string is incorrect"
-    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag_string;"
-    exit 1
-fi
-
-## Check if the tag_string names and their values are correct
-docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag_string;" >/tmp/tag_string_values.txt
-if ! grep -Fxq " stringValue | hello " /tmp/tag_string_values.txt; then
-    echo "One or more lines are missing"
-    docker exec -i timescaledb psql -U postgres -d umh_v2 -c "SELECT * FROM tag_string;"
-    exit 1
-fi
+# Check if the tag_string names and their values are correct
+check_values "tag_string" "stringValue, hello"
