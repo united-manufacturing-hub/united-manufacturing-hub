@@ -19,26 +19,39 @@ sleep 5
 echo "Querying the database..."
 
 ## Check if the number of assets is correct
-docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM asset;" |
-    grep -q -E "^\s*1$" || echo "Number of assets is incorrect" && exit 1
+if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM asset;" |
+    grep -q -E "^\s*1$"; then
+    echo "Number of assets is incorrect"
+    exit 1
+fi
 
 ## Check if the number of tags is correct
-docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag;" |
-    grep -q -E "^\s*4$" || echo "Number of tags is incorrect" && exit 1
+if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag;" |
+    grep -q -E "^\s*4$"; then
+    echo "Number of tags is incorrect"
+    exit 1
+fi
 
 ## Check if the tag names and their values are correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag ORDER BY name;" >/tmp/tag_values.txt
-grep -Fxq " pos\$x |     1 " /tmp/tag_values.txt &&
+if ! grep -Fxq " pos\$x |     1 " /tmp/tag_values.txt &&
     grep -Fxq " pos\$y |     2 " /tmp/tag_values.txt &&
     grep -Fxq " pos\$z |     3 " /tmp/tag_values.txt &&
-    grep -Fxq " value |     1" /tmp/tag_values.txt &&
-    echo "All lines are present" || echo "One or more lines are missing" && exit 1
+    grep -Fxq " value |     1" /tmp/tag_values.txt; then
+    echo "One or more lines are missing"
+    exit 1
+fi
 
 ## Check if the number of tag_string is correct
-docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag_string;" |
-    grep -q -E "^\s*1$" || echo "Number of tag_string is incorrect" && exit 1
+if ! docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT COUNT(*) FROM tag_string;" |
+    grep -q -E "^\s*1$"; then
+    echo "Number of tag_string is incorrect"
+    exit 1
+fi
 
 ## Check if the tag_string names and their values are correct
 docker exec -i timescaledb psql -U postgres -d umh_v2 -t -c "SELECT name, value FROM tag_string;" >/tmp/tag_string_values.txt
-grep -Fxq " stringValue | hello " /tmp/tag_string_values.txt &&
-    echo "All lines are present" || echo "One or more lines are missing" && exit 1
+if ! grep -Fxq " stringValue | hello " /tmp/tag_string_values.txt; then
+    echo "One or more lines are missing"
+    exit 1
+fi
