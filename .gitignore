@@ -94,3 +94,4 @@ deployment/kafka-to-postgresql/postgres_data
 values_*.yaml
 development_*.yaml
 test.yaml
+venv
