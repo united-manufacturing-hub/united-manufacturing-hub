@@ -21,7 +21,7 @@ type DBValue struct {
 	Timestamp time.Time
 	Origin    string
 	AssetId   int
-	Value     *sharedStructs.Value
+	Value     sharedStructs.Value
 }
 
 func (r *DBValue) GetValue() interface{} {
@@ -351,7 +351,7 @@ func (c *Connection) InsertHistorianValue(value []sharedStructs.Value, timestamp
 				Timestamp: timestamp,
 				Origin:    origin,
 				AssetId:   assetId,
-				Value:     &v,
+				Value:     v,
 			}
 			c.numericalReceived.Add(1)
 		} else {
@@ -359,7 +359,7 @@ func (c *Connection) InsertHistorianValue(value []sharedStructs.Value, timestamp
 				Timestamp: timestamp,
 				Origin:    origin,
 				AssetId:   assetId,
-				Value:     &v,
+				Value:     v,
 			}
 			c.stringsReceived.Add(1)
 		}
