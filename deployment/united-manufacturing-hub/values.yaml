@@ -433,9 +433,9 @@ timescaledb-single:
     repository: management.umh.app/oci/timescale/timescaledb-ha
     tag: pg13.8-ts2.8.0-p1
     pullPolicy: IfNotPresent
-  prometheus:
-    image:
-    repository: management.umh.app/oci/prometheuscommunity/postgres-exporter
+  #prometheus:
+  #  image:
+  #  repository: management.umh.app/oci/prometheuscommunity/postgres-exporter
 
   # This configuration will be passed on to Patroni directly, there are a few things that are
   # injected/changed, these are:
