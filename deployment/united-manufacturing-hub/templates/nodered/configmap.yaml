@@ -25,7 +25,7 @@ metadata:
 data:
   nodered-config: |-
     {{- $settings := default .Values.nodered.settings | toPrettyJson}}
-    {{- print $settings | nindent 4 }}
+    {{- if eq ($settings | toJson) "{}" }}
     module.exports = {
     // the tcp port that the Node-RED web server is listening on
     uiPort: process.env.PORT || 1880,
@@ -261,5 +261,8 @@ data:
       }
     }
     }
+    {{- else }}
+    {{- print $settings | nindent 4 }}
+    {{- end }}
 
 {{end}}

@@ -25,7 +25,7 @@ metadata:
 data:
   nodered-flows: |- 
     {{- $settings := default .Values.nodered.flows | toPrettyJson }}
-    {{- print $settings | nindent 4 }}
+    {{- if eq ($settings | toJson) "{}" }}
     [
     {
         "id": "41c9c6783cbe3070",
@@ -1976,4 +1976,7 @@ data:
         "wires": []
     }
     ]
+    {{- else}}
+    {{- print $settings | nindent 4 }}
+    {{- end}}
 {{end}}
