@@ -41,6 +41,10 @@ jobs:
           echo "::set-output name=new_release_version::${{ steps.semantic.outputs.new_release_version }}"
 
   build-barcodereader:
+    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -67,6 +71,10 @@ jobs:
 
 
   build-databridge:
+    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -92,6 +100,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/databridge:latest
 
   build-factoryinsight:
+    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -118,6 +130,9 @@ jobs:
 
 
   build-grafana-umh:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -143,6 +158,9 @@ jobs:
             ghcr.io/united-manufacturing-hub/grafana-umh:latest
 
   build-hivemq-init:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -168,6 +186,9 @@ jobs:
             ghcr.io/united-manufacturing-hub/hivemq-init:latest
 
   build-kafka-bridge:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -196,6 +217,9 @@ jobs:
 
 
   build-kafka-init:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -224,6 +248,9 @@ jobs:
 
 
   build-kafka-to-postgresql:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -250,6 +277,9 @@ jobs:
 
 
   build-kafka-to-postgresql-v2:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -276,6 +306,10 @@ jobs:
 
 
   build-metrics:
+    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -304,6 +338,9 @@ jobs:
 
 
   build-mqtt-kafka-bridge:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -330,6 +367,10 @@ jobs:
 
 
   build-sensorconnect:
+    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
