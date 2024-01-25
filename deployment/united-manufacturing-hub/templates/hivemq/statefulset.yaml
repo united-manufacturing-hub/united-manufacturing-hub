@@ -20,20 +20,20 @@ kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
-    app.kubernetes.io/component: "hivemqce"
 spec:
   serviceName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   replicas: 1
   selector:
     matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
       {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 6}}
-      app.kubernetes.io/component: "hivemqce"
   template:
     metadata:
       labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 8}}
-        app.kubernetes.io/component: "hivemqce"
     spec:
       volumes:
         - name: hivemqce-mqtt-config

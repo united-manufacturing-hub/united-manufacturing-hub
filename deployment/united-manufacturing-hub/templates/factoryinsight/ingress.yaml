@@ -21,6 +21,7 @@ kind: Ingress
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-ingress
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
   {{if .Values.factoryinsight.ingress.annotations}}
   annotations:

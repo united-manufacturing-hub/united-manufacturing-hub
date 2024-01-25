@@ -3,6 +3,10 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"github.com/united-manufacturing-hub/umh-utils/env"
@@ -10,8 +14,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
-	"sync"
-	"time"
 )
 
 type Worker struct {
@@ -69,9 +71,9 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 			origin = "unknown"
 		}
 
-		switch topic.Usecase {
+		switch topic.Schema {
 		case "historian":
-			payload, timestampMs, err := parseHistorianPayload(msg.Value)
+			payload, timestampMs, err := parseHistorianPayload(msg.Value, topic.Tag)
 			if err != nil {
 				zap.S().Warnf("Failed to parse payload %+v for message: %s ", msg, err)
 				k.MarkMessage(msg)
@@ -86,7 +88,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 		case "analytics":
 			zap.S().Warnf("Analytics not yet supported, ignoring")
 		default:
-			zap.S().Errorf("Unknown usecase %s", topic.Usecase)
+			zap.S().Errorf("Unknown usecase %s", topic.Schema)
 		}
 		k.MarkMessage(msg)
 		messagesHandled++
@@ -97,48 +99,38 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 	}
 }
 
-func parseHistorianPayload(value []byte) (*sharedStructs.Value, int64, error) {
+func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.Value, int64, error) {
 	// Attempt to JSON decode the message
 	var message map[string]interface{}
 	err := json.Unmarshal(value, &message)
 	if err != nil {
 		return nil, 0, err
 	}
-	// There should only be two fields and one of them is "timestamp_ms"
-	if len(message) != 2 {
-		return nil, 0, errors.New("message contains does not have exactly 2 fields")
+	// The payload must contain at least 2 fields: timestamp_ms and a value
+	if len(message) < 2 {
+		return nil, 0, errors.New("message payload does not contain enough fields")
 	}
 	var timestampMs int64
-	var timestampFound bool
-	var v *sharedStructs.Value
-	var vFound bool
+	var values = make([]sharedStructs.Value, 0)
 
-	for key, value := range message {
-		if key == "timestamp_ms" {
-			timestampMs, err = parseInt(value)
-			if err != nil {
-				return nil, 0, err
-			}
-			zap.S().Debugf("Parsed %s:%s as timestamp_ms: %d", key, value, timestampMs)
-			timestampFound = true
-		} else {
-			v, err = parseValue(value)
-			if err != nil {
-				return nil, 0, err
-			}
-			vFound = true
-			v.Name = key
+	// Extract and remove the timestamp_ms field
+	if ts, ok := message["timestamp_ms"]; !ok {
+		return nil, 0, errors.New("message value does not contain timestamp_ms")
+	} else {
+		timestampMs, err = parseInt(ts)
+		if err != nil {
+			return nil, 0, err
 		}
+		delete(message, "timestamp_ms")
 	}
 
-	if !timestampFound {
-		return nil, 0, fmt.Errorf("message value does not contain timestamp_ms: %+v", message)
-	}
-	if !vFound {
-		return nil, 0, fmt.Errorf("message does not contain any value: %+v", message)
-	}
+	// Replace separators in the tag with $
+	tag = strings.ReplaceAll(tag, ".", sharedStructs.DbTagSeparator)
 
-	return v, timestampMs, nil
+	// Recursively parse the remaining fields
+	err = parseValue(tag, message, &values)
+
+	return values, timestampMs, err
 }
 
 func parseInt(v interface{}) (int64, error) {
@@ -149,34 +141,58 @@ func parseInt(v interface{}) (int64, error) {
 	return int64(timestamp), nil
 }
 
-func parseValue(v interface{}) (*sharedStructs.Value, error) {
-	var val sharedStructs.Value
-	var numericVal float32
-
-	switch t := v.(type) {
-	case float64:
-		numericVal = float32(t)
-		val.NumericValue = &numericVal
-		val.IsNumeric = true
-	case string:
-		val.StringValue = &t
-	case float32:
-		numericVal = t
-		val.NumericValue = &numericVal
-		val.IsNumeric = true
-	case int:
-		numericVal = float32(t)
-		val.NumericValue = &numericVal
-		val.IsNumeric = true
-	case bool:
-		numericVal = 0.0
-		if t {
-			numericVal = 1.0
+func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (err error) {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		for k, v := range val {
+			fullKey := k
+			if prefix != "" {
+				// Handle duplicate tag groups
+				if strings.HasSuffix(prefix, k) {
+					fullKey = prefix
+				} else {
+					fullKey = prefix + sharedStructs.DbTagSeparator + k
+				}
+			}
+			err = parseValue(fullKey, v, values)
 		}
-		val.NumericValue = &numericVal
+	case float64:
+		f := float32(val)
+		*values = append(*values, sharedStructs.Value{
+			Name:         prefix,
+			NumericValue: &f,
+			IsNumeric:    true,
+		})
+	case float32:
+		*values = append(*values, sharedStructs.Value{
+			Name:         prefix,
+			NumericValue: &val,
+			IsNumeric:    true,
+		})
+	case int:
+		f := float32(val)
+		*values = append(*values, sharedStructs.Value{
+			Name:         prefix,
+			NumericValue: &f,
+			IsNumeric:    true,
+		})
+	case string:
+		*values = append(*values, sharedStructs.Value{
+			Name:        prefix,
+			StringValue: &val,
+		})
+	case bool:
+		f := float32(0.0)
+		if val {
+			f = 1.0
+		}
+		*values = append(*values, sharedStructs.Value{
+			Name:         prefix,
+			NumericValue: &f,
+			IsNumeric:    true,
+		})
 	default:
-		return nil, fmt.Errorf("unsupported type: %T (%v)", t, v)
+		return fmt.Errorf("unsupported type %T (%v) for tag %s", val, val, prefix)
 	}
-
-	return &val, nil
+	return err
 }
