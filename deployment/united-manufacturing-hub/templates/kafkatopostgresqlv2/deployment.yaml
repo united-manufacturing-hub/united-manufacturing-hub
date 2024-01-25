@@ -20,6 +20,7 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 4}}
   {{if .Values.kafkatopostgresqlv2.annotations}}
   annotations:
@@ -29,13 +30,14 @@ spec:
   replicas: {{.Values.kafkatopostgresqlv2.replicas}}
   selector:
     matchLabels:
-      name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 8}}
     spec:
       affinity:

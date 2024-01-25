@@ -20,6 +20,7 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight-deployment
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
   {{if .Values.factoryinsight.annotations}}
   annotations:
@@ -29,13 +30,15 @@ spec:
   replicas: {{.Values.factoryinsight.replicas}}
   selector:
     matchLabels:
-     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
       labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 8}}
         redis-client: "true"
     spec:

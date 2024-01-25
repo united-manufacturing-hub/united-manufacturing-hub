@@ -21,7 +21,7 @@ type DBValue struct {
 	Timestamp time.Time
 	Origin    string
 	AssetId   int
-	Value     *sharedStructs.Value
+	Value     sharedStructs.Value
 }
 
 func (r *DBValue) GetValue() interface{} {
@@ -336,7 +336,7 @@ func getCacheKey(topic *sharedStructs.TopicDetails) string {
 	return cacheKey.String()
 }
 
-func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
+func (c *Connection) InsertHistorianValue(value []sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
@@ -344,23 +344,27 @@ func (c *Connection) InsertHistorianValue(value *sharedStructs.Value, timestampM
 	seconds := timestampMs / 1000
 	nanoseconds := (timestampMs % 1000) * 1000000
 	timestamp := time.Unix(seconds, nanoseconds)
-	if value.IsNumeric {
-		c.numericalValuesChannel <- DBValue{
-			Timestamp: timestamp,
-			Origin:    origin,
-			AssetId:   assetId,
-			Value:     value,
+
+	for _, v := range value {
+		if v.IsNumeric {
+			c.numericalValuesChannel <- DBValue{
+				Timestamp: timestamp,
+				Origin:    origin,
+				AssetId:   assetId,
+				Value:     v,
+			}
+			c.numericalReceived.Add(1)
+		} else {
+			c.stringValuesChannel <- DBValue{
+				Timestamp: timestamp,
+				Origin:    origin,
+				AssetId:   assetId,
+				Value:     v,
+			}
+			c.stringsReceived.Add(1)
 		}
-		c.numericalReceived.Add(1)
-	} else {
-		c.stringValuesChannel <- DBValue{
-			Timestamp: timestamp,
-			Origin:    origin,
-			AssetId:   assetId,
-			Value:     value,
-		}
-		c.stringsReceived.Add(1)
 	}
+
 	return nil
 }
 
