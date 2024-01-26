@@ -701,6 +701,8 @@ timescaledb-single:
 grafana:
   image:
     repository: management.umh.app/oci/grafana/grafana
+  downloadDashboardsImage:
+    repository: management.umh.app/oci/curlimages/curl
   serviceAccount:
     create: false
 
@@ -737,7 +739,6 @@ grafana:
   persistence:
     enabled: true
     size: 5Gi
-
   initChownData:
     ## If false, data ownership will not be reset at startup
     ## This allows the prometheus-server to be run with an arbitrary user
@@ -984,6 +985,8 @@ redpanda:
   fullnameOverride: united-manufacturing-hub-kafka
   statefulset:
     replicas: 1
+    initContainerImage:
+      repository: management.umh.app/oci/library/busybox
   rbac:
     enabled: true
   storage:
@@ -1007,6 +1010,8 @@ redpanda:
   tls:
     enabled: false
   console:
+    image:
+      registry: management.umh.app/oci
     serviceAccount:
       create: false
     service:
