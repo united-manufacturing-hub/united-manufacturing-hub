@@ -1051,7 +1051,7 @@ redis:
   metrics:
     enabled: true
     image:
-      registry: management.umh.app/oci/
+      registry: management.umh.app/oci
   pdb:
     create: true
     minAvailable: 2
@@ -1062,13 +1062,13 @@ redis:
     existingSecretPasswordKey: redispassword
   sentinel:
     image:
-      registry: management.umh.app/oci/
+      registry: management.umh.app/oci
   volumePermissions:
     image:
-      registry: management.umh.app/oci/
+      registry: management.umh.app/oci
   sysctl:
     image:
-      registry: management.umh.app/oci/
+      registry: management.umh.app/oci
 
 ##### CONFIG FOR HIVEMQ CE
 ##### you can set a tag if you want a version other than 2023.7
