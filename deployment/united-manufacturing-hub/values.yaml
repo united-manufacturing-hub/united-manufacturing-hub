@@ -1066,9 +1066,11 @@ redis:
   volumePermissions:
     image:
       registry: management.umh.app/oci
+      repository: bitnami/os-shell
   sysctl:
     image:
       registry: management.umh.app/oci
+      repository: bitnami/os-shell
 
 ##### CONFIG FOR HIVEMQ CE
 ##### you can set a tag if you want a version other than 2023.7
