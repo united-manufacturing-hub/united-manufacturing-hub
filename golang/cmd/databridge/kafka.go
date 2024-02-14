@@ -98,10 +98,13 @@ func (k *kafkaClient) getConsumerStats() (received uint64, invalidTopic uint64, 
 func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
 		for {
+			zap.S().Debugf("Awaiting message to produce...")
 			msg := <-toProduceMessageChannel
+			zap.S().Debugf("Received message to produce: %s", msg.Topic)
 
 			var err error
 			msg.Topic, err = toKafkaTopic(msg.Topic)
+			zap.S().Debugf("Transformed topic: %s", msg.Topic)
 			if err != nil {
 				k.lossInvalidTopic.Add(1)
 				zap.S().Warnf("skipping message (invalid topic): %s", err)
@@ -120,10 +123,13 @@ func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaM
 
 			msg = splitMessage(msg, k.split)
 
+			zap.S().Debugf("Publishing message: %s", msg.Topic)
 			k.prePublish.Add(1)
 			k.producer.SendMessage(msg)
+			zap.S().Debugf("Published message: %s", msg.Topic)
 
 			bridgedMessagesToCommitChannel <- msg
+			zap.S().Debugf("Committed message: %s", msg.Topic)
 		}
 	}()
 }
