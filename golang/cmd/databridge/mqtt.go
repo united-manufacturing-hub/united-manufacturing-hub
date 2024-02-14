@@ -121,13 +121,17 @@ func (m *mqttClient) getConsumerStats() (messages uint64, lossInvalidTopic uint6
 func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
 		for {
+			zap.S().Debugf("Awaiting message to produce...")
 			msg := <-toProduceMessageChannel
+			zap.S().Debugf("Received message to produce: %s", msg.Topic)
 
 			var err error
 			if len(msg.Key) > 0 {
 				msg.Topic = msg.Topic + "." + string(msg.Key)
+				zap.S().Debugf("Using key %s as suffix for topic: %s", string(msg.Key), msg.Topic)
 			}
 			msg.Topic, err = toMqttTopic(msg.Topic)
+			zap.S().Debugf("Transformed topic: %s", msg.Topic)
 			if err != nil {
 				zap.S().Warnf("skipping message (invalid topic): %s", err)
 				m.lossInvalidTopic.Add(1)
@@ -143,10 +147,13 @@ func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMe
 				}
 				continue
 			}
+			zap.S().Debugf("Publishing message: %s", msg.Topic)
 			m.prePublish.Add(1)
 			m.client.Publish(msg.Topic, 1, false, msg.Value)
 			m.sent.Add(1)
+			zap.S().Debugf("Published message: %s", msg.Topic)
 			bridgedMessagesToCommitChannel <- msg
+			zap.S().Debugf("Committed message: %s", msg.Topic)
 		}
 	}()
 }
