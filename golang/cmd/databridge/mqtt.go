@@ -36,6 +36,7 @@ import (
 type mqttClient struct {
 	client             MQTT.Client
 	topic              string
+	prePublish         atomic.Uint64
 	sent               atomic.Uint64
 	recv               atomic.Uint64
 	lossInvalidTopic   atomic.Uint64
@@ -109,11 +110,11 @@ func newMqttClient(broker, topic, serialNumber string) (mc *mqttClient, err erro
 	return
 }
 
-func (m *mqttClient) getProducerStats() (messages uint64, load uint64, u uint64, u2 uint64) {
-	return m.sent.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
+func (m *mqttClient) getProducerStats() (messages uint64, prePublish uint64, lossInvalidTopic uint64, lossInvalidMessage uint64, skipped uint64) {
+	return m.sent.Load(), m.prePublish.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
-func (m *mqttClient) getConsumerStats() (messages uint64, load uint64, u uint64, u2 uint64) {
+func (m *mqttClient) getConsumerStats() (messages uint64, lossInvalidTopic uint64, lossInvalidMessage uint64, skipped uint64) {
 	return m.recv.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
@@ -142,7 +143,7 @@ func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMe
 				}
 				continue
 			}
-
+			m.prePublish.Add(1)
 			m.client.Publish(msg.Topic, 1, false, msg.Value)
 			m.sent.Add(1)
 			bridgedMessagesToCommitChannel <- msg

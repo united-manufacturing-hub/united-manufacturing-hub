@@ -31,6 +31,7 @@ import (
 
 type kafkaClient struct {
 	lossInvalidTopic   atomic.Uint64
+	prePublish         atomic.Uint64
 	marked             atomic.Uint64
 	lossInvalidMessage atomic.Uint64
 	skipped            atomic.Uint64
@@ -82,9 +83,9 @@ func (k *kafkaClient) getState() State {
 	return StatePreparing
 }
 
-func (k *kafkaClient) getProducerStats() (sent uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
+func (k *kafkaClient) getProducerStats() (sent uint64, prePublish uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
 	_, productionErrors := k.producer.GetProducedMessages()
-	return k.marked.Load(), k.lossInvalidTopic.Load(), productionErrors + k.lossInvalidMessage.Load(), k.skipped.Load()
+	return k.marked.Load(), k.prePublish.Load(), k.lossInvalidTopic.Load(), productionErrors + k.lossInvalidMessage.Load(), k.skipped.Load()
 }
 
 func (k *kafkaClient) getConsumerStats() (received uint64, invalidTopic uint64, invalidMessage uint64, skippedMessage uint64) {
@@ -119,6 +120,7 @@ func (k *kafkaClient) startProducing(toProduceMessageChannel chan *shared.KafkaM
 
 			msg = splitMessage(msg, k.split)
 
+			k.prePublish.Add(1)
 			k.producer.SendMessage(msg)
 
 			bridgedMessagesToCommitChannel <- msg
