@@ -7,6 +7,7 @@ on:
 
 jobs:
   release:
+    permissions: write-all
     runs-on: ubuntu-latest
     outputs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
@@ -40,6 +41,9 @@ jobs:
           echo "::set-output name=new_release_version::${{ steps.semantic.outputs.new_release_version }}"
 
   build-barcodereader:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -64,32 +68,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/barcodereader:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/barcodereader:latest
 
-  build-factoryinput:
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./deployment/factoryinput/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/united-manufacturing-hub/factoryinput:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/united-manufacturing-hub/factoryinput:latest
-
   build-databridge:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -115,6 +97,9 @@ jobs:
             ghcr.io/united-manufacturing-hub/databridge:latest
 
   build-factoryinsight:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -139,32 +124,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/factoryinsight:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/factoryinsight:latest
 
-  build-grafana-proxy:
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./deployment/grafana-proxy/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/united-manufacturing-hub/grafana-proxy:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/united-manufacturing-hub/grafana-proxy:latest
-
   build-grafana-umh:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -190,6 +153,9 @@ jobs:
             ghcr.io/united-manufacturing-hub/grafana-umh:latest
 
   build-hivemq-init:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -215,6 +181,9 @@ jobs:
             ghcr.io/united-manufacturing-hub/hivemq-init:latest
 
   build-kafka-bridge:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -239,34 +208,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/kafka-bridge:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/kafka-bridge:latest
 
-
-  build-kafka-debug:
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./deployment/kafka-debug/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/united-manufacturing-hub/kafka-debug:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/united-manufacturing-hub/kafka-debug:latest
-
-
   build-kafka-init:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -291,34 +236,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/kafka-init:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/kafka-init:latest
 
-
-  build-kafka-state-detector:
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./deployment/kafka-state-detector/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/united-manufacturing-hub/kafka-state-detector:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/united-manufacturing-hub/kafka-state-detector:latest
-
-
   build-kafka-to-postgresql:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -345,6 +266,9 @@ jobs:
 
 
   build-kafka-to-postgresql-v2:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -371,6 +295,10 @@ jobs:
 
 
   build-metrics:
+    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -395,34 +323,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/metrics:${{ needs.release.outputs.new_release_version }}
             ghcr.io/united-manufacturing-hub/metrics:latest
 
-
-  build-mqtt-bridge:
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./deployment/mqtt-bridge/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/united-manufacturing-hub/mqtt-bridge:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/united-manufacturing-hub/mqtt-bridge:latest
-
-
   build-mqtt-kafka-bridge:
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
@@ -448,7 +352,10 @@ jobs:
             ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge:latest
 
 
-  build-sensorconnect:
+  build-sensorconnect:    
+    permissions:
+      packages: write
+      contents: read
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest

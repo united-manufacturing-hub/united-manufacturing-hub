@@ -55,7 +55,3 @@ nodered:
 
 factoryinsight:
   replicas: 1
-
-factoryinput:
-  env:
-    loggingLevel: "DEVELOPMENT"
