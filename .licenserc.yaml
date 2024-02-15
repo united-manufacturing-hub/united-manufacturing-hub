@@ -19,7 +19,7 @@ header:
     software-name: United Manufacturing Hub
 
   paths-ignore:
-    - '**/*.md'
+    - '*/*.md'
     - 'LICENSE'
     - 'NOTICE'
     - 'CODEOWNERS'
