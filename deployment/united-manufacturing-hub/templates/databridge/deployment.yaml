@@ -1,3 +1,17 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 {{if or .Values._000_commonConfig.datamodel_v2.enabled .Values.databridge.enabled}}
 
 {{- range $index, $bridge := .Values._000_commonConfig.datamodel_v2.bridges }}
@@ -6,18 +20,22 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
   labels:
+    {{- include "united-manufacturing-hub.labels.common" $ | nindent 4}}
     {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 4 }}
 spec:
   replicas: {{ $.Values.databridge.replicas }}
   selector:
     matchLabels:
       name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
+      {{- include "united-manufacturing-hub.matchLabels" $ | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 6 }}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
         name: {{include "united-manufacturing-hub.fullname" $}}-databridge-{{ $index }}
+        {{- include "united-manufacturing-hub.labels.common" $ | nindent 8}}
         {{- include "united-manufacturing-hub.labels.databridge" $ | nindent 8 }}
     spec:
       affinity:
@@ -66,8 +84,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['app.kubernetes.io/name']
-            - name: MODE
-              value: "{{ if eq $bridge.mode "kafka-kafka" }}0{{ else if eq $bridge.mode "mqtt-kafka" }}1{{ else if eq $bridge.mode "mtt-mqtt" }}2{{ else }}3{{ end }}"
             - name: BROKER_A
               value: {{ $bridge.brokerA | quote }}
             - name: BROKER_B
@@ -103,6 +119,14 @@ spec:
             {{- if  $.Values.databridge.loggingLevel }}
             - name: LOGGING_LEVEL
               value: {{ $.Values.databridge.loggingLevel | quote }}
+            {{- end}}
+            {{- if  $.Values.databridge.msgChanLen }}
+            - name: MSG_CHANNEL_LENGTH
+              value: {{ $.Values.databridge.msgChanLen | quote }}
+            {{- end}}
+            {{- if  $.Values.databridge.lruSize }}
+            - name: LRU_SIZE
+              value: {{ $.Values.databridge.lruSize | quote }}
             {{- end}}
           resources:
             limits:

@@ -19,6 +19,9 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extension
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 data:
   # https://github.com/hivemq/hivemq-file-rbac-extension
   credentials.xml: |
@@ -26,22 +29,8 @@ data:
     <file-rbac>
         <users>
             <user>
-                <name>FACTORYINPUT</name>
-                <password>{{.Values.factoryinput.mqtt.encryptedPassword}}</password>
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
                 <name>MQTT_KAFKA_BRIDGE</name>
                 <password>{{.Values.mqttkafkabridge.mqtt.encryptedPassword}}</password>
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
-                <name>MQTT_BRIDGE</name>
-                <password>{{.Values.mqttbridge.mqtt.encryptedPassword}}</password>
                 <roles>
                     <id>ia_read_write</id>
                 </roles>
