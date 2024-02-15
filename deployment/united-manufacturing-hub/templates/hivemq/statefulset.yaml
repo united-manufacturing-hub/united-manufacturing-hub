@@ -20,20 +20,20 @@ kind: StatefulSet
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
-    app.kubernetes.io/component: "hivemqce"
 spec:
   serviceName: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
   replicas: 1
   selector:
     matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
       {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 6}}
-      app.kubernetes.io/component: "hivemqce"
   template:
     metadata:
       labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 8}}
-        app.kubernetes.io/component: "hivemqce"
     spec:
       volumes:
         - name: hivemqce-mqtt-config
@@ -59,7 +59,7 @@ spec:
           image: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.repository}}:{{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.tag}}
           imagePullPolicy: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.pullPolicy}}
           volumeMounts:
-            - mountPath: /opt/hivemq-ce-2022.1/extensions
+            - mountPath: /opt/hivemq-ce-2023.7/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
           env:
             - name: RBAC_ENABLED
@@ -73,7 +73,7 @@ spec:
           {{if .Values.mqtt_broker.image.tag}}
           image: {{.Values.mqtt_broker.image.repository}}:{{.Values.mqtt_broker.image.tag}}
           {{- else}}
-          image: {{.Values.mqtt_broker.image.repository}}:2022.1
+          image: {{.Values.mqtt_broker.image.repository}}:2023.7
           {{end}}
           imagePullPolicy: {{.Values.mqtt_broker.image.pullPolicy}}
           env:
