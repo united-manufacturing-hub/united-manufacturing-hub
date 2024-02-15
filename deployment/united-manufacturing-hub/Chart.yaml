@@ -16,7 +16,7 @@
 apiVersion: v2
 name: united-manufacturing-hub
 description: Transform manufacturing with UMH Systems united-manufacturing-hub Helm chart, simplifying access to powerful technology for engineers.
-icon: https://avatars.githubusercontent.com/u/77492553
+icon: https://management.umh.app/binaries/umh/image/umh_black_transparent.png
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -47,20 +47,20 @@ sources:
 dependencies:
   - name: redis
     version: 17.9.0
-    repository: https://charts.bitnami.com/bitnami
+    repository: https://management.umh.app/helm/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
   - name: grafana
-    version: 6.52.4
-    repository: https://grafana.github.io/helm-charts
+    version: 6.57.4
+    repository: https://management.umh.app/helm/grafana
     condition: _000_commonConfig.datastorage.enabled
 
   - name: timescaledb-single
     version: 0.26.9
-    repository: https://charts.timescale.com/
+    repository: https://management.umh.app/helm/timescale
     condition: _000_commonConfig.datastorage.enabled
 
   - name: redpanda
-    repository: https://charts.redpanda.com/
+    repository: https://management.umh.app/helm/redpanda
     version: 5.3.4
     condition: _000_commonConfig.infrastructure.kafka.enabled

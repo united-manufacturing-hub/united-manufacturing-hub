@@ -111,9 +111,9 @@ func main() {
 	// Output metrics to stdout
 	zap.S().Infof("%s", string(jsonMetrics))
 
-	// POST to https://repo.umh.app/metrics
+	// POST to https://management.umh.app/helm/umh/metrics
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://repo.umh.app/metrics", strings.NewReader(string(jsonMetrics)))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://management.umh.app/helm/umh/metrics", strings.NewReader(string(jsonMetrics)))
 	if err != nil {
 		zap.S().Errorf("error: %s", err)
 		return

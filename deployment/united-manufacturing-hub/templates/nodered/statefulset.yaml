@@ -55,7 +55,7 @@ spec:
 
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
-        image: nodered/node-red:{{.Values.nodered.tag}}
+        image: management.umh.app/oci/nodered/node-red:{{.Values.nodered.tag}}
         ports:
         - containerPort: 1880
           name: nodered-ui
