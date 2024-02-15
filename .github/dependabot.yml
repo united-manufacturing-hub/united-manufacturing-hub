@@ -43,13 +43,6 @@ updates:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/factoryinput
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
 
   - directory: /deployment/factoryinsight
     labels:
@@ -59,21 +52,7 @@ updates:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/grafana-proxy
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
 
-  - directory: /deployment/kafka-debug
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
 
   - directory: /deployment/kafka-init
     labels:
@@ -91,13 +70,6 @@ updates:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/mqtt-bridge
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
 
   - directory: /deployment/mqtt-kafka-bridge
     labels:

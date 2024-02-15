@@ -104,7 +104,7 @@ func (c State) ProcessMessages(msg internal.ParsedMessage) (putback bool, err er
 			if pqErr.Code == Sql23p01ExclusionViolation {
 				return true, err, true
 			} else if pqErr.Code == Sql23505UniqueViolation {
-				return true, err, true
+				return false, err, false
 			}
 		}
 		return true, err, false

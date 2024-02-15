@@ -20,7 +20,6 @@ import (
 
 const (
 	inputEventSize = 24
-	eventFilePath  = "/dev/input/event0"
 )
 
 type inputEvent struct {
@@ -29,6 +28,8 @@ type inputEvent struct {
 	Code  uint16
 	Value int32
 }
+
+var eventFilePath = "/dev/input/event0"
 
 // https://en.wikipedia.org/wiki/British_and_American_keyboards#/media/File:KB_United_States-NoAltGr.svg
 var keycodeToChar = map[uint16]rune{
@@ -72,6 +73,8 @@ func main() {
 
 	listDevices()
 	initKafka()
+	eventFilePath, _ = env.GetAsString("EVENT_FILE_PATH", false, "/dev/input/event0") //nolint:errcheck
+	zap.S().Infof("Using event file path: %s", eventFilePath)
 	scan()
 }
 
