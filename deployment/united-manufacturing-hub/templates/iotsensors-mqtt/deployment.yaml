@@ -20,21 +20,21 @@ kind: Deployment
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-iotsensorsmqtt
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 4}}
-    app.kubernetes.io/component: "iotsensorsmqtt"
 spec:
   replicas: 1
   selector:
     matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
       {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 6}}
-      app.kubernetes.io/component: "iotsensorsmqtt"
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
         {{- include "united-manufacturing-hub.labels.iotsensorsmqtt" . | nindent 8}}
-        app.kubernetes.io/component: "iotsensorsmqtt"
     spec:
       volumes:
         - name: iotsensors-mqtt-config
