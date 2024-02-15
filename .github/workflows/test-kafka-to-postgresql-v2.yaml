@@ -1,0 +1,48 @@
+name: Run and Test kafka-to-postgresql-v2
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Services
+        working-directory: ./test/integration/kafka-to-postgresql-v2
+        run: |
+          docker-compose up -d --build
+          docker pull confluentinc/cp-kafkacat:7.0.13
+      
+      - name: Wait for Services
+        working-directory: ./test/integration/kafka-to-postgresql-v2
+        run: ./wait-for-services.sh
+
+      - name: Initialize Database
+        working-directory: ./test/integration/kafka-to-postgresql-v2
+        run: ./initialize-database.sh
+
+      - name: Run Tests
+        working-directory: ./test/integration/kafka-to-postgresql-v2
+        run: ./run-integration-test.sh
+
+      - name: Cleanup
+        if: always()
+        working-directory: ./test/integration/kafka-to-postgresql-v2
+        run: |
+          docker logs kafka-to-postgresql-v2 || true
+          docker-compose down
