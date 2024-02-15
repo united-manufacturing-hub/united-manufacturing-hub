@@ -1,3 +1,4 @@
+## workspace
 # github.com/DataDog/gostackparse v0.7.0
 ## explicit; go 1.16
 github.com/DataDog/gostackparse
@@ -7,9 +8,6 @@ github.com/EagleChen/mapmutex
 # github.com/IBM/sarama v1.42.1
 ## explicit; go 1.17
 github.com/IBM/sarama
-# github.com/beeker1121/goque v2.1.0+incompatible
-## explicit
-github.com/beeker1121/goque
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
@@ -53,9 +51,6 @@ github.com/confluentinc/confluent-kafka-go/kafka/librdkafka_vendor
 # github.com/coocood/freecache v1.2.4
 ## explicit; go 1.13
 github.com/coocood/freecache
-# github.com/cristalhq/base64 v0.1.2
-## explicit; go 1.16
-github.com/cristalhq/base64
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
@@ -122,9 +117,6 @@ github.com/go-openapi/jsonreference/internal
 # github.com/go-openapi/swag v0.22.3
 ## explicit; go 1.18
 github.com/go-openapi/swag
-# github.com/go-playground/assert/v2 v2.2.0
-## explicit; go 1.13
-github.com/go-playground/assert/v2
 # github.com/go-playground/locales v0.14.1
 ## explicit; go 1.17
 github.com/go-playground/locales
@@ -390,20 +382,6 @@ github.com/shirou/gopsutil/process
 # github.com/stretchr/testify v1.8.4
 ## explicit; go 1.20
 github.com/stretchr/testify/assert
-# github.com/syndtr/goleveldb v1.0.0
-## explicit
-github.com/syndtr/goleveldb/leveldb
-github.com/syndtr/goleveldb/leveldb/cache
-github.com/syndtr/goleveldb/leveldb/comparer
-github.com/syndtr/goleveldb/leveldb/errors
-github.com/syndtr/goleveldb/leveldb/filter
-github.com/syndtr/goleveldb/leveldb/iterator
-github.com/syndtr/goleveldb/leveldb/journal
-github.com/syndtr/goleveldb/leveldb/memdb
-github.com/syndtr/goleveldb/leveldb/opt
-github.com/syndtr/goleveldb/leveldb/storage
-github.com/syndtr/goleveldb/leveldb/table
-github.com/syndtr/goleveldb/leveldb/util
 # github.com/tklauser/go-sysconf v0.3.12
 ## explicit; go 1.13
 github.com/tklauser/go-sysconf
