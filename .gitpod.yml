@@ -6,16 +6,24 @@
 
 tasks:
   - name: Setup git
-    init:
+    init: |
       git config push.autoSetupRemote true
       git config pull.rebase true
   - name: Setup local GH action testing
-    init:
-      cd /usr/local && curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+    init: |
+      cd /usr/local && curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash 
       echo "-P ubuntu-latest=catthehacker/ubuntu:act-latest" > ~/.actrc
       echo "-P ubuntu-22.04=catthehacker/ubuntu:act-22.04" >> ~/.actrc
       echo "-P ubuntu-20.04=catthehacker/ubuntu:act-20.04" >> ~/.actrc
       echo "-P ubuntu-18.04=catthehacker/ubuntu:act-18.04" >> ~/.actrc
+  
+  - name: Install Helm
+    init: |
+      cd /tmp
+      curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+      chmod 700 get_helm.sh
+      ./get_helm.sh
+      exit 0
 
 jetbrains:
   plugins:

@@ -22,6 +22,7 @@ kind: Ingress
 metadata:
   name: {{include "united-manufacturing-hub.fullname" .}}-nodered-ingress
   labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
   {{if .Values.nodered.ingress.annotations}}
   annotations:

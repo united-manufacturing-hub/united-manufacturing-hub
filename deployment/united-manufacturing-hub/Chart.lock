@@ -1,15 +1,15 @@
 dependencies:
 - name: redis
-  repository: https://charts.bitnami.com/bitnami
+  repository: https://management.umh.app/helm/bitnami
   version: 17.9.0
 - name: grafana
-  repository: https://grafana.github.io/helm-charts
-  version: 6.52.4
+  repository: https://management.umh.app/helm/grafana
+  version: 6.57.4
 - name: timescaledb-single
-  repository: https://charts.timescale.com/
+  repository: https://management.umh.app/helm/timescale
   version: 0.26.9
 - name: redpanda
-  repository: https://charts.redpanda.com/
-  version: 3.0.9
-digest: sha256:7ddfac2da3945da08949513ecf14f5daf430b6f6f3b1863cd59493fa9c7ae3a1
-generated: "2023-04-11T17:14:14.5949821+02:00"
+  repository: https://management.umh.app/helm/redpanda
+  version: 5.3.4
+digest: sha256:860e177ffd4937af2242c54656c1fb0bd703027548af9406f2a335c90d26c2f4
+generated: "2024-01-30T10:54:49.826404377Z"
