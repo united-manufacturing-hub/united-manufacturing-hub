@@ -30,7 +30,7 @@ data:
         <users>
             <user>
                 <name>MQTT_KAFKA_BRIDGE</name>
-                {{- $pass := default .Values.mqttkafkabridge.mqtt.encryptedPassword | nindent 4}}
+                {{- $pass := default .Values.mqttkafkabridge.mqtt.encryptedPassword }}
                 {{- if eq $pass "" }}
                 <password>WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==</password>
                 {{- else }}
