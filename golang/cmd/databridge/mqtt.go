@@ -36,6 +36,7 @@ import (
 type mqttClient struct {
 	client             MQTT.Client
 	topic              string
+	prePublish         atomic.Uint64
 	sent               atomic.Uint64
 	recv               atomic.Uint64
 	lossInvalidTopic   atomic.Uint64
@@ -109,24 +110,28 @@ func newMqttClient(broker, topic, serialNumber string) (mc *mqttClient, err erro
 	return
 }
 
-func (m *mqttClient) getProducerStats() (messages uint64, load uint64, u uint64, u2 uint64) {
-	return m.sent.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
+func (m *mqttClient) getProducerStats() (messages uint64, prePublish uint64, lossInvalidTopic uint64, lossInvalidMessage uint64, skipped uint64) {
+	return m.sent.Load(), m.prePublish.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
-func (m *mqttClient) getConsumerStats() (messages uint64, load uint64, u uint64, u2 uint64) {
+func (m *mqttClient) getConsumerStats() (messages uint64, lossInvalidTopic uint64, lossInvalidMessage uint64, skipped uint64) {
 	return m.recv.Load(), m.lossInvalidTopic.Load(), m.lossInvalidMessage.Load(), m.skipped.Load()
 }
 
 func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMessage, bridgedMessagesToCommitChannel chan *shared.KafkaMessage) {
 	go func() {
 		for {
+			zap.S().Debugf("Awaiting message to produce...")
 			msg := <-toProduceMessageChannel
+			zap.S().Debugf("Received message to produce: %s", msg.Topic)
 
 			var err error
 			if len(msg.Key) > 0 {
 				msg.Topic = msg.Topic + "." + string(msg.Key)
+				zap.S().Debugf("Using key %s as suffix for topic: %s", string(msg.Key), msg.Topic)
 			}
 			msg.Topic, err = toMqttTopic(msg.Topic)
+			zap.S().Debugf("Transformed topic: %s", msg.Topic)
 			if err != nil {
 				zap.S().Warnf("skipping message (invalid topic): %s", err)
 				m.lossInvalidTopic.Add(1)
@@ -142,10 +147,13 @@ func (m *mqttClient) startProducing(toProduceMessageChannel chan *shared.KafkaMe
 				}
 				continue
 			}
-
+			zap.S().Debugf("Publishing message: %s", msg.Topic)
+			m.prePublish.Add(1)
 			m.client.Publish(msg.Topic, 1, false, msg.Value)
 			m.sent.Add(1)
+			zap.S().Debugf("Published message: %s", msg.Topic)
 			bridgedMessagesToCommitChannel <- msg
+			zap.S().Debugf("Committed message: %s", msg.Topic)
 		}
 	}()
 }

@@ -84,14 +84,13 @@ func main() {
 
 	var clientA, clientB client
 	clientA, err = newClient(brokerA, topic, serialNumber, split)
-	if err != nil {
+	if err != nil || clientA == nil {
 		zap.S().Fatalf("failed to create client: %s", err)
 	}
 	clientB, err = newClient(brokerB, topic, serialNumber, split)
-	if err != nil {
+	if err != nil || clientB == nil {
 		zap.S().Fatalf("failed to create client: %s", err)
 	}
-
 	gs := internal.NewGracefulShutdown(func() error {
 		zap.S().Info("shutting down")
 		var err error
@@ -114,14 +113,28 @@ func main() {
 	var commitChan = make(chan *shared.KafkaMessage, msgChanLen)
 
 	zap.S().Info("starting clients")
-	clientA.startConsuming(msgChan, commitChan)
-	clientB.startProducing(msgChan, commitChan)
-	reportStats(msgChan, clientA, clientB, gs)
+	if clientA != nil {
+		clientA.startConsuming(msgChan, commitChan)
+	} else {
+		zap.S().Fatal("clientA is nil")
+	}
+	if clientB != nil {
+		clientB.startProducing(msgChan, commitChan)
+	} else {
+		zap.S().Fatal("clientB is nil")
+	}
+	reportStats(msgChan, commitChan, clientA, clientB, gs)
 }
 
 // reportStats logs the number of messages sent and received every 10 seconds. It also shuts down the application if no messages are sent or received for 3 minutes.
-func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClient client, gs internal.GracefulShutdownHandler) {
-	sent, _, _, _ := producerClient.getProducerStats()
+func reportStats(msgChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage, consumerClient, producerClient client, gs internal.GracefulShutdownHandler) {
+	if producerClient == nil {
+		zap.S().Fatal("producerClient is nil")
+	}
+	if consumerClient == nil {
+		zap.S().Fatal("consumerClient is nil")
+	}
+	sent, _, _, _, _ := producerClient.getProducerStats()
 	recv, _, _, _ := consumerClient.getConsumerStats()
 
 	ticker := time.NewTicker(10 * time.Second)
@@ -131,20 +144,27 @@ func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClie
 		select {
 		case <-ticker.C:
 			var newSent, newRecv uint64
-			newSent, newSentInvalidTopic, newSentInvalidMessage, newSentSkipped := producerClient.getProducerStats()
+			if producerClient == nil {
+				zap.S().Fatal("producerClient is nil")
+			}
+			if consumerClient == nil {
+				zap.S().Fatal("consumerClient is nil")
+			}
+			newSent, newPrePublish, newSentInvalidTopic, newSentInvalidMessage, newSentSkipped := producerClient.getProducerStats()
 			newRecv, newRecvInvalidTopic, newRecvInvalidMessage, newRecvSkipped := consumerClient.getConsumerStats()
 
 			sentPerSecond := (newSent - sent) / 10
 			recvPerSecond := (newRecv - recv) / 10
 			lruHits, lruMisses, lruSize := GetLRUStats()
 			consumerState := consumerClient.getState()
-
-			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | MsgChanLen: %d | LRU: Hits: %d Misses: %d Size: %d | ConsumerState: %s",
+			isWaiting := newPrePublish > 0
+			zap.S().Infof("Received: %d (%d/s) Invalid Topic: %d Invalid Message: %d Skipped: %d | Sent: %d (%d/s) [HasMessageWaiting: %v] Invalid Topic: %d Invalid Message: %d Skipped: %d | MsgChanLen: %d | CommitChanLen: %d | LRU: Hits: %d Misses: %d Size: %d | ConsumerState: %s",
 				newRecv, recvPerSecond,
 				newRecvInvalidTopic, newRecvInvalidMessage, newRecvSkipped,
-				newSent, sentPerSecond,
+				newSent, sentPerSecond, isWaiting,
 				newSentInvalidTopic, newSentInvalidMessage, newSentSkipped,
 				len(msgChan),
+				len(commitChan),
 				lruHits, lruMisses, lruSize, consumerState)
 
 			if (newSent != sent && newRecv != recv) || consumerState == StatePreparing {
@@ -164,7 +184,7 @@ func reportStats(msgChan chan *shared.KafkaMessage, consumerClient, producerClie
 }
 
 type client interface {
-	getProducerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
+	getProducerStats() (messages uint64, prePublish uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
 	getConsumerStats() (messages uint64, lossInvalidTopic, lossInvalidMessage, skipped uint64)
 	startProducing(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)
 	startConsuming(messageChan chan *shared.KafkaMessage, commitChan chan *shared.KafkaMessage)

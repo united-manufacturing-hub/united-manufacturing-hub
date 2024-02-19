@@ -51,7 +51,7 @@ func resolveDNS(name string) string {
 	}
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
+	if err != nil || clientset == nil {
 		zap.S().Fatal(err)
 	}
 
@@ -61,6 +61,9 @@ func resolveDNS(name string) string {
 	pod, err := clientset.CoreV1().Pods("united-manufacturing-hub").Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		zap.S().Fatal(err)
+	}
+	if pod == nil {
+		zap.S().Fatal("Pod does not exist")
 	}
 	// Check if the pod is running
 	if pod.Status.Phase != "Running" {
