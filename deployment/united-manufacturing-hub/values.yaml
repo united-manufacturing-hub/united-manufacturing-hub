@@ -279,7 +279,7 @@ sensorconnect:
       memory: "200Mi"
   mqtt:
     password: INSECURE_INSECURE_INSECURE
-    encryptedPassword: ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==
+    encryptedPassword: ""
 
 ### iotsensorsmqtt ###
 iotsensorsmqtt:
@@ -294,7 +294,7 @@ iotsensorsmqtt:
       memory: "50Mi"
   mqtt:
     password: INSECURE_INSECURE_INSECURE
-    encryptedPassword: T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==
+    encryptedPassword: ""
 
 ### opcuasimulator ###
 opcuasimulator:
@@ -327,7 +327,7 @@ kafkabridge:
 ### nodered ###
 nodered:
   mqtt:
-    encryptedPassword: aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==
+    encryptedPassword: ""
   tag: 3.0.2
   port: 1880
   storageRequest: 1Gi
@@ -653,7 +653,7 @@ packmlmqttsimulator:
     site: testLocation
     mqtt:
       password: INSECURE_INSECURE_INSECURE
-      encryptedPassword: ZzBCbzEyaWlnZkRjbndTa2RLTW1aSmlsOWtQSWtpak0=:100:9FWqFUN88VPio9yFR59XbE9fr/GUkM1fnKCNn2wvK06MMtKp5LPtUrTCOLhHgkFQ6IMw92wi9HTsLRFxnM+reQ==
+      encryptedPassword: ""
   replicas: 1
   resources:
     requests:
