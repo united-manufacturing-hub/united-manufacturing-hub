@@ -707,7 +707,7 @@ mqttkafkabridge:
   messageLRUSize: 100000
   mqtt:
     password: INSECURE_INSECURE_INSECURE
-    encryptedPassword: WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==
+    encryptedPassword: ""
 
 ### kafka-to-blob ###
 kafkatoblob:
