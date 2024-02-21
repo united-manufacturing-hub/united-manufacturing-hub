@@ -21,6 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
 
       - name: Start Services
         working-directory: ./test/integration/kafka-to-postgresql-v2
