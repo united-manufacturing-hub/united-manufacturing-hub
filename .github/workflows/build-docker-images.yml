@@ -33,6 +33,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -70,6 +73,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -105,6 +111,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -139,6 +148,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -173,6 +185,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -208,6 +223,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -244,6 +262,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -280,6 +301,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -315,6 +339,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -350,6 +377,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -385,6 +415,9 @@ jobs:
       group: large-runners
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
