@@ -59,7 +59,7 @@ spec:
           image: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.repository}}:{{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.tag}}
           imagePullPolicy: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.pullPolicy}}
           volumeMounts:
-            - mountPath: /opt/hivemq-ce-2023.7/extensions
+            - mountPath: /opt/hivemq-ce-2024.2/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
           env:
             - name: RBAC_ENABLED
@@ -73,7 +73,7 @@ spec:
           {{if .Values.mqtt_broker.image.tag}}
           image: {{.Values.mqtt_broker.image.repository}}:{{.Values.mqtt_broker.image.tag}}
           {{- else}}
-          image: {{.Values.mqtt_broker.image.repository}}:2023.7
+          image: {{.Values.mqtt_broker.image.repository}}:2024.2
           {{end}}
           imagePullPolicy: {{.Values.mqtt_broker.image.pullPolicy}}
           env:
