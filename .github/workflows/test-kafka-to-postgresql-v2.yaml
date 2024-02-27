@@ -35,6 +35,8 @@ jobs:
           key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
           restore-keys: |
             ${{ runner.os }}-lfs-
+      - name: Git LFS Pull
+        run: git lfs pull
       - name: Start Services
         working-directory: ./test/integration/kafka-to-postgresql-v2
         run: |
