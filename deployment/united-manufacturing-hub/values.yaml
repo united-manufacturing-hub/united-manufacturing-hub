@@ -821,7 +821,7 @@ redis:
 mqtt_broker:
   image:
     repository: management.umh.app/oci/hivemq/hivemq-ce
-    tag: 2024.3
+    tag: 2024.1
     pullPolicy: IfNotPresent
   rbacEnabled: false
   initContainer:
