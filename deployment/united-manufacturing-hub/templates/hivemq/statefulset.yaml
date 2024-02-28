@@ -73,7 +73,7 @@ spec:
           {{if .Values.mqtt_broker.image.tag}}
           image: {{.Values.mqtt_broker.image.repository}}:{{.Values.mqtt_broker.image.tag}}
           {{- else}}
-          image: {{.Values.mqtt_broker.image.repository}}:2024.2
+          image: {{.Values.mqtt_broker.image.repository}}:2024.3
           {{end}}
           imagePullPolicy: {{.Values.mqtt_broker.image.pullPolicy}}
           env:
