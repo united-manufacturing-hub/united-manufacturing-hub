@@ -46,7 +46,7 @@ sources:
 
 dependencies:
   - name: redis
-    version: 17.9.0
+    version: 18.17.0
     repository: https://management.umh.app/helm/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
