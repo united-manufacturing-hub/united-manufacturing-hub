@@ -817,11 +817,11 @@ redis:
       repository: bitnami/os-shell
 
 ##### CONFIG FOR HIVEMQ CE
-##### you can set a tag if you want a version other than 2023.7
+##### you can set a tag if you want a version other than 2024.1
 mqtt_broker:
   image:
     repository: management.umh.app/oci/hivemq/hivemq-ce
-    tag: 2023.7
+    tag: 2024.1
     pullPolicy: IfNotPresent
   rbacEnabled: false
   initContainer:

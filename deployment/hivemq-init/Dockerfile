@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM hivemq/hivemq-ce:2023.7 as hivemq
+FROM hivemq/hivemq-ce:2024.1 as hivemq
 FROM alpine as base
 
 # Download hivemq-file-rbac-extension
